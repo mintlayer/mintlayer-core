@@ -1,8 +1,3 @@
-use blake2::{Blake2b};
-use sha1::{Sha1};
-use sha2::{Sha256};
-use sha3::{Sha3_512};
-use ripemd160::{Ripemd160};
 use digest::{Digest};
 
 /// A generic hash function which will return the hash using the chosen 
