@@ -25,3 +25,18 @@ members = [
   "wallet",        # wallet executable
 #  "test",          # integration tests
 ]
+
+[dependencies]
+common = { path = "common"}
+storage = { path = "storage"}
+crypto = { path = "crypto"}
+consensus = { path = "consensus"}
+script = { path = "script"}
+logging = { path = "logging"}
+p2p = { path = "p2p"}
+network = { path = "network"}
+rpc = { path = "rpc"}
+serialization = { path = "serialization"}
+node = { path = "node", optional = true}
+wallet = { path = "wallet", optional = true}
+
