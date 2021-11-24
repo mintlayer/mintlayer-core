@@ -1,0 +1,29 @@
+[package]
+name = "blake2"
+version = "0.9.2"
+description = "BLAKE2 hash functions"
+authors = ["RustCrypto Developers"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+edition = "2018"
+documentation = "https://docs.rs/blake2"
+repository = "https://github.com/RustCrypto/hashes"
+keywords = ["crypto", "blake2", "hash", "digest"]
+categories = ["cryptography", "no-std"]
+
+[dependencies]
+digest = "0.9"
+crypto-mac = "0.8"
+opaque-debug = "0.3"
+
+[dev-dependencies]
+digest = { version = "0.9", features = ["dev"] }
+crypto-mac = { version = "0.8", features = ["dev"] }
+hex-literal = "0.2"
+
+[features]
+default = ["std"]
+std = ["digest/std", "crypto-mac/std"]
+simd = []
+simd_opt = ["simd"]
+simd_asm = ["simd_opt"]
