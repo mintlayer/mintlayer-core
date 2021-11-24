@@ -1,0 +1,27 @@
+[package]
+name = "mintlayer-core"
+description = "Bitcoin bridging blockchain node"
+homepage = "https://mintlayer.org"
+repository = "https://github.com/mintlayer/mintlayer-core"
+readme = "README.md"
+license = "MIT"
+version = "0.1.0"
+authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
+edition = "2018"
+
+[workspace]
+members = [
+  "common",        # everything else, until it's moved to another crate
+  "storage",       # storage abstraction layer and its implementation
+  "crypto",        # cryptographic primitives and their interfaces
+  "consensus",     # code on consensus of blocks and transactions
+  "script",        # bitcoin script and its interfaces
+  "logging",       # logging engine and its interfaces
+  "p2p",           # p2p communication interfaces and protocols
+  "network",       # network abstractions and their implementations
+  "rpc",           # rpc abstraction and implementation
+  "serialization", # serialization interfaces and implementations
+  "node",          # node executable
+  "wallet",        # wallet executable
+#  "test",          # integration tests
+]
