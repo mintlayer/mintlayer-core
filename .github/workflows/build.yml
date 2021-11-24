@@ -47,7 +47,28 @@ jobs:
     - name: CheckL
       run: cargo check
 
-  build:
+  build_windows:
+    runs-on: windows-latest
+    # if: github.ref == 'refs/heads/master'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        components: rustfmt
+        default: true
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Build
+      run: cargo build --release
+    - name: Run tests
+      run: cargo test --release
+
+  build_ubuntu:
     runs-on: ubuntu-latest
     # if: github.ref == 'refs/heads/master'
     steps:
