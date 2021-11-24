@@ -21,6 +21,20 @@ version = "0.1.0"
 [[package]]
 name = "mintlayer-core"
 version = "0.1.0"
+dependencies = [
+ "common",
+ "consensus",
+ "crypto",
+ "logging",
+ "network",
+ "node",
+ "p2p",
+ "rpc",
+ "script",
+ "serialization",
+ "storage",
+ "wallet",
+]
 
 [[package]]
 name = "network"
