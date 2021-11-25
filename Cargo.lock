@@ -267,6 +267,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
+name = "inmemorydb"
+version = "0.1.0"
+dependencies = [
+ "generic-array",
+ "storage",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -324,6 +332,7 @@ dependencies = [
  "common",
  "consensus",
  "crypto",
+ "inmemorydb",
  "logging",
  "network",
  "node",
@@ -594,6 +603,9 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "storage"
 version = "0.1.0"
+dependencies = [
+ "generic-array",
+]
 
 [[package]]
 name = "subtle"

@@ -1,11 +1,14 @@
 use std::collections::BTreeMap;
 
 #[allow(dead_code)]
-enum DBError {
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum DBError {
     Unknown,
 }
 
-trait Storage<I: ?Sized> {
+pub type DBIndexCountT = generic_array::typenum::U4;
+
+pub trait Storage<I: ?Sized> {
     /// Returns true if a single key can have multiple values (non-unique keys)
     /// Notice that this doesn't take `self` because it's an interface definition, independent of the db library
     fn duplicates_allowed(db_index: I) -> bool;
@@ -39,26 +42,24 @@ trait Storage<I: ?Sized> {
 
     /// For a database that allows non-unique key/values, this returns everything in the database
     /// If this were used with a databse not allowing duplicates, the result will provide only the unique value available in list
-    fn get_all<K: AsRef<[u8]>>(
+    fn get_all(
         &mut self,
         db_index: I,
-        key: K,
-    ) -> Result<BTreeMap<K, Vec<Vec<u8>>>, DBError>;
+    ) -> Result<BTreeMap<Vec<u8>, Vec<Vec<u8>>>, DBError>;
 
     /// For a database with unique key/value, this gets all keys and their corresponding unique values
     /// If this were used with a database with non-unique values, only a single arbitrary value will be provided from the list of available values
-    fn get_all_unique<K: AsRef<[u8]>>(
+    fn get_all_unique(
         &mut self,
         db_index: I,
-        key: K,
-    ) -> Result<BTreeMap<K, Vec<u8>>, DBError>;
+    ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, DBError>;
 
     /// Returns true if the key exists in the database; false otherwise
-    fn exists<K: AsRef<[u8]>>(db_index: I, key: K) -> Result<bool, DBError>;
+    fn exists<K: AsRef<[u8]>>(&mut self, db_index: I, key: K) -> Result<bool, DBError>;
 
     /// For a non-unique database, this appends a value to the available kv pairs
     /// If used with unique keys, an overwrite happens
-    fn append<K: AsRef<[u8]>, V: AsRef<[u8]>>(db_index: I, key: K, val: V) -> Result<(), DBError>;
+    fn append<K: AsRef<[u8]>, V: AsRef<[u8]>>(&mut self, db_index: I, key: K, val: V) -> Result<(), DBError>;
 
     /// For a non-unique database, a key is erased with the respective value is erased
     /// For a unique database, the key is only erased if the key/value match
@@ -70,7 +71,7 @@ trait Storage<I: ?Sized> {
     ) -> Result<(), DBError>;
 
     /// The key and all possible values are erased
-    fn erase<K: AsRef<[u8]>>(db_index: I, key: K) -> Result<(), DBError>;
+    fn erase<K: AsRef<[u8]>>(&mut self, db_index: I, key: K) -> Result<(), DBError>;
 
     /// All database content for all indexes are cleared
     fn clear_all(&mut self) -> Result<(), DBError>;

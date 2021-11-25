@@ -29,6 +29,7 @@ members = [
 [dependencies]
 common = { path = "common"}
 storage = { path = "storage"}
+inmemorydb = { path = "inmemorydb"}
 crypto = { path = "crypto"}
 consensus = { path = "consensus"}
 script = { path = "script"}
