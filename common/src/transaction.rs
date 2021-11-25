@@ -7,12 +7,12 @@ pub struct Outpoint {
 }
 
 //TODO: is this correct?
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(Debug,PartialEq, Eq, Hash, Clone)]
 pub struct Bytes(Vec<u8>);
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct TransactionInput {
-    pub previous_output: OutPoint,
+    pub previous_output: Outpoint,
     pub script_sig: Bytes,
     pub sequence: u32,
     pub script_witness: Vec<Bytes>,
