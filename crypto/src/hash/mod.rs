@@ -7,11 +7,11 @@ pub trait Hasher {
     fn hash<T: AsRef<[u8]>>(data: T) -> GenericArray<u8, Self::OutputSize>;
 }
 
-struct Blake2b;
-struct Sha1;
-struct Sha256;
-struct Sha3_512;
-struct Ripemd160;
+pub struct Blake2b;
+pub struct Sha1;
+pub struct Sha256;
+pub struct Sha3_512;
+pub struct Ripemd160;
 
 impl Hasher for Blake2b {
     type OutputSize = typenum::U64;
