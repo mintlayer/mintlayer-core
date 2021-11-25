@@ -1,0 +1,32 @@
+crypto provides the basic crypto primitives required for mintlayer
+
+if you have any questions about the crypto subsystem speak to ben
+do not use crypto primitives without understanding what you are doing - speak to amin, ben and sam for clarification
+
+hashing
+- blake2
+- sha1  !!! DO NOT USE UNLESS YOU KNOW WHAT YOU ARE DOING
+- sha2
+- sha3 
+- ripemd160
+
+example of use from another subsystem
+add your dependencies to your cargo.toml file
+
+
+```
+crypto = {path = "../crypto"}
+
+```
+
+then you can use it like such
+
+```
+use crypto::hash::hash;
+use crypto::Blake2b;
+let mut buf_blake2 = Vec::new();
+hash::<Blake2b>((b"a").to_vec(), &mut buf_blake2); //your result is now stored in buf_blake2b
+
+```
+
+see the tests in hash.rs for more examples of usage.
