@@ -76,6 +76,7 @@ name = "crypto"
 version = "0.1.0"
 dependencies = [
  "digest",
+ "generic-array",
  "hashing",
 ]
 
