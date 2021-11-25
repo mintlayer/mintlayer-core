@@ -1,3 +1,7 @@
+mod transaction;
+
+pub use transaction::*;
+
 #[cfg(test)]
 mod tests {
     #[test]
