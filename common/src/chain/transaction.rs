@@ -1,8 +1,6 @@
 use crate::primitives::Amount;
 use crate::primitives::H256;
-// use script::Script;
-
-type Script = Vec<u8>;
+use script::Script;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutPoint {
