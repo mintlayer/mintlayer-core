@@ -1,10 +1,10 @@
 use generic_array::GenericArray;
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::RwLock;
 use storage::{DBError, Storage};
 
 struct InMemoryDB {
-    data: GenericArray<Mutex<BTreeMap<Vec<u8>, Vec<Vec<u8>>>>, storage::DBIndexCountT>,
+    data: GenericArray<RwLock<BTreeMap<Vec<u8>, Vec<Vec<u8>>>>, storage::DBIndexCountT>,
 }
 
 #[allow(dead_code)]
@@ -32,7 +32,7 @@ impl Storage<IndexType> for InMemoryDB {
         val: V,
     ) -> Result<(), DBError> {
         self.data[db_index]
-            .lock()
+            .write()
             .expect(MTX_ERR)
             .insert(key.as_ref().to_vec(), vec![val.as_ref().to_vec()]);
         Ok(())
@@ -45,7 +45,7 @@ impl Storage<IndexType> for InMemoryDB {
         offset: usize,
         size: Option<usize>,
     ) -> Result<Option<Vec<u8>>, DBError> {
-        let m = self.data[db_index].lock().expect(MTX_ERR);
+        let m = self.data[db_index].read().expect(MTX_ERR);
         let result = m.get(&key.as_ref().to_vec());
         match result {
             Some(vv) => {
@@ -78,7 +78,7 @@ impl Storage<IndexType> for InMemoryDB {
         db_index: IndexType,
         key: K,
     ) -> Result<Vec<Vec<u8>>, DBError> {
-        let m = self.data[db_index].lock().expect(MTX_ERR);
+        let m = self.data[db_index].read().expect(MTX_ERR);
         let result = m.get(&key.as_ref().to_vec());
         match result {
             Some(r) => return Ok(r.clone()),
@@ -87,7 +87,7 @@ impl Storage<IndexType> for InMemoryDB {
     }
 
     fn get_all(&mut self, db_index: IndexType) -> Result<BTreeMap<Vec<u8>, Vec<Vec<u8>>>, DBError> {
-        let m = self.data[db_index].lock().expect(MTX_ERR);
+        let m = self.data[db_index].read().expect(MTX_ERR);
         Ok(m.clone())
     }
 
@@ -95,7 +95,7 @@ impl Storage<IndexType> for InMemoryDB {
         &mut self,
         db_index: IndexType,
     ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, DBError> {
-        let m = self.data[db_index].lock().expect(MTX_ERR);
+        let m = self.data[db_index].read().expect(MTX_ERR);
         let mut result: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
         m.iter().for_each(|(k, vv)| {
             if !vv.is_empty() {
@@ -106,7 +106,7 @@ impl Storage<IndexType> for InMemoryDB {
     }
 
     fn exists<K: AsRef<[u8]>>(&mut self, db_index: IndexType, key: K) -> Result<bool, DBError> {
-        let m = self.data[db_index].lock().expect(MTX_ERR);
+        let m = self.data[db_index].read().expect(MTX_ERR);
         let result = m.get(&key.as_ref().to_vec()).is_some();
         Ok(result)
     }
@@ -117,7 +117,7 @@ impl Storage<IndexType> for InMemoryDB {
         key: K,
         val: V,
     ) -> Result<(), DBError> {
-        let mut m = self.data[db_index].lock().expect(MTX_ERR);
+        let mut m = self.data[db_index].write().expect(MTX_ERR);
         m.entry(key.as_ref().to_vec()).or_default().push(val.as_ref().to_vec());
         Ok(())
     }
@@ -128,7 +128,7 @@ impl Storage<IndexType> for InMemoryDB {
         key: K,
         val: V,
     ) -> Result<(), DBError> {
-        let mut m = self.data[db_index].lock().expect(MTX_ERR);
+        let mut m = self.data[db_index].write().expect(MTX_ERR);
         let result = m.get_mut(&key.as_ref().to_vec());
         match result {
             Some(vv) => {
@@ -140,7 +140,7 @@ impl Storage<IndexType> for InMemoryDB {
     }
 
     fn erase<K: AsRef<[u8]>>(&mut self, db_index: IndexType, key: K) -> Result<(), DBError> {
-        let mut m = self.data[db_index].lock().expect(MTX_ERR);
+        let mut m = self.data[db_index].write().expect(MTX_ERR);
         m.remove(&key.as_ref().to_vec());
         Ok(())
     }
@@ -151,21 +151,21 @@ impl Storage<IndexType> for InMemoryDB {
     }
 
     fn clear_db(&mut self, db_index: IndexType) -> Result<(), DBError> {
-        let mut m = self.data[db_index].lock().expect(MTX_ERR);
+        let mut m = self.data[db_index].write().expect(MTX_ERR);
         m.clear();
         Ok(())
     }
 
     fn begin_transaction(&mut self, _approximate_data_size: usize) -> Result<(), DBError> {
-        Err(DBError::Unknown)
+        unimplemented!()
     }
 
     fn revert_transaction(&mut self) -> Result<(), DBError> {
-        Err(DBError::Unknown)
+        unimplemented!()
     }
 
     fn commit_transaction(&mut self) -> Result<(), DBError> {
-        Err(DBError::Unknown)
+        unimplemented!()
     }
 }
 
