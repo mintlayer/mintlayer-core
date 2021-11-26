@@ -13,6 +13,9 @@ pub struct Sha256;
 pub struct Sha3_512;
 pub struct Ripemd160;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Hash256([u8;32]); //TODO: change this temporary holder to an actual one
+
 impl Hasher for Blake2b {
     type OutputSize = typenum::U64;
 
