@@ -1,5 +1,4 @@
 fixed_hash::construct_fixed_hash! {
-    /// My 256 bit hash type.
     pub struct H256(32);
 }
 
