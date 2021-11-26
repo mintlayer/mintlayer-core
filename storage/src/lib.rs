@@ -6,6 +6,9 @@ pub enum DBError {
     Unknown,
 }
 
+pub trait DataType: AsRef<[u8]> + Clone {
+}
+
 pub type DBIndexCountT = generic_array::typenum::U4;
 
 pub trait Storage<I: ?Sized> {
@@ -15,7 +18,7 @@ pub trait Storage<I: ?Sized> {
 
     /// For a database with unique key/value, this sets the key vs value and overwrites an existing one
     /// If this were used with a databse allowing duplicates, the kv pair will become (k, [v])
-    fn set<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+    fn set<K: DataType, V: DataType>(
         &mut self,
         db_index: I,
         key: K,
@@ -24,7 +27,7 @@ pub trait Storage<I: ?Sized> {
 
     /// For a database with unique key/value, this gets the value stored with the given key
     /// If this were used with a databse not allowing duplicates, the result will provide only one value in the list of duplicates
-    fn get<K: AsRef<[u8]>>(
+    fn get<K: DataType>(
         &mut self,
         db_index: I,
         key: K,
@@ -34,7 +37,7 @@ pub trait Storage<I: ?Sized> {
 
     /// For a database with non-unique key/values, this gets all the values stored with the given key
     /// If this were used with a databse not allowing duplicates, the result will provide only the unique value available in list
-    fn get_multiple<K: AsRef<[u8]>>(
+    fn get_multiple<K: DataType>(
         &mut self,
         db_index: I,
         key: K,
@@ -55,15 +58,15 @@ pub trait Storage<I: ?Sized> {
     ) -> Result<BTreeMap<Vec<u8>, Vec<u8>>, DBError>;
 
     /// Returns true if the key exists in the database; false otherwise
-    fn exists<K: AsRef<[u8]>>(&mut self, db_index: I, key: K) -> Result<bool, DBError>;
+    fn exists<K: DataType>(&mut self, db_index: I, key: K) -> Result<bool, DBError>;
 
     /// For a non-unique database, this appends a value to the available kv pairs
     /// If used with unique keys, an overwrite happens
-    fn append<K: AsRef<[u8]>, V: AsRef<[u8]>>(&mut self, db_index: I, key: K, val: V) -> Result<(), DBError>;
+    fn append<K: DataType, V: DataType>(&mut self, db_index: I, key: K, val: V) -> Result<(), DBError>;
 
     /// For a non-unique database, a key is erased with the respective value is erased
     /// For a unique database, the key is only erased if the key/value match
-    fn erase_one<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+    fn erase_one<K: DataType, V: DataType>(
         &mut self,
         db_index: I,
         key: K,
@@ -71,7 +74,7 @@ pub trait Storage<I: ?Sized> {
     ) -> Result<(), DBError>;
 
     /// The key and all possible values are erased
-    fn erase<K: AsRef<[u8]>>(&mut self, db_index: I, key: K) -> Result<(), DBError>;
+    fn erase<K: DataType>(&mut self, db_index: I, key: K) -> Result<(), DBError>;
 
     /// All database content for all indexes are cleared
     fn clear_all(&mut self) -> Result<(), DBError>;

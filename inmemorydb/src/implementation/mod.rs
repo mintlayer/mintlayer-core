@@ -3,6 +3,8 @@ use std::collections::BTreeMap;
 use std::sync::RwLock;
 use storage::{DBError, Storage};
 
+mod transaction;
+
 struct InMemoryDB {
     data: GenericArray<RwLock<BTreeMap<Vec<u8>, Vec<Vec<u8>>>>, storage::DBIndexCountT>,
 }
