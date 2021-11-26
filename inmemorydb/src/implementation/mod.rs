@@ -1,7 +1,7 @@
 use generic_array::GenericArray;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap};
 use std::sync::RwLock;
-use storage::{DBError, Storage};
+use storage::{DBError, DataType, Storage};
 
 mod transaction;
 
@@ -27,7 +27,7 @@ impl Storage<IndexType> for InMemoryDB {
         return false;
     }
 
-    fn set<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+    fn set<K: DataType, V: DataType>(
         &mut self,
         db_index: IndexType,
         key: K,
@@ -40,7 +40,7 @@ impl Storage<IndexType> for InMemoryDB {
         Ok(())
     }
 
-    fn get<K: AsRef<[u8]>>(
+    fn get<K: DataType>(
         &mut self,
         db_index: IndexType,
         key: K,
@@ -75,7 +75,7 @@ impl Storage<IndexType> for InMemoryDB {
         };
     }
 
-    fn get_multiple<K: AsRef<[u8]>>(
+    fn get_multiple<K: DataType>(
         &mut self,
         db_index: IndexType,
         key: K,
@@ -107,13 +107,13 @@ impl Storage<IndexType> for InMemoryDB {
         Ok(result)
     }
 
-    fn exists<K: AsRef<[u8]>>(&mut self, db_index: IndexType, key: K) -> Result<bool, DBError> {
+    fn exists<K: DataType>(&mut self, db_index: IndexType, key: K) -> Result<bool, DBError> {
         let m = self.data[db_index].read().expect(MTX_ERR);
         let result = m.get(&key.as_ref().to_vec()).is_some();
         Ok(result)
     }
 
-    fn append<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+    fn append<K: DataType, V: DataType>(
         &mut self,
         db_index: IndexType,
         key: K,
@@ -124,7 +124,7 @@ impl Storage<IndexType> for InMemoryDB {
         Ok(())
     }
 
-    fn erase_one<K: AsRef<[u8]>, V: AsRef<[u8]>>(
+    fn erase_one<K: DataType, V: DataType>(
         &mut self,
         db_index: IndexType,
         key: K,
@@ -141,13 +141,14 @@ impl Storage<IndexType> for InMemoryDB {
         }
     }
 
-    fn erase<K: AsRef<[u8]>>(&mut self, db_index: IndexType, key: K) -> Result<(), DBError> {
+    fn erase<K: DataType>(&mut self, db_index: IndexType, key: K) -> Result<(), DBError> {
         let mut m = self.data[db_index].write().expect(MTX_ERR);
         m.remove(&key.as_ref().to_vec());
         Ok(())
     }
 
     fn clear_all(&mut self) -> Result<(), DBError> {
+        // TODO: this is not thread-safe
         self.data = GenericArray::default();
         Ok(())
     }
