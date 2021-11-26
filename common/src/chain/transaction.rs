@@ -1,11 +1,12 @@
 use crate::primitives::Amount;
-use crypto::hash::Hash256;
-use script::Script;
+use crate::primitives::H256;
+// use script::Script;
 
+type Script = Vec<u8>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutPoint {
-    pub hash_output: Hash256,
+    pub hash_output: H256,
     pub index_output: u32,
 }
 
