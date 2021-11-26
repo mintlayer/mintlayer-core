@@ -9,6 +9,13 @@ pub enum DBError {
 pub trait DataType: AsRef<[u8]> + Clone {
 }
 
+impl DataType for Vec<u8> {
+}
+
+impl DataType for &[u8] {
+}
+
+/// number of unique databases within the database as a type
 pub type DBIndexCountT = generic_array::typenum::U4;
 
 pub trait Storage<I: ?Sized> {
