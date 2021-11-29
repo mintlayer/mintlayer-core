@@ -6,6 +6,12 @@ pub enum OutputSpentState {
     SpentBy(H256),
 }
 
+/// A transaction is stored in the database as part of a block,
+/// specifically in the mainchain.
+/// To find a transaction in the database, we first locate the block that contains it,
+/// and we then read the binary data at a specific offset and size, which we deserialize
+/// to get the transaction.
+/// This struct represents the position of a transaction in the database
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TxMainChainPosition {
     block_id: H256,
@@ -38,6 +44,7 @@ impl TxMainChainPosition {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpendError {
     AlreadySpent(H256),
+    AlreadyUnspent,
     OutOfRange,
 }
 
@@ -46,6 +53,10 @@ pub enum TxMainChainIndexError {
     InvalidOutputCount,
 }
 
+/// Assuming a transaction is in the mainchain, its index contains two things:
+/// 1. The state on whether its outputs are spent
+/// 2. The position on where to find that transaction in the mainchain (block + bianry position)#[derive(Clone, Debug, PartialEq, Eq)]
+/// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TxMainChainIndex {
     position: TxMainChainPosition,
@@ -68,6 +79,18 @@ impl TxMainChainIndex {
         }
     }
 
+    fn unspend_internal(spent_state: &mut OutputSpentState) -> Result<(), SpendError> {
+        match spent_state {
+            OutputSpentState::Unspent => {
+                return Err(SpendError::AlreadyUnspent);
+            }
+            OutputSpentState::SpentBy(_) => {
+                *spent_state = OutputSpentState::Unspent;
+                return Ok(());
+            }
+        }
+    }
+
     pub fn spend(&mut self, index: u32, spender: &H256) -> Result<(), SpendError> {
         let index = index as usize;
         if index >= self.spent.len() {
@@ -78,6 +101,20 @@ impl TxMainChainIndex {
             None => return Err(SpendError::OutOfRange),
             Some(spent_state) => {
                 return Self::spend_internal(spent_state, spender);
+            }
+        }
+    }
+
+    pub fn unspend(&mut self, index: u32) -> Result<(), SpendError> {
+        let index = index as usize;
+        if index >= self.spent.len() {
+            return Err(SpendError::OutOfRange);
+        }
+
+        match self.spent.get_mut(index) {
+            None => return Err(SpendError::OutOfRange),
+            Some(spent_state) => {
+                return Self::unspend_internal(spent_state);
             }
         }
     }
@@ -229,6 +266,46 @@ mod tests {
         assert_eq!(
             tx_index.get_spent_state(2).unwrap(),
             OutputSpentState::SpentBy(tx_spending_output_2)
+        );
+
+        // unspend output 1
+        assert!(tx_index.unspend(0).is_ok());
+
+        // cannot "double unspend"
+        assert_eq!(tx_index.unspend(0).unwrap_err(), SpendError::AlreadyUnspent);
+
+        // check the new unspent state
+        assert!(!tx_index.all_outputs_spent());
+        assert_eq!(
+            tx_index.get_spent_state(0).unwrap(),
+            OutputSpentState::Unspent
+        );
+        assert_eq!(
+            tx_index.get_spent_state(1).unwrap(),
+            OutputSpentState::SpentBy(tx_spending_output_1)
+        );
+        assert_eq!(
+            tx_index.get_spent_state(2).unwrap(),
+            OutputSpentState::SpentBy(tx_spending_output_2)
+        );
+
+        // unspent the rest
+        assert!(tx_index.unspend(1).is_ok());
+        assert!(tx_index.unspend(2).is_ok());
+
+        // check the new unspent state
+        assert!(!tx_index.all_outputs_spent());
+        assert_eq!(
+            tx_index.get_spent_state(0).unwrap(),
+            OutputSpentState::Unspent
+        );
+        assert_eq!(
+            tx_index.get_spent_state(1).unwrap(),
+            OutputSpentState::Unspent
+        );
+        assert_eq!(
+            tx_index.get_spent_state(2).unwrap(),
+            OutputSpentState::Unspent
         );
     }
 }
