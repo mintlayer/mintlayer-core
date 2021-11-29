@@ -7,5 +7,8 @@ edition = "2018"
 
 [dependencies]
 fixed-hash = "0.7.0"
+bech32 = "0.8.1"
+displaydoc = { default-features = false, version = "0.2" }
+
 script = { path = '../script'}
 crypto = { path = '../crypto'}
