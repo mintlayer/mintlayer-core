@@ -1,3 +1,3 @@
-mod block;
-mod config;
-mod transaction;
+pub mod block;
+pub mod config;
+pub mod transaction;

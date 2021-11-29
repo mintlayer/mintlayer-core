@@ -76,6 +76,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
+name = "blockchain_storage"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "storage",
+]
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -93,6 +101,7 @@ version = "0.1.0"
 dependencies = [
  "crypto",
  "fixed-hash",
+ "hex-literal",
  "script",
 ]
 
@@ -278,6 +287,7 @@ checksum = "308cc39be01b73d0d18f82a0e7b2a3df85245f84af96fdddc5d202d27e47b86a"
 name = "mintlayer-core"
 version = "0.1.0"
 dependencies = [
+ "blockchain_storage",
  "common",
  "consensus",
  "crypto",

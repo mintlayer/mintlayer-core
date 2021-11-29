@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 #[allow(dead_code)]
-enum DBError {
+pub enum DBError {
     Unknown,
 }
 
