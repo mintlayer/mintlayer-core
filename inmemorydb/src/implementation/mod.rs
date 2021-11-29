@@ -44,17 +44,18 @@ impl Storage<IndexType> for InMemoryDB {
         &mut self,
         db_index: IndexType,
         key: K,
-        offset: usize,
-        size: Option<usize>,
+        _offset: usize,
+        _size: Option<usize>,
     ) -> Result<Option<Vec<u8>>, DBError> {
         let m = self.data[db_index].read().expect(MTX_ERR);
         let result = m.get(&key.as_ref().to_vec());
         match result {
             Some(vv) => {
                 if vv.is_empty() {
-                    return Ok(None);
+                    Ok(None)
                 } else {
                     let v = vv[0].as_slice();
+                    /*
                     if offset > v.len() {
                         return Ok(Some(vec![]));
                     }
@@ -69,10 +70,12 @@ impl Storage<IndexType> for InMemoryDB {
                             }
                         }
                     }
+                    */
+                    unimplemented!()
                 }
             }
-            None => return Ok(None),
-        };
+            None => Ok(None),
+        }
     }
 
     fn get_multiple<K: DataType>(
