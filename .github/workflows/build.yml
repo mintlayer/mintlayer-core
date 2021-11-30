@@ -66,7 +66,7 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release --all
+      run: cargo test --release --workspace
 
   build_ubuntu:
     runs-on: ubuntu-latest
@@ -87,4 +87,4 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release --all
+      run: cargo test --release --workspace
