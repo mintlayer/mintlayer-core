@@ -21,16 +21,6 @@ pub struct ChainConfig {
     magic_bytes: [u8; 4],
 }
 
-impl AddressExt for ChainConfig {
-    fn hrp(&self) -> &str {
-        &self.address_prefix
-    }
-
-    fn data<T: AsRef<[u8]>>(&self) -> T {
-        self.magic_bytes
-    }
-}
-
 #[allow(dead_code)]
 pub fn create_mainnet() -> ChainConfig {
     ChainConfig {
