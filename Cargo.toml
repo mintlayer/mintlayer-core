@@ -40,6 +40,10 @@ serialization = { path = "serialization"}
 node = { path = "node", optional = true}
 wallet = { path = "wallet", optional = true}
 
+[profile.release]
+debug-assertions = true
+overflow-checks = true
+
 [profile.test]
 opt-level = 2
 debug-assertions = true
