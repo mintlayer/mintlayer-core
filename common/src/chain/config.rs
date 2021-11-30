@@ -1,5 +1,5 @@
 use std::{collections::BTreeMap};
-use crate::primitives::BlockHeight;
+use crate::primitives::{BlockHeight, AddressExt};
 
 type HashType = Vec<u8>; // temp type until crypto is ready
 
@@ -19,6 +19,16 @@ pub struct ChainConfig {
     p2p_port: u16,
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
     magic_bytes: [u8; 4],
+}
+
+impl AddressExt for ChainConfig {
+    fn hrp(&self) -> &str {
+        &self.address_prefix
+    }
+
+    fn data<T: AsRef<[u8]>>(&self) -> T {
+        self.magic_bytes
+    }
 }
 
 #[allow(dead_code)]
