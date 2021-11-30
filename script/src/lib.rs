@@ -55,6 +55,8 @@ mod interpreter;
 pub mod opcodes;
 pub mod script;
 pub mod sighash;
+#[cfg(test)]
+mod test;
 
 #[cfg(feature = "testcontext")]
 pub use context::testcontext::TestContext;
