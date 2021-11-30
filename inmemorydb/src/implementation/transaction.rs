@@ -3,6 +3,7 @@ use storage::{DataType, Storage, DBError};
 use crate::implementation::IndexType;
 use std::collections::BTreeMap;
 
+/*
 enum DBOperation<V: DataType> {
     UniqueSet(V),
     Append(Vec<V>),
@@ -188,3 +189,4 @@ impl Storage<IndexType> for Transaction {
         panic!("Nested transactions are not allowed");
     }
 }
+*/
