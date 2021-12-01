@@ -3,8 +3,7 @@ use crate::keys::AddressExt;
 use crypto::hash::Hasher;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Public {
-    //TODO: define a proper one
+pub struct Public { //TODO: define a proper one
     prefix: String,
 }
 
