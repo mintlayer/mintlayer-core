@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 #[allow(unused)]
-struct Peer {}
+pub struct Peer {}
 
 #[allow(unused)]
 impl Peer {
