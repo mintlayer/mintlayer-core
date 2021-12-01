@@ -22,8 +22,8 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn address_prefix(&self) -> String {
-        self.address_prefix.clone()
+    pub fn address_prefix(&self) -> &str {
+        &self.address_prefix
     }
 }
 

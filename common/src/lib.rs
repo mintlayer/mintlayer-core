@@ -1,6 +1,6 @@
-mod chain;
-mod keys;
-mod primitives;
+pub mod chain;
+pub mod address;
+pub mod primitives;
 
 #[cfg(test)]
 mod tests {
