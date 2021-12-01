@@ -108,6 +108,12 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
+dependencies = [
+ "blockchain_storage",
+ "common",
+ "logging",
+ "rand",
+]
 
 [[package]]
 name = "cpufeatures"

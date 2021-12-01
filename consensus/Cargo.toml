@@ -6,3 +6,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+blockchain_storage = { path = '../blockchain_storage'}
+common = { path = '../common'}
+rand = "0.8.4"
+logging = { path = '../logging'}
