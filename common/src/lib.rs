@@ -1,5 +1,6 @@
-mod primitives;
 mod chain;
+mod keys;
+mod primitives;
 
 #[cfg(test)]
 mod tests {

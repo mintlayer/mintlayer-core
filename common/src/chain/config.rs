@@ -21,6 +21,12 @@ pub struct ChainConfig {
     magic_bytes: [u8; 4],
 }
 
+impl ChainConfig {
+    pub fn address_prefix(&self) -> String {
+        self.address_prefix.clone()
+    }
+}
+
 #[allow(dead_code)]
 pub fn create_mainnet() -> ChainConfig {
     ChainConfig {
