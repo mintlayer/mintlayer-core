@@ -1,5 +1,6 @@
-mod primitives;
-mod chain;
+pub mod chain;
+pub mod address;
+pub mod primitives;
 
 #[cfg(test)]
 mod tests {

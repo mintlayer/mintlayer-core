@@ -3,8 +3,7 @@ fixed_hash::construct_fixed_hash! {
 }
 
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
-pub trait Idable {
-}
+pub trait Idable {}
 
 #[allow(dead_code)]
 pub type DataID = H256;
