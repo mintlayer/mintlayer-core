@@ -1,5 +1,5 @@
-use crate::primitives::{encoding, Bech32Error};
 use crate::chain::ChainConfig;
+use crate::primitives::{encoding, Bech32Error};
 use crypto::hash::hash;
 
 pub trait AddressableData<T: AsRef<[u8]>> {
@@ -36,7 +36,7 @@ pub struct Address {
 impl Address {
     pub fn new<T: AsRef<[u8]>>(cfg: &ChainConfig, data: T) -> Result<Self, AddressError> {
         let h = hash::<crypto::hash::Sha256, _>(data);
-        let h= hash::<crypto::hash::Ripemd160, _>(h);
+        let h = hash::<crypto::hash::Ripemd160, _>(h);
         Ok(Self {
             address: encoding::encode(cfg.address_prefix(), h)?,
         })
