@@ -14,39 +14,10 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-pub mod error;
-pub mod peer;
-
-#[allow(unused)]
-struct NetworkManager {}
-
-#[allow(unused)]
-impl NetworkManager {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-#[allow(unused)]
-struct P2P {
-    mgr: NetworkManager,
-}
-
-#[allow(unused)]
-impl P2P {
-    pub fn new() -> Self {
-        Self {
-            mgr: NetworkManager::new(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn it_works() {
-        let _p2p = P2P::new();
+        assert_eq!(2 + 2, 4);
     }
 }
