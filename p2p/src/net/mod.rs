@@ -18,6 +18,9 @@ use crate::error::P2pError;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
 
+pub mod mock;
+pub mod libp2p;
+
 /// `NetworkService` provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
