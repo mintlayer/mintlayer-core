@@ -15,6 +15,7 @@
 //
 // Author(s): A. Altonen
 pub mod error;
+pub mod net;
 pub mod peer;
 
 #[allow(unused)]
