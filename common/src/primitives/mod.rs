@@ -1,4 +1,5 @@
 mod amount;
+mod error;
 mod height;
 mod id;
 
