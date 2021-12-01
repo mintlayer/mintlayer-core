@@ -41,6 +41,10 @@ impl Address {
             address: encoding::encode(cfg.address_prefix(), h)?,
         })
     }
+
+    pub fn get(&self) -> &str {
+        &self.address
+    }
 }
 
 // TODO: add address tests once decided
