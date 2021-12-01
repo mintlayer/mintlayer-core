@@ -4,7 +4,7 @@ mod encoding;
 mod height;
 mod id;
 
-pub use address::{AddressExt, AddressExtNoData};
+pub use address::AddressExt;
 pub use amount::Amount;
 pub use encoding::{decode, encode, Bech32Error, DecodedBech32};
 pub use height::BlockHeight;
