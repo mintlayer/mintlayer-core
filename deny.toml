@@ -1,0 +1,35 @@
+[sources.allow-org]
+github = [
+    "mintlayer",#allow any code from mintlayer's github
+]
+
+[bans]
+multiple-versions = "deny" #catch mutliple versions of a crate
+deny = []
+#skip quick-error for "reasons" that i cba to explain just about as much as i cba to fix
+skip = [{name = "quick-error"}]
+
+[licenses]
+#we reject code without a license
+unlicensed = "deny"
+confidence-threshold = 0.92
+allow = [
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "CC0-1.0",
+    "Unlicense",#this is a specific license rather than no license at all
+] #deny a license not in this set of licenses
+
+[advisories]
+db-path = "~/.cargo/advisory-dbs"
+db-url = "https://github.com/RustSec/advisory-db"
+vulnerability = "deny"
+unmaintained = "warn"
+unsound = "warn"
+yanked = "warn"
+notice = "warn"
+severity-threshold = "medium"
