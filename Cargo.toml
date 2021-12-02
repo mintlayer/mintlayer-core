@@ -29,7 +29,7 @@ members = [
 [dependencies]
 common = { path = "common"}
 storage = { path = "storage"}
-blockchain_storage = { path = "blockchain_storage"}
+blockchain-storage = { path = "blockchain_storage"}
 crypto = { path = "crypto"}
 consensus = { path = "consensus"}
 script = { path = "script"}
