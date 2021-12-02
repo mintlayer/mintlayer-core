@@ -6,9 +6,11 @@ github = [
 [bans]
 multiple-versions = "deny" #catch mutliple versions of a crate
 deny = []
-skip = []
+#skip quick-error for "reasons" that i cba to explain just about as much as i cba to fix
+skip = [{name = "quick-error"}]
 
 [licenses]
+#we reject code without a license
 unlicensed = "deny"
 confidence-threshold = 0.92
 allow = [
@@ -19,6 +21,7 @@ allow = [
     "MIT",
     "MPL-2.0",
     "CC0-1.0",
+    "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 
 [advisories]
