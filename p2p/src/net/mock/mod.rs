@@ -99,6 +99,11 @@ impl<P: NetworkService> PeerService for Peer<P> {
     where
         T: Decode,
     {
-        todo!();
+        let mut data = vec![0u8; 1024 * 1024];
+
+        match self.socket.read(&mut data).await? {
+            0 => Err(P2pError::PeerDisconnected),
+            _ => Decode::decode(&mut &data[..]).map_err(|e| P2pError::DecodeFailure(e)),
+        }
     }
 }

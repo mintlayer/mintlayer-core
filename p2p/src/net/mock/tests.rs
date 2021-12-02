@@ -21,10 +21,17 @@ mod tests {
     use crate::net::mock::{MockService, NetworkService};
     use crate::net::PeerService;
     use crate::peer::Peer;
+    use parity_scale_codec::{Decode, Encode};
     use std::net::SocketAddr;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
     use tokio::select;
+
+    #[derive(Debug, Encode, Decode, PartialEq, Eq)]
+    struct Transaction {
+        hash: u64,
+        value: u128,
+    }
 
     #[tokio::test]
     async fn test_new() {
@@ -92,8 +99,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_send() {
-        use parity_scale_codec::{Decode, Encode};
-
         let addr: SocketAddr = "[::1]:11112".parse().unwrap();
         let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
         let server_ = TcpListener::bind(addr).await.unwrap();
@@ -107,12 +112,6 @@ mod tests {
 
         // try to send data that implements `Encode + Decode`
         // and verify that it was received correctly
-        #[derive(Debug, Encode, Decode, PartialEq, Eq)]
-        struct Transaction {
-            hash: u64,
-            value: u128,
-        }
-
         let tx = Transaction {
             hash: 12345u64,
             value: 67890u128,
@@ -124,5 +123,32 @@ mod tests {
         assert_eq!(peer_res.is_ok(), true);
         assert_eq!(server_res.is_ok(), true);
         assert_eq!(Decode::decode(&mut &buf[..]), Ok(tx));
+    }
+
+    #[tokio::test]
+    async fn test_peer_recv() {
+        let addr: SocketAddr = "[::1]:11113".parse().unwrap();
+        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
+        let server_ = TcpListener::bind(addr).await.unwrap();
+
+        let (server_res, peer_res) = tokio::join!(server_.accept(), peer_fut);
+        assert_eq!(server_res.is_ok(), true);
+        assert_eq!(peer_res.is_ok(), true);
+
+        let mut server = server_res.unwrap().0;
+        let mut peer = Peer::<MockService>::new(1u128, peer_res.unwrap());
+
+        // send data and decode it successfully
+        let tx = Transaction {
+            hash: 12345u64,
+            value: 67890u128,
+        };
+        let encoded = tx.encode();
+
+        let (server_res, peer_res): (_, Result<Transaction, _>) =
+            tokio::join!(server.write(&encoded), peer.recv());
+        assert_eq!(server_res.is_ok(), true);
+        assert_eq!(peer_res.is_ok(), true);
+        assert_eq!(peer_res.unwrap(), tx);
     }
 }
