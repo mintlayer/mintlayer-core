@@ -2,6 +2,7 @@
 name = "script"
 version = "0.1.0"
 edition = "2018"
+license = "MIT"
 
 [dependencies]
 displaydoc = { default-features = false, version = "0.2" }
