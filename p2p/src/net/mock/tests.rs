@@ -19,6 +19,12 @@ mod tests {
     use super::*;
     use crate::error::P2pError;
     use crate::net::mock::{MockService, NetworkService};
+    use crate::net::PeerService;
+    use crate::peer::Peer;
+    use std::net::SocketAddr;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio::select;
 
     #[tokio::test]
     async fn test_new() {
@@ -40,7 +46,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect() {
-        use std::net::SocketAddr;
         use tokio::net::TcpListener;
 
         // create `TcpListener`, spawn a task, and start accepting connections
@@ -74,10 +79,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_accept() {
-        use std::net::SocketAddr;
-        use tokio::net::TcpStream;
-        use tokio::select;
-
         // create service that is used for testing `accept()`
         let addr: SocketAddr = "[::1]:9999".parse().unwrap();
         let mut srv = MockService::new("[::1]:9999".parse().unwrap()).await.unwrap();
@@ -87,5 +88,41 @@ mod tests {
         assert_eq!(con.is_ok(), true);
 
         // TODO: is there any sensible way to make `accept()` fail?
+    }
+
+    #[tokio::test]
+    async fn test_peer_send() {
+        use parity_scale_codec::{Decode, Encode};
+
+        let addr: SocketAddr = "[::1]:11112".parse().unwrap();
+        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
+        let server_ = TcpListener::bind(addr).await.unwrap();
+
+        let (server_res, peer_res) = tokio::join!(server_.accept(), peer_fut);
+        assert_eq!(server_res.is_ok(), true);
+        assert_eq!(peer_res.is_ok(), true);
+
+        let mut server = server_res.unwrap().0;
+        let mut peer = Peer::<MockService>::new(1u128, peer_res.unwrap());
+
+        // try to send data that implements `Encode + Decode`
+        // and verify that it was received correctly
+        #[derive(Debug, Encode, Decode, PartialEq, Eq)]
+        struct Transaction {
+            hash: u64,
+            value: u128,
+        }
+
+        let tx = Transaction {
+            hash: 12345u64,
+            value: 67890u128,
+        };
+
+        let mut buf = vec![0u8; 256];
+        let (server_res, peer_res) = tokio::join!(server.read(&mut buf), peer.send(&tx));
+
+        assert_eq!(peer_res.is_ok(), true);
+        assert_eq!(server_res.is_ok(), true);
+        assert_eq!(Decode::decode(&mut &buf[..]), Ok(tx));
     }
 }

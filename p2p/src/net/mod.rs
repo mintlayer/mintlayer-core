@@ -17,6 +17,7 @@
 use crate::error::P2pError;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
+use tokio::io::AsyncWriteExt;
 
 pub mod libp2p;
 pub mod mock;
@@ -36,7 +37,7 @@ pub trait NetworkService {
     type Address;
 
     /// Generic socket object that the underlying implementation uses
-    type Socket: Sync + Send;
+    type Socket: Sync + Send + Unpin + AsyncWriteExt;
 
     /// Initialize the network service provider
     ///

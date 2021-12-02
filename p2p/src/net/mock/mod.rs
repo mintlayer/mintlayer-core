@@ -89,7 +89,10 @@ impl<P: NetworkService> PeerService for Peer<P> {
     where
         T: Sync + Send + Encode,
     {
-        todo!();
+        match self.socket.write(&data.encode()).await? {
+            0 => Err(P2pError::PeerDisconnected),
+            _ => Ok(()),
+        }
     }
 
     async fn recv<T>(&mut self) -> Result<T, P2pError>

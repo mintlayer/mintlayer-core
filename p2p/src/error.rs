@@ -17,6 +17,7 @@
 #[derive(Debug)]
 pub enum P2pError {
     SocketError(std::io::Error),
+    PeerDisconnected,
 }
 
 impl From<std::io::Error> for P2pError {

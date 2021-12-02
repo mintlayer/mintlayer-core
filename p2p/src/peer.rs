@@ -21,7 +21,7 @@ pub type PeerId = u128;
 #[allow(unused)]
 pub struct Peer<NetworkingBackend: NetworkService> {
     peer_id: PeerId,
-    socket: NetworkingBackend::Socket,
+    pub socket: NetworkingBackend::Socket,
 }
 
 #[allow(unused)]
