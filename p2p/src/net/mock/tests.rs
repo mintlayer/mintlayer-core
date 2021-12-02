@@ -37,4 +37,38 @@ mod tests {
         let s_ipv6 = MockService::new("[::1]:5555".parse().unwrap()).await;
         assert_eq!(err.is_err(), true);
     }
+
+    #[tokio::test]
+    async fn test_connect() {
+        use std::net::SocketAddr;
+        use tokio::net::TcpListener;
+
+        // create `TcpListener`, spawn a task, and start accepting connections
+        let addr: SocketAddr = "127.0.0.1:6666".parse().unwrap();
+        let server = TcpListener::bind(addr).await.unwrap();
+
+        tokio::spawn(async move {
+            loop {
+                if let Ok(_) = server.accept().await {}
+            }
+        });
+
+        // create service that is used for testing `connect()`
+        let srv = MockService::new("127.0.0.1:7777".parse().unwrap()).await;
+        assert_eq!(srv.is_ok(), true);
+        let mut srv = srv.unwrap();
+
+        // try to connect to self, should fail
+        let res = srv.connect("127.0.0.1:7777".parse().unwrap()).await;
+        assert_eq!(res.is_err(), true);
+
+        // try to connect to an address that (hopefully)
+        // doesn't have a `TcpListener` running, should fail
+        let res = srv.connect("127.0.0.1:1".parse().unwrap()).await;
+        assert_eq!(res.is_err(), true);
+
+        // try to connect to the `TcpListener` that was spawned above, should succeeed
+        let res = srv.connect("127.0.0.1:6666".parse().unwrap()).await;
+        assert_eq!(res.is_ok(), true);
+    }
 }

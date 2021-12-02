@@ -53,7 +53,14 @@ impl NetworkService for MockService {
     }
 
     async fn connect(&mut self, addr: Self::Address) -> Result<Self::Socket, P2pError> {
-        todo!();
+        if self.addr == addr {
+            return Err(P2pError::SocketError(Error::new(
+                ErrorKind::Other,
+                "Connection to local node prohibited!",
+            )));
+        }
+
+        Ok(TcpStream::connect(addr).await?)
     }
 
     async fn accept(&mut self) -> Result<Self::Socket, P2pError> {
