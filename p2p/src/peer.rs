@@ -14,20 +14,43 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#[allow(unused)]
-pub struct Peer {}
+use crate::net::NetworkService;
+
+pub type PeerId = u128;
 
 #[allow(unused)]
-impl Peer {
-    pub fn new() -> Self {
-        Self {}
+pub struct Peer<NetworkingBackend: NetworkService> {
+    peer_id: PeerId,
+    socket: NetworkingBackend::Socket,
+}
+
+#[allow(unused)]
+impl<NetworkingBackend: NetworkService> Peer<NetworkingBackend> {
+    /// Create new peer
+    ///
+    /// # Arguments
+    /// `peer_id` - unique ID of the peer
+    /// `socket` - socket for the peer
+    pub fn new(peer_id: PeerId, socket: NetworkingBackend::Socket) -> Self {
+        Self { peer_id, socket }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(1 + 1, 2);
+    use super::*;
+    use crate::net::mock::MockService;
+
+    #[tokio::test]
+    async fn test_peer_new() {
+        let addr: <MockService as NetworkService>::Address = "[::1]:11111".parse().unwrap();
+        let mut server = MockService::new(addr).await.unwrap();
+        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
+
+        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
+        assert_eq!(server_res.is_ok(), true);
+        assert_eq!(peer_res.is_ok(), true);
+
+        let _ = Peer::<MockService>::new(1u128, peer_res.unwrap());
     }
 }

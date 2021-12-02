@@ -84,7 +84,7 @@ impl NetworkService for MockService {
 }
 
 #[async_trait]
-impl PeerService for Peer {
+impl<P: NetworkService> PeerService for Peer<P> {
     async fn send<T>(&mut self, data: &T) -> Result<(), P2pError>
     where
         T: Sync + Send + Encode,
