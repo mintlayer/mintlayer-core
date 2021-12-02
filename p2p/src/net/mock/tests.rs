@@ -71,4 +71,21 @@ mod tests {
         let res = srv.connect("127.0.0.1:6666".parse().unwrap()).await;
         assert_eq!(res.is_ok(), true);
     }
+
+    #[tokio::test]
+    async fn test_accept() {
+        use std::net::SocketAddr;
+        use tokio::net::TcpStream;
+        use tokio::select;
+
+        // create service that is used for testing `accept()`
+        let addr: SocketAddr = "[::1]:9999".parse().unwrap();
+        let mut srv = MockService::new("[::1]:9999".parse().unwrap()).await.unwrap();
+
+        let (acc, con) = tokio::join!(srv.accept(), TcpStream::connect(addr));
+        assert_eq!(acc.is_ok(), true);
+        assert_eq!(con.is_ok(), true);
+
+        // TODO: is there any sensible way to make `accept()` fail?
+    }
 }

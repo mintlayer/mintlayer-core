@@ -64,7 +64,8 @@ impl NetworkService for MockService {
     }
 
     async fn accept(&mut self) -> Result<Self::Socket, P2pError> {
-        todo!();
+        // 0 is `TcpStream`, 1 is `SocketAddr`
+        Ok(self.socket.accept().await?.0)
     }
 
     async fn publish<T>(&mut self, topic: &'static str, data: &T)
