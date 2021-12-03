@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 #![allow(dead_code, unused_variables, unused_imports)]
-use crate::error::P2pError;
+use crate::error::{self, P2pError};
 use crate::net::{NetworkService, SocketService};
 use crate::peer::Peer;
 use async_trait::async_trait;
@@ -50,14 +50,14 @@ impl NetworkService for MockService {
     type Address = SocketAddr;
     type Socket = MockSocket;
 
-    async fn new(addr: Self::Address) -> Result<Self, P2pError> {
+    async fn new(addr: Self::Address) -> error::Result<Self> {
         Ok(Self {
             addr: addr,
             socket: TcpListener::bind(addr).await?,
         })
     }
 
-    async fn connect(&mut self, addr: Self::Address) -> Result<Self::Socket, P2pError> {
+    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
         if self.addr == addr {
             return Err(P2pError::SocketError(Error::new(
                 ErrorKind::Other,
@@ -70,7 +70,7 @@ impl NetworkService for MockService {
         })
     }
 
-    async fn accept(&mut self) -> Result<Self::Socket, P2pError> {
+    async fn accept(&mut self) -> error::Result<Self::Socket> {
         // 0 is `TcpStream`, 1 is `SocketAddr`
         Ok(MockSocket {
             socket: self.socket.accept().await?.0,
@@ -94,7 +94,7 @@ impl NetworkService for MockService {
 
 #[async_trait]
 impl SocketService for MockSocket {
-    async fn send<T>(&mut self, data: &T) -> Result<(), P2pError>
+    async fn send<T>(&mut self, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
@@ -104,7 +104,7 @@ impl SocketService for MockSocket {
         }
     }
 
-    async fn recv<T>(&mut self) -> Result<T, P2pError>
+    async fn recv<T>(&mut self) -> error::Result<T>
     where
         T: Decode,
     {

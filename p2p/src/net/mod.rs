@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error::P2pError;
+use crate::error;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
 
@@ -42,7 +42,7 @@ pub trait NetworkService {
     ///
     /// # Arguments
     /// `addr` - socket address for incoming P2P traffic
-    async fn new(addr: Self::Address) -> Result<Self, P2pError>
+    async fn new(addr: Self::Address) -> error::Result<Self>
     where
         Self: Sized;
 
@@ -53,7 +53,7 @@ pub trait NetworkService {
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, addr: Self::Address) -> Result<Self::Socket, P2pError>;
+    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket>;
 
     /// Listen for an incoming connection on the P2P port
     ///
@@ -65,7 +65,7 @@ pub trait NetworkService {
     /// This returns a future that the caller must poll and after a connection
     /// with a peer has been established, the function returns. To start listening
     /// for another incoming connection on the P2P port, `accept()` must be called again.
-    async fn accept(&mut self) -> Result<Self::Socket, P2pError>;
+    async fn accept(&mut self) -> error::Result<Self::Socket>;
 
     /// Publish data in a given gossip topic
     ///
@@ -94,12 +94,12 @@ pub trait SocketService {
     ///
     /// # Arguments
     /// `data` - generic data to send
-    async fn send<T>(&mut self, data: &T) -> Result<(), P2pError>
+    async fn send<T>(&mut self, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode;
 
     /// Receive data from a remote peer we're connected to
-    async fn recv<T>(&mut self) -> Result<T, P2pError>
+    async fn recv<T>(&mut self) -> error::Result<T>
     where
         T: Decode;
 }

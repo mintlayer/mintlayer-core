@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error::P2pError;
 use crate::net::NetworkService;
 
 pub mod error;
@@ -32,7 +31,7 @@ impl<NetworkingBackend: NetworkService> NetworkManager<NetworkingBackend> {
     ///
     /// # Arguments
     /// `addr` - socket address where the local node binds itself to
-    pub async fn new(addr: NetworkingBackend::Address) -> Result<Self, P2pError> {
+    pub async fn new(addr: NetworkingBackend::Address) -> error::Result<Self> {
         Ok(Self {
             network: NetworkingBackend::new(addr).await?,
         })
@@ -50,7 +49,7 @@ impl<NetworkingBackend: NetworkService> P2P<NetworkingBackend> {
     ///
     /// # Arguments
     /// `addr` - socket address where the local node binds itself to
-    pub async fn new(addr: NetworkingBackend::Address) -> Result<Self, P2pError> {
+    pub async fn new(addr: NetworkingBackend::Address) -> error::Result<Self> {
         Ok(Self {
             mgr: NetworkManager::new(addr).await?,
         })

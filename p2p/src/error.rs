@@ -21,6 +21,8 @@ pub enum P2pError {
     DecodeFailure(parity_scale_codec::Error),
 }
 
+pub type Result<T> = core::result::Result<T, P2pError>;
+
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {
         P2pError::SocketError(e)
