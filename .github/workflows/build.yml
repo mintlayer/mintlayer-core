@@ -16,7 +16,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - uses: EmbarkStudios/cargo-deny-action@v1
+    - uses: EmbarkStudios/cargo-deny-action@v1cargo_
+    
+  cargo_tarpaulin:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions-rs/tarpaulin@v0.1
+      with:
+        version: '0.15.0'
+        args: '-- --test-threads 1'
     
   check_l:
     runs-on: ubuntu-latest
