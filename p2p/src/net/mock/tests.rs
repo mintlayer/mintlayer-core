@@ -106,7 +106,8 @@ mod tests {
         assert_eq!(server_res.is_ok(), true);
         assert_eq!(remote_res.is_ok(), true);
 
-        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap());
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap(), tx, rx);
         let mut socket = remote_res.unwrap();
 
         // try to send data that implements `Encode + Decode`
@@ -135,7 +136,8 @@ mod tests {
         assert_eq!(server_res.is_ok(), true);
         assert_eq!(remote_res.is_ok(), true);
 
-        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap());
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap(), tx, rx);
         let mut socket = remote_res.unwrap();
 
         // send data and decode it successfully
