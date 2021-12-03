@@ -18,3 +18,9 @@
 pub enum P2pError {
     SocketError(std::io::Error),
 }
+
+impl From<std::io::Error> for P2pError {
+    fn from(e: std::io::Error) -> P2pError {
+        P2pError::SocketError(e)
+    }
+}
