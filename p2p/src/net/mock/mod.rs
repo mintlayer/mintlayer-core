@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::error::P2pError;
-use crate::net::{NetworkService, PeerService};
+use crate::net::{NetworkService, SocketService};
 use crate::peer::Peer;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
@@ -40,10 +40,15 @@ pub struct MockService {
     addr: SocketAddr,
 }
 
+#[derive(Debug)]
+pub struct MockSocket {
+    socket: TcpStream,
+}
+
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
-    type Socket = TcpStream;
+    type Socket = MockSocket;
 
     async fn new(addr: Self::Address) -> Result<Self, P2pError> {
         Ok(Self {
@@ -60,12 +65,16 @@ impl NetworkService for MockService {
             )));
         }
 
-        Ok(TcpStream::connect(addr).await?)
+        Ok(MockSocket {
+            socket: TcpStream::connect(addr).await?,
+        })
     }
 
     async fn accept(&mut self) -> Result<Self::Socket, P2pError> {
         // 0 is `TcpStream`, 1 is `SocketAddr`
-        Ok(self.socket.accept().await?.0)
+        Ok(MockSocket {
+            socket: self.socket.accept().await?.0,
+        })
     }
 
     async fn publish<T>(&mut self, topic: &'static str, data: &T)
@@ -84,7 +93,7 @@ impl NetworkService for MockService {
 }
 
 #[async_trait]
-impl<P: NetworkService> PeerService for Peer<P> {
+impl SocketService for MockSocket {
     async fn send<T>(&mut self, data: &T) -> Result<(), P2pError>
     where
         T: Sync + Send + Encode,

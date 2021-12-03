@@ -18,8 +18,7 @@
 mod tests {
     use super::*;
     use crate::error::P2pError;
-    use crate::net::mock::{MockService, NetworkService};
-    use crate::net::PeerService;
+    use crate::net::mock::{MockService, NetworkService, SocketService};
     use crate::peer::Peer;
     use parity_scale_codec::{Decode, Encode};
     use std::net::SocketAddr;
@@ -100,15 +99,15 @@ mod tests {
     #[tokio::test]
     async fn test_peer_send() {
         let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
-        let server_ = TcpListener::bind(addr).await.unwrap();
+        let mut server = MockService::new(addr).await.unwrap();
+        let remote_fut = TcpStream::connect(addr);
 
-        let (server_res, peer_res) = tokio::join!(server_.accept(), peer_fut);
+        let (server_res, remote_res) = tokio::join!(server.accept(), remote_fut);
         assert_eq!(server_res.is_ok(), true);
-        assert_eq!(peer_res.is_ok(), true);
+        assert_eq!(remote_res.is_ok(), true);
 
-        let mut server = server_res.unwrap().0;
-        let mut peer = Peer::<MockService>::new(1u128, peer_res.unwrap());
+        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap());
+        let mut socket = remote_res.unwrap();
 
         // try to send data that implements `Encode + Decode`
         // and verify that it was received correctly
@@ -118,7 +117,7 @@ mod tests {
         };
 
         let mut buf = vec![0u8; 256];
-        let (server_res, peer_res) = tokio::join!(server.read(&mut buf), peer.send(&tx));
+        let (server_res, peer_res) = tokio::join!(socket.read(&mut buf), peer.socket.send(&tx));
 
         assert_eq!(peer_res.is_ok(), true);
         assert_eq!(server_res.is_ok(), true);
@@ -127,16 +126,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_recv() {
+        // create a `MockService`, connect to it with a `TcpStream` and exchange data
         let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
-        let server_ = TcpListener::bind(addr).await.unwrap();
+        let mut server = MockService::new(addr).await.unwrap();
+        let remote_fut = TcpStream::connect(addr);
 
-        let (server_res, peer_res) = tokio::join!(server_.accept(), peer_fut);
+        let (server_res, remote_res) = tokio::join!(server.accept(), remote_fut);
         assert_eq!(server_res.is_ok(), true);
-        assert_eq!(peer_res.is_ok(), true);
+        assert_eq!(remote_res.is_ok(), true);
 
-        let mut server = server_res.unwrap().0;
-        let mut peer = Peer::<MockService>::new(1u128, peer_res.unwrap());
+        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap());
+        let mut socket = remote_res.unwrap();
 
         // send data and decode it successfully
         let tx = Transaction {
@@ -145,9 +145,9 @@ mod tests {
         };
         let encoded = tx.encode();
 
-        let (server_res, peer_res): (_, Result<Transaction, _>) =
-            tokio::join!(server.write(&encoded), peer.recv());
-        assert_eq!(server_res.is_ok(), true);
+        let (socket_res, peer_res): (_, Result<Transaction, _>) =
+            tokio::join!(socket.write(&encoded), peer.socket.recv());
+        assert_eq!(socket_res.is_ok(), true);
         assert_eq!(peer_res.is_ok(), true);
         assert_eq!(peer_res.unwrap(), tx);
     }

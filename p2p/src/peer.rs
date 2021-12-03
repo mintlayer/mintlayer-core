@@ -40,17 +40,18 @@ impl<NetworkingBackend: NetworkService> Peer<NetworkingBackend> {
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
+    use tokio::net::TcpStream;
 
     #[tokio::test]
     async fn test_peer_new() {
         let addr: <MockService as NetworkService>::Address = "[::1]:11111".parse().unwrap();
         let mut server = MockService::new(addr).await.unwrap();
-        let peer_fut = <MockService as NetworkService>::Socket::connect(addr);
+        let peer_fut = TcpStream::connect(addr);
 
         let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
         assert_eq!(server_res.is_ok(), true);
         assert_eq!(peer_res.is_ok(), true);
 
-        let _ = Peer::<MockService>::new(1u128, peer_res.unwrap());
+        let _ = Peer::<MockService>::new(1u128, server_res.unwrap());
     }
 }

@@ -17,7 +17,6 @@
 use crate::error::P2pError;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub mod libp2p;
 pub mod mock;
@@ -37,7 +36,7 @@ pub trait NetworkService {
     type Address;
 
     /// Generic socket object that the underlying implementation uses
-    type Socket: Sync + Send + Unpin + AsyncWriteExt + AsyncReadExt;
+    type Socket: SocketService;
 
     /// Initialize the network service provider
     ///
@@ -87,10 +86,10 @@ pub trait NetworkService {
         T: Sync + Send + Decode;
 }
 
-/// `PeerService` provides the low-level socket interface that
-/// the `Peer` object must implement in order to do networking.
+/// `SocketService` provides the low-level socket interface that
+/// the `NetworkService::Socket` object must implement in order to do networking
 #[async_trait]
-pub trait PeerService {
+pub trait SocketService {
     /// Send data to a remote peer we're connected to
     ///
     /// # Arguments
