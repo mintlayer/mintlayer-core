@@ -19,7 +19,7 @@ pub struct Block {
 
 impl Idable for Block {
     fn get_id(&self) -> H256 {
-        H256::from_low_u64_ne(0) // TODO
+        H256::from_low_u64_ne(self.header.time as u64) // TODO
     }
 }
 
