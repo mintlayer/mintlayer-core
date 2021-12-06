@@ -9,8 +9,8 @@ pub struct Amount {
 
 impl Amount {
     #[allow(dead_code)]
-    pub fn new() -> Self {
-        Amount { val: 0 }
+    pub fn new(v: u128) -> Self {
+        Amount { val: v }
     }
 }
 
@@ -140,8 +140,8 @@ mod tests {
 
     #[test]
     fn creation() {
-        let x = Amount::new();
-        assert_eq!(x.val, 0);
+        let x = Amount::new(555);
+        assert_eq!(x.val, 555);
 
         let y = Amount::from(123);
         assert_eq!(y.val, 123);
