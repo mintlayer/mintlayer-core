@@ -389,25 +389,21 @@ mod tests {
         assert_eq!(orphans_pool.orphan_by_prev_id.len(),1);
         assert_eq!(orphans_pool.orphan_ids.len(),3);
 
-        let first_block = blocks.first().expect("list should not be empty");
+        let random_block = blocks.choose(&mut orphans_pool.rng).expect("list should not be empty");
         {
-            let x = orphans_pool.orphan_by_prev_id.get(&first_block.get_prev_block_id())
+            let x = orphans_pool.orphan_by_prev_id.get(&random_block.get_prev_block_id())
                 .expect("this id should exist");
             assert_eq!(x.len(),3);
         }
 
-        // block d should be removed:
-        // [
-        //  ( a, (b,c) ),
-        // ]
-        orphans_pool.del_one_deepest_child(&first_block.get_id());
+        orphans_pool.del_one_deepest_child(&random_block.get_id());
 
-        assert!(!orphans_pool.orphan_by_id.contains_key(&first_block.get_id()));
+        assert!(!orphans_pool.orphan_by_id.contains_key(&random_block.get_id()));
 
-        if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&first_block.get_prev_block_id()) {
+        if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&random_block.get_prev_block_id()) {
             assert_eq!(blocks.len(),2);
         } else {
-            panic!("there should still be 2 elements in id: {:?}", first_block.get_prev_block_id());
+            panic!("there should still be 2 elements in id: {:?}", random_block.get_prev_block_id());
         }
 
         assert_eq!(orphans_pool.orphan_ids.len(),2);
