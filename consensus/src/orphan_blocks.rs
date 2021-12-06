@@ -8,10 +8,10 @@ use std::rc::Rc;
 pub const DEFAULT_MAX_ORPHAN_BLOCKS: usize = 512;
 
 pub struct OrphanBlocksPool {
-    pub(crate) orphan_ids: Vec<H256>,
-    pub(crate) orphan_by_id: BTreeMap<H256, Rc<Block>>,
-    pub(crate) orphan_by_prev_id: BTreeMap<H256, Vec<Rc<Block>>>,
-    pub(crate) max_orphans: usize,
+    orphan_ids: Vec<H256>,
+    orphan_by_id: BTreeMap<H256, Rc<Block>>,
+    orphan_by_prev_id: BTreeMap<H256, Vec<Rc<Block>>>,
+    max_orphans: usize,
     rng: ThreadRng,
 }
 
@@ -41,7 +41,7 @@ impl OrphanBlocksPool {
         }
     }
 
-    pub(crate) fn drop_block(&mut self, block_id: &H256) {
+    fn drop_block(&mut self, block_id: &H256) {
         let block = self
             .orphan_by_id
             .get(block_id)
