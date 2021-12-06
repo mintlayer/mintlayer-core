@@ -7,6 +7,19 @@ pub struct Amount {
     val: IntType,
 }
 
+impl Amount {
+    #[allow(dead_code)]
+    pub fn new() -> Self {
+        Amount { val: 0 }
+    }
+}
+
+impl From<u128> for Amount {
+    fn from(v: u128) -> Self {
+        Amount { val: v }
+    }
+}
+
 impl std::ops::Add for Amount {
     type Output = Option<Self>;
 
@@ -124,6 +137,16 @@ impl std::ops::Shr<u32> for Amount {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn creation() {
+        let x = Amount::new();
+        assert_eq!(x.val, 0);
+
+        let y = Amount::from(123);
+        assert_eq!(y.val, 123);
+    }
+
     #[test]
     fn add_some() {
         assert_eq!(
