@@ -136,9 +136,9 @@ impl OrphanBlocksPool {
 
     /// take all the blocks that share the same parent
     /// this is useful when a new tip is set, and we want to connect all its unorphaned children
-    pub fn take_all_children_of(&mut self, block_id: &H256) -> Vec<Rc<Block>> {
+    pub fn take_all_children_of(&mut self, block_id: &H256) -> Vec<Block> {
         let res = self.orphan_by_prev_id.get_mut(block_id);
-        let res = match res {
+        let mut res = match res {
             None => {
                 return Vec::new();
             }
@@ -147,7 +147,13 @@ impl OrphanBlocksPool {
         // after we get all the blocks that have the same prev, we drop them from the pool
         res.iter().for_each(|blk| self.drop_block(&blk.get_id()));
         // after dropping everything, this is expected to be the only Rc left
-        res.iter().for_each(|blk| assert_eq!(Rc::strong_count(blk), 1));
+        let res = res
+            .drain(..)
+            .map(|blk| {
+                Rc::try_unwrap(blk)
+                    .expect("There cannot be more than one copy of the Rc. This is unexpected.")
+            })
+            .collect();
         res
     }
 }
@@ -193,8 +199,6 @@ mod tests {
         }
 
         pub fn gen_blocks_chain_starting_from_id(count: u32, prev_block_id: Option<H256>) -> Vec<Block> {
-            let mut rng = rand::thread_rng();
-
             let mut blocks = vec![gen_block_from_id(prev_block_id)];
 
             (1..count).into_iter().for_each(|_| {
@@ -392,21 +396,18 @@ mod tests {
         // ]
         let blocks = gen_blocks_chain(4);
 
-        blocks.iter().enumerate().for_each(|(idx, b)| {
-            assert!(orphans_pool.add_block(b.clone()).is_ok());
-            assert!(orphans_pool.is_already_an_orphan(&b.get_id()));
+        blocks.iter().for_each(|block| {
+            assert!(orphans_pool.add_block(block.clone()).is_ok());
+            assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
             // check that relationship of the prev_id and the block is 1-to-1.
-            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&b.get_prev_block_id()) {
+            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.get_prev_block_id()) {
                 assert_eq!(blocks.len(), 1);
-
-                let only_block = blocks.first().expect("this should not be empty");
-                assert_eq!(only_block, &Rc::new(b.clone()));
             } else {
                 panic!(
                     "block {:?} not found for key {:?}",
-                    b,
-                    b.get_prev_block_id()
+                    block,
+                    block.get_prev_block_id()
                 );
             }
         });
@@ -600,26 +601,40 @@ mod tests {
         // ]
         let sim_blocks = gen_blocks_with_common_parent(count);
 
-        let rand_block_id = sim_blocks.choose(&mut rand::thread_rng()).expect("should return any block in sim_blocks").get_prev_block_id();
+        let mut conn_blocks:Vec<Block> = vec![];
+        // let's use 2 random blocks of sim_blocks to generate a chain of blocks
+        for _ in 0..2 {
+            let rand_block_id = sim_blocks.choose(&mut rand::thread_rng()).expect("should return any block in sim_blocks").get_id();
+            // generate a chain of 3 blocks for `rand_block_id` as parent.
+            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id));
+            conn_blocks.append(&mut blocks);
+        }
 
-        // create a chain of blocks using rand_block's id as parent
-        // in `orphans_by_prev_id`:
-        // [
-        //  ( <id_from_sim_blocks>,l), (l,m), (m,n), (n,o), (o,p))
-        // ]
-        let conn_blocks = gen_blocks_chain_starting_from_id(5,Some(rand_block_id));
+        // alternate insert
+        for i in 0 .. sim_blocks.len() {
+            if i < conn_blocks.len() {
+                let b = conn_blocks[i].clone();
+                orphans_pool.add_block(b).expect("should not fail");
+            }
 
-        // alternate adding of blocks
-        for (sim_block, conn_block) in sim_blocks.iter().zip(conn_blocks) {
-            orphans_pool.add_block(sim_block.clone()).expect("should not fail");
-            orphans_pool.add_block(conn_block).expect("should not fail");
+            let b = sim_blocks[i].clone();
+            orphans_pool.add_block(b).expect("should not fail");
         }
 
         // collect all children of sim_blocks's prev_id
         let sim_parent_id = sim_blocks.first().expect("this should return the first element").get_prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
+        assert_eq!(children.len(), sim_blocks.len());
 
-        //TODO: what's the expected result?
+        // all blocks in sim_blocks should appear in the children list
+        sim_blocks.into_iter().for_each(|child| {
+            assert!(children.contains(&Rc::new(child)));
+        });
 
+        // the remaining blocks in the pool should all belong to conn_blocks,
+        // and should all STILL be in the pool
+        conn_blocks.iter().for_each(|block| {
+            check_block_existence(&orphans_pool,block);
+        })
     }
 }
