@@ -17,7 +17,7 @@ pub trait BlockchainStorage {
     fn del_block() -> Result<(), BlockchainStorageError>;
 
     fn set_block_height_in_mainchain(height: &BlockHeight, block_id: &H256);
-    fn get_block_height_in_mainchain(height: &BlockHeight);
+    fn get_block_height_in_mainchain(block_id: &H256);
     fn del_block_height_in_mainchain(height: &BlockHeight);
 
     fn set_best_block_id(hash: &H256) -> Result<(), BlockchainStorageError>;
