@@ -7,10 +7,10 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-fixed-hash = "0.7.0"
+fixed-hash = { version = "0.7.0", default-features = true, features = ["std"] }
 bech32 = "0.8.1"
 thiserror = "1.0.30"
 displaydoc = { default-features = false, version = "0.2" }
-
 script = { path = '../script'}
 crypto = { path = '../crypto'}
+hex-literal = "0.3.4"

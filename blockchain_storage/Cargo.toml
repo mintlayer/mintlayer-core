@@ -1,5 +1,5 @@
 [package]
-name = "consensus"
+name = "blockchain-storage"
 version = "0.1.0"
 edition = "2018"
 license = "MIT"
@@ -7,7 +7,5 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-blockchain-storage = { path = '../blockchain_storage'}
-common = { path = '../common'}
-rand = "0.8.4"
-logging = { path = '../logging'}
+storage = { path = '../storage'}
+common = { path = '../common' }

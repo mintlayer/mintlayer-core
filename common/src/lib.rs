@@ -1,5 +1,5 @@
-pub mod chain;
 pub mod address;
+pub mod chain;
 pub mod primitives;
 
 #[cfg(test)]
