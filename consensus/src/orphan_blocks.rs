@@ -161,14 +161,14 @@ impl OrphanBlocksPool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::chain::block::{Block, BlockHeader};
-    use rand::seq::SliceRandom;
-    use helpers::*;
     use checkers::*;
+    use common::chain::block::{Block, BlockHeader};
+    use helpers::*;
+    use rand::seq::SliceRandom;
 
     mod helpers {
-        use rand::Rng;
         use super::*;
+        use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
             (0..count).into_iter().map(|_| gen_random_block()).collect::<Vec<_>>()
@@ -198,7 +198,10 @@ mod tests {
             gen_blocks_chain_starting_from_id(count, None)
         }
 
-        pub fn gen_blocks_chain_starting_from_id(count: u32, prev_block_id: Option<H256>) -> Vec<Block> {
+        pub fn gen_blocks_chain_starting_from_id(
+            count: u32,
+            prev_block_id: Option<H256>,
+        ) -> Vec<Block> {
             let mut blocks = vec![gen_block_from_id(prev_block_id)];
 
             (1..count).into_iter().for_each(|_| {
@@ -213,14 +216,15 @@ mod tests {
             gen_blocks_with_common_parent_id(count, None)
         }
 
-        pub fn gen_blocks_with_common_parent_id(count: u32, prev_block_id: Option<H256>) -> Vec<Block> {
+        pub fn gen_blocks_with_common_parent_id(
+            count: u32,
+            prev_block_id: Option<H256>,
+        ) -> Vec<Block> {
             let mut rng = rand::thread_rng();
 
             let prev_block_id = prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen()));
 
-            (0..count).into_iter().map(|_|{
-                gen_block_from_id(Some(prev_block_id))
-            }).collect()
+            (0..count).into_iter().map(|_| gen_block_from_id(Some(prev_block_id))).collect()
         }
     }
 
@@ -228,7 +232,7 @@ mod tests {
         use super::*;
 
         // checks whether each vecs in the orphan pool has a length that matches with the expected length.
-        pub fn check_pool_length(orphans_pool:&OrphanBlocksPool, expected_length: usize) {
+        pub fn check_pool_length(orphans_pool: &OrphanBlocksPool, expected_length: usize) {
             assert_eq!(orphans_pool.orphan_ids.len(), expected_length);
             assert_eq!(orphans_pool.orphan_by_id.len(), expected_length);
 
@@ -236,32 +240,33 @@ mod tests {
             assert_eq!(len, expected_length);
         }
 
-        pub fn check_empty_pool(orphans_pool:&OrphanBlocksPool) {
-            check_pool_length(orphans_pool,0);
+        pub fn check_empty_pool(orphans_pool: &OrphanBlocksPool) {
+            check_pool_length(orphans_pool, 0);
         }
 
-        pub fn check_block_existence(orphans_pool:&OrphanBlocksPool, block:&Block) {
+        pub fn check_block_existence(orphans_pool: &OrphanBlocksPool, block: &Block) {
             assert!(orphans_pool.orphan_ids.contains(&block.get_id()));
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
             if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.get_prev_block_id()) {
-               assert!(blocks.contains(&Rc::new(block.clone())))
+                assert!(blocks.contains(&Rc::new(block.clone())))
             } else {
-                panic!("the block {:#?} is not in `orphan_by_prev_id` field.", block);
+                panic!(
+                    "the block {:#?} is not in `orphan_by_prev_id` field.",
+                    block
+                );
             }
         }
 
         pub fn check_block_existence_and_pool_length(
-            orphans_pool:&OrphanBlocksPool,
-            block:&Block,
-            expected_length:usize
+            orphans_pool: &OrphanBlocksPool,
+            block: &Block,
+            expected_length: usize,
         ) {
-            check_block_existence(orphans_pool,block);
-            check_pool_length(orphans_pool,expected_length);
+            check_block_existence(orphans_pool, block);
+            check_pool_length(orphans_pool, expected_length);
         }
-
     }
-
 
     #[test]
     fn test_pool_default() {
@@ -287,7 +292,7 @@ mod tests {
         assert!(orphans_pool.add_block(block.clone()).is_ok());
 
         // check if block was really inserted
-        check_block_existence(&orphans_pool,&block);
+        check_block_existence(&orphans_pool, &block);
 
         // check if orphans pool is empty after clearing.
         orphans_pool.clear();
@@ -302,28 +307,34 @@ mod tests {
         let block = gen_random_block();
         assert!(orphans_pool.add_block(block.clone()).is_ok());
 
-        check_block_existence_and_pool_length(&orphans_pool, &block,1);
+        check_block_existence_and_pool_length(&orphans_pool, &block, 1);
 
         // add another block that connects to the first one
         let conn_block = gen_block_from_id(Some(block.get_id()));
         assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
-        check_block_existence_and_pool_length(&orphans_pool, &conn_block,2);
+        check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
 
         // check that there is only 2 key-value pair in `orphans_by_prev_id`
-        assert_eq!(orphans_pool.orphan_by_prev_id.len(),2);
+        assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);
 
         // add another block with the parent id of any of the 2 blocks above
         let rand_block = {
-            let rand_id = orphans_pool.orphan_ids.choose(&mut rand::thread_rng()).expect("it should return any id of the 2 blocks above");
-            orphans_pool.orphan_by_id.get(rand_id).expect("it should return the block specified by `rand_id`")
+            let rand_id = orphans_pool
+                .orphan_ids
+                .choose(&mut rand::thread_rng())
+                .expect("it should return any id of the 2 blocks above");
+            orphans_pool
+                .orphan_by_id
+                .get(rand_id)
+                .expect("it should return the block specified by `rand_id`")
         };
 
         let sim_block = gen_block_from_id(Some(rand_block.get_prev_block_id()));
         assert!(orphans_pool.add_block(sim_block.clone()).is_ok());
-        check_block_existence_and_pool_length(&orphans_pool, &sim_block,3);
+        check_block_existence_and_pool_length(&orphans_pool, &sim_block, 3);
 
         // check that there is STILL only 2 key-value pair in `orphans_by_prev_id`
-        assert_eq!(orphans_pool.orphan_by_prev_id.len(),2);
+        assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);
 
         // check if orphans pool is empty after clearing.
         orphans_pool.clear();
@@ -352,13 +363,14 @@ mod tests {
             assert!(orphans_pool.add_block(block.clone()).is_ok());
         });
 
-        let rand_block = blocks
-            .choose(&mut rand::thread_rng())
-            .expect("this should return any block");
+        let rand_block =
+            blocks.choose(&mut rand::thread_rng()).expect("this should return any block");
 
-        assert!(orphans_pool.add_block(rand_block.clone()).is_err());
+        assert_eq!(
+            orphans_pool.add_block(rand_block.clone()).unwrap_err(),
+            OrphanAddError::BlockAlreadyInOrphanList(rand_block.clone())
+        );
     }
-
 
     #[test]
     fn test_pool_drop_block() {
@@ -370,10 +382,8 @@ mod tests {
         });
         check_pool_length(&orphans_pool, blocks.len());
 
-
-        let rand_block = blocks
-            .choose(&mut rand::thread_rng())
-            .expect("this should return any block");
+        let rand_block =
+            blocks.choose(&mut rand::thread_rng()).expect("this should return any block");
 
         // dropping the rand_block
         orphans_pool.drop_block(&rand_block.get_id());
@@ -411,7 +421,7 @@ mod tests {
                 );
             }
         });
-        check_pool_length(&orphans_pool,blocks.len());
+        check_pool_length(&orphans_pool, blocks.len());
 
         let first_block = blocks.first().expect("list should not be empty");
         let last_block = blocks.last().expect("list should not be empty");
@@ -427,7 +437,7 @@ mod tests {
         // the last block should be deleted.
         assert!(!orphans_pool.orphan_by_id.contains_key(&last_block.get_id()));
         assert!(!orphans_pool.orphan_by_prev_id.contains_key(&last_block.get_prev_block_id()));
-        check_pool_length(&orphans_pool,blocks.len() - 1);
+        check_pool_length(&orphans_pool, blocks.len() - 1);
 
         // the first block should still exist.
         check_block_existence(&orphans_pool, first_block);
@@ -461,7 +471,6 @@ mod tests {
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 1);
         assert_eq!(orphans_pool.orphan_ids.len(), blocks.len());
 
-
         // delete a random block
         let random_block = blocks.choose(&mut rand::thread_rng()).expect("returns any block");
         orphans_pool.del_one_deepest_child(&random_block.get_id());
@@ -470,7 +479,8 @@ mod tests {
         assert!(!orphans_pool.orphan_by_id.contains_key(&random_block.get_id()));
         assert!(!orphans_pool.orphan_ids.contains(&random_block.get_id()));
 
-        if let Some(in_blocks) = orphans_pool.orphan_by_prev_id.get(&random_block.get_prev_block_id())
+        if let Some(in_blocks) =
+            orphans_pool.orphan_by_prev_id.get(&random_block.get_prev_block_id())
         {
             assert_eq!(in_blocks.len(), blocks.len() - 1);
         } else {
@@ -543,13 +553,16 @@ mod tests {
         // add a random block
         let random_block = gen_random_block();
         assert!(orphans_pool.add_block(random_block.clone()).is_ok());
-        check_block_existence_and_pool_length(&orphans_pool,&random_block, orphans_pool.max_orphans);
+        check_block_existence_and_pool_length(
+            &orphans_pool,
+            &random_block,
+            orphans_pool.max_orphans,
+        );
 
         // this will trigger pruning
         orphans_pool.prune();
-        check_pool_length(&orphans_pool,orphans_pool.max_orphans - 1);
+        check_pool_length(&orphans_pool, orphans_pool.max_orphans - 1);
     }
-
 
     #[test]
     fn test_simple_take_all_children_of() {
@@ -569,7 +582,6 @@ mod tests {
         let conn_blocks = gen_blocks_chain(count);
         let conn_blocks_len = conn_blocks.len();
 
-
         // alternate adding of blocks
         for (sim_block, conn_block) in sim_blocks.iter().zip(conn_blocks) {
             orphans_pool.add_block(sim_block.clone()).expect("should not fail");
@@ -577,17 +589,20 @@ mod tests {
         }
 
         // collect all children of sim_blocks's prev_id
-        let sim_parent_id = sim_blocks.first().expect("this should return the first element").get_prev_block_id();
+        let sim_parent_id = sim_blocks
+            .first()
+            .expect("this should return the first element")
+            .get_prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 
         // all blocks in sim_blocks should appear in the children list
         sim_blocks.into_iter().for_each(|child| {
-          assert!(children.contains(&Rc::new(child)));
+            assert!(children.contains(&Rc::new(child)));
         });
 
         // the remaining blocks in the pool should all belong to conn_blocks
-        check_pool_length(&orphans_pool,conn_blocks_len);
+        check_pool_length(&orphans_pool, conn_blocks_len);
     }
 
     #[test]
@@ -601,7 +616,7 @@ mod tests {
         // ]
         let sim_blocks = gen_blocks_with_common_parent(count);
 
-        let mut conn_blocks:Vec<Block> = vec![];
+        let mut conn_blocks: Vec<Block> = vec![];
         // let's use 2 random blocks of sim_blocks to generate a chain of blocks
         // in `orphans_by_prev_id`:
         // [
@@ -613,7 +628,10 @@ mod tests {
         //  ( o, p )
         // ]
         for _ in 0..2 {
-            let rand_block_id = sim_blocks.choose(&mut rand::thread_rng()).expect("should return any block in sim_blocks").get_id();
+            let rand_block_id = sim_blocks
+                .choose(&mut rand::thread_rng())
+                .expect("should return any block in sim_blocks")
+                .get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
             let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id));
             conn_blocks.append(&mut blocks);
@@ -630,7 +648,7 @@ mod tests {
         //  ( n, o ),
         //  ( o, p )
         // ]
-        for i in 0 .. sim_blocks.len() {
+        for i in 0..sim_blocks.len() {
             if i < conn_blocks.len() {
                 let b = conn_blocks[i].clone();
                 orphans_pool.add_block(b).expect("should not fail");
@@ -641,7 +659,10 @@ mod tests {
         }
 
         // collect all children of sim_blocks's prev_id
-        let sim_parent_id = sim_blocks.first().expect("this should return the first element").get_prev_block_id();
+        let sim_parent_id = sim_blocks
+            .first()
+            .expect("this should return the first element")
+            .get_prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 
@@ -657,7 +678,7 @@ mod tests {
         //  ( d, k ), ( k, l ), ( l, m ), ( i, n ), ( n, o ), ( o, p )
         // ]
         conn_blocks.iter().for_each(|block| {
-            check_block_existence(&orphans_pool,block);
+            check_block_existence(&orphans_pool, block);
         })
     }
 }
