@@ -524,7 +524,7 @@ mod tests {
         let blocks = [sim_blocks, conn_blocks, extra_conn_blocks, extra_sim_blocks].concat();
 
         blocks.iter().for_each(|block| {
-            orphans_pool.add_block(block.clone());
+            orphans_pool.add_block(block.clone()).expect("should not fail");
         });
 
         check_pool_length(&orphans_pool, blocks.len());
@@ -571,8 +571,8 @@ mod tests {
 
         // alternate adding of blocks
         for (sim_block, conn_block) in sim_blocks.iter().zip(conn_blocks) {
-            orphans_pool.add_block(sim_block.clone());
-            orphans_pool.add_block(conn_block);
+            orphans_pool.add_block(sim_block.clone()).expect("should not fail");
+            orphans_pool.add_block(conn_block).expect("should not fail");
         }
 
         // collect all children of sim_blocks's prev_id
@@ -611,8 +611,8 @@ mod tests {
 
         // alternate adding of blocks
         for (sim_block, conn_block) in sim_blocks.iter().zip(conn_blocks) {
-            orphans_pool.add_block(sim_block.clone());
-            orphans_pool.add_block(conn_block);
+            orphans_pool.add_block(sim_block.clone()).expect("should not fail");
+            orphans_pool.add_block(conn_block).expect("should not fail");
         }
 
         // collect all children of sim_blocks's prev_id
