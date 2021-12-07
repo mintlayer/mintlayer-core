@@ -564,7 +564,7 @@ mod tests {
 
         // in `orphans_by_prev_id`:
         // [
-        //  ( k,l), (l,m), (m,n), (n,o), (o,p), (p,q), (q,r), (r,s), (s,t))
+        //  (k,l), (l,m), (m,n), (n,o), (o,p), (p,q), (q,r), (r,s), (s,t))
         // ]
         let conn_blocks = gen_blocks_chain(count);
         let conn_blocks_len = conn_blocks.len();
@@ -603,6 +603,15 @@ mod tests {
 
         let mut conn_blocks:Vec<Block> = vec![];
         // let's use 2 random blocks of sim_blocks to generate a chain of blocks
+        // in `orphans_by_prev_id`:
+        // [
+        //  ( <random_id_x_from_sim_blocks>, k )
+        //  ( k, l ),
+        //  ( l, m ),
+        //  ( <random_id_y_from_sim_blocks>, n ),
+        //  ( n, o ),
+        //  ( o, p )
+        // ]
         for _ in 0..2 {
             let rand_block_id = sim_blocks.choose(&mut rand::thread_rng()).expect("should return any block in sim_blocks").get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
@@ -610,7 +619,17 @@ mod tests {
             conn_blocks.append(&mut blocks);
         }
 
-        // alternate insert
+        // alternate insert. At this point, the `orphans_by_prev_id` will look something like this:
+        // in `orphans_by_prev_id`:
+        // [
+        //  ( a, (b,c,d,e,f,g,h,i,j) ),
+        //  ( d, k )
+        //  ( k, l ),
+        //  ( l, m ),
+        //  ( i, n ),
+        //  ( n, o ),
+        //  ( o, p )
+        // ]
         for i in 0 .. sim_blocks.len() {
             if i < conn_blocks.len() {
                 let b = conn_blocks[i].clone();
@@ -627,12 +646,16 @@ mod tests {
         assert_eq!(children.len(), sim_blocks.len());
 
         // all blocks in sim_blocks should appear in the children list
-        sim_blocks.into_iter().for_each(|child| {
-            assert!(children.contains(&Rc::new(child)));
+        sim_blocks.iter().for_each(|child| {
+            assert!(children.contains(child));
         });
 
-        // the remaining blocks in the pool should all belong to conn_blocks,
-        // and should all STILL be in the pool
+        // the remaining blocks in the pool should all belong to conn_blocks;
+        // the (d,k) and (i,n) should STILL be in the pool:
+        // in `orphans_by_prev_id`:
+        // [
+        //  ( d, k ), ( k, l ), ( l, m ), ( i, n ), ( n, o ), ( o, p )
+        // ]
         conn_blocks.iter().for_each(|block| {
             check_block_existence(&orphans_pool,block);
         })
