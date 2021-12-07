@@ -140,7 +140,7 @@ pub fn read_scriptint_size(v: &[u8], max_size: usize) -> Result<i64, Error> {
 
     let (mut ret, sh) = v.iter().fold((0, 0), |(acc, sh), n| (acc + ((*n as i64) << sh), sh + 8));
     if v[len - 1] & 0x80 != 0 {
-        ret &= (1 << (sh - 1)) - 1;
+        ret &= ((1u64 << (sh - 1)) - 1) as i64;
         ret = -ret;
     }
     Ok(ret)
@@ -893,6 +893,13 @@ mod test {
         }
         assert!(read_scriptint(&build_scriptint(1 << 31)).is_err());
         assert!(read_scriptint(&build_scriptint(-(1 << 31))).is_err());
+    }
+
+    #[test]
+    fn read_scriptint_neg_zero_i64() {
+        let n0_bytes = [0, 0, 0, 0, 0, 0, 0, 128];
+        let result = read_scriptint_size(&n0_bytes, 8);
+        assert_eq!(result, Ok(0i64));
     }
 
     #[test]

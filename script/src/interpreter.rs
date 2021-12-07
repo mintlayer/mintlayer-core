@@ -327,7 +327,7 @@ pub fn run_script<'a, Ctx: Context>(
                     }
                 },
                 opcodes::Class::TimeLock(opcode) if executing => {
-                    let time = script::read_scriptint_size(stack.top(0)?.as_ref(), 8)?;
+                    let time = script::read_scriptint_size(stack.top(0)?.as_ref(), 5)?;
                     let ok = match opcode {
                         opcodes::TimeLock::OP_CLTV => ctx.check_lock_time(time),
                         opcodes::TimeLock::OP_CSV => ctx.check_sequence(time),

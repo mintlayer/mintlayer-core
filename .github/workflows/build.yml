@@ -11,6 +11,15 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+
+  cargo_deny:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        arguments: --all-features --workspace
+
   check_l:
     runs-on: ubuntu-latest
     steps:
@@ -66,7 +75,7 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release --all
+      run: cargo test --release --workspace
 
   build_ubuntu:
     runs-on: ubuntu-latest
@@ -87,4 +96,4 @@ jobs:
     - name: Build
       run: cargo build --release
     - name: Run tests
-      run: cargo test --release --all
+      run: cargo test --release --workspace

@@ -26,6 +26,22 @@ members = [
 #  "test",          # integration tests
 ]
 
+default-members = [
+  "common",
+  "storage",
+  "crypto",
+  "consensus",
+  "script",
+  "logging",
+  "p2p",
+  "network",
+  "rpc",
+  "serialization",
+  "node",
+  "wallet",
+#  "test",
+]
+
 [dependencies]
 common = { path = "common"}
 storage = { path = "storage"}
@@ -41,3 +57,11 @@ serialization = { path = "serialization"}
 node = { path = "node", optional = true}
 wallet = { path = "wallet", optional = true}
 
+[profile.release]
+debug-assertions = true
+overflow-checks = true
+
+[profile.test]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
