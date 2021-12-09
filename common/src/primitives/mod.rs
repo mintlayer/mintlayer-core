@@ -1,8 +1,9 @@
-pub mod encoding;
 pub mod amount;
+pub mod encoding;
 pub mod error;
 pub mod height;
 pub mod id;
+pub mod merkle;
 
 pub use amount::Amount;
 pub use encoding::{Bech32Error, DecodedBech32};

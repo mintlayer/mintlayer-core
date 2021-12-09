@@ -21,6 +21,7 @@ pub enum OrphanAddError {
 }
 
 impl OrphanBlocksPool {
+    #[allow(dead_code)]
     pub fn new_default() -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
@@ -31,6 +32,7 @@ impl OrphanBlocksPool {
         }
     }
 
+    #[allow(dead_code)]
     pub fn new_custom(max_orphans: usize) -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
@@ -41,6 +43,7 @@ impl OrphanBlocksPool {
         }
     }
 
+    #[allow(dead_code)]
     fn drop_block(&mut self, block_id: &H256) {
         let block = self
             .orphan_by_id
@@ -83,6 +86,7 @@ impl OrphanBlocksPool {
     }
 
     // keep digging in the orphans tree until we find a block that has no children, then delete that
+    #[allow(dead_code)]
     fn del_one_deepest_child(&mut self, block_id: &H256) {
         let next_block = self
             .orphan_by_prev_id
@@ -97,6 +101,7 @@ impl OrphanBlocksPool {
         }
     }
 
+    #[allow(dead_code)]
     fn prune(&mut self) {
         if self.orphan_by_id.len() < self.max_orphans {
             return;
@@ -107,6 +112,7 @@ impl OrphanBlocksPool {
         self.del_one_deepest_child(&id);
     }
 
+    #[allow(dead_code)]
     pub fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError> {
         self.prune();
         let block_id = block.get_id();
@@ -124,10 +130,12 @@ impl OrphanBlocksPool {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn is_already_an_orphan(&self, block_id: &H256) -> bool {
         self.orphan_by_id.contains_key(block_id)
     }
 
+    #[allow(dead_code)]
     pub fn clear(&mut self) {
         self.orphan_by_id.clear();
         self.orphan_ids.clear();
@@ -136,6 +144,7 @@ impl OrphanBlocksPool {
 
     /// take all the blocks that share the same parent
     /// this is useful when a new tip is set, and we want to connect all its unorphaned children
+    #[allow(dead_code)]
     pub fn take_all_children_of(&mut self, block_id: &H256) -> Vec<Block> {
         let res = self.orphan_by_prev_id.get_mut(block_id);
         let mut res = match res {
@@ -188,10 +197,10 @@ mod tests {
                 time: rng.gen(),
                 version: 1,
             };
-            Block {
+            Block::V1(common::chain::block::BlockV1 {
                 header,
                 transactions: Vec::new(),
-            }
+            })
         }
 
         pub fn gen_blocks_chain(count: u32) -> Vec<Block> {

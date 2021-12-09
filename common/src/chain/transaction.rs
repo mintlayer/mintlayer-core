@@ -1,4 +1,5 @@
 use crate::primitives::Amount;
+use crate::primitives::Idable;
 use crate::primitives::H256;
 use script::Script;
 
@@ -26,9 +27,20 @@ pub struct TxOutput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transaction {
+pub struct TransactionV1 {
     pub version: i32,
     pub inputs: Vec<TxInput>,
     pub outputs: Vec<TxOutput>,
     pub lock_time: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Transaction {
+    V1(TransactionV1), // TODO: add serialization index attribute
+}
+
+impl Idable for Transaction {
+    fn get_id(&self) -> H256 {
+        H256::zero()
+    }
 }
