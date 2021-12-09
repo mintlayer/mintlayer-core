@@ -24,7 +24,6 @@ members = [
   "node",          # node executable
   "wallet",        # wallet executable
   "block_production", # block production
-  "util",          # additional utilities, like the uint
 #  "test",          # integration tests
 ]
 
@@ -42,7 +41,6 @@ default-members = [
   "node",
   "wallet",
   "block_production",
-  "util"
 #  "test",
 ]
 
@@ -60,7 +58,6 @@ network = { path = "network"}
 rpc = { path = "rpc"}
 serialization = { path = "serialization"}
 node = { path = "node", optional = true}
-util = { path = "util"}
 wallet = { path = "wallet", optional = true}
 
 [profile.release]
