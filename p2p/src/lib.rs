@@ -31,14 +31,14 @@ pub mod peer;
 const MANAGER_MAX_BACKLOG: usize = 256;
 
 #[allow(unused)]
-struct NetworkManager<NetworkingBackend> {
+struct P2P<NetworkingBackend> {
     network: NetworkingBackend,
     peers: Arc<Mutex<HashMap<PeerId, Sender<Event>>>>,
 }
 
 #[allow(unused)]
-impl<NetworkingBackend: 'static + NetworkService> NetworkManager<NetworkingBackend> {
-    /// Create new NetworkManager
+impl<NetworkingBackend: 'static + NetworkService> P2P<NetworkingBackend> {
+    /// Create new P2P
     ///
     /// # Arguments
     /// `addr` - socket address where the local node binds itself to
@@ -49,7 +49,7 @@ impl<NetworkingBackend: 'static + NetworkService> NetworkManager<NetworkingBacke
         })
     }
 
-    /// Run the `NetworkManager` event loop.
+    /// Run the `P2P` event loop.
     ///
     /// This event loop has three responsibilities:
     ///  - accept incoming connections
@@ -58,7 +58,7 @@ impl<NetworkingBackend: 'static + NetworkService> NetworkManager<NetworkingBacke
     ///
     /// It sends requests from peers to `P2P` which forwards them to
     /// the core service and when response for a request is received,
-    /// `NetworkManager` forwards that to the correct peer.
+    /// `P2P` forwards that to the correct peer.
     pub async fn run(&mut self) -> error::Result<()> {
         let (mgr_tx, mut mgr_rx): (Sender<Event>, Receiver<Event>) = tokio::sync::mpsc::channel(MANAGER_MAX_BACKLOG);
 
@@ -83,33 +83,6 @@ impl<NetworkingBackend: 'static + NetworkService> NetworkManager<NetworkingBacke
     }
 }
 
-#[allow(unused)]
-struct P2P<NetworkingBackend> {
-    mgr: NetworkManager<NetworkingBackend>,
-}
-
-#[allow(unused)]
-impl<NetworkingBackend: 'static + NetworkService> P2P<NetworkingBackend> {
-    /// Create new P2P object
-    ///
-    /// # Arguments
-    /// `addr` - socket address where the local node binds itself to
-    pub async fn new(addr: NetworkingBackend::Address) -> error::Result<Self> {
-        Ok(Self {
-            mgr: NetworkManager::new(addr).await?,
-        })
-    }
-
-    /// Start the networking subsystem
-    ///
-    /// This function starts the event loop for `NetworkManager`
-    /// and in the future will listen incoming connections from
-    /// the core service module.
-    pub async fn run(&mut self) -> error::Result<()> {
-        self.mgr.run().await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,23 +102,6 @@ mod tests {
         // try to create new P2P object to different address, should succeed
         let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
         let res = P2P::<MockService>::new(addr).await;
-        assert_eq!(res.is_ok(), true);
-    }
-
-    #[tokio::test]
-    async fn test_network_manager_new() {
-        let addr: <MockService as NetworkService>::Address = "[::1]:1111".parse().unwrap();
-        let res = NetworkManager::<MockService>::new(addr).await;
-        assert_eq!(res.is_ok(), true);
-
-        // try to create new NetworkManager to the same address, should fail
-        let addr: <MockService as NetworkService>::Address = "[::1]:1111".parse().unwrap();
-        let res = NetworkManager::<MockService>::new(addr).await;
-        assert_eq!(res.is_err(), true);
-
-        // try to create new NetworkManager to different address, should succeed
-        let addr: <MockService as NetworkService>::Address = "127.0.0.1:1111".parse().unwrap();
-        let res = NetworkManager::<MockService>::new(addr).await;
         assert_eq!(res.is_ok(), true);
     }
 }
