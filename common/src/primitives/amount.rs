@@ -318,6 +318,27 @@ mod tests {
     }
 
     #[test]
+    fn sum_some() {
+        let amounts = vec![Amount { val: 1 }, Amount { val: 2 }, Amount { val: 3 }];
+        assert_eq!(
+            amounts.into_iter().sum::<Option<Amount>>(),
+            Some(Amount { val: 6 })
+        );
+    }
+
+    #[test]
+    fn sum_overflow() {
+        let amounts = vec![
+            Amount { val: 1 },
+            Amount { val: 2 },
+            Amount {
+                val: IntType::MAX - 2,
+            },
+        ];
+        assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
+    }
+
+    #[test]
     fn sub_underflow() {
         assert_eq!(Amount { val: IntType::MIN } - Amount { val: 1 }, None);
     }
