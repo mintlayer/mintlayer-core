@@ -5,6 +5,7 @@ use crate::primitives::merkle;
 use crate::primitives::Idable;
 use crate::primitives::H256;
 
+// TODO: make block and header fields private with appropriate getters
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockHeader {
     pub version: i32,
