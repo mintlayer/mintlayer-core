@@ -15,8 +15,8 @@
 //
 // Author(s): A. Altonen
 #![allow(dead_code, unused_variables, unused_imports)]
-use crate::error::P2pError;
-use crate::net::{NetworkService, PeerService};
+use crate::error::{self, P2pError};
+use crate::net::{NetworkService, SocketService};
 use crate::peer::Peer;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
@@ -40,19 +40,24 @@ pub struct MockService {
     addr: SocketAddr,
 }
 
+#[derive(Debug)]
+pub struct MockSocket {
+    socket: TcpStream,
+}
+
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
-    type Socket = TcpStream;
+    type Socket = MockSocket;
 
-    async fn new(addr: Self::Address) -> Result<Self, P2pError> {
+    async fn new(addr: Self::Address) -> error::Result<Self> {
         Ok(Self {
             addr: addr,
             socket: TcpListener::bind(addr).await?,
         })
     }
 
-    async fn connect(&mut self, addr: Self::Address) -> Result<Self::Socket, P2pError> {
+    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
         if self.addr == addr {
             return Err(P2pError::SocketError(Error::new(
                 ErrorKind::Other,
@@ -60,12 +65,16 @@ impl NetworkService for MockService {
             )));
         }
 
-        Ok(TcpStream::connect(addr).await?)
+        Ok(MockSocket {
+            socket: TcpStream::connect(addr).await?,
+        })
     }
 
-    async fn accept(&mut self) -> Result<Self::Socket, P2pError> {
+    async fn accept(&mut self) -> error::Result<Self::Socket> {
         // 0 is `TcpStream`, 1 is `SocketAddr`
-        Ok(self.socket.accept().await?.0)
+        Ok(MockSocket {
+            socket: self.socket.accept().await?.0,
+        })
     }
 
     async fn publish<T>(&mut self, topic: &'static str, data: &T)
@@ -84,18 +93,26 @@ impl NetworkService for MockService {
 }
 
 #[async_trait]
-impl<P: NetworkService> PeerService for Peer<P> {
-    async fn send<T>(&mut self, data: &T) -> Result<(), P2pError>
+impl SocketService for MockSocket {
+    async fn send<T>(&mut self, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
-        todo!();
+        match self.socket.write(&data.encode()).await? {
+            0 => Err(P2pError::PeerDisconnected),
+            _ => Ok(()),
+        }
     }
 
-    async fn recv<T>(&mut self) -> Result<T, P2pError>
+    async fn recv<T>(&mut self) -> error::Result<T>
     where
         T: Decode,
     {
-        todo!();
+        let mut data = vec![0u8; 1024 * 1024];
+
+        match self.socket.read(&mut data).await? {
+            0 => Err(P2pError::PeerDisconnected),
+            _ => Decode::decode(&mut &data[..]).map_err(|e| P2pError::DecodeFailure(e)),
+        }
     }
 }
