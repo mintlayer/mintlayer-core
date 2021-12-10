@@ -14,3 +14,8 @@ displaydoc = { default-features = false, version = "0.2" }
 script = { path = '../script'}
 crypto = { path = '../crypto'}
 hex-literal = "0.3.4"
+merkletree = "0.21.0"
+static_assertions = "1.1.0"
+generic-array = "0.14.4"
+rand = "0.8.4"
+anyhow = "1.0.51"
