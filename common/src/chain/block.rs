@@ -1,4 +1,19 @@
-use core::panic;
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
 use crate::primitives::merkle;
@@ -28,9 +43,6 @@ pub enum Block {
 
 impl BlockV1 {
     pub fn get_merkle_root(&self) -> Result<H256, merkle::MerkleTreeFormError> {
-        if self.transactions.is_empty() {
-            panic!("Cannot calculate merkleroot of an empty block");
-        }
         if self.transactions.len() == 1 {
             // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
             return Ok(self.transactions[0].get_id());
@@ -65,13 +77,12 @@ impl Idable for Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::chain::transaction::TransactionV1;
+    use crate::{chain::transaction::TransactionV1, primitives::merkle::MerkleTreeFormError};
 
     use super::*;
     use rand::Rng;
 
     #[test]
-    #[should_panic(expected = "Cannot calculate merkleroot of an empty block")]
     fn empty_block_merkleroot() {
         let mut rng = rand::thread_rng();
 
@@ -88,6 +99,7 @@ mod tests {
             transactions: Vec::new(),
         });
         let _res = block.get_merkle_root();
+        assert_eq!(_res.unwrap_err(), MerkleTreeFormError::TooSmall(0));
     }
 
     #[test]
