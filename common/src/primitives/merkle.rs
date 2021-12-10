@@ -1,3 +1,20 @@
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author(s): S. Afach
+
 use crate::primitives::id::default_hash;
 use crate::primitives::id::DefaultHashAlgoStream;
 use crate::primitives::id::H256;
@@ -13,16 +30,12 @@ use merkletree::store::VecStore;
 #[derive(Clone)]
 pub struct BlockchainHashAlgorithm(DefaultHashAlgoStream);
 
-const fn num_bits<T>() -> usize {
-    std::mem::size_of::<T>() * 8
-}
-
 fn next_pow2(n: usize) -> usize {
     if n == 0 {
         return 1;
     }
     let leading_zeros = (n - 1).leading_zeros() as usize;
-    let active_bits = num_bits::<usize>() - leading_zeros;
+    let active_bits = usize::BITS as usize - leading_zeros;
     let pow2_size = (1 << active_bits) as usize;
     pow2_size
 }
