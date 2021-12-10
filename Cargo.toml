@@ -23,6 +23,7 @@ members = [
   "serialization", # serialization interfaces and implementations
   "node",          # node executable
   "wallet",        # wallet executable
+  "service",       # mintayer core services
 #  "test",          # integration tests
 ]
 

@@ -1030,6 +1030,14 @@ name = "serialization"
 version = "0.1.0"
 
 [[package]]
+name = "service"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "rand 0.8.4",
+]
+
+[[package]]
 name = "sha1"
 version = "0.9.8"
 source = "git+https://github.com/mintlayer/hashing.git?branch=master#5af66c334a78e87b688cc47caed38012275f3f7e"
