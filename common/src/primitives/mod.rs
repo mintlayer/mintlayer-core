@@ -25,4 +25,4 @@ pub mod merkle;
 pub use amount::Amount;
 pub use encoding::{Bech32Error, DecodedBech32};
 pub use height::BlockHeight;
-pub use id::{DataID, Idable, H256};
+pub use id::{DataID, Id, Idable, H256};

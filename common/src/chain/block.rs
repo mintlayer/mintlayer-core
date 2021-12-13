@@ -17,6 +17,7 @@
 
 use crate::chain::transaction::Transaction;
 use crate::primitives::merkle;
+use crate::primitives::Id;
 use crate::primitives::Idable;
 use crate::primitives::H256;
 
@@ -45,9 +46,9 @@ impl BlockV1 {
     pub fn get_merkle_root(&self) -> Result<H256, merkle::MerkleTreeFormError> {
         if self.transactions.len() == 1 {
             // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-            return Ok(self.transactions[0].get_id());
+            return Ok(*self.transactions[0].get_id().get());
         }
-        let hashes: Vec<H256> = self.transactions.iter().map(|tx| tx.get_id()).collect();
+        let hashes: Vec<H256> = self.transactions.iter().map(|tx| *tx.get_id().get()).collect();
         let t = merkle::merkletree_from_vec(&hashes)?;
         Ok(t.root())
     }
@@ -67,10 +68,10 @@ impl Block {
     }
 }
 
-impl Idable for Block {
-    fn get_id(&self) -> H256 {
+impl Idable<Block> for Block {
+    fn get_id(&self) -> Id<Self> {
         match &self {
-            Block::V1(blk) => H256::from_low_u64_ne(blk.header.time as u64), // TODO
+            Block::V1(blk) => Id::new(&H256::from_low_u64_ne(blk.header.time as u64)), // TODO
         }
     }
 }
@@ -115,7 +116,7 @@ mod tests {
         };
 
         let coinbase = Transaction::V1(TransactionV1 {
-            version: 1,
+            flags: 0,
             inputs: Vec::new(),
             outputs: Vec::new(),
             lock_time: 0,
@@ -126,6 +127,6 @@ mod tests {
             transactions: vec![coinbase.clone()],
         });
         let res = block.get_merkle_root().unwrap();
-        assert_eq!(res, coinbase.get_id());
+        assert_eq!(res, *coinbase.get_id().get());
     }
 }
