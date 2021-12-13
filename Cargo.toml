@@ -7,7 +7,7 @@ readme = "README.md"
 license = "MIT"
 version = "0.1.0"
 authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh@mintlayer.org>", "Enrico Rubboli <enrico.rubboli@mintlayer.org>"]
-edition = "2018"
+edition = "2021"
 
 [workspace]
 members = [
