@@ -108,7 +108,7 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap(), peer_tx, rx);
+        let mut peer = Peer::<MockService>::new(1, server_res.unwrap(), peer_tx, rx);
         let mut socket = remote_res.unwrap();
 
         // try to send data that implements `Encode + Decode`
@@ -139,7 +139,7 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(1u128, server_res.unwrap(), peer_tx, rx);
+        let mut peer = Peer::<MockService>::new(1, server_res.unwrap(), peer_tx, rx);
         let mut socket = remote_res.unwrap();
 
         // send data and decode it successfully

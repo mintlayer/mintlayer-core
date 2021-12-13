@@ -22,8 +22,8 @@ use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
 use std::time::Duration;
 
-pub type PeerId = u128;
-pub type TaskId = u128;
+pub type PeerId = u64;
+pub type TaskId = u64;
 
 struct TaskInfo {
     task_id: TaskId,
@@ -33,7 +33,7 @@ struct TaskInfo {
 // Represents a task that will run independently of any incoming/outgoing event
 // meaning the decision to run is built into the protocol and, for example, the
 // network manager is not responsible for scheduling the execution of this event
-const DUMMY_TASK_ID: u128 = 1;
+const DUMMY_TASK_ID: TaskId = 1;
 const DUMMY_PERIOD: Duration = Duration::from_secs(60);
 
 async fn schedule_event(task_info: TaskInfo) -> TaskId {
@@ -172,6 +172,6 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(1u128, server_res.unwrap(), peer_tx, rx);
+        let _ = Peer::<MockService>::new(1, server_res.unwrap(), peer_tx, rx);
     }
 }
