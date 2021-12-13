@@ -1,10 +1,9 @@
 mod compact;
 mod pow;
+mod u256;
 
 pub use compact::*;
-pub use pow::Pow;
-
-use util::Uint256;
+pub use u256::*;
 
 pub trait ExtractData {
     /// Returns the bits
