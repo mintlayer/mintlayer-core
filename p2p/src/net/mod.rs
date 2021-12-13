@@ -36,7 +36,7 @@ pub trait NetworkService {
     type Address;
 
     /// Generic socket object that the underlying implementation uses
-    type Socket: SocketService;
+    type Socket: SocketService + Send;
 
     /// Initialize the network service provider
     ///

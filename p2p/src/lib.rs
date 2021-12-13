@@ -14,12 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::event::PeerEvent;
+use crate::event::{PeerEvent, Event};
 use crate::net::NetworkService;
-use crate::peer::PeerId;
+use crate::peer::{PeerId, Peer};
 use futures::FutureExt;
 use std::collections::HashMap;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Sender, Receiver};
+use rand::Rng;
 
 pub mod error;
 pub mod event;
@@ -28,6 +29,7 @@ pub mod net;
 pub mod peer;
 
 const MANAGER_MAX_BACKLOG: usize = 256;
+const PEER_MAX_BACKLOG: usize = 32;
 
 #[allow(unused)]
 pub enum ConnectivityEvent<T>
@@ -41,7 +43,8 @@ where
 #[allow(unused)]
 struct P2P<NetworkingBackend> {
     network: NetworkingBackend,
-    peers: HashMap<PeerId, Sender<PeerEvent>>,
+    peers: HashMap<PeerId, Sender<Event>>,
+    mgr_chan: (Sender<PeerEvent>, Receiver<PeerEvent>),
 }
 
 #[allow(unused)]
@@ -57,6 +60,7 @@ where
         Ok(Self {
             network: NetworkingBackend::new(addr).await?,
             peers: HashMap::new(),
+            mgr_chan: tokio::sync::mpsc::channel(MANAGER_MAX_BACKLOG),
         })
     }
 
@@ -78,11 +82,38 @@ where
     /// This may be a socket event (new peer, `accept()` failed) or it may be
     /// a connection request from some other part of the system indicating that
     /// P2P should try to establish a connection with a specific remote peer.
-    async fn on_connecitivity_event(
+    async fn on_connectivity_event(
         &mut self,
         event: ConnectivityEvent<NetworkingBackend>,
     ) -> error::Result<()> {
-        todo!();
+        match event {
+            ConnectivityEvent::Accept(res) => match res {
+                Err(err) => return Err(err),
+                Ok(socket) => {
+                    let mut peer_id = rand::thread_rng().gen();
+
+                    // find unique id for the peer
+                    while self.peers.contains_key(&peer_id) {
+                        peer_id = rand::thread_rng().gen();
+                    }
+
+                    let mgr_tx = self.mgr_chan.0.clone();
+                    let (tx, rx) = tokio::sync::mpsc::channel(PEER_MAX_BACKLOG);
+                    self.peers.insert(peer_id, tx);
+
+                    tokio::spawn(async move {
+                        Peer::<NetworkingBackend>::new(peer_id, socket, mgr_tx, rx)
+                            .run()
+                            .await;
+                    });
+                }
+            }
+            ConnectivityEvent::Connect(_) => {
+                todo!();
+            }
+        }
+
+        Ok(())
     }
 
     /// Run the `P2P` event loop.
@@ -91,14 +122,12 @@ where
     ///  - accept incoming connections
     ///  - listen to messages from peers
     pub async fn run(&mut self) -> error::Result<()> {
-        let (mgr_tx, mut mgr_rx) = tokio::sync::mpsc::channel(MANAGER_MAX_BACKLOG);
-
         loop {
             tokio::select! {
                 res = self.network.accept() => {
-                    self.on_connecitivity_event(ConnectivityEvent::Accept(res)).await?;
+                    self.on_connectivity_event(ConnectivityEvent::Accept(res)).await?;
                 },
-                event = mgr_rx.recv().fuse() => {
+                event = self.mgr_chan.1.recv().fuse() => {
                     self.on_peer_event(event).await?;
                 }
             };
