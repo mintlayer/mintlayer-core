@@ -29,8 +29,4 @@ impl Block {
     pub fn get_prev_block_id(&self) -> H256 {
         self.header.hash_prev_block
     }
-
-    pub fn calculate_hash(&self) ->  H256 {
-        todo!()
-    }
 }
