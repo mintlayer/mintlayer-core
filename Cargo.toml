@@ -40,6 +40,7 @@ default-members = [
   "serialization",
   "node",
   "wallet",
+  "block_production"
 #  "test",
 ]
 
@@ -56,6 +57,8 @@ p2p = { path = "p2p"}
 network = { path = "network"}
 rpc = { path = "rpc"}
 serialization = { path = "serialization"}
+node = { path = "node", optional = true}
+wallet = { path = "wallet", optional = true}
 
 [profile.release]
 debug-assertions = true

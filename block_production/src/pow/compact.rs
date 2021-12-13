@@ -1,9 +1,14 @@
-use crate::pow::U256;
+use util::Uint256;
 
-pub fn convert_to_u256(bits: Vec<u8>) -> U256 {
-    todo!()
-}
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
+pub struct Compact(pub(crate) Vec<u8>);
 
-pub fn convert_to_compact(u256: U256) -> Vec<u8> {
-    todo!()
+impl Compact {
+    pub fn convert_to_uint256(&self) -> Uint256 {
+        todo!()
+    }
+
+    pub fn from_uint256(u256: Uint256) -> Self {
+        todo!()
+    }
 }
