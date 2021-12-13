@@ -222,7 +222,10 @@ mod tests {
         assert!(remote_res.is_ok());
 
         let server_res: Event<MockService> = server_res.unwrap();
-        let Event::IncomingConnection(server_res) = server_res;
+        let server_res = match server_res {
+            Event::IncomingConnection(server_res) => server_res,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
@@ -264,7 +267,10 @@ mod tests {
         assert!(remote_res.is_ok());
 
         let server_res: Event<MockService> = server_res.unwrap();
-        let Event::IncomingConnection(server_res) = server_res;
+        let server_res = match server_res {
+            Event::IncomingConnection(server_res) => server_res,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);

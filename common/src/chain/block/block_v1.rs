@@ -3,6 +3,8 @@ use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::{id, Id, Idable, H256};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
+pub type ConsensusData = Vec<u8>;
+
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
     pub(super) hash_prev_block: Id<BlockV1>,

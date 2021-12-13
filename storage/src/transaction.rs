@@ -1,5 +1,30 @@
 //! Traits specifying the interface for database transactions.
 
+/// Low-level interface for read-only database transactions
+pub trait TransactionRo: Sized {
+    /// Errors that can occur during a transaction.
+    type Error;
+
+    /// Finalize the transaction.
+    fn finalize(self) -> Result<(), Self::Error>;
+}
+
+#[allow(type_alias_bounds)]
+pub type RoTxResult<'s, R, T: Transactional<'s>> =
+    Result<R, <T::TransactionRo as TransactionRo>::Error>;
+
+/// Low-level interface for read-write database transactions
+pub trait TransactionRw: Sized {
+    /// Errors that can occur during a transaction.
+    type Error;
+
+    /// Commit a transaction
+    fn commit(self) -> Result<(), Self::Error>;
+
+    /// Abort a transaction.
+    fn abort(self) -> Result<(), Self::Error>;
+}
+
 /// Transaction response
 #[must_use = "Response must be returned from the transaction"]
 pub enum Response<T> {
@@ -10,6 +35,7 @@ pub enum Response<T> {
 }
 
 impl<T> Response<T> {
+    // Extract the return value from the response.
     fn value(self) -> T {
         match self {
             Self::Commit(v) => v,
@@ -30,41 +56,63 @@ pub fn abort<T, E>(ret: T) -> Result<Response<T>, E> {
     Ok(Response::Abort(ret))
 }
 
-/// Low-level database transation interface
-pub trait DbTransaction: Sized {
-    /// Errors that can occur during a transaction.
-    type Error;
-
-    /// Commit a transaction
-    fn commit(self) -> Result<(), Self::Error>;
-
-    /// Abort a transaction.
-    fn abort(self) -> Result<(), Self::Error>;
-}
-
 #[allow(type_alias_bounds)]
-pub type TxResult<'s, R, T: Transactional<'s>> =
-    Result<R, <T::Transaction as DbTransaction>::Error>;
+pub type RwTxResult<'s, R, T: Transactional<'s>> =
+    Result<R, <T::TransactionRw as TransactionRw>::Error>;
 
 /// Type where some operations can be grouped into atomic transactions.
 pub trait Transactional<'s> {
-    /// Associated transaction type.
-    type Transaction: DbTransaction;
+    /// Associated read-only transaction type.
+    type TransactionRo: TransactionRo;
 
-    /// Start a transaction.
-    ///
-    /// Prefer the [Self::transaction] convenience function over this.
-    fn start_transaction(&'s mut self) -> Self::Transaction;
+    /// Associated read-write transaction type.
+    type TransactionRw: TransactionRw;
 
-    /// Run a transaction.
+    /// Start a read-only transaction.
     ///
-    /// High-level convenience method. Prefer this over a combination of [Self::start_transaction],
-    /// [DbTransaction::commit], [DbTransaction::abort].
+    /// Prefer the [Self::read] convenience function over this.
+    fn start_transaction_ro(&'s self) -> Self::TransactionRo;
+
+    /// Run a read-only transaction.
+    ///
+    /// High-level convenience method. Prefer this over a combination of
+    /// [Self::start_transaction_ro], [TransactionRo::finalize].
     ///
     /// ```
-    /// # use storage::Transactional;
+    /// # use storage::transaction::Transactional;
     /// # fn foo<'a, T: Transactional<'a>>(foo: &'a mut T) {
-    /// let result = foo.transaction(|tx| {
+    /// let result = foo.transaction_ro(|tx| {
+    ///     // Your transaction operations go here
+    ///     Ok(42) // this will be the result
+    /// });
+    /// # }
+    /// ```
+    ///
+    /// Implementations are allowed to override this method provided semantics are preserved.
+    fn transaction_ro<R>(
+        &'s self,
+        tx_body: impl FnOnce(&Self::TransactionRo) -> RoTxResult<'s, R, Self>,
+    ) -> RoTxResult<R, Self> {
+        let tx = self.start_transaction_ro();
+        let result = tx_body(&tx);
+        tx.finalize()?;
+        result
+    }
+
+    /// Start a read-write transaction.
+    ///
+    /// Prefer the [Self::write] convenience function over this.
+    fn start_transaction_rw(&'s self) -> Self::TransactionRw;
+
+    /// Run a read-write transaction.
+    ///
+    /// High-level convenience method. Prefer this over a combination of
+    /// [Self::start_transaction_rw], [TransactionRw::commit], [TransactionRw::abort].
+    ///
+    /// ```
+    /// # use storage::transaction::Transactional;
+    /// # fn foo<'a, T: Transactional<'a>>(foo: &'a mut T) {
+    /// let result = foo.transaction_rw(|tx| {
     ///     // Your transaction operations go here
     ///     storage::commit(42) // this will be the result
     /// });
@@ -72,11 +120,11 @@ pub trait Transactional<'s> {
     /// ```
     ///
     /// Implementations are allowed to override this method provided semantics are preserved.
-    fn transaction<R>(
-        &'s mut self,
-        tx_body: impl FnOnce(&mut Self::Transaction) -> TxResult<'s, Response<R>, Self>,
-    ) -> TxResult<R, Self> {
-        let mut tx = self.start_transaction();
+    fn transaction_rw<F, R>(&'s self, tx_body: F) -> RwTxResult<'s, R, Self>
+    where
+        F: FnOnce(&mut Self::TransactionRw) -> RwTxResult<'s, Response<R>, Self>,
+    {
+        let mut tx = self.start_transaction_rw();
         let result = tx_body(&mut tx);
         match result {
             Ok(Response::Commit(_)) => tx.commit()?,

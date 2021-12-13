@@ -8,7 +8,7 @@ use common::primitives::{BlockHeight, Id};
 pub mod mock;
 mod store;
 
-pub use store::{Store, StoreTx};
+pub use store::Store;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
@@ -29,22 +29,22 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Operations on persistent blockchain data
 pub trait BlockchainStorage {
     /// Get storage version
-    fn get_storage_version(&mut self) -> crate::Result<u32>;
+    fn get_storage_version(&self) -> crate::Result<u32>;
 
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
     /// Get the hash of the best block
-    fn get_best_block_id(&mut self) -> crate::Result<Option<Id<Block>>>;
+    fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
+    /// Get block by its hash
+    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> crate::Result<()>;
-
-    /// Get block by its hash
-    fn get_block(&mut self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
     /// Remove block from the database
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -58,7 +58,7 @@ pub trait BlockchainStorage {
 
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
-        &mut self,
+        &self,
         tx_id: &Id<Transaction>,
     ) -> crate::Result<Option<TxMainChainIndex>>;
 
@@ -67,15 +67,15 @@ pub trait BlockchainStorage {
 
     /// Get transaction by block ID and position
     fn get_mainchain_tx_by_position(
-        &mut self,
+        &self,
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>>;
 
     /// Get transaction by transaction ID. Transaction must be in the index.
-    fn get_mainchain_tx(&mut self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
+    fn get_mainchain_tx(&self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
 
     /// Get mainchain block by its height
-    fn get_block_id_by_height(&mut self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(
