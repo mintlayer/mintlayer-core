@@ -1,9 +1,9 @@
 use parity_scale_codec::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
 pub struct SimpleWrapper<T>(pub T);
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
 pub struct OptionWrapper<T> {
     pub option: Option<T>,
 }

@@ -1,13 +1,13 @@
 use parity_scale_codec::{Decode, Encode};
 use rand::Rng;
-use serialization::{OptionWrapper, SimpleWrapper};
+use serialization_utils::{OptionWrapper, SimpleWrapper};
 use std::collections::BTreeMap;
 
 #[test]
-fn test_structures() {
+fn test_scale_structures() {
     let mut rng = rand::thread_rng();
 
-    #[derive(Debug, Clone, PartialEq, PartialOrd, Encode, Decode)]
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
     enum TestEnum {
         Numbers((i8, u8, i16, u16, i32, u32, i64, u64, i128, u128)),
         Strings(
@@ -24,7 +24,7 @@ fn test_structures() {
         Containers((Vec<u8>, BTreeMap<String, String>)),
     }
 
-    #[derive(Debug, Clone, PartialEq, PartialOrd, Encode, Decode)]
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
     struct TestStruct {
         field_enum_number: TestEnum,
         field_enum_strings: TestEnum,

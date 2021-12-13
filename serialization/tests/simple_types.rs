@@ -1,8 +1,8 @@
 use parity_scale_codec::{Decode, Encode};
-use serialization::{OptionWrapper, SimpleWrapper};
+use serialization_utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
-fn test_numbers() {
+fn test_scale_numbers() {
     // 8-bit	i8	u8
     let enc = SimpleWrapper::encode(&SimpleWrapper(0i8));
     assert!(!enc.is_empty());
@@ -165,7 +165,7 @@ fn test_numbers() {
 }
 
 #[test]
-fn test_options() {
+fn test_scale_options() {
     // Strings
     let result = Some("any error message".to_string());
     let enc = OptionWrapper::encode(&OptionWrapper::new(result.clone()));
@@ -370,7 +370,7 @@ fn test_options() {
 }
 
 #[test]
-fn test_arrays() {
+fn test_scale_arrays() {
     let array = [0xFF; 64_000];
     let enc = SimpleWrapper::encode(&SimpleWrapper(array.clone()));
     assert!(!enc.is_empty());
@@ -398,7 +398,7 @@ fn test_arrays() {
 }
 
 #[test]
-fn test_tuples() {
+fn test_scale_tuples() {
     let tuple = (
         -11i8,
         12u8,

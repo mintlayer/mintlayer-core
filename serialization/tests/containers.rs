@@ -1,11 +1,11 @@
 use parity_scale_codec::{Decode, Encode};
 use rand::Rng;
-use serialization::SimpleWrapper;
+use serialization_utils::SimpleWrapper;
 use std::collections::BTreeMap;
 // use std::collections::HashMap;
 
 #[test]
-fn test_vectors() {
+fn test_scale_vectors() {
     let vector = vec![-11, 12, -13, 14, -15, 16, -17, 18, -19];
     let enc = SimpleWrapper::encode(&SimpleWrapper(vector.clone()));
     assert!(!enc.is_empty());
@@ -76,7 +76,7 @@ fn test_vectors() {
 }
 
 #[test]
-fn test_btree_map() {
+fn test_scale_btree_map() {
     let mut rng = rand::thread_rng();
     let mut btree_map = BTreeMap::new();
     for _ in 0..1024 {
@@ -105,7 +105,7 @@ fn test_btree_map() {
 }
 
 #[test]
-fn test_hash_map() {
+fn test_scale_hash_map() {
     // The SCALE does not support HashMap, still digging into this
     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
