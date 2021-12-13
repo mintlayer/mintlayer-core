@@ -707,6 +707,7 @@ dependencies = [
  "script",
  "serialization",
  "storage",
+ "wallet",
 ]
 
 [[package]]
