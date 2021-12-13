@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::error;
-use crate::event::Event;
+use crate::event::{Event, PeerEvent};
 use crate::message::Message;
 use crate::net::{NetworkService, SocketService};
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
@@ -50,7 +50,7 @@ where
     peer_id: PeerId,
 
     /// Channel for sending messages to `NetworkManager`
-    mgr_tx: tokio::sync::mpsc::Sender<Event>,
+    mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
 
     /// Channel for reading events from the `NetworkManager`
     mgr_rx: tokio::sync::mpsc::Receiver<Event>,
@@ -72,7 +72,7 @@ where
     pub fn new(
         peer_id: PeerId,
         socket: NetworkingBackend::Socket,
-        mgr_tx: tokio::sync::mpsc::Sender<Event>,
+        mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
         mgr_rx: tokio::sync::mpsc::Receiver<Event>,
     ) -> Self {
         Self {
@@ -113,8 +113,8 @@ where
     /// the task information is returned as an `Option` to the caller so that it knows
     /// the reschedule the event.
     ///
-    /// This design allows the peer event loop to wait on
-    /// an arbitrary number of timer-based events, both scheduled and one-shot.
+    /// This design allows the peer event loop to wait onan arbitrary number of 
+    /// timer-based events, both scheduled and one-shot.
     async fn on_timer_event(&mut self, task_id: TaskId) -> error::Result<Option<TaskInfo>> {
         todo!();
     }
@@ -123,9 +123,8 @@ where
     ///
     /// This function polls events from the peer socket,
     /// handles them appropriately and passes the messages
-    /// to the `NetworkManager`. It also listens to messages
-    /// from `NetworkManager` and sends them to the connected
-    /// peer
+    /// to the P2P. It also listens to messages from P2P
+    /// and sends them to the connected remote peer
     ///
     /// This function has its own loop so it must not be polled by
     /// an upper-level event loop but a task must be spawned for it
@@ -171,7 +170,8 @@ mod tests {
         assert_eq!(server_res.is_ok(), true);
         assert_eq!(peer_res.is_ok(), true);
 
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(1u128, server_res.unwrap(), tx, rx);
+        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let _ = Peer::<MockService>::new(1u128, server_res.unwrap(), peer_tx, rx);
     }
 }

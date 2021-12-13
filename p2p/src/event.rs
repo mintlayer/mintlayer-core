@@ -14,9 +14,26 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use crate::message;
+use crate::peer::PeerId;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode)]
 pub enum Event {
     Hello,
+}
+
+#[allow(unused)]
+pub struct PeerEvent {
+    peer_id: PeerId,
+    event: PeerEventType,
+}
+
+/// P2P uses these events to communicate with Peer
+#[allow(unused)]
+pub enum PeerEventType {
+    /// Remote peer disconnected
+    Disconnected,
+    /// Inbound or outbound message
+    Message(message::Message),
 }
