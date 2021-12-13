@@ -14,13 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::event::{PeerEvent, Event};
+use crate::event::{Event, PeerEvent};
 use crate::net::NetworkService;
-use crate::peer::{PeerId, Peer};
+use crate::peer::{Peer, PeerId};
 use futures::FutureExt;
-use std::collections::HashMap;
-use tokio::sync::mpsc::{Sender, Receiver};
 use rand::Rng;
+use std::collections::HashMap;
+use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod error;
 pub mod event;
@@ -87,29 +87,9 @@ where
         event: ConnectivityEvent<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            ConnectivityEvent::Accept(res) => match res {
-                Err(err) => return Err(err),
-                Ok(socket) => {
-                    let mut peer_id = rand::thread_rng().gen();
-
-                    // find unique id for the peer
-                    while self.peers.contains_key(&peer_id) {
-                        peer_id = rand::thread_rng().gen();
-                    }
-
-                    let mgr_tx = self.mgr_chan.0.clone();
-                    let (tx, rx) = tokio::sync::mpsc::channel(PEER_MAX_BACKLOG);
-                    self.peers.insert(peer_id, tx);
-
-                    tokio::spawn(async move {
-                        Peer::<NetworkingBackend>::new(peer_id, socket, mgr_tx, rx)
-                            .run()
-                            .await;
-                    });
-                }
-            }
-            ConnectivityEvent::Connect(_) => {
-                todo!();
+            ConnectivityEvent::Accept(res) => res.map(|socket| self.create_peer(socket))?,
+            ConnectivityEvent::Connect(address) => {
+                self.network.connect(address).await.map(|socket| self.create_peer(socket))?
             }
         }
 
@@ -132,6 +112,24 @@ where
                 }
             };
         }
+    }
+
+    /// Create `Peer` object from a socket object and spawn task for it
+    fn create_peer(&mut self, socket: NetworkingBackend::Socket) {
+        // find unique id for the peer
+        let mut peer_id = rand::thread_rng().gen();
+
+        while self.peers.contains_key(&peer_id) {
+            peer_id = rand::thread_rng().gen();
+        }
+
+        let mgr_tx = self.mgr_chan.0.clone();
+        let (tx, rx) = tokio::sync::mpsc::channel(PEER_MAX_BACKLOG);
+        self.peers.insert(peer_id, tx);
+
+        tokio::spawn(async move {
+            Peer::<NetworkingBackend>::new(peer_id, socket, mgr_tx, rx).run().await;
+        });
     }
 }
 
