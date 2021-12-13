@@ -1,4 +1,4 @@
-use crate::pow::{ExtractData, Hashable, U256};
+use crate::pow::{convert_to_u256, ExtractData, Hashable, U256};
 use crate::{BlockProducer, BlockProductionError, Chain};
 use common::chain::block::{Block, BlockHeader, ConsensusData};
 use common::chain::transaction::Transaction;
@@ -24,6 +24,32 @@ impl Chain for Pow {
     }
 
     fn add_block(block: Block) {
+        todo!()
+    }
+}
+
+
+impl ExtractData for ConsensusData {
+    fn get_bits(&self) -> Vec<u8> {
+        todo!()
+    }
+
+    fn get_nonce(&self) -> u128 {
+        todo!()
+    }
+
+    fn get_difficulty(&self) -> U256 {
+        let bits = self.get_bits();
+        convert_to_u256(bits)
+    }
+
+    fn create(bits: &[u8], nonce: u128) -> Self {
+        todo!()
+    }
+}
+
+impl Hashable for Block {
+    fn hash(&self) -> U256 {
         todo!()
     }
 }
