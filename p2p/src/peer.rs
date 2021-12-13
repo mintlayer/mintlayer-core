@@ -144,7 +144,7 @@ where
                 event = self.mgr_rx.recv().fuse() => {
                     self.on_manager_event(event).await?;
                 }
-                task = tasks.select_next_some().fuse() => {
+                task = tasks.select_next_some() => {
                     self.on_timer_event(task).await?.map(|info| {
                         tasks.push(schedule_event(info));
                     });
