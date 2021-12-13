@@ -39,7 +39,7 @@ impl ExtractData for ConsensusData {
 
     fn get_difficulty(&self) -> Uint256 {
         let bits = self.get_bits();
-        bits.convert_to_uint256()
+        bits.into()
     }
 
     fn create(bits: &Compact, nonce: u128) -> Self {
