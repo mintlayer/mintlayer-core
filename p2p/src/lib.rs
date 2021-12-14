@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::event::{Event, PeerEvent};
 use crate::net::NetworkService;
-use crate::peer::{Peer, PeerId};
+use crate::peer::{Peer, PeerId, PeerRole};
 use futures::FutureExt;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -101,10 +101,14 @@ where
         event: ConnectivityEvent<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            ConnectivityEvent::Accept(res) => res.map(|socket| self.create_peer(socket))?,
-            ConnectivityEvent::Connect(address) => {
-                self.network.connect(address).await.map(|socket| self.create_peer(socket))?
+            ConnectivityEvent::Accept(res) => {
+                res.map(|socket| self.create_peer(socket, PeerRole::Responder))?
             }
+            ConnectivityEvent::Connect(address) => self
+                .network
+                .connect(address)
+                .await
+                .map(|socket| self.create_peer(socket, PeerRole::Initiator))?,
         }
 
         Ok(())
@@ -129,7 +133,7 @@ where
     }
 
     /// Create `Peer` object from a socket object and spawn task for it
-    fn create_peer(&mut self, socket: NetworkingBackend::Socket) {
+    fn create_peer(&mut self, socket: NetworkingBackend::Socket, role: PeerRole) {
         let mgr_tx = self.mgr_chan.0.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
@@ -137,7 +141,7 @@ where
         self.peers.insert(peer_id, tx);
 
         tokio::spawn(async move {
-            Peer::<NetworkingBackend>::new(peer_id, socket, mgr_tx, rx).run().await;
+            Peer::<NetworkingBackend>::new(peer_id, role, socket, mgr_tx, rx).run().await;
         });
     }
 }

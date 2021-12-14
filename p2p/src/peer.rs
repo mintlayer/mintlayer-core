@@ -30,6 +30,27 @@ struct TaskInfo {
     period: Duration,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum PeerRole {
+    Initiator,
+    Responder,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum HandshakeState {
+    /// Initiate the handshake by sending Hello message
+    Initiate,
+    // Wait for Hello message. When received, send HelloAck
+    WaitInitiation,
+    /// Wait HelloAck
+    WaitResponse,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum PeerState {
+    Handshaking(HandshakeState),
+}
+
 // Represents a task that will run independently of any incoming/outgoing event
 // meaning the decision to run is built into the protocol and, for example, the
 // network manager is not responsible for scheduling the execution of this event
@@ -47,7 +68,13 @@ where
     NetworkingBackend: NetworkService,
 {
     /// Unique ID of the peer
-    peer_id: PeerId,
+    id: PeerId,
+
+    /// Is peer the initiator or responder of the session
+    role: PeerRole,
+
+    /// Current state of the peer (handshaking, listening, etc.)
+    state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
     mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
@@ -67,16 +94,24 @@ where
     /// Create new peer
     ///
     /// # Arguments
-    /// `peer_id` - unique ID of the peer
+    /// `id` - unique ID of the peer
     /// `socket` - socket for the peer
     pub fn new(
-        peer_id: PeerId,
+        id: PeerId,
+        role: PeerRole,
         socket: NetworkingBackend::Socket,
         mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
         mgr_rx: tokio::sync::mpsc::Receiver<Event>,
     ) -> Self {
+        let state = match role {
+            PeerRole::Initiator => PeerState::Handshaking(HandshakeState::Initiate),
+            PeerRole::Responder => PeerState::Handshaking(HandshakeState::WaitInitiation),
+        };
+
         Self {
-            peer_id,
+            id,
+            role,
+            state,
             mgr_tx,
             mgr_rx,
             socket,
@@ -172,6 +207,6 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(1, server_res.unwrap(), peer_tx, rx);
+        let _ = Peer::<MockService>::new(1, PeerRole::Initiator, server_res.unwrap(), peer_tx, rx);
     }
 }
