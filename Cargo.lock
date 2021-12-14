@@ -191,7 +191,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "logging",
- "rand",
+ "rand 0.8.4",
 ]
 
 [[package]]
