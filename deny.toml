@@ -7,7 +7,16 @@ github = [
 multiple-versions = "deny" #catch mutliple versions of a crate
 deny = []
 #skip quick-error for "reasons" that i cba to explain just about as much as i cba to fix
-skip = [{name = "quick-error"}]
+skip = [{name = "quick-error"},
+        {name = "winapi"},
+        {name = "wasi"},
+        {name = "rand_hc"},
+        {name = "rand_core"},
+        {name = "rand_chacha"},
+        {name = "rand"},
+        {name = "getrandom"},
+        {name = "byteorder"},
+        ]
 
 [licenses]
 #we reject code without a license
