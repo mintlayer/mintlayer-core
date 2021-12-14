@@ -15,15 +15,15 @@
 //
 // Author(s): A. Altonen
 use parity_scale_codec::{Decode, Encode};
+use util::Message;
 
-#[allow(unused)]
 const MINTLAYER_MAGIC_NUM: u32 = 0x11223344;
 #[allow(unused)]
 const MINTLAYER_MAINNET_ID: u32 = 0xaabbccdd;
 #[allow(unused)]
 const MINTLAYER_TESTNET_ID: u32 = 0xeeff1122;
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub enum MessageType {
     Hello,
     HelloAck,
@@ -41,18 +41,26 @@ pub struct Message {
     payload: Vec<u8>,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, Message)]
 pub struct Hello {
+    /// Version of the software
     version: u32,
+    /// Network ID
     network: u32,
+    /// Services provided by the node
     services: u32,
+    /// Unix timestamp
     timestamp: u64,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, Message)]
 pub struct HelloAck {
+    /// Version of the software
     version: u32,
+    /// Network ID
     network: u32,
+    /// Services provided by the node
     services: u32,
+    /// Unix timestamp
     timestamp: u64,
 }

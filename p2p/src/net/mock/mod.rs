@@ -112,7 +112,7 @@ impl SocketService for MockSocket {
 
         match self.socket.read(&mut data).await? {
             0 => Err(P2pError::PeerDisconnected),
-            _ => Decode::decode(&mut &data[..]).map_err(|e| P2pError::DecodeFailure(e)),
+            _ => Decode::decode(&mut &data[..]).map_err(|e| e.into()),
         }
     }
 }
