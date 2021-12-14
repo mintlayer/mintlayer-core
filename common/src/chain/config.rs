@@ -13,11 +13,16 @@ pub enum ChainType {
 
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
+    #[allow(dead_code)]
     chain_type: ChainType,
     address_prefix: String,
+    #[allow(dead_code)]
     rpc_port: u16,
+    #[allow(dead_code)]
     p2p_port: u16,
+    #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
+    #[allow(dead_code)]
     magic_bytes: [u8; 4],
 }
 
