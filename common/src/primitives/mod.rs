@@ -21,8 +21,10 @@ pub mod error;
 pub mod height;
 pub mod id;
 pub mod merkle;
+pub mod uint;
 
 pub use amount::Amount;
 pub use encoding::{Bech32Error, DecodedBech32};
 pub use height::BlockHeight;
 pub use id::{DataID, Id, Idable, H256};
+pub use uint::Uint256;

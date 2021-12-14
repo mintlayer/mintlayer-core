@@ -25,6 +25,8 @@ mod block_v1;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
 
+pub use block_v1::ConsensusData;
+
 pub fn calculate_tx_merkle_root(
     transactions: &Vec<Transaction>,
 ) -> Result<H256, merkle::MerkleTreeFormError> {

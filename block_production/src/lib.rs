@@ -1,8 +1,8 @@
 mod pow;
 
-use common::chain::block::{Block, ConsensusData};
+use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
-use common::primitives::H256;
+use common::primitives::{Uint256, H256};
 
 //TODO: remove until an actual trait is created
 pub trait Chain {
@@ -18,6 +18,25 @@ pub trait Chain {
 pub enum BlockProductionError {
     Error1,
     Error2,
+    InvalidConsensusParams(String),
+    BlockCreationError(BlockCreationError),
+}
+
+impl From<BlockCreationError> for BlockProductionError {
+    fn from(e: BlockCreationError) -> Self {
+        BlockProductionError::BlockCreationError(e)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum ConsensusParams {
+    /// Proof of Work consensus parameters
+    POW {
+        max_nonce: u128,
+        difficulty: Uint256,
+    },
+    /// Proof of Stake consensus parameters
+    POS,
 }
 
 pub trait BlockProducer: Chain {
@@ -26,9 +45,8 @@ pub trait BlockProducer: Chain {
 
     fn create_block(
         time: u32,
-        version: i32,
         transactions: Vec<Transaction>,
-        consensus_data: ConsensusData,
+        consensus_params: ConsensusParams,
     ) -> Result<Block, BlockProductionError>;
 }
 

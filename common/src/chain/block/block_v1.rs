@@ -2,13 +2,15 @@ use crate::chain::transaction::Transaction;
 use crate::primitives::Id;
 use crate::primitives::H256;
 
+pub type ConsensusData = Vec<u8>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockHeader {
     pub(super) hash_prev_block: H256,
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
-    pub(super) consensus_data: Vec<u8>,
+    pub(super) consensus_data: ConsensusData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
