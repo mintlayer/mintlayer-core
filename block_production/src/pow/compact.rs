@@ -1,7 +1,7 @@
-use util::Uint256;
+use common::primitives::Uint256;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]
-pub struct Compact(pub(crate) Vec<u8>);
+pub struct Compact(pub(crate) u32);
 
 impl From<Uint256> for Compact {
     fn from(_: Uint256) -> Self {

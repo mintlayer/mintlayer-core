@@ -1,8 +1,9 @@
-use crate::pow::{Compact, ExtractData, Hashable, Uint256};
-use crate::{BlockProducer, BlockProductionError, Chain};
-use common::chain::block::{Block, BlockHeader, ConsensusData};
+use crate::pow::traits::{DataExt, PowExt};
+use crate::pow::Compact;
+use crate::{BlockProducer, BlockProductionError, Chain, ConsensusParams};
+use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
-use common::primitives::{Idable, H256};
+use common::primitives::{Uint256, H256};
 
 pub struct Pow;
 
@@ -28,31 +29,6 @@ impl Chain for Pow {
     }
 }
 
-impl ExtractData for ConsensusData {
-    fn get_bits(&self) -> Compact {
-        todo!()
-    }
-
-    fn get_nonce(&self) -> u128 {
-        todo!()
-    }
-
-    fn get_difficulty(&self) -> Uint256 {
-        let bits = self.get_bits();
-        bits.into()
-    }
-
-    fn create(bits: &Compact, nonce: u128) -> Self {
-        todo!()
-    }
-}
-
-impl Hashable for Block {
-    fn hash(&self) -> Uint256 {
-        todo!()
-    }
-}
-
 impl BlockProducer for Pow {
     fn verify_block(block: &Block) -> Result<(), BlockProductionError> {
         todo!()
@@ -60,36 +36,38 @@ impl BlockProducer for Pow {
 
     fn create_block(
         time: u32,
-        version: i32,
         transactions: Vec<Transaction>,
-        consensus_params: ConsensusData,
+        consensus_params: ConsensusParams,
     ) -> Result<Block, BlockProductionError> {
-        let hash_prev_block = Self::get_latest_block().get_id();
-        let bits = consensus_params.get_bits();
+        match consensus_params {
+            ConsensusParams::POW {
+                max_nonce,
+                difficulty,
+            } => {
+                let mut block = Pow::create_empty_block(time, transactions)?;
 
-        let difficulty = consensus_params.get_difficulty();
-        let max_nonce = consensus_params.get_nonce();
+                block.mine(max_nonce, difficulty)?;
 
-        for nonce in 0..max_nonce {
-            let consensus_data = ConsensusData::create(&bits, nonce);
-            let header = BlockHeader {
-                version,
-                hash_prev_block,
-                hash_merkle_root: Default::default(), // TODO
-                time,
-                consensus_data,
-            };
-
-            let block = Block {
-                header: header.clone(),
-                transactions: transactions.clone(),
-            };
-
-            if block.hash() >= difficulty {
-                return Ok(block);
+                Ok(block)
             }
+            other => Err(BlockProductionError::InvalidConsensusParams(format!(
+                "Expecting Proof of Work Consensus Parameters, Actual: {:?}",
+                other
+            ))),
         }
+    }
+}
 
-        Err(BlockProductionError::Error2)
+impl Pow {
+    pub fn check_difficulty(block: &Block, difficulty: &Uint256) -> bool {
+        block.calculate_hash() <= *difficulty
+    }
+
+    pub fn create_empty_block(
+        time: u32,
+        transactions: Vec<Transaction>,
+    ) -> Result<Block, BlockCreationError> {
+        let hash_prev_block = Self::get_latest_block().get_merkle_root();
+        Block::new(transactions, &hash_prev_block, time, ConsensusData::empty())
     }
 }
