@@ -50,16 +50,16 @@ fn test_scale_vectors() {
         ));
         vector.push(
             (
-                -i8::MAX,
-                u8::MAX,
-                -i16::MAX,
-                u16::MAX,
-                -i32::MAX,
-                u32::MAX,
-                -i64::MAX,
-                u64::MAX,
-                -i128::MAX,
-                u128::MAX,
+                -1i8,
+                2u8,
+                -1234i16,
+                5678u16,
+                -1036572536i32,
+                2415369116u32,
+                -2321372031054735191i64,
+                1091632910434195781u64,
+                -170141123460424235652481386091358552721i128,
+                210614612912676532892982561042679146832u128,
                 ("The minister gave out his text and droned along monotonously through an argument that \
             was so prosy that many a head by and by began to nod — and yet it was an argument that \
             dealt in limitless fire and brimstone and thinned the predestined elect down to a company \

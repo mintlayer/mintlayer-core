@@ -10,23 +10,23 @@ fn test_scale_numbers() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(0i8)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(-i8::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-12i8));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(-i8::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(-12i8)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(i8::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(98i8));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(i8::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(98i8)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(u8::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(104i8));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(u8::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(104i8)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u8));
     assert!(!enc.is_empty());
@@ -41,23 +41,23 @@ fn test_scale_numbers() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(0i16)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(-i16::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-1234i16));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(-i16::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(-1234i16)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(i16::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-1234i16));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(i16::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(-1234i16)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(u16::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(5678u16));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(u16::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(5678u16)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u16));
     assert!(!enc.is_empty());
@@ -72,23 +72,23 @@ fn test_scale_numbers() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(0i32)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(-i32::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-1036572536i32));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(-i32::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(-1036572536i32)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(i32::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(1036572536i32));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(i32::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(1036572536i32)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(u32::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(2415369116u32));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(u32::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(2415369116u32)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u32));
     assert!(!enc.is_empty());
@@ -103,23 +103,23 @@ fn test_scale_numbers() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(0i64)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(-i64::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-2321372031054735191i64));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(-i64::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(-2321372031054735191i64)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(i64::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(1091632910434195781u64));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(i64::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(1091632910434195781u64)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(u64::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(141123460424235652u64));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(u64::MAX)));
+    assert_eq!(dec, Some(SimpleWrapper(141123460424235652u64)));
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u64));
     assert!(!enc.is_empty());
@@ -134,23 +134,32 @@ fn test_scale_numbers() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(0i128)));
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(-i128::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(-170141123460424235652481386091358552721i128));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(-i128::MAX)));
+    assert_eq!(
+        dec,
+        Some(SimpleWrapper(-170141123460424235652481386091358552721i128))
+    );
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(i128::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(10614612912676532892982561042679146832i128));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(i128::MAX)));
+    assert_eq!(
+        dec,
+        Some(SimpleWrapper(10614612912676532892982561042679146832i128))
+    );
 
-    let enc = SimpleWrapper::encode(&SimpleWrapper(u128::MAX));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(210614612912676532892982561042679146832u128));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(SimpleWrapper(u128::MAX)));
+    assert_eq!(
+        dec,
+        Some(SimpleWrapper(210614612912676532892982561042679146832u128))
+    );
 
     let enc = SimpleWrapper::encode(&SimpleWrapper(0u128));
     assert!(!enc.is_empty());
@@ -189,23 +198,23 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(OptionWrapper::new(Some(0i8))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-i8::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-54i8)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(-i8::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(-54i8))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(i8::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(73i8)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(i8::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(73i8))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(u8::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(123u8)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(u8::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(123u8))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u8)));
     assert!(!enc.is_empty());
@@ -220,23 +229,23 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(OptionWrapper::new(Some(0i16))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-i16::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-12345i16)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(-i16::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(-12345i16))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(i16::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(5432i16)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(i16::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(5432i16))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(u16::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(5678u16)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(u16::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(5678u16))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u16)));
     assert!(!enc.is_empty());
@@ -251,23 +260,23 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(OptionWrapper::new(Some(0i32))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-i32::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-1036572536i32)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(-i32::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(-1036572536i32))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(i32::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(52756301i32)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(i32::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(52756301i32))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(u32::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(2415369116u32)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(u32::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(2415369116u32))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u32)));
     assert!(!enc.is_empty());
@@ -282,23 +291,23 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(OptionWrapper::new(Some(0i64))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-i64::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-2321372031054735191i64)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(-i64::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(-2321372031054735191i64))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(i64::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(2106146129126765328i64)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(i64::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(2106146129126765328i64))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(u64::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(1091632910434195781u64)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(u64::MAX))));
+    assert_eq!(dec, Some(OptionWrapper::new(Some(1091632910434195781u64))));
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u64)));
     assert!(!enc.is_empty());
@@ -313,23 +322,44 @@ fn test_scale_options() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(OptionWrapper::new(Some(0i128))));
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(-i128::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(
+        -170141123460424235652481386091358552721i128,
+    )));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(-i128::MAX))));
+    assert_eq!(
+        dec,
+        Some(OptionWrapper::new(Some(
+            -170141123460424235652481386091358552721i128
+        )))
+    );
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(i128::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(
+        170141123460424235652481386091358552721i128,
+    )));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(i128::MAX))));
+    assert_eq!(
+        dec,
+        Some(OptionWrapper::new(Some(
+            170141123460424235652481386091358552721i128
+        )))
+    );
 
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(u128::MAX)));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(
+        210614612912676532892982561042679146832u128,
+    )));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
-    assert_eq!(dec, Some(OptionWrapper::new(Some(u128::MAX))));
+    assert_eq!(
+        dec,
+        Some(OptionWrapper::new(Some(
+            210614612912676532892982561042679146832u128
+        )))
+    );
 
     let enc = OptionWrapper::encode(&OptionWrapper::new(Some(0u128)));
     assert!(!enc.is_empty());
