@@ -23,13 +23,13 @@ const MINTLAYER_MAINNET_ID: u32 = 0xaabbccdd;
 #[allow(unused)]
 const MINTLAYER_TESTNET_ID: u32 = 0xeeff1122;
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Clone)]
 pub enum MessageType {
     Hello,
     HelloAck,
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, Clone)]
 pub struct Message {
     /// Magic number identifying Mintlayer P2P messages
     magic: u32,
@@ -41,7 +41,7 @@ pub struct Message {
     payload: Vec<u8>,
 }
 
-#[derive(Debug, Encode, Decode, Message)]
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Message)]
 pub struct Hello {
     /// Version of the software
     version: u32,
@@ -53,7 +53,7 @@ pub struct Hello {
     timestamp: u64,
 }
 
-#[derive(Debug, Encode, Decode, Message)]
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Message)]
 pub struct HelloAck {
     /// Version of the software
     version: u32,
@@ -63,4 +63,45 @@ pub struct HelloAck {
     services: u32,
     /// Unix timestamp
     timestamp: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::SystemTime;
+    use crate::error::P2pError;
+
+    #[test]
+    fn hello_test() {
+        let version = 215; // v2.1.5
+        let services = 0;
+        let timestamp: u64 =
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+        let hello = Hello::new(version, MINTLAYER_MAINNET_ID, services, timestamp);
+        let msg: Message = hello.clone().into();
+
+        // Hello message cannot be converted to HelloAck message
+        // even if the representation of the messages is exactly the same
+        assert_eq!(HelloAck::try_from(msg.clone()), Err(P2pError::DecodeFailure("Invalid message type".to_string())));
+        assert_eq!(Hello::try_from(msg.clone()), Ok(hello));
+        assert_eq!(msg.msg_type as u8, 0);
+    }
+
+    #[test]
+    fn hello_ack_test() {
+        let version = 215; // v2.1.5
+        let services = 0;
+        let timestamp: u64 =
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+        let hello_ack = HelloAck::new(version, MINTLAYER_MAINNET_ID, services, timestamp);
+        let msg: Message = hello_ack.clone().into();
+
+        // Hello message cannot be converted to HelloAck message
+        // even if the representation of the messages is exactly the same
+        assert_eq!(Hello::try_from(msg.clone()), Err(P2pError::DecodeFailure("Invalid message type".to_string())));
+        assert_eq!(HelloAck::try_from(msg.clone()), Ok(hello_ack));
+        assert_eq!(msg.msg_type as u8, 1);
+    }
 }
