@@ -1,9 +1,12 @@
 use crate::primitives::BlockHeight;
+use parity_scale_codec::{Decode, Encode};
 use std::collections::BTreeMap;
 
 type HashType = Vec<u8>; // temp type until crypto is ready
 
-#[derive(Debug, Copy, Clone)]
+pub const MAGIC_BYTES: [u8; 4] = [0x1a, 0x64, 0xe5, 0xf1];
+
+#[derive(Debug, Copy, Clone, PartialEq, Encode, Decode)]
 pub enum ChainType {
     Mainnet,
     // Testnet,
@@ -40,6 +43,6 @@ pub fn create_mainnet() -> ChainConfig {
         height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
         rpc_port: 15234,
         p2p_port: 8978,
-        magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+        magic_bytes: MAGIC_BYTES,
     }
 }
