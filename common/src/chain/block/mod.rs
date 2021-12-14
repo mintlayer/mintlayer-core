@@ -26,6 +26,8 @@ use block_v1::BlockHeader;
 use block_v1::BlockV1;
 use parity_scale_codec::{Decode, Encode};
 
+pub use block_v1::ConsensusData;
+
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
