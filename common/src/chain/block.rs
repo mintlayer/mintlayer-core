@@ -23,17 +23,17 @@ use crate::primitives::H256;
 
 // TODO: make block and header fields private with appropriate getters
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockHeader {
-    pub version: i32,
+pub struct BlockHeaderV1 {
     pub hash_prev_block: H256,
-    pub hash_merkle_root: H256,
+    pub tx_merkle_root: H256,
+    pub witness_merkle_root: H256,
     pub time: u32,
     pub consensus_data: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockV1 {
-    pub header: BlockHeader,
+    pub header: BlockHeaderV1,
     pub transactions: Vec<Transaction>,
 }
 
@@ -87,12 +87,12 @@ mod tests {
     fn empty_block_merkleroot() {
         let mut rng = rand::thread_rng();
 
-        let header = BlockHeader {
+        let header = BlockHeaderV1 {
             consensus_data: Vec::new(),
-            hash_merkle_root: H256::from_low_u64_be(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             hash_prev_block: H256::zero(),
             time: rng.gen(),
-            version: 1,
         };
 
         let block = Block::V1(BlockV1 {
@@ -107,12 +107,12 @@ mod tests {
     fn block_merkleroot_only_coinbase() {
         let mut rng = rand::thread_rng();
 
-        let header = BlockHeader {
+        let header = BlockHeaderV1 {
             consensus_data: Vec::new(),
-            hash_merkle_root: H256::from_low_u64_be(rng.gen()),
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             hash_prev_block: H256::zero(),
             time: rng.gen(),
-            version: 1,
         };
 
         let coinbase = Transaction::V1(TransactionV1 {

@@ -188,7 +188,7 @@ impl OrphanBlocksPool {
 mod tests {
     use super::*;
     use checkers::*;
-    use common::chain::block::{Block, BlockHeader};
+    use common::chain::block::{Block, BlockHeaderV1};
     use helpers::*;
     use rand::seq::SliceRandom;
 
@@ -207,12 +207,12 @@ mod tests {
         pub fn gen_block_from_id(prev_block_id: Option<H256>) -> Block {
             let mut rng = rand::thread_rng();
 
-            let header = BlockHeader {
+            let header = BlockHeaderV1 {
                 consensus_data: Vec::new(),
-                hash_merkle_root: H256::from_low_u64_be(rng.gen()),
+                tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+                witness_merkle_root: H256::from_low_u64_be(rng.gen()),
                 hash_prev_block: prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen())),
                 time: rng.gen(),
-                version: 1,
             };
             Block::V1(common::chain::block::BlockV1 {
                 header,
