@@ -18,9 +18,9 @@ use crate::event::{Event, PeerEvent};
 use crate::net::NetworkService;
 use crate::peer::{Peer, PeerId};
 use futures::FutureExt;
-use rand::Rng;
 use std::collections::HashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub mod error;
 pub mod event;
@@ -42,8 +42,16 @@ where
 
 #[allow(unused)]
 struct P2P<NetworkingBackend> {
+    /// Network backend (libp2p, mock)
     network: NetworkingBackend,
+
+    /// Hashmap for peer information
     peers: HashMap<PeerId, Sender<Event>>,
+
+	/// Counter for getting unique peer IDs
+    peer_cnt: AtomicU64,
+
+	/// Channel for p2p<->peers communication
     mgr_chan: (Sender<PeerEvent>, Receiver<PeerEvent>),
 }
 
@@ -59,6 +67,7 @@ where
     pub async fn new(addr: NetworkingBackend::Address) -> error::Result<Self> {
         Ok(Self {
             network: NetworkingBackend::new(addr).await?,
+            peer_cnt: AtomicU64::default(),
             peers: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(MANAGER_MAX_BACKLOG),
         })
@@ -116,15 +125,10 @@ where
 
     /// Create `Peer` object from a socket object and spawn task for it
     fn create_peer(&mut self, socket: NetworkingBackend::Socket) {
-        // find unique id for the peer
-        let mut peer_id = rand::thread_rng().gen();
-
-        while self.peers.contains_key(&peer_id) {
-            peer_id = rand::thread_rng().gen();
-        }
-
         let mgr_tx = self.mgr_chan.0.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(PEER_MAX_BACKLOG);
+
+        let peer_id: PeerId = self.peer_cnt.fetch_add(1, Ordering::Relaxed);
         self.peers.insert(peer_id, tx);
 
         tokio::spawn(async move {
