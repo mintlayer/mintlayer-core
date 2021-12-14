@@ -1,8 +1,8 @@
+use crate::pow::traits::{DataExt, PowExt};
+use crate::pow::{Compact, Pow};
+use crate::BlockProductionError;
 use common::chain::block::{Block, ConsensusData};
 use common::primitives::Uint256;
-use crate::BlockProductionError;
-use crate::pow::{Compact, Pow};
-use crate::pow::traits::{DataExt, PowExt};
 
 impl DataExt for ConsensusData {
     fn get_bits(&self) -> Compact {
