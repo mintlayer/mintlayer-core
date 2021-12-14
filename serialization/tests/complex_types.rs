@@ -132,3 +132,121 @@ fn test_scale_structures() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(test_main)));
 }
+
+#[test]
+fn test_scale_enums_with_single_variant() {
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum {
+        OnlyOneVariant,
+    }
+    let te = TestEnum::OnlyOneVariant;
+    let enc = TestEnum::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum::OnlyOneVariant));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum2 {
+        OnlyOneVariant(u8),
+    }
+    let te = TestEnum2::OnlyOneVariant(0xFF);
+    let enc = TestEnum2::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum2::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum2::OnlyOneVariant(0xFF)));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum3 {
+        OnlyOneVariant(u16),
+    }
+    let te = TestEnum3::OnlyOneVariant(0xFFFF);
+    let enc = TestEnum3::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum3::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum3::OnlyOneVariant(0xFFFF)));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum4 {
+        OnlyOneVariant(u32),
+    }
+    let te = TestEnum4::OnlyOneVariant(0xFFFFFFFF);
+    let enc = TestEnum4::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum4::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum4::OnlyOneVariant(0xFFFFFFFF)));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum5 {
+        OnlyOneVariant(u64),
+    }
+    let te = TestEnum5::OnlyOneVariant(0xFFFFFFFFFFFFFFFF);
+    let enc = TestEnum5::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum5::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum5::OnlyOneVariant(0xFFFFFFFFFFFFFFFF)));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum6 {
+        OnlyOneVariant(String),
+    }
+    let te = TestEnum6::OnlyOneVariant("Hello, world!".to_string());
+    let enc = TestEnum6::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum6::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(
+        dec,
+        Some(TestEnum6::OnlyOneVariant("Hello, world!".to_string()))
+    );
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum7 {
+        OnlyOneVariant(Vec<u8>),
+    }
+    let te = TestEnum7::OnlyOneVariant(vec![1, 2, 3, 4]);
+    let enc = TestEnum7::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum7::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(dec, Some(TestEnum7::OnlyOneVariant(vec![1, 2, 3, 4])));
+
+    #[derive(Encode, Decode, Debug, PartialEq, Eq)]
+    enum TestEnum8 {
+        OnlyOneVariant((u64, Vec<u8>, String, Option<i32>)),
+    }
+    let te = TestEnum8::OnlyOneVariant((
+        u64::MAX,
+        vec![1, 2, 3, 4],
+        "Hello, world!".to_string(),
+        Some(i32::MAX),
+    ));
+    let enc = TestEnum8::encode(&te);
+    assert!(!enc.is_empty());
+    dbg!(&enc);
+    let dec = TestEnum8::decode(&mut &enc[..]).ok();
+    assert!(&dec.is_some());
+    assert_eq!(
+        dec,
+        Some(TestEnum8::OnlyOneVariant((
+            u64::MAX,
+            vec![1, 2, 3, 4],
+            "Hello, world!".to_string(),
+            Some(i32::MAX),
+        )))
+    );
+}
+
+#[test]
+fn test_scale_timing_tests() {}
