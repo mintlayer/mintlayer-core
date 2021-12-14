@@ -13,12 +13,9 @@
 //
 
 #[macro_use]
-mod internal_macros;
-#[macro_use]
-mod uint;
-mod endian;
+pub(crate) mod internal_macros;
 
-pub use uint::*;
+pub(crate) mod endian;
 
 /// A trait which allows numbers to act as fixed-size bit arrays
 pub trait BitArray {
@@ -39,12 +36,4 @@ pub trait BitArray {
 
     /// Create value representing one
     fn one() -> Self;
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
