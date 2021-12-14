@@ -28,8 +28,8 @@ pub struct Id<T: ?Sized> {
 }
 
 impl<T> Id<T> {
-    pub fn get(&self) -> &H256 {
-        &self.id
+    pub fn get(&self) -> H256 {
+        self.id
     }
 
     pub fn new(h: &H256) -> Self {

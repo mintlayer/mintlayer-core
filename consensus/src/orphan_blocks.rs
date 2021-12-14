@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use common::chain::block::Block;
-use common::primitives::{Id, Idable, H256};
+use common::primitives::{Idable, H256};
 use rand::prelude::ThreadRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeMap;
@@ -96,7 +96,7 @@ impl OrphanBlocksPool {
             // we find the element that matches the block id
             let index = prevs
                 .iter()
-                .position(|blk| *blk.get_id().get() == *block_id)
+                .position(|blk| blk.get_id().get() == *block_id)
                 .expect("Must be there since we inserted it");
             prevs.remove(index);
         }
@@ -138,8 +138,8 @@ impl OrphanBlocksPool {
         }
 
         let rc_block = Rc::new(block);
-        self.orphan_by_id.insert(*block_id.get(), rc_block.clone());
-        self.orphan_ids.push(*block_id.get());
+        self.orphan_by_id.insert(block_id.get(), rc_block.clone());
+        self.orphan_ids.push(block_id.get());
         self.orphan_by_prev_id
             .entry(rc_block.get_prev_block_id())
             .or_default()
@@ -231,7 +231,7 @@ mod tests {
             let mut blocks = vec![gen_block_from_id(prev_block_id)];
 
             (1..count).into_iter().for_each(|_| {
-                let prev_block_id = blocks.last().map(|block| *block.get_id().get());
+                let prev_block_id = blocks.last().map(|block| block.get_id().get());
                 blocks.push(gen_block_from_id(prev_block_id));
             });
 
@@ -336,7 +336,7 @@ mod tests {
         check_block_existence_and_pool_length(&orphans_pool, &block, 1);
 
         // add another block that connects to the first one
-        let conn_block = gen_block_from_id(Some(*block.get_id().get()));
+        let conn_block = gen_block_from_id(Some(block.get_id().get()));
         assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
 
@@ -540,14 +540,14 @@ mod tests {
         //  ( e, j ),
         //  ( j, k )
         // ]
-        let extra_sim_blocks = gen_blocks_chain_starting_from_id(2, Some(*sim_block_id.get()));
+        let extra_sim_blocks = gen_blocks_chain_starting_from_id(2, Some(sim_block_id.get()));
 
         // generate blocks with conn's block id as parent
         let conn_block_id = conn_blocks.last().expect("it should return last element").get_id();
         // [
         //  ( i, (l,m,n) )
         // ]
-        let extra_conn_blocks = gen_blocks_with_common_parent_id(3, Some(*conn_block_id.get()));
+        let extra_conn_blocks = gen_blocks_with_common_parent_id(3, Some(conn_block_id.get()));
 
         //[
         //  ( a, (b,c,d,e) ),
@@ -659,7 +659,7 @@ mod tests {
                 .expect("should return any block in sim_blocks")
                 .get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
-            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(*rand_block_id.get()));
+            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id.get()));
             conn_blocks.append(&mut blocks);
         }
 

@@ -46,9 +46,9 @@ impl BlockV1 {
     pub fn get_merkle_root(&self) -> Result<H256, merkle::MerkleTreeFormError> {
         if self.transactions.len() == 1 {
             // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-            return Ok(*self.transactions[0].get_id().get());
+            return Ok(self.transactions[0].get_id().get());
         }
-        let hashes: Vec<H256> = self.transactions.iter().map(|tx| *tx.get_id().get()).collect();
+        let hashes: Vec<H256> = self.transactions.iter().map(|tx| tx.get_id().get()).collect();
         let t = merkle::merkletree_from_vec(&hashes)?;
         Ok(t.root())
     }
@@ -127,6 +127,6 @@ mod tests {
             transactions: vec![coinbase.clone()],
         });
         let res = block.get_merkle_root().unwrap();
-        assert_eq!(res, *coinbase.get_id().get());
+        assert_eq!(res, coinbase.get_id().get());
     }
 }

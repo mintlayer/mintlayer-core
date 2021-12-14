@@ -15,9 +15,6 @@
 //
 // Author(s): S. Afach
 
-use std::hash::Hasher;
-use std::primitive;
-
 use crate::primitives::id;
 use crate::primitives::Amount;
 use crate::primitives::Id;
@@ -92,7 +89,7 @@ impl Idable<TransactionV1> for TransactionV1 {
 
 impl Into<Id<Transaction>> for Id<TransactionV1> {
     fn into(self) -> Id<Transaction> {
-        Id::new(self.get())
+        Id::new(&self.get())
     }
 }
 
