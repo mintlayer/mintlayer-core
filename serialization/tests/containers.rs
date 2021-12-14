@@ -103,35 +103,3 @@ fn test_scale_btree_map() {
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(btree_map)));
 }
-
-#[test]
-fn test_scale_hash_map() {
-    // The SCALE does not support HashMap, still digging into this
-    // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-    // let mut rng = rand::thread_rng();
-    // let mut hash_map = HashMap::new();
-    // for _ in 0..1024 {
-    //     hash_map.insert(
-    //         format!("Office Space {}", rng.gen::<u64>()),
-    //         "Deals with real issues in the workplace.".to_string(),
-    //     );
-    //     hash_map.insert(
-    //         format!("Pulp Fiction {}", rng.gen::<u64>()),
-    //         "Masterpiece.".to_string(),
-    //     );
-    //     hash_map.insert(
-    //         format!("The Godfather {}", rng.gen::<u64>()),
-    //         "Very enjoyable.".to_string(),
-    //     );
-    //     hash_map.insert(
-    //         format!("The Blues Brothers {}", rng.gen::<u64>()),
-    //         "Eye lyked it a lot.".to_string(),
-    //     );
-    // }
-    // let enc = SimpleWrapper::encode(&SimpleWrapper(&hash_map.clone()));
-    // assert!(!enc.is_empty());
-    // let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
-    // assert!(&dec.is_some());
-    // assert_eq!(dec, Some(SimpleWrapper(hash_map)));
-}
