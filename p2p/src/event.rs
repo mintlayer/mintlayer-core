@@ -13,16 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach
+// Author(s): A. Altonen
+use crate::message;
+use crate::peer::PeerId;
+use parity_scale_codec::{Decode, Encode};
 
-pub mod amount;
-pub mod encoding;
-pub mod error;
-pub mod height;
-pub mod id;
-pub mod merkle;
+#[derive(Debug, Encode, Decode)]
+pub enum Event {
+    Hello,
+}
 
-pub use amount::Amount;
-pub use encoding::{Bech32Error, DecodedBech32};
-pub use height::BlockHeight;
-pub use id::{DataID, Id, Idable, H256};
+#[allow(unused)]
+pub struct PeerEvent {
+    peer_id: PeerId,
+    event: PeerEventType,
+}
+
+/// P2P uses these events to communicate with Peer
+#[allow(unused)]
+pub enum PeerEventType {
+    /// Remote peer disconnected
+    Disconnected,
+    /// Inbound or outbound message
+    Message(message::Message),
+}

@@ -21,9 +21,28 @@ fixed_hash::construct_fixed_hash! {
     pub struct H256(32);
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Id<T: ?Sized> {
+    id: H256,
+    _shadow: std::marker::PhantomData<T>,
+}
+
+impl<T> Id<T> {
+    pub fn get(&self) -> H256 {
+        self.id
+    }
+
+    pub fn new(h: &H256) -> Self {
+        Self {
+            id: *h,
+            _shadow: std::marker::PhantomData,
+        }
+    }
+}
+
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
-pub trait Idable {
-    fn get_id(&self) -> H256;
+pub trait Idable<T: ?Sized> {
+    fn get_id(&self) -> Id<Self>;
 }
 
 #[allow(dead_code)]
