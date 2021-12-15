@@ -21,6 +21,7 @@ pub mod error;
 pub mod height;
 pub mod id;
 pub mod merkle;
+pub mod version;
 
 pub use amount::Amount;
 pub use encoding::{Bech32Error, DecodedBech32};
