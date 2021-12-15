@@ -178,6 +178,8 @@ dependencies = [
  "generic-array",
  "hex-literal",
  "merkletree",
+ "parity-scale-codec",
+ "parity-scale-codec-derive",
  "rand 0.8.4",
  "script",
  "static_assertions",
@@ -1131,6 +1133,8 @@ dependencies = [
  "flate2",
  "hex",
  "hex-literal",
+ "parity-scale-codec",
+ "parity-scale-codec-derive",
  "proptest",
 ]
 
