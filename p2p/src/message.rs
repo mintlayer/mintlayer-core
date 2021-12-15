@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use common::primitives::version::SemVer;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
@@ -21,7 +22,7 @@ use parity_scale_codec::{Decode, Encode};
 pub enum MessageType {
     Hello {
         /// Software version of local node
-        version: u32,
+        version: SemVer,
         /// Services that the local node supports
         services: u32,
         /// Unix timestamp
@@ -29,7 +30,7 @@ pub enum MessageType {
     },
     HelloAck {
         /// Software version of local node
-        version: u32,
+        version: SemVer,
         /// Services that the local node supports
         services: u32,
         /// Unix timestamp
@@ -49,7 +50,6 @@ pub struct Message {
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use crate::error;
     use common::chain::config;
     use std::time::SystemTime;
 
@@ -62,7 +62,7 @@ mod tests {
         let msg = Message {
             magic: *config.magic_bytes(),
             msg: MessageType::Hello {
-                version: 1,
+                version: SemVer::new(0, 1, 0),
                 services: serv,
                 timestamp: ts,
             },
@@ -75,7 +75,7 @@ mod tests {
                 services,
                 timestamp,
             } => {
-                assert_eq!(version, 1);
+                assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
             }
@@ -91,7 +91,7 @@ mod tests {
                 services,
                 timestamp,
             } => {
-                assert_eq!(version, 1);
+                assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
             }
@@ -108,7 +108,7 @@ mod tests {
         let msg = Message {
             magic: *config.magic_bytes(),
             msg: MessageType::HelloAck {
-                version: 1,
+                version: SemVer::new(0, 1, 0),
                 services: serv,
                 timestamp: ts,
             },
@@ -121,7 +121,7 @@ mod tests {
                 services,
                 timestamp,
             } => {
-                assert_eq!(version, 1);
+                assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
             }
@@ -137,7 +137,7 @@ mod tests {
                 services,
                 timestamp,
             } => {
-                assert_eq!(version, 1);
+                assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
             }
