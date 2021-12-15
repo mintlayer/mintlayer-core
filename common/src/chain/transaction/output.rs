@@ -1,11 +1,12 @@
 use crate::primitives::Amount;
 use parity_scale_codec::{Decode, Encode};
+use script::Script;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Destination {
-    Address, // Address type to be added
+    Address,   // Address type to be added
     PublicKey, // Key type to be added
-             // ScriptHash(Script),  // So far Script is not serializable... so, until this is resolved
+    ScriptHash(Script),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

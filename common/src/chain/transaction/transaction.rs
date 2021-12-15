@@ -19,7 +19,6 @@ use crate::primitives::id;
 use crate::primitives::{Id, Idable, H256};
 use crypto::hash::StreamHasher;
 use parity_scale_codec::{Decode, Encode};
-// use script::Script;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 use crate::chain::transaction::*;
