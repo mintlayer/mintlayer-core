@@ -19,17 +19,14 @@ use crate::net::NetworkService;
 use crate::peer::{Peer, PeerId};
 use futures::FutureExt;
 use std::collections::HashMap;
-use tokio::sync::mpsc::{Receiver, Sender};
 use std::sync::atomic::{AtomicU64, Ordering};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
 pub mod peer;
-
-const MANAGER_MAX_BACKLOG: usize = 256;
-const PEER_MAX_BACKLOG: usize = 32;
 
 #[allow(unused)]
 pub enum ConnectivityEvent<T>
@@ -48,10 +45,13 @@ struct P2P<NetworkingBackend> {
     /// Hashmap for peer information
     peers: HashMap<PeerId, Sender<Event>>,
 
-	/// Counter for getting unique peer IDs
+    /// Counter for getting unique peer IDs
     peer_cnt: AtomicU64,
 
-	/// Channel for p2p<->peers communication
+    /// Peer backlog maximum size
+    peer_backlock: usize,
+
+    /// Channel for p2p<->peers communication
     mgr_chan: (Sender<PeerEvent>, Receiver<PeerEvent>),
 }
 
@@ -64,12 +64,17 @@ where
     ///
     /// # Arguments
     /// `addr` - socket address where the local node binds itself to
-    pub async fn new(addr: NetworkingBackend::Address) -> error::Result<Self> {
+    pub async fn new(
+        mgr_backlog: usize,
+        peer_backlock: usize,
+        addr: NetworkingBackend::Address,
+    ) -> error::Result<Self> {
         Ok(Self {
             network: NetworkingBackend::new(addr).await?,
             peer_cnt: AtomicU64::default(),
+            peer_backlock,
             peers: HashMap::new(),
-            mgr_chan: tokio::sync::mpsc::channel(MANAGER_MAX_BACKLOG),
+            mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
         })
     }
 
@@ -126,7 +131,7 @@ where
     /// Create `Peer` object from a socket object and spawn task for it
     fn create_peer(&mut self, socket: NetworkingBackend::Socket) {
         let mgr_tx = self.mgr_chan.0.clone();
-        let (tx, rx) = tokio::sync::mpsc::channel(PEER_MAX_BACKLOG);
+        let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
         let peer_id: PeerId = self.peer_cnt.fetch_add(1, Ordering::Relaxed);
         self.peers.insert(peer_id, tx);
@@ -145,17 +150,17 @@ mod tests {
     #[tokio::test]
     async fn test_p2p_new() {
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(addr).await;
+        let res = P2P::<MockService>::new(256, 32, addr).await;
         assert_eq!(res.is_ok(), true);
 
         // try to create new P2P object to the same address, should fail
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(addr).await;
+        let res = P2P::<MockService>::new(256, 32, addr).await;
         assert_eq!(res.is_err(), true);
 
         // try to create new P2P object to different address, should succeed
         let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(addr).await;
+        let res = P2P::<MockService>::new(256, 32, addr).await;
         assert_eq!(res.is_ok(), true);
     }
 }
