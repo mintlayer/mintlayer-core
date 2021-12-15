@@ -16,43 +16,132 @@
 // Author(s): A. Altonen
 use parity_scale_codec::{Decode, Encode};
 
+#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[allow(unused)]
-const MINTLAYER_MAGIC_NUM: u32 = 0x11223344;
-#[allow(unused)]
-const MINTLAYER_MAINNET_ID: u32 = 0xaabbccdd;
-#[allow(unused)]
-const MINTLAYER_TESTNET_ID: u32 = 0xeeff1122;
-
-#[derive(Debug, Encode, Decode)]
 pub enum MessageType {
-    Hello,
-    HelloAck,
+    Hello {
+        /// Software version of local node
+        version: u32,
+        /// Services that the local node supports
+        services: u32,
+        /// Unix timestamp
+        timestamp: u64,
+    },
+    HelloAck {
+        /// Software version of local node
+        version: u32,
+        /// Services that the local node supports
+        services: u32,
+        /// Unix timestamp
+        timestamp: u64,
+    },
 }
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+#[allow(unused)]
 pub struct Message {
-    /// Magic number identifying Mintlayer P2P messages
-    magic: u32,
-    /// Type of the message carried in `payload`
-    msg_type: MessageType,
-    /// Size of the message
-    size: u32,
-    /// SCALE-encoded message
-    payload: Vec<u8>,
+    /// Magic number identifying mainnet, testnet
+    pub magic: [u8; 4],
+    /// Message (Hello, GetHeaders)
+    pub msg: MessageType,
 }
 
-#[derive(Debug, Encode, Decode)]
-pub struct Hello {
-    version: u32,
-    network: u32,
-    services: u32,
-    timestamp: u64,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    // use crate::error;
+    use common::chain::config;
+    use std::time::SystemTime;
 
-#[derive(Debug, Encode, Decode)]
-pub struct HelloAck {
-    version: u32,
-    network: u32,
-    services: u32,
-    timestamp: u64,
+    #[test]
+    fn hello_test() {
+        let config = config::create_mainnet();
+        let serv = 0u32;
+        let ts: u64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+        let msg = Message {
+            magic: *config.magic_bytes(),
+            msg: MessageType::Hello {
+                version: 1,
+                services: serv,
+                timestamp: ts,
+            },
+        };
+        assert_eq!(&msg.magic, config.magic_bytes());
+
+        match msg.msg {
+            MessageType::Hello {
+                version,
+                services,
+                timestamp,
+            } => {
+                assert_eq!(version, 1);
+                assert_eq!(services, serv);
+                assert_eq!(timestamp, ts);
+            }
+            _ => panic!("invalid message type"),
+        }
+
+        let encoded = msg.encode();
+        let message: Message = Decode::decode(&mut &encoded[..]).unwrap();
+
+        match message.msg {
+            MessageType::Hello {
+                version,
+                services,
+                timestamp,
+            } => {
+                assert_eq!(version, 1);
+                assert_eq!(services, serv);
+                assert_eq!(timestamp, ts);
+            }
+            _ => panic!("invalid message type"),
+        }
+    }
+
+    #[test]
+    fn hello_ack_test() {
+        let config = config::create_mainnet();
+        let serv = 0u32;
+        let ts: u64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+        let msg = Message {
+            magic: *config.magic_bytes(),
+            msg: MessageType::HelloAck {
+                version: 1,
+                services: serv,
+                timestamp: ts,
+            },
+        };
+        assert_eq!(&msg.magic, config.magic_bytes());
+
+        match msg.msg {
+            MessageType::HelloAck {
+                version,
+                services,
+                timestamp,
+            } => {
+                assert_eq!(version, 1);
+                assert_eq!(services, serv);
+                assert_eq!(timestamp, ts);
+            }
+            _ => panic!("invalid message type"),
+        }
+
+        let encoded = msg.encode();
+        let message: Message = Decode::decode(&mut &encoded[..]).unwrap();
+
+        match message.msg {
+            MessageType::HelloAck {
+                version,
+                services,
+                timestamp,
+            } => {
+                assert_eq!(version, 1);
+                assert_eq!(services, serv);
+                assert_eq!(timestamp, ts);
+            }
+            _ => panic!("invalid message type"),
+        }
+    }
 }
