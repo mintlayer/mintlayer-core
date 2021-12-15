@@ -747,6 +747,7 @@ dependencies = [
  "futures",
  "futures-timer",
  "parity-scale-codec",
+ "rand 0.8.4",
  "tokio",
 ]
 
