@@ -18,8 +18,10 @@ use crate::error;
 use crate::event::{Event, PeerEvent};
 use crate::message::Message;
 use crate::net::{NetworkService, SocketService};
+use common::chain::ChainConfig;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
+use std::sync::Arc;
 use std::time::Duration;
 
 pub type PeerId = u64;
@@ -84,6 +86,9 @@ where
 
     /// Socket of the peer
     pub socket: NetworkingBackend::Socket,
+
+    /// Chain config
+    config: Arc<ChainConfig>,
 }
 
 #[allow(unused)]
@@ -99,6 +104,7 @@ where
     pub fn new(
         id: PeerId,
         role: PeerRole,
+        config: Arc<ChainConfig>,
         socket: NetworkingBackend::Socket,
         mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
         mgr_rx: tokio::sync::mpsc::Receiver<Event>,
@@ -115,6 +121,7 @@ where
             mgr_tx,
             mgr_rx,
             socket,
+            config,
         }
     }
 
@@ -193,10 +200,12 @@ where
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
+    use common::chain::config;
     use tokio::net::TcpStream;
 
     #[tokio::test]
     async fn test_peer_new() {
+        let config = Arc::new(config::create_mainnet());
         let addr: <MockService as NetworkService>::Address = "[::1]:11111".parse().unwrap();
         let mut server = MockService::new(addr).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
@@ -207,6 +216,13 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(1, PeerRole::Initiator, server_res.unwrap(), peer_tx, rx);
+        let _ = Peer::<MockService>::new(
+            1,
+            PeerRole::Initiator,
+            config.clone(),
+            server_res.unwrap(),
+            peer_tx,
+            rx,
+        );
     }
 }

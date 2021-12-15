@@ -17,9 +17,13 @@
 use crate::event::{Event, PeerEvent};
 use crate::net::NetworkService;
 use crate::peer::{Peer, PeerId, PeerRole};
+use common::chain::ChainConfig;
 use futures::FutureExt;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod error;
@@ -41,6 +45,9 @@ where
 struct P2P<NetworkingBackend> {
     /// Network backend (libp2p, mock)
     network: NetworkingBackend,
+
+    /// Chain config
+    config: Arc<ChainConfig>,
 
     /// Hashmap for peer information
     peers: HashMap<PeerId, Sender<Event>>,
@@ -68,9 +75,11 @@ where
         mgr_backlog: usize,
         peer_backlock: usize,
         addr: NetworkingBackend::Address,
+        config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
         Ok(Self {
             network: NetworkingBackend::new(addr).await?,
+            config,
             peer_cnt: AtomicU64::default(),
             peer_backlock,
             peers: HashMap::new(),
@@ -134,6 +143,7 @@ where
 
     /// Create `Peer` object from a socket object and spawn task for it
     fn create_peer(&mut self, socket: NetworkingBackend::Socket, role: PeerRole) {
+        let config = self.config.clone();
         let mgr_tx = self.mgr_chan.0.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
@@ -141,7 +151,9 @@ where
         self.peers.insert(peer_id, tx);
 
         tokio::spawn(async move {
-            Peer::<NetworkingBackend>::new(peer_id, role, socket, mgr_tx, rx).run().await;
+            Peer::<NetworkingBackend>::new(peer_id, role, config, socket, mgr_tx, rx)
+                .run()
+                .await;
         });
     }
 }
@@ -149,22 +161,24 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use common::chain::config;
     use net::mock::MockService;
 
     #[tokio::test]
     async fn test_p2p_new() {
+        let config = Arc::new(config::create_mainnet());
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr).await;
-        assert!(res.is_ok());
+        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
+        assert_eq!(res.is_ok(), true);
 
         // try to create new P2P object to the same address, should fail
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr).await;
-        assert!(res.is_err());
+        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
+        assert_eq!(res.is_err(), true);
 
         // try to create new P2P object to different address, should succeed
         let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr).await;
-        assert!(res.is_ok());
+        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
+        assert_eq!(res.is_ok(), true);
     }
 }
