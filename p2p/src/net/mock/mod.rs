@@ -57,10 +57,7 @@ impl NetworkService for MockService {
 
     async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
         if self.addr == addr {
-            return Err(P2pError::SocketError(Error::new(
-                ErrorKind::Other,
-                "Connection to local node prohibited!",
-            )));
+            return Err(P2pError::SocketError(ErrorKind::AddrNotAvailable));
         }
 
         Ok(MockSocket {
@@ -110,7 +107,7 @@ impl SocketService for MockSocket {
 
         match self.socket.read(&mut data).await? {
             0 => Err(P2pError::PeerDisconnected),
-            _ => Decode::decode(&mut &data[..]).map_err(P2pError::DecodeFailure),
+            _ => Decode::decode(&mut &data[..]).map_err(|e| e.into()),
         }
     }
 }
