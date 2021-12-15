@@ -63,7 +63,7 @@ pub fn message(input: TokenStream) -> TokenStream {
             fn into(self) -> Message {
                 let encoded = self.encode();
                 Message {
-                    magic: MAGIC_BYTES,
+                    magic: CHAIN_CONFIG.magic_bytes,
                     msg_type: MessageType::#ident,
                     size: encoded.len() as u32,
                     payload: encoded,

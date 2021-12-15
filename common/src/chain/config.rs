@@ -26,13 +26,17 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
     #[allow(dead_code)]
-    magic_bytes: [u8; 4],
+    pub magic_bytes: [u8; 4],
 }
 
 impl ChainConfig {
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }
+}
+
+lazy_static::lazy_static! {
+    pub static ref CHAIN_CONFIG: ChainConfig = create_mainnet();
 }
 
 #[allow(dead_code)]

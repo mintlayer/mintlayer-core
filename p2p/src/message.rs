@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use common::chain::config::{ChainType, MAGIC_BYTES};
+use common::chain::config::CHAIN_CONFIG;
 use parity_scale_codec::{Decode, Encode};
 use util::Message;
 
@@ -40,8 +40,6 @@ pub struct Message {
 pub struct Hello {
     /// Version of the software
     version: u32,
-    /// Network ID
-    network: ChainType,
     /// Services provided by the node
     services: u32,
     /// Unix timestamp
@@ -52,8 +50,6 @@ pub struct Hello {
 pub struct HelloAck {
     /// Version of the software
     version: u32,
-    /// Network ID
-    network: ChainType,
     /// Services provided by the node
     services: u32,
     /// Unix timestamp
@@ -73,7 +69,7 @@ mod tests {
         let timestamp: u64 =
             SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-        let hello = Hello::new(version, ChainType::Mainnet, services, timestamp);
+        let hello = Hello::new(version, services, timestamp);
         let msg: Message = hello.clone().into();
 
         // Hello message cannot be converted to HelloAck message
@@ -93,10 +89,10 @@ mod tests {
         let timestamp: u64 =
             SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-        let hello_ack = HelloAck::new(version, ChainType::Mainnet, services, timestamp);
+        let hello_ack = HelloAck::new(version, services, timestamp);
         let msg: Message = hello_ack.clone().into();
 
-        // Hello message cannot be converted to HelloAck message
+        // HelloAck message cannot be converted to Hello message
         // even if the representation of the messages is exactly the same
         assert_eq!(
             Hello::try_from(msg.clone()),
