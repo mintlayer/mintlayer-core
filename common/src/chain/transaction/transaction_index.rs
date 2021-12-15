@@ -71,22 +71,18 @@ impl TxMainChainIndex {
         match spent_state {
             OutputSpentState::Unspent => {
                 *spent_state = OutputSpentState::SpentBy(*spender);
-                return Ok(());
+                Ok(())
             }
-            OutputSpentState::SpentBy(spender) => {
-                return Err(SpendError::AlreadySpent(*spender));
-            }
+            OutputSpentState::SpentBy(spender) => Err(SpendError::AlreadySpent(*spender)),
         }
     }
 
     fn unspend_internal(spent_state: &mut OutputSpentState) -> Result<(), SpendError> {
         match spent_state {
-            OutputSpentState::Unspent => {
-                return Err(SpendError::AlreadyUnspent);
-            }
+            OutputSpentState::Unspent => Err(SpendError::AlreadyUnspent),
             OutputSpentState::SpentBy(_) => {
                 *spent_state = OutputSpentState::Unspent;
-                return Ok(());
+                Ok(())
             }
         }
     }
@@ -98,10 +94,8 @@ impl TxMainChainIndex {
         }
 
         match self.spent.get_mut(index) {
-            None => return Err(SpendError::OutOfRange),
-            Some(spent_state) => {
-                return Self::spend_internal(spent_state, spender);
-            }
+            None => Err(SpendError::OutOfRange),
+            Some(spent_state) => Self::spend_internal(spent_state, spender),
         }
     }
 
@@ -112,10 +106,8 @@ impl TxMainChainIndex {
         }
 
         match self.spent.get_mut(index) {
-            None => return Err(SpendError::OutOfRange),
-            Some(spent_state) => {
-                return Self::unspend_internal(spent_state);
-            }
+            None => Err(SpendError::OutOfRange),
+            Some(spent_state) => Self::unspend_internal(spent_state),
         }
     }
 
@@ -131,10 +123,7 @@ impl TxMainChainIndex {
     }
 
     pub fn all_outputs_spent(&self) -> bool {
-        self.spent.iter().all(|s| match s {
-            OutputSpentState::SpentBy(_) => true,
-            _ => false,
-        })
+        self.spent.iter().all(|s| matches!(s, OutputSpentState::SpentBy(_)))
     }
 
     pub fn get_output_count(&self) -> u32 {
@@ -145,7 +134,7 @@ impl TxMainChainIndex {
         tx_position: TxMainChainPosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
-        if output_count <= 0 {
+        if output_count == 0 {
             return Err(TxMainChainIndexError::InvalidOutputCount);
         }
 

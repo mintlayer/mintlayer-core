@@ -27,7 +27,7 @@ use block_v1::BlockV1;
 use parity_scale_codec::{Decode, Encode};
 
 pub fn calculate_tx_merkle_root(
-    transactions: &Vec<Transaction>,
+    transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
     if transactions.len() == 1 {
         // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
@@ -39,7 +39,7 @@ pub fn calculate_tx_merkle_root(
 }
 
 pub fn calculate_witness_merkle_root(
-    transactions: &Vec<Transaction>,
+    transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
     // TODO: provide implementation based on real serialization instead of get_id()
     if transactions.len() == 1 {
@@ -68,15 +68,15 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl Into<Id<Block>> for Id<BlockV1> {
-    fn into(self) -> Id<Block> {
-        Id::new(&self.get())
+impl From<Id<BlockV1>> for Id<Block> {
+    fn from(id_block_v1: Id<BlockV1>) -> Self {
+        Id::new(&id_block_v1.get())
     }
 }
 
-impl Into<Id<BlockV1>> for Id<Block> {
-    fn into(self) -> Id<BlockV1> {
-        Id::new(&self.get())
+impl From<Id<Block>> for Id<BlockV1> {
+    fn from(id_block: Id<Block>) -> Id<BlockV1> {
+        Id::new(&id_block.get())
     }
 }
 

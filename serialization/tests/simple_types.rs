@@ -375,7 +375,7 @@ fn test_scale_options() {
     }
 
     let result = TestEnum::TestField1(Some("any error message".to_string()));
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(result.clone())));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(result)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
@@ -387,7 +387,7 @@ fn test_scale_options() {
     );
 
     let result = TestEnum::TestField2(Some(Box::new(Some("any error message".to_string()))));
-    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(result.clone())));
+    let enc = OptionWrapper::encode(&OptionWrapper::new(Some(result)));
     assert!(!enc.is_empty());
     let dec = OptionWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
@@ -402,25 +402,25 @@ fn test_scale_options() {
 #[test]
 fn test_scale_arrays() {
     let array = [0xFF; 64_000];
-    let enc = SimpleWrapper::encode(&SimpleWrapper(array.clone()));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(array)));
 
     let array = [0x00; 64_000];
-    let enc = SimpleWrapper::encode(&SimpleWrapper(array.clone()));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());
     assert_eq!(dec, Some(SimpleWrapper(array)));
 
     let array = [0xFF; 0];
-    let enc = SimpleWrapper::encode(&SimpleWrapper(array.clone()));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(enc.is_empty());
 
     let array = [0xFF; 1];
-    let enc = SimpleWrapper::encode(&SimpleWrapper(array.clone()));
+    let enc = SimpleWrapper::encode(&SimpleWrapper(array));
     assert!(!enc.is_empty());
     let dec = SimpleWrapper::decode(&mut &enc[..]).ok();
     assert!(&dec.is_some());

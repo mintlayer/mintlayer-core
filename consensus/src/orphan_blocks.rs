@@ -213,7 +213,7 @@ mod tests {
 
             Block::new(
                 vec![tx],
-                Id::new(&prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen()))),
+                Id::new(&prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()))),
                 rng.gen(),
                 Vec::new(),
             )
@@ -248,7 +248,7 @@ mod tests {
         ) -> Vec<Block> {
             let mut rng = rand::thread_rng();
 
-            let prev_block_id = prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen()));
+            let prev_block_id = prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()));
 
             (0..count).into_iter().map(|_| gen_block_from_id(Some(prev_block_id))).collect()
         }

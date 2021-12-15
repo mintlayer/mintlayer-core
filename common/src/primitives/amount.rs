@@ -1,3 +1,5 @@
+#![allow(clippy::eq_op)]
+
 use parity_scale_codec::{Decode, Encode};
 
 // Copyright (c) 2021 RBB S.r.l
