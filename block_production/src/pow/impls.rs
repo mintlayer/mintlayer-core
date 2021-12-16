@@ -1,8 +1,8 @@
 use crate::pow::traits::{DataExt, PowExt};
-use crate::pow::{Compact, Pow};
+use crate::pow::{Compact, POWError, Pow};
 use crate::BlockProductionError;
 use common::chain::block::{Block, ConsensusData};
-use common::primitives::Uint256;
+use common::primitives::{Idable, Uint256};
 
 impl DataExt for ConsensusData {
     fn get_bits(&self) -> Compact {
@@ -24,20 +24,23 @@ impl DataExt for ConsensusData {
 
 impl PowExt for Block {
     fn calculate_hash(&self) -> Uint256 {
-        todo!()
+        let id = self.get_id();
+        id.get().into() //TODO: needs to be tested
     }
 
     fn mine(&mut self, max_nonce: u128, difficulty: Uint256) -> Result<(), BlockProductionError> {
-        let bits = Compact::from(difficulty);
+        if let Some(bits) = Compact::from_uint256(difficulty) {
+            for nonce in 0..max_nonce {
+                self.update_consensus_data(ConsensusData::create(&bits, nonce));
 
-        for nonce in 0..max_nonce {
-            self.update_consensus_data(ConsensusData::create(&bits, nonce));
-
-            if Pow::check_difficulty(self, &difficulty) {
-                return Ok(());
+                if Pow::check_difficulty(self, &difficulty) {
+                    return Ok(());
+                }
             }
+
+            return Err(BlockProductionError::Error1);
         }
 
-        Err(BlockProductionError::Error1)
+        Err(POWError::FailedUInt256ToCompact.into())
     }
 }
