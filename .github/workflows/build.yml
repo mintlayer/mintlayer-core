@@ -20,42 +20,6 @@ jobs:
       with:
         arguments: --all-features --workspace
 
-  check_l:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Install rust stable
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        components: rustfmt
-        default: true
-    - name: Checkout repository and submodules
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-    - name: CheckL
-      run: cargo check
-
-  check_m:
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Install rust stable
-      uses: actions-rs/toolchain@v1
-      with:
-        profile: minimal
-        toolchain: stable
-        components: rustfmt
-        default: true
-    - name: Checkout repository and submodules
-      uses: actions/checkout@v2
-      with:
-        submodules: recursive
-    - name: CheckL
-      run: cargo check
-
   build_windows:
     runs-on: windows-latest
     # if: github.ref == 'refs/heads/master'
