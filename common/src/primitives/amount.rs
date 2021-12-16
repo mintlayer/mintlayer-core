@@ -1,3 +1,5 @@
+use parity_scale_codec::{Decode, Encode};
+
 // Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
@@ -19,8 +21,9 @@
 // if you need a signed amount, we should create a separate type for it and implement proper conversion
 pub type IntType = u128;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Amount {
+    #[codec(compact)]
     val: IntType,
 }
 

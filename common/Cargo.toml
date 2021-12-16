@@ -19,6 +19,6 @@ static_assertions = "1.1.0"
 generic-array = "0.14.4"
 rand = "0.8.4"
 anyhow = "1.0.51"
-parity-scale-codec-derive = "2.3.1"
 parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
+parity-scale-codec-derive = "2.3.1"
 sscanf = "0.1.4"

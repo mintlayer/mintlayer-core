@@ -28,15 +28,17 @@
 
 use core::{default::Default, fmt};
 
+use parity_scale_codec::{Decode, Encode};
+
 use crate::{error::Error, opcodes};
 
 // TODO this needs better types
 type PubkeyHash = [u8];
 type ScriptHash = [u8];
 
-#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(Clone, Default, PartialOrd, Ord, PartialEq, Eq, Hash, Encode, Decode)]
 /// A Bitcoin script
-pub struct Script(Box<[u8]>);
+pub struct Script(Vec<u8>);
 
 impl AsRef<[u8]> for Script {
     fn as_ref(&self) -> &[u8] {
@@ -171,7 +173,7 @@ pub fn read_uint(data: &[u8], size: usize) -> Result<usize, Error> {
 impl Script {
     /// Creates a new empty script
     pub fn new() -> Script {
-        Script(vec![].into_boxed_slice())
+        Script(vec![].to_owned())
     }
 
     /// Generates P2PK-type of scriptPubkey
@@ -227,12 +229,12 @@ impl Script {
 
     /// Returns a copy of the script data
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.0.clone().into_vec()
+        self.0.clone()
     }
 
     /// Convert the script into a byte vector
     pub fn into_bytes(self) -> Vec<u8> {
-        self.0.into_vec()
+        self.0
     }
 
     /// Checks whether a script pubkey is a p2sh output
@@ -413,7 +415,7 @@ impl Script {
 /// Creates a new script from an existing vector
 impl From<Vec<u8>> for Script {
     fn from(v: Vec<u8>) -> Script {
-        Script(v.into_boxed_slice())
+        Script(v.to_owned())
     }
 }
 
@@ -625,7 +627,7 @@ impl Builder {
 
     /// Converts the `Builder` into an unmodifiable `Script`
     pub fn into_script(self) -> Script {
-        Script(self.0.into_boxed_slice())
+        Script(self.0.clone())
     }
 }
 
@@ -639,7 +641,7 @@ impl Default for Builder {
 /// Creates a new script from an existing vector
 impl From<Vec<u8>> for Builder {
     fn from(v: Vec<u8>) -> Builder {
-        let script = Script(v.into_boxed_slice());
+        let script = Script(v.to_owned());
         let last_op = match script.instructions().last() {
             Some(Ok(Instruction::Op(op))) => Some(op),
             _ => None,
