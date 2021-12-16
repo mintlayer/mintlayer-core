@@ -36,8 +36,7 @@ fn next_pow2(n: usize) -> usize {
     }
     let leading_zeros = (n - 1).leading_zeros() as usize;
     let active_bits = usize::BITS as usize - leading_zeros;
-    let pow2_size = (1 << active_bits) as usize;
-    pow2_size
+    (1 << active_bits) as usize
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -70,8 +69,8 @@ impl From<anyhow::Error> for MerkleTreeFormError {
 }
 
 fn concatenate_with_padding_as_bytes(elements: &[H256], padding: Vec<H256>) -> Vec<u8> {
-    let data: Vec<u8> = elements.iter().flat_map(|el| el.as_bytes().to_vec()).collect();
-    let padding_data: Vec<u8> = padding.iter().flat_map(|el| el.as_bytes().to_vec()).collect();
+    let data = elements.iter().flat_map(|el| el.as_bytes().to_vec());
+    let padding_data = padding.iter().flat_map(|el| el.as_bytes().to_vec());
     let data: Vec<u8> = data.into_iter().chain(padding_data.into_iter()).collect();
     data
 }
@@ -178,10 +177,10 @@ mod tests {
 
     #[test]
     fn merkletree_too_small() {
-        let t0 = merkletree_from_vec(&vec![]);
+        let t0 = merkletree_from_vec(&[]);
         assert_eq!(t0.unwrap_err(), MerkleTreeFormError::TooSmall(0));
 
-        let t1 = merkletree_from_vec(&vec![H256::zero()]);
+        let t1 = merkletree_from_vec(&[H256::zero()]);
         assert_eq!(t1.unwrap_err(), MerkleTreeFormError::TooSmall(1));
     }
 
@@ -209,9 +208,9 @@ mod tests {
 
         let data: Vec<u8> = vec![]
             .into_iter()
-            .chain(default_hash(v1).as_bytes().into_iter())
+            .chain(default_hash(v1).as_bytes().iter())
             .into_iter()
-            .chain(default_hash(v2).as_bytes().into_iter())
+            .chain(default_hash(v2).as_bytes().iter())
             .cloned()
             .collect();
 
@@ -317,7 +316,7 @@ mod tests {
         let v1 = H256::zero();
         let v2 = H256::from_low_u64_be(1);
 
-        let t = merkletree_from_vec(&vec![v1, v2]).unwrap();
+        let t = merkletree_from_vec(&[v1, v2]).unwrap();
 
         // recreate the expected root
         let mut test_hasher = DefaultHashAlgoStream::new();
@@ -333,7 +332,7 @@ mod tests {
         let v2 = H256::from_low_u64_be(1);
         let v3 = H256::from_low_u64_be(2);
 
-        let t = merkletree_from_vec(&vec![v1, v2, v3]).unwrap();
+        let t = merkletree_from_vec(&[v1, v2, v3]).unwrap();
 
         // recreate the expected root
         let mut node10 = DefaultHashAlgoStream::new();
@@ -362,11 +361,11 @@ mod tests {
         let v3 = H256::from_low_u64_be(2);
         let v4 = H256::from_low_u64_be(3);
         let v5 = H256::from_low_u64_be(4);
-        let v6 = H256::from(default_hash(v5));
-        let v7 = H256::from(default_hash(v6));
-        let v8 = H256::from(default_hash(v7));
+        let v6 = default_hash(v5);
+        let v7 = default_hash(v6);
+        let v8 = default_hash(v7);
 
-        let t = merkletree_from_vec(&vec![v1, v2, v3, v4, v5]).unwrap();
+        let t = merkletree_from_vec(&[v1, v2, v3, v4, v5]).unwrap();
 
         // recreate the expected root
         let mut node20 = DefaultHashAlgoStream::new();

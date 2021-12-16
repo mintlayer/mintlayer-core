@@ -52,7 +52,7 @@ impl BlockV1 {
 
 impl Idable<BlockV1> for BlockV1 {
     fn get_id(&self) -> Id<Self> {
-        let encoded = BlockV1::encode(&self);
+        let encoded = BlockV1::encode(self);
         let hashed = default_hash(encoded);
         Id::new(&hashed)
     }

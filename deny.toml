@@ -30,6 +30,7 @@ allow = [
     "MIT",
     "MPL-2.0",
     "CC0-1.0",
+    "Zlib",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 

@@ -177,8 +177,8 @@ pub fn verify_witness_lock<Ctx: Context>(
     witness: &Script,
     lock: &Script,
 ) -> crate::Result<()> {
-    let stack = run_pushdata(ctx, &witness)?;
-    let stack = run_script(ctx, &lock, stack)?;
+    let stack = run_pushdata(ctx, witness)?;
+    let stack = run_script(ctx, lock, stack)?;
     stack.verify()
 }
 
@@ -840,7 +840,7 @@ mod test {
         fn prop_pushdata_eq(data in gen_vec(gen_vec(prop::num::u8::ANY, 0..500), 0..20)) {
             let mut builder = Builder::default();
             for x in &data {
-                builder = builder.push_slice_minimal(&x);
+                builder = builder.push_slice_minimal(x);
             }
             let script = builder.into_script();
             let stack0 = run_pushdata(&TestContext::default(), &script);

@@ -53,7 +53,7 @@ impl TransactionV1 {
     }
 
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
-        let encoded = TransactionV1::encode(&self);
+        let encoded = TransactionV1::encode(self);
         let hashed = default_hash(encoded);
         Id::new(&hashed)
     }

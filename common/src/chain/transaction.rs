@@ -21,7 +21,17 @@ use crypto::hash::StreamHasher;
 use parity_scale_codec::{Decode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
-use crate::chain::transaction::*;
+
+pub mod input;
+pub use input::*;
+
+pub mod output;
+pub use output::*;
+
+pub mod transaction_index;
+pub use transaction_index::*;
+
+mod transaction_v1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Transaction {
@@ -44,9 +54,9 @@ impl Idable<TransactionV1> for TransactionV1 {
     }
 }
 
-impl Into<Id<Transaction>> for Id<TransactionV1> {
-    fn into(self) -> Id<Transaction> {
-        Id::new(&self.get())
+impl From<Id<TransactionV1>> for Id<Transaction> {
+    fn from(id_tx_v1: Id<TransactionV1>) -> Id<Transaction> {
+        Id::new(&id_tx_v1.get())
     }
 }
 

@@ -30,6 +30,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4c527152e37cf757a3f78aae5a06fbeefdb07ccc535c980a3208ee3060dd544"
 
 [[package]]
+name = "arraytools"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5367919938d9d809b2f2f6a3c7d7174c85ebb08beadf0c1d3dd94f64439f437"
+
+[[package]]
 name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -683,13 +689,11 @@ dependencies = [
  "crypto",
  "logging",
  "network",
- "node",
  "p2p",
  "rpc",
  "script",
  "serialization",
  "storage",
- "wallet",
 ]
 
 [[package]]
@@ -1184,6 +1188,7 @@ dependencies = [
 name = "serialization"
 version = "0.1.0"
 dependencies = [
+ "arraytools",
  "hex-literal",
  "parity-scale-codec",
  "parity-scale-codec-derive",

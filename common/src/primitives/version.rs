@@ -85,40 +85,28 @@ mod tests {
             Err("String does not contain SemVer")
         );
         assert_eq!(
-            SemVer::try_from(version.to_string()),
+            SemVer::try_from(version),
             Err("String does not contain SemVer")
         );
 
         let version = "1.2.3".to_string();
         assert_eq!(SemVer::try_from(version.clone()), Ok(SemVer::new(1, 2, 3)));
-        assert_eq!(
-            SemVer::try_from(version.to_string()),
-            Ok(SemVer::new(1, 2, 3))
-        );
+        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(1, 2, 3)));
 
         let version = "255.255.255";
-        assert_eq!(
-            SemVer::try_from(version.clone()),
-            Ok(SemVer::new(255, 255, 255))
-        );
-        assert_eq!(
-            SemVer::try_from(version.to_string()),
-            Ok(SemVer::new(255, 255, 255))
-        );
+        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 255)));
+        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 255)));
 
         let version = "255.255.65535".to_string();
         assert_eq!(
             SemVer::try_from(version.clone()),
             Ok(SemVer::new(255, 255, 65535))
         );
-        assert_eq!(
-            SemVer::try_from(version.to_string()),
-            Ok(SemVer::new(255, 255, 65535))
-        );
+        assert_eq!(SemVer::try_from(version), Ok(SemVer::new(255, 255, 65535)));
 
         let version = "255.255.65536";
         assert_eq!(
-            SemVer::try_from(version.clone()),
+            SemVer::try_from(version),
             Err("String does not contain SemVer")
         );
         assert_eq!(
