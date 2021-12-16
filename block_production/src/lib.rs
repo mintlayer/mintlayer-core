@@ -1,5 +1,6 @@
 mod pow;
 
+use crate::pow::POWError;
 use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
 use common::primitives::H256;
