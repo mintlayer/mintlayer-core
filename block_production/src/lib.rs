@@ -1,5 +1,6 @@
 mod pow;
 
+use crate::pow::POWError;
 use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
 use common::primitives::{Uint256, H256};
@@ -20,6 +21,8 @@ pub enum BlockProductionError {
     Error2,
     InvalidConsensusParams(String),
     BlockCreationError(BlockCreationError),
+    // Pow specific errors
+    POWError(crate::pow::POWError),
 }
 
 impl From<BlockCreationError> for BlockProductionError {
