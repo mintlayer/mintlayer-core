@@ -61,3 +61,24 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+
+  build_macos:
+    runs-on: macos-latest
+    # if: github.ref == 'refs/heads/master'
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        components: rustfmt
+        default: true
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Build
+      run: cargo build --release
+    - name: Run tests
+      run: cargo test --release --workspace
