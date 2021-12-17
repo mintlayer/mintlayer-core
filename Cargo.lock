@@ -192,6 +192,7 @@ dependencies = [
  "common",
  "logging",
  "rand 0.8.4",
+ "thiserror",
 ]
 
 [[package]]

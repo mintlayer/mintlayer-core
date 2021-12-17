@@ -2,6 +2,8 @@
 // use common::chain::config::ChainConfig;
 // use common::chain::block::Block;
 
+mod chain_state;
+
 mod orphan_blocks;
 // use orphan_blocks::OrphanBlocks;
 

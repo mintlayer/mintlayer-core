@@ -11,3 +11,4 @@ blockchain-storage = { path = '../blockchain_storage'}
 common = { path = '../common'}
 rand = "0.8.4"
 logging = { path = '../logging'}
+thiserror = "1.0.30"
