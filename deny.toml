@@ -7,7 +7,16 @@ github = [
 multiple-versions = "deny" #catch mutliple versions of a crate
 deny = []
 #skip quick-error for "reasons" that i cba to explain just about as much as i cba to fix
-skip = [{name = "quick-error"}]
+skip = [{name = "quick-error"},
+        {name = "winapi"},
+        {name = "wasi"},
+        {name = "rand_hc"},
+        {name = "rand_core"},
+        {name = "rand_chacha"},
+        {name = "rand"},
+        {name = "getrandom"},
+        {name = "byteorder"},
+        ]
 
 [licenses]
 #we reject code without a license
@@ -21,6 +30,7 @@ allow = [
     "MIT",
     "MPL-2.0",
     "CC0-1.0",
+    "Zlib",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 

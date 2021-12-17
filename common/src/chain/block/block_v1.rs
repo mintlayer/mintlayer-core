@@ -1,17 +1,20 @@
 use crate::chain::transaction::Transaction;
+use crate::primitives::id::default_hash;
 use crate::primitives::Id;
+use crate::primitives::Idable;
 use crate::primitives::H256;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+use parity_scale_codec::Encode;
+use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
+#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
-    pub(super) hash_prev_block: H256,
+    pub(super) hash_prev_block: Id<BlockV1>,
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
     pub(super) consensus_data: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
     pub(super) transactions: Vec<Transaction>,
@@ -42,7 +45,15 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn get_prev_block_id(&self) -> Id<BlockV1> {
-        Id::new(&self.header.hash_prev_block)
+    pub fn get_prev_block_id(&self) -> &Id<BlockV1> {
+        &self.header.hash_prev_block
+    }
+}
+
+impl Idable<BlockV1> for BlockV1 {
+    fn get_id(&self) -> Id<Self> {
+        let encoded = BlockV1::encode(self);
+        let hashed = default_hash(encoded);
+        Id::new(&hashed)
     }
 }

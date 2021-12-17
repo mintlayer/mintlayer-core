@@ -16,80 +16,47 @@
 // Author(s): S. Afach
 
 use crate::primitives::id;
-use crate::primitives::Amount;
-use crate::primitives::Id;
-use crate::primitives::Idable;
-use crate::primitives::H256;
+use crate::primitives::{Id, Idable, H256};
 use crypto::hash::StreamHasher;
-use script::Script;
+use parity_scale_codec::{Decode, Encode};
+
+use crate::chain::transaction::transaction_v1::TransactionV1;
+
+pub mod input;
+pub use input::*;
+
+pub mod output;
+pub use output::*;
 
 pub mod transaction_index;
 pub use transaction_index::*;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OutPoint {
-    pub hash: H256,
-    pub index: u32,
-}
+mod transaction_v1;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TxInput {
-    pub outpoint: OutPoint,
-    pub witness: Vec<Script>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Destination {
-    Address,   // Address type to be added
-    PublicKey, // Key type to be added
-    ScriptHash(Script),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TxOutput {
-    pub value: Amount,
-    pub dest: Destination,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TransactionV1 {
-    pub flags: u32,
-    pub inputs: Vec<TxInput>,
-    pub outputs: Vec<TxOutput>,
-    pub lock_time: u32,
-}
-
-impl TransactionV1 {
-    fn is_replaceable(&self) -> bool {
-        (self.flags & 1) != 0
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Transaction {
-    V1(TransactionV1), // TODO: add serialization index attribute
+    #[codec(index = 1)]
+    V1(TransactionV1),
 }
 
 impl Idable<TransactionV1> for TransactionV1 {
     fn get_id(&self) -> Id<Self> {
         let mut hash_stream = id::DefaultHashAlgoStream::new();
-        // hash_stream.write(self.flags);
-        for input in &self.inputs {
-            hash_stream.write(input.outpoint.hash);
-            // hash_stream.write(input.outpoint.index);
+        hash_stream.write(self.get_lock_time().encode());
+        for input in self.get_inputs() {
+            hash_stream.write(input.get_outpoint().encode());
         }
-        for _output in &self.outputs {
-            // hash_stream.write(output.value);
-            // hash_stream.write(output.dest);
+        for output in self.get_outputs() {
+            hash_stream.write(output.encode());
         }
-        // hash_stream.write(self.lock_time);
+        hash_stream.write(self.get_lock_time().encode());
         Id::new(&H256::from(hash_stream.finalize().as_slice()))
     }
 }
 
-impl Into<Id<Transaction>> for Id<TransactionV1> {
-    fn into(self) -> Id<Transaction> {
-        Id::new(&self.get())
+impl From<Id<TransactionV1>> for Id<Transaction> {
+    fn from(id_tx_v1: Id<TransactionV1>) -> Id<Transaction> {
+        Id::new(&id_tx_v1.get())
     }
 }
 
@@ -101,10 +68,56 @@ impl Idable<Transaction> for Transaction {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum TransactionCreationError {
+    Unknown,
+}
+
 impl Transaction {
+    pub fn new(
+        flags: u32,
+        inputs: Vec<TxInput>,
+        outputs: Vec<TxOutput>,
+        lock_time: u32,
+    ) -> Result<Self, TransactionCreationError> {
+        let tx = Transaction::V1(TransactionV1::new(flags, inputs, outputs, lock_time)?);
+        Ok(tx)
+    }
+
     pub fn is_replaceable(&self) -> bool {
         match &self {
             Transaction::V1(tx) => tx.is_replaceable(),
+        }
+    }
+
+    pub fn get_flags(&self) -> u32 {
+        match &self {
+            Transaction::V1(tx) => tx.get_flags(),
+        }
+    }
+
+    pub fn get_inputs(&self) -> &Vec<TxInput> {
+        match &self {
+            Transaction::V1(tx) => tx.get_inputs(),
+        }
+    }
+
+    pub fn get_outputs(&self) -> &Vec<TxOutput> {
+        match &self {
+            Transaction::V1(tx) => tx.get_outputs(),
+        }
+    }
+
+    pub fn get_lock_time(&self) -> u32 {
+        match &self {
+            Transaction::V1(tx) => tx.get_lock_time(),
+        }
+    }
+
+    /// provides the hash of a transaction including the witness (malleable)
+    pub fn get_serialized_hash(&self) -> Id<Transaction> {
+        match &self {
+            Transaction::V1(tx) => tx.get_serialized_hash(),
         }
     }
 }

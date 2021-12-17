@@ -8,6 +8,9 @@ license = "MIT"
 displaydoc = { default-features = false, version = "0.2" }
 crypto = { path = '../crypto' }
 
+parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
+parity-scale-codec-derive = "2.3.1"
+
 [dev-dependencies]
 flate2 = "1.0.22"
 hex = "0.4.3"

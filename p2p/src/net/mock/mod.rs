@@ -26,8 +26,6 @@ use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
-mod tests;
-
 /// This file provides a mock implementation of the network service.
 /// It implements the `NetworkService` trait on top of `tokio::net::TcpListener`
 
@@ -52,7 +50,7 @@ impl NetworkService for MockService {
 
     async fn new(addr: Self::Address) -> error::Result<Self> {
         Ok(Self {
-            addr: addr,
+            addr,
             socket: TcpListener::bind(addr).await?,
         })
     }
@@ -112,7 +110,7 @@ impl SocketService for MockSocket {
 
         match self.socket.read(&mut data).await? {
             0 => Err(P2pError::PeerDisconnected),
-            _ => Decode::decode(&mut &data[..]).map_err(|e| P2pError::DecodeFailure(e)),
+            _ => Decode::decode(&mut &data[..]).map_err(P2pError::DecodeFailure),
         }
     }
 }

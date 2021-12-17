@@ -24,9 +24,10 @@ use crate::primitives::H256;
 mod block_v1;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
+use parity_scale_codec::{Decode, Encode};
 
 pub fn calculate_tx_merkle_root(
-    transactions: &Vec<Transaction>,
+    transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
     if transactions.len() == 1 {
         // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
@@ -38,7 +39,7 @@ pub fn calculate_tx_merkle_root(
 }
 
 pub fn calculate_witness_merkle_root(
-    transactions: &Vec<Transaction>,
+    transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
     // TODO: provide implementation based on real serialization instead of get_id()
     if transactions.len() == 1 {
@@ -61,21 +62,28 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Block {
+    #[codec(index = 1)]
     V1(BlockV1),
 }
 
-impl Into<Id<Block>> for Id<BlockV1> {
-    fn into(self) -> Id<Block> {
-        Id::new(&self.get())
+impl From<Id<BlockV1>> for Id<Block> {
+    fn from(id_block_v1: Id<BlockV1>) -> Self {
+        Id::new(&id_block_v1.get())
+    }
+}
+
+impl From<Id<Block>> for Id<BlockV1> {
+    fn from(id_block: Id<Block>) -> Id<BlockV1> {
+        Id::new(&id_block.get())
     }
 }
 
 impl Block {
     pub fn new(
         transactions: Vec<Transaction>,
-        hash_prev_block: &H256,
+        hash_prev_block: Id<Block>,
         time: u32,
         consensus_data: Vec<u8>,
     ) -> Result<Self, BlockCreationError> {
@@ -85,7 +93,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block: *hash_prev_block,
+            hash_prev_block: hash_prev_block.into(),
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -136,7 +144,7 @@ impl Block {
 
     pub fn get_prev_block_id(&self) -> Id<Block> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().into(),
+            Block::V1(blk) => blk.get_prev_block_id().clone().into(),
         }
     }
 }
@@ -151,7 +159,7 @@ impl Idable<Block> for Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chain::transaction::TransactionV1, primitives::merkle::MerkleTreeFormError};
+    use crate::{chain::transaction::Transaction, primitives::merkle::MerkleTreeFormError};
 
     use super::*;
     use rand::Rng;
@@ -164,7 +172,7 @@ mod tests {
             consensus_data: Vec::new(),
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: H256::zero(),
+            hash_prev_block: Id::new(&H256::zero()),
             time: rng.gen(),
         };
 
@@ -184,16 +192,11 @@ mod tests {
             consensus_data: Vec::new(),
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: H256::zero(),
+            hash_prev_block: Id::new(&H256::zero()),
             time: rng.gen(),
         };
 
-        let coinbase = Transaction::V1(TransactionV1 {
-            flags: 0,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            lock_time: 0,
-        });
+        let coinbase = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
         let block = Block::V1(BlockV1 {
             header,

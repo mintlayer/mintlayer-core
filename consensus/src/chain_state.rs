@@ -68,10 +68,12 @@ pub struct ChainState;
 
 pub struct MemPool;
 
+type Callback = fn();
+
 pub fn load_chain_state(
     reset: bool,
     chain_manager: &ChainStateManager,
-    mempool: &Mempool,
+    // mempool: &Mempool,
     prune_mode: bool,
     consensus_params: &ConsensusParams,
     reindex_chain_state: bool,
@@ -80,7 +82,7 @@ pub fn load_chain_state(
     coin_cache_usage: i64,
     block_tree_db_in_memory: bool,
     coins_db_in_memory: bool,
-    shutdown_requested: Box<dyn FnOnce<bool, Output = ()>>,
-    coins_error_db: Box<dyn FnOnce<(), Output = ()>>,
+    shutdown_requested: Callback,
+    coins_error_db: Callback,
 ) -> Result<ChainState, ChainstateLoadingError> {
 }

@@ -16,12 +16,14 @@
 // Author(s): S. Afach
 
 use generic_array::typenum::marker_traits::Unsigned;
+use parity_scale_codec_derive::{Decode, Encode};
 
 fixed_hash::construct_fixed_hash! {
+    #[derive(Encode, Decode)]
     pub struct H256(32);
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Id<T: ?Sized> {
     id: H256,
     _shadow: std::marker::PhantomData<T>,
@@ -90,7 +92,7 @@ mod tests {
         let random_bytes = rand::thread_rng().gen::<[u8; H256::len_bytes()]>();
 
         let n = H256::from(random_bytes);
-        let bytes_again = n.as_bytes().clone();
+        let bytes_again = &(*n.as_bytes());
         assert_eq!(n.as_bytes(), random_bytes);
         let m = H256::from(bytes_again);
         assert_eq!(m, n);

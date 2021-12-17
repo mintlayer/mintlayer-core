@@ -189,12 +189,13 @@ mod tests {
     use super::*;
     use checkers::*;
     use common::chain::block::Block;
+    use common::primitives::Id;
     use helpers::*;
     use rand::seq::SliceRandom;
 
     mod helpers {
         use super::*;
-        use common::chain::transaction::{Transaction, TransactionV1};
+        use common::chain::transaction::Transaction;
         use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
@@ -208,16 +209,11 @@ mod tests {
         pub fn gen_block_from_id(prev_block_id: Option<H256>) -> Block {
             let mut rng = rand::thread_rng();
 
-            let tx = Transaction::V1(TransactionV1 {
-                flags: 0,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
-                lock_time: 0,
-            });
+            let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
                 vec![tx],
-                &prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen())),
+                Id::new(&prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()))),
                 rng.gen(),
                 Vec::new(),
             )
@@ -252,7 +248,7 @@ mod tests {
         ) -> Vec<Block> {
             let mut rng = rand::thread_rng();
 
-            let prev_block_id = prev_block_id.unwrap_or(H256::from_low_u64_be(rng.gen()));
+            let prev_block_id = prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()));
 
             (0..count).into_iter().map(|_| gen_block_from_id(Some(prev_block_id))).collect()
         }
