@@ -22,8 +22,8 @@ use crate::primitives::Id;
 use crate::primitives::Idable;
 use crate::primitives::H256;
 mod block_v1;
-use block_v1::BlockHeader;
-use block_v1::BlockV1;
+pub use block_v1::BlockHeader;
+pub use block_v1::BlockV1;
 use parity_scale_codec::{Decode, Encode};
 
 pub fn calculate_tx_merkle_root(
