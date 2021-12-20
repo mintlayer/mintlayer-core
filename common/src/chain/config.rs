@@ -35,9 +35,13 @@ impl ChainConfig {
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }
+
+    pub fn genesis_block(&self) -> &Block {
+        &self.genesis_block
+    }
 }
 
-const MAINNET_ADDRESS_PREFIX: &'static str = "mlt";
+const MAINNET_ADDRESS_PREFIX: &str = "mlt";
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{Destination, TxInput, TxOutput};
