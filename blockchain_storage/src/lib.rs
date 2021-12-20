@@ -5,7 +5,7 @@ use common::primitives::{BlockHeight, H256};
 #[allow(dead_code)]
 pub enum BlockchainStorageError {
     Unknown,
-    DatabaseError(storage::DBError),
+    DatabaseError(storage::Error),
 }
 
 pub trait BlockchainStorage {
