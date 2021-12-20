@@ -1,6 +1,7 @@
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error};
 use crypto::hash::hash;
+use parity_scale_codec::{Decode, Encode};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {
@@ -18,6 +19,7 @@ pub trait AddressableData<T: AsRef<[u8]>> {
     fn set_data(&mut self, data: &[u8]);
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum AddressError {
     Bech32EncodingError(Bech32Error),
 }
@@ -28,7 +30,7 @@ impl From<Bech32Error> for AddressError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Address {
     address: String,
 }
@@ -39,6 +41,15 @@ impl Address {
         let h = hash::<crypto::hash::Ripemd160, _>(h);
         Ok(Self {
             address: encoding::encode(cfg.address_prefix(), h)?,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn new_with_hrp<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<Self, AddressError> {
+        let h = hash::<crypto::hash::Sha256, _>(data);
+        let h = hash::<crypto::hash::Ripemd160, _>(h);
+        Ok(Self {
+            address: encoding::encode(hrp, h)?,
         })
     }
 
