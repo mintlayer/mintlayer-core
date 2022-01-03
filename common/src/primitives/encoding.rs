@@ -48,6 +48,7 @@ impl From<bech32::Error> for Bech32Error {
 }
 
 pub fn encode<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
+    // if data is not in Base32, then convert it to Base32.
     let data = data.as_ref().check_base32().unwrap_or(data.to_base32());
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
