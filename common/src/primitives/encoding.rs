@@ -1,4 +1,4 @@
-use bech32::{self, CheckBase32, Error, Variant};
+use bech32::{self, CheckBase32, Error, ToBase32, Variant};
 use core::fmt;
 use displaydoc::Display;
 use thiserror::Error;
@@ -48,7 +48,7 @@ impl From<bech32::Error> for Bech32Error {
 }
 
 pub fn encode<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
-    let data = data.check_base32()?;
+    let data = data.as_ref().check_base32().unwrap_or(data.to_base32());
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
 
