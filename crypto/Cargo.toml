@@ -8,6 +8,9 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-hashing = {version = "0.1.0", git = "https://github.com/mintlayer/hashing.git", branch = "master"}
-digest = "0.9.0"
-generic-array = "0.14.4"
+sha-1 = "0.10.0"
+sha2 = "0.10.0"
+sha3 = "0.10.0"
+ripemd = "0.1.0"
+blake2 = "0.10.0"
+generic-array = "0.14.5"

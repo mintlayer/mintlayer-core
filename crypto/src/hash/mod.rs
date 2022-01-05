@@ -45,11 +45,11 @@ macro_rules! impl_hasher_trait {
     };
 }
 
-impl_hasher_trait!(Blake2b, hashing::blake2::Blake2b, typenum::U64);
-impl_hasher_trait!(Sha1, hashing::sha1::Sha1, typenum::U20);
-impl_hasher_trait!(Sha256, hashing::sha2::Sha256, typenum::U32);
-impl_hasher_trait!(Sha3_512, hashing::sha3::Sha3_512, typenum::U64);
-impl_hasher_trait!(Ripemd160, hashing::ripemd160::Ripemd160, typenum::U20);
+impl_hasher_trait!(Blake2b, blake2::Blake2b<typenum::U64>, typenum::U64);
+impl_hasher_trait!(Sha1, sha1::Sha1, typenum::U20);
+impl_hasher_trait!(Sha256, sha2::Sha256, typenum::U32);
+impl_hasher_trait!(Sha3_512, sha3::Sha3_512, typenum::U64);
+impl_hasher_trait!(Ripemd160, ripemd::Ripemd160, typenum::U20);
 
 /////// Streams
 pub trait StreamHasher {
@@ -118,17 +118,17 @@ macro_rules! impl_hasher_stream_with_crop_trait {
 }
 
 #[derive(Clone)]
-pub struct Blake2bStream(InternalStreamHasher<hashing::blake2::Blake2b>);
+pub struct Blake2bStream(InternalStreamHasher<blake2::Blake2b<typenum::U64>>);
 #[derive(Clone)]
-pub struct Blake2bStream32(InternalStreamHasher<hashing::blake2::Blake2b>);
+pub struct Blake2bStream32(InternalStreamHasher<blake2::Blake2b<typenum::U64>>);
 #[derive(Clone)]
-pub struct Sha1Stream(InternalStreamHasher<hashing::sha1::Sha1>);
+pub struct Sha1Stream(InternalStreamHasher<sha1::Sha1>);
 #[derive(Clone)]
-pub struct Sha256Stream(InternalStreamHasher<hashing::sha2::Sha256>);
+pub struct Sha256Stream(InternalStreamHasher<sha2::Sha256>);
 #[derive(Clone)]
-pub struct Sha3_512Stream(InternalStreamHasher<hashing::sha3::Sha3_512>);
+pub struct Sha3_512Stream(InternalStreamHasher<sha3::Sha3_512>);
 #[derive(Clone)]
-pub struct Ripemd160Stream(InternalStreamHasher<hashing::ripemd160::Ripemd160>);
+pub struct Ripemd160Stream(InternalStreamHasher<ripemd::Ripemd160>);
 
 impl_hasher_stream_with_crop_trait!(Blake2bStream32, generic_array::typenum::U32);
 impl_hasher_stream_trait!(Blake2bStream, generic_array::typenum::U64);
@@ -162,7 +162,7 @@ macro_rules! impl_hasher_stream_with_extra_steps_trait {
     };
 }
 
-pub struct Sha256Ripmd160Stream(InternalStreamHasher<hashing::sha2::Sha256>);
+pub struct Sha256Ripmd160Stream(InternalStreamHasher<sha2::Sha256>);
 
 impl_hasher_stream_with_extra_steps_trait!(
     Sha256Ripmd160Stream,
