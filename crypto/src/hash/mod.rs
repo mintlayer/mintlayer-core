@@ -55,7 +55,7 @@ pub trait StreamHasher {
 
     fn new() -> Self;
 
-    fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T);
+    fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) -> &mut Self;
 
     fn reset(&mut self);
 
@@ -71,8 +71,9 @@ macro_rules! impl_hasher_stream_trait {
                 Self(InternalStreamHasher::new())
             }
 
-            fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) {
-                self.0.write(in_bytes)
+            fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) -> &mut Self {
+                self.0.write(in_bytes);
+                self
             }
 
             fn finalize(&mut self) -> GenericArray<u8, Self::OutputSize> {
@@ -115,8 +116,9 @@ macro_rules! impl_hasher_stream_with_extra_steps_trait {
                 Self(InternalStreamHasher::new())
             }
 
-            fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) {
-                self.0.write(in_bytes)
+            fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) -> &mut Self {
+                self.0.write(in_bytes);
+                self
             }
 
             fn finalize(&mut self) -> GenericArray<u8, Self::OutputSize> {

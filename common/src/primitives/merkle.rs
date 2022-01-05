@@ -133,7 +133,9 @@ impl merkletree::hash::Algorithm<H256> for BlockchainHashAlgorithm {
     }
 
     fn multi_node(&mut self, nodes: &[H256], _height: usize) -> H256 {
-        nodes.iter().for_each(|node| self.0.write(node));
+        nodes.iter().for_each(|node| {
+            self.0.write(node);
+        });
         self.hash()
     }
 }
