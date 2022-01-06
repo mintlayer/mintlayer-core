@@ -73,6 +73,13 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
             if variant == Variant::Bech32 {
                 return Err(Bech32Error::UnsupportedVariant);
             }
+
+            // ------- this checking is only for BITCOIN: Witness Programs
+            // if hrp == "bc" && ( s.len() < 2 || s.len() > 40 ) {
+            //     return Err(Bech32Error::InvalidLength);
+            // }
+            // ------- EOL
+
             let data = data.into_iter().map(|x| x.to_u8()).collect();
 
             Ok(DecodedBech32 {
@@ -116,6 +123,21 @@ mod tests {
             "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
+            // valid addresses
+            "bc1p5rgvqejqh9dh37t9g94dd9cm8vtqns7dndgj423egwggsggcdzmsspvr7j",
+            "bc1zr4pq63udck",
+            "tb1ray6e8gxfx49ers6c4c70l3c8lsxtcmlx",
+            "tb1pxqf7d825wjtcftj7uep8w24jq3tz8vudfaqj20rns8ahqya56gcs92eqtu",
+            "tb1rsrzkyvu2rt0dcgexajtazlw5nft4j7494ay396q6auw9375wxsrsgag884",
+            "bcrt1p3xat2ryucc2v0adrktqnavfzttvezrr27ngltsa2726p2ehvxz4se722v2",
+            "bcrt1saflydw6e26xhp29euhy5jke5jjqyywk3wvtc9ulgw9dvxyuqy9hdnxthyw755c7ldavy7u",
+            "bc1ps8cndas60cntk8x79sg9f5e5jz7x050z8agyugln2ukkks23rryqpejzkc",
+            "bc1zn4tsczge9l",
+            "bc10rmfwl8nxdweeyc4sf89t0tn9fv9w6qpyzsnl2r4k48vjqh03qas9asdje0rlr0phru0wqw0p", // should fail on bitcoin, because it's > 40 bytes
+            "bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5u302s7x", // should fail on bitcoin, segwit version
+            "bcrt1rhsveeudk", // should fail on bitcoin, Invalid hrp, "bc" or "tb" expected
+            "tb13h83rtwq62udrhwpn87uely7cyxcjrj0azz6a4r3n9s87x5uj98ys6ufp83", // should fail on bitcoin, Invalid script version
+
         ).iter().for_each(|s| {
            match decode(*s) {
                Ok(decoded) => {
@@ -148,7 +170,15 @@ mod tests {
             ("M1VUXWEZ", Bech32Error::FailedChecksum),
             ("16plkw9", Bech32Error::InvalidLength),
             ("1p2gdwpf", Bech32Error::InvalidLength),
-            ("bech321qqqsyrhqy2a", Bech32Error::UnsupportedVariant)
+            ("bech321qqqsyrhqy2a", Bech32Error::UnsupportedVariant),
+            // invalid addresses
+            ("bc1q5cuatynjmk4szh40mmunszfzh7zrc5xm9w8ccy", Bech32Error::UnsupportedVariant),
+            ("bc1qkw7lz3ahms6e0ajv27mzh7g62tchjpmve4afc29u7w49tddydy2syv0087", Bech32Error::UnsupportedVariant),
+            ("tb1q74fxwnvhsue0l8wremgq66xzvn48jlc5zthsvz", Bech32Error::UnsupportedVariant),
+            ("tb1qpt7cqgq8ukv92dcraun9c3n0s3aswrt62vtv8nqmkfpa2tjfghesv9ln74", Bech32Error::UnsupportedVariant),
+            ("tb1q0sqzfp3zj42u0perxr6jahhu4y03uw4dypk6sc", Bech32Error::UnsupportedVariant),
+            ("tb1q9jv4qnawnuevqaeadn47gkq05ev78m4qg3zqejykdr9u0cm7yutq6gu5dj", Bech32Error::UnsupportedVariant),
+            ("bc1qz377zwe5awr68dnggengqx9vrjt05k98q3sw2n", Bech32Error::UnsupportedVariant),
         ).iter().for_each(|(s,b_err)| {
             match decode(*s) {
                 Ok(_) => { panic!("Should be invalid: {:?}", s) }
