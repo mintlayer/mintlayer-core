@@ -2,6 +2,7 @@ use tari_crypto::signatures::SchnorrSignature;
 
 pub type RistrettoSchnorrSignature = SchnorrSignature<RistrettoPublicKey, RistrettoSecretKey>;
 pub use tari_crypto::ristretto::{RistrettoPublicKey, RistrettoSchnorr, RistrettoSecretKey};
+pub use tari_crypto::tari_utilities::ByteArray;
 
 #[cfg(test)]
 mod test {
@@ -13,11 +14,11 @@ mod test {
         Vec::from_bytes(d.as_slice()).unwrap()
     }
 
+    use tari_crypto::tari_utilities::ByteArray;
     use tari_crypto::{
         keys::{PublicKey, SecretKey},
         ristretto::{RistrettoPublicKey, RistrettoSchnorr, RistrettoSecretKey},
     };
-    use tari_utilities::ByteArray;
 
     #[test]
     fn default() {
