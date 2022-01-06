@@ -39,6 +39,10 @@ impl ChainConfig {
     pub fn genesis_block(&self) -> &Block {
         &self.genesis_block
     }
+
+    pub fn magic_bytes(&self) -> &[u8; 4] {
+        &self.magic_bytes
+    }
 }
 
 const MAINNET_ADDRESS_PREFIX: &str = "mlt";

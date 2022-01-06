@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use parity_scale_codec::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
