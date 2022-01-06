@@ -9,7 +9,7 @@ pub trait AddressableData<T: AsRef<[u8]>> {
     }
 
     fn decode(&mut self, addr: &str) -> Result<DecodedBech32, Bech32Error> {
-        encoding::decode(&addr)
+        encoding::decode(addr)
     }
 
     fn get_hrp(&self) -> &str;
