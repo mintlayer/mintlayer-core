@@ -169,16 +169,16 @@ mod tests {
         let config = Arc::new(config::create_mainnet());
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert_eq!(res.is_ok(), true);
+        assert!(res.is_ok());
 
         // try to create new P2P object to the same address, should fail
         let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert_eq!(res.is_err(), true);
+        assert!(res.is_err());
 
         // try to create new P2P object to different address, should succeed
         let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert_eq!(res.is_ok(), true);
+        assert!(res.is_ok());
     }
 }

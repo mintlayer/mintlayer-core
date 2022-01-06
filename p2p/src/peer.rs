@@ -364,7 +364,7 @@ mod tests {
             PeerRole::Responder,
             remote_config.clone(),
             MockSocket::new(local_res),
-            peer_tx.clone(),
+            peer_tx,
             rx2,
         );
 

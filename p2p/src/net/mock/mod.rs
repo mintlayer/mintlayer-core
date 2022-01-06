@@ -123,12 +123,12 @@ mod tests {
     use super::*;
     use crate::net::mock::MockService;
     use crate::peer::{Peer, PeerRole};
+    use common::chain::config;
     use parity_scale_codec::{Decode, Encode};
     use std::net::SocketAddr;
+    use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
-    use common::chain::config;
-    use std::sync::Arc;
 
     #[derive(Debug, Encode, Decode, PartialEq, Eq)]
     struct Transaction {
@@ -210,10 +210,17 @@ mod tests {
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
-		let config = Arc::new(config::create_mainnet());
+        let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(1, PeerRole::Initiator, config.clone(), server_res.unwrap(), peer_tx, rx);
+        let mut peer = Peer::<MockService>::new(
+            1,
+            PeerRole::Initiator,
+            config.clone(),
+            server_res.unwrap(),
+            peer_tx,
+            rx,
+        );
         let mut socket = remote_res.unwrap();
 
         // try to send data that implements `Encode + Decode`
@@ -242,10 +249,17 @@ mod tests {
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
-		let config = Arc::new(config::create_mainnet());
+        let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(1, PeerRole::Initiator, config.clone(), server_res.unwrap(), peer_tx, rx);
+        let mut peer = Peer::<MockService>::new(
+            1,
+            PeerRole::Initiator,
+            config.clone(),
+            server_res.unwrap(),
+            peer_tx,
+            rx,
+        );
         let mut socket = remote_res.unwrap();
 
         // send data and decode it successfully
