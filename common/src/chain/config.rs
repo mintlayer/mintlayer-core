@@ -1,7 +1,7 @@
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
 use crate::primitives::id::{Id, H256};
-use crate::primitives::BlockHeight;
+use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
 type HashType = Vec<u8>; // temp type until crypto is ready
@@ -29,6 +29,8 @@ pub struct ChainConfig {
     magic_bytes: [u8; 4],
     #[allow(dead_code)]
     genesis_block: Block,
+    #[allow(dead_code)]
+    version: SemVer,
 }
 
 impl ChainConfig {
@@ -42,6 +44,10 @@ impl ChainConfig {
 
     pub fn magic_bytes(&self) -> &[u8; 4] {
         &self.magic_bytes
+    }
+
+    pub fn version(&self) -> &SemVer {
+        &self.version
     }
 }
 
@@ -73,6 +79,7 @@ pub fn create_mainnet() -> ChainConfig {
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
         genesis_block: create_mainnet_genesis(),
+        version: SemVer::new(0, 1, 0),
     }
 }
 

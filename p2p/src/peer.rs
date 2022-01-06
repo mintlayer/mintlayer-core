@@ -14,15 +14,15 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::error::{self, P2pError, ProtocolError};
 use crate::event::{Event, PeerEvent};
-use crate::message::Message;
+use crate::message::{Message, MessageType};
 use crate::net::{NetworkService, SocketService};
 use common::chain::ChainConfig;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 pub type PeerId = u64;
 pub type TaskId = u64;
@@ -32,7 +32,7 @@ struct TaskInfo {
     period: Duration,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PeerRole {
     Initiator,
     Responder,
@@ -42,15 +42,21 @@ pub enum PeerRole {
 pub enum HandshakeState {
     /// Initiate the handshake by sending Hello message
     Initiate,
+
     // Wait for Hello message. When received, send HelloAck
     WaitInitiation,
+
     /// Wait HelloAck
     WaitResponse,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerState {
+    /// Peer is handshaking with the remote peer
     Handshaking(HandshakeState),
+
+    /// Listen to incoming messages from remote peer
+    Listening,
 }
 
 // Represents a task that will run independently of any incoming/outgoing event
@@ -125,13 +131,97 @@ where
         }
     }
 
+    /// Handle handshake event
+    ///
+    /// This might be any event related to handshaking but the two ways of getting
+    /// into this function are calling it directly (initator starts handshaking)
+    /// or receiving a handshake message (Hello, HelloAck) at any point during reception.
+    ///
+    /// This function makes sure that the peer's state and role are correct and if so,
+    /// it acts appropriately (changes state and possibly sends a message). If the peer's state
+    /// or role is incorrect, a protocol error is emitted and the connection must be closed.
+    ///
+    /// This function may return `P2pError::ProtocolError` which means that there was
+    /// an invalid peer state/message combination or it may return `P2pError::SocketError`
+    /// indicating that the remote peer closed the connection during handshaking.
+    ///
+    /// This function assumes that the magic number of the message has been verified
+    /// and sender and the local node are using the same chain type (Mainnet, Testnet)
+    async fn on_handshake_event(&mut self, msg: Message) -> error::Result<()> {
+        match self.state {
+            PeerState::Handshaking(ref state) => match (state, self.role, msg.msg) {
+                (HandshakeState::Initiate, PeerRole::Initiator, MessageType::Hello { .. }) => {
+                    self.socket.send(&msg).await?;
+                    self.state = PeerState::Handshaking(HandshakeState::WaitResponse);
+                }
+                (
+                    HandshakeState::WaitInitiation,
+                    PeerRole::Responder,
+                    MessageType::Hello { version, .. },
+                ) => {
+                    if version != *self.config.version() {
+                        return Err(P2pError::ProtocolError(ProtocolError::InvalidVersion));
+                    }
+
+                    let msg = Message {
+                        magic: *self.config.magic_bytes(),
+                        msg: MessageType::HelloAck {
+                            version: *self.config.version(),
+                            services: 0u32,
+                            timestamp: SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)?
+                                .as_secs(),
+                        },
+                    };
+
+                    self.socket.send(&msg).await?;
+                    self.state = PeerState::Listening;
+                }
+                (
+                    HandshakeState::WaitResponse,
+                    PeerRole::Initiator,
+                    MessageType::HelloAck { version, .. },
+                ) => match *self.config.version() {
+                    version => self.state = PeerState::Listening,
+                    _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidVersion)),
+                },
+                _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidState)),
+            },
+            _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidState)),
+        }
+
+        Ok(())
+    }
+
     /// Handle message coming from the remote peer
     ///
     /// This might be an invalid message (such as a stray Hello), it might be Ping in
     /// which case we must respond with Pong, or it may be, e.g., GetHeaders in which
     /// case the message is sent to the P2P object for further processing
     async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
-        todo!();
+        // if `msg` contains an error, it means that there was a socket error,
+        // i.e., remote peer closed the connection. Exit from the peer event loop
+        //
+        // Based on whether the handshake is in process or not, either a `SocketError`
+        // or `ProtocolError` is returned
+        let msg = msg.map_err(|err| match self.state {
+            PeerState::Handshaking(_) => P2pError::ProtocolError(ProtocolError::Incompatible),
+            _ => err,
+        })?;
+
+        if msg.magic != *self.config.magic_bytes() {
+            return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+        }
+
+        match (&msg.msg, &self.state) {
+            (MessageType::Hello { .. } | MessageType::HelloAck { .. }, _)
+            | (_, PeerState::Handshaking(_)) => {
+                self.on_handshake_event(msg).await?;
+            }
+            _ => {}
+        }
+
+        Ok(())
     }
 
     /// Handle event coming from the network manager
@@ -177,6 +267,23 @@ where
             task_id: DUMMY_TASK_ID,
             period: DUMMY_PERIOD,
         }));
+
+        // the protocol defines that the initiator of the communication, i.e., the peer
+        // who connected is responsible for sending the Hello message. This means that
+        // before the actual event loop is started, if the local node is initiator,
+        // it must first send the Hello message and only then proceed to responding
+        // to incoming events from remote peer and the network manager
+        if self.role == PeerRole::Initiator {
+            self.on_handshake_event(Message {
+                magic: *self.config.magic_bytes(),
+                msg: MessageType::Hello {
+                    version: *self.config.version(),
+                    services: 0u32,
+                    timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+                },
+            })
+            .await;
+        }
 
         loop {
             tokio::select! {
