@@ -134,9 +134,11 @@ mod tests {
             "bc1ps8cndas60cntk8x79sg9f5e5jz7x050z8agyugln2ukkks23rryqpejzkc",
             "bc1zn4tsczge9l",
             "bc10rmfwl8nxdweeyc4sf89t0tn9fv9w6qpyzsnl2r4k48vjqh03qas9asdje0rlr0phru0wqw0p", // should fail on bitcoin, because it's > 40 bytes
-            "bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5u302s7x", // should fail on bitcoin, segwit version
+            "bc1qxmf2d6aerjzam3rur0zufqxqnyqfts5u302s7x", // should fail on bitcoin, version 0 for bech32m
             "bcrt1rhsveeudk", // should fail on bitcoin, Invalid hrp, "bc" or "tb" expected
             "tb13h83rtwq62udrhwpn87uely7cyxcjrj0azz6a4r3n9s87x5uj98ys6ufp83", // should fail on bitcoin, Invalid script version
+            "tb130lvl2lyugsk2tf3zhwcjjv39dmwt2tt7ytqaexy8edwcuwks6p5scll5kz", // should fail on bitcoin, Invalid script version
+            "tb13c553hwygcgj48qwmr9f8q0hgdcfklyaye5sxzcpcjnmxv4z506xs90tchn" // should fail on bitcoin, Invalid script version
 
         ).iter().for_each(|s| {
            match decode(*s) {
@@ -179,6 +181,7 @@ mod tests {
             ("tb1q0sqzfp3zj42u0perxr6jahhu4y03uw4dypk6sc", Bech32Error::UnsupportedVariant),
             ("tb1q9jv4qnawnuevqaeadn47gkq05ev78m4qg3zqejykdr9u0cm7yutq6gu5dj", Bech32Error::UnsupportedVariant),
             ("bc1qz377zwe5awr68dnggengqx9vrjt05k98q3sw2n", Bech32Error::UnsupportedVariant),
+            ("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::FailedChecksum)
         ).iter().for_each(|(s,b_err)| {
             match decode(*s) {
                 Ok(_) => { panic!("Should be invalid: {:?}", s) }
