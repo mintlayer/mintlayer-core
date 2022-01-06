@@ -43,6 +43,12 @@ pub struct MockSocket {
     socket: TcpStream,
 }
 
+impl MockSocket {
+    pub fn new(socket: TcpStream) -> Self {
+        MockSocket { socket }
+    }
+}
+
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
