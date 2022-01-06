@@ -5,8 +5,23 @@ use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedBech32 {
-    pub hrp: String,
-    pub data: Vec<u8>,
+    hrp: String,
+    base32_data: Vec<u8>,
+}
+
+impl DecodedBech32 {
+    fn get_hrp(&self) -> &str {
+        &self.hrp
+    }
+
+    fn get_base32_data(&self) -> &[u8] {
+        &self.base32_data
+    }
+
+    fn encode(self) -> Result<String, Bech32Error> {
+        let data = &self.base32_data.check_base32()?;
+        bech32::encode(&self.hrp, data, Variant::Bech32m).map_err(|e| e.into())
+    }
 }
 
 #[derive(Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Display)]
@@ -48,8 +63,7 @@ impl From<bech32::Error> for Bech32Error {
 }
 
 pub fn encode<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
-    // if data is not in Base32, then convert it to Base32.
-    let data = data.as_ref().check_base32().unwrap_or(data.to_base32());
+    let data = data.to_base32();
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
 
@@ -61,7 +75,10 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
             }
             let data = data.into_iter().map(|x| x.to_u8()).collect();
 
-            Ok(DecodedBech32 { hrp, data })
+            Ok(DecodedBech32 {
+                hrp,
+                base32_data: data,
+            })
         }
         Err(e) => Err(e.into()),
     }
@@ -70,6 +87,24 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn check_encode() {
+        let data = vec![0x00, 0x01, 0x02];
+        let hrp = "bech32";
+
+        let encoded = encode(hrp, data.clone()).expect("it should not fail");
+        assert_eq!(encoded, "bech321qqqsyktsg0l".to_string());
+
+        let decoded = decode(&encoded).expect("should decode okay");
+        println!("value of decoded: {:?}", decoded);
+
+        let base32_data: Vec<u8> = data.to_base32().into_iter().map(|x| x.to_u8()).collect();
+        assert_eq!(base32_data, decoded.get_base32_data());
+        assert_eq!(hrp, decoded.get_hrp());
+
+        assert_ne!(data, decoded.get_base32_data());
+    }
 
     #[test]
     fn check_valid_strings() {
@@ -83,8 +118,8 @@ mod tests {
             "?1v759aa",
         ).iter().for_each(|s| {
            match decode(*s) {
-               Ok(DecodedBech32{ hrp, data }) => {
-                   match encode(&hrp,data){
+               Ok(decoded) => {
+                   match decoded.encode() {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
                        Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
                    }
