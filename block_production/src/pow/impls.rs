@@ -38,7 +38,8 @@ impl PowExt for Block {
                 }
             }
 
-            return Err(BlockProductionError::Error1);
+            let err = format!("max nonce {} has been reached.", max_nonce);
+            return Err(BlockProductionError::BlockToMineError(err));
         }
 
         Err(POWError::FailedUInt256ToCompact.into())
