@@ -15,12 +15,29 @@
 //
 // Author(s): S. Afach
 
+use crate::primitives::Uint256;
 use generic_array::typenum::marker_traits::Unsigned;
 use parity_scale_codec_derive::{Decode, Encode};
 
 fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
+}
+
+impl H256 {
+    fn reverse_inner(&self) -> [u8; 32] {
+        let mut h256_inner = self.0;
+        h256_inner.reverse();
+        h256_inner
+    }
+}
+
+impl Into<Uint256> for H256 {
+    fn into(self) -> Uint256 {
+        //TODO: needs to be tested
+        let x = self.reverse_inner();
+        Uint256::from_be_bytes(x)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

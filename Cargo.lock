@@ -134,13 +134,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "block-production"
-version = "0.1.0"
-dependencies = [
- "common",
-]
-
-[[package]]
 name = "blockchain-storage"
 version = "0.1.0"
 dependencies = [
@@ -689,6 +682,7 @@ dependencies = [
  "crypto",
  "logging",
  "network",
+ "node",
  "p2p",
  "rpc",
  "script",
