@@ -3,7 +3,7 @@ use crate::pow::Compact;
 use crate::{BlockProducer, BlockProductionError, Chain, ConsensusParams};
 use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
-use common::primitives::{Uint256, H256};
+use common::primitives::{Id, Uint256, H256};
 
 pub struct Pow;
 
@@ -68,6 +68,7 @@ impl Pow {
         transactions: Vec<Transaction>,
     ) -> Result<Block, BlockCreationError> {
         let hash_prev_block = Self::get_latest_block().get_merkle_root();
-        Block::new(transactions, &hash_prev_block, time, ConsensusData::empty())
+        let hash_prev_block = Id::new(&hash_prev_block);
+        Block::new(transactions, hash_prev_block, time, ConsensusData::empty())
     }
 }
