@@ -722,6 +722,8 @@ dependencies = [
  "blake2 0.10.2",
  "generic-array",
  "hex",
+ "parity-scale-codec",
+ "parity-scale-codec-derive",
  "rand 0.8.4",
  "ripemd",
  "sha-1 0.10.0",
