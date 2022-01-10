@@ -17,8 +17,11 @@ impl Network {
         }
     }
 
-    pub fn target_timespan_in_secs() -> u32 {
-        TARGET_TIMESPAN_SECS
+    pub fn allow_min_difficulty_blocks(&self) -> bool {
+        match self {
+            Network::MAIN | Network::SIG_NET => false,
+            Network::TEST_NET | Network::REG_TEST => true,
+        }
     }
 
     pub fn limit(&self) -> Uint256 {

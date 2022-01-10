@@ -36,7 +36,10 @@ impl BlockV1 {
         &self.header
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: Vec<u8>) {
+    pub fn get_consensus_data(&self) -> &ConsensusData {
+        &self.get_header().consensus_data
+    }
+    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.header.consensus_data = consensus_data;
     }
 
