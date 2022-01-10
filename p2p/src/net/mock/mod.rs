@@ -215,7 +215,7 @@ mod tests {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
             1,
-            PeerRole::Initiator,
+            PeerRole::Outbound,
             config.clone(),
             server_res.unwrap(),
             peer_tx,
@@ -254,7 +254,7 @@ mod tests {
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
             1,
-            PeerRole::Initiator,
+            PeerRole::Outbound,
             config.clone(),
             server_res.unwrap(),
             peer_tx,

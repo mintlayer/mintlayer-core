@@ -18,7 +18,7 @@
 pub enum ProtocolError {
     DifferentNetwork,
     InvalidVersion,
-    InvalidState,
+    InvalidMessage,
     Incompatible,
 }
 
@@ -60,8 +60,8 @@ impl std::fmt::Display for ProtocolError {
             ProtocolError::InvalidVersion => {
                 write!(f, "Remote peer has an incompatible version")
             }
-            ProtocolError::InvalidState => {
-                write!(f, "Invalid state/message type/role combination")
+            ProtocolError::InvalidMessage => {
+                write!(f, "Invalid protocol message")
             }
             ProtocolError::Incompatible => {
                 write!(f, "Remote deemed us incompatible, connection closed")

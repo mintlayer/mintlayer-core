@@ -111,13 +111,13 @@ where
     ) -> error::Result<()> {
         match event {
             ConnectivityEvent::Accept(res) => {
-                res.map(|socket| self.create_peer(socket, PeerRole::Responder))?
+                res.map(|socket| self.create_peer(socket, PeerRole::Inbound))?
             }
             ConnectivityEvent::Connect(address) => self
                 .network
                 .connect(address)
                 .await
-                .map(|socket| self.create_peer(socket, PeerRole::Initiator))?,
+                .map(|socket| self.create_peer(socket, PeerRole::Outbound))?,
         }
 
         Ok(())

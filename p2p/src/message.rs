@@ -19,7 +19,7 @@ use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[allow(unused)]
-pub enum MessageType {
+pub enum HandshakeMessage {
     Hello {
         /// Software version of local node
         version: SemVer,
@@ -36,6 +36,12 @@ pub enum MessageType {
         /// Unix timestamp
         timestamp: u64,
     },
+}
+
+#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
+#[allow(unused)]
+pub enum MessageType {
+    Handshake(HandshakeMessage),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -61,20 +67,20 @@ mod tests {
 
         let msg = Message {
             magic: *config.magic_bytes(),
-            msg: MessageType::Hello {
+            msg: MessageType::Handshake(HandshakeMessage::Hello {
                 version: SemVer::new(0, 1, 0),
                 services: serv,
                 timestamp: ts,
-            },
+            }),
         };
         assert_eq!(&msg.magic, config.magic_bytes());
 
         match msg.msg {
-            MessageType::Hello {
+            MessageType::Handshake(HandshakeMessage::Hello {
                 version,
                 services,
                 timestamp,
-            } => {
+            }) => {
                 assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
@@ -86,11 +92,11 @@ mod tests {
         let message: Message = Decode::decode(&mut &encoded[..]).unwrap();
 
         match message.msg {
-            MessageType::Hello {
+            MessageType::Handshake(HandshakeMessage::Hello {
                 version,
                 services,
                 timestamp,
-            } => {
+            }) => {
                 assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
@@ -107,20 +113,20 @@ mod tests {
 
         let msg = Message {
             magic: *config.magic_bytes(),
-            msg: MessageType::HelloAck {
+            msg: MessageType::Handshake(HandshakeMessage::HelloAck {
                 version: SemVer::new(0, 1, 0),
                 services: serv,
                 timestamp: ts,
-            },
+            }),
         };
         assert_eq!(&msg.magic, config.magic_bytes());
 
         match msg.msg {
-            MessageType::HelloAck {
+            MessageType::Handshake(HandshakeMessage::HelloAck {
                 version,
                 services,
                 timestamp,
-            } => {
+            }) => {
                 assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
@@ -132,11 +138,11 @@ mod tests {
         let message: Message = Decode::decode(&mut &encoded[..]).unwrap();
 
         match message.msg {
-            MessageType::HelloAck {
+            MessageType::Handshake(HandshakeMessage::HelloAck {
                 version,
                 services,
                 timestamp,
-            } => {
+            }) => {
                 assert_eq!(version, SemVer::new(0, 1, 0));
                 assert_eq!(services, serv);
                 assert_eq!(timestamp, ts);
