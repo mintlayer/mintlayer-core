@@ -1,6 +1,6 @@
 mod pow;
 
-use crate::pow::POWError;
+use crate::pow::{Network as POWNetwork, POWError};
 use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
 use common::primitives::{Uint256, H256};
@@ -32,12 +32,13 @@ impl From<BlockCreationError> for BlockProductionError {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum ConsensusParams {
     /// Proof of Work consensus parameters
     POW {
         max_nonce: u128,
         difficulty: Uint256,
+        network: POWNetwork,
     },
     /// Proof of Stake consensus parameters
     POS,
