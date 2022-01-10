@@ -33,7 +33,6 @@ pub(crate) enum PublicKeyHolder {
 
 impl PrivateKey {
     pub fn new(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
-        use tari_crypto::keys::PublicKey;
         let mut rng = make_rng();
         match key_kind {
             KeyKind::RistrettoSchnorr => {
@@ -63,8 +62,6 @@ impl PrivateKey {
 
 impl PublicKey {
     pub fn from_private_key(private_key: &PrivateKey) -> Self {
-        use tari_crypto::keys::PublicKey;
-
         match private_key.get_internal_key() {
             PrivateKeyHolder::RistrettoSchnorr(ref k) => crate::key::PublicKey {
                 pub_key: PublicKeyHolder::RistrettoSchnorr(
