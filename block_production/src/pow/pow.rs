@@ -43,6 +43,7 @@ impl BlockProducer for Pow {
             ConsensusParams::POW {
                 max_nonce,
                 difficulty,
+                network,
             } => {
                 let mut block = Pow::create_empty_block(time, transactions)?;
 
@@ -62,11 +63,12 @@ impl Pow {
     pub fn check_difficulty(block: &Block, difficulty: &Uint256) -> bool {
         block.calculate_hash() <= *difficulty
     }
-
     pub fn create_empty_block(
         time: u32,
         transactions: Vec<Transaction>,
     ) -> Result<Block, BlockCreationError> {
+        let x: Block = Self::get_latest_block();
+
         let hash_prev_block = Self::get_latest_block().get_merkle_root();
         let hash_prev_block = Id::new(&hash_prev_block);
         Block::new(transactions, hash_prev_block, time, ConsensusData::empty())
