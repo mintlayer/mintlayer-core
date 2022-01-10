@@ -31,6 +31,7 @@ pub mod event;
 pub mod message;
 pub mod net;
 pub mod peer;
+pub mod proto;
 
 #[allow(unused)]
 pub enum ConnectivityEvent<T>
