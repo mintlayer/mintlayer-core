@@ -14,13 +14,16 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::error::{self, P2pError, ProtocolError};
 use crate::event::{Event, PeerEvent};
-use crate::message::Message;
+use crate::message::{HandshakeMessage, Message, MessageType};
 use crate::net::{NetworkService, SocketService};
+use crate::proto::handshake::*;
+use common::chain::ChainConfig;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, SystemTime};
 
 pub type PeerId = u64;
 pub type TaskId = u64;
@@ -28,6 +31,24 @@ pub type TaskId = u64;
 struct TaskInfo {
     task_id: TaskId,
     period: Duration,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PeerState {
+    /// Peer is handshaking with the remote peer
+    Handshaking(HandshakeState),
+
+    /// Listen to incoming messages from remote peer
+    Listening,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PeerRole {
+    /// Peer accepted a connection from remote
+    Inbound,
+
+    /// Peer initiated a connection to remote
+    Outbound,
 }
 
 // Represents a task that will run independently of any incoming/outgoing event
@@ -47,7 +68,13 @@ where
     NetworkingBackend: NetworkService,
 {
     /// Unique ID of the peer
-    peer_id: PeerId,
+    id: PeerId,
+
+    /// Inbound/outbound
+    pub(super) role: PeerRole,
+
+    /// Current state of the peer (handshaking, listening, etc.)
+    pub(super) state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
     mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
@@ -56,7 +83,10 @@ where
     mgr_rx: tokio::sync::mpsc::Receiver<Event>,
 
     /// Socket of the peer
-    pub socket: NetworkingBackend::Socket,
+    pub(super) socket: NetworkingBackend::Socket,
+
+    /// Chain config
+    pub(super) config: Arc<ChainConfig>,
 }
 
 #[allow(unused)]
@@ -67,19 +97,37 @@ where
     /// Create new peer
     ///
     /// # Arguments
-    /// `peer_id` - unique ID of the peer
+    /// `id` - unique ID of the peer
+    /// `role` - role (inbound/outbound) of the peer
+    /// `config` - pointer to ChainConfig
     /// `socket` - socket for the peer
+    /// `mgr_tx` - channel for sending messages to P2P
+    /// `mgr_rx` - channel fro receiving messages from P2P
     pub fn new(
-        peer_id: PeerId,
+        id: PeerId,
+        role: PeerRole,
+        config: Arc<ChainConfig>,
         socket: NetworkingBackend::Socket,
         mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
         mgr_rx: tokio::sync::mpsc::Receiver<Event>,
     ) -> Self {
+        let state = match role {
+            PeerRole::Outbound => {
+                PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
+            }
+            PeerRole::Inbound => PeerState::Handshaking(HandshakeState::Inbound(
+                InboundHandshakeState::WaitInitiation,
+            )),
+        };
+
         Self {
-            peer_id,
+            id,
+            role,
+            state,
             mgr_tx,
             mgr_rx,
             socket,
+            config,
         }
     }
 
@@ -88,8 +136,28 @@ where
     /// This might be an invalid message (such as a stray Hello), it might be Ping in
     /// which case we must respond with Pong, or it may be, e.g., GetHeaders in which
     /// case the message is sent to the P2P object for further processing
-    async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
-        todo!();
+    pub(super) async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
+        // if `msg` contains an error, it means that there was a socket error,
+        // i.e., remote peer closed the connection. Exit from the peer event loop
+        //
+        // Based on whether the handshake is in process or not, either a `SocketError`
+        // or `ProtocolError` is returned
+        let msg = msg.map_err(|err| match self.state {
+            PeerState::Handshaking(_) => P2pError::ProtocolError(ProtocolError::Incompatible),
+            _ => err,
+        })?;
+
+        if msg.magic != *self.config.magic_bytes() {
+            return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+        }
+
+        if let (PeerState::Handshaking(state), MessageType::Handshake(msg)) = (self.state, msg.msg)
+        {
+            // found in src/proto/handshake.rs
+            self.on_handshake_event(state, msg).await?;
+        }
+
+        Ok(())
     }
 
     /// Handle event coming from the network manager
@@ -136,6 +204,23 @@ where
             period: DUMMY_PERIOD,
         }));
 
+        // the protocol defines that the initiator of the communication, i.e., the peer
+        // who connected is responsible for sending the Hello message. This means that
+        // before the actual event loop is started, if the local node is initiator,
+        // it must first send the Hello message and only then proceed to responding
+        // to incoming events from remote peer and the network manager
+        if self.role == PeerRole::Outbound {
+            self.on_peer_event(Ok(Message {
+                magic: *self.config.magic_bytes(),
+                msg: MessageType::Handshake(HandshakeMessage::Hello {
+                    version: *self.config.version(),
+                    services: 0u32,
+                    timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+                }),
+            }))
+            .await?;
+        }
+
         loop {
             tokio::select! {
                 event = self.socket.recv() => {
@@ -158,11 +243,13 @@ where
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
+    use common::chain::config;
     use tokio::net::TcpStream;
 
     #[tokio::test]
     async fn test_peer_new() {
-        let addr: <MockService as NetworkService>::Address = "[::1]:11111".parse().unwrap();
+        let config = Arc::new(config::create_mainnet());
+        let addr: <MockService as NetworkService>::Address = "[::1]:11121".parse().unwrap();
         let mut server = MockService::new(addr).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
 
@@ -172,6 +259,13 @@ mod tests {
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(1, server_res.unwrap(), peer_tx, rx);
+        let _ = Peer::<MockService>::new(
+            1,
+            PeerRole::Outbound,
+            config.clone(),
+            server_res.unwrap(),
+            peer_tx,
+            rx,
+        );
     }
 }

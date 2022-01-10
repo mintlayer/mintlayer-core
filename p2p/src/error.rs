@@ -15,10 +15,20 @@
 //
 // Author(s): A. Altonen
 #[derive(Debug, PartialEq, Eq)]
+pub enum ProtocolError {
+    DifferentNetwork,
+    InvalidVersion,
+    InvalidMessage,
+    Incompatible,
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum P2pError {
     SocketError(std::io::ErrorKind),
     PeerDisconnected,
     DecodeFailure(String),
+    ProtocolError(ProtocolError),
+    TimeError(String),
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
@@ -32,5 +42,30 @@ impl From<std::io::Error> for P2pError {
 impl From<parity_scale_codec::Error> for P2pError {
     fn from(e: parity_scale_codec::Error) -> P2pError {
         P2pError::DecodeFailure(e.to_string())
+    }
+}
+
+impl From<std::time::SystemTimeError> for P2pError {
+    fn from(e: std::time::SystemTimeError) -> P2pError {
+        P2pError::TimeError(e.to_string())
+    }
+}
+
+impl std::fmt::Display for ProtocolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            ProtocolError::DifferentNetwork => {
+                write!(f, "Remote peer is in different network")
+            }
+            ProtocolError::InvalidVersion => {
+                write!(f, "Remote peer has an incompatible version")
+            }
+            ProtocolError::InvalidMessage => {
+                write!(f, "Invalid protocol message")
+            }
+            ProtocolError::Incompatible => {
+                write!(f, "Remote deemed us incompatible, connection closed")
+            }
+        }
     }
 }
