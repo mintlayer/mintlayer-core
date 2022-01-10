@@ -21,6 +21,7 @@ pub mod error;
 pub mod height;
 pub mod id;
 pub mod merkle;
+pub mod time;
 pub mod version;
 
 pub use amount::Amount;
