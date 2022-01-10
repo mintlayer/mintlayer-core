@@ -108,6 +108,10 @@ impl Block {
         Ok(block)
     }
 
+    pub fn get_consensus_data(&self) -> &ConsensusData {
+        &self.get_header().consensus_data
+    }
+
     pub fn update_consensus_data(&mut self, consensus_data: Vec<u8>) {
         match self {
             Block::V1(blk) => blk.update_consensus_data(consensus_data),
