@@ -94,3 +94,37 @@ impl MLRistrettoPublicKey {
         ))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::SeedableRng;
+
+    #[test]
+    fn basic() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
+        let pk2 = MLRistrettoPublicKey::from_private_key(&sk);
+        assert_eq!(pk, pk2);
+    }
+
+    #[test]
+    fn import_from_short_key() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
+        {
+            let sk_bytes = sk.as_bytes();
+            let sk_short = &sk_bytes[..sk_bytes.len() - 1];
+            assert_eq!(sk_short.len(), 31);
+            let sk_again = MLRistrettoPrivateKey::from_bytes(sk_short);
+            assert!(sk_again.is_err());
+        }
+        {
+            let pk_bytes = pk.as_bytes();
+            let pk_short = &pk_bytes[..pk_bytes.len() - 1];
+            assert_eq!(pk_short.len(), 31);
+            let pk_again = MLRistrettoPublicKey::from_bytes(pk_short);
+            assert!(pk_again.is_err());
+        }
+    }
+}
