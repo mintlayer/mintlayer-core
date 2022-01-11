@@ -1,5 +1,3 @@
-use std::array;
-
 /******************* IDEA
 
 Core <--> Trait <--> Tunnel <--> Some other core
@@ -57,16 +55,22 @@ use std::fmt::{Debug, Display};
 struct Wrap<T>(T);
 
 // Subsystem traits
-trait Subsystem1 {}
-trait Subsystem2 {}
-trait Subsystem3 {}
+struct Subsystem1 {
+    num: u8,
+}
+struct Subsystem2 {
+    vec: Vec<u8>,
+}
+struct Subsystem3 {
+    str: String,
+}
 
 // Specialization trick
 trait ViaSubsystem1 {
     fn foo(&self);
 }
 
-impl ViaSubsystem1 for &&Wrap<String> {
+impl ViaSubsystem1 for &&Wrap<Subsystem1> {
     fn foo(&self) {
         println!("Via Subsystem1");
     }
@@ -76,7 +80,7 @@ trait ViaSubsystem2 {
     fn foo(&self);
 }
 
-impl<T: Display> ViaSubsystem2 for &Wrap<T> {
+impl ViaSubsystem2 for &Wrap<Subsystem2> {
     fn foo(&self) {
         println!("Via Subsystem2");
     }
@@ -86,22 +90,19 @@ trait ViaSubsystem3 {
     fn foo(&self);
 }
 
-impl<T: Debug> ViaSubsystem3 for Wrap<T> {
+impl ViaSubsystem3 for Wrap<Subsystem3> {
     fn foo(&self) {
         println!("Via Subsystem3");
     }
 }
 
 fn main() {
-    // Test method calls
-    (&&&Wrap(String::from("hi"))).foo();
-    (&&&Wrap(3)).foo();
-    (&&&Wrap(['a', 'b'])).foo();
-
     // TODO
-    // Replace STRING, DISPLAY and DEBUG with Subsystems
+    // Include Tagging Method
+    // Simplify with Macro
+    // PoC with Thread
 
-    //(&&&Wrap(Subsystem1)).foo();
-    //(&&&Wrap(Subsystem2)).foo();
-    //(&&&Wrap(Subsystem3)).foo();
+    (&&&Wrap(Subsystem1 { num: 8 })).foo();
+    (&&&Wrap(Subsystem2 { vec: Vec::new() })).foo();
+    (&&&Wrap(Subsystem3 { str: String::new() })).foo();
 }
