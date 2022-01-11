@@ -15,33 +15,40 @@
 //
 // Author(s): S. Afach
 
-use digest::{generic_array::GenericArray, Digest};
+// there's not particular reason for using blake2 here,
+// but this saves us from adding digest manually to cargo
+// and managing a different version
+pub use blake2::digest::{
+    generic_array::GenericArray, Digest, FixedOutputReset, OutputSizeUser, Reset, Update,
+};
 
-pub fn hash<D: Digest, T: AsRef<[u8]>>(in_bytes: T) -> GenericArray<u8, <D as Digest>::OutputSize> {
+pub fn hash<D: Digest, T: AsRef<[u8]>>(
+    in_bytes: T,
+) -> GenericArray<u8, <D as OutputSizeUser>::OutputSize> {
     let mut hasher = D::new();
     hasher.update(in_bytes);
     hasher.finalize()
 }
 
 #[derive(Clone)]
-pub struct InternalStreamHasher<D: Digest> {
+pub struct InternalStreamHasher<D: Digest + Reset + FixedOutputReset> {
     hasher: D,
 }
 
-impl<D: Digest> InternalStreamHasher<D> {
+impl<D: Digest + Reset + FixedOutputReset> InternalStreamHasher<D> {
     pub fn new() -> Self {
         Self { hasher: D::new() }
     }
 
     pub fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) {
-        self.hasher.update(in_bytes);
+        Digest::update(&mut self.hasher, in_bytes);
     }
 
     pub fn reset(&mut self) {
-        self.hasher.reset()
+        Digest::reset(&mut self.hasher)
     }
 
-    pub fn finalize(&mut self) -> GenericArray<u8, <D as Digest>::OutputSize> {
+    pub fn finalize(&mut self) -> GenericArray<u8, <D as OutputSizeUser>::OutputSize> {
         self.hasher.finalize_reset()
     }
 }
