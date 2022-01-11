@@ -18,7 +18,7 @@ use crate::error::{self, P2pError, ProtocolError};
 use crate::message::{HandshakeMessage, Message, MessageType};
 use crate::net::{NetworkService, SocketService};
 use crate::peer::{Peer, PeerState};
-use std::time::SystemTime;
+use common::primitives::time;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InboundHandshakeState {
@@ -76,9 +76,7 @@ where
                     msg: MessageType::Handshake(HandshakeMessage::HelloAck {
                         version: *self.config.version(),
                         services: 0u32,
-                        timestamp: SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)?
-                            .as_secs(),
+                        timestamp: time::get(),
                     }),
                 };
 
@@ -175,6 +173,7 @@ mod tests {
     use crate::net::mock::{MockService, MockSocket};
     use crate::peer::PeerRole;
     use common::chain::{config, ChainConfig};
+    use common::primitives::time;
     use common::primitives::version::SemVer;
     use std::sync::Arc;
     use tokio::net::TcpStream;
@@ -244,10 +243,7 @@ mod tests {
                 HandshakeMessage::Hello {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 },
             )
             .await;
@@ -319,10 +315,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             })
             .await
@@ -379,10 +372,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: SemVer::new(13, 37, 1338),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             })
             .await
@@ -439,10 +429,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: SemVer::new(13, 37, 1338),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             })
             .await
@@ -497,10 +484,7 @@ mod tests {
                 HandshakeMessage::Hello {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 },
             )
             .await;
@@ -527,10 +511,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             })
             .await
@@ -575,10 +556,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::HelloAck {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             })
             .await
@@ -623,10 +601,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::HelloAck {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             }))
             .await;
@@ -655,10 +630,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::HelloAck {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             }))
             .await;
@@ -687,10 +659,7 @@ mod tests {
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: *config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
+                    timestamp: time::get(),
                 }),
             }))
             .await;

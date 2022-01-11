@@ -20,10 +20,11 @@ use crate::message::{HandshakeMessage, Message, MessageType};
 use crate::net::{NetworkService, SocketService};
 use crate::proto::handshake::*;
 use common::chain::ChainConfig;
+use common::primitives::time;
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 pub type PeerId = u64;
 pub type TaskId = u64;
@@ -215,7 +216,7 @@ where
                 msg: MessageType::Handshake(HandshakeMessage::Hello {
                     version: *self.config.version(),
                     services: 0u32,
-                    timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?.as_secs(),
+                    timestamp: time::get(),
                 }),
             }))
             .await?;

@@ -175,6 +175,7 @@ dependencies = [
  "fixed-hash",
  "generic-array",
  "hex-literal",
+ "lazy_static",
  "merkletree",
  "parity-scale-codec",
  "parity-scale-codec-derive",
