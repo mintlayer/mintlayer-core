@@ -21,17 +21,17 @@ pub const UPPER_TARGET_TIMESPAN_SECS: u32 = TARGET_TIMESPAN_SECS * TIMESPAN_ADJU
 pub const LOWER_TARGET_TIMESPAN_SECS: u32 = TARGET_TIMESPAN_SECS / TIMESPAN_ADJUSTMENT_FACTOR;
 
 pub(crate) fn actual_timespan(curr_block_blocktime: u32, prev_block_blocktime: u32) -> u32 {
-    let mut timespan = prev_block_blocktime - curr_block_blocktime;
+    let mut actual_timespan = prev_block_blocktime - curr_block_blocktime;
 
-    if timespan < LOWER_TARGET_TIMESPAN_SECS {
-        timespan = LOWER_TARGET_TIMESPAN_SECS;
+    if actual_timespan < LOWER_TARGET_TIMESPAN_SECS {
+        actual_timespan = LOWER_TARGET_TIMESPAN_SECS;
     }
 
-    if timespan > UPPER_TARGET_TIMESPAN_SECS {
-        timespan = UPPER_TARGET_TIMESPAN_SECS;
+    if actual_timespan > UPPER_TARGET_TIMESPAN_SECS {
+        actual_timespan = UPPER_TARGET_TIMESPAN_SECS;
     }
 
-    timespan
+    actual_timespan
 }
 
 pub enum POWError {
