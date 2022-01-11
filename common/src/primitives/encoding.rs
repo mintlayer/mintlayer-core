@@ -10,15 +10,15 @@ pub struct DecodedBech32 {
 }
 
 impl DecodedBech32 {
-    fn get_hrp(&self) -> &str {
+    pub fn get_hrp(&self) -> &str {
         &self.hrp
     }
 
-    fn get_base32_data(&self) -> &[u8] {
+    pub fn get_base32_data(&self) -> &[u8] {
         &self.base32_data
     }
 
-    fn encode(self) -> Result<String, Bech32Error> {
+    pub fn encode(self) -> Result<String, Bech32Error> {
         let data = &self.base32_data.check_base32()?;
         bech32::encode(&self.hrp, data, Variant::Bech32m).map_err(|e| e.into())
     }
