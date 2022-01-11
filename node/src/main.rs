@@ -1,4 +1,4 @@
-/******************* IDEA
+/******************* IDEA : Compile time deterministic generic specialization for subsystems interfacing
 
 Core <--> Trait <--> Tunnel <--> Some other core
 
@@ -38,13 +38,16 @@ For your method call:
 https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
 https://stackoverflow.com/questions/28519997/what-are-rusts-exact-auto-dereferencing-rules
 
+Real-World example :
+https://github.com/sagebind/castaway
+
 */
 
 /*******************  Tagging (complementary technique)
 
-Tagged dispatch strategy with a pair of method calls,
-the first using autoderef-based specialization with a reference argument to select a tag,
-and the second based on that tag which takes ownership of the original argument.
+Tagged dispatch strategy with a pair of method calls :
+- the first using autoderef-based specialization with a reference argument to select a tag, and
+- the second based on that tag which takes ownership of the original argument.
 
 https://github.com/dtolnay/case-studies/tree/master/autoref-specialization#realistic-application
 
@@ -54,7 +57,7 @@ use std::fmt::{Debug, Display};
 
 struct Wrap<T>(T);
 
-// Subsystem traits
+// Subsystem Types
 struct Subsystem1 {
     num: u8,
 }
@@ -96,11 +99,13 @@ impl ViaSubsystem3 for Wrap<Subsystem3> {
     }
 }
 
+
 fn main() {
     // TODO
-    // Include Tagging Method
-    // Simplify with Macro
-    // PoC with Thread
+    // Add Tagging for conflict resolution
+    // Simplify specialization with macro
+    // Thread
+    // proc_macro 
 
     (&&&Wrap(Subsystem1 { num: 8 })).foo();
     (&&&Wrap(Subsystem2 { vec: Vec::new() })).foo();
