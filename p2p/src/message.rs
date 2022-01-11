@@ -26,7 +26,7 @@ pub enum HandshakeMessage {
         /// Services that the local node supports
         services: u32,
         /// Unix timestamp
-        timestamp: u64,
+        timestamp: i64,
     },
     HelloAck {
         /// Software version of local node
@@ -34,7 +34,7 @@ pub enum HandshakeMessage {
         /// Services that the local node supports
         services: u32,
         /// Unix timestamp
-        timestamp: u64,
+        timestamp: i64,
     },
 }
 
@@ -57,13 +57,13 @@ pub struct Message {
 mod tests {
     use super::*;
     use common::chain::config;
-    use std::time::SystemTime;
+    use common::primitives::time;
 
     #[test]
     fn hello_test() {
         let config = config::create_mainnet();
         let serv = 0u32;
-        let ts: u64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let ts = time::get();
 
         let msg = Message {
             magic: *config.magic_bytes(),
@@ -109,7 +109,7 @@ mod tests {
     fn hello_ack_test() {
         let config = config::create_mainnet();
         let serv = 0u32;
-        let ts: u64 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let ts = time::get();
 
         let msg = Message {
             magic: *config.magic_bytes(),
