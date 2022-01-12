@@ -148,6 +148,7 @@ impl Pow {
             return Self::next_work_required_for_testnet(&prev_block, new_block, network);
         }
 
+        // TODO: get the ancestor: const CBlockIndex* pindexFirst = pindexLast->GetAncestor(nHeightFirst);
         Self::next_work_required(&prev_block, new_block, network)
     }
 }
