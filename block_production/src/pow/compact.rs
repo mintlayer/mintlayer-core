@@ -10,7 +10,7 @@ impl Compact {
         let mut size = (value.bits() + 7) / 8;
 
         let mut compact = if size <= 3 {
-            (value.low_u64() << (8 * (3 - size)))
+            value.low_u64() << (8 * (3 - size))
         } else {
             let bn = value >> (8 * (size - 3));
             bn.low_u64()
