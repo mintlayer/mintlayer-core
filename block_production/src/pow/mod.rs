@@ -5,17 +5,21 @@ mod network;
 mod pow;
 mod traits;
 
-use crate::BlockProductionError;
 pub use compact::*;
 pub use network::Network;
 pub use pow::Pow;
 
-pub enum POWError {
-    FailedUInt256ToCompact,
+pub enum ConversionError {
+    CompactToUInt256,
 }
 
-impl Into<BlockProductionError> for POWError {
-    fn into(self) -> BlockProductionError {
-        BlockProductionError::POWError(self)
+impl Into<POWError> for ConversionError {
+    fn into(self) -> POWError {
+        POWError::FailedConversion(self)
     }
+}
+
+pub enum POWError {
+    FailedConversion(ConversionError),
+    BlockToMineError(String),
 }

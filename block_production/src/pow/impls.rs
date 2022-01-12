@@ -1,6 +1,6 @@
 use crate::pow::pow::{check_difficulty, create_empty_block};
 use crate::pow::traits::{DataExt, PowExt};
-use crate::pow::{Compact, POWError, Pow};
+use crate::pow::{Compact, ConversionError, POWError, Pow};
 use crate::{BlockProducer, BlockProductionError, Chain, ConsensusParams};
 use common::chain::block::{Block, ConsensusData};
 use common::chain::Transaction;
@@ -30,8 +30,8 @@ impl PowExt for Block {
         id.get().into() //TODO: needs to be tested
     }
 
-    fn mine(&mut self, max_nonce: u128, difficulty: Uint256) -> Result<(), BlockProductionError> {
-        if let Some(bits) = Compact::from_uint256(difficulty) {
+    fn mine(&mut self, max_nonce: u128, bits: Compact) -> Result<(), BlockProductionError> {
+        if let Some(difficulty) = bits.clone().into_uint256() {
             for nonce in 0..max_nonce {
                 self.update_consensus_data(ConsensusData::create(&bits, nonce));
 
@@ -39,12 +39,12 @@ impl PowExt for Block {
                     return Ok(());
                 }
             }
-
-            let err = format!("max nonce {} has been reached.", max_nonce);
-            return Err(BlockProductionError::BlockToMineError(err));
+        } else {
+            return Err(POWError::FailedConversion(ConversionError::CompactToUInt256).into());
         }
 
-        Err(POWError::FailedUInt256ToCompact.into())
+        let err = format!("max nonce {} has been reached.", max_nonce);
+        return Err(POWError::BlockToMineError(err).into());
     }
 }
 
@@ -85,15 +85,12 @@ impl BlockProducer for Pow {
         consensus_params: ConsensusParams,
     ) -> Result<Block, BlockProductionError> {
         match consensus_params {
-            ConsensusParams::POW {
-                max_nonce,
-                difficulty,
-                network: _, // used for retargeting
-            } => {
+            ConsensusParams::POW { max_nonce, network } => {
                 let prev_block = Self::get_latest_block();
                 let mut block = create_empty_block(&prev_block, time, transactions)?;
+                let bits = Self::check_for_work_required(time, &prev_block, &network)?;
 
-                block.mine(max_nonce, difficulty)?;
+                block.mine(max_nonce, bits)?;
 
                 Ok(block)
             }

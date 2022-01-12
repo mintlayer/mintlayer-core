@@ -6,7 +6,7 @@ pub struct Compact(pub(crate) u32);
 
 impl Compact {
     // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L223
-    pub fn from_uint256(value: Uint256) -> Option<Self> {
+    pub fn from_uint256(value: Uint256) -> Self {
         let mut size = (value.bits() + 7) / 8;
 
         let mut compact = if size <= 3 {
@@ -23,7 +23,7 @@ impl Compact {
 
         let x = compact as u32 | (size << 24) as u32;
 
-        Some(Compact(x))
+        Compact(x)
     }
 
     // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L203
@@ -67,15 +67,14 @@ mod tests {
                 .expect("conversion should not fail from compact to uint256")
         };
 
-        let updated_compact = Compact::from_uint256(uint256)
-            .expect("conversion should not fail from uint256 to compact");
+        let updated_compact = Compact::from_uint256(uint256);
         assert_eq!(updated_compact, Compact(expected_value));
     }
 
     #[test]
     fn test_compact_uint256_conversion() {
         let u256 = Uint256::from_u64(0x80).expect("it should convert with not problems");
-        let compact = Compact::from_uint256(u256).expect("it should convert with no problems");
+        let compact = Compact::from_uint256(u256);
         assert_eq!(compact, Compact(0x02008000));
 
         // zero values
