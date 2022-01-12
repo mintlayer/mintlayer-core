@@ -1,5 +1,5 @@
 use crate::chain::ChainConfig;
-use crate::primitives::{encoding, Bech32Error};
+use crate::primitives::{encoding, Bech32Error, DecodedBech32};
 use crypto::hash::hash;
 use parity_scale_codec::{Decode, Encode};
 
@@ -8,13 +8,13 @@ pub trait AddressableData<T: AsRef<[u8]>> {
         encoding::encode(self.get_hrp(), self.get_data())
     }
 
-    fn decode(&mut self, addr: &str) -> Result<(), Bech32Error> {
-        let decoded = encoding::decode(addr)?;
-        self.set_data(decoded.data.as_ref());
-        Ok(())
+    fn decode(&mut self, addr: &str) -> Result<DecodedBech32, Bech32Error> {
+        encoding::decode(addr)
     }
 
     fn get_hrp(&self) -> &str;
+    fn set_hrp(&mut self, hrp: String);
+
     fn get_data(&self) -> T;
     fn set_data(&mut self, data: &[u8]);
 }

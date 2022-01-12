@@ -1,3 +1,4 @@
+use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
 use crate::primitives::id::{Id, H256};
@@ -58,10 +59,13 @@ fn create_mainnet_genesis() -> Block {
     use crate::primitives::Amount;
 
     let genesis_message = b"".to_vec();
-    // let _genesis_mint_receiver = Address::new_with_hrp(MAINNET_ADDRESS_PREFIX, [])
-    //     .expect("Failed to create genesis mint address");
+    let genesis_mint_receiver = Address::new_with_hrp(MAINNET_ADDRESS_PREFIX, [])
+        .expect("Failed to create genesis mint address");
     let input = TxInput::new(Id::new(&H256::zero()), 0, genesis_message);
-    let output = TxOutput::new(Amount::new(100000000000000), Destination::Address);
+    let output = TxOutput::new(
+        Amount::new(100000000000000),
+        Destination::Address(genesis_mint_receiver),
+    );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
