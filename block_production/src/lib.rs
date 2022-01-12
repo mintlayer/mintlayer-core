@@ -20,7 +20,6 @@ pub trait Chain {
 pub enum BlockProductionError {
     Error1,
     Error2,
-    BlockToMineError(String),
     InvalidConsensusParams(String),
     BlockCreationError(BlockCreationError),
     // Pow specific errors
