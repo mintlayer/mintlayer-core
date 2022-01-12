@@ -1,7 +1,7 @@
 mod pow;
 
-use crate::pow::{Network as POWNetwork, POWError};
-use common::chain::block::{Block, BlockCreationError, ConsensusData};
+pub use crate::pow::{Network as POWNetwork, POWError};
+use common::chain::block::{Block, BlockCreationError};
 use common::chain::transaction::Transaction;
 use common::primitives::{Id, Uint256, H256};
 
