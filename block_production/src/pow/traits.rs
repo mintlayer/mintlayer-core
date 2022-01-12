@@ -19,5 +19,5 @@ pub trait DataExt {
 pub trait PowExt {
     fn calculate_hash(&self) -> Uint256;
 
-    fn mine(&mut self, max_nonce: u128, difficulty: Uint256) -> Result<(), BlockProductionError>;
+    fn mine(&mut self, max_nonce: u128, bits: Compact) -> Result<(), BlockProductionError>;
 }
