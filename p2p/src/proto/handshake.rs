@@ -17,7 +17,7 @@
 use crate::error::{self, P2pError, ProtocolError};
 use crate::message::{HandshakeMessage, Message, MessageType};
 use crate::net::{NetworkService, SocketService};
-use crate::peer::{Peer, PeerState};
+use crate::peer::{ListeningState, Peer, PeerState};
 use common::primitives::time;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -81,7 +81,7 @@ where
                 };
 
                 self.socket.send(&msg).await?;
-                self.state = PeerState::Listening;
+                self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
             (InboundHandshakeState::WaitInitiation, HandshakeMessage::HelloAck { .. }) => {
@@ -128,7 +128,7 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
 
-                self.state = PeerState::Listening;
+                self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
             (OutboundHandshakeState::WaitResponse, HandshakeMessage::Hello { .. }) => {
@@ -275,15 +275,15 @@ mod tests {
                 OutboundHandshakeState::WaitResponse
             ))
         );
-        assert_eq!(remote.state, PeerState::Listening);
+        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
 
         // read initiator socket and parse message
         let msg = local.socket.recv().await;
         let res = local.on_peer_event(msg).await;
 
         assert!(res.is_ok());
-        assert_eq!(local.state, PeerState::Listening);
-        assert_eq!(remote.state, PeerState::Listening);
+        assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
+        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
     }
 
     // Test that invalid magic number closes the connection
