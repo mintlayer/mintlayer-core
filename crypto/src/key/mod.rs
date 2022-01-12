@@ -1,6 +1,13 @@
 pub mod rschnorr;
+pub mod signature;
+
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 use rand::SeedableRng;
+use signature::Signature;
+
+pub enum SignatureError {
+    Unknown,
+}
 
 fn make_rng() -> rand::rngs::StdRng {
     rand::rngs::StdRng::from_entropy()
@@ -58,6 +65,17 @@ impl PrivateKey {
     pub(crate) fn get_internal_key(&self) -> &PrivateKeyHolder {
         &self.key
     }
+
+    // fn sign(&self) -> Result<Signature, SignatureError> {
+    //     let k = match self.key {
+    //         PrivateKeyHolder::RistrettoSchnorr(k) => k,
+    //     };
+    //     RistrettoSchnorr::sign(k, r, &e);
+    //     Ok(Signature::new(
+    //         signature::SignatureKind::RistrettoSchnorr,
+    //         Vec::new(),
+    //     ))
+    // }
 }
 
 impl PublicKey {

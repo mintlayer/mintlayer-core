@@ -35,7 +35,8 @@ impl MLRistrettoPrivateKey {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RistrettoKeyError> {
-        let sk = RistrettoSecretKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
+        let sk =
+            RistrettoSecretKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
         let result = Self::from_native(&sk);
         Ok(result)
     }
@@ -66,7 +67,8 @@ impl MLRistrettoPublicKey {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RistrettoKeyError> {
-        let pk = RistrettoPublicKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
+        let pk =
+            RistrettoPublicKey::from_bytes(bytes).map_err(|_| RistrettoKeyError::InvalidData)?;
         let result = Self::from_native(&pk);
         Ok(result)
     }
