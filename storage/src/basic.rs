@@ -62,7 +62,7 @@ impl DeltaMap {
 /// Store is a collection of key-(multi)value maps
 pub struct Store<Sch: Schema> {
     maps: sync::Arc<sync::Mutex<StoreMapSet>>,
-    _phantom: std::marker::PhantomData<*const Sch>,
+    _phantom: std::marker::PhantomData<Sch>,
 }
 
 impl<Sch: Schema> Clone for Store<Sch> {

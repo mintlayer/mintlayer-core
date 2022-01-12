@@ -1,51 +1,80 @@
+//! Application-level interface for the persistent blockchain storage.
+
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::primitives::{BlockHeight, H256};
+use common::primitives::{BlockHeight, Id};
 
-#[allow(dead_code)]
-pub enum BlockchainStorageError {
-    Unknown,
+mod store;
+
+pub use store::{Store, StoreTx};
+
+/// Blockchain storage error
+#[derive(Eq, PartialEq, Debug)]
+pub enum Error {
     DatabaseError(storage::Error),
 }
 
+/// Possibly failing result of blockchain storage query
+pub type Result<T> = core::result::Result<T, Error>;
+
+/// Operations on persistent blockchain data
 pub trait BlockchainStorage {
-    fn set_storage_version(version: u32) -> Result<(), BlockchainStorageError>;
-    fn get_storage_version() -> Result<Option<u32>, BlockchainStorageError>;
+    /// Get storage version
+    fn get_storage_version(&mut self) -> crate::Result<u32>;
 
-    fn set_block(block: &Block) -> Result<(), BlockchainStorageError>;
-    fn get_block(block_id: &H256) -> Result<Option<Block>, BlockchainStorageError>;
-    fn del_block() -> Result<(), BlockchainStorageError>;
+    /// Set storage version
+    fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
-    fn set_block_height_in_mainchain(height: &BlockHeight, block_id: &H256);
-    fn get_block_height_in_mainchain(block_id: &H256);
-    fn del_block_height_in_mainchain(height: &BlockHeight);
+    /// Get the hash of the best block
+    fn get_best_block_id(&mut self) -> crate::Result<Option<Id<Block>>>;
 
-    fn set_best_block_id(hash: &H256) -> Result<(), BlockchainStorageError>;
-    fn get_best_block_id() -> Result<Option<H256>, BlockchainStorageError>;
+    /// Set the hash of the best block
+    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
+    /// Add a new block into the database
+    fn add_block(&mut self, block: &Block) -> crate::Result<()>;
+
+    /// Get block by its hash
+    fn get_block(&mut self, id: Id<Block>) -> crate::Result<Option<Block>>;
+
+    /// Remove block from the database
+    fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
+
+    /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(
-        tx_id: &H256,
+        &mut self,
+        tx_id: &Id<Transaction>,
         tx_index: &TxMainChainIndex,
-    ) -> Result<(), BlockchainStorageError>;
+    ) -> crate::Result<()>;
+
+    /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
-        tx_id: &H256,
-    ) -> Result<Option<TxMainChainIndex>, BlockchainStorageError>;
-    fn del_mainchain_tx_index(tx_id: &H256) -> Result<(), BlockchainStorageError>;
+        &mut self,
+        tx_id: &Id<Transaction>,
+    ) -> crate::Result<Option<TxMainChainIndex>>;
 
-    fn get_mainchain_tx(
+    /// Delete outputs state index associated with given transaction
+    fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+
+    /// Get transaction by block ID and position
+    fn get_mainchain_tx_by_position(
+        &mut self,
         tx_index: &TxMainChainPosition,
-    ) -> Result<Transaction, BlockchainStorageError>;
+    ) -> crate::Result<Option<Transaction>>;
 
-    fn transaction_begin() -> Result<(), BlockchainStorageError>;
-    fn transaction_commit() -> Result<(), BlockchainStorageError>;
-    fn transaction_abort() -> Result<(), BlockchainStorageError>;
-}
+    /// Get transaction by transaction ID. Transaction must be in the index.
+    fn get_mainchain_tx(&mut self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+    /// Get mainchain block by its height
+    fn get_block_id_by_height(&mut self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+
+    /// Set the mainchain block at given height to be given block.
+    fn set_block_id_at_height(
+        &mut self,
+        height: &BlockHeight,
+        block_id: &Id<Block>,
+    ) -> crate::Result<()>;
+
+    /// Remove block id from given mainchain height
+    fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 }

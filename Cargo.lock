@@ -140,6 +140,7 @@ name = "blockchain-storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "parity-scale-codec",
  "storage",
 ]
 

@@ -29,7 +29,7 @@ pub trait Transactional<'s> {
     /// Run a transaction.
     ///
     /// High-level convenience method. Prefer this over a combination of [Self::start_transaction],
-    /// [Transaction::commit], [Transaction::abort].
+    /// [DbTransaction::commit], [DbTransaction::abort].
     ///
     /// ```
     /// # use storage::Transactional;
