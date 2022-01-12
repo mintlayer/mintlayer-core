@@ -20,6 +20,7 @@ pub enum ProtocolError {
     InvalidVersion,
     InvalidMessage,
     Incompatible,
+    Unresponsive,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -65,6 +66,9 @@ impl std::fmt::Display for ProtocolError {
             }
             ProtocolError::Incompatible => {
                 write!(f, "Remote deemed us incompatible, connection closed")
+            }
+            ProtocolError::Unresponsive => {
+                write!(f, "Remote did not reply to Pings")
             }
         }
     }
