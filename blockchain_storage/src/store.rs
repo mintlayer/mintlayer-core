@@ -296,3 +296,111 @@ impl storage::transaction::DbTransaction for StoreTx<'_> {
         self.0.abort().map_err(DatabaseError)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use common::primitives::H256;
+
+    #[test]
+    fn test_storage_manipulation() {
+        // Prepare some test data
+        let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
+        let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
+        let block0 = Block::new(vec![tx0.clone()], Id::new(&H256::default()), 12, vec![]).unwrap();
+        let block1 = Block::new(vec![tx1.clone()], block0.get_id(), 34, vec![]).unwrap();
+
+        // Set up the store
+        let mut store = Store::new_empty().unwrap();
+
+        // Storage version manipulation
+        assert_eq!(store.get_storage_version(), Ok(1));
+        assert_eq!(store.set_storage_version(2), Ok(()));
+        assert_eq!(store.get_storage_version(), Ok(2));
+
+        // Storte is now empty, the block is not there
+        assert_eq!(store.get_block(block0.get_id()), Ok(None));
+
+        // Insert the first block and check it is there
+        assert_eq!(store.add_block(&block0), Ok(()));
+        assert_eq!(&store.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+
+        // Insert, remove, and reinsert the second block
+        assert_eq!(store.get_block(block1.get_id()), Ok(None));
+        assert_eq!(store.add_block(&block1), Ok(()));
+        assert_eq!(&store.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+        assert_eq!(store.del_block(block1.get_id()), Ok(()));
+        assert_eq!(store.get_block(block1.get_id()), Ok(None));
+        assert_eq!(store.add_block(&block1), Ok(()));
+        assert_eq!(&store.get_block(block0.get_id()).unwrap().unwrap(), &block0);
+
+        // Test the transaction extraction from a block
+        let enc_tx0 = tx0.encode();
+        let enc_block0 = block0.encode();
+        let offset_tx0 = enc_block0
+            .windows(enc_tx0.len())
+            .enumerate()
+            .find_map(|(i, d)| (d == enc_tx0).then(|| i))
+            .unwrap();
+        assert!(
+            &enc_block0[offset_tx0..].starts_with(&enc_tx0),
+            "Transaction format has changed, adjust the offset in this test",
+        );
+        let pos_tx0 = TxMainChainPosition::new(
+            &block0.get_id().get(),
+            offset_tx0 as u32,
+            enc_tx0.len() as u32,
+        );
+        assert_eq!(&store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(), &tx0);
+
+        // Test setting and retrieving best chain id
+        assert_eq!(store.get_best_block_id(), Ok(None));
+        assert_eq!(store.set_best_block_id(&block0.get_id()), Ok(()));
+        assert_eq!(store.get_best_block_id(), Ok(Some(block0.get_id())));
+        assert_eq!(store.set_best_block_id(&block1.get_id()), Ok(()));
+        assert_eq!(store.get_best_block_id(), Ok(Some(block1.get_id())));
+
+        // Chain index operations
+        let idx_tx0 = TxMainChainIndex::new(pos_tx0, 1).expect("Tx index creation failed");
+        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
+        assert_eq!(store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0), Ok(()));
+        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(Some(idx_tx0.clone())));
+        assert_eq!(store.del_mainchain_tx_index(&tx0.get_id()), Ok(()));
+        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
+        assert_eq!(store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0), Ok(()));
+
+        // Retrieve transactions by ID using the index
+        assert_eq!(store.get_mainchain_tx(&tx1.get_id()), Ok(None));
+        assert_eq!(store.get_mainchain_tx(&tx0.get_id()), Ok(Some(tx0)));
+    }
+
+    #[test]
+    fn test_storage_transactions() {
+        // TODO run this under loom
+        use std::thread;
+
+        // Set up the store and initialize the version to 2
+        let mut store = Store::new_empty().unwrap();
+        assert_eq!(store.set_storage_version(2), Ok(()));
+
+        // Concurrently bump version by 3 and 5 in two separate threads
+        let thr0 = {
+            let mut store = store.clone();
+            thread::spawn(move || store.transaction(|tx| {
+                let v = tx.get_storage_version().unwrap();
+                tx.set_storage_version(v + 3)
+            }))
+        };
+        let thr1 = {
+            let mut store = store.clone();
+            thread::spawn(move || store.transaction(|tx| {
+                let v = tx.get_storage_version().unwrap();
+                tx.set_storage_version(v + 5)
+            }))
+        };
+
+        let _ = thr0.join();
+        let _ = thr1.join();
+        assert_eq!(store.get_storage_version(), Ok(10));
+    }
+}
