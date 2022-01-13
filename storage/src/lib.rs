@@ -69,12 +69,12 @@
 //! });
 //! ```
 
-pub mod schema;
 mod basic;
+pub mod schema;
 pub mod transaction;
 
 // Reexport items from the temporary basic implementation.
-pub use basic::{Store, Transaction, SingleMap};
+pub use basic::{SingleMap, Store, Transaction};
 pub use transaction::{DbTransaction, Transactional};
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]

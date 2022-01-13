@@ -23,10 +23,7 @@ type DeltaMapSingle = BTreeMap<Data, Option<Data>>;
 #[allow(unused)]
 enum VecDelta<T> {
     Set(Vec<T>),
-    Modify {
-        add: Vec<T>,
-        del: Vec<T>,
-    },
+    Modify { add: Vec<T>, del: Vec<T> },
 }
 
 type DeltaMapMulti = BTreeMap<Data, VecDelta<Data>>;
@@ -133,15 +130,22 @@ impl<'st, Sch: Schema> Transaction<'st, Sch> {
     // Start a transaction on given store
     fn start(store: &'st Store<Sch>) -> Self {
         let store = store.maps.lock().expect("Mutex locked by a crashed thread");
-        let delta = store.iter().map(|(&k, v)| {
-            let dm = match v {
-                StoreMap::Single(_) => DeltaMap::Single(Default::default()),
-                StoreMap::Multi(_) => DeltaMap::Multi(Default::default()),
-            };
-            (k, dm)
-        }).collect();
+        let delta = store
+            .iter()
+            .map(|(&k, v)| {
+                let dm = match v {
+                    StoreMap::Single(_) => DeltaMap::Single(Default::default()),
+                    StoreMap::Multi(_) => DeltaMap::Multi(Default::default()),
+                };
+                (k, dm)
+            })
+            .collect();
         let _phantom = Default::default();
-        Self { store, delta, _phantom }
+        Self {
+            store,
+            delta,
+            _phantom,
+        }
     }
 
     /// Get key-value store for given column (key-to-single-value only for now)
@@ -151,9 +155,10 @@ impl<'st, Sch: Schema> Transaction<'st, Sch> {
         Sch: schema::HasColumn<Col, I>,
     {
         match (self.store.get(Col::NAME), self.delta.get_mut(Col::NAME)) {
-            (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) =>
-                SingleMap::new(store, delta),
-            _ => panic!("Unexpected map kind")
+            (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) => {
+                SingleMap::new(store, delta)
+            }
+            _ => panic!("Unexpected map kind"),
         }
     }
 }
@@ -163,9 +168,12 @@ impl<'st, Sch: Schema> crate::transaction::DbTransaction for Transaction<'st, Sc
 
     /// Commit a transaction
     fn commit(mut self) -> Result<(), Self::Error> {
-        self.store.values_mut().zip(self.delta.into_values()).for_each(|(store, delta)| {
-            delta.apply_to(store);
-        });
+        self.store
+            .values_mut()
+            .zip(self.delta.into_values())
+            .for_each(|(store, delta)| {
+                delta.apply_to(store);
+            });
         Ok(())
     }
 
