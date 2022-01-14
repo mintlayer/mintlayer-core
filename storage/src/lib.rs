@@ -12,7 +12,7 @@
 //!
 //! ```
 //! # use storage::{schema, Transactional, DbTransaction};
-//! // Delcare a schema. Schema specifies which columns are present,
+//! // Declare a schema. Schema specifies which columns are present,
 //! // name of each column and its kind. Columns are identified by types.
 //! // Here, we create just one column.
 //!

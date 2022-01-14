@@ -1,9 +1,7 @@
-use parity_scale_codec_derive::{Encode, Decode};
-
-#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
+use parity_scale_codec_derive::{Decode, Encode};
 use std::fmt;
 
-#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
 pub struct BlockHeight(u64);
 
 // Display should be defined for thiserr crate
