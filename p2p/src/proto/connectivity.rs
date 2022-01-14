@@ -474,7 +474,7 @@ mod tests {
 
     // respond to ping on the first retry
     #[tokio::test]
-    async fn test_late_response_v1() {
+    async fn test_late_response_on_1st_retry() {
         let config = Arc::new(config::create_mainnet());
         let addr = "[::1]:11133".parse().unwrap();
         let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
@@ -519,7 +519,7 @@ mod tests {
 
     // respond to ping on the second retry
     #[tokio::test]
-    async fn test_late_response_v2() {
+    async fn test_late_response_on_2nd_retry() {
         let config = Arc::new(config::create_mainnet());
         let addr = "[::1]:11134".parse().unwrap();
         let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
@@ -564,7 +564,7 @@ mod tests {
 
     // respond to ping on the third and last retry
     #[tokio::test]
-    async fn test_late_response_v3() {
+    async fn test_late_response_on_3rd_retry() {
         let config = Arc::new(config::create_mainnet());
         let addr = "[::1]:11135".parse().unwrap();
         let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
