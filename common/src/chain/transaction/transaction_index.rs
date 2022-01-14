@@ -1,6 +1,7 @@
 use crate::primitives::H256;
+use parity_scale_codec_derive::{Encode, Decode};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
     Unspent,
     SpentBy(H256),
@@ -12,15 +13,15 @@ pub enum OutputSpentState {
 /// and we then read the binary data at a specific offset and size, which we deserialize
 /// to get the transaction.
 /// This struct represents the position of a transaction in the database
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainPosition {
     block_id: H256,
-    byte_offset_in_block: usize,
-    serialized_size: usize,
+    byte_offset_in_block: u32,
+    serialized_size: u32,
 }
 
 impl TxMainChainPosition {
-    pub fn new(block_id: &H256, byte_offset_in_block: usize, serialized_size: usize) -> Self {
+    pub fn new(block_id: &H256, byte_offset_in_block: u32, serialized_size: u32) -> Self {
         TxMainChainPosition {
             block_id: *block_id,
             byte_offset_in_block,
@@ -32,11 +33,11 @@ impl TxMainChainPosition {
         &self.block_id
     }
 
-    pub fn get_byte_offset_in_block(&self) -> usize {
+    pub fn get_byte_offset_in_block(&self) -> u32 {
         self.byte_offset_in_block
     }
 
-    pub fn get_serialized_size(&self) -> usize {
+    pub fn get_serialized_size(&self) -> u32 {
         self.serialized_size
     }
 }
@@ -57,7 +58,7 @@ pub enum TxMainChainIndexError {
 /// 1. The state on whether its outputs are spent
 /// 2. The position on where to find that transaction in the mainchain (block + bianry position)#[derive(Clone, Debug, PartialEq, Eq)]
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
     position: TxMainChainPosition,
     spent: Vec<OutputSpentState>,
