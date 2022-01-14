@@ -1,8 +1,7 @@
 use blockchain_storage::BlockchainStorage;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
-use common::primitives::merkle::MerkleTreeFormError;
-use common::primitives::{Id, H256};
+use common::primitives::{time, Id, H256};
 
 mod chain_state;
 mod orphan_blocks;
@@ -51,9 +50,10 @@ impl<S: BlockchainStorage> Consensus<S> {
         let prev_block_id = block.get_prev_block_id();
 
         // If it is the genesis block, then we skip this check
+        let previous_block = self.blockchain_storage.get_block(prev_block_id.clone())?;
         if prev_block_id != (Id::<Block>::new(&H256::zero())) {
             //  Is the previous block not found?
-            if self.blockchain_storage.get_block(prev_block_id)?.is_none() {
+            if previous_block.is_none() {
                 return Ok(BlockStatus::Failed);
             }
         }
@@ -85,10 +85,16 @@ impl<S: BlockchainStorage> Consensus<S> {
                 return Ok(BlockStatus::Failed);
             }
         }
-        //   - Time
+        // Time
         let block_time = block.get_block_time();
-
-        //   - Consensus data
+        if let Some(previous_block) = previous_block {
+            if previous_block.get_block_time() > block_time {
+                return Ok(BlockStatus::Failed);
+            }
+        }
+        if i64::from(block_time) > time::get() {
+            return Ok(BlockStatus::Failed);
+        }
         Ok(BlockStatus::Valid)
     }
 
@@ -98,6 +104,7 @@ impl<S: BlockchainStorage> Consensus<S> {
             return BlockStatus::Failed;
         }
 
+        //   - Consensus data
         // Will have added some checks
         BlockStatus::Valid
     }
