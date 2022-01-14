@@ -301,11 +301,12 @@ impl storage::transaction::DbTransaction for StoreTx<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use common::primitives::H256;
 
     #[test]
     #[cfg(not(loom))]
     fn test_storage_manipulation() {
+        use common::primitives::H256;
+
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
@@ -390,72 +391,71 @@ mod test {
 
     #[test]
     fn test_storage_transactions() {
-        // TODO run this under loom
-        use std::thread;
+        common::concurrency::model(|| {
+            // Set up the store and initialize the version to 2
+            let mut store = Store::new_empty().unwrap();
+            assert_eq!(store.set_storage_version(2), Ok(()));
 
-        // Set up the store and initialize the version to 2
-        let mut store = Store::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+            // Concurrently bump version by 3 and 5 in two separate threads
+            let thr0 = {
+                let mut store = store.clone();
+                common::thread::spawn(move || {
+                    let tx_result = store.transaction(|tx| {
+                        let v = tx.get_storage_version()?;
+                        tx.set_storage_version(v + 3)
+                    });
+                    assert!(tx_result.is_ok());
+                })
+            };
+            let thr1 = {
+                let mut store = store.clone();
+                common::thread::spawn(move || {
+                    let tx_result = store.transaction(|tx| {
+                        let v = tx.get_storage_version()?;
+                        tx.set_storage_version(v + 5)
+                    });
+                    assert!(tx_result.is_ok());
+                })
+            };
 
-        // Concurrently bump version by 3 and 5 in two separate threads
-        let thr0 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let tx_result = store.transaction(|tx| {
-                    let v = tx.get_storage_version()?;
-                    tx.set_storage_version(v + 3)
-                });
-                assert!(tx_result.is_ok());
-            })
-        };
-        let thr1 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let tx_result = store.transaction(|tx| {
-                    let v = tx.get_storage_version()?;
-                    tx.set_storage_version(v + 5)
-                });
-                assert!(tx_result.is_ok());
-            })
-        };
-
-        let _ = thr0.join();
-        let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+            let _ = thr0.join();
+            let _ = thr1.join();
+            assert_eq!(store.get_storage_version(), Ok(10));
+        })
     }
 
     #[test]
     fn test_storage_transactions_with_result_check() {
-        // TODO run this under loom
-        use std::thread;
-        use storage::DbTransaction;
+        common::concurrency::model(|| {
+            use storage::DbTransaction;
 
-        // Set up the store and initialize the version to 2
-        let mut store = Store::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+            // Set up the store and initialize the version to 2
+            let mut store = Store::new_empty().unwrap();
+            assert_eq!(store.set_storage_version(2), Ok(()));
 
-        // Concurrently bump version by 3 and 5 in two separate threads
-        let thr0 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let mut tx = store.start_transaction();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 3).is_ok());
-                assert!(tx.commit().is_ok());
-            })
-        };
-        let thr1 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let mut tx = store.start_transaction();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 5).is_ok());
-                assert!(tx.commit().is_ok());
-            })
-        };
+            // Concurrently bump version by 3 and 5 in two separate threads
+            let thr0 = {
+                let mut store = store.clone();
+                common::thread::spawn(move || {
+                    let mut tx = store.start_transaction();
+                    let v = tx.get_storage_version().unwrap();
+                    assert!(tx.set_storage_version(v + 3).is_ok());
+                    assert!(tx.commit().is_ok());
+                })
+            };
+            let thr1 = {
+                let mut store = store.clone();
+                common::thread::spawn(move || {
+                    let mut tx = store.start_transaction();
+                    let v = tx.get_storage_version().unwrap();
+                    assert!(tx.set_storage_version(v + 5).is_ok());
+                    assert!(tx.commit().is_ok());
+                })
+            };
 
-        let _ = thr0.join();
-        let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+            let _ = thr0.join();
+            let _ = thr1.join();
+            assert_eq!(store.get_storage_version(), Ok(10));
+        })
     }
 }
