@@ -12,7 +12,7 @@ pub use store::{Store, StoreTx};
 #[derive(Eq, PartialEq, Debug)]
 pub enum Error {
     RecoverableError(storage::Error),
-    DatabaseError(storage::Error),
+    UnrecoverableError(storage::Error),
 }
 
 /// Possibly failing result of blockchain storage query
