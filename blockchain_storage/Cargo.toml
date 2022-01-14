@@ -9,3 +9,4 @@ license = "MIT"
 [dependencies]
 storage = { path = '../storage'}
 common = { path = '../common' }
+parity-scale-codec = {version = "2.3.1", features = ["chain-error"]}

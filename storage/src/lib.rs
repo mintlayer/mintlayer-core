@@ -1,99 +1,88 @@
-use std::collections::BTreeMap;
+//! Storage interface
+//!
+//! Storage is a collection of key-value maps. One key-value map is called a column. Column kind
+//! specifies whether a key is mapped to just a single value or to a collection of values.
+//!
+//! # Basic storage
+//!
+//! For now, only basic storage implementation is provided. It is to be replaced with a proper one
+//! abstracting over storage backend and a more complete feature set.
+//!
+//! # Example
+//!
+//! ```
+//! # use storage::{schema, Transactional, DbTransaction};
+//! // Delcare a schema. Schema specifies which columns are present,
+//! // name of each column and its kind. Columns are identified by types.
+//! // Here, we create just one column.
+//!
+//! struct MyColumn;
+//! impl schema::Column for MyColumn {
+//!     const NAME: &'static str = "MyColumnV1";
+//!     type Kind = schema::Single;
+//! }
+//!
+//! // Schema is a bunch of nested tuples listing the columns.
+//! // The format is (Column1, (Column2, ())) etc.
+//! type Schema = (MyColumn, ());
+//!
+//! // Our store type is parametrized by the schema.
+//! type MyStore = storage::Store<Schema>;
+//!
+//! // Initialize an empty store with columns listed in the schema.
+//! let mut store = MyStore::default();
+//!
+//! // All store operations happen inside on a transaction.
+//! store.transaction(|tx| {
+//!     // Get the column, identified by the type.
+//!     let mut col = tx.get::<MyColumn, ()>();
+//!
+//!     // Associate the value "bar" with the key "foo"
+//!     col.put(b"foo".to_vec(), b"bar".to_vec())?;
+//!
+//!     // Get the value out again.
+//!     let val = col.get(b"foo")?;
+//!     assert_eq!(val, Some(&b"bar"[..]));
+//!
+//!     // End the transaction
+//!     Ok(())
+//! });
+//!
+//! // Try writing a value but abort the transaction afterwards.
+//! store.transaction(|tx| {
+//!     tx.get::<MyColumn, ()>().put(b"baz".to_vec(), b"xyz".to_vec())?;
+//!     tx.abort()?;
+//!     Ok(())
+//! });
+//!
+//! // Transaction can return data. Values taken from the database have to be cloned
+//! // in order for them to be available after the transaction terminates.
+//! let result = store.transaction(|tx| {
+//!     Ok(tx.get::<MyColumn, ()>().get(b"baz")?.map(ToOwned::to_owned))
+//! });
+//! assert_eq!(result, Ok(None));
+//!
+//! // Check the value we first inserted is still there.
+//! let result = store.transaction(|tx| {
+//!     assert_eq!(tx.get::<MyColumn, ()>().get(b"foo")?, Some(&b"bar"[..]));
+//!     Ok(())
+//! });
+//! ```
 
-#[allow(dead_code)]
-pub enum DBError {
+mod basic;
+pub mod schema;
+pub mod transaction;
+
+// Reexport items from the temporary basic implementation.
+pub use basic::{SingleMap, Store, Transaction};
+pub use transaction::{DbTransaction, Transactional};
+
+#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Error {
+    #[error("Transaction aborted by the user")]
+    Aborted,
+    #[error("Unknown database error")]
     Unknown,
 }
 
-trait Storage<I: ?Sized> {
-    /// Returns true if a single key can have multiple values (non-unique keys)
-    /// Notice that this doesn't take `self` because it's an interface definition, independent of the db library
-    fn duplicates_allowed(db_index: I) -> bool;
-
-    /// For a database with unique key/value, this sets the key vs value and overwrites an existing one
-    /// If this were used with a databse allowing duplicates, the kv pair will become (k, [v])
-    fn set<K: AsRef<[u8]>, V: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-        val: V,
-    ) -> Result<(), DBError>;
-
-    /// For a database with unique key/value, this gets the value stored with the given key
-    /// If this were used with a databse not allowing duplicates, the result will provide only one value in the list of duplicates
-    fn get<K: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-        offset: usize,
-        size: Option<usize>,
-    ) -> Result<Option<Vec<u8>>, DBError>;
-
-    /// For a database with non-unique key/values, this gets all the values stored with the given key
-    /// If this were used with a databse not allowing duplicates, the result will provide only the unique value available in list
-    fn get_multiple<K: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-    ) -> Result<Vec<Vec<u8>>, DBError>;
-
-    /// For a database that allows non-unique key/values, this returns everything in the database
-    /// If this were used with a databse not allowing duplicates, the result will provide only the unique value available in list
-    fn get_all<K: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-    ) -> Result<BTreeMap<K, Vec<Vec<u8>>>, DBError>;
-
-    /// For a database with unique key/value, this gets all keys and their corresponding unique values
-    /// If this were used with a database with non-unique values, only a single arbitrary value will be provided from the list of available values
-    fn get_all_unique<K: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-    ) -> Result<BTreeMap<K, Vec<u8>>, DBError>;
-
-    /// Returns true if the key exists in the database; false otherwise
-    fn exists<K: AsRef<[u8]>>(db_index: I, key: K) -> Result<bool, DBError>;
-
-    /// For a non-unique database, this appends a value to the available kv pairs
-    /// If used with unique keys, an overwrite happens
-    fn append<K: AsRef<[u8]>, V: AsRef<[u8]>>(db_index: I, key: K, val: V) -> Result<(), DBError>;
-
-    /// For a non-unique database, a key is erased with the respective value is erased
-    /// For a unique database, the key is only erased if the key/value match
-    fn erase_one<K: AsRef<[u8]>, V: AsRef<[u8]>>(
-        &mut self,
-        db_index: I,
-        key: K,
-        val: V,
-    ) -> Result<(), DBError>;
-
-    /// The key and all possible values are erased
-    fn erase<K: AsRef<[u8]>>(db_index: I, key: K) -> Result<(), DBError>;
-
-    /// All database content for all indexes are cleared
-    fn clear_all(&mut self) -> Result<(), DBError>;
-
-    /// All database content are cleared for the given index
-    fn clear_db(&mut self, db_index: I) -> Result<(), DBError>;
-
-    /// Begin an atomic, consistent and isolated transaction in the database
-    /// this can be done once at a time, until reverted or committed
-    fn begin_transaction(&mut self, approximate_data_size: usize) -> Result<(), DBError>;
-
-    /// Revert all operations in the transaction that was started
-    fn revert_transaction(&mut self) -> Result<(), DBError>;
-
-    /// Commit the operations in the transaction to the persistent DB
-    fn commit_transaction(&mut self) -> Result<(), DBError>;
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub type Result<T> = std::result::Result<T, Error>;

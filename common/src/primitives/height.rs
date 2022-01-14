@@ -1,3 +1,6 @@
+use parity_scale_codec_derive::{Encode, Decode};
+
+#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
 use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq)]
