@@ -15,6 +15,8 @@
 //
 // Author(s): S. Afach
 
+#[macro_use]
+pub mod util;
 pub mod address;
 pub mod chain;
 pub mod primitives;
