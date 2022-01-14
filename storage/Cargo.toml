@@ -6,4 +6,5 @@ license = "MIT"
 
 [dependencies]
 serialization = { path = "../serialization"}
+common = { path = "../common"}
 thiserror = "1.0"
