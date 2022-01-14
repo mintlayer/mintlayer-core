@@ -5,7 +5,6 @@ use std::ops::Shl;
 pub struct Compact(pub u32);
 
 impl Compact {
-
     // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L203
     pub fn into_uint256(self) -> Option<Uint256> {
         let compact = self.0;
@@ -25,7 +24,7 @@ impl Compact {
 
         if (word != 0 && (compact & 0x00800000) != 0)
             || (word != 0
-            && ((size > 34) || (word > 0xFF && size > 33) || (word > 0xFFFF && size > 32)))
+                && ((size > 34) || (word > 0xFF && size > 33) || (word > 0xFFFF && size > 32)))
         {
             return None;
         }
@@ -85,10 +84,10 @@ mod tests {
             0x00123456, 0x01003456, 0x02000056, 0x03000000, 0x04000000, 0x00923456, 0x01803456,
             0x02800056, 0x03800000, 0x04800000,
         ]
-            .into_iter()
-            .for_each(|x| {
-                check_conversion(x, 0);
-            });
+        .into_iter()
+        .for_each(|x| {
+            check_conversion(x, 0);
+        });
 
         [
             (0x1d00ffff, 0x1d00ffff),
@@ -99,10 +98,10 @@ mod tests {
             (0x05009234, 0x05009234),
             (0x20123456, 0x20123456),
         ]
-            .into_iter()
-            .for_each(|(x, y)| {
-                check_conversion(x, y);
-            });
+        .into_iter()
+        .for_each(|(x, y)| {
+            check_conversion(x, y);
+        });
     }
 
     #[test]
