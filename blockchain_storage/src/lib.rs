@@ -12,7 +12,7 @@ pub trait BlockchainStorage {
     fn set_storage_version(version: u32) -> Result<(), BlockchainStorageError>;
     fn get_storage_version() -> Result<Option<u32>, BlockchainStorageError>;
 
-    fn set_block(s: S, block: &Block) -> Result<(), BlockchainStorageError>;
+    fn set_block(s: &Self, block: &Block) -> Result<(), BlockchainStorageError>;
     fn get_block(block_id: &H256) -> Result<Option<Block>, BlockchainStorageError>;
     fn del_block() -> Result<(), BlockchainStorageError>;
 

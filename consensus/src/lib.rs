@@ -21,12 +21,18 @@ struct Consensus<S: BlockchainStorage> {
 }
 
 impl<S: BlockchainStorage> Consensus<S> {
+    pub fn new(chain_config: ChainConfig, blockchain_storage: S) -> Self {
+        Self {
+            chain_config,
+            blockchain_storage,
+            orphan_blocks: OrphanBlocksPool::new_default(),
+        }
+    }
+
     pub fn process_block(&self, block: &Block) -> BlockStatus {
         match self.check_block(block) {
             BlockStatus::Valid => {
-                match <S as BlockchainStorage>::set_block(self.blockchain_storage.clone(), block)
-                    .is_ok()
-                {
+                match <S as BlockchainStorage>::set_block(&self.blockchain_storage, block).is_ok() {
                     true => BlockStatus::Valid,
                     false => BlockStatus::Failed,
                 }
@@ -43,9 +49,14 @@ impl<S: BlockchainStorage> Consensus<S> {
 
 #[cfg(test)]
 mod tests {
+    use crate::Consensus;
+    use common::chain::config::create_mainnet;
+
     #[test]
     #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_genesis() {
+        let config = create_mainnet();
+        // let storage = MocStorage::new();
+        // let consensus = Consensus::new(config, storage);
     }
 }
