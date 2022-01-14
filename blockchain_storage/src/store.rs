@@ -304,6 +304,7 @@ mod test {
     use common::primitives::H256;
 
     #[test]
+    #[cfg(not(loom))]
     fn test_storage_manipulation() {
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
