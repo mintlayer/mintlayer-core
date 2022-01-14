@@ -526,7 +526,7 @@ fn op_hash<T: AsRef<[u8]>>(stack: &mut Stack, f: impl FnOnce(&[u8]) -> T) -> cra
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(loom)))]
 mod test {
     use super::*;
     use crate::opcodes::all as opc;
