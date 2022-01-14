@@ -11,6 +11,7 @@ pub use store::{Store, StoreTx};
 /// Blockchain storage error
 #[derive(Eq, PartialEq, Debug)]
 pub enum Error {
+    RecoverableError(storage::Error),
     DatabaseError(storage::Error),
 }
 
