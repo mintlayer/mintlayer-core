@@ -68,7 +68,7 @@ impl std::fmt::Display for ProtocolError {
                 write!(f, "Remote deemed us incompatible, connection closed")
             }
             ProtocolError::Unresponsive => {
-                write!(f, "Remote did not reply to Pings")
+                write!(f, "No response from remote peer")
             }
         }
     }
