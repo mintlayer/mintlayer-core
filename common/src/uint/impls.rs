@@ -537,10 +537,8 @@ mod tests {
         assert!(big < bigger);
         assert!(bigger < biggest);
         assert!(bigger <= biggest);
-        assert!(biggest <= biggest);
         assert!(bigger >= big);
         assert!(bigger >= small);
-        assert!(small <= small);
     }
 
     #[test]
@@ -782,14 +780,6 @@ mod tests {
         assert_eq!(init << 64, Uint256([0, 0xDEADBEEFDEADBEEF, 0, 0]));
         let add = (init << 64) + init;
         assert_eq!(add, Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0]));
-        assert_eq!(
-            add >> 0,
-            Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0])
-        );
-        assert_eq!(
-            add << 0,
-            Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0])
-        );
         assert_eq!(add >> 64, Uint256([0xDEADBEEFDEADBEEF, 0, 0, 0]));
         assert_eq!(
             add << 64,
