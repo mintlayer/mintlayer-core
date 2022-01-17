@@ -17,7 +17,7 @@
 use crate::error::{self, P2pError, ProtocolError};
 use crate::message::{HandshakeMessage, Message, MessageType};
 use crate::net::{NetworkService, SocketService};
-use crate::peer::{Peer, PeerState};
+use crate::peer::{ListeningState, Peer, PeerState};
 use common::primitives::time;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -81,7 +81,7 @@ where
                 };
 
                 self.socket.send(&msg).await?;
-                self.state = PeerState::Listening;
+                self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
             (InboundHandshakeState::WaitInitiation, HandshakeMessage::HelloAck { .. }) => {
@@ -128,7 +128,7 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
 
-                self.state = PeerState::Listening;
+                self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
             (OutboundHandshakeState::WaitResponse, HandshakeMessage::Hello { .. }) => {
@@ -155,7 +155,7 @@ where
     ///
     /// This function assumes that the magic number of the message has been verified
     /// and sender and the local node are using the same chain type (Mainnet, Testnet)
-    pub async fn on_handshake_event(
+    pub(super) async fn on_handshake_event(
         &mut self,
         state: HandshakeState,
         msg: HandshakeMessage,
@@ -163,6 +163,23 @@ where
         match state {
             HandshakeState::Inbound(state) => self.on_inbound_handshake_event(state, msg).await,
             HandshakeState::Outbound(state) => self.on_outbound_handshake_event(state, msg).await,
+        }
+    }
+
+    /// Handle inboud message when local peer is handshaking
+    pub async fn on_handshake_state_peer_event(
+        &mut self,
+        state: HandshakeState,
+        msg: Message,
+    ) -> error::Result<()> {
+        match msg.msg {
+            MessageType::Handshake(msg) => {
+                // found in src/proto/handshake.rs
+                self.on_handshake_event(state, msg).await
+            }
+            MessageType::Connectivity(_) => {
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
         }
     }
 }
@@ -275,15 +292,15 @@ mod tests {
                 OutboundHandshakeState::WaitResponse
             ))
         );
-        assert_eq!(remote.state, PeerState::Listening);
+        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
 
         // read initiator socket and parse message
         let msg = local.socket.recv().await;
         let res = local.on_peer_event(msg).await;
 
         assert!(res.is_ok());
-        assert_eq!(local.state, PeerState::Listening);
-        assert_eq!(remote.state, PeerState::Listening);
+        assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
+        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
     }
 
     // Test that invalid magic number closes the connection

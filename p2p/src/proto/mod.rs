@@ -14,4 +14,5 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+pub mod connectivity;
 pub mod handshake;
