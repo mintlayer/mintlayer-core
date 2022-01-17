@@ -1,5 +1,5 @@
 use crate::chain::config::ChainType;
-use crate::primitives::Uint256;
+use crate::uint::Uint256;
 
 /// Chain Parameters for Proof of Work, as found in
 /// https://github.com/bitcoin/bitcoin/blob/master/src/chainparams.cpp
@@ -63,7 +63,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn pow_limit() {
+    fn check_pow_limit() {
         let regtest = ChainType::Regtest;
         let str_format = format!("{:?}", limit(&regtest));
         assert_eq!(
@@ -84,5 +84,20 @@ mod tests {
             "0x00000377ae000000000000000000000000000000000000000000000000000000",
             &str_format,
         );
+    }
+
+    #[test]
+    fn check_from_chain_type() {
+        let cfg = POWConfig::from(ChainType::Mainnet);
+        assert!(!cfg.no_retargeting);
+        assert!(!cfg.allow_min_difficulty_blocks);
+
+        let cfg = POWConfig::from(ChainType::Regtest);
+        assert!(cfg.no_retargeting);
+        assert!(cfg.allow_min_difficulty_blocks);
+
+        let cfg = POWConfig::from(ChainType::Testnet);
+        assert!(!cfg.no_retargeting);
+        assert!(cfg.allow_min_difficulty_blocks);
     }
 }

@@ -5,6 +5,7 @@ pub struct BlockHeight(u64);
 
 const ZERO: BlockHeight = BlockHeight(0);
 const ONE: BlockHeight = BlockHeight(1);
+const MAX: BlockHeight = BlockHeight(u64::MAX);
 
 impl BlockHeight {
     pub fn new(height: u64) -> BlockHeight {
@@ -17,6 +18,10 @@ impl BlockHeight {
 
     pub fn one() -> BlockHeight {
         ONE
+    }
+
+    pub fn max() -> BlockHeight {
+        MAX
     }
 }
 
@@ -42,5 +47,23 @@ impl Saturating<u64> for BlockHeight {
 
     fn saturating_div(self, rhs: u64) -> Self {
         BlockHeight(self.0.saturating_div(rhs))
+    }
+}
+
+impl Saturating<BlockHeight> for BlockHeight {
+    fn saturating_sub(self, rhs: BlockHeight) -> Self {
+        self.saturating_sub(rhs.0)
+    }
+
+    fn saturating_add(self, rhs: BlockHeight) -> Self {
+        self.saturating_add(rhs.0)
+    }
+
+    fn saturating_mul(self, rhs: BlockHeight) -> Self {
+        self.saturating_mul(rhs.0)
+    }
+
+    fn saturating_div(self, rhs: BlockHeight) -> Self {
+        self.saturating_div(rhs.0)
     }
 }

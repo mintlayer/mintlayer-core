@@ -1,3 +1,5 @@
+#![allow(clippy::upper_case_acronyms)]
+
 use crate::chain::config::ChainType;
 use crate::chain::pow::POWConfig;
 use crate::primitives::height::Saturating;
@@ -6,7 +8,7 @@ use std::collections::BTreeMap;
 use std::ops::Bound::Included;
 
 pub type NetUpgradeVersion = u8;
-pub type NetUpgrades = BTreeMap<BlockHeight, Option<NetUpgradeConfig>>;
+pub type NetUpgrades = BTreeMap<BlockHeight, NetUpgradeVersionType>;
 
 #[derive(Debug, PartialEq, Eq)]
 enum NetVersion {
@@ -15,7 +17,7 @@ enum NetVersion {
     DSA = 3,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum NetUpgradeVersionType {
     Genesis,
     DSA,
@@ -60,7 +62,7 @@ impl NetUpgradeConfig {
         self.get_version_type().get_version_num()
     }
 
-    pub fn create(net_version: NetUpgradeVersionType, chain_type: ChainType) -> Option<Self> {
+    pub fn generate(net_version: NetUpgradeVersionType, chain_type: ChainType) -> Option<Self> {
         match net_version {
             NetUpgradeVersionType::POW => Some(NetUpgradeConfig::POW(POWConfig::from(chain_type))),
             NetUpgradeVersionType::POS => Some(NetUpgradeConfig::POS),
@@ -71,167 +73,239 @@ impl NetUpgradeConfig {
 }
 
 pub trait NetUpgradesExt {
-    fn is_upgrade_activated(&self, height: &BlockHeight) -> bool;
-    fn get_net_config(&self, height: &BlockHeight) -> Option<NetUpgradeConfig>;
-    fn get_version_num_from_height(&self, height: &BlockHeight) -> NetUpgradeVersion;
+    fn is_upgrade_activated(&self, height: BlockHeight) -> bool;
+    fn version_num_from_height(&self, height: BlockHeight) -> NetUpgradeVersion;
+    fn version_type_from_height(&self, height: BlockHeight) -> NetUpgradeVersionType;
+    fn height_range(&self, version_type: NetUpgradeVersionType) -> Vec<(BlockHeight, BlockHeight)>;
 }
 
 impl NetUpgradesExt for NetUpgrades {
-    fn is_upgrade_activated(&self, height: &BlockHeight) -> bool {
-        self.contains_key(height)
+    fn is_upgrade_activated(&self, height: BlockHeight) -> bool {
+        self.contains_key(&height)
     }
 
-    fn get_net_config(&self, height: &BlockHeight) -> Option<NetUpgradeConfig> {
-        if let Some(net_upgrade) = self.get(height) {
+    fn version_type_from_height(&self, height: BlockHeight) -> NetUpgradeVersionType {
+        if let Some(net_upgrade) = self.get(&height) {
             *net_upgrade
         }
         // just get the consensus config of the nearest given height.
         else {
-            let mut min_height = *height;
+            let mut min_height = height;
             loop {
                 let max_height = min_height.saturating_sub(1);
 
-                //Note: it doesn't have to be 100. Could be 1000, or 10000
-                min_height = min_height.saturating_sub(100);
-
-                if max_height <= BlockHeight::one() {
-                    // we've reached the lowest height of the chain.
-                    return None;
+                if max_height == BlockHeight::zero() {
+                    // we've reached the beginning of the chain.
+                    return NetUpgradeVersionType::Genesis;
                 }
 
-                // go back to the last 100 of the height.
+                //Note: it doesn't have to be 1000. Could be 1000, or 10000
+                min_height = min_height.saturating_sub(1000);
+
+                // go back to the last 1000 of the height.
                 let new_range = self.range((Included(min_height), Included(max_height)));
 
                 // get the number nearest to our height
                 match new_range.max() {
-                    // nothing was found. Continue the loop, and go the the next previous 100
+                    // nothing was found. Continue the loop, and go the previous 1000
                     None => {}
-                    Some((_, net_upgrade)) => {
-                        return *net_upgrade;
+                    Some((_, vers_type)) => {
+                        return *vers_type;
                     }
                 }
             }
         }
     }
 
-    fn get_version_num_from_height(&self, height: &BlockHeight) -> NetUpgradeVersion {
-        if let Some(cfg) = self.get_net_config(height) {
-            cfg.get_version_num()
-        } else {
-            NetUpgradeVersionType::Genesis.get_version_num()
+    fn version_num_from_height(&self, height: BlockHeight) -> NetUpgradeVersion {
+        {
+            if height == BlockHeight::zero() {
+                NetUpgradeVersionType::Genesis
+            } else {
+                self.version_type_from_height(height)
+            }
         }
+        .get_version_num()
+    }
+
+    fn height_range(&self, version_type: NetUpgradeVersionType) -> Vec<(BlockHeight, BlockHeight)> {
+        if version_type == NetUpgradeVersionType::Genesis {
+            return vec![(BlockHeight::zero(), BlockHeight::zero())];
+        }
+
+        let mut result: Vec<(BlockHeight, BlockHeight)> = vec![];
+
+        let h_zero = BlockHeight::zero();
+        let mut start = h_zero;
+
+        // For every new element, check if it matches the version_type.
+        self.iter().for_each(|(elem_height, elem_version)| {
+            if *elem_version == version_type {
+                // if a match is found for the first time, set it as the "start" of the range.
+                if start == h_zero {
+                    start = *elem_height;
+                }
+            }
+            // If the current element is a new version, and the start of the range was set,
+            // then the block height before this element is the "end" of the range.
+            else if start > h_zero {
+                result.push((start, elem_height.saturating_sub(1)));
+
+                // reset back to zero, indicating that a new range is ready.
+                start = h_zero;
+            }
+        });
+
+        // If a start of a range was set, it means this version_type is the current and active version.
+        // Set the "end" of the range to the maximum block height.
+        if start > h_zero {
+            result.push((start, BlockHeight::max()));
+        }
+
+        result
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::chain::config::ChainType;
-    use crate::chain::{NetUpgradeConfig, NetUpgradeVersionType, NetUpgrades, NetUpgradesExt};
+    use crate::chain::{
+        NetUpgradeConfig, NetUpgradeVersion, NetUpgradeVersionType, NetUpgrades, NetUpgradesExt,
+        POWConfig,
+    };
     use crate::primitives::height::Saturating;
     use crate::primitives::BlockHeight;
 
-    #[test]
-    fn check_net_upgrade() {
+    fn mock_netupgrades() -> (NetUpgrades, BlockHeight, BlockHeight) {
         let mut upgrades = NetUpgrades::new();
         let pos_height = BlockHeight::new(350);
         let dsa_height = BlockHeight::new(3000);
 
-        upgrades.insert(
+        upgrades.insert(BlockHeight::zero(), NetUpgradeVersionType::Genesis);
+
+        upgrades.insert(BlockHeight::one(), NetUpgradeVersionType::POW);
+
+        upgrades.insert(pos_height, NetUpgradeVersionType::POS);
+
+        upgrades.insert(dsa_height, NetUpgradeVersionType::DSA);
+
+        (upgrades, pos_height, dsa_height)
+    }
+
+    #[test]
+    fn check_upgrade_activated() {
+        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+
+        let is_activated = |h: BlockHeight| {
+            assert!(&upgrades.is_upgrade_activated(h));
+        };
+
+        let not_activated = |h: BlockHeight| {
+            assert!(!&upgrades.is_upgrade_activated(h));
+        };
+
+        is_activated(BlockHeight::zero());
+        is_activated(BlockHeight::one());
+        is_activated(pos_height);
+        is_activated(dsa_height);
+
+        not_activated(BlockHeight::new(2));
+        not_activated(BlockHeight::new(100));
+        not_activated(pos_height.saturating_add(1));
+        not_activated(pos_height.saturating_add(2));
+        not_activated(pos_height.saturating_sub(1));
+        not_activated(pos_height.saturating_sub(2));
+        not_activated(dsa_height.saturating_add(2));
+        not_activated(dsa_height.saturating_add(1));
+        not_activated(dsa_height.saturating_sub(1));
+        not_activated(dsa_height.saturating_sub(2));
+    }
+
+    #[test]
+    fn check_upgrade_version_from_height() {
+        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+
+        let check = |v: &NetUpgradeVersion, h: BlockHeight| {
+            assert_eq!(v, &upgrades.version_num_from_height(h));
+        };
+
+        check(&0, BlockHeight::zero());
+        check(&1, BlockHeight::one()); // POW is version 1
+        check(&1, BlockHeight::new(26)); // POW is version 1
+        check(&1, pos_height); // POS is version 1
+        check(&1, pos_height.saturating_add(1)); // POS is version 1
+        check(&1, dsa_height.saturating_sub(1));
+        check(&3, dsa_height);
+        check(&3, dsa_height.saturating_add(100));
+        check(&3, dsa_height.saturating_add(2022));
+        check(&3, dsa_height.saturating_add(3000));
+    }
+
+    #[test]
+    fn check_upgrade_versions() {
+        assert_eq!(0, NetUpgradeVersionType::Genesis.get_version_num());
+        assert_eq!(1, NetUpgradeVersionType::POW.get_version_num());
+        assert_eq!(1, NetUpgradeVersionType::POS.get_version_num());
+        assert_eq!(3, NetUpgradeVersionType::DSA.get_version_num());
+    }
+
+    #[test]
+    fn check_upgrade_height_range() {
+        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+
+        let check =
+            |vers_type: NetUpgradeVersionType, height: BlockHeight, end_range: BlockHeight| {
+                let res = upgrades.height_range(vers_type);
+                assert_eq!(1, res.len());
+
+                assert_eq!(
+                    &(height, end_range),
+                    res.first().expect("this should have one value inside")
+                );
+            };
+
+        check(
+            NetUpgradeVersionType::Genesis,
             BlockHeight::zero(),
-            NetUpgradeConfig::create(NetUpgradeVersionType::Genesis, ChainType::Mainnet),
+            BlockHeight::zero(),
         );
-
-        upgrades.insert(
+        check(
+            NetUpgradeVersionType::POW,
             BlockHeight::one(),
-            NetUpgradeConfig::create(NetUpgradeVersionType::POW, ChainType::Mainnet),
+            pos_height.saturating_sub(1),
         );
-
-        upgrades.insert(
+        check(
+            NetUpgradeVersionType::POS,
             pos_height,
-            NetUpgradeConfig::create(NetUpgradeVersionType::POS, ChainType::Mainnet),
+            dsa_height.saturating_sub(1),
         );
-
-        upgrades.insert(
-            dsa_height,
-            NetUpgradeConfig::create(NetUpgradeVersionType::DSA, ChainType::Mainnet),
-        );
-
-        // check genesis
-        {
-            let zero_height = BlockHeight::zero();
-            assert!(&upgrades.is_upgrade_activated(&zero_height));
-            assert_eq!(&0, &upgrades.get_version_num_from_height(&zero_height));
-            assert!(&upgrades.get_net_config(&zero_height).is_none());
-        }
-
-        // checking POW
-        {
-            let one_cfg =
-                height_has_upgrade(NetUpgradeVersionType::POW, &BlockHeight::one(), &upgrades);
-
-            // at Block 50, there's no upgrade.
-            // The net config should be the same as Block 1.
-            height_no_upgrade(&BlockHeight::new(50), &upgrades, &one_cfg);
-
-            // at Block 349, there's no upgrade.
-            // The net config should be the same as Block 1 and Block 50.
-            height_no_upgrade(&pos_height.saturating_sub(1), &upgrades, &one_cfg);
-        }
-
-        // checking POS
-        {
-            let pos_cfg = height_has_upgrade(NetUpgradeVersionType::POS, &pos_height, &upgrades);
-
-            // at Block 351, there's no upgrade.
-            // The net config should be the same as Block 350.
-            height_no_upgrade(&pos_height.saturating_add(1), &upgrades, &pos_cfg);
-
-            height_no_upgrade(&pos_height.saturating_add(125), &upgrades, &pos_cfg);
-
-            height_no_upgrade(&dsa_height.saturating_sub(1), &upgrades, &pos_cfg)
-        }
-
-        // checking DSA
-        {
-            let dsa_cfg = height_has_upgrade(NetUpgradeVersionType::DSA, &dsa_height, &upgrades);
-
-            // at Block 3001, there's no upgrade.
-            // The net config should be the same as Block 3000.
-            height_no_upgrade(&dsa_height.saturating_add(1), &upgrades, &dsa_cfg);
-
-            height_no_upgrade(&dsa_height.saturating_add(1001), &upgrades, &dsa_cfg);
-
-            height_no_upgrade(&dsa_height.saturating_add(3210), &upgrades, &dsa_cfg);
-        }
+        check(NetUpgradeVersionType::DSA, dsa_height, BlockHeight::max());
     }
 
-    fn height_has_upgrade(
-        vers_type: NetUpgradeVersionType,
-        height: &BlockHeight,
-        upgrades: &NetUpgrades,
-    ) -> NetUpgradeConfig {
-        assert!(&upgrades.is_upgrade_activated(height));
-        assert_eq!(
-            &vers_type.get_version_num(),
-            &upgrades.get_version_num_from_height(height)
-        );
-        let cfg = upgrades.get_net_config(height).expect("should return NetUpgradeConfig");
-        assert_eq!(vers_type, cfg.get_version_type());
+    #[test]
+    fn check_upgrade_config() {
+        fn pow(chain_type: ChainType) {
+            let cfg = NetUpgradeConfig::generate(NetUpgradeVersionType::POW, chain_type);
+            assert!(cfg.is_some());
+            let cfg = cfg.expect("should have value");
 
-        cfg
-    }
+            assert_eq!(NetUpgradeConfig::POW(POWConfig::from(chain_type)), cfg);
+        }
 
-    fn height_no_upgrade(
-        height: &BlockHeight,
-        upgrades: &NetUpgrades,
-        expected_cfg: &NetUpgradeConfig,
-    ) {
-        assert!(!&upgrades.is_upgrade_activated(&height));
-        let cfg = upgrades.get_net_config(&height).expect("should return a NetUpgradeConfig");
-        assert_eq!(expected_cfg.get_version_type(), cfg.get_version_type());
-        assert_eq!(expected_cfg, &cfg);
+        pow(ChainType::Mainnet);
+        pow(ChainType::Testnet);
+        pow(ChainType::Signet);
+        pow(ChainType::Regtest);
 
-        // cannot get a config just by using the BTreeMaps's method.
-        assert!(upgrades.get(&height).is_none());
+        fn genesis(chain_type: ChainType) {
+            assert!(
+                NetUpgradeConfig::generate(NetUpgradeVersionType::Genesis, chain_type).is_none()
+            );
+        }
+
+        genesis(ChainType::Mainnet);
+        genesis(ChainType::Testnet);
+        genesis(ChainType::Signet);
+        genesis(ChainType::Regtest);
     }
 }
