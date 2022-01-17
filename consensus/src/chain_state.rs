@@ -26,10 +26,12 @@ pub(crate) enum BlockStatus {
     // To be expanded
 }
 
-#[derive(Error, Debug)]
+#[allow(dead_code)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
     #[error("Unknown error")]
     Unknown,
+    // To be expanded
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -11,6 +11,7 @@ use crate::chain_state::BlockError;
 use crate::chain_state::BlockIndex;
 use orphan_blocks::OrphanBlocksPool;
 
+#[allow(dead_code)]
 struct Consensus<S: BlockchainStorage> {
     chain_config: ChainConfig,
     blockchain_storage: S,
@@ -18,6 +19,7 @@ struct Consensus<S: BlockchainStorage> {
 }
 
 impl<S: BlockchainStorage> Consensus<S> {
+    #[allow(dead_code)]
     pub fn new(chain_config: ChainConfig, blockchain_storage: S) -> Self {
         Self {
             chain_config,
@@ -26,6 +28,7 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn process_block(&mut self, block: &Block) -> Result<BlockStatus, BlockError> {
         if self.check_block(block) == BlockStatus::Failed {
             return Ok(BlockStatus::Failed);
@@ -35,21 +38,23 @@ impl<S: BlockchainStorage> Consensus<S> {
             return Ok(BlockStatus::Failed);
         }
 
-        Ok(self.activate_best_chain(block)?)
+        self.activate_best_chain(block)
     }
 
-    fn activate_best_chain(&mut self, block: &Block) -> Result<BlockStatus, BlockError> {
+    #[allow(dead_code)]
+    fn activate_best_chain(&mut self, _block: &Block) -> Result<BlockStatus, BlockError> {
         // let starting_tip = self
         //     .blockchain_storage
         //     .get_best_block_id()
         //     .map_err(|_| BlockError::Unknown)?
         //     .unwrap_or(BlockIndex::new());
 
-        let new_tip = BlockIndex::new();
+        let _new_tip = BlockIndex::new();
 
         Ok(BlockStatus::Valid)
     }
 
+    #[allow(dead_code)]
     fn accept_block(&mut self, block: &Block) -> BlockStatus {
         let blk_index = BlockIndex::new();
 
@@ -70,11 +75,13 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
     }
 
-    fn check_block_index(&mut self, blk_index: &BlockIndex) -> bool {
+    #[allow(dead_code)]
+    fn check_block_index(&mut self, _blk_index: &BlockIndex) -> bool {
         // TODO: Will be expanded
         true
     }
 
+    #[allow(dead_code)]
     fn check_block_header(&mut self, block: &Block) -> blockchain_storage::Result<BlockStatus> {
         // Hash of the previous block
         let prev_block_id = block.get_prev_block_id();
@@ -128,17 +135,21 @@ impl<S: BlockchainStorage> Consensus<S> {
         Ok(BlockStatus::Valid)
     }
 
-    fn check_pos(&self, block: &Block) -> bool {
+    #[allow(dead_code)]
+    fn check_pos(&self, _block: &Block) -> bool {
         // TODO: We have to decide how to check it
         true
     }
-    fn check_transactions(&self, block: &Block) -> bool {
+
+    #[allow(dead_code)]
+    fn check_transactions(&self, _block: &Block) -> bool {
         //TODO: Must check for duplicate inputs (see CVE-2018-17144)
         //TODO: Size limits
         //TODO: Check signatures
         true
     }
 
+    #[allow(dead_code)]
     fn check_block(&mut self, block: &Block) -> BlockStatus {
         if self.check_block_header(block) != Ok(BlockStatus::Valid) {
             return BlockStatus::Failed;
@@ -168,7 +179,7 @@ mod tests {
         let mut consensus = Consensus::new(config.clone(), storage);
         assert_eq!(
             consensus.process_block(config.genesis_block()),
-            BlockStatus::Valid
+            Ok(BlockStatus::Valid)
         );
     }
 }
