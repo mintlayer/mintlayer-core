@@ -1,19 +1,15 @@
-use blockchain_storage::BlockchainStorage;
+use blockchain_storage::{BlockchainStorage, Error};
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
 use common::primitives::{time, Id, H256};
 
 mod chain_state;
-mod orphan_blocks;
-use orphan_blocks::OrphanBlocksPool;
+use chain_state::BlockStatus;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum BlockStatus {
-    Valid,
-    Failed,
-    // To be expanded
-}
+mod orphan_blocks;
+use crate::chain_state::BlockError;
+use crate::chain_state::BlockIndex;
+use orphan_blocks::OrphanBlocksPool;
 
 struct Consensus<S: BlockchainStorage> {
     chain_config: ChainConfig,
@@ -30,19 +26,53 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
     }
 
-    pub fn process_block(&mut self, block: &Block) -> BlockStatus {
-        match self.check_block(block) {
-            BlockStatus::Valid => {
-                // TODO: Add checks for DB status, if we have recoverable error then we have to retry to perform operation
-                match <S as BlockchainStorage>::add_block(&mut self.blockchain_storage, block)
-                    .is_ok()
-                {
-                    true => BlockStatus::Valid,
-                    false => BlockStatus::Failed,
+    pub fn process_block(&mut self, block: &Block) -> Result<BlockStatus, BlockError> {
+        if self.check_block(block) == BlockStatus::Failed {
+            return Ok(BlockStatus::Failed);
+        }
+
+        if self.accept_block(block) == BlockStatus::Failed {
+            return Ok(BlockStatus::Failed);
+        }
+
+        Ok(self.activate_best_chain(block)?)
+    }
+
+    fn activate_best_chain(&mut self, block: &Block) -> Result<BlockStatus, BlockError> {
+        // let starting_tip = self
+        //     .blockchain_storage
+        //     .get_best_block_id()
+        //     .map_err(|_| BlockError::Unknown)?
+        //     .unwrap_or(BlockIndex::new());
+
+        let new_tip = BlockIndex::new();
+
+        Ok(BlockStatus::Valid)
+    }
+
+    fn accept_block(&mut self, block: &Block) -> BlockStatus {
+        let blk_index = BlockIndex::new();
+
+        if !self.check_block_index(&blk_index) {
+            return BlockStatus::Failed;
+        }
+
+        match <S as BlockchainStorage>::add_block(&mut self.blockchain_storage, block) {
+            Ok(_) => BlockStatus::Valid,
+            Err(err) => {
+                match err {
+                    // TODO: Add checks for DB status, if we have recoverable error then we have to retry to perform operation
+                    Error::RecoverableError(_) | Error::UnrecoverableError(_) => {
+                        BlockStatus::Failed
+                    }
                 }
             }
-            BlockStatus::Failed => BlockStatus::Failed,
         }
+    }
+
+    fn check_block_index(&mut self, blk_index: &BlockIndex) -> bool {
+        // TODO: Will be expanded
+        true
     }
 
     fn check_block_header(&mut self, block: &Block) -> blockchain_storage::Result<BlockStatus> {
@@ -98,13 +128,27 @@ impl<S: BlockchainStorage> Consensus<S> {
         Ok(BlockStatus::Valid)
     }
 
+    fn check_pos(&self, block: &Block) -> bool {
+        // TODO: We have to decide how to check it
+        true
+    }
+    fn check_transactions(&self, block: &Block) -> bool {
+        //TODO: Must check for duplicate inputs (see CVE-2018-17144)
+        //TODO: Size limits
+        //TODO: Check signatures
+        true
+    }
+
     fn check_block(&mut self, block: &Block) -> BlockStatus {
-        // Checks:
         if self.check_block_header(block) != Ok(BlockStatus::Valid) {
             return BlockStatus::Failed;
         }
-
-        //   - Consensus data
+        if !self.check_pos(block) {
+            return BlockStatus::Failed;
+        }
+        if !self.check_transactions(block) {
+            return BlockStatus::Failed;
+        }
         // Will have added some checks
         BlockStatus::Valid
     }

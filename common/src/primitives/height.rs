@@ -10,3 +10,9 @@ impl fmt::Display for BlockHeight {
         write!(f, "{}", self.0)
     }
 }
+
+impl BlockHeight {
+    pub fn new(height: u64) -> Self {
+        Self(height)
+    }
+}
