@@ -400,19 +400,21 @@ mod test {
         let thr0 = {
             let mut store = store.clone();
             thread::spawn(move || {
-                store.transaction(|tx| {
-                    let v = tx.get_storage_version().unwrap();
+                let tx_result = store.transaction(|tx| {
+                    let v = tx.get_storage_version()?;
                     tx.set_storage_version(v + 3)
-                })
+                });
+                assert!(tx_result.is_ok());
             })
         };
         let thr1 = {
             let mut store = store.clone();
             thread::spawn(move || {
-                store.transaction(|tx| {
-                    let v = tx.get_storage_version().unwrap();
+                let tx_result = store.transaction(|tx| {
+                    let v = tx.get_storage_version()?;
                     tx.set_storage_version(v + 5)
-                })
+                });
+                assert!(tx_result.is_ok());
             })
         };
 
