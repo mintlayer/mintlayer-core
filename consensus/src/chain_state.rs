@@ -15,7 +15,6 @@
 //
 // Author(s): Anton Sinitsyn
 
-use common::chain::block::BlockV1;
 use common::primitives::{BlockHeight, H256};
 use thiserror::Error;
 
@@ -26,8 +25,6 @@ pub(crate) enum BlockStatus {
     Failed,
     // To be expanded
 }
-
-type Block = BlockV1;
 
 #[derive(Error, Debug)]
 pub enum BlockError {
