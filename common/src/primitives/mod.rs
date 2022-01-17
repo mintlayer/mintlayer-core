@@ -23,7 +23,7 @@ pub mod height;
 pub mod id;
 pub mod merkle;
 pub mod time;
-pub mod uint;
+
 pub mod version;
 
 pub use amount::Amount;
@@ -31,4 +31,3 @@ pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedBech32};
 pub use height::BlockHeight;
 pub use id::{DataID, Id, Idable, H256};
-pub use uint::Uint256;
