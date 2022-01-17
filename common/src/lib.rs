@@ -15,11 +15,13 @@
 //
 // Author(s): S. Afach
 
-#[macro_use]
-pub mod util;
 pub mod address;
 pub mod chain;
 pub mod primitives;
+
+pub mod uint;
+
+pub use uint::{Uint128, Uint256};
 
 #[cfg(test)]
 mod tests {

@@ -17,6 +17,10 @@ pub(crate) mod internal_macros;
 
 pub(crate) mod endian;
 
+mod impls;
+
+pub use impls::{Uint128, Uint256};
+
 /// A trait which allows numbers to act as fixed-size bit arrays
 pub trait BitArray {
     /// Is bit set?

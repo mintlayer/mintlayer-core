@@ -1,13 +1,15 @@
-use crate::primitives::Uint256;
+use crate::uint::Uint256;
 use std::ops::Shl;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
 pub struct Compact(pub u32);
 
-impl Compact {
+impl TryFrom<Compact> for Uint256 {
+    type Error = Option<Uint256>;
+
     // https://github.com/bitcoin/bitcoin/blob/7fcf53f7b4524572d1d0c9a5fdc388e87eb02416/src/arith_uint256.cpp#L203
-    pub fn into_uint256(self) -> Option<Uint256> {
-        let compact = self.0;
+    fn try_from(value: Compact) -> Result<Self, Self::Error> {
+        let compact = value.0;
         let size = compact >> 24;
         let mut word = compact & 0x007FFFFF;
 
@@ -22,14 +24,21 @@ impl Compact {
             })
         };
 
-        if (word != 0 && (compact & 0x00800000) != 0)
-            || (word != 0
-                && ((size > 34) || (word > 0xFF && size > 33) || (word > 0xFFFF && size > 32)))
-        {
-            return None;
-        }
+        match value {
+            None => Err(None),
+            Some(value) => {
+                if (word != 0 && (compact & 0x00800000) != 0)
+                    || (word != 0
+                        && ((size > 34)
+                            || (word > 0xFF && size > 33)
+                            || (word > 0xFFFF && size > 32)))
+                {
+                    return Err(Some(value));
+                }
 
-        value
+                Ok(value)
+            }
+        }
     }
 }
 
@@ -64,9 +73,7 @@ mod tests {
     fn check_conversion(for_uint256: u32, expected_value: u32) {
         let uint256 = {
             let compact = Compact(for_uint256);
-            compact
-                .into_uint256()
-                .expect("conversion should not fail from compact to uint256")
+            Uint256::try_from(compact).expect("conversion should not fail from compact to uint256")
         };
 
         let updated_compact = Compact::from(uint256);
@@ -105,8 +112,19 @@ mod tests {
     }
 
     #[test]
-    fn test_none_conversion() {
-        assert!(Compact(0x04923456).into_uint256().is_none());
-        assert!(Compact(0x01fedcba).into_uint256().is_none());
+    fn test_err_conversion() {
+        fn err_conversion(c: u32) {
+            match Uint256::try_from(Compact(c)) {
+                Ok(v) => {
+                    panic!("conversion of {} should fail, not {:?}", c, v);
+                }
+                Err(e) => {
+                    assert!(e.is_some())
+                }
+            }
+        }
+
+        err_conversion(0x04923456);
+        err_conversion(0x01fedcba);
     }
 }

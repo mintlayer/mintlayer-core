@@ -11,6 +11,7 @@
 // along with this software.
 // If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //
+#![allow(unused)]
 
 macro_rules! define_slice_to_be {
     ($name: ident, $type: ty) => {
