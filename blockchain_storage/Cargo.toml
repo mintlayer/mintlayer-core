@@ -9,4 +9,11 @@ license = "MIT"
 [dependencies]
 storage = { path = '../storage'}
 common = { path = '../common' }
-parity-scale-codec = {version = "2.3.1", features = ["chain-error"]}
+mockall = { version = "0.11", optional = true }
+parity-scale-codec = { version = "2.3.1", features = ["chain-error"] }
+
+[dev-dependencies]
+mockall = "0.11"
+
+[features]
+mock = [ 'mockall' ]
