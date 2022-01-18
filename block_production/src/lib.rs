@@ -1,9 +1,9 @@
 mod pow;
 
+use crate::pow::POWError;
 use common::chain::block::{Block, BlockCreationError, ConsensusData};
 use common::chain::transaction::Transaction;
-use common::primitives::H256;
-use common::Uint256;
+use common::primitives::{Uint256, H256};
 
 //TODO: remove until an actual trait is created
 pub trait Chain {

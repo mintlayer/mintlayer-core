@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::Uint256;
+use crate::primitives::Uint256;
 use generic_array::typenum::marker_traits::Unsigned;
 use parity_scale_codec_derive::{Decode, Encode};
 
@@ -56,12 +56,6 @@ impl<T> Id<T> {
             id: *h,
             _shadow: std::marker::PhantomData,
         }
-    }
-}
-
-impl<T> AsRef<[u8]> for Id<T> {
-    fn as_ref(&self) -> &[u8] {
-        &self.id[..]
     }
 }
 
