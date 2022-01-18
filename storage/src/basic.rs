@@ -1,6 +1,6 @@
 use crate::schema::{self, Schema};
 use std::collections::BTreeMap;
-use std::sync;
+use common::sync;
 
 type Data = Vec<u8>;
 
