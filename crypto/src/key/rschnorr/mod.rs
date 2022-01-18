@@ -3,10 +3,19 @@ mod internal;
 use internal::*;
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 use rand::{CryptoRng, Rng};
+use tari_crypto::keys::PublicKey;
+use tari_crypto::tari_utilities::message_format::MessageFormat;
+
+use crate::hash::{Blake2bStream32, StreamHasher};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum RistrettoKeyError {
     InvalidData,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+pub enum RistrittoSignatureError {
+    ByteConversionError(String),
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
@@ -16,7 +25,6 @@ pub struct MLRistrettoPrivateKey {
 
 impl MLRistrettoPrivateKey {
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (MLRistrettoPrivateKey, MLRistrettoPublicKey) {
-        use tari_crypto::keys::PublicKey;
         let pair = RistrettoPublicKey::random_keypair(rng);
         (
             Self::from_native(&pair.0),
@@ -54,6 +62,20 @@ impl MLRistrettoPrivateKey {
                 .expect("Ristretto Private Key size is expected to be 32-bytes"),
         }
     }
+
+    pub(crate) fn sign_message<R: Rng + CryptoRng>(
+        &self,
+        rng: &mut R,
+        msg: &[u8],
+    ) -> Result<Vec<u8>, RistrittoSignatureError> {
+        let (r, r_pub) = RistrettoPublicKey::random_keypair(rng);
+        let k = self.as_native();
+        let e = Blake2bStream32::new().write(msg).finalize();
+        let sig = RistrettoSchnorr::sign(k, r, &e).unwrap();
+        debug_assert_eq!(*sig.get_public_nonce(), r_pub);
+        sig.to_binary()
+            .map_err(|e| RistrittoSignatureError::ByteConversionError(e.to_string()))
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
@@ -88,10 +110,19 @@ impl MLRistrettoPublicKey {
     }
 
     pub fn from_private_key(private_key: &MLRistrettoPrivateKey) -> Self {
-        use tari_crypto::keys::PublicKey;
         Self::from_native(&RistrettoPublicKey::from_secret_key(
             &private_key.as_native(),
         ))
+    }
+
+    pub(crate) fn verify_message(&self, signature: &[u8], msg: &[u8]) -> bool {
+        let signature = if let Ok(s) = RistrettoSchnorr::from_binary(signature) {
+            s
+        } else {
+            return false;
+        };
+        let e = Blake2bStream32::new().write(msg).finalize();
+        signature.verify_challenge(&self.as_native(), &e)
     }
 }
 
@@ -126,5 +157,26 @@ mod test {
             let pk_again = MLRistrettoPublicKey::from_bytes(pk_short);
             assert!(pk_again.is_err());
         }
+    }
+
+    #[test]
+    fn sign_and_verify() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let msg_size = 1 + rand::random::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
+        let sig = sk.sign_message(&mut rng, &msg).unwrap();
+        assert!(sig.len() > 0);
+        assert!(pk.verify_message(&sig, &msg));
+    }
+
+    #[test]
+    fn sign_empty() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let msg: Vec<u8> = Vec::new();
+        let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
+        let sig = sk.sign_message(&mut rng, &msg).unwrap();
+        assert!(sig.len() > 0);
+        assert!(pk.verify_message(&sig, &msg));
     }
 }

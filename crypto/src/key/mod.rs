@@ -3,10 +3,14 @@ pub mod signature;
 
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 use rand::SeedableRng;
-use signature::Signature;
+pub use signature::Signature;
 
+use self::rschnorr::RistrittoSignatureError;
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
     Unknown,
+    DataConversionError(String),
 }
 
 fn make_rng() -> rand::rngs::StdRng {
@@ -38,6 +42,16 @@ pub(crate) enum PublicKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPublicKey),
 }
 
+impl From<RistrittoSignatureError> for SignatureError {
+    fn from(e: RistrittoSignatureError) -> Self {
+        match e {
+            RistrittoSignatureError::ByteConversionError(s) => {
+                SignatureError::DataConversionError(s)
+            }
+        }
+    }
+}
+
 impl PrivateKey {
     pub fn new(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
         let mut rng = make_rng();
@@ -66,16 +80,17 @@ impl PrivateKey {
         &self.key
     }
 
-    // fn sign(&self) -> Result<Signature, SignatureError> {
-    //     let k = match self.key {
-    //         PrivateKeyHolder::RistrettoSchnorr(k) => k,
-    //     };
-    //     RistrettoSchnorr::sign(k, r, &e);
-    //     Ok(Signature::new(
-    //         signature::SignatureKind::RistrettoSchnorr,
-    //         Vec::new(),
-    //     ))
-    // }
+    pub fn sign_message(&self, msg: &[u8]) -> Result<Signature, SignatureError> {
+        let mut rng = make_rng();
+        let k = match &self.key {
+            PrivateKeyHolder::RistrettoSchnorr(k) => k,
+        };
+        let sig = k.sign_message(&mut rng, msg)?;
+        Ok(Signature::new(
+            signature::SignatureKind::RistrettoSchnorr,
+            sig,
+        ))
+    }
 }
 
 impl PublicKey {
@@ -88,6 +103,17 @@ impl PublicKey {
             },
         }
     }
+
+    pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
+        use crate::key::Signature::RistrettoSchnorrSig;
+
+        let k = match &self.pub_key {
+            PublicKeyHolder::RistrettoSchnorr(k) => k,
+        };
+        match signature {
+            RistrettoSchnorrSig(s) => k.verify_message(s, msg),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -95,8 +121,12 @@ mod test {
     use super::*;
 
     #[test]
-    fn basic() {
+    fn sign_and_verify() {
         let (sk, pk) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         assert_eq!(sk.kind(), KeyKind::RistrettoSchnorr);
+        let msg_size = 1 + rand::random::<usize>() % 10000;
+        let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
+        let sig = sk.sign_message(&msg).unwrap();
+        assert!(pk.verify_message(&sig, &msg));
     }
 }

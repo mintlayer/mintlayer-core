@@ -1,6 +1,3 @@
-use tari_crypto::signatures::SchnorrSignature;
-
-pub type RistrettoSchnorrSignature = SchnorrSignature<RistrettoPublicKey, RistrettoSecretKey>;
 pub use tari_crypto::ristretto::{RistrettoPublicKey, RistrettoSchnorr, RistrettoSecretKey};
 pub use tari_crypto::tari_utilities::ByteArray;
 
