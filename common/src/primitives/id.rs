@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::primitives::Uint256;
+use crate::Uint256;
 use generic_array::typenum::marker_traits::Unsigned;
 use parity_scale_codec_derive::{Decode, Encode};
 

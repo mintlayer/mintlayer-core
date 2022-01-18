@@ -1,6 +1,6 @@
-use crate::pow::Compact;
 use crate::BlockProductionError;
-use common::primitives::Uint256;
+use common::primitives::Compact;
+use common::Uint256;
 
 pub trait DataExt {
     /// Returns the bits
