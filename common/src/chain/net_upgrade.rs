@@ -5,7 +5,7 @@ use crate::chain::pow::POWConfig;
 use crate::primitives::height::Saturating;
 use crate::primitives::BlockHeight;
 use std::collections::BTreeMap;
-use std::ops::Bound::Included;
+use std::ops::Bound::{Excluded, Unbounded};
 
 pub type NetUpgradeVersion = u8;
 pub type NetUpgrades = BTreeMap<BlockHeight, NetUpgradeVersionType>;
@@ -84,48 +84,22 @@ impl NetUpgradesExt for NetUpgrades {
         self.contains_key(&height)
     }
 
+    fn version_num_from_height(&self, height: BlockHeight) -> NetUpgradeVersion {
+        self.version_type_from_height(height).get_version_num()
+    }
+
     fn version_type_from_height(&self, height: BlockHeight) -> NetUpgradeVersionType {
         if let Some(net_upgrade) = self.get(&height) {
             *net_upgrade
         }
         // just get the consensus config of the nearest given height.
         else {
-            let mut min_height = height;
-            loop {
-                let max_height = min_height.saturating_sub(1);
-
-                if max_height == BlockHeight::zero() {
-                    // we've reached the beginning of the chain.
-                    return NetUpgradeVersionType::Genesis;
-                }
-
-                //Note: it doesn't have to be 1000. Could be 1000, or 10000
-                min_height = min_height.saturating_sub(1000);
-
-                // go back to the last 1000 of the height.
-                let new_range = self.range((Included(min_height), Included(max_height)));
-
-                // get the number nearest to our height
-                match new_range.max() {
-                    // nothing was found. Continue the loop, and go the previous 1000
-                    None => {}
-                    Some((_, vers_type)) => {
-                        return *vers_type;
-                    }
-                }
+            let mut new_range = self.range((Unbounded, Excluded(height)));
+            match new_range.next_back() {
+                None => NetUpgradeVersionType::Genesis,
+                Some((_, vers_type)) => *vers_type,
             }
         }
-    }
-
-    fn version_num_from_height(&self, height: BlockHeight) -> NetUpgradeVersion {
-        {
-            if height == BlockHeight::zero() {
-                NetUpgradeVersionType::Genesis
-            } else {
-                self.version_type_from_height(height)
-            }
-        }
-        .get_version_num()
     }
 
     fn height_range(&self, version_type: NetUpgradeVersionType) -> Vec<(BlockHeight, BlockHeight)> {
