@@ -1,5 +1,5 @@
 use crate::primitives::H256;
-use parity_scale_codec_derive::{Encode, Decode};
+use parity_scale_codec_derive::{Decode, Encode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
