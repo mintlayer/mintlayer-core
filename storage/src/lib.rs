@@ -45,27 +45,26 @@
 //!     assert_eq!(val, Some(&b"bar"[..]));
 //!
 //!     // End the transaction
-//!     Ok(())
+//!     storage::commit(())
 //! });
 //!
 //! // Try writing a value but abort the transaction afterwards.
 //! store.transaction(|tx| {
 //!     tx.get::<MyColumn, ()>().put(b"baz".to_vec(), b"xyz".to_vec())?;
-//!     tx.abort()?;
-//!     Ok(())
+//!     storage::abort(())
 //! });
 //!
 //! // Transaction can return data. Values taken from the database have to be cloned
 //! // in order for them to be available after the transaction terminates.
 //! let result = store.transaction(|tx| {
-//!     Ok(tx.get::<MyColumn, ()>().get(b"baz")?.map(ToOwned::to_owned))
+//!     storage::commit(tx.get::<MyColumn, ()>().get(b"baz")?.map(ToOwned::to_owned))
 //! });
 //! assert_eq!(result, Ok(None));
 //!
 //! // Check the value we first inserted is still there.
 //! let result = store.transaction(|tx| {
 //!     assert_eq!(tx.get::<MyColumn, ()>().get(b"foo")?, Some(&b"bar"[..]));
-//!     Ok(())
+//!     storage::commit(())
 //! });
 //! ```
 
@@ -75,12 +74,10 @@ pub mod transaction;
 
 // Reexport items from the temporary basic implementation.
 pub use basic::{SingleMap, Store, Transaction};
-pub use transaction::{DbTransaction, Transactional};
+pub use transaction::{DbTransaction, Transactional, abort, commit};
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
-    #[error("Transaction aborted by the user")]
-    Aborted,
     #[error("Unknown database error")]
     Unknown,
 }
