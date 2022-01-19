@@ -1,18 +1,19 @@
 use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
+use crate::chain::upgrades::NetUpgrade;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
-type HashType = Vec<u8>; // temp type until crypto is ready
+type HashType = H256; // https://github.com/mintlayer/mintlayer-core/pull/65#discussion_r785970305
 
 #[derive(Debug, Copy, Clone)]
 pub enum ChainType {
     Mainnet,
-    // Testnet,
-    // Regtest,
-    // Signet,
+    Testnet,
+    Regtest,
+    Signet,
 }
 
 #[derive(Debug, Clone)]
@@ -26,6 +27,8 @@ pub struct ChainConfig {
     p2p_port: u16,
     #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
+    #[allow(dead_code)]
+    net_upgrades: NetUpgrade,
     #[allow(dead_code)]
     magic_bytes: [u8; 4],
     #[allow(dead_code)]
@@ -49,6 +52,10 @@ impl ChainConfig {
 
     pub fn version(&self) -> &SemVer {
         &self.version
+    }
+
+    pub fn net_upgrade(&self) -> &NetUpgrade {
+        &self.net_upgrades
     }
 }
 
@@ -79,6 +86,7 @@ pub fn create_mainnet() -> ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
         height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        net_upgrades: Default::default(),
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
@@ -93,6 +101,9 @@ mod tests {
     #[allow(clippy::eq_op)]
     fn mainnet_creation() {
         use super::*;
-        let _config = create_mainnet();
+        let config = create_mainnet();
+
+        assert!(!config.net_upgrades.is_empty());
+        assert_eq!(1, config.net_upgrades.len());
     }
 }
