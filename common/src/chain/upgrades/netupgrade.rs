@@ -216,34 +216,4 @@ mod tests {
         );
         check(UpgradeVersion::DSA, dsa_height, BlockHeight::max());
     }
-
-    /*
-    #[test]
-    fn check_upgrade_config() {
-        fn pow(chain_type: ChainType) {
-            let cfg = NetUpgradeConfig::generate(UpgradeVersion::POW, chain_type);
-            assert!(cfg.is_some());
-            let cfg = cfg.expect("should have value");
-
-            assert_eq!(NetUpgradeConfig::POW(POWConfig::from(chain_type)), cfg);
-        }
-
-        pow(ChainType::Mainnet);
-        pow(ChainType::Testnet);
-        pow(ChainType::Signet);
-        pow(ChainType::Regtest);
-
-        fn genesis(chain_type: ChainType) {
-            assert!(
-                NetUpgradeConfig::generate(UpgradeVersion::Genesis, chain_type).is_none()
-            );
-        }
-
-        genesis(ChainType::Mainnet);
-        genesis(ChainType::Testnet);
-        genesis(ChainType::Signet);
-        genesis(ChainType::Regtest);
-    }
-
-    */
 }
