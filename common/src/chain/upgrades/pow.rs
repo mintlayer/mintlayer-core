@@ -1,4 +1,5 @@
 use crate::chain::config::ChainType;
+use crate::chain::upgrades::{NetUpgradeError, UpgradeVersion};
 use crate::uint::Uint256;
 
 /// Chain Parameters for Proof of Work, as found in
@@ -9,6 +10,18 @@ pub struct POWConfig {
     pub(crate) no_retargeting: bool,
     pub(crate) allow_min_difficulty_blocks: bool,
     pub(crate) limit: Uint256,
+}
+
+impl TryFrom<(UpgradeVersion, ChainType)> for POWConfig {
+    type Error = NetUpgradeError;
+
+    fn try_from(value: (UpgradeVersion, ChainType)) -> Result<Self, Self::Error> {
+        if value.0 == UpgradeVersion::POW {
+            return Ok(POWConfig::from(value.1));
+        }
+
+        Err(NetUpgradeError::GenerateConfigFailed)
+    }
 }
 
 impl From<ChainType> for POWConfig {
@@ -99,5 +112,36 @@ mod tests {
         let cfg = POWConfig::from(ChainType::Testnet);
         assert!(!cfg.no_retargeting);
         assert!(cfg.allow_min_difficulty_blocks);
+    }
+
+    #[test]
+    fn check_generate_config() {
+        let vers = UpgradeVersion::POW;
+        let chain = ChainType::Mainnet;
+
+        fn check(vers: UpgradeVersion, chain: ChainType) {
+            if let Ok(res) = POWConfig::try_from((vers, chain)) {
+                assert_eq!(POWConfig::from(chain), res);
+            } else {
+                panic!("failed to generate config for {:?} , {:?}", vers, chain);
+            }
+        }
+
+        check(vers, ChainType::Mainnet);
+        check(vers, ChainType::Regtest);
+        check(vers, ChainType::Testnet);
+        check(vers, ChainType::Signet);
+    }
+
+    #[test]
+    fn check_failed_generate_config() {
+        fn check(vers: UpgradeVersion, chain: ChainType) {
+            assert!(POWConfig::try_from((vers, chain)).is_err())
+        }
+
+        check(UpgradeVersion::DSA, ChainType::Testnet);
+        check(UpgradeVersion::DSA, ChainType::Regtest);
+        check(UpgradeVersion::POS, ChainType::Mainnet);
+        check(UpgradeVersion::POS, ChainType::Signet);
     }
 }
