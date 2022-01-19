@@ -116,13 +116,13 @@ mod tests {
         let pos_height = BlockHeight::new(350);
         let dsa_height = BlockHeight::new(3000);
 
-        upgrades.insert(BlockHeight::zero(), UpgradeVersion::Genesis.into());
+        upgrades.insert(BlockHeight::zero(), UpgradeVersion::Genesis);
 
-        upgrades.insert(BlockHeight::one(), UpgradeVersion::POW.into());
+        upgrades.insert(BlockHeight::one(), UpgradeVersion::POW);
 
-        upgrades.insert(pos_height, UpgradeVersion::POS.into());
+        upgrades.insert(pos_height, UpgradeVersion::POS);
 
-        upgrades.insert(dsa_height, UpgradeVersion::DSA.into());
+        upgrades.insert(dsa_height, UpgradeVersion::DSA);
 
         (upgrades, pos_height, dsa_height)
     }
