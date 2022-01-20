@@ -13,6 +13,10 @@ rand = "0.8.4"
 [dependencies.common]
 path = "../common/"
 
+[dependencies.libp2p]
+git = "https://github.com/mintlayer/rust-libp2p"
+branch = "streaming-protocol-v0.41.1"
+
 [dependencies.tokio]
 version = "1"
 features = ["full"]
