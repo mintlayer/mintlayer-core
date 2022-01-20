@@ -1,7 +1,37 @@
 //! Traits specifying the interface for database transactions.
 
+/// Transaction response
+#[must_use = "Response must be returned from the transaction"]
+pub enum Response<T> {
+    /// Commit the transaction to the storage
+    Commit(T),
+    /// Abort the transaction
+    Abort(T),
+}
+
+impl<T> Response<T> {
+    fn value(self) -> T {
+        match self {
+            Self::Commit(v) => v,
+            Self::Abort(v) => v,
+        }
+    }
+}
+
+/// Commit a transaction, returning given value
+#[must_use = "commit must be returned from the transaction"]
+pub fn commit<T, E>(ret: T) -> Result<Response<T>, E> {
+    Ok(Response::Commit(ret))
+}
+
+/// Abort a transaction, returning given value
+#[must_use = "abort must be returned from the transaction"]
+pub fn abort<T, E>(ret: T) -> Result<Response<T>, E> {
+    Ok(Response::Abort(ret))
+}
+
 /// Low-level database transation interface
-pub trait DbTransaction {
+pub trait DbTransaction: Sized {
     /// Errors that can occur during a transaction.
     type Error;
 
@@ -9,7 +39,7 @@ pub trait DbTransaction {
     fn commit(self) -> Result<(), Self::Error>;
 
     /// Abort a transaction.
-    fn abort(&mut self) -> Result<(), Self::Error>;
+    fn abort(self) -> Result<(), Self::Error>;
 }
 
 #[allow(type_alias_bounds)]
@@ -36,7 +66,7 @@ pub trait Transactional<'s> {
     /// # fn foo<'a, T: Transactional<'a>>(foo: &'a mut T) {
     /// let result = foo.transaction(|tx| {
     ///     // Your transaction operations go here
-    ///     Ok(42) // this will be the result
+    ///     storage::commit(42) // this will be the result
     /// });
     /// # }
     /// ```
@@ -44,14 +74,15 @@ pub trait Transactional<'s> {
     /// Implementations are allowed to override this method provided semantics are preserved.
     fn transaction<R>(
         &'s mut self,
-        tx_body: impl FnOnce(&mut Self::Transaction) -> TxResult<'s, R, Self>,
+        tx_body: impl FnOnce(&mut Self::Transaction) -> TxResult<'s, Response<R>, Self>,
     ) -> TxResult<R, Self> {
         let mut tx = self.start_transaction();
         let result = tx_body(&mut tx);
         match result {
-            Ok(_) => tx.commit()?,
-            Err(_) => tx.abort()?,
+            Ok(Response::Commit(_)) => tx.commit()?,
+            Ok(Response::Abort(_)) => tx.abort()?,
+            Err(_) => (),
         };
-        result
+        result.map(Response::value)
     }
 }

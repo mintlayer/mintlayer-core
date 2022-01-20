@@ -87,10 +87,12 @@ impl<'st> Transactional<'st> for Store {
 }
 
 macro_rules! delegate_to_transaction {
-    ($(fn $func:ident(&mut self $(, $arg:ident: $aty:ty)* $(,)?) -> $rty:ty;)*) => {
+    ($(fn $f:ident(&mut self $(, $arg:ident: $aty:ty)* $(,)?) -> $rty:ty;)*) => {
         $(
-            fn $func(&mut self $(, $arg: $aty)*) -> $rty {
-                self.transaction(|tx| <Self as Transactional>::Transaction::$func(tx $(, $arg)*))
+            fn $f(&mut self $(, $arg: $aty)*) -> $rty {
+                self.transaction(
+                    |tx| storage::commit(<Self as Transactional>::Transaction::$f(tx $(, $arg)*)?)
+                )
             }
         )*
     };
@@ -293,7 +295,7 @@ impl storage::transaction::DbTransaction for StoreTx<'_> {
         self.0.commit().map_err(UnrecoverableError)
     }
 
-    fn abort(&mut self) -> crate::Result<()> {
+    fn abort(self) -> crate::Result<()> {
         self.0.abort().map_err(UnrecoverableError)
     }
 }
@@ -402,7 +404,8 @@ mod test {
                 common::thread::spawn(move || {
                     let tx_result = store.transaction(|tx| {
                         let v = tx.get_storage_version()?;
-                        tx.set_storage_version(v + 3)
+                        tx.set_storage_version(v + 3)?;
+                        storage::commit(())
                     });
                     assert!(tx_result.is_ok());
                 })
@@ -412,7 +415,8 @@ mod test {
                 common::thread::spawn(move || {
                     let tx_result = store.transaction(|tx| {
                         let v = tx.get_storage_version()?;
-                        tx.set_storage_version(v + 5)
+                        tx.set_storage_version(v + 5)?;
+                        storage::commit(())
                     });
                     assert!(tx_result.is_ok());
                 })

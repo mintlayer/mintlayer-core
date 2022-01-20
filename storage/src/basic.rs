@@ -178,9 +178,8 @@ impl<'st, Sch: Schema> crate::transaction::DbTransaction for Transaction<'st, Sc
     }
 
     /// Abort a transaction.
-    fn abort(&mut self) -> Result<(), Self::Error> {
-        self.delta = Default::default();
-        Err(crate::Error::Aborted)
+    fn abort(self) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 
