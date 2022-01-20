@@ -1,113 +1,110 @@
-/******************* IDEA : Compile time deterministic generic specialization for subsystems interfacing
+use std::time::Duration;
+use tokio::sync::mpsc;
+use tokio::task;
+use tokio::task::JoinHandle;
+use tokio::time::sleep;
 
-Core <--> Trait <--> Tunnel <--> Some other core
-
-fn get_tip() -> Id<Block>;
-fn get_block(id: &Id<Block>) -> Block;
-
-template <typename Func, typename ReturnType, typename Params...>
-ReturnType Call(Func&& func, Params... params)
-{
-    return func(params...);
-}
-
-
-[External]
-fn get_tip() -> Id<Block>;
-
-*/
-
-/******************* The Technique
-
-Lets assume you have an ordered list of N sets of types (“specialization levels”), e.g. (0) Subsystem1, (1) T: Subsystem2, (2) T: Subsystem3.
-You want calls of your method foo to dispatch via the first (in the order of your list) set of types that contains the receiver type of the method call,
-e.g. String dispatches via (0), while u32 dispatches via (1).
-
-To make this happen, you have to:
-
-- Create the type struct Wrap<T>(T).
-- For each specialization level with index i in your list:
-- Create a trait Via⟨desc⟩ where ⟨desc⟩ is a good description of that level (e.g. ViaSubsystem2). Add the method foo to this trait.
-- Implement that trait for ⟨refs⟩ Wrap<⟨set⟩> where ⟨refs⟩ is simply N - i - 1 times &,
-  and ⟨set⟩ describes the set of types for this specialization level. E.g. impl ViaSubsystem1 for &&Wrap<Subsystem1> or impl<T: Subsystem2> ViaSubsystem2 for &Wrap<T>.
-
-For your method call:
-- Make sure all Via* traits are in scope.
-- Wrap your receiver type ( ⟨refs⟩ Wrap<⟨receiver⟩> ).method() where ⟨refs⟩ is N times & and ⟨receiver⟩ is the original receiver. E.g. (&&&Wrap(r)).method().
-
-https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
-https://stackoverflow.com/questions/28519997/what-are-rusts-exact-auto-dereferencing-rules
-
-Real-World example :
-https://github.com/sagebind/castaway
-
-*/
-
-/*******************  Tagging (complementary technique)
-
-Tagged dispatch strategy with a pair of method calls :
-- the first using autoderef-based specialization with a reference argument to select a tag, and
-- the second based on that tag which takes ownership of the original argument.
-
-https://github.com/dtolnay/case-studies/tree/master/autoref-specialization#realistic-application
-
-*/
-
-use std::fmt::{Debug, Display};
-
-struct Wrap<T>(T);
-
-// Subsystem Types
+// Definitions
+struct Transaction;
 struct Subsystem1 {
-    num: u8,
+    block_counter: u64,
+    block_hash: Vec<u128>,
 }
 struct Subsystem2 {
-    vec: Vec<u8>,
-}
-struct Subsystem3 {
-    str: String,
+    tx_count: u32,
+    mempool: Vec<u128>,
 }
 
-// Specialization trick
-trait ViaSubsystem1 {
-    fn foo(&self);
+trait Launch {
+    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()>;
+    fn call<T>(func: impl Fn(T) -> T);
 }
 
-impl ViaSubsystem1 for &&Wrap<Subsystem1> {
-    fn foo(&self) {
-        println!("Via Subsystem1");
+// Implementation of Subsystem1
+impl Subsystem1 {
+    pub fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
+        task::spawn(async move {
+            tx.send("Init Subsystem1 Thread").await;
+            sleep(Duration::from_millis(200)).await;
+        })
+    }
+
+    pub fn add_block(/*&mut self, */ hash: &u128) -> Result<(), Box<dyn std::error::Error>> {
+        /*
+        self.block_counter += 1;
+        self.block_hash.push(*hash);
+        println!("Hash {} added as block num {}", *hash, self.block_counter);
+        */
+        println!("Hash {} added as block num {}", 1, 2);
+        Ok(())
     }
 }
 
-trait ViaSubsystem2 {
-    fn foo(&self);
+impl Launch for Subsystem1 {
+    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
+        Subsystem1::init(tx)
+    }
+
+    fn call<T>(func: impl Fn(T) -> T) {}
 }
 
-impl ViaSubsystem2 for &Wrap<Subsystem2> {
-    fn foo(&self) {
-        println!("Via Subsystem2");
+// Implementation of Subsystem2
+impl Subsystem2 {
+    pub fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
+        task::spawn(async move {
+            tx.send("Init Subsystem2 Thread").await;
+            sleep(Duration::from_millis(100)).await;
+        })
+    }
+
+    pub fn submit_transaction(
+        &self,
+        tx: &Transaction,
+        timestamp: i64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        todo!();
     }
 }
 
-trait ViaSubsystem3 {
-    fn foo(&self);
+impl Launch for Subsystem2 {
+    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
+        Subsystem2::init(tx)
+    }
+
+    fn call<T>(func: impl Fn(T) -> T) {}
 }
 
-impl ViaSubsystem3 for Wrap<Subsystem3> {
-    fn foo(&self) {
-        println!("Via Subsystem3");
+// Implement Wrapper
+
+struct Wrap;
+
+impl Wrap {
+    fn new<T: Launch>(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
+        T::init(tx)
     }
 }
 
+#[tokio::main]
+async fn main() {
+    let hash = 0;
+    let value = 0x55566666;
 
-fn main() {
-    // TODO
-    // Add Tagging for conflict resolution
-    // Simplify specialization with macro
-    // Thread
-    // proc_macro 
+    // Channels
+    let (tx1, mut rx) = mpsc::channel(32);
+    let tx2 = tx1.clone();
 
-    (&&&Wrap(Subsystem1 { num: 8 })).foo();
-    (&&&Wrap(Subsystem2 { vec: Vec::new() })).foo();
-    (&&&Wrap(Subsystem3 { str: String::new() })).foo();
+    // Subsystem Initialization
+    let wrap_sys1 = Wrap::new::<Subsystem1>(tx1);
+    let wrap_sys2 = Wrap::new::<Subsystem2>(tx2);
+
+    wrap_sys1.await;
+    wrap_sys2.await;
+
+    while let Some(message) = rx.recv().await {
+        println!("GOT = {}", message);
+    }
+
+    // Subsystem Call
+    //let result1 = wrap_sys1.call::<Subsystem1>(&Subsystem1::add_block, hash);
+    //let result2 = wrap_sys1.call::<Subsystem2>(&Subsystem2::submit_transaction, value);
 }
