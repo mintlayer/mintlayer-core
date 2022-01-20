@@ -14,11 +14,67 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+use crate::{
+    error,
+    net::{NetworkService, SocketService},
+};
+use async_trait::async_trait;
+use libp2p::Multiaddr;
+use parity_scale_codec::{Decode, Encode};
+
+/// This file provides the libp2p implementation of the network service.
+
+#[derive(Debug)]
+pub struct Libp2pService {}
+
+#[derive(Debug)]
+pub struct Libp2pSocket {}
+
+#[async_trait]
+impl NetworkService for Libp2pService {
+    type Address = Multiaddr;
+    type Socket = Libp2pSocket;
+
+    async fn new(_addr: Self::Address) -> error::Result<Self> {
+        todo!();
+    }
+
+    async fn connect(&mut self, _addr: Self::Address) -> error::Result<Self::Socket> {
+        todo!();
+    }
+
+    async fn accept(&mut self) -> error::Result<Self::Socket> {
+        todo!();
+    }
+
+    async fn publish<T>(&mut self, _topic: &'static str, _data: &T)
+    where
+        T: Sync + Send + Encode,
+    {
+        todo!();
+    }
+
+    async fn subscribe<T>(&mut self, _topic: &'static str, _tx: tokio::sync::mpsc::Sender<T>)
+    where
+        T: Send + Sync + Decode,
+    {
+        todo!();
+    }
+}
+
+#[async_trait]
+impl SocketService for Libp2pSocket {
+    async fn send<T>(&mut self, _data: &T) -> error::Result<()>
+    where
+        T: Sync + Send + Encode,
+    {
+        todo!();
+    }
+
+    async fn recv<T>(&mut self) -> error::Result<T>
+    where
+        T: Decode,
+    {
+        todo!();
     }
 }
