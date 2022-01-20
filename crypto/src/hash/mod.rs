@@ -64,6 +64,21 @@ pub trait StreamHasher {
     fn finalize(&mut self) -> GenericArray<u8, Self::OutputSize>;
 }
 
+macro_rules! impl_io_write_trait {
+    ($stream_type:ident) => {
+        impl std::io::Write for $stream_type {
+            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                self.0.write(buf);
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> std::io::Result<()> {
+                Ok(())
+            }
+        }
+    };
+}
+
 macro_rules! impl_hasher_stream_trait {
     ($stream_type:ident, $stream_size:ty) => {
         impl StreamHasher for $stream_type {
@@ -85,6 +100,8 @@ macro_rules! impl_hasher_stream_trait {
                 self.0.reset()
             }
         }
+
+        impl_io_write_trait!($stream_type);
     };
 }
 
@@ -114,6 +131,8 @@ macro_rules! impl_hasher_stream_with_crop_trait {
                 self.0.reset()
             }
         }
+
+        impl_io_write_trait!($stream_type);
     };
 }
 

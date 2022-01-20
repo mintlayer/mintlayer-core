@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use generic_array::typenum::marker_traits::Unsigned;
-use parity_scale_codec_derive::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 
 fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -68,6 +68,14 @@ pub type DefaultHashAlgoStream = crypto::hash::Blake2bStream32;
 pub fn default_hash<T: AsRef<[u8]> + Clone>(data: T) -> H256 {
     let d = crypto::hash::hash::<DefaultHashAlgo, _>(&data);
     H256::from(d.as_slice())
+}
+
+/// Hash the encoded version of given value
+pub fn default_hash_serialized<T: Encode>(value: &T) -> H256 {
+    use crypto::hash::StreamHasher;
+    let mut hash_stream = DefaultHashAlgoStream::new();
+    value.encode_to(&mut hash_stream);
+    hash_stream.finalize().as_slice().into()
 }
 
 impl From<&[u8]> for H256 {
