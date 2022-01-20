@@ -74,7 +74,7 @@ pub mod transaction;
 
 // Reexport items from the temporary basic implementation.
 pub use basic::{SingleMap, Store, Transaction};
-pub use transaction::{DbTransaction, Transactional, abort, commit};
+pub use transaction::{abort, commit, DbTransaction, Transactional};
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Error {
