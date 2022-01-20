@@ -55,12 +55,12 @@ mod interpreter;
 pub mod opcodes;
 pub mod script;
 pub mod sighash;
-#[cfg(test)]
+#[cfg(all(test, not(loom)))]
 mod test;
 
+pub use crate::script::{Builder, Script};
 #[cfg(feature = "testcontext")]
 pub use context::testcontext::TestContext;
 pub use context::Context;
 pub use error::{Error, Result};
 pub use interpreter::{run_pushdata, run_script, verify_witness_lock, Stack};
-pub use crate::script::{Builder, Script};

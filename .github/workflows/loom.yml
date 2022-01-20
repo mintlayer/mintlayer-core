@@ -1,0 +1,31 @@
+name: Permutation testing
+
+on:
+  pull_request:
+    branches:
+      - master
+      - staging
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: --cfg=loom
+
+jobs:
+
+  test_loom:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install rust stable
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        components: rustfmt
+        default: true
+    - name: Checkout repository and submodules
+      uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Run permutation tests
+      run: cargo test --tests --release --workspace

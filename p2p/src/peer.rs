@@ -14,24 +14,35 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error::{self, P2pError, ProtocolError};
-use crate::event::{Event, PeerEvent};
-use crate::message::{HandshakeMessage, Message, MessageType};
-use crate::net::{NetworkService, SocketService};
-use crate::proto::handshake::*;
-use common::chain::ChainConfig;
-use common::primitives::time;
+use crate::{
+    error::{self, P2pError, ProtocolError},
+    event::{Event, PeerEvent},
+    message::{HandshakeMessage, Message, MessageType},
+    net::{NetworkService, SocketService},
+    proto::{connectivity::*, handshake::*},
+};
+use common::{chain::ChainConfig, primitives::time};
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 pub type PeerId = u64;
 pub type TaskId = u64;
 
-struct TaskInfo {
-    task_id: TaskId,
-    period: Duration,
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub struct TaskInfo {
+    pub task: Task,
+    pub period: i64,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ListeningState {
+    /// Listen to and handle all incoming messages
+    Any,
+
+    /// Listen to and handle all incoming messages but expect
+    /// to receive Pong message from remote
+    Connectivity(ConnectivityState),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -40,7 +51,7 @@ pub enum PeerState {
     Handshaking(HandshakeState),
 
     /// Listen to incoming messages from remote peer
-    Listening,
+    Listening(ListeningState),
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -52,15 +63,47 @@ pub enum PeerRole {
     Outbound,
 }
 
-// Represents a task that will run independently of any incoming/outgoing event
-// meaning the decision to run is built into the protocol and, for example, the
-// network manager is not responsible for scheduling the execution of this event
-const DUMMY_TASK_ID: TaskId = 1;
-const DUMMY_PERIOD: Duration = Duration::from_secs(60);
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ConnectivityTask {
+    Ping {
+        /// How often is Ping scheduled to happen (seconds)
+        period: i64,
+    },
+    PingRetry {
+        /// How many times the Ping has been resent
+        max_retries: isize,
+    },
+}
 
-async fn schedule_event(task_info: TaskInfo) -> TaskId {
-    Delay::new(task_info.period).await;
-    task_info.task_id
+/// Task is an abstraction over some piece of code
+/// that is scheduled to happen either periodically
+/// (such as the ping task once a minute) or in one-shot
+/// fashion (such as the ping retry task).
+///
+/// It's a wrapper for an asynchronous timer which returns
+/// the task type when it expires and allows the peer event
+/// loop to handle it alongside with any other event received
+/// either from the socket or from P2P's RX channel.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Task {
+    Connectivity(ConnectivityTask),
+}
+
+/// How often (in seconds) is ping/pong scheduled to happen
+pub const PING_PERIOD: i64 = 60;
+
+/// How long is the response to ping waited until ping is sent again
+pub const PING_REPLY_PERIOD: i64 = 10;
+
+/// How many times is ping resent until the remote is considered unresponsive
+pub const PING_MAX_RETRIES: isize = 3;
+
+pub async fn schedule_event(task_info: TaskInfo) -> Task {
+    Delay::new(Duration::from_secs(
+        task_info.period.try_into().expect("Failed to convert i64 to u64"),
+    ))
+    .await;
+    task_info.task
 }
 
 #[allow(unused)]
@@ -88,6 +131,9 @@ where
 
     /// Chain config
     pub(super) config: Arc<ChainConfig>,
+
+    /// Last time when something was read from the socket
+    pub(super) last_activity: i64,
 }
 
 #[allow(unused)]
@@ -129,6 +175,24 @@ where
             mgr_rx,
             socket,
             config,
+            last_activity: 0i64,
+        }
+    }
+
+    /// Handle inbound message when local peer is listening
+    async fn on_listening_state_peer_event(
+        &mut self,
+        state: ListeningState,
+        msg: Message,
+    ) -> error::Result<()> {
+        match msg.msg {
+            MessageType::Connectivity(msg) => {
+                // found in src/proto/connectivity.rs
+                self.on_inbound_connectivity_event(state, msg).await
+            }
+            MessageType::Handshake(_) => {
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
         }
     }
 
@@ -152,13 +216,10 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
         }
 
-        if let (PeerState::Handshaking(state), MessageType::Handshake(msg)) = (self.state, msg.msg)
-        {
-            // found in src/proto/handshake.rs
-            self.on_handshake_event(state, msg).await?;
+        match self.state {
+            PeerState::Handshaking(state) => self.on_handshake_state_peer_event(state, msg).await,
+            PeerState::Listening(state) => self.on_listening_state_peer_event(state, msg).await,
         }
-
-        Ok(())
     }
 
     /// Handle event coming from the network manager
@@ -168,6 +229,20 @@ where
     /// a shutdown signal which instructs us to close the connection and exit the event loop
     async fn on_manager_event(&mut self, event: Option<Event>) -> error::Result<()> {
         todo!();
+    }
+
+    /// Handle timer event when local peer is listening
+    async fn on_listening_state_timer_event(
+        &mut self,
+        state: ListeningState,
+        task: Task,
+    ) -> error::Result<Option<TaskInfo>> {
+        match task {
+            Task::Connectivity(task) => {
+                // found in src/proto/connectivity.rs
+                self.on_outbound_connectivity_event(state, task).await
+            }
+        }
     }
 
     /// Handle event that's scheduled to happen when a timer expires
@@ -184,8 +259,13 @@ where
     ///
     /// This design allows the peer event loop to wait onan arbitrary number of
     /// timer-based events, both scheduled and one-shot.
-    async fn on_timer_event(&mut self, task_id: TaskId) -> error::Result<Option<TaskInfo>> {
-        todo!();
+    pub(super) async fn on_timer_event(&mut self, task: Task) -> error::Result<Option<TaskInfo>> {
+        match self.state {
+            PeerState::Listening(state) => self.on_listening_state_timer_event(state, task).await,
+            PeerState::Handshaking(_) => {
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
+        }
     }
 
     /// Start event loop for the peer
@@ -199,14 +279,15 @@ where
     /// an upper-level event loop but a task must be spawned for it
     pub async fn run(&mut self) -> error::Result<()> {
         let mut tasks = FuturesUnordered::new();
-
         tasks.push(schedule_event(TaskInfo {
-            task_id: DUMMY_TASK_ID,
-            period: DUMMY_PERIOD,
+            task: Task::Connectivity(ConnectivityTask::Ping {
+                period: PING_PERIOD,
+            }),
+            period: PING_PERIOD,
         }));
 
-        // the protocol defines that the initiator of the communication, i.e., the peer
-        // who connected is responsible for sending the Hello message. This means that
+        // the protocol defines that the initiator of the communication, i.e., the outbound
+        // peer, is responsible for sending the Hello message. This means that
         // before the actual event loop is started, if the local node is initiator,
         // it must first send the Hello message and only then proceed to responding
         // to incoming events from remote peer and the network manager
@@ -226,6 +307,7 @@ where
             tokio::select! {
                 event = self.socket.recv() => {
                     self.on_peer_event(event).await?;
+                    self.last_activity = time::get();
                 }
                 event = self.mgr_rx.recv().fuse() => {
                     self.on_manager_event(event).await?;

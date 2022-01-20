@@ -113,7 +113,7 @@ macro_rules! construct_uint {
             }
 
             fn _from_be_slice(bytes: &[u8]) -> $name {
-                use crate::util::endian::slice_to_u64_be;
+                use crate::uint::endian::slice_to_u64_be;
                 let mut slice = [0u64; $n_words];
                 slice
                     .iter_mut()
@@ -125,7 +125,7 @@ macro_rules! construct_uint {
 
             /// Convert a big integer into a byte array using big-endian encoding
             pub fn to_be_bytes(&self) -> [u8; $n_words * 8] {
-                use crate::util::endian::u64_to_array_be;
+                use crate::uint::endian::u64_to_array_be;
                 let mut res = [0; $n_words * 8];
                 for i in 0..$n_words {
                     let start = i * 8;
@@ -238,7 +238,7 @@ macro_rules! construct_uint {
 
             #[inline]
             fn sub(self, other: $name) -> $name {
-                self + !other + $crate::util::BitArray::one()
+                self + !other + $crate::uint::BitArray::one()
             }
         }
 
@@ -246,7 +246,7 @@ macro_rules! construct_uint {
             type Output = $name;
 
             fn mul(self, other: $name) -> $name {
-                use $crate::util::BitArray;
+                use $crate::uint::BitArray;
                 let mut me = $name::zero();
                 // TODO: be more efficient about this
                 for i in 0..(2 * $n_words) {
@@ -273,7 +273,7 @@ macro_rules! construct_uint {
             }
         }
 
-        impl $crate::util::BitArray for $name {
+        impl $crate::uint::BitArray for $name {
             #[inline]
             fn bit(&self, index: usize) -> bool {
                 let &$name(ref arr) = self;
@@ -475,8 +475,8 @@ impl Uint256 {
 
 #[cfg(test)]
 mod tests {
-    use crate::primitives::uint::{Uint128, Uint256};
-    use crate::util::BitArray;
+    use super::*;
+    use crate::uint::BitArray;
 
     #[test]
     pub fn uint256_bits_test() {
@@ -537,10 +537,8 @@ mod tests {
         assert!(big < bigger);
         assert!(bigger < biggest);
         assert!(bigger <= biggest);
-        assert!(biggest <= biggest);
         assert!(bigger >= big);
         assert!(bigger >= small);
-        assert!(small <= small);
     }
 
     #[test]
@@ -782,14 +780,6 @@ mod tests {
         assert_eq!(init << 64, Uint256([0, 0xDEADBEEFDEADBEEF, 0, 0]));
         let add = (init << 64) + init;
         assert_eq!(add, Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0]));
-        assert_eq!(
-            add >> 0,
-            Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0])
-        );
-        assert_eq!(
-            add << 0,
-            Uint256([0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0, 0])
-        );
         assert_eq!(add >> 64, Uint256([0xDEADBEEFDEADBEEF, 0, 0, 0]));
         assert_eq!(
             add << 64,

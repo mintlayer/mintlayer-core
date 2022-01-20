@@ -14,6 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+#![cfg(not(loom))]
+
 use crate::event::{Event, PeerEvent};
 use crate::net::NetworkService;
 use crate::peer::{Peer, PeerId, PeerRole};

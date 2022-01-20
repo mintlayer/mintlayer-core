@@ -39,9 +39,16 @@ pub enum HandshakeMessage {
 }
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
+pub enum ConnectivityMessage {
+    Ping { nonce: u64 },
+    Pong { nonce: u64 },
+}
+
+#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[allow(unused)]
 pub enum MessageType {
     Handshake(HandshakeMessage),
+    Connectivity(ConnectivityMessage),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

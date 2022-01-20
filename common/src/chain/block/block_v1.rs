@@ -5,13 +5,16 @@ use crate::primitives::Idable;
 use crate::primitives::H256;
 use parity_scale_codec::Encode;
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
+
+pub type ConsensusData = Vec<u8>;
+
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
     pub(super) hash_prev_block: Id<BlockV1>,
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
-    pub(super) consensus_data: Vec<u8>,
+    pub(super) consensus_data: ConsensusData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]

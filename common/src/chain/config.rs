@@ -1,7 +1,6 @@
 use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
-use crate::chain::NetUpgrades;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
@@ -11,9 +10,9 @@ type HashType = Vec<u8>; // temp type until crypto is ready
 #[derive(Debug, Copy, Clone)]
 pub enum ChainType {
     Mainnet,
-    Testnet,
-    Regtest,
-    Signet,
+    // Testnet,
+    // Regtest,
+    // Signet,
 }
 
 #[derive(Debug, Clone)]
@@ -27,8 +26,6 @@ pub struct ChainConfig {
     p2p_port: u16,
     #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
-    #[allow(dead_code)]
-    net_upgrades: NetUpgrades,
     #[allow(dead_code)]
     magic_bytes: [u8; 4],
     #[allow(dead_code)]
@@ -82,7 +79,6 @@ pub fn create_mainnet() -> ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
         height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
-        net_upgrades: NetUpgrades::new(),
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],

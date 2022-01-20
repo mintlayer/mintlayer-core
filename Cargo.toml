@@ -23,6 +23,7 @@ members = [
   "serialization", # serialization interfaces and implementations
   "node",          # node executable
   "wallet",        # wallet executable
+  "block_production", # block production
 #  "test",          # integration tests
 ]
 
@@ -39,6 +40,7 @@ default-members = [
   "serialization",
   "node",
   "wallet",
+  "block_production"
 #  "test",
 ]
 
@@ -46,6 +48,7 @@ default-members = [
 common = { path = "common"}
 storage = { path = "storage"}
 blockchain-storage = { path = "blockchain_storage"}
+block-production = { path = "block_production" }
 crypto = { path = "crypto"}
 consensus = { path = "consensus"}
 script = { path = "script"}
@@ -54,6 +57,8 @@ p2p = { path = "p2p"}
 network = { path = "network"}
 rpc = { path = "rpc"}
 serialization = { path = "serialization"}
+node = { path = "node", optional = true}
+wallet = { path = "wallet", optional = true}
 
 [profile.release]
 debug-assertions = true
