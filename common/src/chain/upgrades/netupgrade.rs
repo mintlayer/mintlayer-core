@@ -2,13 +2,8 @@
 
 use crate::primitives::height::Saturating;
 use crate::primitives::BlockHeight;
-use num_enum::{IntoPrimitive, TryFromPrimitive};
-use std::collections::BTreeMap;
-use std::ops::Bound::{Excluded, Unbounded};
 
-pub type UpgradeVersionNum = u8;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd, IntoPrimitive, TryFromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 #[repr(u8)]
 pub enum UpgradeVersion {
     Genesis = 0,
@@ -18,24 +13,31 @@ pub enum UpgradeVersion {
 }
 
 #[derive(Debug, Clone)]
-pub struct NetUpgrade(BTreeMap<BlockHeight, UpgradeVersionNum>);
+pub struct NetUpgrade(Vec<(BlockHeight, UpgradeVersion)>);
 
 impl Default for NetUpgrade {
     fn default() -> Self {
-        let mut height_to_version = BTreeMap::<BlockHeight, UpgradeVersionNum>::new();
-        height_to_version.insert(BlockHeight::zero(), UpgradeVersion::Genesis.into());
-
-        Self(height_to_version)
+        Self(vec![(BlockHeight::zero(), UpgradeVersion::Genesis)])
     }
 }
 
 impl NetUpgrade {
-    pub fn insert(
-        &mut self,
-        height: BlockHeight,
-        version: UpgradeVersion,
-    ) -> Option<UpgradeVersionNum> {
-        self.0.insert(height, version.into())
+    #[allow(dead_code)]
+    pub(crate) fn initialize(upgrades: Vec<(BlockHeight, UpgradeVersion)>) -> Self {
+        let mut upgrades = upgrades;
+        upgrades.sort();
+
+        if let Some(&(height, _)) = upgrades.first() {
+            return if height == BlockHeight::zero() {
+                Self(upgrades)
+            } else {
+                let mut default: NetUpgrade = Default::default();
+                default.0.append(&mut upgrades);
+                default
+            };
+        }
+
+        NetUpgrade::default()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -47,59 +49,32 @@ impl NetUpgrade {
     }
 
     pub fn is_upgrade_activated(&self, height: BlockHeight) -> bool {
-        self.0.contains_key(&height)
+        #![allow(clippy::search_is_some)]
+        self.0.iter().find(|&(elem_height, _)| *elem_height == height).is_some()
     }
 
     pub fn get_version(&self, height: BlockHeight) -> UpgradeVersion {
-        if let Some(version) = self.0.get(&height) {
-            UpgradeVersion::try_from(*version).expect("version number should be found in the enum")
-        }
-        // just get the consensus config of the nearest given height.
-        else {
-            let mut new_range = self.0.range((Unbounded, Excluded(height)));
-
-            match new_range.next_back() {
-                None => UpgradeVersion::Genesis,
-                Some((_, version)) => UpgradeVersion::try_from(*version)
-                    .expect("version number should be found in the enum"),
-            }
+        match self.0.iter().rfind(|&&(elem_height, _)| elem_height <= height) {
+            None => UpgradeVersion::Genesis,
+            Some(&(_, version)) => version,
         }
     }
 
-    pub fn height_range(&self, version: UpgradeVersion) -> Vec<(BlockHeight, BlockHeight)> {
-        if version == UpgradeVersion::Genesis {
-            return vec![(BlockHeight::zero(), BlockHeight::zero())];
-        }
-
-        let mut result: Vec<(BlockHeight, BlockHeight)> = vec![];
-
-        let h_zero = BlockHeight::zero();
-        let mut start = h_zero;
-
-        // For every new element, check if it matches the version_type.
-        self.0.iter().for_each(|(elem_height, elem_version)| {
-            if *elem_version == version.into() {
-                // if a match is found for the first time, set it as the "start" of the range.
-                if start == h_zero {
-                    start = *elem_height;
-                }
-            }
-            // If the current element is a new version, and the start of the range was set,
-            // then the block height before this element is the "end" of the range.
-            else if start > h_zero {
-                result.push((start, elem_height.saturating_sub(1)));
-
-                // reset back to zero, indicating that a new range is ready.
-                start = h_zero;
-            }
-        });
-
-        // If a start of a range was set, it means this version_type is the current and active version.
-        // Set the "end" of the range to the maximum block height.
-        if start > h_zero {
-            result.push((start, BlockHeight::max()));
-        }
-        result
+    pub fn height_range(&self, version: UpgradeVersion) -> Option<(BlockHeight, BlockHeight)> {
+        self.0
+            .iter()
+            .enumerate()
+            .find(|&(_, &(_, elem_version))| elem_version == version)
+            .map(|(idx, &(start_h, _))| {
+                (
+                    start_h,
+                    if idx == (self.0.len() - 1) {
+                        BlockHeight::max()
+                    } else {
+                        self.0[idx + 1].0.saturating_sub(1)
+                    },
+                )
+            })
     }
 }
 
@@ -108,23 +83,19 @@ mod tests {
     use crate::chain::upgrades::netupgrade::{NetUpgrade, UpgradeVersion};
     use crate::primitives::height::Saturating;
     use crate::primitives::BlockHeight;
-    use std::collections::BTreeMap;
 
     fn mock_netupgrades() -> (NetUpgrade, BlockHeight, BlockHeight) {
-        let mut upgrades = NetUpgrade(BTreeMap::new());
-
+        let mut upgrades = vec![];
         let pos_height = BlockHeight::new(350);
         let dsa_height = BlockHeight::new(3000);
 
-        upgrades.insert(BlockHeight::zero(), UpgradeVersion::Genesis);
+        upgrades.push((BlockHeight::one(), UpgradeVersion::POW));
 
-        upgrades.insert(BlockHeight::one(), UpgradeVersion::POW);
+        upgrades.push((pos_height, UpgradeVersion::POS));
 
-        upgrades.insert(pos_height, UpgradeVersion::POS);
+        upgrades.push((dsa_height, UpgradeVersion::DSA));
 
-        upgrades.insert(dsa_height, UpgradeVersion::DSA);
-
-        (upgrades, pos_height, dsa_height)
+        (NetUpgrade::initialize(upgrades), pos_height, dsa_height)
     }
 
     #[test]
@@ -160,8 +131,10 @@ mod tests {
     fn check_upgrade_version_from_height() {
         let (upgrades, pos_height, dsa_height) = mock_netupgrades();
 
+        println!("THE UPGRADES: {:?}", upgrades);
+
         let check = |v: UpgradeVersion, h: BlockHeight| {
-            assert_eq!(upgrades.get_version(h), v);
+            assert_eq!(v, upgrades.get_version(h));
         };
 
         check(UpgradeVersion::Genesis, BlockHeight::zero());
@@ -179,10 +152,10 @@ mod tests {
 
     #[test]
     fn check_upgrade_versions() {
-        assert_eq!(0u8, UpgradeVersion::Genesis.into());
-        assert_eq!(1u8, UpgradeVersion::POW.into());
-        assert_eq!(2u8, UpgradeVersion::POS.into());
-        assert_eq!(5u8, UpgradeVersion::DSA.into());
+        assert_eq!(0u8, UpgradeVersion::Genesis as u8);
+        assert_eq!(1u8, UpgradeVersion::POW as u8);
+        assert_eq!(2u8, UpgradeVersion::POS as u8);
+        assert_eq!(5u8, UpgradeVersion::DSA as u8);
     }
 
     #[test]
@@ -191,12 +164,8 @@ mod tests {
 
         let check = |vers_type: UpgradeVersion, height: BlockHeight, end_range: BlockHeight| {
             let res = upgrades.height_range(vers_type);
-            assert_eq!(1, res.len());
 
-            assert_eq!(
-                &(height, end_range),
-                res.first().expect("this should have one value inside")
-            );
+            assert_eq!(Some((height, end_range)), res);
         };
 
         check(
