@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -325,6 +325,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net;
     use crate::net::mock::MockService;
     use common::chain::config;
     use tokio::net::TcpStream;
@@ -333,12 +334,15 @@ mod tests {
     async fn test_peer_new() {
         let config = Arc::new(config::create_mainnet());
         let addr: <MockService as NetworkService>::Address = "[::1]:11121".parse().unwrap();
-        let mut server = MockService::new(addr).await.unwrap();
+        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
 
-        let (server_res, peer_res) = tokio::join!(server.accept(), peer_fut);
+        let (server_res, peer_res) = tokio::join!(server.poll_next(), peer_fut);
         assert!(server_res.is_ok());
         assert!(peer_res.is_ok());
+
+        let server_res: net::Event<MockService> = server_res.unwrap();
+        let net::Event::IncomingConnection(server_res) = server_res;
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
@@ -346,7 +350,7 @@ mod tests {
             1,
             PeerRole::Outbound,
             config.clone(),
-            server_res.unwrap(),
+            server_res,
             peer_tx,
             rx,
         );

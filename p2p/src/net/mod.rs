@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -21,6 +21,21 @@ use parity_scale_codec::{Decode, Encode};
 pub mod libp2p;
 pub mod mock;
 
+#[derive(Debug)]
+pub enum Event<T>
+where
+    T: NetworkService,
+{
+    /// Incoming connection from remote peer
+    IncomingConnection(T::Socket),
+}
+
+#[derive(Debug)]
+pub enum GossipSubTopic {
+    Transactions,
+    Blocks,
+}
+
 /// `NetworkService` provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
@@ -38,11 +53,20 @@ pub trait NetworkService {
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;
 
+    // Enum of different peer discovery strategies that the implementation provides
+    type Strategy;
+
     /// Initialize the network service provider
     ///
     /// # Arguments
     /// `addr` - socket address for incoming P2P traffic
-    async fn new(addr: Self::Address) -> error::Result<Self>
+    /// `strategies` - list of strategies that are used for peer discovery
+    /// `topics` - list of gossipsub topics that the implementation should subscribe to
+    async fn new(
+        addr: Self::Address,
+        strategies: &[Self::Strategy],
+        topics: &[GossipSubTopic],
+    ) -> error::Result<Self>
     where
         Self: Sized;
 
@@ -55,35 +79,24 @@ pub trait NetworkService {
     /// `addr` - socket address of the peer
     async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket>;
 
-    /// Listen for an incoming connection on the P2P port
+    /// Poll events from the network service provider
     ///
-    /// When a peer connects, the underlying protocol implementation
-    /// performs any initialization/handshaking it needs and then returns
-    /// the initialized `Socket` object which the caller of `accept()` can
-    /// use to perform the upper-level handshake and initializations.
-    ///
-    /// This returns a future that the caller must poll and after a connection
-    /// with a peer has been established, the function returns. To start listening
-    /// for another incoming connection on the P2P port, `accept()` must be called again.
-    async fn accept(&mut self) -> error::Result<Self::Socket>;
+    /// There are three types of events that can be received:
+    /// - incoming peer connections
+    /// - incoming messages from gossipsub topics
+    /// - new discovered peers
+    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
+    where
+        T: NetworkService<Socket = Self::Socket>;
 
     /// Publish data in a given gossip topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<T>(&mut self, topic: &'static str, data: &T)
+    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
     where
         T: Sync + Send + Encode;
-
-    /// Subscribe to a gossip topic
-    ///
-    /// # Arguments
-    /// `topic` - identifier for the topic
-    /// `tx` - channel for communication between the caller and the event loop
-    async fn subscribe<T>(&mut self, topic: &'static str, tx: tokio::sync::mpsc::Sender<T>)
-    where
-        T: Sync + Send + Decode;
 }
 
 /// `SocketService` provides the low-level socket interface that

@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -16,13 +16,16 @@
 // Author(s): A. Altonen
 use crate::{
     error,
-    net::{NetworkService, SocketService},
+    net::{Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use libp2p::Multiaddr;
 use parity_scale_codec::{Decode, Encode};
 
 /// This file provides the libp2p implementation of the network service.
+
+#[derive(Debug)]
+pub enum LibP2pStrategy {}
 
 #[derive(Debug)]
 pub struct Libp2pService {}
@@ -34,8 +37,13 @@ pub struct Libp2pSocket {}
 impl NetworkService for Libp2pService {
     type Address = Multiaddr;
     type Socket = Libp2pSocket;
+    type Strategy = LibP2pStrategy;
 
-    async fn new(_addr: Self::Address) -> error::Result<Self> {
+    async fn new(
+        _addr: Self::Address,
+        _strategies: &[Self::Strategy],
+        _topics: &[GossipSubTopic],
+    ) -> error::Result<Self> {
         todo!();
     }
 
@@ -43,20 +51,16 @@ impl NetworkService for Libp2pService {
         todo!();
     }
 
-    async fn accept(&mut self) -> error::Result<Self::Socket> {
-        todo!();
-    }
-
-    async fn publish<T>(&mut self, _topic: &'static str, _data: &T)
+    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: Sync + Send + Encode,
+        T: NetworkService,
     {
         todo!();
     }
 
-    async fn subscribe<T>(&mut self, _topic: &'static str, _tx: tokio::sync::mpsc::Sender<T>)
+    async fn publish<T>(&mut self, _topic: GossipSubTopic, _data: &T)
     where
-        T: Send + Sync + Decode,
+        T: Sync + Send + Encode,
     {
         todo!();
     }

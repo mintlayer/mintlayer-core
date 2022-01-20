@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -188,6 +188,7 @@ where
 mod tests {
     use super::*;
     use crate::net::mock::{MockService, MockSocket};
+    use crate::net::Event;
     use crate::peer::PeerRole;
     use common::chain::{config, ChainConfig};
     use common::primitives::time;
@@ -200,11 +201,12 @@ mod tests {
         remote_config: Arc<ChainConfig>,
         addr: std::net::SocketAddr,
     ) -> (Peer<MockService>, Peer<MockService>) {
-        let mut server = MockService::new(addr).await.unwrap();
+        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
 
-        let (remote_res, local_res) = tokio::join!(server.accept(), peer_fut);
-        let remote_res = remote_res.unwrap();
+        let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
+        let remote_res: Event<MockService> = remote_res.unwrap();
+        let Event::IncomingConnection(remote_res) = remote_res;
         let local_res = local_res.unwrap();
 
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
