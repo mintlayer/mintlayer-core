@@ -16,6 +16,17 @@ skip = [{name = "quick-error"},
         {name = "rand"},
         {name = "getrandom"},
         {name = "byteorder"},
+        {name = "socket2"},
+        {name = "arrayvec"},
+        {name = "pin-project"},
+        {name = "pin-project-internal"},
+        {name = "pin-project-lite"},
+        {name = "digest"},
+        {name = "block-buffer"},
+        {name = "sha-1"},
+        {name = "sha2"},
+        {name = "sha3"},
+        {name = "blake2"},
         ]
 
 [licenses]
