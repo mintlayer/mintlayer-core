@@ -15,12 +15,18 @@
 //
 // Author(s): S. Afach
 
-use generic_array::typenum::marker_traits::Unsigned;
+use generic_array::{typenum, GenericArray};
 use parity_scale_codec::{Decode, Encode};
 
 fixed_hash::construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
+}
+
+impl From<GenericArray<u8, typenum::U32>> for H256 {
+    fn from(val: GenericArray<u8, typenum::U32>) -> Self {
+        Self(val.into())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
@@ -62,12 +68,11 @@ pub type DataID = H256;
 // from a strong and software-friendly hash function;
 // both the hashing methods below should produce the
 // same result
-pub type DefaultHashAlgo = crypto::hash::Blake2b;
-pub type DefaultHashAlgoStream = crypto::hash::Blake2bStream32;
+pub type DefaultHashAlgo = crypto::hash::Blake2b32;
+pub type DefaultHashAlgoStream = crypto::hash::Blake2b32Stream;
 
 pub fn default_hash<T: AsRef<[u8]> + Clone>(data: T) -> H256 {
-    let d = crypto::hash::hash::<DefaultHashAlgo, _>(&data);
-    H256::from(d.as_slice())
+    crypto::hash::hash::<DefaultHashAlgo, _>(&data).into()
 }
 
 /// Hash the encoded version of given value
@@ -75,42 +80,13 @@ pub fn default_hash_serialized<T: Encode>(value: &T) -> H256 {
     use crypto::hash::StreamHasher;
     let mut hash_stream = DefaultHashAlgoStream::new();
     value.encode_to(&mut hash_stream);
-    hash_stream.finalize().as_slice().into()
-}
-
-impl From<&[u8]> for H256 {
-    fn from(data: &[u8]) -> Self {
-        // since we're gonna do a copy from some data to H256,
-        // let's ensure that we won't have unused parts in H256 at compile-time
-        static_assertions::const_assert!(
-            <<DefaultHashAlgoStream as crypto::hash::StreamHasher>::OutputSize as Unsigned>::USIZE
-                >= H256::len_bytes()
-        );
-        static_assertions::const_assert!(
-            <<DefaultHashAlgo as crypto::hash::Hasher>::OutputSize as Unsigned>::USIZE
-                >= H256::len_bytes()
-        );
-
-        H256::from_slice(&data[..H256::len_bytes()])
-    }
+    hash_stream.finalize().into()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crypto::hash::StreamHasher;
-
-    #[test]
-    fn basic_h256_to_and_from_bytes() {
-        use rand::Rng;
-        let random_bytes = rand::thread_rng().gen::<[u8; H256::len_bytes()]>();
-
-        let n = H256::from(random_bytes);
-        let bytes_again = &(*n.as_bytes());
-        assert_eq!(n.as_bytes(), random_bytes);
-        let m = H256::from(bytes_again);
-        assert_eq!(m, n);
-    }
 
     #[test]
     fn hashes_stream_and_msg_identical() {
@@ -122,10 +98,10 @@ mod tests {
         hash_stream.write(random_bytes);
         let h2 = hash_stream.finalize();
 
-        assert_eq!(h1, H256::from(h2.as_slice()));
+        assert_eq!(h1, h2.into());
 
         let h3 = crypto::hash::hash::<DefaultHashAlgo, _>(&random_bytes);
 
-        assert_eq!(h1, H256::from(h3.as_slice()));
+        assert_eq!(h1, h3.into());
     }
 }

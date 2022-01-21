@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use crate::primitives::id;
-use crate::primitives::{Id, Idable, H256};
+use crate::primitives::{Id, Idable};
 use crypto::hash::StreamHasher;
 use parity_scale_codec::{Decode, Encode};
 
@@ -50,7 +50,7 @@ impl Idable<TransactionV1> for TransactionV1 {
             output.encode_to(&mut hash_stream);
         }
         self.get_lock_time().encode_to(&mut hash_stream);
-        Id::new(&H256::from(hash_stream.finalize().as_slice()))
+        Id::new(&hash_stream.finalize().into())
     }
 }
 
