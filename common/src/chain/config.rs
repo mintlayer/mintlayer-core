@@ -6,7 +6,7 @@ use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
-type HashType = H256; // https://github.com/mintlayer/mintlayer-core/pull/65#discussion_r785970305
+type HashType = Id<Block>;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ChainType {
