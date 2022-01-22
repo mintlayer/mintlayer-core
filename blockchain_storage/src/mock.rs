@@ -122,7 +122,8 @@ mod tests {
     pub use common::primitives::{Idable, H256};
     pub use storage::Transactional;
 
-    const TXFAIL: crate::Error = crate::Error::RecoverableError(storage::Error::TransactionFailed);
+    const TXFAIL: crate::Error =
+        crate::Error::Storage(storage::error::Recoverable::TransactionFailed);
     const HASH1: H256 = H256([0x01; 32]);
     const HASH2: H256 = H256([0x02; 32]);
 
@@ -212,13 +213,13 @@ mod tests {
             storage::commit("ok")
         });
         res.unwrap_or_else(|e| {
-            let e = match e {
-                crate::Error::RecoverableError(e) => e,
-                crate::Error::UnrecoverableError(e) => e,
-            };
+            #[allow(unreachable_patterns)]
             match e {
-                storage::Error::TransactionFailed => "tx failed",
-                _ => "other",
+                crate::Error::Storage(e) => match e {
+                    storage::error::Recoverable::TransactionFailed => "tx failed",
+                    _ => "other storage error",
+                },
+                _ => "other error",
             }
         })
     }

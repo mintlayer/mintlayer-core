@@ -69,19 +69,13 @@
 //! ```
 
 mod basic;
+pub mod error;
 pub mod schema;
 pub mod transaction;
 
 // Reexport items from the temporary basic implementation.
 pub use basic::{SingleMap, Store, Transaction};
+pub use error::Error;
 pub use transaction::{abort, commit, DbTransaction, Transactional};
-
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
-pub enum Error {
-    #[error("Transaction failed")]
-    TransactionFailed,
-    #[error("Unknown database error")]
-    Unknown,
-}
 
 pub type Result<T> = std::result::Result<T, Error>;

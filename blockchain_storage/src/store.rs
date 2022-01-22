@@ -4,7 +4,7 @@ use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::Transactional;
 
-use crate::{BlockchainStorage, Error::UnrecoverableError};
+use crate::BlockchainStorage;
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -180,7 +180,7 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Remove block from the database
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get::<DBBlocks, _>().del(id.as_ref()).map_err(UnrecoverableError)
+        self.0.get::<DBBlocks, _>().del(id.as_ref()).map_err(Into::into)
     }
 
     /// Set state of the outputs of given transaction
@@ -202,7 +202,7 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Delete outputs state index associated with given transaction
     fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0.get::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(UnrecoverableError)
+        self.0.get::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(Into::into)
     }
 
     /// Get transaction
@@ -212,7 +212,7 @@ impl BlockchainStorage for StoreTx<'_> {
     ) -> crate::Result<Option<Transaction>> {
         let block_id = tx_index.get_block_id();
         match self.0.get::<DBBlocks, _>().get(block_id) {
-            Err(e) => Err(UnrecoverableError(e)),
+            Err(e) => Err(e.into()),
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
                 let begin = tx_index.get_byte_offset_in_block() as usize;
@@ -246,10 +246,7 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
-        self.0
-            .get::<DBBlockByHeight, _>()
-            .del(&height.encode())
-            .map_err(UnrecoverableError)
+        self.0.get::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
     }
 }
 
@@ -262,7 +259,7 @@ impl StoreTx<'_> {
         T: Decode,
     {
         let col = self.0.get::<Col, I>();
-        let data = col.get(key).map_err(UnrecoverableError)?;
+        let data = col.get(key).map_err(crate::Error::from)?;
         Ok(data.map(|d| T::decode_all(d).expect("Cannot decode a database value")))
     }
 
@@ -274,7 +271,7 @@ impl StoreTx<'_> {
         T: Encode,
     {
         let mut col = self.0.get::<Col, I>();
-        col.put(key, value.encode()).map_err(UnrecoverableError)
+        col.put(key, value.encode()).map_err(Into::into)
     }
 
     // Read a value for a well-known entry
@@ -292,11 +289,11 @@ impl storage::transaction::DbTransaction for StoreTx<'_> {
     type Error = crate::Error;
 
     fn commit(self) -> crate::Result<()> {
-        self.0.commit().map_err(UnrecoverableError)
+        self.0.commit().map_err(Into::into)
     }
 
     fn abort(self) -> crate::Result<()> {
-        self.0.abort().map_err(UnrecoverableError)
+        self.0.abort().map_err(Into::into)
     }
 }
 

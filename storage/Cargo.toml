@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-serialization = { path = "../serialization"}
 common = { path = "../common"}
+serialization = { path = "../serialization"}
+logging = { path = '../logging' }
 thiserror = "1.0"

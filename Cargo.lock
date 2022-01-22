@@ -402,6 +402,7 @@ dependencies = [
  "mockall",
  "parity-scale-codec",
  "storage",
+ "thiserror",
 ]
 
 [[package]]
@@ -3273,6 +3274,7 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "logging",
  "serialization",
  "thiserror",
 ]
