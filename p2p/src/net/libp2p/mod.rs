@@ -16,7 +16,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error,
+    error::{self, P2pError},
     net::{Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
@@ -29,7 +29,10 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use parity_scale_codec::{Decode, Encode};
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    oneshot,
+};
 
 pub mod backend;
 pub mod common;
@@ -57,7 +60,7 @@ impl NetworkService for Libp2pService {
     type Strategy = LibP2pStrategy;
 
     async fn new(
-        _addr: Self::Address,
+        addr: Self::Address,
         _strategies: &[Self::Strategy],
         _topics: &[GossipSubTopic],
     ) -> error::Result<Self> {
@@ -87,10 +90,14 @@ impl NetworkService for Libp2pService {
         // run the libp2p backend in a background task
         tokio::spawn(async move {
             let mut backend = backend::Backend::new(swarm, cmd_rx, event_tx);
-            backend.run().await;
+            backend.run().await
         });
 
-        // TODO: start listening to `_addr` when command support is added
+        // send listen command to the libp2p backend and if it succeeds,
+        // return the created libp2p object
+        let (tx, rx) = oneshot::channel();
+        cmd_tx.send(common::Command::Listen { addr, response: tx }).await?;
+        rx.await?.map_err(|_| P2pError::SocketError(std::io::ErrorKind::AddrInUse))?;
 
         Ok(Self {
             _peer_id: peer_id,

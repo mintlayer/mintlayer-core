@@ -15,12 +15,21 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use crate::error;
 use libp2p::{
     streaming::{IdentityCodec, Streaming, StreamingEvent},
-    NetworkBehaviour,
+    Multiaddr, NetworkBehaviour,
 };
+use tokio::sync::oneshot;
 
-pub enum Command {}
+pub enum Command {
+    /// Start listening on the network interface specified by `addr`
+    Listen {
+        addr: Multiaddr,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+}
+
 pub enum Event {}
 
 #[derive(NetworkBehaviour)]
