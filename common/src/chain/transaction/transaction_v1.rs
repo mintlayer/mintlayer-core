@@ -51,6 +51,6 @@ impl TransactionV1 {
     }
 
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
-        Id::new(&id::default_hash_serialized(self))
+        Id::new(&id::hash_encoded(self))
     }
 }

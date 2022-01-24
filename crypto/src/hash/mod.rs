@@ -83,17 +83,6 @@ macro_rules! impl_hasher_stream_trait {
                 self.0.reset()
             }
         }
-
-        impl std::io::Write for $stream_type {
-            fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-                self.0.write(buf);
-                Ok(buf.len())
-            }
-
-            fn flush(&mut self) -> std::io::Result<()> {
-                Ok(())
-            }
-        }
     };
 }
 

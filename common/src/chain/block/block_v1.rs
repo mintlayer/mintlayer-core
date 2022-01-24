@@ -49,6 +49,6 @@ impl BlockV1 {
 
 impl Idable<BlockV1> for BlockV1 {
     fn get_id(&self) -> Id<Self> {
-        Id::new(&id::default_hash_serialized(self))
+        Id::new(&id::hash_encoded(self))
     }
 }

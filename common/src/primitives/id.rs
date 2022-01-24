@@ -71,16 +71,22 @@ pub type DataID = H256;
 pub type DefaultHashAlgo = crypto::hash::Blake2b32;
 pub type DefaultHashAlgoStream = crypto::hash::Blake2b32Stream;
 
+/// Hash given slice using the default hash
 pub fn default_hash<T: AsRef<[u8]> + Clone>(data: T) -> H256 {
     crypto::hash::hash::<DefaultHashAlgo, _>(&data).into()
 }
 
-/// Hash the encoded version of given value
-pub fn default_hash_serialized<T: Encode>(value: &T) -> H256 {
+/// Feed the encoded version of given value into the default hasher
+pub fn hash_encoded_to<T: Encode>(value: &T, hasher: &mut DefaultHashAlgoStream) {
+    crate::primitives::hash_encoded::hash_encoded_to(value, hasher)
+}
+
+/// Hash the encoded version of given value using the default hash
+pub fn hash_encoded<T: Encode>(value: &T) -> H256 {
     use crypto::hash::StreamHasher;
-    let mut hash_stream = DefaultHashAlgoStream::new();
-    value.encode_to(&mut hash_stream);
-    hash_stream.finalize().into()
+    let mut hasher = DefaultHashAlgoStream::new();
+    hash_encoded_to(value, &mut hasher);
+    hasher.finalize().into()
 }
 
 #[cfg(test)]
