@@ -1,3 +1,4 @@
+// Copyright (c) 2021 Protocol Labs
 // Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
@@ -19,19 +20,35 @@ use crate::{
     net::{Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
-use libp2p::Multiaddr;
+use libp2p::{
+    core::{upgrade, PeerId},
+    identity, mplex, noise,
+    streaming::{IdentityCodec, StreamHandle, Streaming},
+    swarm::{NegotiatedSubstream, SwarmBuilder},
+    tcp::TcpConfig,
+    Multiaddr, Transport,
+};
 use parity_scale_codec::{Decode, Encode};
+use tokio::sync::mpsc::{Receiver, Sender};
 
-/// This file provides the libp2p implementation of the network service.
+pub mod backend;
+pub mod common;
 
 #[derive(Debug)]
 pub enum LibP2pStrategy {}
 
 #[derive(Debug)]
-pub struct Libp2pService {}
+pub struct Libp2pService {
+    _peer_id: PeerId,
+    _cmd_tx: Sender<common::Command>,
+    _event_rx: Receiver<common::Event>,
+}
 
 #[derive(Debug)]
-pub struct Libp2pSocket {}
+pub struct Libp2pSocket {
+    pub peer: Multiaddr,
+    pub socket: StreamHandle<NegotiatedSubstream>,
+}
 
 #[async_trait]
 impl NetworkService for Libp2pService {
@@ -44,7 +61,44 @@ impl NetworkService for Libp2pService {
         _strategies: &[Self::Strategy],
         _topics: &[GossipSubTopic],
     ) -> error::Result<Self> {
-        todo!();
+        let id_keys = identity::Keypair::generate_ed25519();
+        let peer_id = id_keys.public().to_peer_id();
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&id_keys)
+            .expect("Signing keypair failed");
+
+        let transport = TcpConfig::new()
+            .nodelay(true)
+            .upgrade(upgrade::Version::V1)
+            .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
+            .multiplex(mplex::MplexConfig::new())
+            .boxed();
+
+        let swarm = SwarmBuilder::new(
+            transport,
+            common::ComposedBehaviour {
+                streaming: Streaming::<IdentityCodec>::default(),
+            },
+            peer_id,
+        )
+        .build();
+
+        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
+        let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
+
+        // run the libp2p backend in a background task
+        tokio::spawn(async move {
+            let mut backend = backend::Backend::new(swarm, cmd_rx, event_tx);
+            backend.run().await;
+        });
+
+        // TODO: start listening to `_addr` when command support is added
+
+        Ok(Self {
+            _peer_id: peer_id,
+            _cmd_tx: cmd_tx,
+            _event_rx: event_rx,
+        })
     }
 
     async fn connect(&mut self, _addr: Self::Address) -> error::Result<Self::Socket> {
