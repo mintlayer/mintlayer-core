@@ -63,7 +63,7 @@ impl Default for UpgradeVersion {
     }
 }
 
-/// is_dsa_activated(block_height:BlockHeight)
+// is_dsa_activated(block_height:BlockHeight)
 is_activated_fn!(dsa, UpgradeVersion, UpgradeVersion::DSA);
 
 impl<T: Default + Ord + Copy> NetUpgrades<T> {
