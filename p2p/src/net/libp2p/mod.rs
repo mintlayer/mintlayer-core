@@ -63,9 +63,7 @@ impl NetworkService for Libp2pService {
     ) -> error::Result<Self> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&id_keys)
-            .expect("Signing keypair failed");
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys)?;
 
         let transport = TcpConfig::new()
             .nodelay(true)
