@@ -17,8 +17,7 @@
 
 mod internal;
 
-use generic_array::typenum::marker_traits::Unsigned;
-use generic_array::{typenum, ArrayLength, GenericArray};
+use generic_array::{sequence::Split, typenum, ArrayLength, GenericArray};
 use internal::InternalStreamHasher;
 
 pub trait Hasher {
@@ -27,25 +26,24 @@ pub trait Hasher {
     fn hash<T: AsRef<[u8]>>(data: T) -> GenericArray<u8, Self::OutputSize>;
 }
 
-pub struct Blake2b;
-pub struct Sha1;
-pub struct Sha256;
-pub struct Sha3_512;
-pub struct Ripemd160;
-
 macro_rules! impl_hasher_trait {
     ($stream_type:ident, $internal_digest_type:ty, $stream_size:ty) => {
+        pub struct $stream_type;
+
         impl Hasher for $stream_type {
             type OutputSize = $stream_size;
 
             fn hash<T: AsRef<[u8]>>(data: T) -> GenericArray<u8, Self::OutputSize> {
-                internal::hash::<$internal_digest_type, T>(data)
+                // The split method below chooses the split point based on type,
+                // see the docs for [generic_array::sequence::Split] for more info.
+                internal::hash::<$internal_digest_type, T>(data).split().0
             }
         }
     };
 }
 
 impl_hasher_trait!(Blake2b, blake2::Blake2b<typenum::U64>, typenum::U64);
+impl_hasher_trait!(Blake2b32, blake2::Blake2b<typenum::U64>, typenum::U32);
 impl_hasher_trait!(Sha1, sha1::Sha1, typenum::U20);
 impl_hasher_trait!(Sha256, sha2::Sha256, typenum::U32);
 impl_hasher_trait!(Sha3_512, sha3::Sha3_512, typenum::U64);
@@ -78,36 +76,7 @@ macro_rules! impl_hasher_stream_trait {
             }
 
             fn finalize(&mut self) -> GenericArray<u8, Self::OutputSize> {
-                self.0.finalize()
-            }
-
-            fn reset(&mut self) {
-                self.0.reset()
-            }
-        }
-    };
-}
-
-/// implementation of a stream hasher that eventually crops the result
-macro_rules! impl_hasher_stream_with_crop_trait {
-    ($stream_type:ident, $crop_size:ty) => {
-        impl StreamHasher for $stream_type {
-            type OutputSize = $crop_size;
-
-            fn new() -> Self {
-                Self(InternalStreamHasher::new())
-            }
-
-            fn write<T: AsRef<[u8]>>(&mut self, in_bytes: T) {
-                self.0.write(in_bytes)
-            }
-
-            fn finalize(&mut self) -> GenericArray<u8, Self::OutputSize> {
-                let buf = self.0.finalize();
-                let size = <$crop_size as Unsigned>::USIZE;
-                let mut res: GenericArray<u8, Self::OutputSize> = Default::default();
-                res.copy_from_slice(&buf[0..size]);
-                res
+                self.0.finalize().split().0
             }
 
             fn reset(&mut self) {
@@ -120,7 +89,7 @@ macro_rules! impl_hasher_stream_with_crop_trait {
 #[derive(Clone)]
 pub struct Blake2bStream(InternalStreamHasher<blake2::Blake2b<typenum::U64>>);
 #[derive(Clone)]
-pub struct Blake2bStream32(InternalStreamHasher<blake2::Blake2b<typenum::U64>>);
+pub struct Blake2b32Stream(InternalStreamHasher<blake2::Blake2b<typenum::U64>>);
 #[derive(Clone)]
 pub struct Sha1Stream(InternalStreamHasher<sha1::Sha1>);
 #[derive(Clone)]
@@ -130,7 +99,7 @@ pub struct Sha3_512Stream(InternalStreamHasher<sha3::Sha3_512>);
 #[derive(Clone)]
 pub struct Ripemd160Stream(InternalStreamHasher<ripemd::Ripemd160>);
 
-impl_hasher_stream_with_crop_trait!(Blake2bStream32, generic_array::typenum::U32);
+impl_hasher_stream_trait!(Blake2b32Stream, generic_array::typenum::U32);
 impl_hasher_stream_trait!(Blake2bStream, generic_array::typenum::U64);
 impl_hasher_stream_trait!(Sha1Stream, generic_array::typenum::U20);
 impl_hasher_stream_trait!(Sha256Stream, generic_array::typenum::U32);
