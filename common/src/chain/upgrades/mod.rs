@@ -2,7 +2,7 @@ mod netupgrade;
 mod pow;
 
 pub use netupgrade::*;
-pub use pow::POWConfig;
+pub use pow::PoWConfig;
 
 pub enum NetUpgradeError {
     GenerateConfigFailed,

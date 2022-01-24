@@ -1,30 +1,17 @@
 use crate::chain::config::ChainType;
-use crate::chain::upgrades::{NetUpgradeError, UpgradeVersion};
 use crate::uint::Uint256;
 
 /// Chain Parameters for Proof of Work, as found in
 /// https://github.com/bitcoin/bitcoin/blob/master/src/chainparams.cpp
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct POWConfig {
+pub struct PoWConfig {
     pub(crate) no_retargeting: bool,
     pub(crate) allow_min_difficulty_blocks: bool,
     pub(crate) limit: Uint256,
 }
 
-impl TryFrom<(UpgradeVersion, ChainType)> for POWConfig {
-    type Error = NetUpgradeError;
-
-    fn try_from(value: (UpgradeVersion, ChainType)) -> Result<Self, Self::Error> {
-        if value.0 == UpgradeVersion::POW {
-            return Ok(POWConfig::from(value.1));
-        }
-
-        Err(NetUpgradeError::GenerateConfigFailed)
-    }
-}
-
-impl From<ChainType> for POWConfig {
+impl From<ChainType> for PoWConfig {
     fn from(chain_type: ChainType) -> Self {
         Self {
             no_retargeting: no_retargeting(&chain_type),
@@ -75,6 +62,20 @@ fn limit(chain_type: &ChainType) -> Uint256 {
 mod tests {
     use super::*;
 
+    use crate::chain::upgrades::{NetUpgradeError, UpgradeVersion};
+
+    impl TryFrom<(UpgradeVersion, ChainType)> for PoWConfig {
+        type Error = NetUpgradeError;
+
+        fn try_from(value: (UpgradeVersion, ChainType)) -> Result<Self, Self::Error> {
+            if value.0 == UpgradeVersion::PoW {
+                return Ok(PoWConfig::from(value.1));
+            }
+
+            Err(NetUpgradeError::GenerateConfigFailed)
+        }
+    }
+
     #[test]
     fn check_pow_limit() {
         let regtest = ChainType::Regtest;
@@ -101,26 +102,26 @@ mod tests {
 
     #[test]
     fn check_from_chain_type() {
-        let cfg = POWConfig::from(ChainType::Mainnet);
+        let cfg = PoWConfig::from(ChainType::Mainnet);
         assert!(!cfg.no_retargeting);
         assert!(!cfg.allow_min_difficulty_blocks);
 
-        let cfg = POWConfig::from(ChainType::Regtest);
+        let cfg = PoWConfig::from(ChainType::Regtest);
         assert!(cfg.no_retargeting);
         assert!(cfg.allow_min_difficulty_blocks);
 
-        let cfg = POWConfig::from(ChainType::Testnet);
+        let cfg = PoWConfig::from(ChainType::Testnet);
         assert!(!cfg.no_retargeting);
         assert!(cfg.allow_min_difficulty_blocks);
     }
 
     #[test]
     fn check_generate_config() {
-        let vers = UpgradeVersion::POW;
+        let vers = UpgradeVersion::PoW;
 
         fn check(vers: UpgradeVersion, chain: ChainType) {
-            if let Ok(res) = POWConfig::try_from((vers, chain)) {
-                assert_eq!(POWConfig::from(chain), res);
+            if let Ok(res) = PoWConfig::try_from((vers, chain)) {
+                assert_eq!(PoWConfig::from(chain), res);
             } else {
                 panic!("failed to generate config for {:?} , {:?}", vers, chain);
             }
@@ -135,12 +136,12 @@ mod tests {
     #[test]
     fn check_failed_generate_config() {
         fn check(vers: UpgradeVersion, chain: ChainType) {
-            assert!(POWConfig::try_from((vers, chain)).is_err())
+            assert!(PoWConfig::try_from((vers, chain)).is_err())
         }
 
         check(UpgradeVersion::DSA, ChainType::Testnet);
         check(UpgradeVersion::DSA, ChainType::Regtest);
-        check(UpgradeVersion::POS, ChainType::Mainnet);
-        check(UpgradeVersion::POS, ChainType::Signet);
+        check(UpgradeVersion::PoS, ChainType::Mainnet);
+        check(UpgradeVersion::PoS, ChainType::Signet);
     }
 }

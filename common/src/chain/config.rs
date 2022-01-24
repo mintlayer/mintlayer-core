@@ -1,7 +1,8 @@
 use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
-use crate::chain::upgrades::NetUpgrade;
+use crate::chain::upgrades::NetUpgrades;
+use crate::chain::UpgradeVersion;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
@@ -28,7 +29,7 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
     #[allow(dead_code)]
-    net_upgrades: NetUpgrade,
+    net_upgrades: NetUpgrades<UpgradeVersion>,
     #[allow(dead_code)]
     magic_bytes: [u8; 4],
     #[allow(dead_code)]
@@ -54,7 +55,7 @@ impl ChainConfig {
         &self.version
     }
 
-    pub fn net_upgrade(&self) -> &NetUpgrade {
+    pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
     }
 }

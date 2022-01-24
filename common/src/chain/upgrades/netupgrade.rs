@@ -1,29 +1,74 @@
-#![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
 use crate::primitives::height::Saturating;
 use crate::primitives::BlockHeight;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-#[repr(u8)]
-pub enum UpgradeVersion {
-    Genesis = 0,
-    POW,
-    POS,
-    DSA = 5,
-}
-
 #[derive(Debug, Clone)]
-pub struct NetUpgrade(Vec<(BlockHeight, UpgradeVersion)>);
+pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
 
-impl Default for NetUpgrade {
+impl<T: Default> Default for NetUpgrades<T> {
     fn default() -> Self {
-        Self(vec![(BlockHeight::zero(), UpgradeVersion::Genesis)])
+        Self(vec![(BlockHeight::zero(), T::default())])
     }
 }
 
-impl NetUpgrade {
+/// creates a function in NetUpgrades to check whether a certain upgrade is activated.
+///
+/// # Examples
+/// ```
+/// #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+/// pub enum ConsensusConfig {
+///    PoW, PoS, NPoS, DPos
+/// }
+///
+/// is_activated_fn!(NPoS, ConsensusConfig, ConsensusConfig::NPoS);
+///
+/// fn main() {
+///     let x = NetUpgrades::default();
+///     x.is_NPoS_activated(); // this will return false
+///     x.is_PoS_activated(); // compile error because function does not exist.
+/// }
+/// ```
+/// ```
+macro_rules! is_activated_fn {
+    ($name:ident, $enum_ty:ty, $matcher:expr) => {
+        impl NetUpgrades<$enum_ty> {
+            paste::paste! {
+                pub fn [< is_ $name _activated >](&self, height:BlockHeight) -> bool {
+                    if let Ok(idx) = self.0.binary_search_by(|&(_,to_match)| {
+                        to_match.cmp(&$matcher)
+                    }) {
+
+                        return height >= self.0[idx].0;
+                    }
+
+                    false
+                }
+            }
+        }
+    };
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum UpgradeVersion {
+    Genesis = 0,
+    PoW,
+    PoS,
+    DSA,
+}
+
+impl Default for UpgradeVersion {
+    fn default() -> Self {
+        Self::Genesis
+    }
+}
+
+/// is_dsa_activated(block_height:BlockHeight)
+is_activated_fn!(dsa, UpgradeVersion, UpgradeVersion::DSA);
+
+impl<T: Default + Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
-    pub(crate) fn initialize(upgrades: Vec<(BlockHeight, UpgradeVersion)>) -> Self {
+    pub(crate) fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
         let mut upgrades = upgrades;
         upgrades.sort();
 
@@ -31,13 +76,13 @@ impl NetUpgrade {
             return if height == BlockHeight::zero() {
                 Self(upgrades)
             } else {
-                let mut default: NetUpgrade = Default::default();
+                let mut default = Self::default();
                 default.0.append(&mut upgrades);
                 default
             };
         }
 
-        NetUpgrade::default()
+        Self::default()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -48,19 +93,14 @@ impl NetUpgrade {
         self.0.len()
     }
 
-    pub fn is_upgrade_activated(&self, height: BlockHeight) -> bool {
-        #![allow(clippy::search_is_some)]
-        self.0.iter().find(|&(elem_height, _)| *elem_height == height).is_some()
-    }
-
-    pub fn get_version(&self, height: BlockHeight) -> UpgradeVersion {
+    pub fn get_version(&self, height: BlockHeight) -> T {
         match self.0.iter().rfind(|&&(elem_height, _)| elem_height <= height) {
-            None => UpgradeVersion::Genesis,
+            None => T::default(),
             Some(&(_, version)) => version,
         }
     }
 
-    pub fn height_range(&self, version: UpgradeVersion) -> Option<(BlockHeight, BlockHeight)> {
+    pub fn height_range(&self, version: T) -> Option<(BlockHeight, BlockHeight)> {
         self.0
             .iter()
             .enumerate()
@@ -80,109 +120,107 @@ impl NetUpgrade {
 
 #[cfg(test)]
 mod tests {
-    use crate::chain::upgrades::netupgrade::{NetUpgrade, UpgradeVersion};
+    use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::primitives::height::Saturating;
     use crate::primitives::BlockHeight;
 
-    fn mock_netupgrades() -> (NetUpgrade, BlockHeight, BlockHeight) {
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+    pub enum MockVersion {
+        Zero,
+        One,
+        Two,
+        Three,
+        Four,
+        Five,
+    }
+
+    impl Default for MockVersion {
+        fn default() -> Self {
+            Self::Zero
+        }
+    }
+
+    is_activated_fn!(two, MockVersion, MockVersion::Two);
+
+    fn mock_netupgrades() -> (NetUpgrades<MockVersion>, BlockHeight, BlockHeight) {
         let mut upgrades = vec![];
-        let pos_height = BlockHeight::new(350);
-        let dsa_height = BlockHeight::new(3000);
+        let two_height = BlockHeight::new(3500);
+        let three_height = BlockHeight::new(80000);
 
-        upgrades.push((BlockHeight::one(), UpgradeVersion::POW));
+        upgrades.push((BlockHeight::one(), MockVersion::One));
 
-        upgrades.push((pos_height, UpgradeVersion::POS));
+        upgrades.push((two_height, MockVersion::Two));
 
-        upgrades.push((dsa_height, UpgradeVersion::DSA));
+        upgrades.push((three_height, MockVersion::Three));
 
-        (NetUpgrade::initialize(upgrades), pos_height, dsa_height)
+        (NetUpgrades::initialize(upgrades), two_height, three_height)
     }
 
     #[test]
-    fn check_upgrade_activated() {
-        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+    fn check_is_activated() {
+        let (upgrades, two_height, three_height) = mock_netupgrades();
 
-        let is_activated = |h: BlockHeight| {
-            assert!(&upgrades.is_upgrade_activated(h));
-        };
+        assert!(upgrades.is_two_activated(two_height));
+        assert!(upgrades.is_two_activated(three_height));
+        assert!(!upgrades.is_two_activated(BlockHeight::one()));
+        assert!(!upgrades.is_two_activated(two_height.saturating_sub(1)));
 
-        let not_activated = |h: BlockHeight| {
-            assert!(!&upgrades.is_upgrade_activated(h));
-        };
+        is_activated_fn!(three, MockVersion, MockVersion::Three);
 
-        is_activated(BlockHeight::zero());
-        is_activated(BlockHeight::one());
-        is_activated(pos_height);
-        is_activated(dsa_height);
-
-        not_activated(BlockHeight::new(2));
-        not_activated(BlockHeight::new(100));
-        not_activated(pos_height.saturating_add(1));
-        not_activated(pos_height.saturating_add(2));
-        not_activated(pos_height.saturating_sub(1));
-        not_activated(pos_height.saturating_sub(2));
-        not_activated(dsa_height.saturating_add(2));
-        not_activated(dsa_height.saturating_add(1));
-        not_activated(dsa_height.saturating_sub(1));
-        not_activated(dsa_height.saturating_sub(2));
+        assert!(!upgrades.is_three_activated(two_height));
+        assert!(!upgrades.is_three_activated(two_height.saturating_add(10)));
+        assert!(upgrades.is_three_activated(three_height));
+        assert!(upgrades.is_three_activated(BlockHeight::max()));
     }
 
     #[test]
     fn check_upgrade_version_from_height() {
-        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+        let (upgrades, two_height, three_height) = mock_netupgrades();
 
-        println!("THE UPGRADES: {:?}", upgrades);
-
-        let check = |v: UpgradeVersion, h: BlockHeight| {
+        let check = |v: MockVersion, h: BlockHeight| {
             assert_eq!(v, upgrades.get_version(h));
         };
 
-        check(UpgradeVersion::Genesis, BlockHeight::zero());
-        check(UpgradeVersion::POW, BlockHeight::one());
-        check(UpgradeVersion::POW, BlockHeight::new(26));
-        check(UpgradeVersion::POW, pos_height.saturating_sub(1));
-        check(UpgradeVersion::POS, pos_height);
-        check(UpgradeVersion::POS, pos_height.saturating_add(1));
-        check(UpgradeVersion::POS, dsa_height.saturating_sub(1));
-        check(UpgradeVersion::DSA, dsa_height);
-        check(UpgradeVersion::DSA, dsa_height.saturating_add(100));
-        check(UpgradeVersion::DSA, dsa_height.saturating_add(2022));
-        check(UpgradeVersion::DSA, dsa_height.saturating_add(3000));
+        check(MockVersion::Zero, BlockHeight::zero());
+        check(MockVersion::One, BlockHeight::one());
+        check(MockVersion::One, BlockHeight::new(26));
+        check(MockVersion::One, two_height.saturating_sub(1));
+        check(MockVersion::Two, two_height);
+        check(MockVersion::Two, two_height.saturating_add(1));
+        check(MockVersion::Two, three_height.saturating_sub(1));
+        check(MockVersion::Three, three_height);
+        check(MockVersion::Three, three_height.saturating_add(100));
+        check(MockVersion::Three, three_height.saturating_add(2022));
+        check(MockVersion::Three, three_height.saturating_add(3000));
     }
 
     #[test]
     fn check_upgrade_versions() {
-        assert_eq!(0u8, UpgradeVersion::Genesis as u8);
-        assert_eq!(1u8, UpgradeVersion::POW as u8);
-        assert_eq!(2u8, UpgradeVersion::POS as u8);
-        assert_eq!(5u8, UpgradeVersion::DSA as u8);
+        assert_eq!(0u8, MockVersion::Zero as u8);
+        assert_eq!(1u8, MockVersion::One as u8);
+        assert_eq!(2u8, MockVersion::Two as u8);
+        assert_eq!(3u8, MockVersion::Three as u8);
+        assert_eq!(4u8, MockVersion::Four as u8);
+        assert_eq!(5u8, MockVersion::Five as u8);
     }
 
     #[test]
     fn check_upgrade_height_range() {
-        let (upgrades, pos_height, dsa_height) = mock_netupgrades();
+        let (upgrades, two_height, three_height) = mock_netupgrades();
 
-        let check = |vers_type: UpgradeVersion, height: BlockHeight, end_range: BlockHeight| {
+        let check = |vers_type: MockVersion, height: BlockHeight, end_range: BlockHeight| {
             let res = upgrades.height_range(vers_type);
 
             assert_eq!(Some((height, end_range)), res);
         };
 
+        check(MockVersion::Zero, BlockHeight::zero(), BlockHeight::zero());
         check(
-            UpgradeVersion::Genesis,
-            BlockHeight::zero(),
-            BlockHeight::zero(),
-        );
-        check(
-            UpgradeVersion::POW,
+            MockVersion::One,
             BlockHeight::one(),
-            pos_height.saturating_sub(1),
+            two_height.saturating_sub(1),
         );
-        check(
-            UpgradeVersion::POS,
-            pos_height,
-            dsa_height.saturating_sub(1),
-        );
-        check(UpgradeVersion::DSA, dsa_height, BlockHeight::max());
+        check(MockVersion::Two, two_height, three_height.saturating_sub(1));
+        check(MockVersion::Three, three_height, BlockHeight::max());
     }
 }
