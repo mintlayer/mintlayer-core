@@ -17,8 +17,9 @@
 // Author(s): A. Altonen
 use crate::error;
 use libp2p::{
-    streaming::{IdentityCodec, Streaming, StreamingEvent},
-    Multiaddr, NetworkBehaviour,
+    streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
+    swarm::NegotiatedSubstream,
+    Multiaddr, NetworkBehaviour, PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -26,6 +27,15 @@ pub enum Command {
     Listen {
         addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
+    },
+    Dial {
+        peer_id: PeerId,
+        peer_addr: Multiaddr,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+    OpenStream {
+        peer_id: PeerId,
+        response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     },
 }
 
