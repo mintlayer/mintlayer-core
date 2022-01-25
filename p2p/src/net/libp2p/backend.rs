@@ -189,6 +189,10 @@ mod tests {
     };
     use tokio::sync::oneshot;
 
+    // create a swarm object which is the top-level object of libp2p
+    //
+    // it contains the selected transport for the swarm (in this case TCP + Noise)
+    // and any custom network behaviour such as streaming or mDNS support
     fn make_swarm() -> Swarm<common::ComposedBehaviour> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -197,6 +201,7 @@ mod tests {
 
         let transport = TcpConfig::new()
             .nodelay(true)
+            .port_reuse(false)
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
@@ -212,6 +217,7 @@ mod tests {
         .build()
     }
 
+    // verify that binding to a free network interface succeeds
     #[tokio::test]
     async fn test_command_listen_success() {
         let swarm = make_swarm();
@@ -235,6 +241,8 @@ mod tests {
         assert!(res.unwrap().is_ok());
     }
 
+    // verify that binding twice to the same network inteface fails
+    #[ignore]
     #[tokio::test]
     async fn test_command_listen_addrinuse() {
         let swarm = make_swarm();
@@ -273,6 +281,8 @@ mod tests {
         assert!(res.unwrap().is_err());
     }
 
+    // verify that libp2p is able to notice if the p2p object closes
+    // the command tx which signals that it is no longer responsive
     #[tokio::test]
     async fn test_drop_command_tx() {
         let swarm = make_swarm();

@@ -194,21 +194,21 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_p2p_new_libp2p() {
         let config = Arc::new(config::create_mainnet());
-        let addr: <Libp2pService as NetworkService>::Address = "/ip6/::1/tcp/8889".parse().unwrap();
+        let addr: libp2p::Multiaddr = "/ip6/::1/tcp/8889".parse().unwrap();
         let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_ok());
 
         // try to create new P2P object to the same address, should fail
-        let addr: <Libp2pService as NetworkService>::Address = "/ip6/::1/tcp/8889".parse().unwrap();
+        let addr: libp2p::Multiaddr = "/ip6/::1/tcp/8889".parse().unwrap();
         let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_err());
 
         // try to create new P2P object to different address, should succeed
-        let addr: <Libp2pService as NetworkService>::Address =
-            "/ip4/127.0.0.1/tcp/8889".parse().unwrap();
+        let addr: libp2p::Multiaddr = "/ip4/127.0.0.1/tcp/8889".parse().unwrap();
         let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_ok());
     }

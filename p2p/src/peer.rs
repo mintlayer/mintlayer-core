@@ -326,12 +326,12 @@ where
 mod tests {
     use super::*;
     use crate::net;
-    use crate::net::mock::MockService;
+    use crate::net::{libp2p::Libp2pService, mock::MockService};
     use common::chain::config;
     use tokio::net::TcpStream;
 
     #[tokio::test]
-    async fn test_peer_new() {
+    async fn test_peer_new_mock() {
         let config = Arc::new(config::create_mainnet());
         let addr: <MockService as NetworkService>::Address = "[::1]:11121".parse().unwrap();
         let mut server = MockService::new(addr, &[], &[]).await.unwrap();
@@ -351,6 +351,38 @@ mod tests {
             PeerRole::Outbound,
             config.clone(),
             server_res,
+            peer_tx,
+            rx,
+        );
+    }
+
+    #[tokio::test]
+    async fn test_peer_new_libp2p() {
+        let config = Arc::new(config::create_mainnet());
+        let addr1: <Libp2pService as NetworkService>::Address =
+            "/ip6/::1/tcp/11422".parse().unwrap();
+        let mut server1 = Libp2pService::new(addr1.clone(), &[], &[]).await.unwrap();
+
+        let conn_addr = server1.addr.clone();
+        let addr2: <Libp2pService as NetworkService>::Address =
+            "/ip6/::1/tcp/11423".parse().unwrap();
+        let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
+
+        let (server1_res, server2_res) =
+            tokio::join!(server1.poll_next(), server2.connect(conn_addr));
+        assert!(server1_res.is_ok());
+        assert!(server2_res.is_ok());
+
+        let server1_res: net::Event<Libp2pService> = server1_res.unwrap();
+        let net::Event::IncomingConnection(server1_res) = server1_res;
+
+        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+        let (_tx, rx) = tokio::sync::mpsc::channel(1);
+        let _ = Peer::<Libp2pService>::new(
+            1,
+            PeerRole::Outbound,
+            config.clone(),
+            server1_res,
             peer_tx,
             rx,
         );
