@@ -15,7 +15,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::{error, net};
 use libp2p::{
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
@@ -39,7 +39,9 @@ pub enum Command {
     },
 }
 
-pub enum Event {}
+pub enum Event {
+    ConnectionAccepted { socket: net::libp2p::Libp2pSocket },
+}
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ComposedEvent")]

@@ -17,13 +17,14 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError},
-    net::libp2p::common,
+    net::{self, libp2p::common},
 };
 use futures::StreamExt;
 use libp2p::{
+    core::connection::ConnectedPoint,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
-    PeerId,
+    Multiaddr, PeerId,
 };
 use std::collections::HashMap;
 use tokio::sync::{
@@ -39,10 +40,13 @@ pub struct Backend {
     cmd_rx: Receiver<common::Command>,
 
     /// Sender for outgoing events (peers, pubsub messages)
-    _event_tx: Sender<common::Event>,
+    event_tx: Sender<common::Event>,
 
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
+
+    /// Hashmap of pending inbound connections
+    conns: HashMap<PeerId, Multiaddr>,
 
     /// Hashmap of pending outbound streams
     streams: HashMap<
@@ -60,8 +64,9 @@ impl Backend {
         Self {
             swarm,
             cmd_rx,
-            _event_tx: event_tx,
+            event_tx,
             dials: HashMap::new(),
+            conns: HashMap::new(),
             streams: HashMap::new(),
         }
     }
@@ -101,18 +106,40 @@ impl Backend {
                 .map_err(|_| P2pError::ChannelClosed),
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
-            } => {
-                if endpoint.is_dialer() {
-                    return self
-                        .dials
-                        .remove(&peer_id)
-                        .ok_or_else(|| {
-                            P2pError::Unknown("Pending connection does not exist".to_string())
-                        })?
-                        .send(Ok(()))
-                        .map_err(|_| P2pError::ChannelClosed);
+            } => match endpoint {
+                ConnectedPoint::Dialer { .. } => self
+                    .dials
+                    .remove(&peer_id)
+                    .ok_or_else(|| {
+                        P2pError::Unknown("Pending connection does not exist".to_string())
+                    })?
+                    .send(Ok(()))
+                    .map_err(|_| P2pError::ChannelClosed),
+                ConnectedPoint::Listener {
+                    local_addr: _,
+                    send_back_addr,
+                } => {
+                    self.conns.insert(peer_id, send_back_addr);
+                    Ok(())
                 }
-
+            },
+            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+                StreamingEvent::NewIncoming {
+                    peer_id, stream, ..
+                },
+            )) => {
+                let addr = self.conns.remove(&peer_id).ok_or_else(|| {
+                    P2pError::Unknown("Pending connection does not exist".to_string())
+                })?;
+                self.event_tx
+                    .send(common::Event::ConnectionAccepted {
+                        socket: net::libp2p::Libp2pSocket { addr, stream },
+                    })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed)
+            }
+            SwarmEvent::NewListenAddr { address, .. } => {
+                println!("libp2p: new listen address: {:?}", address);
                 Ok(())
             }
             _ => {
