@@ -201,3 +201,66 @@ impl SocketService for Libp2pSocket {
         todo!();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_connect_new() {
+        let service = Libp2pService::new("/ip6/::1/tcp/8900".parse().unwrap(), &[], &[]).await;
+        assert!(service.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_connect_new_addrinuse() {
+        let service = Libp2pService::new("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+        assert!(service.is_ok());
+
+        let service = Libp2pService::new("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+
+        match service {
+            Err(e) => {
+                assert_eq!(e, P2pError::SocketError(std::io::ErrorKind::AddrInUse));
+            }
+            Ok(_) => panic!("address is not in use"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_connect_accept() {
+        let service1 = Libp2pService::new("/ip6/::1/tcp/8902".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::new("/ip6/::1/tcp/8903".parse().unwrap(), &[], &[]).await;
+        assert!(service1.is_ok());
+        assert!(service2.is_ok());
+
+        let mut service1 = service1.unwrap();
+        let mut service2 = service2.unwrap();
+        let conn_addr = service1.addr.clone();
+
+        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+            tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+
+        assert!(res2.is_ok());
+        assert!(res1.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_connect_peer_id_missing() {
+        let addr1: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
+        let mut service2 = Libp2pService::new("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[])
+            .await
+            .unwrap();
+        match service2.connect(addr1).await {
+            Ok(_) => panic!("connect succeeded without peer id"),
+            Err(e) => {
+                assert_eq!(
+                    e,
+                    P2pError::Libp2pError(Libp2pError::DialError(
+                        "Expect peer multiaddr to contain peer ID.".into(),
+                    ))
+                )
+            }
+        }
+    }
+}
