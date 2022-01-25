@@ -1,4 +1,4 @@
-use common::Uint256;
+use common::primitives::Uint256;
 use std::ops::Shl;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Debug)]

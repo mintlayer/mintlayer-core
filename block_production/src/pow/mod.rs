@@ -1,50 +1,25 @@
+mod compact;
+mod constants;
+pub mod impls;
+mod network;
 mod pow;
+mod traits;
 
-use common::chain::block::{Block, BlockHeader, ConsensusData};
-use common::primitives::{Compact,H256};
-use common::Uint256;
+pub use compact::*;
+pub use network::Network;
+pub use pow::Pow;
 
-
-pub trait ExtractData {
-    fn get_bits(&self) -> Vec<u8>;
-    fn get_nonce(&self) -> u128;
-    fn get_target(&self) -> Uint256;
-
-    fn create(bits: &[u8], nonce: u128) -> Self;
-
-    fn get_difficulty(&self) -> Uint256;
+pub enum ConversionError {
+    CompactToUInt256,
 }
 
-impl ExtractData for ConsensusData {
-    fn get_bits(&self) -> Vec<u8> {
-        todo!()
-    }
-
-    fn get_nonce(&self) -> u128 {
-        todo!()
-    }
-
-    fn get_target(&self) -> Uint256 {
-        let bits = self.get_bits();
-        convert_to_Uint256(bits)
-    }
-
-    fn get_difficulty(&self) -> Uint256 {
-        let bits = self.get_bits();
-        convert_to_Uint256(bits)
-    }
-
-    fn create(bits: &[u8], nonce: u128) -> Self {
-        todo!()
+impl Into<POWError> for ConversionError {
+    fn into(self) -> POWError {
+        POWError::FailedConversion(self)
     }
 }
 
-pub trait Hashable {
-    fn hash(&self) -> Uint256;
-}
-
-impl Hashable for Block {
-    fn hash(&self) -> Uint256 {
-        todo!()
-    }
+pub enum POWError {
+    FailedConversion(ConversionError),
+    BlockToMineError(String),
 }
