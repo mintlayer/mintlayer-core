@@ -110,18 +110,6 @@ mod tests {
     use super::*;
     use crypto::hash::StreamHasher;
 
-    // #[test]
-    // fn basic_h256_to_and_from_bytes() {
-    //     use rand::Rng;
-    //     let random_bytes = rand::thread_rng().gen::<[u8; H256::len_bytes()]>();
-    //
-    //     let n = H256::from(random_bytes);
-    //     let bytes_again = &(*n.as_bytes());
-    //     assert_eq!(n.as_bytes(), random_bytes);
-    //     let m = H256::from(bytes_again);
-    //     assert_eq!(m, n);
-    // }
-
     #[test]
     fn hashes_stream_and_msg_identical() {
         use rand::Rng;
