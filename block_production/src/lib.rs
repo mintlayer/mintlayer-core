@@ -1,20 +1,12 @@
+#![allow(dead_code, unused_variables)]
+
 mod pow;
 
-pub use crate::pow::{Network as POWNetwork, POWError};
+pub use crate::pow::POWError;
 use common::chain::block::{Block, BlockCreationError};
 use common::chain::transaction::Transaction;
-use common::primitives::{Id, H256};
-
-//TODO: remove until an actual trait is created
-pub trait Chain {
-    fn get_block_hash(block_number: u32) -> H256;
-    fn get_block_number(block_hash: &H256) -> u32;
-    fn get_latest_block() -> Block;
-    fn get_block_id(block: &Block) -> H256;
-    fn get_block(block_id: &Id<Block>) -> Block;
-
-    fn add_block(block: Block);
-}
+use common::chain::ChainConfig;
+use common::primitives::{BlockHeight, Id};
 
 //TODO: define definite errors specific to BlockProduction
 pub enum BlockProductionError {
@@ -38,32 +30,38 @@ impl From<BlockCreationError> for BlockProductionError {
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
-pub enum ConsensusParams {
-    /// Proof of Work consensus parameters
-    POW {
-        max_nonce: u128,
-        network: POWNetwork,
-    },
-    /// Proof of Stake consensus parameters
-    POS,
-}
-
-pub trait BlockProducer: Chain {
-    //TODO: what other params are needed to verify a block?
-    fn verify_block(block: &Block) -> Result<(), BlockProductionError>;
-
-    fn create_block(
-        time: u32,
-        transactions: Vec<Transaction>,
-        consensus_params: ConsensusParams,
-    ) -> Result<Block, BlockProductionError>;
-}
-
 #[cfg(test)]
 mod tests {
     #[test]
     fn it_works() {
         assert_eq!(2 + 2, 4);
     }
+}
+
+pub struct BlockProducer;
+
+impl BlockProducer {
+    fn verify_block(block: &Block) -> Result<(), BlockProductionError> {
+        todo!()
+    }
+
+    fn create_block(
+        time: u32,
+        transactions: Vec<Transaction>,
+        cfg: ChainConfig,
+        height: BlockHeight,
+    ) -> Result<Block, BlockProductionError> {
+        // TODO: retrieve the netupgrade from cfg, and determine whether it's for pow, pos, etc.
+
+        todo!()
+    }
+}
+
+pub fn create_empty_block(
+    prev_block: &Block,
+    time: u32,
+    transactions: Vec<Transaction>,
+) -> Result<Block, BlockCreationError> {
+    let hash_prev_block = Id::new(&prev_block.get_merkle_root());
+    Block::new(transactions, hash_prev_block, time, vec![])
 }
