@@ -44,15 +44,24 @@ pub enum LibP2pStrategy {}
 
 #[derive(Debug)]
 pub struct Libp2pService {
-    _peer_id: PeerId,
+    /// Multiaddress of the local peer
+    pub addr: Multiaddr,
+
+    /// TX channel for sending commands to libp2p backend
     cmd_tx: Sender<common::Command>,
-    _event_rx: Receiver<common::Event>,
+
+    /// RX channel for receiving events from libp2p backend
+    event_rx: Receiver<common::Event>,
 }
 
 #[derive(Debug)]
+#[allow(unused)]
 pub struct Libp2pSocket {
-    pub addr: Multiaddr,
-    pub stream: StreamHandle<NegotiatedSubstream>,
+    /// Multiaddress of the remote peer
+    addr: Multiaddr,
+
+    /// Stream handle for the remote peer
+    stream: StreamHandle<NegotiatedSubstream>,
 }
 
 #[async_trait]
@@ -96,15 +105,20 @@ impl NetworkService for Libp2pService {
         });
 
         // send listen command to the libp2p backend and if it succeeds,
-        // return the created libp2p object
+        // create a multiaddress for local peer and return the Libp2pService object
         let (tx, rx) = oneshot::channel();
-        cmd_tx.send(common::Command::Listen { addr, response: tx }).await?;
+        cmd_tx
+            .send(common::Command::Listen {
+                addr: addr.clone(),
+                response: tx,
+            })
+            .await?;
         rx.await?.map_err(|_| P2pError::SocketError(std::io::ErrorKind::AddrInUse))?;
 
         Ok(Self {
-            _peer_id: peer_id,
+            addr: addr.with(Protocol::P2p(peer_id.into())),
             cmd_tx,
-            _event_rx: event_rx,
+            event_rx,
         })
     }
 
@@ -138,7 +152,6 @@ impl NetworkService for Libp2pService {
             .map_err(|e| e)?; // command failure
 
         // if dial succeeded, open a generic stream
-        let _ = 0u32;
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(common::Command::OpenStream {
@@ -157,9 +170,11 @@ impl NetworkService for Libp2pService {
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService,
+        T: NetworkService<Socket = Libp2pSocket>,
     {
-        todo!();
+        match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            common::Event::ConnectionAccepted { socket } => Ok(Event::IncomingConnection(socket)),
+        }
     }
 
     async fn publish<T>(&mut self, _topic: GossipSubTopic, _data: &T)
