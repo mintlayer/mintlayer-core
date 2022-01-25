@@ -1,4 +1,6 @@
-/******************* IDEA : Compile time deterministic generic specialization for subsystems interfacing
+use std::array;
+
+/******************* IDEA
 
 Core <--> Trait <--> Tunnel <--> Some other core
 
@@ -38,16 +40,13 @@ For your method call:
 https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
 https://stackoverflow.com/questions/28519997/what-are-rusts-exact-auto-dereferencing-rules
 
-Real-World example :
-https://github.com/sagebind/castaway
-
 */
 
 /*******************  Tagging (complementary technique)
 
-Tagged dispatch strategy with a pair of method calls :
-- the first using autoderef-based specialization with a reference argument to select a tag, and
-- the second based on that tag which takes ownership of the original argument.
+Tagged dispatch strategy with a pair of method calls,
+the first using autoderef-based specialization with a reference argument to select a tag,
+and the second based on that tag which takes ownership of the original argument.
 
 https://github.com/dtolnay/case-studies/tree/master/autoref-specialization#realistic-application
 
@@ -57,23 +56,17 @@ use std::fmt::{Debug, Display};
 
 struct Wrap<T>(T);
 
-// Subsystem Types
-struct Subsystem1 {
-    num: u8,
-}
-struct Subsystem2 {
-    vec: Vec<u8>,
-}
-struct Subsystem3 {
-    str: String,
-}
+// Subsystem traits
+trait Subsystem1 {}
+trait Subsystem2 {}
+trait Subsystem3 {}
 
 // Specialization trick
 trait ViaSubsystem1 {
     fn foo(&self);
 }
 
-impl ViaSubsystem1 for &&Wrap<Subsystem1> {
+impl ViaSubsystem1 for &&Wrap<String> {
     fn foo(&self) {
         println!("Via Subsystem1");
     }
@@ -83,7 +76,7 @@ trait ViaSubsystem2 {
     fn foo(&self);
 }
 
-impl ViaSubsystem2 for &Wrap<Subsystem2> {
+impl<T: Display> ViaSubsystem2 for &Wrap<T> {
     fn foo(&self) {
         println!("Via Subsystem2");
     }
@@ -93,21 +86,61 @@ trait ViaSubsystem3 {
     fn foo(&self);
 }
 
-impl ViaSubsystem3 for Wrap<Subsystem3> {
+impl<T: Debug> ViaSubsystem3 for Wrap<T> {
     fn foo(&self) {
         println!("Via Subsystem3");
     }
 }
 
-
 fn main() {
-    // TODO
-    // Add Tagging for conflict resolution
-    // Simplify specialization with macro
-    // Thread
-    // proc_macro 
+    // Test method calls
+    (&&&Wrap(String::from("hi"))).foo();
+    (&&&Wrap(3)).foo();
+    (&&&Wrap(['a', 'b'])).foo();
 
-    (&&&Wrap(Subsystem1 { num: 8 })).foo();
-    (&&&Wrap(Subsystem2 { vec: Vec::new() })).foo();
-    (&&&Wrap(Subsystem3 { str: String::new() })).foo();
+    // TODO
+    // Replace STRING, DISPLAY and DEBUG with Subsystems
+
+    //(&&&Wrap(Subsystem1)).foo();
+    //(&&&Wrap(Subsystem2)).foo();
+    //(&&&Wrap(Subsystem3)).foo();
 }
+
+// ------------- Multi-Level Currying with (impl Fn) ---------
+
+/*
+fn add(x: i32) -> impl Fn(i32) -> Box<dyn Fn(i32) -> i32> {
+    move |y: i32| Box::new(move |z: i32| x + y + z)
+}
+
+fn main(){
+    let add5 = add(5);
+        let add5_10 = add5(10);
+        println!("Result: {}", add5_10(6)); // prints "Result: 21"
+}
+*/
+
+
+// ----------------- type_alias_impl_trait --------------------
+/*
+#![feature(type_alias_impl_trait)]
+
+type Add1 = impl Fn(u32) -> u32;
+type Add2 = impl Fn(u32) -> Add1;
+
+fn add3 (x: u32)
+  -> Add2
+{
+    move |y: u32| {
+        move |z: u32| {
+            x + y + z
+        }
+    }
+}
+
+fn main ()
+{
+    assert_eq!(6, add3 (1) (2) (3));
+}
+
+*/

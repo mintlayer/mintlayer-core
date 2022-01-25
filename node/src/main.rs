@@ -1,110 +1,134 @@
-use std::time::Duration;
-use tokio::sync::mpsc;
-use tokio::task;
-use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread::JoinHandle;
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+    task::{Context, Poll, Waker},
+    thread,
+};
 
-// Definitions
 struct Transaction;
+
 struct Subsystem1 {
     block_counter: u64,
     block_hash: Vec<u128>,
 }
+
 struct Subsystem2 {
     tx_count: u32,
     mempool: Vec<u128>,
 }
 
-trait Launch {
-    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()>;
-    fn call<T>(func: impl Fn(T) -> T);
-}
-
-// Implementation of Subsystem1
 impl Subsystem1 {
-    pub fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
-        task::spawn(async move {
-            tx.send("Init Subsystem1 Thread").await;
-            sleep(Duration::from_millis(200)).await;
-        })
+    pub fn add_them(&self, x: i32, y: i32) -> i32 {
+        x + y
     }
 
-    pub fn add_block(/*&mut self, */ hash: &u128) -> Result<(), Box<dyn std::error::Error>> {
-        /*
+    pub fn add_block(&mut self, hash: &u128) -> Result<(), Box<dyn std::error::Error>> {
         self.block_counter += 1;
-        self.block_hash.push(*hash);
-        println!("Hash {} added as block num {}", *hash, self.block_counter);
-        */
-        println!("Hash {} added as block num {}", 1, 2);
-        Ok(())
+        self.block_hash.push(hash.clone());
+        todo!()
+    }
+
+    /// Create a new Subsystem Future
+    pub fn init() -> Self {
+        let block_counter = 0;
+        let block_hash: Vec<u128> = vec![0]; // GENESIS
+
+        Subsystem1 {
+            block_counter,
+            block_hash,
+        }
     }
 }
 
-impl Launch for Subsystem1 {
-    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
-        Subsystem1::init(tx)
-    }
-
-    fn call<T>(func: impl Fn(T) -> T) {}
-}
-
-// Implementation of Subsystem2
 impl Subsystem2 {
-    pub fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
-        task::spawn(async move {
-            tx.send("Init Subsystem2 Thread").await;
-            sleep(Duration::from_millis(100)).await;
-        })
-    }
-
     pub fn submit_transaction(
-        &self,
+        &mut self,
         tx: &Transaction,
         timestamp: i64,
     ) -> Result<(), Box<dyn std::error::Error>> {
         todo!();
     }
-}
 
-impl Launch for Subsystem2 {
-    fn init(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
-        Subsystem2::init(tx)
+    /// Create a new Subsystem Future
+    pub fn init() -> Self {
+        let tx_count = 0;
+        let mempool: Vec<u128> = vec![0]; // GENESIS
+
+        Subsystem2 { tx_count, mempool }
     }
-
-    fn call<T>(func: impl Fn(T) -> T) {}
 }
 
-// Implement Wrapper
-
-struct Wrap;
+struct Wrap {
+    sender: Sender<(for<'r> fn(&'r Subsystem1, i32, i32) -> i32, i32, i32)>,
+    handle: JoinHandle<()>,
+    result_rx: Receiver<i32>,
+}
 
 impl Wrap {
-    fn new<T: Launch>(tx: mpsc::Sender<&'static str>) -> JoinHandle<()> {
-        T::init(tx)
+    fn Launch(func: fn() -> Subsystem1) -> Self {
+        type F = (for<'r> fn(&'r Subsystem1, i32, i32) -> i32, i32, i32);
+
+        let (tx, rx) = mpsc::channel::<F>();
+        let (tx2, rx2) = mpsc::channel();
+
+        let handle = thread::spawn(move || {
+            // TODO SOMETHING HERER
+            let instance = func();
+            loop {
+                let t = rx.recv().unwrap();
+                let result = (t.0)(&instance, t.1, t.2);
+                tx2.send(result).unwrap();
+            }
+        });
+
+        Wrap {
+            sender: tx,
+            handle: handle,
+            result_rx: rx2,
+        }
     }
 }
 
-#[tokio::main]
-async fn main() {
+enum Subsystem1Callables {
+    add_them((for<'r> fn(&'r Subsystem1, i32, i32) -> i32, i32, i32)),
+    add_block(
+        (
+            for<'r> fn(&'r mut Subsystem1, &u128) -> Result<(), Box<dyn std::error::Error>>,
+            u128,
+        ),
+    ),
+    init,
+    shutdown,
+}
+
+fn main() {
+    // create a thread in each Subsystem and return a future
+    let wrapper_s1 = Wrap::Launch(Subsystem1::init);
+
     let hash = 0;
-    let value = 0x55566666;
 
     // Channels
-    let (tx1, mut rx) = mpsc::channel(32);
-    let tx2 = tx1.clone();
+    wrapper_s1
+        .sender
+        .send((Subsystem1::add_them, 3, 4))
+        .unwrap();
 
-    // Subsystem Initialization
-    let wrap_sys1 = Wrap::new::<Subsystem1>(tx1);
-    let wrap_sys2 = Wrap::new::<Subsystem2>(tx2);
+    let y = wrapper_s1.result_rx.recv().unwrap();
 
-    wrap_sys1.await;
-    wrap_sys2.await;
+    println!("{}", y);
 
-    while let Some(message) = rx.recv().await {
-        println!("GOT = {}", message);
-    }
+    wrapper_s1.handle.join().unwrap();
 
-    // Subsystem Call
-    //let result1 = wrap_sys1.call::<Subsystem1>(&Subsystem1::add_block, hash);
-    //let result2 = wrap_sys1.call::<Subsystem2>(&Subsystem2::submit_transaction, value);
+    // make "CALL" function which gets enum
+
+    //let result1 = wrapper_s1.call(&Subsystem1::add_block, hash);
+    //let result2 = wrapper_s2.call(&Subsystem1::submit_transaction, 0x555666666);
+
+    // what happens inside wrapper when one does wrapper_s1.call(...)
+    // s2.submit_transaction(&Transaction, 55566666);
+    // let func = Subsystem1::add_block; // this is the first param
+    // let result = func(&s1, &hash); // this result is returned through the channel
 }
