@@ -2188,13 +2188,11 @@ dependencies = [
  "crypto",
  "logging",
  "network",
- "node",
  "p2p",
  "rpc",
  "script",
  "serialization",
  "storage",
- "wallet",
 ]
 
 [[package]]
