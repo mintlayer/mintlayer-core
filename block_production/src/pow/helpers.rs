@@ -32,7 +32,7 @@ pub fn allow_mining_min_difficulty_blocks(new_block_time: u32, prev_block_time: 
 }
 
 pub(crate) fn check_difficulty_interval(block_height: BlockHeight) -> bool {
-    block_height.into() % DIFFICULTY_ADJUSTMENT_INTERVAL as u64 != 0
+    block_height.inner() % DIFFICULTY_ADJUSTMENT_INTERVAL as u64 != 0
 }
 
 pub(crate) fn retarget(
