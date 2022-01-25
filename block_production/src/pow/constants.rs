@@ -1,4 +1,4 @@
-use common::primitives::Uint256;
+use common::Uint256;
 
 pub const TARGET_TIMESPAN_SECS: u32 = 14 * 24 * 60 * 60; // 2 weeks
 pub const TARGET_TIMESPAN_UINT256: Uint256 =
