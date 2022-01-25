@@ -23,6 +23,8 @@ impl BlockHeight {
     pub fn max() -> BlockHeight {
         MAX
     }
+
+    pub fn inner(self) -> u64 { self.0 }
 }
 
 pub trait Saturating<Rhs = Self> {
@@ -45,9 +47,6 @@ impl Saturating<u64> for BlockHeight {
         BlockHeight(self.0.saturating_mul(rhs))
     }
 
-    // fn saturating_div(self, rhs: u64) -> Self {
-    //     BlockHeight(self.0.saturating_div(rhs))
-    // }
 }
 
 impl Saturating<BlockHeight> for BlockHeight {
@@ -62,8 +61,4 @@ impl Saturating<BlockHeight> for BlockHeight {
     fn saturating_mul(self, rhs: BlockHeight) -> Self {
         self.saturating_mul(rhs.0)
     }
-
-    // fn saturating_div(self, rhs: BlockHeight) -> Self {
-    //     self.saturating_div(rhs.0)
-    // }
 }
