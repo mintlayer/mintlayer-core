@@ -399,7 +399,6 @@ name = "block-production"
 version = "0.1.0"
 dependencies = [
  "common",
- "util",
 ]
 
 [[package]]
@@ -2030,12 +2029,14 @@ dependencies = [
 name = "mintlayer-core"
 version = "0.1.0"
 dependencies = [
+ "block-production",
  "blockchain-storage",
  "common",
  "consensus",
  "crypto",
  "logging",
  "network",
+ "node",
  "p2p",
  "rpc",
  "script",
