@@ -15,4 +15,20 @@ impl BlockHeight {
     pub fn new(height: u64) -> Self {
         Self(height)
     }
+
+    pub fn increment(&mut self) {
+        self.0 += 1;
+    }
+}
+
+impl Into<u64> for BlockHeight {
+    fn into(self) -> u64 {
+        self.0
+    }
+}
+
+impl From<u64> for BlockHeight {
+    fn from(w: u64) -> BlockHeight {
+        BlockHeight(w)
+    }
 }

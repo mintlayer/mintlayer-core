@@ -3,6 +3,7 @@
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
+use std::fmt;
 
 mod store;
 
@@ -13,6 +14,13 @@ pub use store::{Store, StoreTx};
 pub enum Error {
     RecoverableError(storage::Error),
     UnrecoverableError(storage::Error),
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO: We have to update it for error messages
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Possibly failing result of blockchain storage query

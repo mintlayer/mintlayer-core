@@ -62,7 +62,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Block {
     #[codec(index = 1)]
     V1(BlockV1),
@@ -151,9 +151,9 @@ impl Block {
 
 impl Idable<Block> for Block {
     fn get_id(&self) -> Id<Self> {
-        match &self {
-            Block::V1(blk) => Id::new(&H256::from_low_u64_ne(blk.get_block_time() as u64)), // TODO
-        }
+        Id::from(match &self {
+            Block::V1(blk) => blk.get_id(), // TODO
+        })
     }
 }
 
