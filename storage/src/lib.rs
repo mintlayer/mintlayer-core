@@ -76,8 +76,10 @@ pub mod transaction;
 pub use basic::{SingleMap, Store, Transaction};
 pub use transaction::{abort, commit, DbTransaction, Transactional};
 
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum Error {
+    #[error("Transaction failed")]
+    TransactionFailed,
     #[error("Unknown database error")]
     Unknown,
 }

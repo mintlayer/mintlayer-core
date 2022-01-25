@@ -4,12 +4,14 @@ use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
 
+#[cfg(any(test, feature = "mock"))]
+pub mod mock;
 mod store;
 
 pub use store::{Store, StoreTx};
 
 /// Blockchain storage error
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
 pub enum Error {
     RecoverableError(storage::Error),
     UnrecoverableError(storage::Error),
