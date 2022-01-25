@@ -20,13 +20,35 @@ use crate::{
     net::libp2p::common,
 };
 use futures::StreamExt;
-use libp2p::swarm::{ProtocolsHandlerUpgrErr, Swarm, SwarmEvent};
-use tokio::sync::mpsc::{Receiver, Sender};
+use libp2p::{
+    streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
+    swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
+    PeerId,
+};
+use std::collections::HashMap;
+use tokio::sync::{
+    mpsc::{Receiver, Sender},
+    oneshot,
+};
 
 pub struct Backend {
+    /// Created libp2p swarm object
     swarm: Swarm<common::ComposedBehaviour>,
+
+    /// Receiver for incoming commands
     cmd_rx: Receiver<common::Command>,
+
+    /// Sender for outgoing events (peers, pubsub messages)
     _event_tx: Sender<common::Event>,
+
+    /// Hashmap of pending outbound connections
+    dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
+
+    /// Hashmap of pending outbound streams
+    streams: HashMap<
+        OutboundStreamId,
+        oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
+    >,
 }
 
 impl Backend {
@@ -39,6 +61,8 @@ impl Backend {
             swarm,
             cmd_rx,
             _event_tx: event_tx,
+            dials: HashMap::new(),
+            streams: HashMap::new(),
         }
     }
 
@@ -46,7 +70,7 @@ impl Backend {
         loop {
             tokio::select! {
                 event = self.swarm.next() => match event {
-                    Some(event) => self.on_event(event).await,
+                    Some(event) => self.on_event(event).await?,
                     None => return Err(P2pError::ChannelClosed)
                 },
                 command = self.cmd_rx.recv() => match command {
@@ -57,20 +81,69 @@ impl Backend {
         }
     }
 
+    /// Handle event received from the swarm object
     async fn on_event(
         &mut self,
-        _event: SwarmEvent<
-            common::ComposedEvent,
-            ProtocolsHandlerUpgrErr<std::convert::Infallible>,
-        >,
-    ) {
+        event: SwarmEvent<common::ComposedEvent, ProtocolsHandlerUpgrErr<std::convert::Infallible>>,
+    ) -> error::Result<()> {
+        match event {
+            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+                StreamingEvent::StreamOpened {
+                    id,
+                    peer_id: _,
+                    stream,
+                },
+            )) => self
+                .streams
+                .remove(&id)
+                .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
+                .send(Ok(stream))
+                .map_err(|_| P2pError::ChannelClosed),
+            SwarmEvent::ConnectionEstablished {
+                peer_id, endpoint, ..
+            } => {
+                if endpoint.is_dialer() {
+                    return self
+                        .dials
+                        .remove(&peer_id)
+                        .ok_or_else(|| {
+                            P2pError::Unknown("Pending connection does not exist".to_string())
+                        })?
+                        .send(Ok(()))
+                        .map_err(|_| P2pError::ChannelClosed);
+                }
+
+                Ok(())
+            }
+            _ => {
+                println!("libp2p: unhandled event: {:?}", event);
+                Ok(())
+            }
+        }
     }
 
+    /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: common::Command) -> error::Result<()> {
         match cmd {
             common::Command::Listen { addr, response } => {
                 let res = self.swarm.listen_on(addr).map(|_| ()).map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
+            }
+            common::Command::Dial {
+                peer_id,
+                peer_addr,
+                response,
+            } => match self.swarm.dial(peer_addr) {
+                Ok(_) => {
+                    self.dials.insert(peer_id, response);
+                    Ok(())
+                }
+                Err(e) => Err(e.into()),
+            },
+            common::Command::OpenStream { peer_id, response } => {
+                let stream_id = self.swarm.behaviour_mut().streaming.open_stream(peer_id);
+                self.streams.insert(stream_id, response);
+                Ok(())
             }
         }
     }

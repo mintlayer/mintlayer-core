@@ -17,8 +17,9 @@
 // Author(s): A. Altonen
 use crate::error;
 use libp2p::{
-    streaming::{IdentityCodec, Streaming, StreamingEvent},
-    Multiaddr, NetworkBehaviour,
+    streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
+    swarm::NegotiatedSubstream,
+    Multiaddr, NetworkBehaviour, PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -27,6 +28,20 @@ pub enum Command {
     Listen {
         addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
+    },
+    /// Connect to a remote peer at address `peer_addr` whose PeerId is `peer_id`
+    Dial {
+        peer_id: PeerId,
+        peer_addr: Multiaddr,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+    /// Open a bidirectional data stream to a remote peer
+    ///
+    /// Before opening a stream, connection must've been established with the peer
+    /// and the peer's identity is signaled using `peer_id` argument
+    OpenStream {
+        peer_id: PeerId,
+        response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     },
 }
 

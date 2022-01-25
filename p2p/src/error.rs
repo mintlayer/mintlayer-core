@@ -27,6 +27,7 @@ pub enum ProtocolError {
 pub enum Libp2pError {
     NoiseError(String),
     TransportError(String),
+    DialError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -37,6 +38,7 @@ pub enum P2pError {
     ProtocolError(ProtocolError),
     TimeError(String),
     Libp2pError(Libp2pError),
+    Unknown(String),
     ChannelClosed,
 }
 
@@ -76,6 +78,12 @@ impl<T> From<libp2p::TransportError<T>> for P2pError {
         };
 
         P2pError::Libp2pError(Libp2pError::TransportError(e))
+    }
+}
+
+impl From<libp2p::swarm::DialError> for P2pError {
+    fn from(e: libp2p::swarm::DialError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::DialError(e.to_string()))
     }
 }
 

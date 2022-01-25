@@ -16,13 +16,15 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::{self, Libp2pError, P2pError},
     net::{Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use libp2p::{
     core::{upgrade, PeerId},
-    identity, mplex, noise,
+    identity, mplex,
+    multiaddr::Protocol,
+    noise,
     streaming::{IdentityCodec, StreamHandle, Streaming},
     swarm::{NegotiatedSubstream, SwarmBuilder},
     tcp::TcpConfig,
@@ -43,14 +45,14 @@ pub enum LibP2pStrategy {}
 #[derive(Debug)]
 pub struct Libp2pService {
     _peer_id: PeerId,
-    _cmd_tx: Sender<common::Command>,
+    cmd_tx: Sender<common::Command>,
     _event_rx: Receiver<common::Event>,
 }
 
 #[derive(Debug)]
 pub struct Libp2pSocket {
-    pub peer: Multiaddr,
-    pub socket: StreamHandle<NegotiatedSubstream>,
+    pub addr: Multiaddr,
+    pub stream: StreamHandle<NegotiatedSubstream>,
 }
 
 #[async_trait]
@@ -101,13 +103,56 @@ impl NetworkService for Libp2pService {
 
         Ok(Self {
             _peer_id: peer_id,
-            _cmd_tx: cmd_tx,
+            cmd_tx,
             _event_rx: event_rx,
         })
     }
 
-    async fn connect(&mut self, _addr: Self::Address) -> error::Result<Self::Socket> {
-        todo!();
+    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
+        let peer_id = match addr.iter().last() {
+            Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
+                P2pError::Libp2pError(Libp2pError::DialError(
+                    "Expect peer multiaddr to contain peer ID.".into(),
+                ))
+            })?,
+            _ => {
+                return Err(P2pError::Libp2pError(Libp2pError::DialError(
+                    "Expect peer multiaddr to contain peer ID.".into(),
+                )))
+            }
+        };
+
+        // dial the remote peer
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(common::Command::Dial {
+                peer_id,
+                peer_addr: addr.clone(),
+                response: tx,
+            })
+            .await?;
+
+        // wait for command response
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e)?; // command failure
+
+        // if dial succeeded, open a generic stream
+        let _ = 0u32;
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(common::Command::OpenStream {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+
+        let stream = rx
+            .await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e)?; // command failure
+
+        Ok(Libp2pSocket { addr, stream })
     }
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
