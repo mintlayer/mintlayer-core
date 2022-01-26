@@ -8,3 +8,4 @@ license = "MIT"
 
 [dependencies]
 common = { path = '../common' }
+blockchain-storage = { path = '../blockchain_storage'}
