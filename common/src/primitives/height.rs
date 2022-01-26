@@ -1,4 +1,5 @@
 use parity_scale_codec_derive::{Decode, Encode};
+use std::ops::{Add, Mul, Sub};
 
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
 pub struct BlockHeight(u64);
@@ -24,41 +25,67 @@ impl BlockHeight {
         MAX
     }
 
-    pub fn inner(self) -> u64 { self.0 }
+    pub fn inner(self) -> u64 {
+        self.0
+    }
+
+    pub fn checked_mul(&self, rhs: u64) -> Option<Self> {
+        self.0.checked_add(rhs).map(BlockHeight::new)
+    }
+
+    pub fn checked_sub(&self, rhs: u64) -> Option<Self> {
+        self.0.checked_sub(rhs).map(BlockHeight::new)
+    }
+
+    pub fn checked_add(&self, rhs: u64) -> Option<Self> {
+        self.0.checked_mul(rhs).map(BlockHeight::new)
+    }
 }
 
-pub trait Saturating<Rhs = Self> {
-    fn saturating_sub(self, rhs: Rhs) -> Self;
-    fn saturating_add(self, rhs: Rhs) -> Self;
-    fn saturating_mul(self, rhs: Rhs) -> Self;
-    // fn saturating_div(self, rhs: Rhs) -> Self;
+impl Add<u64> for BlockHeight {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        BlockHeight::new(self.0 + rhs)
+    }
 }
 
-impl Saturating<u64> for BlockHeight {
-    fn saturating_sub(self, rhs: u64) -> Self {
-        BlockHeight(self.0.saturating_sub(rhs))
-    }
+impl Sub<u64> for BlockHeight {
+    type Output = Self;
 
-    fn saturating_add(self, rhs: u64) -> Self {
-        BlockHeight(self.0.saturating_add(rhs))
+    fn sub(self, rhs: u64) -> Self::Output {
+        BlockHeight(self.0 - rhs)
     }
-
-    fn saturating_mul(self, rhs: u64) -> Self {
-        BlockHeight(self.0.saturating_mul(rhs))
-    }
-
 }
 
-impl Saturating<BlockHeight> for BlockHeight {
-    fn saturating_sub(self, rhs: BlockHeight) -> Self {
-        self.saturating_sub(rhs.0)
-    }
+impl Mul<u64> for BlockHeight {
+    type Output = Self;
 
-    fn saturating_add(self, rhs: BlockHeight) -> Self {
-        self.saturating_add(rhs.0)
+    fn mul(self, rhs: u64) -> Self::Output {
+        BlockHeight(self.0 * rhs)
     }
+}
 
-    fn saturating_mul(self, rhs: BlockHeight) -> Self {
-        self.saturating_mul(rhs.0)
+impl Add<BlockHeight> for BlockHeight {
+    type Output = Self;
+
+    fn add(self, rhs: BlockHeight) -> Self::Output {
+        self + rhs.0
+    }
+}
+
+impl Sub<BlockHeight> for BlockHeight {
+    type Output = Self;
+
+    fn sub(self, rhs: BlockHeight) -> Self::Output {
+        self - rhs.0
+    }
+}
+
+impl Mul<BlockHeight> for BlockHeight {
+    type Output = Self;
+
+    fn mul(self, rhs: BlockHeight) -> Self::Output {
+        self * rhs.0
     }
 }

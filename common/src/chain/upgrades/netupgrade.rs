@@ -1,6 +1,5 @@
 #![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
-use crate::primitives::height::Saturating;
 use crate::primitives::BlockHeight;
 
 #[derive(Debug, Clone)]
@@ -12,41 +11,16 @@ impl<T: Default> Default for NetUpgrades<T> {
     }
 }
 
-/// creates a function in NetUpgrades to check whether a certain upgrade is activated.
-///
-/// # Examples
-/// ```
-/// #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-/// pub enum ConsensusConfig {
-///    PoW, PoS, NPoS, DPos
-/// }
-///
-/// is_activated_fn!(NPoS, ConsensusConfig, ConsensusConfig::NPoS);
-///
-/// fn main() {
-///     let x = NetUpgrades::default();
-///     x.is_NPoS_activated(); // this will return false
-///     x.is_PoS_activated(); // compile error because function does not exist.
-/// }
-/// ```
-/// ```
-macro_rules! is_activated_fn {
-    ($name:ident, $enum_ty:ty, $matcher:expr) => {
-        impl NetUpgrades<$enum_ty> {
-            paste::paste! {
-                pub fn [< is_ $name _activated >](&self, height:BlockHeight) -> bool {
-                    if let Ok(idx) = self.0.binary_search_by(|&(_,to_match)| {
-                        to_match.cmp(&$matcher)
-                    }) {
-
-                        return height >= self.0[idx].0;
-                    }
-
-                    false
-                }
-            }
+pub trait Activate {
+    fn is_activated(&self, height: BlockHeight, net_upgrades: &NetUpgrades<Self>) -> bool
+    where
+        Self: Sized + Ord + Copy,
+    {
+        if let Ok(idx) = net_upgrades.0.binary_search_by(|&(_, to_match)| to_match.cmp(self)) {
+            return height >= net_upgrades.0[idx].0;
         }
-    };
+        false
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -57,14 +31,13 @@ pub enum UpgradeVersion {
     DSA,
 }
 
+impl Activate for UpgradeVersion {}
+
 impl Default for UpgradeVersion {
     fn default() -> Self {
         Self::Genesis
     }
 }
-
-// is_dsa_activated(block_height:BlockHeight)
-is_activated_fn!(dsa, UpgradeVersion, UpgradeVersion::DSA);
 
 impl<T: Default + Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
@@ -101,27 +74,29 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
     }
 
     pub fn height_range(&self, version: T) -> Option<(BlockHeight, BlockHeight)> {
-        self.0
+        let res = self
+            .0
             .iter()
             .enumerate()
-            .find(|&(_, &(_, elem_version))| elem_version == version)
-            .map(|(idx, &(start_h, _))| {
-                (
-                    start_h,
-                    if idx == (self.0.len() - 1) {
-                        BlockHeight::max()
-                    } else {
-                        self.0[idx + 1].0.saturating_sub(1)
-                    },
-                )
-            })
+            .find(|&(_, &(_, elem_version))| elem_version == version);
+
+        match res {
+            None => None,
+            Some((idx, &(start_h, _))) => {
+                if idx == (self.0.len() - 1) {
+                    Some((start_h, BlockHeight::max()))
+                } else {
+                    self.0[idx + 1].0.checked_sub(1).map(|last_h| (start_h, last_h))
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::chain::upgrades::netupgrade::NetUpgrades;
-    use crate::primitives::height::Saturating;
+    use crate::chain::Activate;
     use crate::primitives::BlockHeight;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
@@ -140,7 +115,7 @@ mod tests {
         }
     }
 
-    is_activated_fn!(two, MockVersion, MockVersion::Two);
+    impl Activate for MockVersion {}
 
     fn mock_netupgrades() -> (NetUpgrades<MockVersion>, BlockHeight, BlockHeight) {
         let mut upgrades = vec![];
@@ -160,17 +135,15 @@ mod tests {
     fn check_is_activated() {
         let (upgrades, two_height, three_height) = mock_netupgrades();
 
-        assert!(upgrades.is_two_activated(two_height));
-        assert!(upgrades.is_two_activated(three_height));
-        assert!(!upgrades.is_two_activated(BlockHeight::one()));
-        assert!(!upgrades.is_two_activated(two_height.saturating_sub(1)));
+        assert!(MockVersion::Two.is_activated(two_height, &upgrades));
+        assert!(MockVersion::Two.is_activated(three_height, &upgrades));
+        assert!(!MockVersion::Two.is_activated(BlockHeight::one(), &upgrades));
+        assert!(!MockVersion::Two.is_activated(two_height - 1, &upgrades));
 
-        is_activated_fn!(three, MockVersion, MockVersion::Three);
-
-        assert!(!upgrades.is_three_activated(two_height));
-        assert!(!upgrades.is_three_activated(two_height.saturating_add(10)));
-        assert!(upgrades.is_three_activated(three_height));
-        assert!(upgrades.is_three_activated(BlockHeight::max()));
+        assert!(!MockVersion::Three.is_activated(two_height, &upgrades));
+        assert!(!MockVersion::Three.is_activated(two_height + 10, &upgrades));
+        assert!(MockVersion::Three.is_activated(three_height, &upgrades));
+        assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
     }
 
     #[test]
@@ -184,14 +157,14 @@ mod tests {
         check(MockVersion::Zero, BlockHeight::zero());
         check(MockVersion::One, BlockHeight::one());
         check(MockVersion::One, BlockHeight::new(26));
-        check(MockVersion::One, two_height.saturating_sub(1));
+        check(MockVersion::One, two_height - 1);
         check(MockVersion::Two, two_height);
-        check(MockVersion::Two, two_height.saturating_add(1));
-        check(MockVersion::Two, three_height.saturating_sub(1));
+        check(MockVersion::Two, two_height + 1);
+        check(MockVersion::Two, three_height - 1);
         check(MockVersion::Three, three_height);
-        check(MockVersion::Three, three_height.saturating_add(100));
-        check(MockVersion::Three, three_height.saturating_add(2022));
-        check(MockVersion::Three, three_height.saturating_add(3000));
+        check(MockVersion::Three, three_height + 100);
+        check(MockVersion::Three, three_height + 2022);
+        check(MockVersion::Three, three_height + 3000);
     }
 
     #[test]
@@ -215,12 +188,8 @@ mod tests {
         };
 
         check(MockVersion::Zero, BlockHeight::zero(), BlockHeight::zero());
-        check(
-            MockVersion::One,
-            BlockHeight::one(),
-            two_height.saturating_sub(1),
-        );
-        check(MockVersion::Two, two_height, three_height.saturating_sub(1));
+        check(MockVersion::One, BlockHeight::one(), two_height - 1);
+        check(MockVersion::Two, two_height, three_height - 1);
         check(MockVersion::Three, three_height, BlockHeight::max());
     }
 }
