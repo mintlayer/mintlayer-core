@@ -29,6 +29,8 @@ skip = [{name = "quick-error"},
         {name = "sha2"},
         {name = "sha3"},
         {name = "blake2"},
+        {name = "itoa"},
+        {name = "base64"},
         ]
 
 [licenses]
