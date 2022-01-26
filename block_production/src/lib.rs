@@ -56,14 +56,13 @@ impl BlockProducer {
     fn create_block(
         time: u32,
         transactions: Vec<Transaction>,
-        height: BlockHeight,
         store: &mut Store,
         cfg: ChainConfig,
     ) -> Result<Block, BlockProductionError> {
         // TODO: retrieve the netupgrade from cfg, and determine whether it's for pow, pos, etc.
 
         let best_block = get_best_block(store)?;
-
+        // get the height based on the best_bloc defined.
         todo!()
     }
 }
