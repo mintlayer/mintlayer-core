@@ -94,9 +94,7 @@ impl MLRistrettoPrivateKey {
     }
 
     pub fn from_native(native: RistrettoSecretKey) -> Self {
-        Self {
-            key_data: native.clone(),
-        }
+        Self { key_data: native }
     }
 
     pub fn construct_challenge_from_message(
@@ -197,7 +195,7 @@ impl MLRistrettoPublicKey {
         signature: &RistrettoSchnorrSignature,
         challenge: &[u8],
     ) -> bool {
-        signature.verify_challenge(&self.as_native(), &challenge)
+        signature.verify_challenge(self.as_native(), challenge)
     }
 
     pub(crate) fn verify_message(&self, signature: &RistrettoSchnorrSignature, msg: &[u8]) -> bool {

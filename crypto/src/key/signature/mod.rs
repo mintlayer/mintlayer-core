@@ -19,7 +19,7 @@ impl Encode for Signature {
     fn encode(&self) -> Vec<u8> {
         let mut buf = BufWriter::new(Vec::new());
         self.encode_to(&mut buf);
-        return buf.into_inner().expect("Flushing should never fail");
+        buf.into_inner().expect("Flushing should never fail")
     }
 
     fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {

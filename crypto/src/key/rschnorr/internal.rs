@@ -6,7 +6,7 @@ pub fn add_sigs(
     sig1: &RistrettoSchnorrSignature,
     sig2: &RistrettoSchnorrSignature,
 ) -> RistrettoSchnorrSignature {
-    return sig1 + sig2;
+    sig1 + sig2
 }
 
 #[cfg(test)]
