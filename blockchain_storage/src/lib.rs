@@ -11,10 +11,16 @@ mod store;
 pub use store::{Store, StoreTx};
 
 /// Blockchain storage error
-#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Debug)]
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum Error {
-    RecoverableError(storage::Error),
-    UnrecoverableError(storage::Error),
+    #[error("Storage error: {0}")]
+    Storage(storage::error::Recoverable),
+}
+
+impl From<storage::Error> for Error {
+    fn from(e: storage::Error) -> Self {
+        Error::Storage(e.recoverable())
+    }
 }
 
 /// Possibly failing result of blockchain storage query
