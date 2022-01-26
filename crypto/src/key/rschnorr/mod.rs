@@ -76,10 +76,7 @@ impl MLRistrettoPrivateKey {
     }
 
     pub fn as_bytes(&self) -> &[u8] {
-        self.key_data
-            .as_bytes()
-            .try_into()
-            .expect("Ristretto Private Key size is expected to be 32-bytes")
+        self.key_data.as_bytes()
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, RistrettoKeyError> {
