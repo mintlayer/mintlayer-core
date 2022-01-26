@@ -197,7 +197,7 @@ impl MLRistrettoPublicKey {
 
     pub(crate) fn verify_message(&self, signature: &RistrettoSchnorrSignature, msg: &[u8]) -> bool {
         let e = Blake2b32Stream::new().write(msg).finalize();
-        signature.verify_challenge(&self.as_native(), &e)
+        signature.verify_challenge(self.as_native(), &e)
     }
 }
 
