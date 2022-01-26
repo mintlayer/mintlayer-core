@@ -16,6 +16,17 @@ skip = [{name = "quick-error"},
         {name = "rand"},
         {name = "getrandom"},
         {name = "byteorder"},
+        {name = "socket2"},
+        {name = "arrayvec"},
+        {name = "pin-project"},
+        {name = "pin-project-internal"},
+        {name = "pin-project-lite"},
+        {name = "digest"},
+        {name = "block-buffer"},
+        {name = "sha-1"},
+        {name = "sha2"},
+        {name = "sha3"},
+        {name = "blake2"},
         ]
 
 [licenses]
@@ -31,8 +42,24 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "Zlib",
+    "LicenseRef-ring",
+    "LicenseRef-webpki",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
+
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "LicenseRef-webpki"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
 
 [advisories]
 db-path = "~/.cargo/advisory-dbs"

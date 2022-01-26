@@ -1,6 +1,6 @@
 use crate::schema::{self, Schema};
-use std::collections::BTreeMap;
 use common::sync;
+use std::collections::BTreeMap;
 
 type Data = Vec<u8>;
 
@@ -178,9 +178,8 @@ impl<'st, Sch: Schema> crate::transaction::DbTransaction for Transaction<'st, Sc
     }
 
     /// Abort a transaction.
-    fn abort(&mut self) -> Result<(), Self::Error> {
-        self.delta = Default::default();
-        Err(crate::Error::Aborted)
+    fn abort(self) -> Result<(), Self::Error> {
+        Ok(())
     }
 }
 

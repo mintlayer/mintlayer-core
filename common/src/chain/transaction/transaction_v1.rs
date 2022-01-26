@@ -1,9 +1,7 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
-use crate::primitives::id::default_hash;
-use crate::primitives::Id;
-use parity_scale_codec::Encode;
+use crate::primitives::{id, Id};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
 use super::Transaction;
@@ -53,8 +51,6 @@ impl TransactionV1 {
     }
 
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
-        let encoded = TransactionV1::encode(self);
-        let hashed = default_hash(encoded);
-        Id::new(&hashed)
+        Id::new(&id::hash_encoded(self))
     }
 }

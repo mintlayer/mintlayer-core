@@ -19,6 +19,7 @@ pub mod amount;
 pub mod compact;
 pub mod encoding;
 pub mod error;
+mod hash_encoded;
 pub mod height;
 pub mod id;
 pub mod merkle;

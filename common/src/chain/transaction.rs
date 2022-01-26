@@ -15,8 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::primitives::id;
-use crate::primitives::{Id, Idable, H256};
+use crate::primitives::{id, Id, Idable};
 use crypto::hash::StreamHasher;
 use parity_scale_codec::{Decode, Encode};
 
@@ -42,15 +41,15 @@ pub enum Transaction {
 impl Idable<TransactionV1> for TransactionV1 {
     fn get_id(&self) -> Id<Self> {
         let mut hash_stream = id::DefaultHashAlgoStream::new();
-        hash_stream.write(self.get_lock_time().encode());
+        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
         for input in self.get_inputs() {
-            hash_stream.write(input.get_outpoint().encode());
+            id::hash_encoded_to(input.get_outpoint(), &mut hash_stream);
         }
         for output in self.get_outputs() {
-            hash_stream.write(output.encode());
+            id::hash_encoded_to(output, &mut hash_stream);
         }
-        hash_stream.write(self.get_lock_time().encode());
-        Id::new(&H256::from(hash_stream.finalize().as_slice()))
+        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
+        Id::new(&hash_stream.finalize().into())
     }
 }
 
