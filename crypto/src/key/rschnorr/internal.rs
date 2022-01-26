@@ -1,5 +1,13 @@
 pub use tari_crypto::ristretto::{RistrettoPublicKey, RistrettoSchnorr, RistrettoSecretKey};
-pub use tari_crypto::tari_utilities::ByteArray;
+use tari_crypto::signatures::SchnorrSignature;
+pub type RistrettoSchnorrSignature = SchnorrSignature<RistrettoPublicKey, RistrettoSecretKey>;
+
+pub fn add_sigs(
+    sig1: &RistrettoSchnorrSignature,
+    sig2: &RistrettoSchnorrSignature,
+) -> RistrettoSchnorrSignature {
+    return sig1 + sig2;
+}
 
 #[cfg(test)]
 mod test {

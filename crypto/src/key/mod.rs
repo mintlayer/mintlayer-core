@@ -11,6 +11,7 @@ use self::rschnorr::RistrittoSignatureError;
 pub enum SignatureError {
     Unknown,
     DataConversionError(String),
+    SignatureConstructionError,
 }
 
 fn make_rng() -> rand::rngs::StdRng {
@@ -22,17 +23,17 @@ pub enum KeyKind {
     RistrettoSchnorr,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
 pub struct PrivateKey {
     key: PrivateKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
 pub(crate) enum PrivateKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPrivateKey),
 }
@@ -86,10 +87,7 @@ impl PrivateKey {
             PrivateKeyHolder::RistrettoSchnorr(k) => k,
         };
         let sig = k.sign_message(&mut rng, msg)?;
-        Ok(Signature::new(
-            signature::SignatureKind::RistrettoSchnorr,
-            sig,
-        ))
+        Ok(Signature::RistrettoSchnorrSig(sig))
     }
 }
 
@@ -112,6 +110,12 @@ impl PublicKey {
         };
         match signature {
             RistrettoSchnorrSig(s) => k.verify_message(s, msg),
+        }
+    }
+
+    pub fn is_aggregable(&self) -> bool {
+        match self.pub_key {
+            PublicKeyHolder::RistrettoSchnorr(_) => true,
         }
     }
 }
