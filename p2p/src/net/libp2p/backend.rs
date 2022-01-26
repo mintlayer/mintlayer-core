@@ -197,6 +197,7 @@ mod tests {
 
         let transport = TcpConfig::new()
             .nodelay(true)
+            .port_reuse(false)
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())

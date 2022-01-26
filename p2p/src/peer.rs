@@ -360,12 +360,12 @@ mod tests {
     async fn test_peer_new_libp2p() {
         let config = Arc::new(config::create_mainnet());
         let addr1: <Libp2pService as NetworkService>::Address =
-            "/ip6/::1/tcp/11122".parse().unwrap();
+            "/ip6/::1/tcp/11422".parse().unwrap();
         let mut server1 = Libp2pService::new(addr1.clone(), &[], &[]).await.unwrap();
 
         let conn_addr = server1.addr.clone();
         let addr2: <Libp2pService as NetworkService>::Address =
-            "/ip6/::1/tcp/11123".parse().unwrap();
+            "/ip6/::1/tcp/11423".parse().unwrap();
         let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
 
         let (server1_res, server2_res) =
