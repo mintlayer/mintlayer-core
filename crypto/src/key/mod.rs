@@ -85,7 +85,7 @@ impl PrivateKey {
         let mut rng = make_rng();
         let PrivateKeyHolder::RistrettoSchnorr(k) = &self.key;
         let sig = k.sign_message(&mut rng, msg)?;
-        Ok(Signature::RistrettoSchnorrSig(sig))
+        Ok(Signature::RistrettoSchnorr(sig))
     }
 }
 
@@ -101,11 +101,11 @@ impl PublicKey {
     }
 
     pub fn verify_message(&self, signature: &Signature, msg: &[u8]) -> bool {
-        use crate::key::Signature::RistrettoSchnorrSig;
+        use crate::key::Signature::RistrettoSchnorr;
 
         let PublicKeyHolder::RistrettoSchnorr(k) = &self.pub_key;
         match signature {
-            RistrettoSchnorrSig(s) => k.verify_message(s, msg),
+            RistrettoSchnorr(s) => k.verify_message(s, msg),
         }
     }
 

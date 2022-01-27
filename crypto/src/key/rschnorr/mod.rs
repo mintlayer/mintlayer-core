@@ -56,14 +56,6 @@ impl Decode for MLRistrettoPrivateKey {
             .map(|r| MLRistrettoPrivateKey { key_data: r })
             .map_err(|_| parity_scale_codec::Error::from("Private Key deserialization failed"))
     }
-
-    fn encoded_fixed_size() -> Option<usize> {
-        None
-    }
-
-    fn skip<I: parity_scale_codec::Input>(_input: &mut I) -> Result<(), parity_scale_codec::Error> {
-        Ok(())
-    }
 }
 
 impl MLRistrettoPrivateKey {
@@ -149,14 +141,6 @@ impl Decode for MLRistrettoPublicKey {
         RistrettoPublicKey::from_bytes(&v)
             .map(|r| MLRistrettoPublicKey { pubkey_data: r })
             .map_err(|_| parity_scale_codec::Error::from("Public Key deserialization failed"))
-    }
-
-    fn encoded_fixed_size() -> Option<usize> {
-        None
-    }
-
-    fn skip<I: parity_scale_codec::Input>(_input: &mut I) -> Result<(), parity_scale_codec::Error> {
-        Ok(())
     }
 }
 

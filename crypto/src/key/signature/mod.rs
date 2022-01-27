@@ -12,7 +12,7 @@ pub enum SignatureKind {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum Signature {
-    RistrettoSchnorrSig(RistrettoSchnorrSignature),
+    RistrettoSchnorr(RistrettoSchnorrSignature),
 }
 
 impl Encode for Signature {
@@ -25,7 +25,7 @@ impl Encode for Signature {
     fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
         // format: enum index followed by data
         match &self {
-            Signature::RistrettoSchnorrSig(s) => {
+            Signature::RistrettoSchnorr(s) => {
                 dest.write(&[(SignatureKind::RistrettoSchnorr as u8)]);
                 let sig_data = s.to_binary().expect("Signature serialization should never fail");
                 sig_data.encode_to(dest);
@@ -49,7 +49,7 @@ impl Decode for Signature {
                 let sig = RistrettoSchnorrSignature::from_binary(&data).map_err(|_| {
                     parity_scale_codec::Error::from("Private Key deserialization failed")
                 })?;
-                Ok(Signature::RistrettoSchnorrSig(sig))
+                Ok(Signature::RistrettoSchnorr(sig))
             }
         }
     }
@@ -58,13 +58,13 @@ impl Decode for Signature {
 impl Signature {
     pub fn is_aggregable(&self) -> bool {
         match self {
-            Self::RistrettoSchnorrSig(_) => true,
+            Self::RistrettoSchnorr(_) => true,
         }
     }
 
     pub fn kind(&self) -> SignatureKind {
         match self {
-            Self::RistrettoSchnorrSig(_) => SignatureKind::RistrettoSchnorr,
+            Self::RistrettoSchnorr(_) => SignatureKind::RistrettoSchnorr,
         }
     }
 }
