@@ -50,7 +50,7 @@ impl Error {
             Self::Fatal(e) => {
                 logging::log::error!("Fatal database error: {}", e);
                 panic!("Fatal database error: {}", e)
-            },
+            }
         }
     }
 }
