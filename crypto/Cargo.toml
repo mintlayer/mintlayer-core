@@ -9,8 +9,16 @@ authors = ["Samer Afach <samer.afach@mintlayer.org>", "Ben Marsh <benjamin.marsh
 
 [dependencies]
 sha-1 = "0.10.0"
-sha2 = "0.10.0"
+sha2 = "0.10.1"
 sha3 = "0.10.0"
 ripemd = "0.1.0"
-blake2 = "0.10.0"
+blake2 = "0.10.2"
 generic-array = "0.14.5"
+hex = "0.4.3"
+rand = "0.8.4"
+tari_crypto = "0.11.2"
+parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
+parity-scale-codec-derive = "2.3.1"
+num = "0.4"
+num-derive = "0.3.3"
+num-traits = "0.2.14"

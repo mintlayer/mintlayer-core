@@ -24,9 +24,13 @@ skip = [{name = "quick-error"},
         {name = "digest"},
         {name = "block-buffer"},
         {name = "sha-1"},
+        {name = "block-buffer"},
+        {name = "digest"},
         {name = "sha2"},
         {name = "sha3"},
         {name = "blake2"},
+        {name = "itoa"},
+        {name = "base64"},
         ]
 
 [licenses]
@@ -44,6 +48,7 @@ allow = [
     "Zlib",
     "LicenseRef-ring",
     "LicenseRef-webpki",
+    "WTFPL",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 
@@ -70,3 +75,8 @@ unsound = "warn"
 yanked = "warn"
 notice = "warn"
 severity-threshold = "medium"
+ignore = [
+    # time/chrono problems, have not been a problem in practice
+    "RUSTSEC-2020-0159",
+    "RUSTSEC-2020-0071",
+]
