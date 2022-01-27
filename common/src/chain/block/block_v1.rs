@@ -18,6 +18,9 @@ pub struct BlockV1 {
 }
 
 impl BlockV1 {
+    // This has to be the same its index in the Block enum
+    pub const VERSION_BYTE: u8 = 0x01;
+
     pub fn get_tx_merkle_root(&self) -> H256 {
         self.header.tx_merkle_root
     }
@@ -49,6 +52,8 @@ impl BlockV1 {
 
 impl Idable<BlockV1> for BlockV1 {
     fn get_id(&self) -> Id<Self> {
-        Id::new(&id::hash_encoded(self))
+        // Block ID is just the hash of its header. The transaction list is committed to by the
+        // inclusion of transaction Merkle root in the header. We also include the version number.
+        Id::new(&id::hash_encoded(&(Self::VERSION_BYTE, self.get_header())))
     }
 }

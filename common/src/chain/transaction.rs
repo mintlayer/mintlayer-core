@@ -15,8 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::primitives::{id, Id, Idable};
-use crypto::hash::StreamHasher;
+use crate::primitives::{Id, Idable};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
@@ -36,21 +35,6 @@ mod transaction_v1;
 pub enum Transaction {
     #[codec(index = 1)]
     V1(TransactionV1),
-}
-
-impl Idable<TransactionV1> for TransactionV1 {
-    fn get_id(&self) -> Id<Self> {
-        let mut hash_stream = id::DefaultHashAlgoStream::new();
-        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
-        for input in self.get_inputs() {
-            id::hash_encoded_to(input.get_outpoint(), &mut hash_stream);
-        }
-        for output in self.get_outputs() {
-            id::hash_encoded_to(output, &mut hash_stream);
-        }
-        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
-        Id::new(&hash_stream.finalize().into())
-    }
 }
 
 impl From<Id<TransactionV1>> for Id<Transaction> {

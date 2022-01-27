@@ -18,9 +18,8 @@
 use crate::chain::transaction::Transaction;
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
-use crate::primitives::Id;
-use crate::primitives::Idable;
 use crate::primitives::H256;
+use crate::primitives::{Id, Idable};
 mod block_v1;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
@@ -151,8 +150,8 @@ impl Block {
 
 impl Idable<Block> for Block {
     fn get_id(&self) -> Id<Self> {
-        match &self {
-            Block::V1(blk) => Id::new(&H256::from_low_u64_ne(blk.get_block_time() as u64)), // TODO
+        match self {
+            Self::V1(block) => Id::new(&block.get_id().get()),
         }
     }
 }
