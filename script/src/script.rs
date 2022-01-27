@@ -531,6 +531,7 @@ impl Builder {
     /// Adds instructions to push an integer onto the stack. Integers are
     /// encoded as little-endian signed-magnitude numbers, but there are
     /// dedicated opcodes to push some small integers.
+    #[must_use = "script::Builder discarded"]
     pub fn push_int(self, data: i64) -> Builder {
         // We can special-case -1, 1-16
         if data == -1 || (1..=16).contains(&data) {
@@ -549,11 +550,13 @@ impl Builder {
 
     /// Adds instructions to push an integer onto the stack, using the explicit
     /// encoding regardless of the availability of dedicated opcodes.
+    #[must_use = "script::Builder discarded"]
     pub fn push_scriptint(self, data: i64) -> Builder {
         self.push_slice(&build_scriptint(data))
     }
 
     /// Adds instructions to push some arbitrary data onto the stack
+    #[must_use = "script::Builder discarded"]
     pub fn push_slice(mut self, data: &[u8]) -> Builder {
         // Start with a PUSH opcode
         match data.len() as u64 {
@@ -586,6 +589,7 @@ impl Builder {
 
     /// Adds instructions to push some arbitrary data onto the stack in minimal encoding when
     /// interpreted as a byte array (numbers have a different minimal encoding).
+    #[must_use = "script::Builder discarded"]
     pub fn push_slice_minimal(self, data: &[u8]) -> Builder {
         match data {
             [129] => self.push_int(-1),
@@ -595,6 +599,7 @@ impl Builder {
     }
 
     /// Adds a single opcode to the script
+    #[must_use = "script::Builder discarded"]
     pub fn push_opcode(mut self, data: opcodes::All) -> Builder {
         self.0.push(data.into_u8());
         self.1 = Some(data);
@@ -604,6 +609,7 @@ impl Builder {
     /// Adds an `OP_VERIFY` to the script, unless the most-recently-added
     /// opcode has an alternate `VERIFY` form, in which case that opcode
     /// is replaced. e.g. `OP_CHECKSIG` will become `OP_CHECKSIGVERIFY`.
+    #[must_use = "script::Builder discarded"]
     pub fn push_verify(mut self) -> Builder {
         match self.1 {
             Some(opcodes::all::OP_EQUAL) => {
