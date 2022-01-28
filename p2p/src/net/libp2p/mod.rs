@@ -20,6 +20,7 @@ use crate::{
     net::{Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
+use futures::prelude::*;
 use libp2p::{
     core::{upgrade, PeerId},
     identity, mplex,
@@ -38,6 +39,9 @@ use tokio::sync::{
 
 mod backend;
 mod common;
+
+// Maximum message size of 10 MB
+const MESSAGE_MAX_SIZE: u32 = 10 * 1024 * 1024;
 
 #[derive(Debug)]
 pub enum LibP2pStrategy {}
@@ -188,24 +192,61 @@ impl NetworkService for Libp2pService {
 
 #[async_trait]
 impl SocketService for Libp2pSocket {
-    async fn send<T>(&mut self, _data: &T) -> error::Result<()>
+    async fn send<T>(&mut self, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
-        todo!();
+        let encoded = data.encode();
+        let size = (encoded.len() as u32).encode();
+
+        self.stream
+            .write_all(&size)
+            .await
+            .map_err(|e| P2pError::SocketError(e.kind()))?;
+
+        self.stream
+            .write_all(&encoded)
+            .await
+            .map_err(|e| P2pError::SocketError(e.kind()))?;
+
+        self.stream.flush().await.map_err(|e| P2pError::SocketError(e.kind()))
     }
 
     async fn recv<T>(&mut self) -> error::Result<T>
     where
         T: Decode,
     {
-        todo!();
+        let mut size: u32 = 0u32;
+        let mut data = vec![0u8; size.encoded_size()];
+
+        size = match self.stream.read_exact(&mut data).await {
+            Ok(_) => Decode::decode(&mut &data[..])
+                .map_err(|e| P2pError::DecodeFailure(e.to_string()))?,
+            Err(_) => return Err(P2pError::PeerDisconnected),
+        };
+
+        if size > MESSAGE_MAX_SIZE {
+            return Err(P2pError::DecodeFailure("Message is too big".to_string()));
+        }
+        data.resize(size as usize, 0);
+
+        match self.stream.read_exact(&mut data).await {
+            Ok(_) => Decode::decode(&mut &data[..]).map_err(|e| e.into()),
+            Err(_) => return Err(P2pError::PeerDisconnected),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net;
+
+    #[derive(Debug, Encode, Decode, PartialEq, Eq, Copy, Clone)]
+    struct Transaction {
+        hash: u64,
+        value: u128,
+    }
 
     #[tokio::test]
     async fn test_connect_new() {
@@ -269,5 +310,141 @@ mod tests {
                 )
             }
         }
+    }
+
+    // connect two libp2p services together and send a transaction from one service
+    // to another and verify that the transaction was received successfully and that
+    // it decodes to the same transaction that was sent.
+    #[tokio::test]
+    async fn test_peer_send() {
+        let service1 = Libp2pService::new("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::new("/ip6/::1/tcp/8906".parse().unwrap(), &[], &[]).await;
+
+        let mut service1 = service1.unwrap();
+        let mut service2 = service2.unwrap();
+        let conn_addr = service1.addr.clone();
+
+        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+            tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+
+        let net::Event::IncomingConnection(mut socket1) = res1.unwrap();
+        let mut socket2 = res2.unwrap();
+
+        // try to send data that implements `Encode + Decode`
+        // and verify that it was received correctly
+        let tx = Transaction {
+            hash: u64::MAX,
+            value: u128::MAX,
+        };
+        let encoded_size: u32 = tx.encode().len() as u32;
+
+        let mut buf = vec![0u8; 64];
+        let (server_res, peer_res) = tokio::join!(socket2.stream.read(&mut buf), socket1.send(&tx));
+
+        assert!(peer_res.is_ok());
+        assert!(server_res.is_ok());
+
+        let received_size: u32 = Decode::decode(&mut &buf[..]).unwrap();
+        assert_eq!(received_size, encoded_size);
+
+        buf.resize(received_size as usize, 0);
+        socket2.stream.read_exact(&mut buf).await.unwrap();
+        assert_eq!(Decode::decode(&mut &buf[..]), Ok(tx));
+    }
+
+    // connect two libp2p services together and send a transaction from one service
+    // to another and verify that the transaction was received successfully and that
+    // it decodes to the same transaction that was sent.
+    #[tokio::test]
+    async fn test_peer_recv() {
+        let service1 = Libp2pService::new("/ip6/::1/tcp/8907".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::new("/ip6/::1/tcp/8908".parse().unwrap(), &[], &[]).await;
+
+        let mut service1 = service1.unwrap();
+        let mut service2 = service2.unwrap();
+        let conn_addr = service1.addr.clone();
+
+        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+            tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+
+        let net::Event::IncomingConnection(mut socket1) = res1.unwrap();
+        let mut socket2 = res2.unwrap();
+
+        let tx = Transaction {
+            hash: u64::MAX,
+            value: u128::MAX,
+        };
+        let tx_copy = tx;
+
+        let (res1, res2): (_, Result<Transaction, _>) =
+            tokio::join!(socket2.send(&tx_copy), socket1.recv());
+
+        assert!(res1.is_ok());
+        assert!(res2.is_ok());
+        assert_eq!(res2.unwrap(), tx);
+    }
+
+    // connect two libp2p services together and send multiple transactions from
+    // one service to another and verify that they are buffered in the receiving
+    // end and decoded as three separate transactions
+    #[tokio::test]
+    async fn test_peer_buffered_recv() {
+        let service1 = Libp2pService::new("/ip6/::1/tcp/8909".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::new("/ip6/::1/tcp/8910".parse().unwrap(), &[], &[]).await;
+
+        let mut service1 = service1.unwrap();
+        let mut service2 = service2.unwrap();
+        let conn_addr = service1.addr.clone();
+
+        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+            tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+
+        let net::Event::IncomingConnection(mut socket1) = res1.unwrap();
+        let mut socket2 = res2.unwrap();
+
+        let tx = Transaction {
+            hash: u64::MAX,
+            value: u128::MAX,
+        };
+        let tx_copy = tx;
+
+        for _ in 0..3 {
+            assert_eq!(socket2.send(&tx_copy).await, Ok(()));
+        }
+
+        for _ in 0..3 {
+            let res: Result<Transaction, _> = socket1.recv().await;
+            assert!(res.is_ok());
+            assert_eq!(res.unwrap(), tx);
+        }
+    }
+
+    // connect two libp2p services together and try to send a message
+    // that is too big and verify that it is rejected
+    #[tokio::test]
+    async fn test_too_large_message_size() {
+        let service1 = Libp2pService::new("/ip6/::1/tcp/8911".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::new("/ip6/::1/tcp/8912".parse().unwrap(), &[], &[]).await;
+
+        let mut service1 = service1.unwrap();
+        let mut service2 = service2.unwrap();
+        let conn_addr = service1.addr.clone();
+
+        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+            tokio::join!(service1.poll_next(), service2.connect(conn_addr));
+
+        let net::Event::IncomingConnection(mut socket1) = res1.unwrap();
+        let mut socket2 = res2.unwrap();
+
+        // send a message size of 4GB to remote
+        let msg_size = u32::MAX.encode();
+        socket1.stream.write_all(&msg_size).await.unwrap();
+        socket1.stream.flush().await.unwrap();
+
+        let res: Result<Transaction, _> = socket2.recv().await;
+        assert_eq!(
+            res,
+            Err(P2pError::DecodeFailure("Message is too big".to_string()))
+        );
     }
 }
