@@ -22,9 +22,14 @@ use crate::primitives::Id;
 use crate::primitives::Idable;
 use crate::primitives::H256;
 mod block_v1;
+mod data;
+
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
+pub use data::*;
 use parity_scale_codec::{Decode, Encode};
+
+pub use block_v1::ConsensusData;
 
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
