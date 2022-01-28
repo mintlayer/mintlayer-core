@@ -299,6 +299,7 @@ impl storage::transaction::DbTransaction for StoreTx<'_> {
 
 #[cfg(test)]
 mod test {
+    use common::primitives::consensus_data::ConsensusData;
     use super::*;
 
     #[test]
@@ -309,8 +310,8 @@ mod test {
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(vec![tx0.clone()], Id::new(&H256::default()), 12, vec![]).unwrap();
-        let block1 = Block::new(vec![tx1.clone()], block0.get_id(), 34, vec![]).unwrap();
+        let block0 = Block::new(vec![tx0.clone()], Id::new(&H256::default()), 12, ConsensusData::None).unwrap();
+        let block1 = Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();
