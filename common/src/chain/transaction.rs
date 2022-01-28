@@ -15,8 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::primitives::{id, Id, Idable};
-use crypto::hash::StreamHasher;
+use crate::primitives::{Id, Idable};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
@@ -36,21 +35,6 @@ mod transaction_v1;
 pub enum Transaction {
     #[codec(index = 1)]
     V1(TransactionV1),
-}
-
-impl Idable<TransactionV1> for TransactionV1 {
-    fn get_id(&self) -> Id<Self> {
-        let mut hash_stream = id::DefaultHashAlgoStream::new();
-        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
-        for input in self.get_inputs() {
-            id::hash_encoded_to(input.get_outpoint(), &mut hash_stream);
-        }
-        for output in self.get_outputs() {
-            id::hash_encoded_to(output, &mut hash_stream);
-        }
-        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
-        Id::new(&hash_stream.finalize().into())
-    }
 }
 
 impl From<Id<TransactionV1>> for Id<Transaction> {
@@ -118,5 +102,36 @@ impl Transaction {
         match &self {
             Transaction::V1(tx) => tx.get_serialized_hash(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use parity_scale_codec::DecodeAll;
+
+    #[test]
+    fn tx_id_collision() {
+        let encoded = {
+            let mut bytes = [0u8; 36];
+            // Compact amount
+            bytes[0] = 10 << 2;
+            // Destination is an address (enum discriminant)
+            bytes[1] = 0;
+            // Compact length of address
+            bytes[2] = 33 << 2;
+            // encoded object
+            bytes
+        };
+
+        let output = TxOutput::decode(&mut &encoded[..]).expect("decoding output");
+        let pt = OutPoint::decode_all(&encoded).expect("decoding outpoint");
+        let input = TxInput::new(pt.get_tx_id(), pt.get_output_index(), vec![]);
+
+        let tx0 = Transaction::new(0x00, vec![], vec![output], 0x00).expect("tx0 bad");
+        let tx1 = Transaction::new(0x00, vec![input], vec![], 0x00).expect("tx1 bad");
+        assert_ne!(tx0, tx1);
+
+        assert_ne!(tx0.get_id(), tx1.get_id(), "Different transactions with the same ID!");
     }
 }

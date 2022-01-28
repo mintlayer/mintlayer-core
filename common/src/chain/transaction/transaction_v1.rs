@@ -1,7 +1,8 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
-use crate::primitives::{id, Id};
+use crate::primitives::{id, Id, Idable};
+use crypto::hash::StreamHasher;
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
 use super::Transaction;
@@ -15,6 +16,9 @@ pub struct TransactionV1 {
 }
 
 impl TransactionV1 {
+    // This has to be the same its index in the Transaction enum
+    pub const VERSION_BYTE: u8 = 0x01;
+
     pub fn new(
         flags: u32,
         inputs: Vec<TxInput>,
@@ -52,5 +56,23 @@ impl TransactionV1 {
 
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
         Id::new(&id::hash_encoded(self))
+    }
+}
+
+impl Idable<TransactionV1> for TransactionV1 {
+    fn get_id(&self) -> Id<Self> {
+        let mut hash_stream = id::DefaultHashAlgoStream::new();
+
+        // Collect data from inputs, excluding witnesses
+        let inputs: Vec<&OutPoint> = self.get_inputs().iter().map(TxInput::get_outpoint).collect();
+
+        // Include the transaction format version first
+        id::hash_encoded_to(&Self::VERSION_BYTE, &mut hash_stream);
+        // Followed by transaction contents
+        id::hash_encoded_to(&self.get_flags(), &mut hash_stream);
+        id::hash_encoded_to(&inputs, &mut hash_stream);
+        id::hash_encoded_to(&self.get_outputs(), &mut hash_stream);
+        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
+        Id::new(&hash_stream.finalize().into())
     }
 }
