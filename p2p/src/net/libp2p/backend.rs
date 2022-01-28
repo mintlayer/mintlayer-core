@@ -135,6 +135,7 @@ impl Backend {
                         )))
                         .map_err(|_| P2pError::ChannelClosed)
                 } else {
+                    // TODO: use logger
                     println!("libp2p: unhandled connection error: {:#?}", error);
                     Ok(())
                 }
@@ -155,10 +156,12 @@ impl Backend {
                     .map_err(|_| P2pError::ChannelClosed)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
+                // TODO: use logger
                 println!("libp2p: new listen address: {:?}", address);
                 Ok(())
             }
             _ => {
+                // TODO: use logger
                 println!("libp2p: unhandled event: {:?}", event);
                 Ok(())
             }

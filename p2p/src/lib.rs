@@ -14,18 +14,21 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-
 #![cfg(not(loom))]
 
-use crate::event::{Event, PeerEvent};
-use crate::net::NetworkService;
-use crate::peer::{Peer, PeerId, PeerRole};
+use crate::{
+    event::{Event, PeerEvent},
+    net::NetworkService,
+    peer::{Peer, PeerId, PeerRole},
+};
 use common::chain::ChainConfig;
 use futures::FutureExt;
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -173,43 +176,42 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::P2pError;
     use common::chain::config;
     use libp2p::Multiaddr;
     use net::{libp2p::Libp2pService, mock::MockService};
     use std::net::SocketAddr;
 
+    // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]
-    async fn test_p2p_new_mock() {
+    async fn test_p2p_connect_mock() {
         let config = Arc::new(config::create_mainnet());
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_ok());
+        let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
 
-        // try to create new P2P object to the same address, should fail
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_err());
-
-        // try to create new P2P object to different address, should succeed
-        let addr: SocketAddr = test_utils::make_address("127.0.0.1:");
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_ok());
+        let remote: SocketAddr = "[::1]:6666".parse().unwrap();
+        let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
+        assert_eq!(
+            res,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
     }
 
-    #[ignore]
+    // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]
-    async fn test_p2p_new_libp2p() {
+    async fn test_p2p_connect_libp2p() {
         let config = Arc::new(config::create_mainnet());
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let res = P2P::<Libp2pService>::new(256, 32, addr.clone(), config.clone()).await;
-        assert!(res.is_ok());
+        let mut p2p = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
 
-        // try to create new P2P object to the same address, should fail
-        let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_err());
-
-        // try to create new P2P object to different address, should succeed
-        let addr: Multiaddr = test_utils::make_address("/ip6/127.0.0.1/tcp/");
-        let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_ok());
+        let remote: Multiaddr =
+            "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
+                .parse()
+                .unwrap();
+        let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
+        assert_eq!(
+            res,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
     }
 }
