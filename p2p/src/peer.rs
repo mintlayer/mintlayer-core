@@ -328,12 +328,14 @@ mod tests {
     use crate::net;
     use crate::net::{libp2p::Libp2pService, mock::MockService};
     use common::chain::config;
+    use libp2p::Multiaddr;
+    use std::net::SocketAddr;
     use tokio::net::TcpStream;
 
     #[tokio::test]
     async fn test_peer_new_mock() {
         let config = Arc::new(config::create_mainnet());
-        let addr: <MockService as NetworkService>::Address = "[::1]:11121".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
 
@@ -359,13 +361,11 @@ mod tests {
     #[tokio::test]
     async fn test_peer_new_libp2p() {
         let config = Arc::new(config::create_mainnet());
-        let addr1: <Libp2pService as NetworkService>::Address =
-            "/ip6/::1/tcp/11422".parse().unwrap();
+        let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let mut server1 = Libp2pService::new(addr1.clone(), &[], &[]).await.unwrap();
 
         let conn_addr = server1.addr.clone();
-        let addr2: <Libp2pService as NetworkService>::Address =
-            "/ip6/::1/tcp/11423".parse().unwrap();
+        let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
 
         let (server1_res, server2_res) =

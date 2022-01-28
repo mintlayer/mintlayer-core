@@ -46,7 +46,7 @@ where
 }
 
 #[allow(unused)]
-struct P2P<NetworkingBackend> {
+pub struct P2P<NetworkingBackend> {
     /// Network backend (libp2p, mock)
     network: NetworkingBackend,
 
@@ -174,22 +174,23 @@ where
 mod tests {
     use super::*;
     use common::chain::config;
+    use libp2p::Multiaddr;
     use net::{libp2p::Libp2pService, mock::MockService};
+    use std::net::SocketAddr;
 
     #[tokio::test]
     async fn test_p2p_new_mock() {
         let config = Arc::new(config::create_mainnet());
-        let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_ok());
 
         // try to create new P2P object to the same address, should fail
-        let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_err());
 
         // try to create new P2P object to different address, should succeed
-        let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("127.0.0.1:");
         let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_ok());
     }
@@ -198,17 +199,16 @@ mod tests {
     #[tokio::test]
     async fn test_p2p_new_libp2p() {
         let config = Arc::new(config::create_mainnet());
-        let addr: libp2p::Multiaddr = "/ip6/::1/tcp/8889".parse().unwrap();
-        let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let res = P2P::<Libp2pService>::new(256, 32, addr.clone(), config.clone()).await;
         assert!(res.is_ok());
 
         // try to create new P2P object to the same address, should fail
-        let addr: libp2p::Multiaddr = "/ip6/::1/tcp/8889".parse().unwrap();
         let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_err());
 
         // try to create new P2P object to different address, should succeed
-        let addr: libp2p::Multiaddr = "/ip4/127.0.0.1/tcp/8889".parse().unwrap();
+        let addr: Multiaddr = test_utils::make_address("/ip6/127.0.0.1/tcp/");
         let res = P2P::<Libp2pService>::new(256, 32, addr, config.clone()).await;
         assert!(res.is_ok());
     }

@@ -306,13 +306,12 @@ mod tests {
         proto::handshake::{HandshakeState, OutboundHandshakeState},
     };
     use common::chain::{config, ChainConfig};
+    use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::net::TcpStream;
 
-    async fn create_two_peers(
-        config: Arc<ChainConfig>,
-        addr: std::net::SocketAddr,
-    ) -> (Peer<MockService>, Peer<MockService>) {
+    async fn create_two_peers(config: Arc<ChainConfig>) -> (Peer<MockService>, Peer<MockService>) {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let peer_fut = TcpStream::connect(addr);
 
@@ -394,8 +393,7 @@ mod tests {
     #[tokio::test]
     async fn test_valid_ping_pong() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11131".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -447,8 +445,7 @@ mod tests {
     #[tokio::test]
     async fn test_no_response() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11132".parse().unwrap();
-        let (mut local, remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -478,8 +475,7 @@ mod tests {
     #[tokio::test]
     async fn test_late_response_on_1st_retry() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11133".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -523,8 +519,7 @@ mod tests {
     #[tokio::test]
     async fn test_late_response_on_2nd_retry() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11134".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -568,8 +563,7 @@ mod tests {
     #[tokio::test]
     async fn test_late_response_on_3rd_retry() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11135".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -613,8 +607,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_pong_invalid_nonce() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11136".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -688,8 +681,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_pong_invalid_then_valid_nonce() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11137".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -792,8 +784,7 @@ mod tests {
     #[tokio::test]
     async fn test_send_pong_invalid_nonce_late_response() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11138".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -882,8 +873,7 @@ mod tests {
     #[tokio::test]
     async fn test_simultaneous_ping() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11139".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -995,8 +985,7 @@ mod tests {
     #[tokio::test]
     async fn test_duplicate_pong() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11140".parse().unwrap();
-        let (mut local, mut remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, mut remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
@@ -1055,8 +1044,7 @@ mod tests {
     #[tokio::test]
     async fn test_socket_activity() {
         let config = Arc::new(config::create_mainnet());
-        let addr = "[::1]:11141".parse().unwrap();
-        let (mut local, remote) = create_two_peers(config.clone(), addr).await;
+        let (mut local, remote) = create_two_peers(config.clone()).await;
 
         // verify that handshake was successful
         assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
