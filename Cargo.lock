@@ -2479,6 +2479,7 @@ dependencies = [
  "libp2p",
  "parity-scale-codec",
  "rand 0.8.4",
+ "test-utils",
  "tokio",
 ]
 
@@ -2668,6 +2669,15 @@ dependencies = [
  "cpufeatures",
  "opaque-debug",
  "universal-hash",
+]
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand 0.8.4",
 ]
 
 [[package]]
@@ -3664,6 +3674,14 @@ name = "termtree"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
+
+[[package]]
+name = "test-utils"
+version = "0.1.0"
+dependencies = [
+ "p2p",
+ "portpicker",
+]
 
 [[package]]
 name = "textwrap"
