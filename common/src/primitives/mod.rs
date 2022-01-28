@@ -25,6 +25,7 @@ pub mod id;
 pub mod merkle;
 pub mod time;
 
+pub mod consensus_data;
 pub mod version;
 
 pub use amount::Amount;

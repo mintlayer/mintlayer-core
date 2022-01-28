@@ -21,6 +21,8 @@ use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
 use crate::primitives::{Id, Idable};
 mod block_v1;
+
+use crate::primitives::consensus_data::ConsensusData;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
 use parity_scale_codec::{Decode, Encode};
@@ -84,7 +86,7 @@ impl Block {
         transactions: Vec<Transaction>,
         hash_prev_block: Id<Block>,
         time: u32,
-        consensus_data: Vec<u8>,
+        consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
@@ -105,7 +107,7 @@ impl Block {
         Ok(block)
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: Vec<u8>) {
+    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         match self {
             Block::V1(blk) => blk.update_consensus_data(consensus_data),
         }
@@ -168,7 +170,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let header = BlockHeader {
-            consensus_data: Vec::new(),
+            consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             hash_prev_block: Id::new(&H256::zero()),
@@ -188,7 +190,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let header = BlockHeader {
-            consensus_data: Vec::new(),
+            consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             hash_prev_block: Id::new(&H256::zero()),

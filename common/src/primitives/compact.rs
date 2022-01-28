@@ -1,7 +1,8 @@
 use crate::uint::Uint256;
+use parity_scale_codec::{Decode, Encode};
 use std::ops::Shl;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug, Encode, Decode)]
 pub struct Compact(pub u32);
 
 impl TryFrom<Compact> for Uint256 {

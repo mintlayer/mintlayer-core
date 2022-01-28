@@ -3,6 +3,7 @@ use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::UpgradeVersion;
+use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
@@ -77,8 +78,13 @@ fn create_mainnet_genesis() -> Block {
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(vec![tx], Id::new(&H256::zero()), 1639975460, Vec::new())
-        .expect("Error creating genesis block")
+    Block::new(
+        vec![tx],
+        Id::new(&H256::zero()),
+        1639975460,
+        ConsensusData::None,
+    )
+    .expect("Error creating genesis block")
 }
 
 #[allow(dead_code)]
