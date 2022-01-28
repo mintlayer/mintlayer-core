@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach
 
+use crate::Uint256;
 use generic_array::{typenum, GenericArray};
 use parity_scale_codec::{Decode, Encode};
 
@@ -26,6 +27,21 @@ fixed_hash::construct_fixed_hash! {
 impl From<GenericArray<u8, typenum::U32>> for H256 {
     fn from(val: GenericArray<u8, typenum::U32>) -> Self {
         Self(val.into())
+    }
+}
+
+impl H256 {
+    fn reverse_inner(&self) -> [u8; 32] {
+        let mut h256_inner = self.0;
+        h256_inner.reverse();
+        h256_inner
+    }
+}
+
+impl From<H256> for Uint256 {
+    fn from(hash: H256) -> Self {
+        let x = hash.reverse_inner();
+        Uint256::from_be_bytes(x)
     }
 }
 

@@ -1,50 +1,41 @@
-mod pow;
+use common::chain::block::Block;
+use common::chain::config::ChainType;
+use common::chain::PoWConfig;
+use common::primitives::BlockHeight;
+use crate::BlockProductionError;
+use crate::pow::temp::BlockIndex;
 
-use common::chain::block::{Block, BlockHeader, ConsensusData};
-use common::primitives::{Compact,H256};
-use common::Uint256;
+mod constants;
+mod data;
+mod helpers;
+mod temp;
+mod work;
 
-
-pub trait ExtractData {
-    fn get_bits(&self) -> Vec<u8>;
-    fn get_nonce(&self) -> u128;
-    fn get_target(&self) -> Uint256;
-
-    fn create(bits: &[u8], nonce: u128) -> Self;
-
-    fn get_difficulty(&self) -> Uint256;
+pub enum POWError {
+    BlockToMineError(String),
+    ConversionError(String),
 }
 
-impl ExtractData for ConsensusData {
-    fn get_bits(&self) -> Vec<u8> {
-        todo!()
-    }
 
-    fn get_nonce(&self) -> u128 {
-        todo!()
-    }
+pub struct PoW;
 
-    fn get_target(&self) -> Uint256 {
-        let bits = self.get_bits();
-        convert_to_Uint256(bits)
-    }
+impl PoW {
+    pub fn start(
+        mut block: Block,
+        max_nonce: u128,
+        time: u32,
+        prev_block_index: &BlockIndex,
+        height: BlockHeight,
+        chain_type: ChainType) -> Result<Block,BlockProductionError> {
+        let bits = work::check_for_work_required(
+            time,
+            prev_block_index,
+            height,
+            chain_type
+        )?;
 
-    fn get_difficulty(&self) -> Uint256 {
-        let bits = self.get_bits();
-        convert_to_Uint256(bits)
-    }
+        work::mine(&mut block,max_nonce,bits)?;
 
-    fn create(bits: &[u8], nonce: u128) -> Self {
-        todo!()
-    }
-}
-
-pub trait Hashable {
-    fn hash(&self) -> Uint256;
-}
-
-impl Hashable for Block {
-    fn hash(&self) -> Uint256 {
-        todo!()
+        Ok(block)
     }
 }
