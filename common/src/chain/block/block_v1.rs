@@ -1,8 +1,7 @@
 use crate::chain::transaction::Transaction;
+use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::{id, Id, Idable, H256};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
-
-pub type ConsensusData = Vec<u8>;
 
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
@@ -32,7 +31,7 @@ impl BlockV1 {
         &self.header
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: Vec<u8>) {
+    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.header.consensus_data = consensus_data;
     }
 
