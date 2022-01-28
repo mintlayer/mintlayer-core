@@ -23,7 +23,6 @@ parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
 parity-scale-codec-derive = "2.3.1"
 sscanf = "0.1.4"
 lazy_static = "1.4.0"
-paste = "1.0.6"
 
 [dev-dependencies]
 bitcoin-bech32 = "0.12.1"

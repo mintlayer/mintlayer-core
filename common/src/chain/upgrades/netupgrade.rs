@@ -43,7 +43,7 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
     pub(crate) fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
         let mut upgrades = upgrades;
-        upgrades.sort();
+        upgrades.sort_unstable();
 
         if let Some(&(height, _)) = upgrades.first() {
             return if height == BlockHeight::zero() {
@@ -80,16 +80,16 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
             .enumerate()
             .find(|&(_, &(_, elem_version))| elem_version == version);
 
-        match res {
-            None => None,
-            Some((idx, &(start_h, _))) => {
+        res.map(|(idx, &(start_h, _))| {
+            (
+                start_h,
                 if idx == (self.0.len() - 1) {
-                    Some((start_h, BlockHeight::max()))
+                    BlockHeight::max()
                 } else {
-                    self.0[idx + 1].0.checked_sub(1).map(|last_h| (start_h, last_h))
-                }
-            }
-        }
+                    BlockHeight::new(self.0[idx + 1].0.inner() - 1)
+                },
+            )
+        })
     }
 }
 
@@ -122,11 +122,11 @@ mod tests {
         let two_height = BlockHeight::new(3500);
         let three_height = BlockHeight::new(80000);
 
+        upgrades.push((three_height, MockVersion::Three));
+
         upgrades.push((BlockHeight::one(), MockVersion::One));
 
         upgrades.push((two_height, MockVersion::Two));
-
-        upgrades.push((three_height, MockVersion::Three));
 
         (NetUpgrades::initialize(upgrades), two_height, three_height)
     }
@@ -138,10 +138,13 @@ mod tests {
         assert!(MockVersion::Two.is_activated(two_height, &upgrades));
         assert!(MockVersion::Two.is_activated(three_height, &upgrades));
         assert!(!MockVersion::Two.is_activated(BlockHeight::one(), &upgrades));
-        assert!(!MockVersion::Two.is_activated(two_height - 1, &upgrades));
+        assert!(!MockVersion::Two.is_activated(BlockHeight::new(two_height.inner() - 1), &upgrades));
 
         assert!(!MockVersion::Three.is_activated(two_height, &upgrades));
-        assert!(!MockVersion::Three.is_activated(two_height + 10, &upgrades));
+        assert!(!MockVersion::Three.is_activated(
+            two_height.checked_add(10).expect("should be fine"),
+            &upgrades
+        ));
         assert!(MockVersion::Three.is_activated(three_height, &upgrades));
         assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
     }
@@ -157,14 +160,26 @@ mod tests {
         check(MockVersion::Zero, BlockHeight::zero());
         check(MockVersion::One, BlockHeight::one());
         check(MockVersion::One, BlockHeight::new(26));
-        check(MockVersion::One, two_height - 1);
+        check(MockVersion::One, BlockHeight::new(two_height.inner() - 1));
         check(MockVersion::Two, two_height);
-        check(MockVersion::Two, two_height + 1);
-        check(MockVersion::Two, three_height - 1);
+        check(
+            MockVersion::Two,
+            two_height.checked_add(1).expect("should be fine"),
+        );
+        check(MockVersion::Two, BlockHeight::new(three_height.inner() - 1));
         check(MockVersion::Three, three_height);
-        check(MockVersion::Three, three_height + 100);
-        check(MockVersion::Three, three_height + 2022);
-        check(MockVersion::Three, three_height + 3000);
+        check(
+            MockVersion::Three,
+            three_height.checked_add(100).expect("should be fine"),
+        );
+        check(
+            MockVersion::Three,
+            three_height.checked_add(2022).expect("should be fine"),
+        );
+        check(
+            MockVersion::Three,
+            three_height.checked_add(3000).expect("should be fine"),
+        );
     }
 
     #[test]
@@ -188,8 +203,16 @@ mod tests {
         };
 
         check(MockVersion::Zero, BlockHeight::zero(), BlockHeight::zero());
-        check(MockVersion::One, BlockHeight::one(), two_height - 1);
-        check(MockVersion::Two, two_height, three_height - 1);
+        check(
+            MockVersion::One,
+            BlockHeight::one(),
+            BlockHeight::new(two_height.inner() - 1),
+        );
+        check(
+            MockVersion::Two,
+            two_height,
+            BlockHeight::new(three_height.inner() - 1),
+        );
         check(MockVersion::Three, three_height, BlockHeight::max());
     }
 }
