@@ -196,8 +196,8 @@ mod tests {
     mod helpers {
         use super::*;
         use common::chain::transaction::Transaction;
-        use rand::Rng;
         use common::primitives::consensus_data::ConsensusData;
+        use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
             (0..count).into_iter().map(|_| gen_random_block()).collect::<Vec<_>>()

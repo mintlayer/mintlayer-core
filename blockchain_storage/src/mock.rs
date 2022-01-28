@@ -119,8 +119,8 @@ mockall::mock! {
 mod tests {
     pub use super::*;
     pub use crate::BlockchainStorage;
-    pub use common::primitives::{Idable, H256};
     use common::primitives::consensus_data::ConsensusData;
+    pub use common::primitives::{Idable, H256};
     pub use storage::Transactional;
 
     const TXFAIL: crate::Error =
@@ -229,7 +229,13 @@ mod tests {
     fn sample_data() -> (Block, Block) {
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(vec![tx0], Id::new(&H256::default()), 12, ConsensusData::None).unwrap();
+        let block0 = Block::new(
+            vec![tx0],
+            Id::new(&H256::default()),
+            12,
+            ConsensusData::None,
+        )
+        .unwrap();
         let block1 = Block::new(vec![tx1], block0.get_id(), 34, ConsensusData::None).unwrap();
         (block0, block1)
     }
