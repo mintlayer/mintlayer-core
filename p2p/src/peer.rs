@@ -325,66 +325,86 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net;
-    use crate::net::{libp2p::Libp2pService, mock::MockService};
+    use crate::{
+        net::mock::{MockService, MockSocket},
+        peer::{Peer, PeerRole},
+    };
     use common::chain::config;
-    use libp2p::Multiaddr;
-    use std::net::SocketAddr;
-    use tokio::net::TcpStream;
+    use common::primitives::version::SemVer;
+    use std::sync::Arc;
 
-    #[tokio::test]
-    async fn test_peer_new_mock() {
-        let config = Arc::new(config::create_mainnet());
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
-        let peer_fut = TcpStream::connect(addr);
+    // make a mock service peer
+    async fn make_peer() -> Peer<MockService> {
+        let (peer_tx, _) = tokio::sync::mpsc::channel(1);
+        let (_, rx) = tokio::sync::mpsc::channel(1);
 
-        let (server_res, peer_res) = tokio::join!(server.poll_next(), peer_fut);
-        assert!(server_res.is_ok());
-        assert!(peer_res.is_ok());
-
-        let server_res: net::Event<MockService> = server_res.unwrap();
-        let net::Event::IncomingConnection(server_res) = server_res;
-
-        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<MockService>::new(
+        Peer::<MockService>::new(
             1,
-            PeerRole::Outbound,
-            config.clone(),
-            server_res,
+            PeerRole::Inbound,
+            Arc::new(config::create_mainnet()),
+            MockSocket::new(test_utils::get_tcp_socket().await),
             peer_tx,
             rx,
+        )
+    }
+
+    // try to handle timer event when the peer is still in a handshaking state
+    // and verify that an error is reported
+    #[tokio::test]
+    async fn test_handshake_timer_event() {
+        let mut peer = make_peer().await;
+
+        assert_eq!(
+            peer.on_timer_event(Task::Connectivity(ConnectivityTask::Ping {
+                period: PING_PERIOD,
+            }))
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
         );
     }
 
+    // verify that `on_peer_event()` gives a protocol error
+    // if the socket is closed during handshaking
     #[tokio::test]
-    async fn test_peer_new_libp2p() {
-        let config = Arc::new(config::create_mainnet());
-        let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let mut server1 = Libp2pService::new(addr1.clone(), &[], &[]).await.unwrap();
+    async fn test_peer_event_socket_closed_handshaking() {
+        let mut peer = make_peer().await;
 
-        let conn_addr = server1.addr.clone();
-        let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
+        assert_eq!(
+            peer.on_peer_event(Err(P2pError::PeerDisconnected)).await,
+            Err(P2pError::ProtocolError(ProtocolError::Incompatible))
+        );
+    }
 
-        let (server1_res, server2_res) =
-            tokio::join!(server1.poll_next(), server2.connect(conn_addr));
-        assert!(server1_res.is_ok());
-        assert!(server2_res.is_ok());
+    // verify that `on_peer_event()` gives `PeerDisconnected` error
+    // if the socket is closed during normal operation
+    #[tokio::test]
+    async fn test_peer_event_socket_closed_listening() {
+        let mut peer = make_peer().await;
+        peer.state = PeerState::Listening(ListeningState::Any);
 
-        let server1_res: net::Event<Libp2pService> = server1_res.unwrap();
-        let net::Event::IncomingConnection(server1_res) = server1_res;
+        assert_eq!(
+            peer.on_peer_event(Err(P2pError::PeerDisconnected)).await,
+            Err(P2pError::PeerDisconnected),
+        );
+    }
 
-        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let _ = Peer::<Libp2pService>::new(
-            1,
-            PeerRole::Outbound,
-            config.clone(),
-            server1_res,
-            peer_tx,
-            rx,
+    // verify that the connection is closed if the received message
+    // contains an invalid magic number
+    #[tokio::test]
+    async fn test_peer_event_invalid_magic() {
+        let mut peer = make_peer().await;
+
+        assert_eq!(
+            peer.on_peer_event(Ok(Message {
+                magic: [1, 2, 3, 4],
+                msg: MessageType::Handshake(HandshakeMessage::Hello {
+                    version: SemVer::new(0, 1, 0),
+                    services: 0u32,
+                    timestamp: 0i64,
+                }),
+            }))
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork)),
         );
     }
 }
