@@ -14,6 +14,26 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![cfg(not(loom))]
+
+use std::net::SocketAddr;
+use tokio::net::{TcpListener, TcpStream};
+
+pub async fn get_tcp_socket() -> TcpStream {
+    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
+    let addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
+    let server = TcpListener::bind(addr).await.unwrap();
+
+    tokio::spawn(async move {
+        loop {
+            let _ = server.accept().await.unwrap();
+        }
+    });
+
+    TcpStream::connect(addr).await.unwrap()
+}
+
+/// Allocate a port and create a socket address for given NetworkService
 pub fn make_address<T>(addr: &str) -> T
 where
     T: std::str::FromStr,
