@@ -259,7 +259,7 @@ where
     ///
     /// This design allows the peer event loop to wait onan arbitrary number of
     /// timer-based events, both scheduled and one-shot.
-    pub(super) async fn on_timer_event(&mut self, task: Task) -> error::Result<Option<TaskInfo>> {
+    pub async fn on_timer_event(&mut self, task: Task) -> error::Result<Option<TaskInfo>> {
         match self.state {
             PeerState::Listening(state) => self.on_listening_state_timer_event(state, task).await,
             PeerState::Handshaking(_) => {
