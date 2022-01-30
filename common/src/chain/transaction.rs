@@ -17,6 +17,7 @@
 
 use crate::primitives::{Id, Idable};
 use serialization::{DirectDecode, DirectEncode, Encode};
+use thiserror::Error;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 
@@ -54,8 +55,9 @@ impl Idable for Transaction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Error, Debug, Clone)]
 pub enum TransactionCreationError {
+    #[error("An unknown error has occurred")]
     Unknown,
 }
 
