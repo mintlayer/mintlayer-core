@@ -157,7 +157,7 @@ where
     ///
     /// This function assumes that the magic number of the message has been verified
     /// and sender and the local node are using the same chain type (Mainnet, Testnet)
-    pub(super) async fn on_handshake_event(
+    pub async fn on_handshake_event(
         &mut self,
         state: HandshakeState,
         msg: HandshakeMessage,
@@ -190,498 +190,172 @@ where
 mod tests {
     use super::*;
     use crate::{
+        message::*,
         net::mock::{MockService, MockSocket},
-        net::Event,
         peer::PeerRole,
     };
-    use common::{
-        chain::{config, ChainConfig},
-        primitives::{time, version::SemVer},
-    };
-    use std::{net::SocketAddr, sync::Arc};
-    use tokio::net::TcpStream;
+    use common::{chain::config, primitives::version::SemVer};
+    use std::sync::Arc;
 
-    async fn create_two_peers(
-        local_config: Arc<ChainConfig>,
-        remote_config: Arc<ChainConfig>,
-    ) -> (Peer<MockService>, Peer<MockService>) {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
-        let peer_fut = TcpStream::connect(addr);
+    // make a mock service peer
+    async fn make_peer() -> Peer<MockService> {
+        let (peer_tx, _) = tokio::sync::mpsc::channel(1);
+        let (_, rx) = tokio::sync::mpsc::channel(1);
 
-        let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
-        let remote_res: Event<MockService> = remote_res.unwrap();
-        let Event::IncomingConnection(remote_res) = remote_res;
-        let local_res = local_res.unwrap();
-
-        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
-
-        let local = Peer::<MockService>::new(
+        Peer::<MockService>::new(
             1,
-            PeerRole::Outbound,
-            local_config.clone(),
-            remote_res,
-            peer_tx.clone(),
-            rx,
-        );
-
-        let remote = Peer::<MockService>::new(
-            2,
             PeerRole::Inbound,
-            remote_config.clone(),
-            MockSocket::new(local_res),
+            Arc::new(config::create_mainnet()),
+            MockSocket::new(test_utils::get_tcp_socket().await),
             peer_tx,
-            rx2,
-        );
-
-        (local, remote)
+            rx,
+        )
     }
 
-    // Test that compatible nodes are able to handshake successfully
     #[tokio::test]
-    async fn test_handshake_success() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
+    async fn test_handshake_state_peer_event() {
+        let mut peer = make_peer().await;
 
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
         assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid hello
-        let res = local
-            .on_handshake_event(
-                HandshakeState::Outbound(OutboundHandshakeState::Initiate),
-                HandshakeMessage::Hello {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                },
+            peer.on_handshake_state_peer_event(
+                HandshakeState::Inbound(InboundHandshakeState::WaitInitiation),
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX })
+                }
             )
-            .await;
-
-        // verify state and call result
-        assert!(res.is_ok());
-        assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(
-                OutboundHandshakeState::WaitResponse
-            ))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // read responder socket and parse message
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-
-        // verify state and call result
-        assert!(res.is_ok());
-        assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(
-                OutboundHandshakeState::WaitResponse
-            ))
-        );
-        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
-
-        // read initiator socket and parse message
-        let msg = local.socket.recv().await;
-        let res = local.on_peer_event(msg).await;
-
-        assert!(res.is_ok());
-        assert_eq!(local.state, PeerState::Listening(ListeningState::Any));
-        assert_eq!(remote.state, PeerState::Listening(ListeningState::Any));
-    }
-
-    // Test that invalid magic number closes the connection
-    #[tokio::test]
-    async fn test_handshake_invalid_magic() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
-
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
-        assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid hello with incompatible magic value
-        local
-            .socket
-            .send(&Message {
-                magic: [0xde, 0xad, 0xbe, 0xef],
-                msg: MessageType::Handshake(HandshakeMessage::Hello {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            })
-            .await
-            .unwrap();
-
-        // read responder socket and parse message
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-
-        // verify that `res` is error and protocol error is reported
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork))
-        );
-
-        // simulate remote node closing the connection and verify that
-        // the read operation causes a protocol error to be returned
-        drop(remote);
-        let msg = local.socket.recv().await;
-        let res = local.on_peer_event(msg).await;
-
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::Incompatible))
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
         );
     }
 
-    // Test that invalid version number closes the connection
     #[tokio::test]
-    async fn test_handshake_invalid_version() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
+    async fn test_handshake_outbound_handshake_event() {
+        let mut peer = make_peer().await;
 
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
+        // verify that valid combination succeeds
         assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid hello with incompatible version
-        local
-            .socket
-            .send(&Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::Hello {
-                    version: SemVer::new(13, 37, 1338),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            })
-            .await
-            .unwrap();
-
-        // read responder socket and parse message
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-
-        // verify that `res` is error and protocol error is reported
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidVersion))
-        );
-
-        // simulate remote node closing the connection and verify that
-        // the read operation causes a protocol error to be returned
-        drop(remote);
-        let msg = local.socket.recv().await;
-        let res = local.on_peer_event(msg).await;
-
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::Incompatible))
-        );
-    }
-
-    // Outbound sends Hello to an incompatible responder who responds anyway with HelloACk
-    #[tokio::test]
-    async fn test_handshake_invalid_ack_sent() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
-
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
-        assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid hello with incompatible version
-        local
-            .socket
-            .send(&Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::Hello {
-                    version: SemVer::new(13, 37, 1338),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            })
-            .await
-            .unwrap();
-
-        // read responder socket and parse message
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-
-        // verify that `res` is error and protocol error is reported
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidVersion))
-        );
-
-        // simulate remote node closing the connection and verify that
-        // the received HelloAck is rejected as it should be
-        drop(local);
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::Incompatible))
-        );
-    }
-
-    // Outbound sends Hello but responder sends something other than HelloAck
-    #[tokio::test]
-    async fn test_handshake_ack_not_sent() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
-
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
-        assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid hello
-        let res = local
-            .on_handshake_event(
-                HandshakeState::Outbound(OutboundHandshakeState::Initiate),
+            peer.on_outbound_handshake_event(
+                OutboundHandshakeState::Initiate,
                 HandshakeMessage::Hello {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                },
+                    version: SemVer::new(0, 1, 0),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
             )
-            .await;
-
-        // verify state and call result
-        assert!(res.is_ok());
+            .await,
+            Ok(())
+        );
         assert_eq!(
-            local.state,
+            peer.state,
             PeerState::Handshaking(HandshakeState::Outbound(
-                OutboundHandshakeState::WaitResponse
-            ))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
+                OutboundHandshakeState::WaitResponse,
             ))
         );
 
-        remote
-            .socket
-            .send(&Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::Hello {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            })
-            .await
-            .unwrap();
-
-        // read initiator socket and parse message
-        let msg = local.socket.recv().await;
-        let res = local.on_peer_event(msg).await;
-
+        // invalid version in helloack
         assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            peer.on_outbound_handshake_event(
+                OutboundHandshakeState::WaitResponse,
+                HandshakeMessage::HelloAck {
+                    version: SemVer::new(1, 2, 3),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
+        );
+
+        // valid helloack
+        assert_eq!(
+            peer.on_outbound_handshake_event(
+                OutboundHandshakeState::WaitResponse,
+                HandshakeMessage::HelloAck {
+                    version: *peer.config.version(),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Ok(()),
+        );
+        assert_eq!(peer.state, PeerState::Listening(ListeningState::Any));
+
+        // invalid state/message combination
+        assert_eq!(
+            peer.on_outbound_handshake_event(
+                OutboundHandshakeState::WaitResponse,
+                HandshakeMessage::Hello {
+                    version: SemVer::new(1, 2, 3),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
+        );
+
+        // invalid state/message combination
+        assert_eq!(
+            peer.on_outbound_handshake_event(
+                OutboundHandshakeState::Initiate,
+                HandshakeMessage::HelloAck {
+                    version: SemVer::new(1, 2, 3),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         );
     }
 
-    // Outbound doesn't start the connection by handshaking but sends something else
     #[tokio::test]
-    async fn test_handshake_hello_not_sent() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, mut remote) = create_two_peers(config.clone(), config.clone()).await;
+    async fn test_handshake_inbound_handshake_event() {
+        let mut peer = make_peer().await;
 
-        // verify initial state
-        assert_eq!(local.role, PeerRole::Outbound);
-        assert_eq!(remote.role, PeerRole::Inbound);
+        // invalid state/message combination
         assert_eq!(
-            local.state,
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate))
-        );
-        assert_eq!(
-            remote.state,
-            PeerState::Handshaking(HandshakeState::Inbound(
-                InboundHandshakeState::WaitInitiation
-            ))
-        );
-
-        // send valid HelloAck but it's considered invalid because initiator is expected to send Hello
-        local
-            .socket
-            .send(&Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::HelloAck {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            })
-            .await
-            .unwrap();
-
-        // read responder socket and parse message
-        let msg = remote.socket.recv().await;
-        let res = remote.on_peer_event(msg).await;
-
-        // verify that `res` is error and protocol error is reported
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            peer.on_inbound_handshake_event(
+                InboundHandshakeState::WaitInitiation,
+                HandshakeMessage::HelloAck {
+                    version: SemVer::new(1, 2, 3),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         );
 
-        // simulate remote node closing the connection and verify that
-        // the read operation causes a protocol error to be returned
-        drop(remote);
-        let msg = local.socket.recv().await;
-        let res = local.on_peer_event(msg).await;
-
+        // invalid version
         assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::Incompatible))
+            peer.on_inbound_handshake_event(
+                InboundHandshakeState::WaitInitiation,
+                HandshakeMessage::Hello {
+                    version: SemVer::new(1, 2, 3),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidVersion)),
         );
-    }
 
-    // try to initiate with helloack
-    #[tokio::test]
-    async fn test_initiate_with_helloack() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, _) = create_two_peers(config.clone(), config.clone()).await;
-
-        local.role = PeerRole::Outbound;
-        local.state =
-            PeerState::Handshaking(HandshakeState::Outbound(OutboundHandshakeState::Initiate));
-
-        let res = local
-            .on_peer_event(Ok(Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::HelloAck {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            }))
-            .await;
-
+        // valid state/message combination
         assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            peer.on_inbound_handshake_event(
+                InboundHandshakeState::WaitInitiation,
+                HandshakeMessage::Hello {
+                    version: *peer.config.version(),
+                    services: u32::MAX,
+                    timestamp: i64::MAX,
+                }
+            )
+            .await,
+            Ok(()),
         );
-    }
-
-    // outbound tried to initiate with helloack
-    #[tokio::test]
-    async fn test_inbound_reject_helloack() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, _) = create_two_peers(config.clone(), config.clone()).await;
-
-        local.role = PeerRole::Inbound;
-        local.state = PeerState::Handshaking(HandshakeState::Inbound(
-            InboundHandshakeState::WaitInitiation,
-        ));
-
-        let res = local
-            .on_peer_event(Ok(Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::HelloAck {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            }))
-            .await;
-
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-        );
-    }
-
-    // inbound responded to hello with hello
-    #[tokio::test]
-    async fn test_outbound_reject_hello() {
-        let config = Arc::new(config::create_mainnet());
-        let (mut local, _) = create_two_peers(config.clone(), config.clone()).await;
-
-        local.role = PeerRole::Outbound;
-        local.state = PeerState::Handshaking(HandshakeState::Outbound(
-            OutboundHandshakeState::WaitResponse,
-        ));
-
-        let res = local
-            .on_peer_event(Ok(Message {
-                magic: *config.magic_bytes(),
-                msg: MessageType::Handshake(HandshakeMessage::Hello {
-                    version: *config.version(),
-                    services: 0u32,
-                    timestamp: time::get(),
-                }),
-            }))
-            .await;
-
-        assert_eq!(
-            res,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-        );
+        assert_eq!(peer.state, PeerState::Listening(ListeningState::Any));
     }
 }
