@@ -131,6 +131,12 @@ impl Amount {
     }
 }
 
+impl From<Amount> for u128 {
+    fn from(amount: Amount) -> Self {
+        amount.val
+    }
+}
+
 impl std::ops::Add for Amount {
     type Output = Option<Self>;
 
