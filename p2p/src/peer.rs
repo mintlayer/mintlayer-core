@@ -115,10 +115,10 @@ where
     id: PeerId,
 
     /// Inbound/outbound
-    pub(super) role: PeerRole,
+    pub role: PeerRole,
 
     /// Current state of the peer (handshaking, listening, etc.)
-    pub(super) state: PeerState,
+    pub state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
     mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
@@ -127,13 +127,13 @@ where
     mgr_rx: tokio::sync::mpsc::Receiver<Event>,
 
     /// Socket of the peer
-    pub(super) socket: NetworkingBackend::Socket,
+    pub socket: NetworkingBackend::Socket,
 
     /// Chain config
-    pub(super) config: Arc<ChainConfig>,
+    pub config: Arc<ChainConfig>,
 
     /// Last time when something was read from the socket
-    pub(super) last_activity: i64,
+    pub last_activity: i64,
 }
 
 #[allow(unused)]
@@ -201,7 +201,7 @@ where
     /// This might be an invalid message (such as a stray Hello), it might be Ping in
     /// which case we must respond with Pong, or it may be, e.g., GetHeaders in which
     /// case the message is sent to the P2P object for further processing
-    pub(super) async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
+    pub async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
         // if `msg` contains an error, it means that there was a socket error,
         // i.e., remote peer closed the connection. Exit from the peer event loop
         //
