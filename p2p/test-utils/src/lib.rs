@@ -14,10 +14,23 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![cfg(not(loom))]
 #![allow(clippy::mutex_atomic)]
+
+use common::chain::ChainConfig;
 use lazy_static::lazy_static;
-use std::net::TcpListener;
-use std::sync::Mutex;
+use p2p::{
+    net::{
+        mock::{MockService, MockSocket},
+        Event, NetworkService,
+    },
+    peer::*,
+};
+use std::{
+    net::{SocketAddr, TcpListener},
+    sync::{Arc, Mutex},
+};
+use tokio::net::TcpStream;
 
 /// TCP server address for testing mock service connectivity
 pub const TCP_SERVER: &str = "[::1]:7999";
@@ -51,4 +64,42 @@ where
 {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
     format!("{}{}", addr, port).parse().unwrap()
+}
+
+// create two mock peers that are connected to each other
+pub async fn create_two_mock_peers(
+    config: Arc<ChainConfig>,
+) -> (Peer<MockService>, Peer<MockService>) {
+    let addr: SocketAddr = make_address("[::1]:");
+    let mut server = MockService::new(addr, &[], &[]).await.unwrap();
+    let peer_fut = TcpStream::connect(addr);
+
+    let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
+    let remote_res: Event<MockService> = remote_res.unwrap();
+    let Event::IncomingConnection(remote_res) = remote_res;
+    let local_res = local_res.unwrap();
+
+    let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+    let (_tx, rx) = tokio::sync::mpsc::channel(1);
+    let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
+
+    let local = Peer::<MockService>::new(
+        1,
+        PeerRole::Outbound,
+        config.clone(),
+        remote_res,
+        peer_tx.clone(),
+        rx,
+    );
+
+    let remote = Peer::<MockService>::new(
+        2,
+        PeerRole::Inbound,
+        config.clone(),
+        MockSocket::new(local_res),
+        peer_tx,
+        rx2,
+    );
+
+    (local, remote)
 }

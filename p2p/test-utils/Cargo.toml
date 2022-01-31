@@ -10,3 +10,10 @@ lazy_static = "1.4.0"
 
 [dependencies.p2p]
 path = "../"
+
+[dependencies.common]
+path = "../../common/"
+
+[dependencies.tokio]
+version = "1"
+features = ["full"]
