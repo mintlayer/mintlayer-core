@@ -23,49 +23,15 @@ use common::{
 use p2p::{
     error::{P2pError, ProtocolError},
     message::*,
-    net::{
-        mock::{MockService, MockSocket},
-        Event, NetworkService, SocketService,
-    },
+    net::{mock::MockService, SocketService},
     peer::*,
     proto::connectivity::*,
     proto::handshake::{HandshakeState, OutboundHandshakeState},
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpStream;
 
 async fn create_two_peers(config: Arc<ChainConfig>) -> (Peer<MockService>, Peer<MockService>) {
-    let addr: SocketAddr = test_utils::make_address("[::1]:");
-    let mut server = MockService::new(addr, &[], &[]).await.unwrap();
-    let peer_fut = TcpStream::connect(addr);
-
-    let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
-    let remote_res: Event<MockService> = remote_res.unwrap();
-    let Event::IncomingConnection(remote_res) = remote_res;
-    let local_res = local_res.unwrap();
-
-    let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-    let (_tx, rx) = tokio::sync::mpsc::channel(1);
-    let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
-
-    let mut local = Peer::<MockService>::new(
-        1,
-        PeerRole::Outbound,
-        Arc::clone(&config),
-        remote_res,
-        peer_tx.clone(),
-        rx,
-    );
-
-    let mut remote = Peer::<MockService>::new(
-        2,
-        PeerRole::Inbound,
-        Arc::clone(&config),
-        MockSocket::new(local_res),
-        peer_tx,
-        rx2,
-    );
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // handshake with remove
     local

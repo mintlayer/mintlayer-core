@@ -17,65 +17,23 @@
 #![cfg(not(loom))]
 
 use common::{
-    chain::{config, ChainConfig},
+    chain::config,
     primitives::{time, version::SemVer},
 };
 use p2p::{
     error::{P2pError, ProtocolError},
     message::*,
-    net::{
-        mock::{MockService, MockSocket},
-        Event, NetworkService, SocketService,
-    },
-    peer::{ListeningState, Peer, PeerRole, PeerState},
+    net::SocketService,
+    peer::{ListeningState, PeerRole, PeerState},
     proto::handshake::*,
 };
-use std::{net::SocketAddr, sync::Arc};
-use tokio::net::TcpStream;
-
-async fn create_two_peers(
-    local_config: Arc<ChainConfig>,
-    remote_config: Arc<ChainConfig>,
-) -> (Peer<MockService>, Peer<MockService>) {
-    let addr: SocketAddr = test_utils::make_address("[::1]:");
-    let mut server = MockService::new(addr, &[], &[]).await.unwrap();
-    let peer_fut = TcpStream::connect(addr);
-
-    let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
-    let remote_res: Event<MockService> = remote_res.unwrap();
-    let Event::IncomingConnection(remote_res) = remote_res;
-    let local_res = local_res.unwrap();
-
-    let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-    let (_tx, rx) = tokio::sync::mpsc::channel(1);
-    let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
-
-    let local = Peer::<MockService>::new(
-        1,
-        PeerRole::Outbound,
-        Arc::clone(&local_config),
-        remote_res,
-        peer_tx.clone(),
-        rx,
-    );
-
-    let remote = Peer::<MockService>::new(
-        2,
-        PeerRole::Inbound,
-        Arc::clone(&remote_config),
-        MockSocket::new(local_res),
-        peer_tx,
-        rx2,
-    );
-
-    (local, remote)
-}
+use std::sync::Arc;
 
 // Test that compatible nodes are able to handshake successfully
 #[tokio::test]
 async fn test_handshake_success() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -145,7 +103,7 @@ async fn test_handshake_success() {
 #[tokio::test]
 async fn test_handshake_invalid_magic() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -201,7 +159,7 @@ async fn test_handshake_invalid_magic() {
 #[tokio::test]
 async fn test_handshake_invalid_version() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -257,7 +215,7 @@ async fn test_handshake_invalid_version() {
 #[tokio::test]
 async fn test_handshake_invalid_ack_sent() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -312,7 +270,7 @@ async fn test_handshake_invalid_ack_sent() {
 #[tokio::test]
 async fn test_handshake_ack_not_sent() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -382,7 +340,7 @@ async fn test_handshake_ack_not_sent() {
 #[tokio::test]
 async fn test_handshake_hello_not_sent() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, mut remote) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, mut remote) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     // verify initial state
     assert_eq!(local.role, PeerRole::Outbound);
@@ -438,7 +396,7 @@ async fn test_handshake_hello_not_sent() {
 #[tokio::test]
 async fn test_initiate_with_helloack() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, _) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, _) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     local.role = PeerRole::Outbound;
     local.state =
@@ -465,7 +423,7 @@ async fn test_initiate_with_helloack() {
 #[tokio::test]
 async fn test_inbound_reject_helloack() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, _) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, _) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     local.role = PeerRole::Inbound;
     local.state = PeerState::Handshaking(HandshakeState::Inbound(
@@ -493,7 +451,7 @@ async fn test_inbound_reject_helloack() {
 #[tokio::test]
 async fn test_outbound_reject_hello() {
     let config = Arc::new(config::create_mainnet());
-    let (mut local, _) = create_two_peers(Arc::clone(&config), Arc::clone(&config)).await;
+    let (mut local, _) = test_utils::create_two_mock_peers(Arc::clone(&config)).await;
 
     local.role = PeerRole::Outbound;
     local.state = PeerState::Handshaking(HandshakeState::Outbound(

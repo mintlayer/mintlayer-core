@@ -10,6 +10,9 @@ portpicker = "0.1.1"
 [dependencies.p2p]
 path = "../"
 
+[dependencies.common]
+path = "../../common/"
+
 [dependencies.tokio]
 version = "1"
 features = ["full"]
