@@ -18,3 +18,6 @@ Non-security related bugs should be opened as [issues](https://github.com/mintla
 
 ## Contributing
 [See this guide](https://github.com/mintlayer/core/blob/master/CONTRIBUTING.md)
+
+## Building
+Install rust (instructions in the contributing guide), use `cargo build` to build and `cargo test` to run the tests.
