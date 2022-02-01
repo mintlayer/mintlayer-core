@@ -19,7 +19,10 @@ extern crate test_utils;
 
 use common::{chain::config, sync::Arc};
 use libp2p::Multiaddr;
-use p2p::{net::libp2p::Libp2pService, net::mock::MockService, P2P};
+use p2p::{
+    net::{libp2p::Libp2pService, mock::MockService},
+    P2P,
+};
 use std::net::SocketAddr;
 
 // create new p2p object with mock service

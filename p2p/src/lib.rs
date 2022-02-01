@@ -128,6 +128,16 @@ where
         Ok(())
     }
 
+    fn peer_discovered(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
+        println!("peers discovered: {:#?}", peers);
+        Ok(())
+    }
+
+    fn peer_expired(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
+        println!("peers expired: {:#?}", peers);
+        Ok(())
+    }
+
     /// Handle network event received from the network service provider
     async fn on_network_event(
         &mut self,
@@ -137,6 +147,8 @@ where
             net::Event::IncomingConnection(socket) => {
                 self.on_connectivity_event(ConnectivityEvent::Accept(socket)).await
             }
+            net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
+            net::Event::PeerExpired(peers) => self.peer_expired(&peers),
         }
     }
 
