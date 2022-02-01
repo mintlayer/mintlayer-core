@@ -123,6 +123,23 @@ impl Backend {
                     Ok(())
                 }
             },
+            SwarmEvent::OutgoingConnectionError { peer_id, error } => {
+                if let Some(peer_id) = peer_id {
+                    self.dials
+                        .remove(&peer_id)
+                        .ok_or_else(|| {
+                            P2pError::Unknown("Pending connection does not exist".to_string())
+                        })?
+                        .send(Err(P2pError::SocketError(
+                            std::io::ErrorKind::ConnectionRefused,
+                        )))
+                        .map_err(|_| P2pError::ChannelClosed)
+                } else {
+                    // TODO: use logger
+                    println!("libp2p: unhandled connection error: {:#?}", error);
+                    Ok(())
+                }
+            }
             SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
                 StreamingEvent::NewIncoming {
                     peer_id, stream, ..
@@ -139,10 +156,12 @@ impl Backend {
                     .map_err(|_| P2pError::ChannelClosed)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
+                // TODO: use logger
                 println!("libp2p: new listen address: {:?}", address);
                 Ok(())
             }
             _ => {
+                // TODO: use logger
                 println!("libp2p: unhandled event: {:?}", event);
                 Ok(())
             }
