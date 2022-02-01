@@ -7,6 +7,10 @@ if you fix a bug feel free to create a pr to merge your fix, if you want to add 
 
 Follow [these instructions](https://www.rust-lang.org/tools/install) to install rust which is required to build Mintlayer.
 
+## MIPS
+
+Mintlayer accepts improvement proposals in [this repo](https://github.com/mintlayer/MIPS). Major changes should be discussed via a MIP before they can be included in the code base. Check the [BIPs repo](https://github.com/bitcoin/bips) to get an idea of how to write a MIP.
+
 ## How to actually contribute
 
 The first thing to do, once you know what you want to do, is to open an issue. If you think you'd found a bug open an issue so it can be discussed with the wider
