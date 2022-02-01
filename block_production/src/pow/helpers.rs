@@ -3,7 +3,6 @@ use crate::pow::constants::{
     TARGET_TIMESPAN_UINT256, UPPER_TARGET_TIMESPAN_SECS,
 };
 use crate::POWError;
-use common::primitives::height::Saturating;
 use common::primitives::{BlockHeight, Compact, H256};
 use common::Uint256;
 use std::ops::Div;
@@ -38,7 +37,8 @@ pub(crate) fn check_difficulty_interval(block_height: BlockHeight) -> bool {
 
 /// Go back by what we want to be 14 days worth of blocks
 pub(crate) fn height_by_difficulty_interval(height: BlockHeight) -> BlockHeight {
-    height.saturating_sub((DIFFICULTY_ADJUSTMENT_INTERVAL - 1) as u64)
+    let res = height.inner() - (DIFFICULTY_ADJUSTMENT_INTERVAL - 1) as u64;
+    BlockHeight::new(res)
 }
 
 pub(crate) fn retarget(

@@ -7,7 +7,8 @@ use blockchain_storage::{BlockchainStorage, Store};
 use common::chain::block::{Block, BlockCreationError};
 use common::chain::transaction::Transaction;
 use common::chain::ChainConfig;
-use common::primitives::{BlockHeight, Id};
+use common::primitives::consensus_data::ConsensusData;
+use common::primitives::Id;
 
 //TODO: define definite errors specific to BlockProduction
 pub enum BlockProductionError {
@@ -73,7 +74,7 @@ pub fn create_empty_block(
     transactions: Vec<Transaction>,
 ) -> Result<Block, BlockCreationError> {
     let hash_prev_block = Id::new(&prev_block.get_merkle_root());
-    Block::new(transactions, hash_prev_block, time, vec![])
+    Block::new(transactions, hash_prev_block, time, ConsensusData::None)
 }
 
 fn get_block(store: &mut Store, block_id: Id<Block>) -> Result<Block, BlockProductionError> {

@@ -1,12 +1,12 @@
 // Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
 
-use crate::pow::data::Data;
 use common::chain::block::Block;
+use common::primitives::consensus_data::PoWData;
 use common::primitives::{BlockHeight, Id};
 
 pub struct BlockIndex {
     pub height: BlockHeight,
-    pub data: Data,
+    pub data: PoWData,
 }
 
 impl BlockIndex {

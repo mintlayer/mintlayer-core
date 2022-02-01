@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::pow::data::Data;
+use crate::pow::config::Config;
 use crate::pow::helpers::{
     actual_timespan, allow_mining_min_difficulty_blocks, check_difficulty,
     height_by_difficulty_interval, retarget,
@@ -8,16 +8,20 @@ use crate::pow::helpers::{
 use crate::pow::temp::BlockIndex;
 use crate::BlockProductionError;
 use crate::POWError;
-use common::chain::block::{Block, ConsensusData};
+use common::chain::block::Block;
 use common::chain::config::ChainType;
-use common::chain::PoWConfig;
+use common::primitives::consensus_data::{ConsensusData, PoWData};
 use common::primitives::Idable;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
-use crate::pow::Pow;
 
-
-
+pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
+    if let Ok(target) = Uint256::try_from(bits) {
+        hash > target
+    } else {
+        false
+    }
+}
 
 pub fn check_for_work_required(
     time: u32,
@@ -25,7 +29,7 @@ pub fn check_for_work_required(
     height: BlockHeight,
     chain_type: ChainType,
 ) -> Result<Compact, POWError> {
-    let cfg = PoWConfig::from(chain_type);
+    let cfg = Config::from(chain_type);
 
     // TODO: only for testnet
     // if check_difficulty_interval(height) {
@@ -43,10 +47,10 @@ pub fn check_for_work_required(
 fn next_work_required(
     time: u32,
     prev_block_index: &BlockIndex,
-    cfg: &PoWConfig,
+    cfg: &Config,
 ) -> Result<Compact, POWError> {
     let pow_limit = cfg.limit;
-    let prev_block_bits = prev_block_index.data.bits;
+    let prev_block_bits = prev_block_index.data.bits();
 
     if cfg.no_retargeting {
         return Ok(prev_block_bits);
@@ -67,7 +71,7 @@ fn next_work_required(
 fn next_work_required_for_testnet(
     time: u32,
     prev_block_index: &BlockIndex,
-    cfg: &PoWConfig,
+    cfg: &Config,
 ) -> Compact {
     let pow_limit = Compact::from(cfg.limit);
 
@@ -78,24 +82,20 @@ fn next_work_required_for_testnet(
             pow_limit
         } else {
             // Return the last work_required_testnet non-special-min-difficulty-rules-block
-            Self::last_non_special_min_difficulty(prev_block_index, pow_limit)
+            last_non_special_min_difficulty(prev_block_index, pow_limit)
         };
     }
 
-    prev_block_index.data.bits
+    prev_block_index.data.bits()
 }
 
-pub fn mine(
-    block: &mut Block,
-    max_nonce: u128,
-    bits: Compact,
-) -> Result<(), BlockProductionError> {
+pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), BlockProductionError> {
     match Uint256::try_from(bits) {
         Ok(difficulty) => {
             for nonce in 0..max_nonce {
-                let data = Data { bits, nonce };
+                let data = PoWData::new(bits, nonce);
 
-                block.update_consensus_data(ConsensusData::from(data));
+                block.update_consensus_data(ConsensusData::PoW(data));
 
                 if check_difficulty(block.get_id().get(), &difficulty) {
                     return Ok(());
@@ -107,7 +107,7 @@ pub fn mine(
                 "conversion of bits {:?} to Uint256 type: {:?}",
                 bits, e
             ))
-                .into());
+            .into());
         }
     }
 
