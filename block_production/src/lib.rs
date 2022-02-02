@@ -1,14 +1,12 @@
 #![allow(dead_code, unused_variables)]
 
-mod pow;
-
-pub use crate::pow::POWError;
 use blockchain_storage::{BlockchainStorage, Store};
 use common::chain::block::{Block, BlockCreationError};
 use common::chain::transaction::Transaction;
 use common::chain::ChainConfig;
 use common::primitives::consensus_data::ConsensusData;
 use common::primitives::Id;
+use consensus::PoWError;
 
 //TODO: define definite errors specific to BlockProduction
 pub enum BlockProductionError {
@@ -16,14 +14,14 @@ pub enum BlockProductionError {
     BlockCreationError(BlockCreationError),
     StorageError(blockchain_storage::Error),
     // Pow specific errors
-    POWError(crate::pow::POWError),
+    PoWError(PoWError),
     BlockIdNotFound(Id<Block>),
     NoBlockFound,
 }
 
-impl From<POWError> for BlockProductionError {
-    fn from(e: POWError) -> Self {
-        BlockProductionError::POWError(e)
+impl From<PoWError> for BlockProductionError {
+    fn from(e: PoWError) -> Self {
+        BlockProductionError::PoWError(e)
     }
 }
 
@@ -62,7 +60,6 @@ impl BlockProducer {
     ) -> Result<Block, BlockProductionError> {
         // TODO: retrieve the netupgrade from cfg, and determine whether it's for pow, pos, etc.
 
-        let best_block = get_best_block(store)?;
         // get the height based on the best_bloc defined.
         todo!()
     }

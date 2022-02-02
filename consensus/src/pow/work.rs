@@ -6,8 +6,7 @@ use crate::pow::helpers::{
     height_by_difficulty_interval, retarget,
 };
 use crate::pow::temp::BlockIndex;
-use crate::BlockProductionError;
-use crate::POWError;
+use crate::pow::Error;
 use common::chain::block::Block;
 use common::chain::config::ChainType;
 use common::primitives::consensus_data::{ConsensusData, PoWData};
@@ -28,7 +27,7 @@ pub fn check_for_work_required(
     prev_block_index: &BlockIndex,
     height: BlockHeight,
     chain_type: ChainType,
-) -> Result<Compact, POWError> {
+) -> Result<Compact, Error> {
     let cfg = Config::from(chain_type);
 
     // TODO: only for testnet
@@ -48,7 +47,7 @@ fn next_work_required(
     time: u32,
     prev_block_index: &BlockIndex,
     cfg: &Config,
-) -> Result<Compact, POWError> {
+) -> Result<Compact, Error> {
     let pow_limit = cfg.limit;
     let prev_block_bits = prev_block_index.data.bits();
 
@@ -89,7 +88,7 @@ fn next_work_required_for_testnet(
     prev_block_index.data.bits()
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), BlockProductionError> {
+pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), Error> {
     match Uint256::try_from(bits) {
         Ok(difficulty) => {
             for nonce in 0..max_nonce {
@@ -103,16 +102,15 @@ pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), Blo
             }
         }
         Err(e) => {
-            return Err(POWError::ConversionError(format!(
+            return Err(Error::ConversionError(format!(
                 "conversion of bits {:?} to Uint256 type: {:?}",
                 bits, e
-            ))
-            .into());
+            )));
         }
     }
 
     let err = format!("max nonce {} has been reached.", max_nonce);
-    Err(POWError::BlockToMineError(err).into())
+    Err(Error::BlockToMineError(err).into())
 }
 
 fn last_non_special_min_difficulty(block: &BlockIndex, _pow_limit: Compact) -> Compact {

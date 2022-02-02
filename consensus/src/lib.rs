@@ -3,6 +3,9 @@
 // use common::chain::block::Block;
 
 mod orphan_blocks;
+mod pow;
+
+pub use pow::Error as PoWError;
 // use orphan_blocks::OrphanBlocks;
 
 // struct Consensus<S: BlockchainStorage> {

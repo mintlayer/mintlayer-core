@@ -15,13 +15,9 @@ pub struct PoWData {
     nonce: u128,
 }
 
-
 impl PoWData {
-    pub fn new(bits:Compact, nonce: u128) -> Self {
-        PoWData {
-            bits,
-            nonce
-        }
+    pub fn new(bits: Compact, nonce: u128) -> Self {
+        PoWData { bits, nonce }
     }
     pub fn bits(&self) -> Compact {
         self.bits
@@ -30,5 +26,4 @@ impl PoWData {
     pub fn nonce(&self) -> u128 {
         self.nonce
     }
-
 }

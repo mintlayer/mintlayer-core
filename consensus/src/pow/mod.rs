@@ -1,5 +1,4 @@
 use crate::pow::temp::BlockIndex;
-use crate::BlockProductionError;
 use common::chain::block::Block;
 use common::chain::config::ChainType;
 use common::primitives::BlockHeight;
@@ -10,7 +9,7 @@ mod helpers;
 mod temp;
 mod work;
 
-pub enum POWError {
+pub enum Error {
     BlockToMineError(String),
     ConversionError(String),
 }
@@ -25,7 +24,7 @@ impl PoW {
         prev_block_index: &BlockIndex,
         height: BlockHeight,
         chain_type: ChainType,
-    ) -> Result<Block, BlockProductionError> {
+    ) -> Result<Block, Error> {
         let bits = work::check_for_work_required(time, prev_block_index, height, chain_type)?;
 
         work::mine(&mut block, max_nonce, bits)?;

@@ -2,7 +2,7 @@ use crate::pow::constants::{
     DIFFICULTY_ADJUSTMENT_INTERVAL, LOWER_TARGET_TIMESPAN_SECS, TARGET_SPACING,
     TARGET_TIMESPAN_UINT256, UPPER_TARGET_TIMESPAN_SECS,
 };
-use crate::POWError;
+use crate::pow::Error;
 use common::primitives::{BlockHeight, Compact, H256};
 use common::Uint256;
 use std::ops::Div;
@@ -45,7 +45,7 @@ pub(crate) fn retarget(
     timespan: u32,
     block_bits: Compact,
     pow_limit: Uint256,
-) -> Result<Compact, POWError> {
+) -> Result<Compact, Error> {
     Uint256::try_from(block_bits)
         .map(|old_target| {
             let mut new_target = old_target.mul_u32(timespan);
@@ -58,7 +58,7 @@ pub(crate) fn retarget(
             Compact::from(new_target)
         })
         .map_err(|e| {
-            POWError::ConversionError(format!(
+            Error::ConversionError(format!(
                 "conversion of bits {:?} to Uint256 type: {:?}",
                 block_bits, e
             ))
