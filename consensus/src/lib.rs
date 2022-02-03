@@ -5,7 +5,8 @@
 mod orphan_blocks;
 mod pow;
 
-pub use pow::Error as PoWError;
+pub use pow::{Error as PoWError, Config as PoWConfig, work::check_proof_of_work};
+
 // use orphan_blocks::OrphanBlocks;
 
 // struct Consensus<S: BlockchainStorage> {

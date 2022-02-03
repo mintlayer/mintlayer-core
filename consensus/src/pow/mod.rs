@@ -1,4 +1,4 @@
-pub use crate::pow::config::Config as PoWConfig;
+
 use crate::pow::temp::BlockIndex;
 use common::chain::block::Block;
 use common::primitives::BlockHeight;
@@ -7,14 +7,16 @@ mod config;
 mod constants;
 mod helpers;
 mod temp;
-mod work;
+pub mod work;
+
+pub use config::Config;
 
 pub enum Error {
     BlockToMineError(String),
     ConversionError(String),
 }
 
-impl PoWConfig {
+impl Config {
     pub fn start(
         &self,
         mut block: Block,

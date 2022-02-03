@@ -22,7 +22,7 @@ pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
 }
 
 impl Config {
-    pub(crate) fn check_for_work_required(
+    pub fn check_for_work_required(
         &self,
         time: u32,
         prev_block_index: &BlockIndex,
