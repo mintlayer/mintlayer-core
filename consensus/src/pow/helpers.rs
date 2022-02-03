@@ -2,6 +2,7 @@ use crate::pow::constants::{
     DIFFICULTY_ADJUSTMENT_INTERVAL, LOWER_TARGET_TIMESPAN_SECS, TARGET_SPACING,
     TARGET_TIMESPAN_UINT256, UPPER_TARGET_TIMESPAN_SECS,
 };
+use crate::pow::temp::BlockIndex;
 use crate::pow::Error;
 use common::primitives::{BlockHeight, Compact, H256};
 use common::Uint256;
@@ -27,6 +28,7 @@ pub fn check_difficulty(block_hash: H256, difficulty: &Uint256) -> bool {
     id <= *difficulty
 }
 
+// checks if it took > 20 minutes to find a block
 pub fn allow_mining_min_difficulty_blocks(new_block_time: u32, prev_block_time: u32) -> bool {
     new_block_time > (prev_block_time + (TARGET_SPACING * 2))
 }
@@ -63,4 +65,23 @@ pub(crate) fn retarget(
                 block_bits, e
             ))
         })
+}
+
+pub fn last_non_special_min_difficulty(block: &BlockIndex, _pow_limit: Compact) -> Compact {
+    // TODO: this requires that a height can be derived.
+    // let mut block = block.clone();
+    // // Return the last non-special-min-difficulty-rules-block
+    // loop {
+    //     let height = Self::get_block_number(&block.get_merkle_root());
+    //     let block_bits = block.get_consensus_data().get_bits();
+    //     if height == 0 {
+    //         return block_bits;
+    //     }
+    //
+    //     if check_difficulty_interval(height) && block_bits == pow_limit {
+    //         let prev_block_id = block.get_prev_block_id();
+    //         block = Self::get_block(&prev_block_id);
+    //     }
+    // }
+    todo!()
 }

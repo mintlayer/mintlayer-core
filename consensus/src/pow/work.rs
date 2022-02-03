@@ -3,12 +3,11 @@
 use crate::pow::config::Config;
 use crate::pow::helpers::{
     actual_timespan, allow_mining_min_difficulty_blocks, check_difficulty,
-    height_by_difficulty_interval, retarget,
+    height_by_difficulty_interval, last_non_special_min_difficulty, retarget,
 };
 use crate::pow::temp::BlockIndex;
 use crate::pow::Error;
 use common::chain::block::Block;
-use common::chain::config::ChainType;
 use common::primitives::consensus_data::{ConsensusData, PoWData};
 use common::primitives::Idable;
 use common::primitives::{BlockHeight, Compact};
@@ -22,70 +21,66 @@ pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
     }
 }
 
-pub fn check_for_work_required(
-    time: u32,
-    prev_block_index: &BlockIndex,
-    height: BlockHeight,
-    chain_type: ChainType,
-) -> Result<Compact, Error> {
-    let cfg = Config::from(chain_type);
+impl Config {
+    pub(crate) fn check_for_work_required(
+        &self,
+        time: u32,
+        prev_block_index: &BlockIndex,
+        _height: BlockHeight,
+    ) -> Result<Compact, Error> {
+        // TODO: only for testnet
+        // if check_difficulty_interval(height) {
+        //     if let ChainType::Testnet = chain_type {
+        //         return Ok(self.next_work_required_for_testnet(time, prev_block));
+        //     }
+        // }
 
-    // TODO: only for testnet
-    // if check_difficulty_interval(height) {
-    //     if let ChainType::Testnet = chain_type {
-    //         return Ok(Self::next_work_required_for_testnet(time, prev_block, &cfg));
-    //     }
-    // }
-
-    let old_height = height_by_difficulty_interval(prev_block_index.height);
-    let block_index = prev_block_index.get_ancestor(old_height);
-    next_work_required(time, &block_index, &cfg)
-}
-
-/// retargeting proof of work
-fn next_work_required(
-    time: u32,
-    prev_block_index: &BlockIndex,
-    cfg: &Config,
-) -> Result<Compact, Error> {
-    let pow_limit = cfg.limit;
-    let prev_block_bits = prev_block_index.data.bits();
-
-    if cfg.no_retargeting {
-        return Ok(prev_block_bits);
+        let old_height = height_by_difficulty_interval(prev_block_index.height);
+        let block_index = prev_block_index.get_ancestor(old_height);
+        self.next_work_required(time, &block_index)
     }
 
-    // limit adjustment step
-    let actual_timespan_of_last_2016_blocks =
-        actual_timespan(time, prev_block_index.get_block_time());
+    /// retargeting proof of work
+    fn next_work_required(
+        &self,
+        time: u32,
+        prev_block_index: &BlockIndex,
+    ) -> Result<Compact, Error> {
+        let pow_limit = self.limit;
+        let prev_block_bits = prev_block_index.data.bits();
 
-    // retarget
-    retarget(
-        actual_timespan_of_last_2016_blocks,
-        prev_block_bits,
-        pow_limit,
-    )
-}
+        if self.no_retargeting {
+            return Ok(prev_block_bits);
+        }
 
-fn next_work_required_for_testnet(
-    time: u32,
-    prev_block_index: &BlockIndex,
-    cfg: &Config,
-) -> Compact {
-    let pow_limit = Compact::from(cfg.limit);
+        // limit adjustment step
+        let actual_timespan_of_last_2016_blocks =
+            actual_timespan(time, prev_block_index.get_block_time());
 
-    if cfg.allow_min_difficulty_blocks {
-        // If the new block's timestamp is more than 2* 10 minutes
-        // then allow mining of a min-difficulty block.
-        return if allow_mining_min_difficulty_blocks(time, prev_block_index.get_block_time()) {
-            pow_limit
-        } else {
-            // Return the last work_required_testnet non-special-min-difficulty-rules-block
-            last_non_special_min_difficulty(prev_block_index, pow_limit)
-        };
+        // retarget
+        retarget(
+            actual_timespan_of_last_2016_blocks,
+            prev_block_bits,
+            pow_limit,
+        )
     }
 
-    prev_block_index.data.bits()
+    fn next_work_required_for_testnet(&self, time: u32, prev_block_index: &BlockIndex) -> Compact {
+        let pow_limit = Compact::from(self.limit);
+
+        if self.allow_min_difficulty_blocks {
+            // If the new block's timestamp is more than 2 * 10 minutes
+            // then allow mining of a min-difficulty block.
+            return if allow_mining_min_difficulty_blocks(time, prev_block_index.get_block_time()) {
+                pow_limit
+            } else {
+                // Return the last work_required_testnet non-special-min-difficulty-rules-block
+                last_non_special_min_difficulty(prev_block_index, pow_limit)
+            };
+        }
+
+        prev_block_index.data.bits()
+    }
 }
 
 pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), Error> {
@@ -110,24 +105,5 @@ pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), Err
     }
 
     let err = format!("max nonce {} has been reached.", max_nonce);
-    Err(Error::BlockToMineError(err).into())
-}
-
-fn last_non_special_min_difficulty(block: &BlockIndex, _pow_limit: Compact) -> Compact {
-    // TODO: this requires that a height can be derived.
-    // let mut block = block.clone();
-    // // Return the last non-special-min-difficulty-rules-block
-    // loop {
-    //     let height = Self::get_block_number(&block.get_merkle_root());
-    //     let block_bits = block.get_consensus_data().get_bits();
-    //     if height == 0 {
-    //         return block_bits;
-    //     }
-    //
-    //     if check_difficulty_interval(height) && block_bits == pow_limit {
-    //         let prev_block_id = block.get_prev_block_id();
-    //         block = Self::get_block(&prev_block_id);
-    //     }
-    // }
-    todo!()
+    Err(Error::BlockToMineError(err))
 }

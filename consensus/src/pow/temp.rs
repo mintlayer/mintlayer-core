@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
 
 use common::chain::block::Block;

@@ -1,6 +1,6 @@
+pub use crate::pow::config::Config as PoWConfig;
 use crate::pow::temp::BlockIndex;
 use common::chain::block::Block;
-use common::chain::config::ChainType;
 use common::primitives::BlockHeight;
 
 mod config;
@@ -14,18 +14,16 @@ pub enum Error {
     ConversionError(String),
 }
 
-pub struct PoW;
-
-impl PoW {
+impl PoWConfig {
     pub fn start(
+        &self,
         mut block: Block,
-        max_nonce: u128,
         time: u32,
         prev_block_index: &BlockIndex,
         height: BlockHeight,
-        chain_type: ChainType,
+        max_nonce: u128,
     ) -> Result<Block, Error> {
-        let bits = work::check_for_work_required(time, prev_block_index, height, chain_type)?;
+        let bits = self.check_for_work_required(time, prev_block_index, height)?;
 
         work::mine(&mut block, max_nonce, bits)?;
 
