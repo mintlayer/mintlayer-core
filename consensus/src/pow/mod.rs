@@ -19,12 +19,11 @@ impl Config {
     pub fn start(
         &self,
         mut block: Block,
-        time: u32,
         prev_block_index: &BlockIndex,
         height: BlockHeight,
         max_nonce: u128,
     ) -> Result<Block, Error> {
-        let bits = self.check_for_work_required(time, prev_block_index, height)?;
+        let bits = self.check_for_work_required(prev_block_index, height)?;
 
         work::mine(&mut block, max_nonce, bits)?;
 

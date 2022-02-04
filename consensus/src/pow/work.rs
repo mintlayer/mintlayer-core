@@ -2,8 +2,7 @@
 
 use crate::pow::config::Config;
 use crate::pow::helpers::{
-    actual_timespan, allow_mining_min_difficulty_blocks, check_difficulty,
-    height_by_difficulty_interval, last_non_special_min_difficulty, retarget,
+    actual_timespan, check_difficulty, retarget, retarget_block_time, testnet,
 };
 use crate::pow::temp::BlockIndex;
 use crate::pow::Error;
@@ -24,10 +23,11 @@ pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
 impl Config {
     pub fn check_for_work_required(
         &self,
-        time: u32,
         prev_block_index: &BlockIndex,
         _height: BlockHeight,
     ) -> Result<Compact, Error> {
+        //TODO: check prev_block_index exists
+
         // TODO: only for testnet
         // if check_difficulty_interval(height) {
         //     if let ChainType::Testnet = chain_type {
@@ -35,15 +35,14 @@ impl Config {
         //     }
         // }
 
-        let old_height = height_by_difficulty_interval(prev_block_index.height);
-        let block_index = prev_block_index.get_ancestor(old_height);
-        self.next_work_required(time, &block_index)
+        let retarget_block_time = retarget_block_time(prev_block_index);
+        self.next_work_required(retarget_block_time, &prev_block_index)
     }
 
     /// retargeting proof of work
     fn next_work_required(
         &self,
-        time: u32,
+        retarget_block_time: u32,
         prev_block_index: &BlockIndex,
     ) -> Result<Compact, Error> {
         let pow_limit = self.limit;
@@ -55,7 +54,7 @@ impl Config {
 
         // limit adjustment step
         let actual_timespan_of_last_2016_blocks =
-            actual_timespan(time, prev_block_index.get_block_time());
+            actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
 
         // retarget
         retarget(
@@ -71,11 +70,14 @@ impl Config {
         if self.allow_min_difficulty_blocks {
             // If the new block's timestamp is more than 2 * 10 minutes
             // then allow mining of a min-difficulty block.
-            return if allow_mining_min_difficulty_blocks(time, prev_block_index.get_block_time()) {
+            return if testnet::allow_mining_min_difficulty_blocks(
+                time,
+                prev_block_index.get_block_time(),
+            ) {
                 pow_limit
             } else {
                 // Return the last work_required_testnet non-special-min-difficulty-rules-block
-                last_non_special_min_difficulty(prev_block_index, pow_limit)
+                testnet::last_non_special_min_difficulty(prev_block_index, pow_limit)
             };
         }
 
