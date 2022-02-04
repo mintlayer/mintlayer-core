@@ -3,6 +3,7 @@
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
+use storage::traits;
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
@@ -26,22 +27,40 @@ impl From<storage::Error> for Error {
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = core::result::Result<T, Error>;
 
-/// Operations on persistent blockchain data
-pub trait BlockchainStorage {
+/// Queries on persistent blockchain data
+pub trait BlockchainStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
-
-    /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
 
-    /// Set the hash of the best block
-    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
-
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+
+    /// Get outputs state for given transaction in the mainchain
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &Id<Transaction>,
+    ) -> crate::Result<Option<TxMainChainIndex>>;
+
+    /// Get transaction by block ID and position
+    fn get_mainchain_tx_by_position(
+        &self,
+        tx_index: &TxMainChainPosition,
+    ) -> crate::Result<Option<Transaction>>;
+
+    /// Get mainchain block by its height
+    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+}
+
+/// Modifying operations on persistent blockchain data
+pub trait BlockchainStorageWrite: BlockchainStorageRead {
+    /// Set storage version
+    fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
+
+    /// Set the hash of the best block
+    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> crate::Result<()>;
@@ -56,23 +75,8 @@ pub trait BlockchainStorage {
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()>;
 
-    /// Get outputs state for given transaction in the mainchain
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &Id<Transaction>,
-    ) -> crate::Result<Option<TxMainChainIndex>>;
-
     /// Delete outputs state index associated with given transaction
     fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
-
-    /// Get transaction by block ID and position
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<Transaction>>;
-
-    /// Get mainchain block by its height
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(
@@ -84,3 +88,20 @@ pub trait BlockchainStorage {
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 }
+
+/// Support for transactions over blockchain storage
+pub trait Transactional<'t> {
+    /// Associated read-only transaction type.
+    type TransactionRo: traits::TransactionRo<Error = crate::Error> + BlockchainStorageRead + 't;
+
+    /// Associated read-write transaction type.
+    type TransactionRw: traits::TransactionRw<Error = crate::Error> + BlockchainStorageWrite + 't;
+
+    /// Start a read-only transaction.
+    fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
+
+    /// Start a read-write transaction.
+    fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
+}
+
+pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> {}

@@ -33,7 +33,7 @@
 //! let mut store = MyStore::default();
 //!
 //! // All store operations happen inside of a transaction.
-//! store.transaction_rw(|tx| {
+//! store.transaction_rw().run(|tx| {
 //!     // Get the column, identified by the type.
 //!     let mut col = tx.get_mut::<MyColumn, _>();
 //!
@@ -49,20 +49,20 @@
 //! });
 //!
 //! // Try writing a value but abort the transaction afterwards.
-//! store.transaction_rw(|tx| {
+//! store.transaction_rw().run(|tx| {
 //!     tx.get_mut::<MyColumn, _>().put(b"baz".to_vec(), b"xyz".to_vec())?;
 //!     storage::abort(())
 //! });
 //!
 //! // Transaction can return data. Values taken from the database have to be cloned
 //! // in order for them to be available after the transaction terminates.
-//! let result = store.transaction_ro(|tx| {
+//! let result = store.transaction_ro().run(|tx| {
 //!     Ok(tx.get::<MyColumn, _>().get(b"baz")?.map(ToOwned::to_owned))
 //! });
 //! assert_eq!(result, Ok(None));
 //!
 //! // Check the value we first inserted is still there.
-//! let result = store.transaction_ro(|tx| {
+//! let result = store.transaction_ro().run(|tx| {
 //!     assert_eq!(tx.get::<MyColumn, _>().get(b"foo")?, Some(&b"bar"[..]));
 //!     Ok(())
 //! });
@@ -81,3 +81,39 @@ pub use transaction::{abort, commit};
 
 pub type Data = Vec<u8>;
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[cfg(test)]
+mod test {
+    use crate::{schema, traits::*};
+
+    struct MyColumn;
+    impl schema::Column for MyColumn {
+        const NAME: &'static str = "MyColumnV1";
+        type Kind = schema::Single;
+    }
+
+    type MySchema = (MyColumn, ());
+    type MyStore = crate::Store<MySchema>;
+
+    fn generic_aborted_write<St: Backend<MySchema>>(store: &St) -> crate::Result<()> {
+        store.transaction_rw().run(|tx| {
+            tx.get_mut::<MyColumn, _>().put(b"hello".to_vec(), b"world".to_vec())?;
+            crate::abort(())
+        })
+    }
+
+    #[test]
+    fn test_abort() {
+        common::concurrency::model(|| {
+            let store = MyStore::default();
+
+            let r = generic_aborted_write(&store);
+            assert_eq!(r, Ok(()));
+
+            let r = store
+                .transaction_ro()
+                .run(|tx| Ok(tx.get::<MyColumn, _>().get(b"hello")?.is_some()));
+            assert_eq!(r, Ok(false));
+        })
+    }
+}
