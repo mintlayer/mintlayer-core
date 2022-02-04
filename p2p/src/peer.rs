@@ -112,7 +112,7 @@ where
     NetworkingBackend: NetworkService,
 {
     /// Unique ID of the peer
-    id: PeerId,
+    pub id: PeerId,
 
     /// Inbound/outbound
     pub role: PeerRole,
@@ -121,7 +121,7 @@ where
     pub state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
-    mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
+    pub mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
 
     /// Channel for reading events from the `NetworkManager`
     mgr_rx: tokio::sync::mpsc::Receiver<Event>,

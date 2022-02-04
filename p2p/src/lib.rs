@@ -17,7 +17,8 @@
 #![cfg(not(loom))]
 
 use crate::{
-    event::{Event, PeerEvent},
+    error::P2pError,
+    event::{Event, PeerEvent, PeerEventType},
     net::NetworkService,
     peer::{Peer, PeerId, PeerRole},
 };
@@ -40,6 +41,28 @@ pub mod peer;
 pub mod proto;
 
 #[allow(unused)]
+#[derive(Debug, PartialEq, Eq)]
+enum PeerState {
+    /// Peer is handshaking
+    Handshaking,
+
+    /// Peer is ready for gossiping/syncing
+    Active,
+}
+
+#[allow(unused)]
+struct PeerContext {
+    /// Unique peer ID
+    id: PeerId,
+
+    /// Peer state
+    state: PeerState,
+
+    /// Channel for communication with the peer
+    tx: Sender<Event>,
+}
+
+#[allow(unused)]
 pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
@@ -57,7 +80,7 @@ pub struct P2P<NetworkingBackend> {
     config: Arc<ChainConfig>,
 
     /// Hashmap for peer information
-    peers: HashMap<PeerId, Sender<Event>>,
+    peers: HashMap<PeerId, PeerContext>,
 
     /// Counter for getting unique peer IDs
     peer_cnt: AtomicU64,
@@ -102,9 +125,27 @@ where
     ///
     /// The event is wrapped in an `Option` because the peer might have ungracefully
     /// failed and reading from the closed channel might gives a `None` value, indicating
-    /// a protocol on error which should be handled accordingly.
+    /// a protocol error which should be handled accordingly.
     async fn on_peer_event(&mut self, event: Option<PeerEvent>) -> error::Result<()> {
-        todo!();
+        let event = event.ok_or(P2pError::ChannelClosed)?;
+
+        match event.event {
+            PeerEventType::HandshakeFailed => self
+                .peers
+                .remove(&event.peer_id)
+                .map(|_| ())
+                .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string())),
+            PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
+                Some(peer) => {
+                    (*peer).state = PeerState::Active;
+                    Ok(())
+                }
+                None => Err(P2pError::Unknown("Peer does not exist".to_string())),
+            },
+            PeerEventType::Disconnected | PeerEventType::Message(_) => {
+                todo!();
+            }
+        }
     }
 
     /// Handle a connectivity-related event
@@ -175,7 +216,14 @@ where
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
         let peer_id: PeerId = self.peer_cnt.fetch_add(1, Ordering::Relaxed);
-        self.peers.insert(peer_id, tx);
+        self.peers.insert(
+            peer_id,
+            PeerContext {
+                id: peer_id,
+                state: PeerState::Handshaking,
+                tx,
+            },
+        );
 
         tokio::spawn(async move {
             Peer::<NetworkingBackend>::new(peer_id, role, config, socket, mgr_tx, rx)
@@ -225,5 +273,67 @@ mod tests {
             res,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
+    }
+
+    // verify that if handshake succeeds, peer state is set to `Active`
+    #[tokio::test]
+    async fn test_on_peer_event_handshake_success() {
+        let config = Arc::new(config::create_mainnet());
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+        let (tx, _) = tokio::sync::mpsc::channel(16);
+
+        p2p.peers.insert(
+            1,
+            PeerContext {
+                id: 1,
+                state: PeerState::Handshaking,
+                tx: tx.clone(),
+            },
+        );
+
+        assert_eq!(p2p.peers.len(), 1);
+        assert_eq!(
+            p2p.on_peer_event(Some(PeerEvent {
+                peer_id: 1,
+                event: PeerEventType::HandshakeSucceeded,
+            }))
+            .await,
+            Ok(())
+        );
+        assert_eq!(p2p.peers.len(), 1);
+        match p2p.peers.get(&1) {
+            Some(peer) => assert_eq!(peer.state, PeerState::Active),
+            None => panic!("peer not found"),
+        }
+    }
+
+    // verify that if handshake fails, peer context is destroyed
+    #[tokio::test]
+    async fn test_on_peer_event_handshake_failure() {
+        let config = Arc::new(config::create_mainnet());
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+        let (tx, _) = tokio::sync::mpsc::channel(16);
+
+        p2p.peers.insert(
+            1,
+            PeerContext {
+                id: 1,
+                state: PeerState::Handshaking,
+                tx: tx.clone(),
+            },
+        );
+
+        assert_eq!(p2p.peers.len(), 1);
+        assert_eq!(
+            p2p.on_peer_event(Some(PeerEvent {
+                peer_id: 1,
+                event: PeerEventType::HandshakeFailed,
+            }))
+            .await,
+            Ok(())
+        );
+        assert_eq!(p2p.peers.len(), 0);
     }
 }

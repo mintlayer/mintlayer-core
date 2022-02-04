@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -25,15 +25,22 @@ pub enum Event {
 
 #[allow(unused)]
 pub struct PeerEvent {
-    peer_id: PeerId,
-    event: PeerEventType,
+    pub peer_id: PeerId,
+    pub event: PeerEventType,
 }
 
 /// P2P uses these events to communicate with Peer
 #[allow(unused)]
 pub enum PeerEventType {
+    /// Handshaking failed
+    HandshakeFailed,
+
+    /// Handshaking succeeded
+    HandshakeSucceeded,
+
     /// Remote peer disconnected
     Disconnected,
+
     /// Inbound or outbound message
     Message(message::Message),
 }

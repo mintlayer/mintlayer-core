@@ -67,9 +67,17 @@ pub async fn create_two_mock_peers(
     };
     let local_res = local_res.unwrap();
 
-    let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+    let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
+
+    // spawn dummy task that listens to the peer RX channel and
+    // acts as though a P2P object was listening to events from the peer
+    tokio::spawn(async move {
+        loop {
+            let _ = peer_rx.recv().await;
+        }
+    });
 
     let local = Peer::<MockService>::new(
         1,

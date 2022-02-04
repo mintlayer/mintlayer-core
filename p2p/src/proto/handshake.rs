@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError, ProtocolError},
+    event::{PeerEvent, PeerEventType},
     message::{HandshakeMessage, Message, MessageType},
     net::{NetworkService, SocketService},
     peer::{ListeningState, Peer, PeerState},
@@ -83,6 +84,12 @@ where
                 };
 
                 self.socket.send(&msg).await?;
+                self.mgr_tx
+                    .send(PeerEvent {
+                        peer_id: self.id,
+                        event: PeerEventType::HandshakeSucceeded,
+                    })
+                    .await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -130,6 +137,12 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
 
+                self.mgr_tx
+                    .send(PeerEvent {
+                        peer_id: self.id,
+                        event: PeerEventType::HandshakeSucceeded,
+                    })
+                    .await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -162,9 +175,22 @@ where
         state: HandshakeState,
         msg: HandshakeMessage,
     ) -> error::Result<()> {
-        match state {
+        let res = match state {
             HandshakeState::Inbound(state) => self.on_inbound_handshake_event(state, msg).await,
             HandshakeState::Outbound(state) => self.on_outbound_handshake_event(state, msg).await,
+        };
+
+        match res {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                self.mgr_tx
+                    .send(PeerEvent {
+                        peer_id: self.id,
+                        event: PeerEventType::HandshakeFailed,
+                    })
+                    .await?;
+                Err(e)
+            }
         }
     }
 
@@ -199,8 +225,16 @@ mod tests {
 
     // make a mock service peer
     async fn make_peer() -> Peer<MockService> {
-        let (peer_tx, _) = tokio::sync::mpsc::channel(1);
+        let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
         let (_, rx) = tokio::sync::mpsc::channel(1);
+
+        // spawn dummy task that listens to the peer RX channel and
+        // acts as though a P2P object was listening to events from the peer
+        tokio::spawn(async move {
+            loop {
+                let _ = peer_rx.recv().await;
+            }
+        });
 
         Peer::<MockService>::new(
             1,
