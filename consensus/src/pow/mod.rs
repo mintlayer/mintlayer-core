@@ -1,4 +1,3 @@
-
 use crate::pow::temp::BlockIndex;
 use common::chain::block::Block;
 use common::primitives::BlockHeight;
