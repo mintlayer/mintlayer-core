@@ -36,7 +36,7 @@ impl Config {
         // }
 
         let retarget_block_time = retarget_block_time(prev_block_index);
-        self.next_work_required(retarget_block_time, &prev_block_index)
+        self.next_work_required(retarget_block_time, prev_block_index)
     }
 
     /// retargeting proof of work
