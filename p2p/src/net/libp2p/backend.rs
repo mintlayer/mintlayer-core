@@ -21,7 +21,8 @@ use crate::{
 };
 use futures::StreamExt;
 use libp2p::{
-    core::connection::ConnectedPoint,
+    core::{connection::ConnectedPoint, either::EitherError},
+    mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
@@ -53,6 +54,9 @@ pub struct Backend {
         OutboundStreamId,
         oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     >,
+
+    /// Whether mDNS peer events should be relayed to P2P manager
+    relay_mdns: bool,
 }
 
 impl Backend {
@@ -60,6 +64,7 @@ impl Backend {
         swarm: Swarm<common::ComposedBehaviour>,
         cmd_rx: Receiver<common::Command>,
         event_tx: Sender<common::Event>,
+        relay_mdns: bool,
     ) -> Self {
         Self {
             swarm,
@@ -68,6 +73,7 @@ impl Backend {
             dials: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
+            relay_mdns,
         }
     }
 
@@ -86,10 +92,26 @@ impl Backend {
         }
     }
 
+    /// Collect peers into a vector and send appropriate event to P2P
+    async fn send_discovery_event(
+        &mut self,
+        peers: Vec<(PeerId, Multiaddr)>,
+        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> common::Event,
+    ) -> error::Result<()> {
+        if !self.relay_mdns || peers.is_empty() {
+            return Ok(());
+        }
+
+        self.event_tx.send(event_fn(peers)).await.map_err(|_| P2pError::ChannelClosed)
+    }
+
     /// Handle event received from the swarm object
     async fn on_event(
         &mut self,
-        event: SwarmEvent<common::ComposedEvent, ProtocolsHandlerUpgrErr<std::convert::Infallible>>,
+        event: SwarmEvent<
+            common::ComposedEvent,
+            EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+        >,
     ) -> error::Result<()> {
         match event {
             SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
@@ -160,6 +182,22 @@ impl Backend {
                 println!("libp2p: new listen address: {:?}", address);
                 Ok(())
             }
+            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
+                peers,
+            ))) => {
+                self.send_discovery_event(peers.collect(), |peers| common::Event::PeerDiscovered {
+                    peers,
+                })
+                .await
+            }
+            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
+                expired,
+            ))) => {
+                self.send_discovery_event(expired.collect(), |peers| common::Event::PeerExpired {
+                    peers,
+                })
+                .await
+            }
             _ => {
                 // TODO: use logger
                 println!("libp2p: unhandled event: {:?}", event);
@@ -200,7 +238,9 @@ mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
-        identity, mplex, noise,
+        identity,
+        mdns::Mdns,
+        mplex, noise,
         streaming::{IdentityCodec, Streaming},
         swarm::SwarmBuilder,
         tcp::TcpConfig,
@@ -212,7 +252,7 @@ mod tests {
     //
     // it contains the selected transport for the swarm (in this case TCP + Noise)
     // and any custom network behaviour such as streaming or mDNS support
-    fn make_swarm() -> Swarm<common::ComposedBehaviour> {
+    async fn make_swarm() -> Swarm<common::ComposedBehaviour> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys =
@@ -230,6 +270,7 @@ mod tests {
             transport,
             common::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
+                mdns: Mdns::new(Default::default()).await.unwrap(),
             },
             peer_id,
         )
@@ -239,10 +280,10 @@ mod tests {
     // verify that binding to a free network interface succeeds
     #[tokio::test]
     async fn test_command_listen_success() {
-        let swarm = make_swarm();
+        let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
         let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx);
+        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -264,10 +305,10 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_command_listen_addrinuse() {
-        let swarm = make_swarm();
+        let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
         let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx);
+        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -304,10 +345,10 @@ mod tests {
     // the command tx which signals that it is no longer responsive
     #[tokio::test]
     async fn test_drop_command_tx() {
-        let swarm = make_swarm();
+        let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
         let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx);
+        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

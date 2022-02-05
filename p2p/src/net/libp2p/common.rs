@@ -17,6 +17,7 @@
 // Author(s): A. Altonen
 use crate::{error, net};
 use libp2p::{
+    mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
     Multiaddr, NetworkBehaviour, PeerId,
@@ -48,21 +49,35 @@ pub enum Command {
 pub enum Event {
     /// Connection with a data stream has been opened by a remote peer
     ConnectionAccepted { socket: net::libp2p::Libp2pSocket },
+
+    /// One or more peers were discovered by one of the discovery strategies
+    PeerDiscovered { peers: Vec<(PeerId, Multiaddr)> },
+
+    /// One or more peers that were previously discovered have expired
+    PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
 }
 
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ComposedEvent")]
 pub struct ComposedBehaviour {
     pub streaming: Streaming<IdentityCodec>,
+    pub mdns: Mdns,
 }
 
 #[derive(Debug)]
 pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
+    MdnsEvent(MdnsEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
     fn from(event: StreamingEvent<IdentityCodec>) -> Self {
         ComposedEvent::StreamingEvent(event)
+    }
+}
+
+impl From<MdnsEvent> for ComposedEvent {
+    fn from(event: MdnsEvent) -> Self {
+        ComposedEvent::MdnsEvent(event)
     }
 }

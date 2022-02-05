@@ -28,6 +28,12 @@ where
 {
     /// Incoming connection from remote peer
     IncomingConnection(T::Socket),
+
+    /// One or more peers discovered
+    PeerDiscovered(Vec<T::Address>),
+
+    /// One one more peers have expired
+    PeerExpired(Vec<T::Address>),
 }
 
 #[derive(Debug)]
@@ -48,7 +54,7 @@ pub trait NetworkService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address;
+    type Address: std::fmt::Debug;
 
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;
@@ -87,7 +93,7 @@ pub trait NetworkService {
     /// - new discovered peers
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService<Socket = Self::Socket>;
+        T: NetworkService<Socket = Self::Socket, Address = Self::Address>;
 
     /// Publish data in a given gossip topic
     ///

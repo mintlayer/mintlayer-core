@@ -38,7 +38,10 @@ async fn test_peer_new_mock() {
     assert!(peer_res.is_ok());
 
     let server_res: net::Event<MockService> = server_res.unwrap();
-    let net::Event::IncomingConnection(server_res) = server_res;
+    let server_res = match server_res {
+        net::Event::IncomingConnection(server_res) => server_res,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
 
     let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
@@ -68,7 +71,10 @@ async fn test_peer_new_libp2p() {
     assert!(server2_res.is_ok());
 
     let server1_res: net::Event<Libp2pService> = server1_res.unwrap();
-    let net::Event::IncomingConnection(server1_res) = server1_res;
+    let server1_res = match server1_res {
+        net::Event::IncomingConnection(server1_res) => server1_res,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
 
     let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
