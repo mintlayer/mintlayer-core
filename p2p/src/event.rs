@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::message;
-use crate::peer::PeerId;
+use crate::net::NetworkService;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode)]
@@ -24,8 +24,11 @@ pub enum Event {
 }
 
 #[allow(unused)]
-pub struct PeerEvent {
-    pub peer_id: PeerId,
+pub struct PeerEvent<T>
+where
+    T: NetworkService,
+{
+    pub peer_id: T::PeerId,
     pub event: PeerEventType,
 }
 

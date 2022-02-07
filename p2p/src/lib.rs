@@ -20,17 +20,11 @@ use crate::{
     error::P2pError,
     event::{Event, PeerEvent, PeerEventType},
     net::NetworkService,
-    peer::{Peer, PeerId, PeerRole},
+    peer::{Peer, PeerRole},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod error;
@@ -51,9 +45,13 @@ enum PeerState {
 }
 
 #[allow(unused)]
-struct PeerContext {
+#[derive(Debug)]
+struct PeerContext<NetworkingBackend>
+where
+    NetworkingBackend: NetworkService,
+{
     /// Unique peer ID
-    id: PeerId,
+    id: NetworkingBackend::PeerId,
 
     /// Peer state
     state: PeerState,
@@ -67,12 +65,15 @@ pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
 {
-    Accept(T::Socket),
+    Accept(T::PeerId, T::Socket),
     Connect(T::Address),
 }
 
 #[allow(unused)]
-pub struct P2P<NetworkingBackend> {
+pub struct P2P<NetworkingBackend>
+where
+    NetworkingBackend: NetworkService,
+{
     /// Network backend (libp2p, mock)
     network: NetworkingBackend,
 
@@ -80,16 +81,16 @@ pub struct P2P<NetworkingBackend> {
     config: Arc<ChainConfig>,
 
     /// Hashmap for peer information
-    peers: HashMap<PeerId, PeerContext>,
-
-    /// Counter for getting unique peer IDs
-    peer_cnt: AtomicU64,
+    peers: HashMap<NetworkingBackend::PeerId, PeerContext<NetworkingBackend>>,
 
     /// Peer backlog maximum size
     peer_backlock: usize,
 
     /// Channel for p2p<->peers communication
-    mgr_chan: (Sender<PeerEvent>, Receiver<PeerEvent>),
+    mgr_chan: (
+        Sender<PeerEvent<NetworkingBackend>>,
+        Receiver<PeerEvent<NetworkingBackend>>,
+    ),
 }
 
 #[allow(unused)]
@@ -110,7 +111,6 @@ where
         Ok(Self {
             network: NetworkingBackend::new(addr, &[], &[]).await?,
             config,
-            peer_cnt: AtomicU64::default(),
             peer_backlock,
             peers: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
@@ -126,7 +126,10 @@ where
     /// The event is wrapped in an `Option` because the peer might have ungracefully
     /// failed and reading from the closed channel might gives a `None` value, indicating
     /// a protocol error which should be handled accordingly.
-    async fn on_peer_event(&mut self, event: Option<PeerEvent>) -> error::Result<()> {
+    async fn on_peer_event(
+        &mut self,
+        event: Option<PeerEvent<NetworkingBackend>>,
+    ) -> error::Result<()> {
         let event = event.ok_or(P2pError::ChannelClosed)?;
 
         match event.event {
@@ -158,12 +161,14 @@ where
         event: ConnectivityEvent<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            ConnectivityEvent::Accept(socket) => self.create_peer(socket, PeerRole::Inbound),
-            ConnectivityEvent::Connect(address) => self
-                .network
-                .connect(address)
-                .await
-                .map(|socket| self.create_peer(socket, PeerRole::Outbound))?,
+            ConnectivityEvent::Accept(peer_id, socket) => {
+                self.create_peer(peer_id, socket, PeerRole::Inbound)
+            }
+            ConnectivityEvent::Connect(address) => {
+                self.network.connect(address).await.map(|(peer_id, socket)| {
+                    self.create_peer(peer_id, socket, PeerRole::Outbound)
+                })?
+            }
         }
 
         Ok(())
@@ -185,8 +190,8 @@ where
         event: net::Event<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            net::Event::IncomingConnection(socket) => {
-                self.on_connectivity_event(ConnectivityEvent::Accept(socket)).await
+            net::Event::IncomingConnection(peer_id, socket) => {
+                self.on_connectivity_event(ConnectivityEvent::Accept(peer_id, socket)).await
             }
             net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
             net::Event::PeerExpired(peers) => self.peer_expired(&peers),
@@ -210,25 +215,27 @@ where
     }
 
     /// Create `Peer` object from a socket object and spawn task for it
-    fn create_peer(&mut self, socket: NetworkingBackend::Socket, role: PeerRole) {
+    fn create_peer(
+        &mut self,
+        id: NetworkingBackend::PeerId,
+        socket: NetworkingBackend::Socket,
+        role: PeerRole,
+    ) {
         let config = self.config.clone();
         let mgr_tx = self.mgr_chan.0.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
-        let peer_id: PeerId = self.peer_cnt.fetch_add(1, Ordering::Relaxed);
         self.peers.insert(
-            peer_id,
+            id,
             PeerContext {
-                id: peer_id,
+                id,
                 state: PeerState::Handshaking,
                 tx,
             },
         );
 
         tokio::spawn(async move {
-            Peer::<NetworkingBackend>::new(peer_id, role, config, socket, mgr_tx, rx)
-                .run()
-                .await;
+            Peer::<NetworkingBackend>::new(id, role, config, socket, mgr_tx, rx).run().await;
         });
     }
 }
@@ -284,9 +291,9 @@ mod tests {
         let (tx, _) = tokio::sync::mpsc::channel(16);
 
         p2p.peers.insert(
-            1,
+            addr,
             PeerContext {
-                id: 1,
+                id: addr,
                 state: PeerState::Handshaking,
                 tx: tx.clone(),
             },
@@ -295,16 +302,20 @@ mod tests {
         assert_eq!(p2p.peers.len(), 1);
         assert_eq!(
             p2p.on_peer_event(Some(PeerEvent {
-                peer_id: 1,
+                peer_id: addr,
                 event: PeerEventType::HandshakeSucceeded,
             }))
             .await,
             Ok(())
         );
         assert_eq!(p2p.peers.len(), 1);
-        match p2p.peers.get(&1) {
+        match p2p.peers.get(&addr) {
             Some(peer) => assert_eq!(peer.state, PeerState::Active),
-            None => panic!("peer not found"),
+            None => {
+                println!("len {}", p2p.peers.len());
+                println!("{:?}", p2p.peers.iter().next().unwrap());
+                panic!("peer not found");
+            }
         }
     }
 
@@ -317,9 +328,9 @@ mod tests {
         let (tx, _) = tokio::sync::mpsc::channel(16);
 
         p2p.peers.insert(
-            1,
+            addr,
             PeerContext {
-                id: 1,
+                id: addr,
                 state: PeerState::Handshaking,
                 tx: tx.clone(),
             },
@@ -328,7 +339,7 @@ mod tests {
         assert_eq!(p2p.peers.len(), 1);
         assert_eq!(
             p2p.on_peer_event(Some(PeerEvent {
-                peer_id: 1,
+                peer_id: addr,
                 event: PeerEventType::HandshakeFailed,
             }))
             .await,

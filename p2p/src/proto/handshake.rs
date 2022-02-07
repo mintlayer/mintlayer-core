@@ -237,7 +237,7 @@ mod tests {
         });
 
         Peer::<MockService>::new(
-            1,
+            test_utils::get_mock_id(),
             PeerRole::Inbound,
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),

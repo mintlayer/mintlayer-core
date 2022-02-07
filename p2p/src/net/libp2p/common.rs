@@ -48,7 +48,9 @@ pub enum Command {
 
 pub enum Event {
     /// Connection with a data stream has been opened by a remote peer
-    ConnectionAccepted { socket: net::libp2p::Libp2pSocket },
+    ConnectionAccepted {
+        socket: Box<net::libp2p::Libp2pSocket>,
+    },
 
     /// One or more peers were discovered by one of the discovery strategies
     PeerDiscovered { peers: Vec<(PeerId, Multiaddr)> },

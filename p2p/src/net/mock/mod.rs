@@ -25,7 +25,7 @@ use parity_scale_codec::{Decode, Encode};
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
-    net::SocketAddr,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -63,6 +63,7 @@ impl NetworkService for MockService {
     type Address = SocketAddr;
     type Socket = MockSocket;
     type Strategy = MockStrategy;
+    type PeerId = SocketAddr;
 
     async fn new(
         addr: Self::Address,
@@ -75,23 +76,34 @@ impl NetworkService for MockService {
         })
     }
 
-    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
+    async fn connect(
+        &mut self,
+        addr: Self::Address,
+    ) -> error::Result<(Self::PeerId, Self::Socket)> {
         if self.addr == addr {
             return Err(P2pError::SocketError(ErrorKind::AddrNotAvailable));
         }
 
-        Ok(MockSocket {
-            socket: TcpStream::connect(addr).await?,
-        })
+        Ok((
+            addr,
+            MockSocket {
+                socket: TcpStream::connect(addr).await?,
+            },
+        ))
     }
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService<Socket = MockSocket>,
+        T: NetworkService<Socket = MockSocket, PeerId = SocketAddr>,
     {
-        Ok(Event::IncomingConnection(MockSocket {
-            socket: self.socket.accept().await?.0,
-        }))
+        let connection = self.socket.accept().await?;
+
+        Ok(Event::IncomingConnection(
+            connection.1,
+            MockSocket {
+                socket: connection.0,
+            },
+        ))
     }
 
     async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
@@ -223,7 +235,7 @@ mod tests {
 
         let server_res: Event<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::IncomingConnection(server_res) => server_res,
+            Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
@@ -231,7 +243,7 @@ mod tests {
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
-            1,
+            test_utils::get_mock_id(),
             PeerRole::Outbound,
             config.clone(),
             server_res,
@@ -268,7 +280,7 @@ mod tests {
 
         let server_res: Event<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::IncomingConnection(server_res) => server_res,
+            Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
@@ -276,7 +288,7 @@ mod tests {
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
-            1,
+            test_utils::get_mock_id(),
             PeerRole::Outbound,
             config.clone(),
             server_res,

@@ -70,6 +70,9 @@ pub struct Libp2pSocket {
     /// Multiaddress of the remote peer
     addr: Multiaddr,
 
+    /// Unique ID of the peer
+    id: PeerId,
+
     /// Stream handle for the remote peer
     stream: StreamHandle<NegotiatedSubstream>,
 }
@@ -106,6 +109,7 @@ impl NetworkService for Libp2pService {
     type Address = Multiaddr;
     type Socket = Libp2pSocket;
     type Strategy = Libp2pStrategy;
+    type PeerId = PeerId;
 
     async fn new(
         addr: Self::Address,
@@ -165,7 +169,10 @@ impl NetworkService for Libp2pService {
         })
     }
 
-    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
+    async fn connect(
+        &mut self,
+        addr: Self::Address,
+    ) -> error::Result<(Self::PeerId, Self::Socket)> {
         let peer_id = match addr.iter().last() {
             Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
                 P2pError::Libp2pError(Libp2pError::DialError(
@@ -208,15 +215,24 @@ impl NetworkService for Libp2pService {
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        Ok(Libp2pSocket { addr, stream })
+        Ok((
+            peer_id,
+            Libp2pSocket {
+                id: peer_id,
+                addr,
+                stream,
+            },
+        ))
     }
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService<Socket = Libp2pSocket, Address = Multiaddr>,
+        T: NetworkService<Socket = Libp2pSocket, Address = Multiaddr, PeerId = PeerId>,
     {
         match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            common::Event::ConnectionAccepted { socket } => Ok(Event::IncomingConnection(socket)),
+            common::Event::ConnectionAccepted { socket } => {
+                Ok(Event::IncomingConnection(socket.id, *socket))
+            }
             common::Event::PeerDiscovered { peers } => Ok(Event::PeerDiscovered(
                 peers
                     .iter()
@@ -378,10 +394,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         // try to send data that implements `Encode + Decode`
         // and verify that it was received correctly
@@ -421,10 +437,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         let tx = Transaction {
             hash: u64::MAX,
@@ -456,10 +472,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         let tx = Transaction {
             hash: u64::MAX,
@@ -493,10 +509,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         // send a message size of 4GB to remote
         let msg_size = u32::MAX.encode();

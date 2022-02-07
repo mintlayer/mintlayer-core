@@ -27,7 +27,7 @@ where
     T: NetworkService,
 {
     /// Incoming connection from remote peer
-    IncomingConnection(T::Socket),
+    IncomingConnection(T::PeerId, T::Socket),
 
     /// One or more peers discovered
     PeerDiscovered(Vec<T::Address>),
@@ -56,6 +56,12 @@ pub trait NetworkService {
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
     type Address: std::fmt::Debug;
 
+    /// Unique ID assigned to a peer on the network
+    type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;
+
+    /// Unique ID assigned to a peer on the network
+    type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;
+
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;
 
@@ -83,7 +89,8 @@ pub trait NetworkService {
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket>;
+    async fn connect(&mut self, addr: Self::Address)
+        -> error::Result<(Self::PeerId, Self::Socket)>;
 
     /// Poll events from the network service provider
     ///
@@ -93,7 +100,7 @@ pub trait NetworkService {
     /// - new discovered peers
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService<Socket = Self::Socket, Address = Self::Address>;
+        T: NetworkService<Socket = Self::Socket, Address = Self::Address, PeerId = Self::PeerId>;
 
     /// Publish data in a given gossip topic
     ///
