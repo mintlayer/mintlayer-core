@@ -17,7 +17,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{Event, GossipSubTopic, NetworkService, SocketService},
+    net::{self, Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use futures::prelude::*;
@@ -34,6 +34,7 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use parity_scale_codec::{Decode, Encode};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -102,6 +103,35 @@ fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multia
         None => Some(peer_addr.with(Protocol::P2p(peer_id.into()))),
         Some(_) => None,
     }
+}
+
+/// Parse all discovered addresses and group them by PeerId
+fn parse_peers<T>(peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+where
+    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+{
+    let mut parsed: HashMap<T::PeerId, net::AddrInfo<T>> = HashMap::new();
+
+    for (id, addr) in peers {
+        let parsed_addr = match parse_discovered_addr(id, addr) {
+            Some(parsed_addr) => parsed_addr,
+            None => continue,
+        };
+
+        let entry = parsed.entry(id).or_insert_with(|| net::AddrInfo {
+            id,
+            ip4: Vec::new(),
+            ip6: Vec::new(),
+        });
+
+        match parsed_addr.iter().next() {
+            Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(parsed_addr)),
+            Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(parsed_addr)),
+            _ => panic!("parse_discovered_addr() failed!"),
+        }
+    }
+
+    parsed.into_iter().map(|(_, addrs)| addrs).collect::<_>()
 }
 
 #[async_trait]
@@ -233,18 +263,10 @@ impl NetworkService for Libp2pService {
             common::Event::ConnectionAccepted { socket } => {
                 Ok(Event::IncomingConnection(socket.id, *socket))
             }
-            common::Event::PeerDiscovered { peers } => Ok(Event::PeerDiscovered(
-                peers
-                    .iter()
-                    .filter_map(|(id, addr)| parse_discovered_addr(*id, addr.clone()))
-                    .collect::<_>(),
-            )),
-            common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(
-                peers
-                    .iter()
-                    .filter_map(|(id, addr)| parse_discovered_addr(*id, addr.clone()))
-                    .collect::<_>(),
-            )),
+            common::Event::PeerDiscovered { peers } => {
+                Ok(Event::PeerDiscovered(parse_peers(peers)))
+            }
+            common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(parse_peers(peers))),
         }
     }
 
@@ -582,6 +604,100 @@ mod tests {
         assert_eq!(
             parse_discovered_addr(id, addr.clone()),
             Some(addr.with(Protocol::P2p(id.into())))
+        );
+    }
+
+    impl PartialEq for Libp2pService {
+        fn eq(&self, other: &Self) -> bool {
+            self.addr == other.addr
+        }
+    }
+
+    // verify that vector of address (that all belong to one peer) parse into one `net::Peer` entry
+    #[test]
+    fn test_parse_peers_valid_1_peer() {
+        let id: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+        let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
+        let addrs = vec![(id, ip4.clone()), (id, ip6.clone())];
+
+        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        assert_eq!(
+            parsed,
+            vec![net::AddrInfo {
+                id,
+                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id.into())))],
+                ip6: vec![Arc::new(ip6.with(Protocol::P2p(id.into())))],
+            }]
+        );
+    }
+
+    // discovery 5 different addresses, ipv4 and ipv6 for both peer and an additional
+    // dns address for peer
+    //
+    // verify that `parse_peers` returns two peers and both only have ipv4 and ipv6 addresses
+    #[test]
+    fn test_parse_peers_valid_2_peers() {
+        let id_1: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4_1: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+        let ip6_1: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
+
+        let id_2: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let ip4_2: Multiaddr = "/ip4/127.0.0.1/tcp/8080".parse().unwrap();
+        let ip6_2: Multiaddr = "/ip6/::1/tcp/8081".parse().unwrap();
+        let dns: Multiaddr = "/dns4/foo.com/tcp/80/http".parse().unwrap();
+
+        let addrs = vec![
+            (id_1, ip4_1.clone()),
+            (id_2, ip4_2.clone()),
+            (id_2, ip6_2.clone()),
+            (id_1, ip6_1.clone()),
+            (id_2, dns),
+        ];
+
+        let mut parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        parsed.sort_by(|a, b| a.id.cmp(&b.id));
+
+        assert_eq!(
+            parsed,
+            vec![
+                net::AddrInfo {
+                    id: id_2,
+                    ip4: vec![Arc::new(ip4_2.with(Protocol::P2p(id_2.into())))],
+                    ip6: vec![Arc::new(ip6_2.with(Protocol::P2p(id_2.into())))],
+                },
+                net::AddrInfo {
+                    id: id_1,
+                    ip4: vec![Arc::new(ip4_1.with(Protocol::P2p(id_1.into())))],
+                    ip6: vec![Arc::new(ip6_1.with(Protocol::P2p(id_1.into())))],
+                },
+            ]
+        );
+    }
+
+    // find 3 peers but only one of the peers have an accepted address available so verify
+    // that `parse_peers()` returns only that peer
+    #[test]
+    fn test_parse_peers_valid_3_peers_1_valid() {
+        let id_1: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+
+        let id_2: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let dns: Multiaddr = "/dns4/foo.com/tcp/80/http".parse().unwrap();
+
+        let id_3: PeerId = "12D3KooWGK4RzvNeioS9aXdzmYXU3mgDrRPjQd8SVyXCkHNxLbWN".parse().unwrap();
+        let quic: Multiaddr = "/ip4/127.0.0.1/tcp/9090/quic".parse().unwrap();
+
+        let addrs = vec![(id_1, ip4.clone()), (id_2, dns), (id_3, quic)];
+        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+
+        assert_eq!(
+            parsed,
+            vec![net::AddrInfo {
+                id: id_1,
+                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id_1.into())))],
+                ip6: vec![],
+            }]
         );
     }
 }

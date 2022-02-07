@@ -17,9 +17,25 @@
 use crate::error;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
+use std::sync::Arc;
 
 pub mod libp2p;
 pub mod mock;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct AddrInfo<T>
+where
+    T: NetworkService,
+{
+    /// Unique ID of the peer
+    pub id: T::PeerId,
+
+    /// List of discovered IPv4 addresses
+    pub ip4: Vec<Arc<T::Address>>,
+
+    /// List of discovered IPv6 addresses
+    pub ip6: Vec<Arc<T::Address>>,
+}
 
 #[derive(Debug)]
 pub enum Event<T>
@@ -30,10 +46,10 @@ where
     IncomingConnection(T::PeerId, T::Socket),
 
     /// One or more peers discovered
-    PeerDiscovered(Vec<T::Address>),
+    PeerDiscovered(Vec<AddrInfo<T>>),
 
     /// One one more peers have expired
-    PeerExpired(Vec<T::Address>),
+    PeerExpired(Vec<AddrInfo<T>>),
 }
 
 #[derive(Debug)]
@@ -54,7 +70,7 @@ pub trait NetworkService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: std::fmt::Debug;
+    type Address: std::fmt::Debug + PartialEq + Eq + std::hash::Hash;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;

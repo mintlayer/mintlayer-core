@@ -24,7 +24,10 @@ use crate::{
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 pub mod error;
@@ -133,11 +136,12 @@ where
         let event = event.ok_or(P2pError::ChannelClosed)?;
 
         match event.event {
-            PeerEventType::HandshakeFailed => self
-                .peers
-                .remove(&event.peer_id)
-                .map(|_| ())
-                .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string())),
+            PeerEventType::HandshakeFailed => {
+                self.peers
+                    .remove(&event.peer_id)
+                    .map(|_| ())
+                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
+            }
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
                     (*peer).state = PeerState::Active;
@@ -174,13 +178,11 @@ where
         Ok(())
     }
 
-    fn peer_discovered(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
-        println!("peers discovered: {:#?}", peers);
+    fn peer_discovered(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
         Ok(())
     }
 
-    fn peer_expired(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
-        println!("peers expired: {:#?}", peers);
+    fn peer_expired(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
         Ok(())
     }
 
@@ -312,8 +314,6 @@ mod tests {
         match p2p.peers.get(&addr) {
             Some(peer) => assert_eq!(peer.state, PeerState::Active),
             None => {
-                println!("len {}", p2p.peers.len());
-                println!("{:?}", p2p.peers.iter().next().unwrap());
                 panic!("peer not found");
             }
         }
