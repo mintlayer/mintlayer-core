@@ -25,7 +25,7 @@ use crate::{
 use common::chain::ChainConfig;
 use futures::FutureExt;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -73,6 +73,20 @@ where
 }
 
 #[allow(unused)]
+enum PeerAddrInfo<T>
+where
+    T: NetworkService,
+{
+    Raw {
+        /// Hashset of IPv4 addresses
+        ip4: HashSet<Arc<T::Address>>,
+
+        /// Hashset of IPv6 addresses
+        ip6: HashSet<Arc<T::Address>>,
+    },
+}
+
+#[allow(unused)]
 pub struct P2P<NetworkingBackend>
 where
     NetworkingBackend: NetworkService,
@@ -85,6 +99,9 @@ where
 
     /// Hashmap for peer information
     peers: HashMap<NetworkingBackend::PeerId, PeerContext<NetworkingBackend>>,
+
+    /// Hashmap of discovered peers we don't have an active connection with
+    discovered: HashMap<NetworkingBackend::PeerId, PeerAddrInfo<NetworkingBackend>>,
 
     /// Peer backlog maximum size
     peer_backlock: usize,
@@ -116,6 +133,7 @@ where
             config,
             peer_backlock,
             peers: HashMap::new(),
+            discovered: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
         })
     }
@@ -178,7 +196,24 @@ where
         Ok(())
     }
 
+    /// Update the list of peers we know about or update a known peers list of addresses
     fn peer_discovered(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
+        for info in peers.iter() {
+            if self.peers.contains_key(&info.id) {
+                continue;
+            }
+
+            match self.discovered.entry(info.id).or_insert_with(|| PeerAddrInfo::Raw {
+                ip4: HashSet::new(),
+                ip6: HashSet::new(),
+            }) {
+                PeerAddrInfo::Raw { ip4, ip6 } => {
+                    ip4.extend(info.ip4.clone());
+                    ip6.extend(info.ip6.clone());
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -346,5 +381,139 @@ mod tests {
             Ok(())
         );
         assert_eq!(p2p.peers.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_peer_discovered_libp2p() {
+        let config = Arc::new(config::create_mainnet());
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let mut p2p = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+
+        let id_1: libp2p::PeerId =
+            "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let id_2: libp2p::PeerId =
+            "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let id_3: libp2p::PeerId =
+            "12D3KooWGK4RzvNeioS9aXdzmYXU3mgDrRPjQd8SVyXCkHNxLbWN".parse().unwrap();
+
+        // check that peer with `id` has the correct ipv4 and ipv6 addresses
+        let check_peer =
+            |discovered: &HashMap<
+                <Libp2pService as NetworkService>::PeerId,
+                PeerAddrInfo<Libp2pService>,
+            >,
+             id: libp2p::PeerId,
+             ip4: Vec<Arc<<Libp2pService as NetworkService>::Address>>,
+             ip6: Vec<Arc<<Libp2pService as NetworkService>::Address>>| {
+                let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
+                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
+                };
+
+                assert_eq!(ip4.len(), p_ip4.len());
+                assert_eq!(ip6.len(), p_ip6.len());
+
+                for ip in ip4.iter() {
+                    assert!(p_ip4.contains(ip));
+                }
+
+                for ip in ip6.iter() {
+                    assert!(p_ip6.contains(ip));
+                }
+            };
+
+        // first add two new peers, both with ipv4 and ipv6 address
+        p2p.peer_discovered(&[
+            net::AddrInfo {
+                id: id_1,
+                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
+                ip6: vec![Arc::new("/ip6/::1/tcp/9091".parse().unwrap())],
+            },
+            net::AddrInfo {
+                id: id_2,
+                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9092".parse().unwrap())],
+                ip6: vec![Arc::new("/ip6/::1/tcp/9093".parse().unwrap())],
+            },
+        ])
+        .unwrap();
+
+        assert_eq!(p2p.peers.len(), 0);
+        assert_eq!(p2p.discovered.len(), 2);
+
+        check_peer(
+            &p2p.discovered,
+            id_1,
+            vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
+            vec![Arc::new("/ip6/::1/tcp/9091".parse().unwrap())],
+        );
+
+        check_peer(
+            &p2p.discovered,
+            id_2,
+            vec![Arc::new("/ip4/127.0.0.1/tcp/9092".parse().unwrap())],
+            vec![Arc::new("/ip6/::1/tcp/9093".parse().unwrap())],
+        );
+
+        // then discover one new peer and two additional ipv6 addresses for peer 1
+        p2p.peer_discovered(&[
+            net::AddrInfo {
+                id: id_1,
+                ip4: vec![],
+                ip6: vec![
+                    Arc::new("/ip6/::1/tcp/9094".parse().unwrap()),
+                    Arc::new("/ip6/::1/tcp/9095".parse().unwrap()),
+                ],
+            },
+            net::AddrInfo {
+                id: id_3,
+                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
+                ip6: vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
+            },
+        ])
+        .unwrap();
+
+        check_peer(
+            &p2p.discovered,
+            id_1,
+            vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
+            vec![
+                Arc::new("/ip6/::1/tcp/9091".parse().unwrap()),
+                Arc::new("/ip6/::1/tcp/9094".parse().unwrap()),
+                Arc::new("/ip6/::1/tcp/9095".parse().unwrap()),
+            ],
+        );
+
+        check_peer(
+            &p2p.discovered,
+            id_3,
+            vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
+            vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
+        );
+
+        // move peer with `id_2` to active list, try to add new address to it
+        // and verify that nothing is added
+        let (tx, _) = tokio::sync::mpsc::channel(1);
+        let _ = 32;
+        p2p.peers.insert(
+            id_3,
+            PeerContext {
+                id: id_3,
+                state: PeerState::Handshaking,
+                tx,
+            },
+        );
+
+        p2p.peer_discovered(&[net::AddrInfo {
+            id: id_3,
+            ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9098".parse().unwrap())],
+            ip6: vec![Arc::new("/ip6/::1/tcp/9099".parse().unwrap())],
+        }])
+        .unwrap();
+
+        check_peer(
+            &p2p.discovered,
+            id_3,
+            vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
+            vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
+        );
     }
 }
