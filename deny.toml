@@ -31,6 +31,8 @@ skip = [{name = "quick-error"},
         {name = "blake2"},
         {name = "itoa"},
         {name = "base64"},
+        {name = "crypto-mac"},
+        {name = "hmac"},
         ]
 
 [licenses]
