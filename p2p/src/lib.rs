@@ -134,7 +134,7 @@ where
             network: NetworkingBackend::new(addr, &[], &[]).await?,
             config,
             peer_backlock,
-            peers: HashMap::new(),
+            peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             discovered: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
         })
@@ -218,25 +218,28 @@ where
         );
 
         // TODO: improve peer selection
-        let mut peers = Vec::new();
         let mut iter = self.discovered.iter();
 
-        for _ in 0..npeers {
-            let peer_info = iter.next().expect("Peer to exist");
-            let (ip4, ip6) = match peer_info.1 {
-                PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
-            };
-            assert!(!ip4.is_empty() || !ip6.is_empty());
+        #[allow(clippy::needless_collect)]
+        let peers: Vec<(NetworkingBackend::PeerId, Arc<NetworkingBackend::Address>)> = (0..npeers)
+            .map(|i| {
+                let peer_info = iter.nth(i).expect("Peer to exist");
 
-            // TODO: let user specify their preference?
-            let addr = if ip6.is_empty() {
-                Arc::clone(ip4.iter().next().unwrap())
-            } else {
-                Arc::clone(ip6.iter().next().unwrap())
-            };
+                let (ip4, ip6) = match peer_info.1 {
+                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
+                };
+                assert!(!ip4.is_empty() || !ip6.is_empty());
 
-            peers.push((*peer_info.0, addr));
-        }
+                // TODO: let user specify their preference?
+                let addr = if ip6.is_empty() {
+                    Arc::clone(ip4.iter().next().unwrap())
+                } else {
+                    Arc::clone(ip6.iter().next().unwrap())
+                };
+
+                (*peer_info.0, addr)
+            })
+            .collect::<_>();
 
         for (id, addr) in peers.into_iter() {
             self.discovered.remove(&id);

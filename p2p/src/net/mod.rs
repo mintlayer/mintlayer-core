@@ -75,9 +75,6 @@ pub trait NetworkService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
 
-    /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;
-
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;
 

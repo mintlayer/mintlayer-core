@@ -21,6 +21,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::prelude::*;
+use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
     identity,
@@ -34,7 +35,7 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use parity_scale_codec::{Decode, Encode};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -105,33 +106,50 @@ fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multia
     }
 }
 
-/// Parse all discovered addresses and group them by PeerId
-fn parse_peers<T>(peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+/// Get the network layer protocol from `addr`
+fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<Protocol> {
+    addr.iter().next()
+}
+
+impl<T> FromIterator<(PeerId, Multiaddr)> for net::AddrInfo<T>
 where
     T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
 {
-    let mut parsed: HashMap<T::PeerId, net::AddrInfo<T>> = HashMap::new();
-
-    for (id, addr) in peers {
-        let parsed_addr = match parse_discovered_addr(id, addr) {
-            Some(parsed_addr) => parsed_addr,
-            None => continue,
-        };
-
-        let entry = parsed.entry(id).or_insert_with(|| net::AddrInfo {
-            id,
+    fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
+        let mut entry = net::AddrInfo {
+            id: PeerId::random(),
             ip4: Vec::new(),
             ip6: Vec::new(),
+        };
+
+        iter.into_iter().for_each(|(id, addr)| {
+            entry.id = id;
+            match get_addr_from_multiaddr(&addr) {
+                Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(addr)),
+                Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(addr)),
+                _ => panic!("parse_discovered_addr() failed!"),
+            }
         });
 
-        match parsed_addr.iter().next() {
-            Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(parsed_addr)),
-            Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(parsed_addr)),
-            _ => panic!("parse_discovered_addr() failed!"),
-        }
+        entry
     }
+}
 
-    parsed.into_iter().map(|(_, addrs)| addrs).collect::<_>()
+/// Parse all discovered addresses and group them by PeerId
+fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+where
+    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+{
+    peers.sort_by(|a, b| a.0.cmp(&b.0));
+    peers
+        .into_iter()
+        .map(|(id, addr)| (id, parse_discovered_addr(id, addr)))
+        .filter(|(_id, addr)| addr.is_some())
+        .map(|(id, addr)| (id, addr.unwrap()))
+        .group_by(|info| info.0)
+        .into_iter()
+        .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))
+        .collect::<Vec<net::AddrInfo<T>>>()
 }
 
 #[async_trait]
