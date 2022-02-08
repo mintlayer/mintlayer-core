@@ -40,6 +40,10 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
+    pub fn chain_type(&self) -> ChainType {
+        self.chain_type
+    }
+
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }
@@ -102,6 +106,7 @@ pub fn create_mainnet() -> ChainConfig {
     }
 }
 
+#[cfg(test)]
 mod tests {
 
     #[test]
