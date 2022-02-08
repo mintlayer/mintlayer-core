@@ -17,7 +17,7 @@
 use crate::error;
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
-use std::sync::Arc;
+use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
 pub mod mock;
@@ -70,10 +70,10 @@ pub trait NetworkService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: std::fmt::Debug + PartialEq + Eq + std::hash::Hash;
+    type Address: Debug + PartialEq + Eq + Hash + Clone;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;
+    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + std::hash::Hash;

@@ -37,6 +37,8 @@ pub mod net;
 pub mod peer;
 pub mod proto;
 
+const MAX_ACTIVE_CONNECTIONS: usize = 32;
+
 #[allow(unused)]
 #[derive(Debug, PartialEq, Eq)]
 enum PeerState {
@@ -154,12 +156,11 @@ where
         let event = event.ok_or(P2pError::ChannelClosed)?;
 
         match event.event {
-            PeerEventType::HandshakeFailed => {
-                self.peers
-                    .remove(&event.peer_id)
-                    .map(|_| ())
-                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
-            }
+            PeerEventType::HandshakeFailed => self
+                .peers
+                .remove(&event.peer_id)
+                .map(|_| ())
+                .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string())),
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
                     (*peer).state = PeerState::Active;
@@ -191,6 +192,55 @@ where
                     self.create_peer(peer_id, socket, PeerRole::Outbound)
                 })?
             }
+        }
+
+        Ok(())
+    }
+
+    /// Try to establish new outbound connections if the total number of
+    /// active connections the local node has is below threshold
+    ///
+    // TODO: move all peer management to separate file
+    async fn auto_connect(&mut self) -> error::Result<()> {
+        // we have enough active connections
+        if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
+            return Ok(());
+        }
+
+        // we don't know of any peers
+        if self.discovered.is_empty() {
+            return Err(P2pError::NoPeers);
+        }
+
+        let npeers = std::cmp::min(
+            self.discovered.len(),
+            MAX_ACTIVE_CONNECTIONS - self.peers.len(),
+        );
+
+        // TODO: improve peer selection
+        let mut peers = Vec::new();
+        let mut iter = self.discovered.iter();
+
+        for _ in 0..npeers {
+            let peer_info = iter.next().expect("Peer to exist");
+            let (ip4, ip6) = match peer_info.1 {
+                PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
+            };
+            assert!(!ip4.is_empty() || !ip6.is_empty());
+
+            // TODO: let user specify their preference?
+            let addr = if ip6.is_empty() {
+                Arc::clone(ip4.iter().next().unwrap())
+            } else {
+                Arc::clone(ip6.iter().next().unwrap())
+            };
+
+            peers.push((*peer_info.0, addr));
+        }
+
+        for (id, addr) in peers.into_iter() {
+            self.discovered.remove(&id);
+            let _ = self.on_connectivity_event(ConnectivityEvent::Connect((*addr).clone())).await;
         }
 
         Ok(())
@@ -285,6 +335,7 @@ mod tests {
     use libp2p::Multiaddr;
     use net::{libp2p::Libp2pService, mock::MockService};
     use std::net::SocketAddr;
+    use tokio::net::TcpListener;
 
     // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]
@@ -515,5 +566,34 @@ mod tests {
             vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
             vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
         );
+    }
+
+    // verify that if the node is aware of any peers on the network,
+    // call to `auto_connect()` will establish a connection with them
+    #[tokio::test]
+    async fn test_auto_connect_mock() {
+        let config = Arc::new(config::create_mainnet());
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+
+        // spawn tcp server for auto-connect test
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let server = TcpListener::bind(addr).await.unwrap();
+        tokio::spawn(async move {
+            loop {
+                assert!(server.accept().await.is_ok());
+            }
+        });
+
+        // "discover" the tcp server
+        p2p.peer_discovered(&[net::AddrInfo {
+            id: addr,
+            ip4: vec![],
+            ip6: vec![Arc::new(addr)],
+        }])
+        .unwrap();
+        p2p.auto_connect().await.unwrap();
+
+        assert_eq!(p2p.peers.len(), 1);
     }
 }
