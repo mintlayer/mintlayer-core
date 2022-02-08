@@ -132,6 +132,10 @@ mod tests {
         let tx1 = Transaction::new(0x00, vec![input], vec![], 0x00).expect("tx1 bad");
         assert_ne!(tx0, tx1);
 
-        assert_ne!(tx0.get_id(), tx1.get_id(), "Different transactions with the same ID!");
+        assert_ne!(
+            tx0.get_id(),
+            tx1.get_id(),
+            "Different transactions with the same ID!"
+        );
     }
 }
