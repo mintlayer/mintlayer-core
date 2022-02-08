@@ -16,7 +16,7 @@ path = "../common/"
 
 [dependencies.libp2p]
 git = "https://github.com/mintlayer/rust-libp2p"
-branch = "streaming-protocol-v0.41.1"
+branch = "streaming-protocol-v0.42.2"
 
 [dependencies.tokio]
 version = "1"
