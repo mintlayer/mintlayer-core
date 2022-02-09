@@ -18,6 +18,12 @@
 pub mod address;
 pub mod chain;
 pub mod primitives;
+pub mod uint;
+
+mod concurrency_impl;
+pub use concurrency_impl::*;
+
+pub use uint::{Uint128, Uint256};
 
 #[cfg(test)]
 mod tests {

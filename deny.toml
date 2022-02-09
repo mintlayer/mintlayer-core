@@ -16,6 +16,23 @@ skip = [{name = "quick-error"},
         {name = "rand"},
         {name = "getrandom"},
         {name = "byteorder"},
+        {name = "socket2"},
+        {name = "arrayvec"},
+        {name = "pin-project"},
+        {name = "pin-project-internal"},
+        {name = "pin-project-lite"},
+        {name = "digest"},
+        {name = "block-buffer"},
+        {name = "sha-1"},
+        {name = "block-buffer"},
+        {name = "digest"},
+        {name = "sha2"},
+        {name = "sha3"},
+        {name = "blake2"},
+        {name = "itoa"},
+        {name = "base64"},
+        {name = "crypto-mac"},
+        {name = "hmac"},
         ]
 
 [licenses]
@@ -31,8 +48,25 @@ allow = [
     "MPL-2.0",
     "CC0-1.0",
     "Zlib",
+    "LicenseRef-ring",
+    "LicenseRef-webpki",
+    "WTFPL",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
+
+[[licenses.clarify]]
+name = "ring"
+expression = "LicenseRef-ring"
+license-files = [
+    { path = "LICENSE", hash = 0xbd0eed23 },
+]
+
+[[licenses.clarify]]
+name = "webpki"
+expression = "LicenseRef-webpki"
+license-files = [
+    { path = "LICENSE", hash = 0x001c7e6c },
+]
 
 [advisories]
 db-path = "~/.cargo/advisory-dbs"
@@ -43,3 +77,8 @@ unsound = "warn"
 yanked = "warn"
 notice = "warn"
 severity-threshold = "medium"
+ignore = [
+    # time/chrono problems, have not been a problem in practice
+    "RUSTSEC-2020-0159",
+    "RUSTSEC-2020-0071",
+]

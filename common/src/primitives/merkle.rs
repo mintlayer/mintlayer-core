@@ -119,8 +119,7 @@ impl std::hash::Hasher for BlockchainHashAlgorithm {
 /// from individual nodes in the tree
 impl merkletree::hash::Algorithm<H256> for BlockchainHashAlgorithm {
     fn hash(&mut self) -> H256 {
-        let res = self.0.finalize();
-        H256::from(res.as_slice())
+        self.0.finalize().into()
     }
 
     fn leaf(&mut self, leaf: H256) -> H256 {
@@ -134,7 +133,9 @@ impl merkletree::hash::Algorithm<H256> for BlockchainHashAlgorithm {
     }
 
     fn multi_node(&mut self, nodes: &[H256], _height: usize) -> H256 {
-        nodes.iter().for_each(|node| self.0.write(node));
+        nodes.iter().for_each(|node| {
+            self.0.write(node);
+        });
         self.hash()
     }
 }
@@ -149,7 +150,7 @@ impl Element for H256 {
     }
 
     fn from_slice(bytes: &[u8]) -> Self {
-        H256::from(bytes)
+        H256(bytes.try_into().expect("merkletree internal error"))
     }
 }
 
@@ -197,7 +198,7 @@ mod tests {
         test_hasher.write(default_hash(v1));
         test_hasher.write(default_hash(v2));
 
-        assert_eq!(t.root(), H256::from(test_hasher.finalize().as_slice()));
+        assert_eq!(t.root(), test_hasher.finalize().into());
     }
 
     #[test]
@@ -222,7 +223,7 @@ mod tests {
         let t: MerkleTree<H256, BlockchainHashAlgorithm, VecStore<_>> =
             MerkleTree::from_byte_slice(&data).unwrap();
 
-        assert_eq!(t.root(), H256::from(test_hasher.finalize().as_slice()));
+        assert_eq!(t.root(), test_hasher.finalize().into());
     }
 
     #[test]
@@ -252,7 +253,7 @@ mod tests {
 
         let res = node00.finalize();
 
-        assert_eq!(t.root(), H256::from(res.as_slice()));
+        assert_eq!(t.root(), res.into());
     }
 
     #[test]
@@ -303,12 +304,12 @@ mod tests {
         let n11 = node11.finalize();
 
         let mut node00 = DefaultHashAlgoStream::new();
-        node00.write(H256::from(n10.as_slice()));
-        node00.write(H256::from(n11.as_slice()));
+        node00.write(H256::from(n10));
+        node00.write(H256::from(n11));
 
         let res = node00.finalize();
 
-        assert_eq!(t.root(), H256::from(res.as_slice()));
+        assert_eq!(t.root(), H256::from(res));
     }
 
     #[test]
@@ -323,7 +324,7 @@ mod tests {
         test_hasher.write(v1);
         test_hasher.write(v2);
 
-        assert_eq!(t.root(), H256::from(test_hasher.finalize().as_slice()));
+        assert_eq!(t.root(), test_hasher.finalize().into());
     }
 
     #[test]
@@ -351,7 +352,7 @@ mod tests {
 
         let res = node00.finalize();
 
-        assert_eq!(t.root(), H256::from(res.as_slice()));
+        assert_eq!(t.root(), res.into());
     }
 
     #[test]
@@ -406,7 +407,7 @@ mod tests {
 
         let res = node00.finalize();
 
-        assert_eq!(t.root(), H256::from(res.as_slice()));
+        assert_eq!(t.root(), res.into());
     }
 
     #[test]

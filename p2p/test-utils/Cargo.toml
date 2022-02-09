@@ -1,0 +1,18 @@
+[package]
+name = "test-utils"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+portpicker = "0.1.1"
+
+[dependencies.p2p]
+path = "../"
+
+[dependencies.common]
+path = "../../common/"
+
+[dependencies.tokio]
+version = "1"
+features = ["full"]

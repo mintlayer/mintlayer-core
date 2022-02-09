@@ -9,9 +9,14 @@ async-trait = "0.1.51"
 futures = "0.3.15"
 futures-timer = "3.0.2"
 rand = "0.8.4"
+void = "1.0.2"
 
 [dependencies.common]
 path = "../common/"
+
+[dependencies.libp2p]
+git = "https://github.com/mintlayer/rust-libp2p"
+branch = "streaming-protocol-v0.42.2"
 
 [dependencies.tokio]
 version = "1"
@@ -21,3 +26,7 @@ features = ["full"]
 default-features = false
 features = ['derive']
 version = '2.0.0'
+
+[dev-dependencies.test-utils]
+version = "0.1.0"
+path = "test-utils"

@@ -54,7 +54,7 @@ After `Hello` and `HelloAck` messages have been exchanged, the peer that sent th
 
 ### Connection maintenance
 
-Once a minute, the node must check if the remote peer is still active by sending a `Ping` message. The peer that receives a `Ping` must respond with a `Pong` message within 10 seconds. If no response is heard, the `Ping` is sent again. If no response is heard after 3 retries, he connection is closed. `Ping`/`Pong` is exchange only if there has been no activity on the socket in the last minute.
+Once a minute, the node must check if the remote peer is still active by sending a `Ping` message. The peer that receives a `Ping` must respond with a `Pong` message within 10 seconds. If no response is heard, the `Ping` is sent again. If no response is heard after 3 retries, he connection is closed. `Ping`/`Pong` is exchange only if there has been no activity on the socket in the last minute. Each `Ping` message contains a 64-bit nonce that the corresponding `Pong` sends back to ascertain that a correct `Ping` message was acknowledged. If `Pong` contains an invalid nonce, the `Ping` message is sent again and after tree failed retries the connection is closed.
 
 Additionally, once every 5 minutes, the peers shall exchange peer information they've learned within the last 5 minutes. This means that the peer which initiated the connection sends a `Pex` message which contains either an empty list (if it hasn't discovered new nodes) or a list of nodes it has discovered within the last 5 minutes. The other node responds to this message with a `PexAck` message that also contains either an empty list or a list of new nodes discovered within the last 5 minutes.
 
@@ -69,9 +69,7 @@ Each message contains at least the header which indicates the message type it ca
 | Length | Description | Type | Comments |
 |--------|-------------|------|----------|
 | 4 bytes | Magic number | `u32` | Magic number that identifies a Mintlayer P2P message
-| 2 bytes | Message type | `enum MessageType` | Number that identifies the message type (`Hello`, `Transaction`, etc.)
-| 4 bytes | Length | `u32` | Length of the payload
-| N bytes | Payload | `Vec<u8>` | Byte vector containing the SCALE-encoded representation of the message
+| N bytes | Message type | `enum MessageType` | Message type (`Hello`, `Transaction`, etc.)
 
 #### Hello
 
@@ -80,27 +78,36 @@ Each message contains at least the header which indicates the message type it ca
 | Length | Description | Type | Comments |
 |--------|-------------|------|----------|
 | 4 bytes | Version | `u32` | Version of the software the node is running
-| 4 bytes | Network ID | `u32` | Mainnet, testnet
 | 4 bytes | Services | `u32` | Bitmap of services that the node provides/supports (inbound connections, validation, block relay, etc.)
-| 8 bytes | Timestamp | `u64` | Unix timestamp in seconds
+| 8 bytes | Timestamp | `i64` | Unix timestamp in seconds
 
 #### HelloAck
 
 `HelloAck` is used to conclude the handshake with the peer that initiated it, if they are running compatible software and are in the same network.
 
-The format of `HelloAck` message is the same as the format of `Hello` with the exception that message type in the header is different.
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 4 bytes | Version | `u32` | Version of the software the node is running
+| 4 bytes | Services | `u32` | Bitmap of services that the node provides/supports (inbound connections, validation, block relay, etc.)
+| 8 bytes | Timestamp | `i64` | Unix timestamp in seconds
 
 #### Ping
 
 Check if the peer is still alive
 
-The `Ping` does not transfer any payload data
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 8 bytes | Nonce | `u64` | Random nonce
 
 #### Pong
 
 Respond to an aliveness check
 
-The `Pong` does not transfer any payload data
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| 8 bytes | Nonce | `u64` | Random nonce
+
+The random nonce carried in the `Pong` message must be the same that was in the `Ping` message that this `Pong` is now acknowledging.
 
 #### Pex
 

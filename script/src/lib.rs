@@ -55,7 +55,7 @@ mod interpreter;
 pub mod opcodes;
 pub mod script;
 pub mod sighash;
-#[cfg(test)]
+#[cfg(all(test, not(loom)))]
 mod test;
 
 pub use crate::script::{Builder, Script};

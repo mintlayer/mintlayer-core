@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -14,15 +14,21 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::event::{Event, PeerEvent};
-use crate::net::NetworkService;
-use crate::peer::{Peer, PeerId, PeerRole};
+#![cfg(not(loom))]
+
+use crate::{
+    event::{Event, PeerEvent},
+    net::NetworkService,
+    peer::{Peer, PeerId, PeerRole},
+};
 use common::chain::ChainConfig;
 use futures::FutureExt;
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -38,12 +44,12 @@ pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
 {
-    Accept(error::Result<T::Socket>),
+    Accept(T::Socket),
     Connect(T::Address),
 }
 
 #[allow(unused)]
-struct P2P<NetworkingBackend> {
+pub struct P2P<NetworkingBackend> {
     /// Network backend (libp2p, mock)
     network: NetworkingBackend,
 
@@ -79,7 +85,7 @@ where
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
         Ok(Self {
-            network: NetworkingBackend::new(addr).await?,
+            network: NetworkingBackend::new(addr, &[], &[]).await?,
             config,
             peer_cnt: AtomicU64::default(),
             peer_backlock,
@@ -111,9 +117,7 @@ where
         event: ConnectivityEvent<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            ConnectivityEvent::Accept(res) => {
-                res.map(|socket| self.create_peer(socket, PeerRole::Inbound))?
-            }
+            ConnectivityEvent::Accept(socket) => self.create_peer(socket, PeerRole::Inbound),
             ConnectivityEvent::Connect(address) => self
                 .network
                 .connect(address)
@@ -124,17 +128,39 @@ where
         Ok(())
     }
 
+    fn peer_discovered(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
+        println!("peers discovered: {:#?}", peers);
+        Ok(())
+    }
+
+    fn peer_expired(&mut self, peers: &[NetworkingBackend::Address]) -> error::Result<()> {
+        println!("peers expired: {:#?}", peers);
+        Ok(())
+    }
+
+    /// Handle network event received from the network service provider
+    async fn on_network_event(
+        &mut self,
+        event: net::Event<NetworkingBackend>,
+    ) -> error::Result<()> {
+        match event {
+            net::Event::IncomingConnection(socket) => {
+                self.on_connectivity_event(ConnectivityEvent::Accept(socket)).await
+            }
+            net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
+            net::Event::PeerExpired(peers) => self.peer_expired(&peers),
+        }
+    }
+
     /// Run the `P2P` event loop.
-    ///
-    /// This event loop has three responsibilities:
-    ///  - accept incoming connections
-    ///  - listen to messages from peers
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {
-                res = self.network.accept() => {
-                    self.on_connectivity_event(ConnectivityEvent::Accept(res)).await?;
-                },
+                res = self.network.poll_next() => {
+                    res.map(|event| async {
+                        self.on_network_event(event).await
+                    })?;
+                }
                 event = self.mgr_chan.1.recv().fuse() => {
                     self.on_peer_event(event).await?;
                 }
@@ -162,24 +188,42 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::P2pError;
     use common::chain::config;
-    use net::mock::MockService;
+    use libp2p::Multiaddr;
+    use net::{libp2p::Libp2pService, mock::MockService};
+    use std::net::SocketAddr;
 
+    // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]
-    async fn test_p2p_new() {
+    async fn test_p2p_connect_mock() {
         let config = Arc::new(config::create_mainnet());
-        let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_ok());
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
 
-        // try to create new P2P object to the same address, should fail
-        let addr: <MockService as NetworkService>::Address = "[::1]:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_err());
+        let remote: SocketAddr = "[::1]:6666".parse().unwrap();
+        let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
+        assert_eq!(
+            res,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+    }
 
-        // try to create new P2P object to different address, should succeed
-        let addr: <MockService as NetworkService>::Address = "127.0.0.1:8888".parse().unwrap();
-        let res = P2P::<MockService>::new(256, 32, addr, config.clone()).await;
-        assert!(res.is_ok());
+    // try to connect to an address that no one listening on and verify it fails
+    #[tokio::test]
+    async fn test_p2p_connect_libp2p() {
+        let config = Arc::new(config::create_mainnet());
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let mut p2p = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+
+        let remote: Multiaddr =
+            "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
+                .parse()
+                .unwrap();
+        let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
+        assert_eq!(
+            res,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
     }
 }

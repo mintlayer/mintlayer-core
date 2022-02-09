@@ -11,8 +11,8 @@
 //! # Example
 //!
 //! ```
-//! # use storage::{schema, Transactional, DbTransaction};
-//! // Declare a schema. Schema specifies which columns are present,
+//! # use storage::{schema, traits::*};
+//! // Delcare a schema. Schema specifies which columns are present,
 //! // name of each column and its kind. Columns are identified by types.
 //! // Here, we create just one column.
 //!
@@ -32,10 +32,10 @@
 //! // Initialize an empty store with columns listed in the schema.
 //! let mut store = MyStore::default();
 //!
-//! // All store operations happen inside on a transaction.
-//! store.transaction(|tx| {
+//! // All store operations happen inside of a transaction.
+//! store.transaction_rw(|tx| {
 //!     // Get the column, identified by the type.
-//!     let mut col = tx.get::<MyColumn, ()>();
+//!     let mut col = tx.get_mut::<MyColumn, _>();
 //!
 //!     // Associate the value "bar" with the key "foo"
 //!     col.put(b"foo".to_vec(), b"bar".to_vec())?;
@@ -45,44 +45,39 @@
 //!     assert_eq!(val, Some(&b"bar"[..]));
 //!
 //!     // End the transaction
-//!     Ok(())
+//!     storage::commit(())
 //! });
 //!
 //! // Try writing a value but abort the transaction afterwards.
-//! store.transaction(|tx| {
-//!     tx.get::<MyColumn, ()>().put(b"baz".to_vec(), b"xyz".to_vec())?;
-//!     tx.abort()?;
-//!     Ok(())
+//! store.transaction_rw(|tx| {
+//!     tx.get_mut::<MyColumn, _>().put(b"baz".to_vec(), b"xyz".to_vec())?;
+//!     storage::abort(())
 //! });
 //!
 //! // Transaction can return data. Values taken from the database have to be cloned
 //! // in order for them to be available after the transaction terminates.
-//! let result = store.transaction(|tx| {
-//!     Ok(tx.get::<MyColumn, ()>().get(b"baz")?.map(ToOwned::to_owned))
+//! let result = store.transaction_ro(|tx| {
+//!     Ok(tx.get::<MyColumn, _>().get(b"baz")?.map(ToOwned::to_owned))
 //! });
 //! assert_eq!(result, Ok(None));
 //!
 //! // Check the value we first inserted is still there.
-//! let result = store.transaction(|tx| {
-//!     assert_eq!(tx.get::<MyColumn, ()>().get(b"foo")?, Some(&b"bar"[..]));
+//! let result = store.transaction_ro(|tx| {
+//!     assert_eq!(tx.get::<MyColumn, _>().get(b"foo")?, Some(&b"bar"[..]));
 //!     Ok(())
 //! });
 //! ```
 
 mod basic;
+pub mod error;
 pub mod schema;
+pub mod traits;
 pub mod transaction;
 
 // Reexport items from the temporary basic implementation.
-pub use basic::{SingleMap, Store, Transaction};
-pub use transaction::{DbTransaction, Transactional};
+pub use basic::Store;
+pub use error::Error;
+pub use transaction::{abort, commit};
 
-#[derive(Debug, PartialEq, Eq, thiserror::Error)]
-pub enum Error {
-    #[error("Transaction aborted by the user")]
-    Aborted,
-    #[error("Unknown database error")]
-    Unknown,
-}
-
+pub type Data = Vec<u8>;
 pub type Result<T> = std::result::Result<T, Error>;

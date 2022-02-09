@@ -7,6 +7,14 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-storage = { path = '../storage'}
 common = { path = '../common' }
-parity-scale-codec = {version = "2.3.1", features = ["chain-error"]}
+storage = { path = '../storage'}
+mockall = { version = "0.11", optional = true }
+parity-scale-codec = { version = "2.3.1", features = ["chain-error"] }
+thiserror = "1.0"
+
+[dev-dependencies]
+mockall = "0.11"
+
+[features]
+mock = [ 'mockall' ]

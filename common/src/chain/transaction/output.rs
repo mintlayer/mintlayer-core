@@ -1,4 +1,4 @@
-use crate::primitives::Amount;
+use crate::primitives::{Amount, Id};
 use parity_scale_codec::{Decode, Encode};
 use script::Script;
 
@@ -6,7 +6,7 @@ use script::Script;
 pub enum Destination {
     Address(crate::address::Address), // Address type to be added
     PublicKey,                        // Key type to be added
-    ScriptHash(Script),
+    ScriptHash(Id<Script>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

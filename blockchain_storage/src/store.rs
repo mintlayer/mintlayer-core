@@ -2,9 +2,9 @@ use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
-use storage::Transactional;
+use storage::traits::*;
 
-use crate::{BlockchainStorage, Error::UnrecoverableError};
+use crate::BlockchainStorage;
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -79,31 +79,49 @@ impl Store {
 }
 
 impl<'st> Transactional<'st> for Store {
-    type Transaction = StoreTx<'st>;
+    type TransactionRo = StoreTxRw<'st>;
+    type TransactionRw = StoreTxRw<'st>;
 
-    fn start_transaction(&'st mut self) -> Self::Transaction {
-        StoreTx(self.0.start_transaction())
+    fn start_transaction_ro(&'st self) -> Self::TransactionRo {
+        StoreTxRw(self.0.start_transaction_rw())
+    }
+
+    fn start_transaction_rw(&'st self) -> Self::TransactionRw {
+        StoreTxRw(self.0.start_transaction_rw())
     }
 }
 
 macro_rules! delegate_to_transaction {
-    ($(fn $func:ident(&mut self $(, $arg:ident: $aty:ty)* $(,)?) -> $rty:ty;)*) => {
-        $(
-            fn $func(&mut self $(, $arg: $aty)*) -> $rty {
-                self.transaction(|tx| <Self as Transactional>::Transaction::$func(tx $(, $arg)*))
-            }
-        )*
+    ($(fn $f:ident $args:tt -> $ret:ty;)*) => {
+        $(delegate_to_transaction!(@SELF [$f ($ret)] $args);)*
+    };
+    (@SELF $done:tt (&self $(, $($rest:tt)*)?)) => {
+        delegate_to_transaction!(@BODY transaction_ro (Ok) $done ($($($rest)*)?));
+    };
+    (@SELF $done:tt (&mut self $(, $($rest:tt)*)?)) => {
+        delegate_to_transaction!(@BODY transaction_rw (storage::commit) mut $done ($($($rest)*)?));
+    };
+    (@BODY $txfunc:ident ($commit:path) $($mut:ident)?
+        [$f:ident ($ret:ty)]
+        ($($arg:ident: $aty:ty),* $(,)?)
+    ) => {
+        fn $f(&$($mut)? self $(, $arg: $aty)*) -> $ret {
+            #[allow(clippy::needless_question_mark)]
+            self.$txfunc(
+                |tx| $commit(<Self as Transactional>::TransactionRw::$f(tx $(, $arg)*)?)
+            )
+        }
     };
 }
 
 impl BlockchainStorage for Store {
     delegate_to_transaction! {
-        fn get_storage_version(&mut self) -> crate::Result<u32>;
+        fn get_storage_version(&self) -> crate::Result<u32>;
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn get_best_block_id(&mut self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
-        fn get_block(&mut self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_mainchain_tx_index(
@@ -113,21 +131,21 @@ impl BlockchainStorage for Store {
         ) -> crate::Result<()>;
 
         fn get_mainchain_tx_index(
-            &mut self,
+            &self,
             tx_id: &Id<Transaction>,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
         fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
 
         fn get_mainchain_tx_by_position(
-            &mut self,
+            &self,
             tx_index: &TxMainChainPosition,
         ) -> crate::Result<Option<Transaction>>;
 
-        fn get_mainchain_tx(&mut self, tx: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
+        fn get_mainchain_tx(&self, tx: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
 
         fn get_block_id_by_height(
-            &mut self,
+            &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
 
@@ -142,12 +160,12 @@ impl BlockchainStorage for Store {
 }
 
 /// Transaction over blockchain data store
-pub struct StoreTx<'st>(storage::Transaction<'st, Schema>);
+pub struct StoreTxRw<'st>(<storage::Store<Schema> as Transactional<'st>>::TransactionRw);
 
 /// Blockchain data storage transaction
-impl BlockchainStorage for StoreTx<'_> {
+impl BlockchainStorage for StoreTxRw<'_> {
     /// Get storage version
-    fn get_storage_version(&mut self) -> crate::Result<u32> {
+    fn get_storage_version(&self) -> crate::Result<u32> {
         self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
     }
 
@@ -157,7 +175,7 @@ impl BlockchainStorage for StoreTx<'_> {
     }
 
     /// Get the hash of the best block
-    fn get_best_block_id(&mut self) -> crate::Result<Option<Id<Block>>> {
+    fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>> {
         self.read_value::<well_known::BestBlockId>()
     }
 
@@ -166,19 +184,19 @@ impl BlockchainStorage for StoreTx<'_> {
         self.write_value::<well_known::BestBlockId>(id)
     }
 
+    /// Get block by its hash
+    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
+        self.read::<DBBlocks, _, _>(id.as_ref())
+    }
+
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> crate::Result<()> {
         self.write::<DBBlocks, _, _>(block.get_id().encode(), block)
     }
 
-    /// Get block by its hash
-    fn get_block(&mut self, id: Id<Block>) -> crate::Result<Option<Block>> {
-        self.read::<DBBlocks, _, _>(id.as_ref())
-    }
-
     /// Remove block from the database
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get::<DBBlocks, _>().del(id.as_ref()).map_err(UnrecoverableError)
+        self.0.get_mut::<DBBlocks, _>().del(id.as_ref()).map_err(Into::into)
     }
 
     /// Set state of the outputs of given transaction
@@ -192,7 +210,7 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
-        &mut self,
+        &self,
         tx_id: &Id<Transaction>,
     ) -> crate::Result<Option<TxMainChainIndex>> {
         self.read::<DBTxIndices, _, _>(tx_id.as_ref())
@@ -200,17 +218,17 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Delete outputs state index associated with given transaction
     fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0.get::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(UnrecoverableError)
+        self.0.get_mut::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(Into::into)
     }
 
     /// Get transaction
     fn get_mainchain_tx_by_position(
-        &mut self,
+        &self,
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>> {
         let block_id = tx_index.get_block_id();
-        match self.0.get::<DBBlocks, _>().get(block_id) {
-            Err(e) => Err(UnrecoverableError(e)),
+        match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
+            Err(e) => Err(e.into()),
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
                 let begin = tx_index.get_byte_offset_in_block() as usize;
@@ -222,14 +240,14 @@ impl BlockchainStorage for StoreTx<'_> {
         }
     }
 
-    fn get_mainchain_tx(&mut self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>> {
+    fn get_mainchain_tx(&self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>> {
         self.get_mainchain_tx_index(txid)?.map_or(Ok(None), |i| {
             self.get_mainchain_tx_by_position(i.get_tx_position())
         })
     }
 
     /// Get mainchain block by its height
-    fn get_block_id_by_height(&mut self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
+    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
     }
 
@@ -244,23 +262,20 @@ impl BlockchainStorage for StoreTx<'_> {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
-        self.0
-            .get::<DBBlockByHeight, _>()
-            .del(&height.encode())
-            .map_err(UnrecoverableError)
+        self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
     }
 }
 
-impl StoreTx<'_> {
+impl StoreTxRw<'_> {
     // Read a value from the database and decode it
-    fn read<Col, I, T>(&mut self, key: &[u8]) -> crate::Result<Option<T>>
+    fn read<Col, I, T>(&self, key: &[u8]) -> crate::Result<Option<T>>
     where
         Col: storage::schema::Column<Kind = storage::schema::Single>,
         Schema: storage::schema::HasColumn<Col, I>,
         T: Decode,
     {
         let col = self.0.get::<Col, I>();
-        let data = col.get(key).map_err(UnrecoverableError)?;
+        let data = col.get(key).map_err(crate::Error::from)?;
         Ok(data.map(|d| T::decode_all(d).expect("Cannot decode a database value")))
     }
 
@@ -271,12 +286,11 @@ impl StoreTx<'_> {
         Schema: storage::schema::HasColumn<Col, I>,
         T: Encode,
     {
-        let mut col = self.0.get::<Col, I>();
-        col.put(key, value.encode()).map_err(UnrecoverableError)
+        self.0.get_mut::<Col, I>().put(key, value.encode()).map_err(Into::into)
     }
 
     // Read a value for a well-known entry
-    fn read_value<E: well_known::Entry>(&mut self) -> crate::Result<Option<E::Value>> {
+    fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
         self.read::<DBValues, _, _>(E::KEY)
     }
 
@@ -286,30 +300,48 @@ impl StoreTx<'_> {
     }
 }
 
-impl storage::transaction::DbTransaction for StoreTx<'_> {
+impl TransactionRw for StoreTxRw<'_> {
     type Error = crate::Error;
 
     fn commit(self) -> crate::Result<()> {
-        self.0.commit().map_err(UnrecoverableError)
+        self.0.commit().map_err(Into::into)
     }
 
-    fn abort(&mut self) -> crate::Result<()> {
-        self.0.abort().map_err(UnrecoverableError)
+    fn abort(self) -> crate::Result<()> {
+        self.0.abort().map_err(Into::into)
+    }
+}
+
+impl TransactionRo for StoreTxRw<'_> {
+    type Error = crate::Error;
+
+    fn finalize(self) -> crate::Result<()> {
+        self.0.commit().map_err(Into::into)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use common::primitives::H256;
+    use common::primitives::consensus_data::ConsensusData;
 
     #[test]
+    #[cfg(not(loom))]
     fn test_storage_manipulation() {
+        use common::primitives::H256;
+
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(vec![tx0.clone()], Id::new(&H256::default()), 12, vec![]).unwrap();
-        let block1 = Block::new(vec![tx1.clone()], block0.get_id(), 34, vec![]).unwrap();
+        let block0 = Block::new(
+            vec![tx0.clone()],
+            Id::new(&H256::default()),
+            12,
+            ConsensusData::None,
+        )
+        .unwrap();
+        let block1 =
+            Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();
@@ -388,71 +420,110 @@ mod test {
     }
 
     #[test]
+    fn get_set_transactions() {
+        common::concurrency::model(|| {
+            // Set up the store and initialize the version to 2
+            let mut store = Store::new_empty().unwrap();
+            assert_eq!(store.set_storage_version(2), Ok(()));
+
+            // Concurrently bump version and run a transactiomn that reads the version twice.
+            let thr1 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let _ = store.transaction_rw(|tx| {
+                        let v = tx.get_storage_version()?;
+                        tx.set_storage_version(v + 1)?;
+                        storage::commit(())
+                    });
+                })
+            };
+            let thr0 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let tx_result = store.transaction_ro(|tx| {
+                        let v1 = tx.get_storage_version()?;
+                        let v2 = tx.get_storage_version()?;
+                        assert!([2, 3].contains(&v1));
+                        assert_eq!(v1, v2, "Version query in a transaction inconsistent");
+                        Ok(())
+                    });
+                    assert!(tx_result.is_ok());
+                })
+            };
+
+            let _ = thr0.join();
+            let _ = thr1.join();
+            assert_eq!(store.get_storage_version(), Ok(3));
+        })
+    }
+
+    #[test]
     fn test_storage_transactions() {
-        // TODO run this under loom
-        use std::thread;
+        common::concurrency::model(|| {
+            // Set up the store and initialize the version to 2
+            let mut store = Store::new_empty().unwrap();
+            assert_eq!(store.set_storage_version(2), Ok(()));
 
-        // Set up the store and initialize the version to 2
-        let mut store = Store::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
-
-        // Concurrently bump version by 3 and 5 in two separate threads
-        let thr0 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                store.transaction(|tx| {
-                    let v = tx.get_storage_version().unwrap();
-                    tx.set_storage_version(v + 3)
+            // Concurrently bump version by 3 and 5 in two separate threads
+            let thr0 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let tx_result = store.transaction_rw(|tx| {
+                        let v = tx.get_storage_version()?;
+                        tx.set_storage_version(v + 3)?;
+                        storage::commit(())
+                    });
+                    assert!(tx_result.is_ok());
                 })
-            })
-        };
-        let thr1 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                store.transaction(|tx| {
-                    let v = tx.get_storage_version().unwrap();
-                    tx.set_storage_version(v + 5)
+            };
+            let thr1 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let tx_result = store.transaction_rw(|tx| {
+                        let v = tx.get_storage_version()?;
+                        tx.set_storage_version(v + 5)?;
+                        storage::commit(())
+                    });
+                    assert!(tx_result.is_ok());
                 })
-            })
-        };
+            };
 
-        let _ = thr0.join();
-        let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+            let _ = thr0.join();
+            let _ = thr1.join();
+            assert_eq!(store.get_storage_version(), Ok(10));
+        })
     }
 
     #[test]
     fn test_storage_transactions_with_result_check() {
-        // TODO run this under loom
-        use std::thread;
-        use storage::DbTransaction;
+        common::concurrency::model(|| {
+            // Set up the store and initialize the version to 2
+            let mut store = Store::new_empty().unwrap();
+            assert_eq!(store.set_storage_version(2), Ok(()));
 
-        // Set up the store and initialize the version to 2
-        let mut store = Store::new_empty().unwrap();
-        assert_eq!(store.set_storage_version(2), Ok(()));
+            // Concurrently bump version by 3 and 5 in two separate threads
+            let thr0 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let mut tx = store.start_transaction_rw();
+                    let v = tx.get_storage_version().unwrap();
+                    assert!(tx.set_storage_version(v + 3).is_ok());
+                    assert!(tx.commit().is_ok());
+                })
+            };
+            let thr1 = {
+                let store = Store::clone(&store);
+                common::thread::spawn(move || {
+                    let mut tx = store.start_transaction_rw();
+                    let v = tx.get_storage_version().unwrap();
+                    assert!(tx.set_storage_version(v + 5).is_ok());
+                    assert!(tx.commit().is_ok());
+                })
+            };
 
-        // Concurrently bump version by 3 and 5 in two separate threads
-        let thr0 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let mut tx = store.start_transaction();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 3).is_ok());
-                assert!(tx.commit().is_ok());
-            })
-        };
-        let thr1 = {
-            let mut store = store.clone();
-            thread::spawn(move || {
-                let mut tx = store.start_transaction();
-                let v = tx.get_storage_version().unwrap();
-                assert!(tx.set_storage_version(v + 5).is_ok());
-                assert!(tx.commit().is_ok());
-            })
-        };
-
-        let _ = thr0.join();
-        let _ = thr1.join();
-        assert_eq!(store.get_storage_version(), Ok(10));
+            let _ = thr0.join();
+            let _ = thr1.join();
+            assert_eq!(store.get_storage_version(), Ok(10));
+        })
     }
 }

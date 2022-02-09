@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -20,6 +20,14 @@ pub enum ProtocolError {
     InvalidVersion,
     InvalidMessage,
     Incompatible,
+    Unresponsive,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Libp2pError {
+    NoiseError(String),
+    TransportError(String),
+    DialError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -29,6 +37,9 @@ pub enum P2pError {
     DecodeFailure(String),
     ProtocolError(ProtocolError),
     TimeError(String),
+    Libp2pError(Libp2pError),
+    Unknown(String),
+    ChannelClosed,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
@@ -51,6 +62,43 @@ impl From<std::time::SystemTimeError> for P2pError {
     }
 }
 
+impl From<libp2p::noise::NoiseError> for P2pError {
+    fn from(e: libp2p::noise::NoiseError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::NoiseError(e.to_string()))
+    }
+}
+
+impl<T> From<libp2p::TransportError<T>> for P2pError {
+    fn from(e: libp2p::TransportError<T>) -> P2pError {
+        let e = match e {
+            libp2p::TransportError::MultiaddrNotSupported(addr) => {
+                format!("Multiaddr {} not supported", addr)
+            }
+            _ => "Unknown transport error".to_string(),
+        };
+
+        P2pError::Libp2pError(Libp2pError::TransportError(e))
+    }
+}
+
+impl From<libp2p::swarm::DialError> for P2pError {
+    fn from(e: libp2p::swarm::DialError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::DialError(e.to_string()))
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for P2pError {
+    fn from(_: tokio::sync::oneshot::error::RecvError) -> P2pError {
+        P2pError::ChannelClosed
+    }
+}
+
+impl<T> From<tokio::sync::mpsc::error::SendError<T>> for P2pError {
+    fn from(_: tokio::sync::mpsc::error::SendError<T>) -> P2pError {
+        P2pError::ChannelClosed
+    }
+}
+
 impl std::fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -65,6 +113,9 @@ impl std::fmt::Display for ProtocolError {
             }
             ProtocolError::Incompatible => {
                 write!(f, "Remote deemed us incompatible, connection closed")
+            }
+            ProtocolError::Unresponsive => {
+                write!(f, "No response from remote peer")
             }
         }
     }

@@ -196,6 +196,7 @@ mod tests {
     mod helpers {
         use super::*;
         use common::chain::transaction::Transaction;
+        use common::primitives::consensus_data::ConsensusData;
         use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
@@ -215,7 +216,7 @@ mod tests {
                 vec![tx],
                 Id::new(&prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()))),
                 rng.gen(),
-                Vec::new(),
+                ConsensusData::None,
             )
             .unwrap()
         }

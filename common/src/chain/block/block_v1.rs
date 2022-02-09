@@ -1,9 +1,6 @@
 use crate::chain::transaction::Transaction;
-use crate::primitives::id::default_hash;
-use crate::primitives::Id;
-use crate::primitives::Idable;
-use crate::primitives::H256;
-use parity_scale_codec::Encode;
+use crate::primitives::consensus_data::ConsensusData;
+use crate::primitives::{id, Id, Idable, H256};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
@@ -12,7 +9,7 @@ pub struct BlockHeader {
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
-    pub(super) consensus_data: Vec<u8>,
+    pub(super) consensus_data: ConsensusData,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
@@ -22,6 +19,9 @@ pub struct BlockV1 {
 }
 
 impl BlockV1 {
+    // This has to be the same its index in the Block enum
+    pub const VERSION_BYTE: u8 = 0x01;
+
     pub fn get_tx_merkle_root(&self) -> H256 {
         self.header.tx_merkle_root
     }
@@ -34,7 +34,7 @@ impl BlockV1 {
         &self.header
     }
 
-    pub fn update_consensus_data(&mut self, consensus_data: Vec<u8>) {
+    pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.header.consensus_data = consensus_data;
     }
 
@@ -53,8 +53,8 @@ impl BlockV1 {
 
 impl Idable<BlockV1> for BlockV1 {
     fn get_id(&self) -> Id<Self> {
-        let encoded = BlockV1::encode(self);
-        let hashed = default_hash(encoded);
-        Id::new(&hashed)
+        // Block ID is just the hash of its header. The transaction list is committed to by the
+        // inclusion of transaction Merkle root in the header. We also include the version number.
+        Id::new(&id::hash_encoded(&(Self::VERSION_BYTE, self.get_header())))
     }
 }

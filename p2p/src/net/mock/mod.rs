@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -15,19 +15,28 @@
 //
 // Author(s): A. Altonen
 #![allow(dead_code, unused_variables, unused_imports)]
-use crate::error::{self, P2pError};
-use crate::net::{NetworkService, SocketService};
-use crate::peer::Peer;
+use crate::{
+    error::{self, P2pError},
+    net::{Event, GossipSubTopic, NetworkService, SocketService},
+    peer::Peer,
+};
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
-use std::collections::HashMap;
-use std::io::{Error, ErrorKind};
-use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use std::{
+    collections::HashMap,
+    io::{Error, ErrorKind},
+    net::SocketAddr,
+};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::{TcpListener, TcpStream},
+};
 
 /// This file provides a mock implementation of the network service.
 /// It implements the `NetworkService` trait on top of `tokio::net::TcpListener`
+
+#[derive(Debug)]
+pub enum MockStrategy {}
 
 #[derive(Debug)]
 pub struct MockService {
@@ -53,8 +62,13 @@ impl MockSocket {
 impl NetworkService for MockService {
     type Address = SocketAddr;
     type Socket = MockSocket;
+    type Strategy = MockStrategy;
 
-    async fn new(addr: Self::Address) -> error::Result<Self> {
+    async fn new(
+        addr: Self::Address,
+        _strategies: &[Self::Strategy],
+        _topics: &[GossipSubTopic],
+    ) -> error::Result<Self> {
         Ok(Self {
             addr,
             socket: TcpListener::bind(addr).await?,
@@ -71,23 +85,18 @@ impl NetworkService for MockService {
         })
     }
 
-    async fn accept(&mut self) -> error::Result<Self::Socket> {
-        // 0 is `TcpStream`, 1 is `SocketAddr`
-        Ok(MockSocket {
+    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
+    where
+        T: NetworkService<Socket = MockSocket>,
+    {
+        Ok(Event::IncomingConnection(MockSocket {
             socket: self.socket.accept().await?.0,
-        })
+        }))
     }
 
-    async fn publish<T>(&mut self, topic: &'static str, data: &T)
+    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
     where
         T: Sync + Send + Encode,
-    {
-        todo!();
-    }
-
-    async fn subscribe<T>(&mut self, topic: &'static str, tx: tokio::sync::mpsc::Sender<T>)
-    where
-        T: Send + Sync + Decode,
     {
         todo!();
     }
@@ -122,6 +131,7 @@ impl SocketService for MockSocket {
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
+    use crate::net::Event;
     use crate::peer::{Peer, PeerRole};
     use common::chain::config;
     use parity_scale_codec::{Decode, Encode};
@@ -138,19 +148,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_new() {
-        let srv_ipv4 = MockService::new("127.0.0.1:5555".parse().unwrap()).await;
+        let srv_ipv4 = MockService::new("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
         assert!(srv_ipv4.is_ok());
 
         // address already in use
-        let err = MockService::new("127.0.0.1:5555".parse().unwrap()).await;
+        let err = MockService::new("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
         assert!(err.is_err());
 
         // bind to IPv6 localhost
-        let srv_ipv6 = MockService::new("[::1]:5555".parse().unwrap()).await;
+        let srv_ipv6 = MockService::new("[::1]:5555".parse().unwrap(), &[], &[]).await;
         assert!(srv_ipv6.is_ok());
 
         // address already in use
-        let s_ipv6 = MockService::new("[::1]:5555".parse().unwrap()).await;
+        let s_ipv6 = MockService::new("[::1]:5555".parse().unwrap(), &[], &[]).await;
         assert!(s_ipv6.is_err());
     }
 
@@ -169,7 +179,7 @@ mod tests {
         });
 
         // create service that is used for testing `connect()`
-        let srv = MockService::new("127.0.0.1:7777".parse().unwrap()).await;
+        let srv = MockService::new("127.0.0.1:7777".parse().unwrap(), &[], &[]).await;
         assert!(srv.is_ok());
         let mut srv = srv.unwrap();
 
@@ -191,11 +201,12 @@ mod tests {
     async fn test_accept() {
         // create service that is used for testing `accept()`
         let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let mut srv = MockService::new("[::1]:9999".parse().unwrap()).await.unwrap();
+        let mut srv = MockService::new("[::1]:9999".parse().unwrap(), &[], &[]).await.unwrap();
 
-        let (acc, con) = tokio::join!(srv.accept(), TcpStream::connect(addr));
+        let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
         assert!(acc.is_ok());
         assert!(con.is_ok());
+        let acc: Event<MockService> = acc.unwrap();
 
         // TODO: is there any sensible way to make `accept()` fail?
     }
@@ -203,12 +214,18 @@ mod tests {
     #[tokio::test]
     async fn test_peer_send() {
         let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let mut server = MockService::new(addr).await.unwrap();
+        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let remote_fut = TcpStream::connect(addr);
 
-        let (server_res, remote_res) = tokio::join!(server.accept(), remote_fut);
+        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
+
+        let server_res: Event<MockService> = server_res.unwrap();
+        let server_res = match server_res {
+            Event::IncomingConnection(server_res) => server_res,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
@@ -217,7 +234,7 @@ mod tests {
             1,
             PeerRole::Outbound,
             config.clone(),
-            server_res.unwrap(),
+            server_res,
             peer_tx,
             rx,
         );
@@ -242,12 +259,18 @@ mod tests {
     async fn test_peer_recv() {
         // create a `MockService`, connect to it with a `TcpStream` and exchange data
         let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let mut server = MockService::new(addr).await.unwrap();
+        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
         let remote_fut = TcpStream::connect(addr);
 
-        let (server_res, remote_res) = tokio::join!(server.accept(), remote_fut);
+        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
+
+        let server_res: Event<MockService> = server_res.unwrap();
+        let server_res = match server_res {
+            Event::IncomingConnection(server_res) => server_res,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
@@ -256,7 +279,7 @@ mod tests {
             1,
             PeerRole::Outbound,
             config.clone(),
-            server_res.unwrap(),
+            server_res,
             peer_tx,
             rx,
         );

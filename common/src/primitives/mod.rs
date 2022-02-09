@@ -16,15 +16,20 @@
 // Author(s): S. Afach
 
 pub mod amount;
+pub mod compact;
 pub mod encoding;
 pub mod error;
+mod hash_encoded;
 pub mod height;
 pub mod id;
 pub mod merkle;
 pub mod time;
+
+pub mod consensus_data;
 pub mod version;
 
 pub use amount::Amount;
+pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedBech32};
 pub use height::BlockHeight;
 pub use id::{DataID, Id, Idable, H256};

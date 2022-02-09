@@ -10,6 +10,9 @@ hashing
 - sha3 
 - ripemd160
 
+sigs
+- ristretto schnorr (no sig aggr)
+
 example of use from another subsystem
 add your dependencies to your cargo.toml file
 
