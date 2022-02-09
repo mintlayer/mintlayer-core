@@ -16,9 +16,8 @@ struct Consensus<S: BlockchainStorage> {
     chain_config: ChainConfig,
     blockchain_storage: S,
     orphan_blocks: OrphanBlocksPool,
-    // TODO: We have to add these fields in a proper way. I guess we should sync block_map with blockchain_storage
+    // TODO: We have to add these fields in a proper way.
     current_block_height: BlockHeight,
-    block_map: BlockMap,
     failed_blocks: HashSet<BlockIndex>,
 }
 
@@ -30,7 +29,6 @@ impl<S: BlockchainStorage> Consensus<S> {
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
             current_block_height: BlockHeight::new(0),
-            block_map: BlockMap::new(),
             failed_blocks: HashSet::new(),
         }
     }
@@ -42,6 +40,7 @@ impl<S: BlockchainStorage> Consensus<S> {
         let mut rc_block = Rc::new(block);
         let block_index =
             self.accept_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL)).map_err(|err| {
+                dbg!(&err);
                 match err {
                     BlockError::Orphan => self
                         .new_orphan_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL))
@@ -50,8 +49,6 @@ impl<S: BlockchainStorage> Consensus<S> {
                 }
                 err
             })?;
-        self.block_map.insert(rc_block.get_id(), block_index);
-
         Ok(self.activate_best_chain(block_index)?)
     }
 
@@ -81,6 +78,24 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
     }
 
+    fn get_ancestor(&mut self, block_id: Id<Block>) -> Result<BlockIndex, BlockError> {
+        let block = self.get_block(block_id)?;
+        dbg!(&block);
+        match block {
+            Some(block) => {
+                let prev_block = block.get_prev_block_id();
+                Ok(BlockIndex::new(
+                    &self.get_block(prev_block)?.ok_or(BlockError::NotFound)?,
+                ))
+            }
+            None => Err(BlockError::NotFound),
+        }
+    }
+
+    fn exist_block(&mut self, block_id: Id<Block>) -> Result<bool, BlockError> {
+        Ok(self.get_block(block_id)?.is_some())
+    }
+
     fn get_block(&mut self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
         Ok(self
             .blockchain_storage
@@ -103,19 +118,51 @@ impl<S: BlockchainStorage> Consensus<S> {
     }
 
     // Disconnect active blocks which are no longer in the best chain.
-    fn disconnect_blocks(&mut self) {
+    fn disconnect_blocks(&mut self, _ancestor: BlockIndex) {
         // TODO: Under construction
     }
 
     // Build list of new blocks to connect (in descending height order).
-    fn make_new_chain(&self) -> Vec<Block> {
+    fn make_new_chain(&self) -> Vec<BlockIndex> {
         // TODO: Under construction
         vec![]
     }
 
     // Connect mew blocks
-    fn connect_blocks(&mut self, _blocks: Vec<Block>) {
+    fn connect_blocks(&mut self, _blocks: Vec<BlockIndex>) {
         // TODO: Under construction
+    }
+
+    fn genesis_block_index(&self) -> BlockIndex {
+        BlockIndex::new(self.chain_config.genesis_block())
+    }
+
+    fn get_common_ancestor(
+        &mut self,
+        tip: BlockIndex,
+        new_block: BlockIndex,
+    ) -> Result<BlockIndex, BlockError> {
+        let mut prev_block_on_tip_chain = self.get_ancestor(tip.get_id())?;
+        let mut prev_block_on_new_chain = self.get_ancestor(new_block.get_id())?;
+
+        loop {
+            if prev_block_on_tip_chain == prev_block_on_new_chain {
+                return Ok(prev_block_on_tip_chain);
+            }
+            prev_block_on_tip_chain = self.get_ancestor(prev_block_on_tip_chain.get_id())?;
+            prev_block_on_new_chain = self.get_ancestor(prev_block_on_new_chain.get_id())?;
+        }
+    }
+
+    fn index_from_opt_id(&mut self, id_block: Id<Block>) -> Result<BlockIndex, BlockError> {
+        let block = self
+            .blockchain_storage
+            .get_block(id_block)
+            .map_err(|err| self.process_storage_failure(err))?;
+        match block {
+            Some(blk) => Ok(BlockIndex::new(&blk)),
+            None => Err(BlockError::Unknown),
+        }
     }
 
     #[allow(dead_code)]
@@ -123,16 +170,32 @@ impl<S: BlockchainStorage> Consensus<S> {
         &mut self,
         mut block_index: BlockIndex,
     ) -> Result<Option<Tip>, BlockError> {
+        println!("ENTER activate_best_chain");
+
         // TODO: We have to decide how we can generate `chain_trust`, at the moment it is wrong
         block_index.chain_trust = self.current_block_height.into();
-        let starting_tip = self.get_best_block_id()?;
+        let best_block = self.get_best_block_id()?;
+        println!("BEST BLOCK: {:?}", &best_block);
+        if let Some(best_block) = best_block {
+            let starting_tip = self.index_from_opt_id(best_block)?;
+            println!("sadasdasdasdasd");
 
-        self.disconnect_blocks();
-        self.connect_blocks(self.make_new_chain());
+            if self.genesis_block_index() == starting_tip {
+                self.connect_blocks(vec![block_index]);
+            } else {
+                let ancestor = self.get_common_ancestor(starting_tip, block_index)?;
+                println!("sadasdasdasdasd");
+                self.disconnect_blocks(ancestor);
+                println!("sadasdasdasdasd");
+                self.connect_blocks(self.make_new_chain());
+                println!("sadasdasdasdasd");
+            }
+        }
         self.set_best_block_id(&block_index.get_id())?;
 
         // Chain trust most be higher
         self.current_block_height.increment();
+        println!("LEAVE activate_best_chain");
         Ok(None)
     }
 
@@ -140,37 +203,38 @@ impl<S: BlockchainStorage> Consensus<S> {
     fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         let blk_index = self.check_block_index(&BlockIndex::new(block))?;
 
-        <S as BlockchainStorage>::add_block(&mut self.blockchain_storage, block)..map_err(|err| {
-            self.process_storage_failure(err)
-        })?;
+        <S as BlockchainStorage>::add_block(&mut self.blockchain_storage, block)
+            .map_err(|err| self.process_storage_failure(err))?;
 
         Ok(blk_index)
     }
 
     fn check_block_index(&mut self, blk_index: &BlockIndex) -> Result<BlockIndex, BlockError> {
         // BlockIndex is already known
-        if self.block_map.contains_key(&blk_index.get_id()) {
+        if self.exist_block(blk_index.get_id())? {
+            println!("exist_block");
             return Err(BlockError::Unknown);
         }
         // Get prev block index
         if !blk_index.is_genesis(&self.chain_config) {
-            let prev_blk_index =
-                self.block_map.get(&blk_index.get_prev_block_id()).ok_or(BlockError::Orphan)?;
+            let _prev_blk_index = self
+                .get_ancestor(blk_index.get_prev_block_id())
+                .map_err(|_| BlockError::Orphan)?;
 
             // TODO: Recheck this part
-            match prev_blk_index.status {
-                BlockStatus::Valid => {
-                    for failed_block in self.failed_blocks.iter() {
-                        if &prev_blk_index.get_ancestor(&self.block_map)? == failed_block {
-                            let mut invalid_walk = prev_blk_index.clone();
-                            while &invalid_walk != failed_block {
-                                invalid_walk.status = BlockStatus::NoLongerOnMainChain;
-                            }
-                        }
-                    }
-                }
-                _ => return Err(BlockError::PrevBlockInvalid),
-            }
+            // match prev_blk_index.status {
+            //     BlockStatus::Valid => {
+            //         for failed_block in ref mut self.failed_blocks {
+            //             if &self.get_ancestor(prev_blk_index.get_id())? == failed_block {
+            //                 let mut invalid_walk = prev_blk_index.clone();
+            //                 while &invalid_walk != failed_block {
+            //                     invalid_walk.status = BlockStatus::NoLongerOnMainChain;
+            //                 }
+            //             }
+            //         }
+            //     }
+            //     _ => return Err(BlockError::PrevBlockInvalid),
+            // }
         }
 
         // TODO: Will be expanded
@@ -285,7 +349,8 @@ mod tests {
         let mut consensus = Consensus::new(config.clone(), storage);
 
         // process the genesis block
-        assert!(consensus.process_block(config.genesis_block().clone()).is_ok());
+        let result = dbg!(consensus.process_block(config.genesis_block().clone()));
+        assert!(result.is_ok());
         assert_eq!(
             consensus.get_best_block_id().expect("Best block didn't found"),
             Some(config.genesis_block().get_id())
@@ -310,6 +375,33 @@ mod tests {
         let new_block = produce_block(&config, config.genesis_block().get_id());
         let new_id = Some(new_block.get_id());
         assert!(consensus.process_block(new_block).is_ok());
+        assert_eq!(
+            consensus.get_best_block_id().expect("Best block didn't found"),
+            new_id
+        );
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn test_connect_chains() {
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage);
+
+        // process the genesis block
+
+        let result = dbg!(consensus.process_block(config.genesis_block().clone()));
+        assert!(result.is_ok());
+        assert_eq!(
+            consensus.get_best_block_id().expect("Best block didn't found"),
+            Some(config.genesis_block().get_id())
+        );
+
+        // Process the second block
+        let new_block = produce_block(&config, config.genesis_block().get_id());
+        dbg!(new_block.get_id());
+        let new_id = Some(new_block.get_id());
+        assert!(dbg!(consensus.process_block(new_block)).is_ok());
         assert_eq!(
             consensus.get_best_block_id().expect("Best block didn't found"),
             new_id

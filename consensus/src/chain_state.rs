@@ -18,10 +18,7 @@
 use common::chain::block::Block;
 use common::chain::ChainConfig;
 use common::primitives::{BlockHeight, Id, Idable, H256};
-use std::collections::BTreeMap;
 use thiserror::Error;
-
-pub type BlockMap = BTreeMap<Id<Block>, BlockIndex>;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +44,8 @@ pub enum BlockError {
     PrevBlockInvalid,
     #[error("The storage cause failure `{0}`")]
     StorageFailure(blockchain_storage::Error),
+    #[error("The block not found")]
+    NotFound,
     // To be expanded
 }
 
@@ -59,7 +58,6 @@ pub struct Tip {
     /// The previous block
     pub prev_block_hash: H256,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
@@ -73,6 +71,7 @@ pub struct BlockIndex {
 
 impl BlockIndex {
     pub fn new(block: &Block) -> Self {
+        // We have to use the whole block because we are not able to take hash_block from the header
         Self {
             hash_block: block.get_id().get(),
             prev_block_hash: block.get_prev_block_id().get(),
@@ -95,10 +94,9 @@ impl BlockIndex {
         self.prev_block_hash == H256::zero()
             && chain_config.genesis_block().get_id().get() == self.hash_block
     }
+}
 
-    pub fn get_ancestor(&self, block_map: &BlockMap) -> Result<BlockIndex, BlockError> {
-        Ok(*block_map
-            .get(&Id::<Block>::new(&self.prev_block_hash))
-            .ok_or(BlockError::Orphan)?)
-    }
+#[cfg(test)]
+mod tests {
+    // use super::*;
 }
