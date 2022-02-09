@@ -2,7 +2,7 @@ use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
-use crate::chain::UpgradeVersion;
+use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
@@ -40,10 +40,6 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn chain_type(&self) -> ChainType {
-        self.chain_type
-    }
-
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }
@@ -62,6 +58,10 @@ impl ChainConfig {
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
+    }
+
+    pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
+        PoWChainConfig::new(self.chain_type)
     }
 }
 
