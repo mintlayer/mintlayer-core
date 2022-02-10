@@ -5,25 +5,25 @@ use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutpointSource {
-    Transaction(Transaction),
-    Block(Block),
+    Transaction(Id<Transaction>),
+    BlockReward(Id<Block>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct OutPoint {
-    id: Id<OutpointSource>,
+    id: OutpointSource,
     index: u32,
 }
 
 impl OutPoint {
-    pub fn new(prev_tx_id: Id<OutpointSource>, output_index: u32) -> Self {
+    pub fn new(prev_tx_id: OutpointSource, output_index: u32) -> Self {
         OutPoint {
             id: prev_tx_id,
             index: output_index,
         }
     }
 
-    pub fn get_tx_id(&self) -> Id<OutpointSource> {
+    pub fn get_tx_id(&self) -> OutpointSource {
         self.id.clone()
     }
 
@@ -39,7 +39,7 @@ pub struct TxInput {
 }
 
 impl TxInput {
-    pub fn new(prev_tx_id: Id<OutpointSource>, output_index: u32, witness: Vec<u8>) -> Self {
+    pub fn new(prev_tx_id: OutpointSource, output_index: u32, witness: Vec<u8>) -> Self {
         TxInput {
             outpoint: OutPoint::new(prev_tx_id, output_index),
             witness,
