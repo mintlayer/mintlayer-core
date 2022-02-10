@@ -14,3 +14,16 @@ pub struct PoWData {
     bits: Compact,
     nonce: u128,
 }
+
+impl PoWData {
+    pub fn new(bits: Compact, nonce: u128) -> Self {
+        PoWData { bits, nonce }
+    }
+    pub fn bits(&self) -> Compact {
+        self.bits
+    }
+
+    pub fn nonce(&self) -> u128 {
+        self.nonce
+    }
+}
