@@ -63,7 +63,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub enum Block {
     #[codec(index = 1)]
     V1(BlockV1),
@@ -110,6 +110,12 @@ impl Block {
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         match self {
             Block::V1(blk) => blk.update_consensus_data(consensus_data),
+        }
+    }
+
+    pub fn get_consensus_data(&self) -> ConsensusData {
+        match self {
+            Block::V1(blk) => blk.get_consensus_data(),
         }
     }
 

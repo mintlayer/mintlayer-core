@@ -2,7 +2,7 @@ use crate::chain::transaction::Transaction;
 use crate::primitives::Id;
 use parity_scale_codec::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct OutPoint {
     id: Id<Transaction>,
     index: u32,
@@ -25,7 +25,7 @@ impl OutPoint {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct TxInput {
     outpoint: OutPoint,
     witness: Vec<u8>,

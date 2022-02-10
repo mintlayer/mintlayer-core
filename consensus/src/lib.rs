@@ -2,9 +2,9 @@ use blockchain_storage::{BlockchainStorage, Error};
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
 use common::primitives::{time, BlockHeight, Id, Idable};
-use std::collections::HashSet;
+use std::cell::RefCell;
+use std::collections::{BTreeSet, HashSet};
 use std::rc::Rc;
-
 mod chain_state;
 use chain_state::*;
 mod orphan_blocks;
@@ -14,7 +14,7 @@ use orphan_blocks::OrphanBlocksPool;
 #[allow(dead_code)]
 struct Consensus<S: BlockchainStorage> {
     chain_config: ChainConfig,
-    blockchain_storage: S,
+    blockchain_storage: Rc<RefCell<S>>,
     orphan_blocks: OrphanBlocksPool,
     // TODO: We have to add these fields in a proper way.
     current_block_height: BlockHeight,
@@ -26,7 +26,7 @@ impl<S: BlockchainStorage> Consensus<S> {
     pub fn new(chain_config: ChainConfig, blockchain_storage: S) -> Self {
         Self {
             chain_config,
-            blockchain_storage,
+            blockchain_storage: Rc::new(RefCell::new(blockchain_storage)),
             orphan_blocks: OrphanBlocksPool::new_default(),
             current_block_height: BlockHeight::new(0),
             failed_blocks: HashSet::new(),
@@ -38,17 +38,17 @@ impl<S: BlockchainStorage> Consensus<S> {
         const RC_FAIL: &str = "RefCounter failure";
         self.check_block(&block)?;
         let mut rc_block = Rc::new(block);
-        let block_index =
-            self.accept_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL)).map_err(|err| {
-                dbg!(&err);
-                match err {
-                    BlockError::Orphan => self
-                        .new_orphan_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL))
-                        .expect("Storage failure"),
-                    _ => (),
-                }
-                err
-            })?;
+        let mut_block = Rc::get_mut(&mut rc_block).expect(RC_FAIL);
+        let block_index = self.accept_block(mut_block).map_err(|err| {
+            dbg!(&err);
+            match err {
+                BlockError::Orphan => self
+                    .new_orphan_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL))
+                    .expect("Storage failure"),
+                _ => (),
+            }
+            err
+        })?;
         Ok(self.activate_best_chain(block_index)?)
     }
 
@@ -69,24 +69,40 @@ impl<S: BlockchainStorage> Consensus<S> {
         Ok(())
     }
 
-    fn process_storage_failure(&self, err: blockchain_storage::Error) -> BlockError {
-        match err {
-            // TODO: Add checks for DB status, if we have recoverable error then we have to retry to perform operation
-            Error::RecoverableError(_) | Error::UnrecoverableError(_) => {
-                BlockError::StorageFailure(err)
+    fn process_storage<T, F>(&self, mut func: F) -> Result<T, BlockError>
+    where
+        F: FnMut() -> Result<T, Error>,
+    {
+        use blockchain_storage::Recoverable;
+
+        let result = func();
+        match result {
+            Ok(result) => Ok(result),
+            // TODO: Most likely, this part should be on storage side. Consensus have to process \
+            //  EntityNotFound, StorageFailure, and probably some other errors. At the moment, \
+            //  this part is not done!
+            Err(Error::Storage(Recoverable::TransactionFailed))
+            | Err(Error::Storage(Recoverable::TemporarilyUnavailable))
+            | Err(Error::Storage(Recoverable::Unknown)) => {
+                let second_attempt = func();
+                if second_attempt.is_err() {
+                    return Err(BlockError::StorageFailure(Error::Storage(
+                        Recoverable::TransactionFailed,
+                    )));
+                }
+                Ok(second_attempt.map_err(|_| BlockError::Unknown)?)
             }
         }
     }
 
-    fn get_ancestor(&mut self, block_id: Id<Block>) -> Result<BlockIndex, BlockError> {
-        let block = self.get_block(block_id)?;
-        dbg!(&block);
+    /// Allow to read from storeage the previous block and return itself BlockIndex
+    fn get_ancestor(&mut self, block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
+        let block = dbg!(self.get_block(block_id.clone()))?;
         match block {
             Some(block) => {
                 let prev_block = block.get_prev_block_id();
-                Ok(BlockIndex::new(
-                    &self.get_block(prev_block)?.ok_or(BlockError::NotFound)?,
-                ))
+                let result = self.get_block(prev_block);
+                Ok(BlockIndex::new(&result?.ok_or(BlockError::NotFound)?))
             }
             None => Err(BlockError::NotFound),
         }
@@ -97,24 +113,26 @@ impl<S: BlockchainStorage> Consensus<S> {
     }
 
     fn get_block(&mut self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
-        Ok(self
-            .blockchain_storage
-            .get_block(id)
-            .map_err(|err| self.process_storage_failure(err))?)
+        let storage = self.blockchain_storage.borrow_mut();
+        self.process_storage(|| storage.get_block(id.clone()))
     }
 
     fn set_best_block_id(&mut self, id: &Id<Block>) -> Result<(), BlockError> {
-        Ok(
-            <S as BlockchainStorage>::set_best_block_id(&mut self.blockchain_storage, id)
-                .map_err(|err| self.process_storage_failure(err))?,
-        )
+        let mut storage = self.blockchain_storage.borrow_mut();
+        self.process_storage(|| storage.set_best_block_id(&id.clone()))
     }
 
     fn get_best_block_id(&mut self) -> Result<Option<Id<Block>>, BlockError> {
-        Ok(
-            <S as BlockchainStorage>::get_best_block_id(&mut self.blockchain_storage)
-                .map_err(|err| self.process_storage_failure(err))?,
-        )
+        let storage = self.blockchain_storage.borrow_mut();
+        self.process_storage(|| storage.get_best_block_id())
+    }
+
+    fn index_from_opt_id(&mut self, id_block: Id<Block>) -> Result<BlockIndex, BlockError> {
+        let storage = self.blockchain_storage.borrow_mut();
+        match self.process_storage(|| storage.get_block(id_block.clone()))? {
+            Some(blk) => Ok(BlockIndex::new(&blk)),
+            None => Err(BlockError::Unknown),
+        }
     }
 
     // Disconnect active blocks which are no longer in the best chain.
@@ -142,26 +160,32 @@ impl<S: BlockchainStorage> Consensus<S> {
         tip: BlockIndex,
         new_block: BlockIndex,
     ) -> Result<BlockIndex, BlockError> {
-        let mut prev_block_on_tip_chain = self.get_ancestor(tip.get_id())?;
-        let mut prev_block_on_new_chain = self.get_ancestor(new_block.get_id())?;
+        // Initialize two BtreeSet, one for the main chain and another for the new chain
+        let mut mainchain = BTreeSet::new();
+        let mut mainchain_ancestor = tip.hash_block;
+        mainchain.insert(mainchain_ancestor);
 
+        let mut newchain = BTreeSet::new();
+        let mut newchain_ancestor = new_block.hash_block;
+        newchain.insert(newchain_ancestor);
+
+        // In every loop, we are checking if there are intersection hashes, if not, then load the previous blocks in chains
         loop {
-            if prev_block_on_tip_chain == prev_block_on_new_chain {
-                return Ok(prev_block_on_tip_chain);
+            let intersection: Vec<_> = mainchain.intersection(&newchain).cloned().collect();
+            if !intersection.is_empty() {
+                // The common ancestor found
+                return Ok(BlockIndex::new(
+                    &self
+                        .get_block(Id::new(intersection.get(0).ok_or(BlockError::NotFound)?))?
+                        .ok_or(BlockError::NotFound)?,
+                ));
             }
-            prev_block_on_tip_chain = self.get_ancestor(prev_block_on_tip_chain.get_id())?;
-            prev_block_on_new_chain = self.get_ancestor(prev_block_on_new_chain.get_id())?;
-        }
-    }
+            // Load next blocks from chains
+            mainchain_ancestor = self.get_ancestor(&Id::new(&mainchain_ancestor))?.hash_block;
+            mainchain.insert(mainchain_ancestor);
 
-    fn index_from_opt_id(&mut self, id_block: Id<Block>) -> Result<BlockIndex, BlockError> {
-        let block = self
-            .blockchain_storage
-            .get_block(id_block)
-            .map_err(|err| self.process_storage_failure(err))?;
-        match block {
-            Some(blk) => Ok(BlockIndex::new(&blk)),
-            None => Err(BlockError::Unknown),
+            newchain_ancestor = self.get_ancestor(&Id::new(&newchain_ancestor))?.hash_block;
+            newchain.insert(newchain_ancestor);
         }
     }
 
@@ -170,17 +194,14 @@ impl<S: BlockchainStorage> Consensus<S> {
         &mut self,
         mut block_index: BlockIndex,
     ) -> Result<Option<Tip>, BlockError> {
-        println!("ENTER activate_best_chain");
-
         // TODO: We have to decide how we can generate `chain_trust`, at the moment it is wrong
         block_index.chain_trust = self.current_block_height.into();
         let best_block = self.get_best_block_id()?;
         println!("BEST BLOCK: {:?}", &best_block);
         if let Some(best_block) = best_block {
             let starting_tip = self.index_from_opt_id(best_block)?;
-            println!("sadasdasdasdasd");
-
             if self.genesis_block_index() == starting_tip {
+                println!("CONNECT THE FIRST BLOCK");
                 self.connect_blocks(vec![block_index]);
             } else {
                 let ancestor = self.get_common_ancestor(starting_tip, block_index)?;
@@ -195,17 +216,14 @@ impl<S: BlockchainStorage> Consensus<S> {
 
         // Chain trust most be higher
         self.current_block_height.increment();
-        println!("LEAVE activate_best_chain");
         Ok(None)
     }
 
     #[allow(dead_code)]
     fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         let blk_index = self.check_block_index(&BlockIndex::new(block))?;
-
-        <S as BlockchainStorage>::add_block(&mut self.blockchain_storage, block)
-            .map_err(|err| self.process_storage_failure(err))?;
-
+        let mut storage = self.blockchain_storage.borrow_mut();
+        self.process_storage(|| storage.add_block(block))?;
         Ok(blk_index)
     }
 
@@ -217,24 +235,8 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
         // Get prev block index
         if !blk_index.is_genesis(&self.chain_config) {
-            let _prev_blk_index = self
-                .get_ancestor(blk_index.get_prev_block_id())
-                .map_err(|_| BlockError::Orphan)?;
-
-            // TODO: Recheck this part
-            // match prev_blk_index.status {
-            //     BlockStatus::Valid => {
-            //         for failed_block in ref mut self.failed_blocks {
-            //             if &self.get_ancestor(prev_blk_index.get_id())? == failed_block {
-            //                 let mut invalid_walk = prev_blk_index.clone();
-            //                 while &invalid_walk != failed_block {
-            //                     invalid_walk.status = BlockStatus::NoLongerOnMainChain;
-            //                 }
-            //             }
-            //         }
-            //     }
-            //     _ => return Err(BlockError::PrevBlockInvalid),
-            // }
+            let _prev_blk_index =
+                self.get_block(blk_index.get_prev_block_id())?.ok_or(BlockError::Orphan)?;
         }
 
         // TODO: Will be expanded
@@ -289,7 +291,8 @@ impl<S: BlockchainStorage> Consensus<S> {
     }
 
     #[allow(dead_code)]
-    fn check_pos(&self, _block: &Block) -> Result<(), BlockError> {
+    fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
+        block.get_consensus_data
         // TODO: We have to decide how to check it
         Ok(())
     }
@@ -305,7 +308,7 @@ impl<S: BlockchainStorage> Consensus<S> {
     #[allow(dead_code)]
     fn check_block(&mut self, block: &Block) -> Result<(), BlockError> {
         self.check_block_header(block)?;
-        self.check_pos(block)?;
+        self.check_consensus(block)?;
         self.check_transactions(block)?;
         // Will have added some checks
         Ok(())
@@ -320,7 +323,20 @@ mod tests {
     use common::chain::block::Block;
     use common::chain::config::create_mainnet;
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
+    use common::primitives::consensus_data::ConsensusData;
     use common::primitives::{Amount, Id, H256};
+
+    #[test]
+    fn test_storage() {
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage);
+        let result = consensus.process_block(config.genesis_block().clone());
+        println!("hash: {:?}", config.genesis_block().get_id());
+        assert!(result.is_ok());
+        let result = consensus.get_block(config.genesis_block().get_id());
+        assert!(result.unwrap().is_some());
+    }
 
     fn produce_block(config: &ChainConfig, id_prev_block: Id<Block>) -> Block {
         use rand::prelude::*;
@@ -337,8 +353,13 @@ mod tests {
         let tx = Transaction::new(0, vec![input], vec![output], 0)
             .expect("Failed to create coinbase transaction");
 
-        Block::new(vec![tx], id_prev_block, time::get() as u32, Vec::new())
-            .expect("Error creating block")
+        Block::new(
+            vec![tx],
+            id_prev_block,
+            time::get() as u32,
+            ConsensusData::None,
+        )
+        .expect("Error creating block")
     }
 
     #[test]
@@ -390,7 +411,8 @@ mod tests {
 
         // process the genesis block
 
-        let result = dbg!(consensus.process_block(config.genesis_block().clone()));
+        let result = consensus.process_block(config.genesis_block().clone());
+        println!("hash: {:?}", config.genesis_block().get_id());
         assert!(result.is_ok());
         assert_eq!(
             consensus.get_best_block_id().expect("Best block didn't found"),
@@ -399,9 +421,11 @@ mod tests {
 
         // Process the second block
         let new_block = produce_block(&config, config.genesis_block().get_id());
-        dbg!(new_block.get_id());
         let new_id = Some(new_block.get_id());
-        assert!(dbg!(consensus.process_block(new_block)).is_ok());
+
+        println!("hash: {:?}", new_block.get_prev_block_id());
+        println!("hash: {:?}", new_block.get_id());
+        assert!(consensus.process_block(new_block).is_ok());
         assert_eq!(
             consensus.get_best_block_id().expect("Best block didn't found"),
             new_id

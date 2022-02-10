@@ -3,7 +3,7 @@
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
-use std::fmt;
+pub use storage::error::Recoverable;
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
@@ -21,13 +21,6 @@ pub enum Error {
 impl From<storage::Error> for Error {
     fn from(e: storage::Error) -> Self {
         Error::Storage(e.recoverable())
-    }
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO: We have to update it for error messages
-        write!(f, "{:?}", self)
     }
 }
 

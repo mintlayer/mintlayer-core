@@ -3,7 +3,7 @@ use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::{id, Id, Idable, H256};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
-#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
     pub(super) hash_prev_block: Id<BlockV1>,
     pub(super) tx_merkle_root: H256,
@@ -12,7 +12,7 @@ pub struct BlockHeader {
     pub(super) consensus_data: ConsensusData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
     pub(super) transactions: Vec<Transaction>,
@@ -36,6 +36,10 @@ impl BlockV1 {
 
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         self.header.consensus_data = consensus_data;
+    }
+
+    pub fn get_consensus_data(&self) -> ConsensusData {
+        self.header.consensus_data.clone()
     }
 
     pub fn get_block_time(&self) -> u32 {
