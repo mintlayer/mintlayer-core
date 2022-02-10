@@ -40,6 +40,7 @@ pub enum P2pError {
     Libp2pError(Libp2pError),
     Unknown(String),
     ChannelClosed,
+    NoPeers,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;

@@ -172,7 +172,11 @@ impl Backend {
                 })?;
                 self.event_tx
                     .send(common::Event::ConnectionAccepted {
-                        socket: net::libp2p::Libp2pSocket { addr, stream },
+                        socket: Box::new(net::libp2p::Libp2pSocket {
+                            id: peer_id,
+                            addr,
+                            stream,
+                        }),
                     })
                     .await
                     .map_err(|_| P2pError::ChannelClosed)
