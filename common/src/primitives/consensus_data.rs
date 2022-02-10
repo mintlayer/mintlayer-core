@@ -8,7 +8,6 @@ pub enum ConsensusData {
     #[codec(index = 1)]
     PoW(PoWData),
 }
-
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoWData {
     bits: Compact,
