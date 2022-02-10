@@ -24,7 +24,10 @@ use p2p::{
     },
     peer::*,
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+};
 use tokio::net::{TcpListener, TcpStream};
 
 pub async fn get_tcp_socket() -> TcpStream {
@@ -51,6 +54,10 @@ where
     format!("{}{}", addr, port).parse().unwrap()
 }
 
+pub fn get_mock_id() -> <MockService as NetworkService>::PeerId {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
+}
+
 // create two mock peers that are connected to each other
 pub async fn create_two_mock_peers(
     config: Arc<ChainConfig>,
@@ -62,17 +69,25 @@ pub async fn create_two_mock_peers(
     let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
     let remote_res: Event<MockService> = remote_res.unwrap();
     let remote_res = match remote_res {
-        Event::IncomingConnection(remote_res) => remote_res,
+        Event::IncomingConnection(_, socket) => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();
 
-    let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+    let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
 
+    // spawn dummy task that listens to the peer RX channel and
+    // acts as though a P2P object was listening to events from the peer
+    tokio::spawn(async move {
+        loop {
+            let _ = peer_rx.recv().await;
+        }
+    });
+
     let local = Peer::<MockService>::new(
-        1,
+        addr,
         PeerRole::Outbound,
         config.clone(),
         remote_res,
@@ -81,7 +96,7 @@ pub async fn create_two_mock_peers(
     );
 
     let remote = Peer::<MockService>::new(
-        2,
+        local_res.local_addr().unwrap(),
         PeerRole::Inbound,
         config.clone(),
         MockSocket::new(local_res),

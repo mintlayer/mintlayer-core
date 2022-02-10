@@ -2,7 +2,7 @@ use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
-use crate::chain::UpgradeVersion;
+use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
@@ -59,6 +59,10 @@ impl ChainConfig {
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
     }
+
+    pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
+        PoWChainConfig::new(self.chain_type)
+    }
 }
 
 const MAINNET_ADDRESS_PREFIX: &str = "mlt";
@@ -102,6 +106,7 @@ pub fn create_mainnet() -> ChainConfig {
     }
 }
 
+#[cfg(test)]
 mod tests {
 
     #[test]

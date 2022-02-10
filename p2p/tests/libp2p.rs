@@ -15,12 +15,14 @@
 //
 // Author(s): A. Altonen
 #![cfg(not(loom))]
+#![allow(unused)]
 extern crate test_utils;
 
 use common::{chain::config, sync::Arc};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
     net::{
+        self,
         libp2p::{Libp2pService, Libp2pStrategy},
         Event, NetworkService,
     },
@@ -45,14 +47,19 @@ async fn test_libp2p_peer_discovery() {
         let serv_res: Event<Libp2pService> = serv.poll_next().await.unwrap();
         match serv_res {
             Event::PeerDiscovered(peers) => {
-                for addr in peers.iter() {
-                    let components = addr.iter().collect::<Vec<Protocol>>();
+                assert_eq!(peers.len(), 1);
 
-                    assert_eq!(components.len(), 3);
-                    assert!(matches!(components[0], Protocol::Ip4(_) | Protocol::Ip6(_)));
-                    assert!(matches!(components[1], Protocol::Tcp(_)));
-                    assert!(matches!(components[2], Protocol::P2p(_)));
-                }
+                let addrs = &peers.get(0).unwrap();
+
+                // libp2p may have discovered an ipv4 address
+                // but there must be at least one ipv6 address available
+                assert_eq!(addrs.ip6.len(), 1);
+
+                let mut addr = addrs.ip6[0].iter();
+                assert!(matches!(addr.next(), Some(Protocol::Ip6(_))));
+                assert!(matches!(addr.next(), Some(Protocol::Tcp(_))));
+                assert!(matches!(addr.next(), Some(Protocol::P2p(_))));
+
                 return;
             }
             e => panic!("unexpected event: {:?}", e),

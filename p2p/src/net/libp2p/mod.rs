@@ -17,10 +17,11 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{Event, GossipSubTopic, NetworkService, SocketService},
+    net::{self, Event, GossipSubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use futures::prelude::*;
+use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
     identity,
@@ -34,6 +35,7 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use parity_scale_codec::{Decode, Encode};
+use std::sync::Arc;
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -70,6 +72,9 @@ pub struct Libp2pSocket {
     /// Multiaddress of the remote peer
     addr: Multiaddr,
 
+    /// Unique ID of the peer
+    id: PeerId,
+
     /// Stream handle for the remote peer
     stream: StreamHandle<NegotiatedSubstream>,
 }
@@ -101,11 +106,58 @@ fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multia
     }
 }
 
+/// Get the network layer protocol from `addr`
+fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<Protocol> {
+    addr.iter().next()
+}
+
+impl<T> FromIterator<(PeerId, Multiaddr)> for net::AddrInfo<T>
+where
+    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+{
+    fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
+        let mut entry = net::AddrInfo {
+            id: PeerId::random(),
+            ip4: Vec::new(),
+            ip6: Vec::new(),
+        };
+
+        iter.into_iter().for_each(|(id, addr)| {
+            entry.id = id;
+            match get_addr_from_multiaddr(&addr) {
+                Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(addr)),
+                Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(addr)),
+                _ => panic!("parse_discovered_addr() failed!"),
+            }
+        });
+
+        entry
+    }
+}
+
+/// Parse all discovered addresses and group them by PeerId
+fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+where
+    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+{
+    peers.sort_by(|a, b| a.0.cmp(&b.0));
+    peers
+        .into_iter()
+        .map(|(id, addr)| (id, parse_discovered_addr(id, addr)))
+        .filter(|(_id, addr)| addr.is_some())
+        .map(|(id, addr)| (id, addr.unwrap()))
+        .group_by(|info| info.0)
+        .into_iter()
+        .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))
+        .collect::<Vec<net::AddrInfo<T>>>()
+}
+
 #[async_trait]
 impl NetworkService for Libp2pService {
     type Address = Multiaddr;
     type Socket = Libp2pSocket;
     type Strategy = Libp2pStrategy;
+    type PeerId = PeerId;
 
     async fn new(
         addr: Self::Address,
@@ -165,7 +217,10 @@ impl NetworkService for Libp2pService {
         })
     }
 
-    async fn connect(&mut self, addr: Self::Address) -> error::Result<Self::Socket> {
+    async fn connect(
+        &mut self,
+        addr: Self::Address,
+    ) -> error::Result<(Self::PeerId, Self::Socket)> {
         let peer_id = match addr.iter().last() {
             Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
                 P2pError::Libp2pError(Libp2pError::DialError(
@@ -208,27 +263,28 @@ impl NetworkService for Libp2pService {
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        Ok(Libp2pSocket { addr, stream })
+        Ok((
+            peer_id,
+            Libp2pSocket {
+                id: peer_id,
+                addr,
+                stream,
+            },
+        ))
     }
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
-        T: NetworkService<Socket = Libp2pSocket, Address = Multiaddr>,
+        T: NetworkService<Socket = Libp2pSocket, Address = Multiaddr, PeerId = PeerId>,
     {
         match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            common::Event::ConnectionAccepted { socket } => Ok(Event::IncomingConnection(socket)),
-            common::Event::PeerDiscovered { peers } => Ok(Event::PeerDiscovered(
-                peers
-                    .iter()
-                    .filter_map(|(id, addr)| parse_discovered_addr(*id, addr.clone()))
-                    .collect::<_>(),
-            )),
-            common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(
-                peers
-                    .iter()
-                    .filter_map(|(id, addr)| parse_discovered_addr(*id, addr.clone()))
-                    .collect::<_>(),
-            )),
+            common::Event::ConnectionAccepted { socket } => {
+                Ok(Event::IncomingConnection(socket.id, *socket))
+            }
+            common::Event::PeerDiscovered { peers } => {
+                Ok(Event::PeerDiscovered(parse_peers(peers)))
+            }
+            common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(parse_peers(peers))),
         }
     }
 
@@ -378,10 +434,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         // try to send data that implements `Encode + Decode`
         // and verify that it was received correctly
@@ -421,10 +477,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         let tx = Transaction {
             hash: u64::MAX,
@@ -456,10 +512,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         let tx = Transaction {
             hash: u64::MAX,
@@ -493,10 +549,10 @@ mod tests {
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(res1) => res1,
+            net::Event::IncomingConnection(_, socket) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
-        let mut socket2 = res2.unwrap();
+        let mut socket2 = res2.unwrap().1;
 
         // send a message size of 4GB to remote
         let msg_size = u32::MAX.encode();
@@ -566,6 +622,100 @@ mod tests {
         assert_eq!(
             parse_discovered_addr(id, addr.clone()),
             Some(addr.with(Protocol::P2p(id.into())))
+        );
+    }
+
+    impl PartialEq for Libp2pService {
+        fn eq(&self, other: &Self) -> bool {
+            self.addr == other.addr
+        }
+    }
+
+    // verify that vector of address (that all belong to one peer) parse into one `net::Peer` entry
+    #[test]
+    fn test_parse_peers_valid_1_peer() {
+        let id: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+        let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
+        let addrs = vec![(id, ip4.clone()), (id, ip6.clone())];
+
+        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        assert_eq!(
+            parsed,
+            vec![net::AddrInfo {
+                id,
+                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id.into())))],
+                ip6: vec![Arc::new(ip6.with(Protocol::P2p(id.into())))],
+            }]
+        );
+    }
+
+    // discovery 5 different addresses, ipv4 and ipv6 for both peer and an additional
+    // dns address for peer
+    //
+    // verify that `parse_peers` returns two peers and both only have ipv4 and ipv6 addresses
+    #[test]
+    fn test_parse_peers_valid_2_peers() {
+        let id_1: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4_1: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+        let ip6_1: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
+
+        let id_2: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let ip4_2: Multiaddr = "/ip4/127.0.0.1/tcp/8080".parse().unwrap();
+        let ip6_2: Multiaddr = "/ip6/::1/tcp/8081".parse().unwrap();
+        let dns: Multiaddr = "/dns4/foo.com/tcp/80/http".parse().unwrap();
+
+        let addrs = vec![
+            (id_1, ip4_1.clone()),
+            (id_2, ip4_2.clone()),
+            (id_2, ip6_2.clone()),
+            (id_1, ip6_1.clone()),
+            (id_2, dns),
+        ];
+
+        let mut parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        parsed.sort_by(|a, b| a.id.cmp(&b.id));
+
+        assert_eq!(
+            parsed,
+            vec![
+                net::AddrInfo {
+                    id: id_2,
+                    ip4: vec![Arc::new(ip4_2.with(Protocol::P2p(id_2.into())))],
+                    ip6: vec![Arc::new(ip6_2.with(Protocol::P2p(id_2.into())))],
+                },
+                net::AddrInfo {
+                    id: id_1,
+                    ip4: vec![Arc::new(ip4_1.with(Protocol::P2p(id_1.into())))],
+                    ip6: vec![Arc::new(ip6_1.with(Protocol::P2p(id_1.into())))],
+                },
+            ]
+        );
+    }
+
+    // find 3 peers but only one of the peers have an accepted address available so verify
+    // that `parse_peers()` returns only that peer
+    #[test]
+    fn test_parse_peers_valid_3_peers_1_valid() {
+        let id_1: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
+
+        let id_2: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let dns: Multiaddr = "/dns4/foo.com/tcp/80/http".parse().unwrap();
+
+        let id_3: PeerId = "12D3KooWGK4RzvNeioS9aXdzmYXU3mgDrRPjQd8SVyXCkHNxLbWN".parse().unwrap();
+        let quic: Multiaddr = "/ip4/127.0.0.1/tcp/9090/quic".parse().unwrap();
+
+        let addrs = vec![(id_1, ip4.clone()), (id_2, dns), (id_3, quic)];
+        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+
+        assert_eq!(
+            parsed,
+            vec![net::AddrInfo {
+                id: id_1,
+                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id_1.into())))],
+                ip6: vec![],
+            }]
         );
     }
 }

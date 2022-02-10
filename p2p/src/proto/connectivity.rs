@@ -311,7 +311,7 @@ mod tests {
         let (_, rx) = tokio::sync::mpsc::channel(1);
 
         Peer::<MockService>::new(
-            1,
+            test_utils::get_mock_id(),
             PeerRole::Inbound,
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),

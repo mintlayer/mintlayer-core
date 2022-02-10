@@ -26,7 +26,7 @@ use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
 use std::{sync::Arc, time::Duration};
 
-pub type PeerId = u64;
+// pub type PeerId = u64;
 pub type TaskId = u64;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -112,7 +112,7 @@ where
     NetworkingBackend: NetworkService,
 {
     /// Unique ID of the peer
-    id: PeerId,
+    pub id: NetworkingBackend::PeerId,
 
     /// Inbound/outbound
     pub role: PeerRole,
@@ -121,7 +121,7 @@ where
     pub state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
-    mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
+    pub mgr_tx: tokio::sync::mpsc::Sender<PeerEvent<NetworkingBackend>>,
 
     /// Channel for reading events from the `NetworkManager`
     mgr_rx: tokio::sync::mpsc::Receiver<Event>,
@@ -151,11 +151,11 @@ where
     /// `mgr_tx` - channel for sending messages to P2P
     /// `mgr_rx` - channel fro receiving messages from P2P
     pub fn new(
-        id: PeerId,
+        id: NetworkingBackend::PeerId,
         role: PeerRole,
         config: Arc<ChainConfig>,
         socket: NetworkingBackend::Socket,
-        mgr_tx: tokio::sync::mpsc::Sender<PeerEvent>,
+        mgr_tx: tokio::sync::mpsc::Sender<PeerEvent<NetworkingBackend>>,
         mgr_rx: tokio::sync::mpsc::Receiver<Event>,
     ) -> Self {
         let state = match role {
@@ -339,7 +339,7 @@ mod tests {
         let (_, rx) = tokio::sync::mpsc::channel(1);
 
         Peer::<MockService>::new(
-            1,
+            test_utils::get_mock_id(),
             PeerRole::Inbound,
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),
