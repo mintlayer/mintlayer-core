@@ -1,32 +1,53 @@
-use crate::pow::temp::BlockIndex;
-use common::chain::block::Block;
-use common::primitives::BlockHeight;
+use common::chain::PoWChainConfig;
+use common::Uint256;
 
-mod config;
-mod constants;
 mod helpers;
 mod temp;
 pub mod work;
 
-pub use config::Config;
-
 pub enum Error {
     BlockToMineError(String),
     ConversionError(String),
+    OutofBounds(String),
 }
 
-impl Config {
-    pub fn start(
-        &self,
-        mut block: Block,
-        prev_block_index: &BlockIndex,
-        height: BlockHeight,
-        max_nonce: u128,
-    ) -> Result<Block, Error> {
-        let bits = self.check_for_work_required(prev_block_index, height)?;
+pub struct PoW(PoWChainConfig);
 
-        work::mine(&mut block, max_nonce, bits)?;
+impl PoW {
+    pub fn difficulty_limit(&self) -> Uint256 {
+        self.0.limit()
+    }
 
-        Ok(block)
+    pub fn no_retargeting(&self) -> bool {
+        self.0.no_retargeting()
+    }
+
+    pub fn allow_min_difficulty_blocks(&self) -> bool {
+        self.0.allow_min_difficulty_blocks()
+    }
+
+    pub fn target_spacing_in_secs(&self) -> u64 {
+        self.0.target_spacing().as_secs()
+    }
+
+    pub fn max_retarget_factor(&self) -> u64 {
+        self.0.max_retarget_factor()
+    }
+
+    pub fn target_timespan_in_secs(&self) -> u64 {
+        self.0.target_timespan().as_secs()
+    }
+
+    pub fn max_target_timespan_in_secs(&self) -> u64 {
+        self.target_timespan_in_secs() * self.max_retarget_factor()
+    }
+
+    pub fn min_target_timespan_in_secs(&self) -> u64 {
+        self.target_timespan_in_secs() / self.max_retarget_factor()
+    }
+
+    pub fn difficulty_adjustment_interval(&self) -> u64 {
+        // or a total of 2016 blocks
+        self.target_timespan_in_secs() / self.target_spacing_in_secs()
     }
 }

@@ -5,7 +5,7 @@
 mod orphan_blocks;
 mod pow;
 
-pub use pow::{work::check_proof_of_work, Config as PoWConfig, Error as PoWError};
+pub use pow::{work::check_proof_of_work, Error as PoWError};
 
 // use orphan_blocks::OrphanBlocks;
 

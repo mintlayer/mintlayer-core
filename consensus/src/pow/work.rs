@@ -1,15 +1,13 @@
 #![allow(dead_code)]
 
-use crate::pow::config::Config;
 use crate::pow::helpers::{
-    actual_timespan, check_difficulty, retarget, retarget_block_time, testnet,
+    calculate_new_target, check_difficulty, is_for_retarget, retarget_block_time, special_rules,
 };
 use crate::pow::temp::BlockIndex;
-use crate::pow::Error;
+use crate::pow::{Error, PoW};
 use common::chain::block::Block;
 use common::primitives::consensus_data::{ConsensusData, PoWData};
-use common::primitives::Idable;
-use common::primitives::{BlockHeight, Compact};
+use common::primitives::{Compact, Idable};
 use common::Uint256;
 
 pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
@@ -20,23 +18,55 @@ pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
     }
 }
 
-impl Config {
-    pub fn check_for_work_required(
+impl PoW {
+    /// The difference (in block time) between the current block and 2016th block before the current one.
+    /// This difference should be inclusive between (2 weeks/4) and (2 weeks*4).
+    /// See Bitcoin's Protocol rules on [Difficulty change](https://en.bitcoin.it/wiki/Protocol_rules)
+    pub fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
+        let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
+
+        // 2 weeks / 4
+        let lower_bound = self.min_target_timespan_in_secs();
+        // 2 wees * 4
+        let upper_bound = self.max_target_timespan_in_secs();
+
+        if actual_timespan < lower_bound {
+            lower_bound
+        } else if actual_timespan > upper_bound {
+            upper_bound
+        } else {
+            actual_timespan
+        }
+    }
+
+    pub fn get_work_required(
         &self,
         prev_block_index: &BlockIndex,
-        _height: BlockHeight,
+        new_block_time: u32,
     ) -> Result<Compact, Error> {
         //TODO: check prev_block_index exists
+        let prev_block_bits = prev_block_index.data.bits();
 
-        // TODO: only for testnet
-        // if check_difficulty_interval(height) {
-        //     if let ChainType::Testnet = chain_type {
-        //         return Ok(self.next_work_required_for_testnet(time, prev_block));
-        //     }
-        // }
+        if self.no_retargeting() {
+            return Ok(prev_block_bits);
+        }
 
-        let retarget_block_time = retarget_block_time(prev_block_index);
-        self.next_work_required(retarget_block_time, prev_block_index)
+        let current_height = prev_block_index
+            .height
+            .checked_add(1)
+            .ok_or_else(|| Error::OutofBounds("max block height has been reached.".to_string()))?;
+        let adjustment_interval = self.difficulty_adjustment_interval();
+
+        if is_for_retarget(adjustment_interval, current_height) {
+            let retarget_block_time = retarget_block_time(adjustment_interval, prev_block_index);
+            self.next_work_required(retarget_block_time, prev_block_index)
+        }
+        // special difficulty rules
+        else if self.allow_min_difficulty_blocks() {
+            Ok(self.next_work_required_for_min_difficulty(new_block_time, prev_block_index))
+        } else {
+            Ok(prev_block_bits)
+        }
     }
 
     /// retargeting proof of work
@@ -45,43 +75,35 @@ impl Config {
         retarget_block_time: u32,
         prev_block_index: &BlockIndex,
     ) -> Result<Compact, Error> {
-        let pow_limit = self.limit;
-        let prev_block_bits = prev_block_index.data.bits();
-
-        if self.no_retargeting {
-            return Ok(prev_block_bits);
-        }
-
         // limit adjustment step
-        let actual_timespan_of_last_2016_blocks =
-            actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
+        let actual_timespan_of_last_interval =
+            self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
 
-        // retarget
-        retarget(
-            actual_timespan_of_last_2016_blocks,
-            prev_block_bits,
-            pow_limit,
+        calculate_new_target(
+            actual_timespan_of_last_interval,
+            self.target_timespan_in_secs(),
+            prev_block_index.data.bits(),
+            self.difficulty_limit(),
         )
     }
 
-    fn next_work_required_for_testnet(&self, time: u32, prev_block_index: &BlockIndex) -> Compact {
-        let pow_limit = Compact::from(self.limit);
-
-        if self.allow_min_difficulty_blocks {
-            // If the new block's timestamp is more than 2 * 10 minutes
-            // then allow mining of a min-difficulty block.
-            return if testnet::allow_mining_min_difficulty_blocks(
-                time,
-                prev_block_index.get_block_time(),
-            ) {
-                pow_limit
-            } else {
-                // Return the last work_required_testnet non-special-min-difficulty-rules-block
-                testnet::last_non_special_min_difficulty(prev_block_index, pow_limit)
-            };
+    fn next_work_required_for_min_difficulty(
+        &self,
+        new_block_time: u32,
+        prev_block_index: &BlockIndex,
+    ) -> Compact {
+        // If the new block's timestamp is more than 2 * 10 minutes
+        // then allow mining of a min-difficulty block.
+        if special_rules::is_restart_difficulty(
+            self.target_spacing_in_secs(),
+            new_block_time,
+            prev_block_index.get_block_time(),
+        ) {
+            return Compact::from(self.difficulty_limit());
         }
 
-        prev_block_index.data.bits()
+        // Return the last non-special-min-difficulty-rules-block
+        special_rules::last_non_special_min_difficulty(prev_block_index)
     }
 }
 

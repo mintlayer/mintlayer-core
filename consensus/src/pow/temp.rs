@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables)]
 // Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
 
 use common::chain::block::Block;
@@ -19,7 +19,7 @@ impl BlockIndex {
         todo!()
     }
 
-    pub fn get_prev(&self) -> Option<Id<Block>> {
+    pub fn prev(&self) -> Option<Id<Block>> {
         todo!()
     }
 }
