@@ -33,6 +33,7 @@ pub trait Mempool<C> {
 
 pub trait ChainState {
     fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
+    fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -183,7 +184,10 @@ pub enum TxValidationError {
     #[error("DuplicateInputs")]
     DuplicateInputs,
     #[error("OutPointNotFound {outpoint:?}")]
-    OutPointNotFound { outpoint: OutPoint, tx: Transaction },
+    OutPointNotFound {
+        outpoint: OutPoint,
+        tx_id: Id<Transaction>,
+    },
     #[error("ExceedsMaxBlockSize")]
     ExceedsMaxBlockSize,
     #[error("TransactionAlreadyInMempool")]
@@ -211,7 +215,7 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
                 |outpoint| {
                     Err(TxValidationError::OutPointNotFound {
                         outpoint: outpoint.clone(),
-                        tx: tx.clone(),
+                        tx_id: tx.get_id(),
                     })
                 },
             )
@@ -450,6 +454,20 @@ mod tests {
     impl ChainState for ChainStateMock {
         fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
             self.outpoints.iter().any(|value| *value == *outpoint)
+        }
+
+        fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error> {
+            self.txs
+                .get(&outpoint.get_tx_id().get_tx_id().expect("Not coinbase").get())
+                .ok_or(anyhow::anyhow!(
+                    "tx for outpoint sought in chain state, not found"
+                ))
+                .and_then(|tx| {
+                    tx.get_outputs()
+                        .get(outpoint.get_output_index() as usize)
+                        .ok_or(anyhow::anyhow!("outpoint index out of bounds"))
+                        .map(|output| output.get_value())
+                })
         }
     }
 
