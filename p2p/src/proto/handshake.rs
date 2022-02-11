@@ -22,6 +22,7 @@ use crate::{
     peer::{ListeningState, Peer, PeerState},
 };
 use common::primitives::time;
+use logging::log;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum InboundHandshakeState {
@@ -71,6 +72,12 @@ where
         match (state, msg) {
             (InboundHandshakeState::WaitInitiation, HandshakeMessage::Hello { version, .. }) => {
                 if version != *self.config.version() {
+                    log::error!(
+                        "{:?}: remote has invalid version, us {:?}, them {:?}",
+                        self.id,
+                        version,
+                        self.config.version()
+                    );
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidVersion));
                 }
 

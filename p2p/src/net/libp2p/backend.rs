@@ -27,6 +27,7 @@ use libp2p::{
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
+use logging::log;
 use std::collections::HashMap;
 use tokio::sync::{
     mpsc::{Receiver, Sender},
@@ -78,6 +79,8 @@ impl Backend {
     }
 
     pub async fn run(&mut self) -> error::Result<()> {
+        log::debug!("starting event loop");
+
         loop {
             tokio::select! {
                 event = self.swarm.next() => match event {
@@ -117,30 +120,42 @@ impl Backend {
             SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
                 StreamingEvent::StreamOpened {
                     id,
-                    peer_id: _,
+                    peer_id,
                     stream,
                 },
-            )) => self
-                .streams
-                .remove(&id)
-                .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
-                .send(Ok(stream))
-                .map_err(|_| P2pError::ChannelClosed),
+            )) => {
+                log::trace!(
+                    "stream opened with remote, id {:?}, peer id {:?}",
+                    id,
+                    peer_id
+                );
+
+                self.streams
+                    .remove(&id)
+                    .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
+                    .send(Ok(stream))
+                    .map_err(|_| P2pError::ChannelClosed)
+            }
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => match endpoint {
-                ConnectedPoint::Dialer { .. } => self
-                    .dials
-                    .remove(&peer_id)
-                    .ok_or_else(|| {
-                        P2pError::Unknown("Pending connection does not exist".to_string())
-                    })?
-                    .send(Ok(()))
-                    .map_err(|_| P2pError::ChannelClosed),
+                ConnectedPoint::Dialer { .. } => {
+                    log::trace!("connection established (dialer), peer id {:?}", peer_id);
+
+                    self.dials
+                        .remove(&peer_id)
+                        .ok_or_else(|| {
+                            P2pError::Unknown("Pending connection does not exist".to_string())
+                        })?
+                        .send(Ok(()))
+                        .map_err(|_| P2pError::ChannelClosed)
+                }
                 ConnectedPoint::Listener {
                     local_addr: _,
                     send_back_addr,
                 } => {
+                    log::trace!("connection established (listener), peer id {:?}", peer_id);
+
                     self.conns.insert(peer_id, send_back_addr);
                     Ok(())
                 }
@@ -157,8 +172,7 @@ impl Backend {
                         )))
                         .map_err(|_| P2pError::ChannelClosed)
                 } else {
-                    // TODO: use logger
-                    println!("libp2p: unhandled connection error: {:#?}", error);
+                    log::error!("unhandled connection error: {:#?}", error);
                     Ok(())
                 }
             }
@@ -167,6 +181,8 @@ impl Backend {
                     peer_id, stream, ..
                 },
             )) => {
+                log::trace!("incoming stream, peer id {:?}", peer_id);
+
                 let addr = self.conns.remove(&peer_id).ok_or_else(|| {
                     P2pError::Unknown("Pending connection does not exist".to_string())
                 })?;
@@ -182,8 +198,7 @@ impl Backend {
                     .map_err(|_| P2pError::ChannelClosed)
             }
             SwarmEvent::NewListenAddr { address, .. } => {
-                // TODO: use logger
-                println!("libp2p: new listen address: {:?}", address);
+                log::trace!("new listen address {:?}", address);
                 Ok(())
             }
             SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
@@ -203,8 +218,7 @@ impl Backend {
                 .await
             }
             _ => {
-                // TODO: use logger
-                println!("libp2p: unhandled event: {:?}", event);
+                log::warn!("unhandled event {:?}", event);
                 Ok(())
             }
         }
@@ -212,6 +226,8 @@ impl Backend {
 
     /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: common::Command) -> error::Result<()> {
+        log::debug!("handle incoming command {:?}", cmd);
+
         match cmd {
             common::Command::Listen { addr, response } => {
                 let res = self.swarm.listen_on(addr).map(|_| ()).map_err(|e| e.into());

@@ -34,6 +34,7 @@ use libp2p::{
     tcp::TcpConfig,
     Multiaddr, Transport,
 };
+use logging::log;
 use parity_scale_codec::{Decode, Encode};
 use std::sync::Arc;
 use tokio::sync::{
@@ -130,6 +131,12 @@ where
                 _ => panic!("parse_discovered_addr() failed!"),
             }
         });
+        log::trace!(
+            "id {:?}, ipv4 {:#?}, ipv6 {:#?}",
+            entry.id,
+            entry.ip4,
+            entry.ip6
+        );
 
         entry
     }
@@ -192,8 +199,11 @@ impl NetworkService for Libp2pService {
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
         let relay_mdns = strategies.iter().any(|s| s == &Libp2pStrategy::MulticastDns);
+        log::trace!("multicast dns enabled {}", relay_mdns);
 
         // run the libp2p backend in a background task
+        log::debug!("spawning libp2p backend to background");
+
         tokio::spawn(async move {
             let mut backend = backend::Backend::new(swarm, cmd_rx, event_tx, relay_mdns);
             backend.run().await
@@ -221,6 +231,8 @@ impl NetworkService for Libp2pService {
         &mut self,
         addr: Self::Address,
     ) -> error::Result<(Self::PeerId, Self::Socket)> {
+        log::trace!("try to establish outbound connection, address {:?}", addr);
+
         let peer_id = match addr.iter().last() {
             Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
                 P2pError::Libp2pError(Libp2pError::DialError(
@@ -305,6 +317,8 @@ impl SocketService for Libp2pSocket {
         let encoded = data.encode();
         let size = (encoded.len() as u32).encode();
 
+        log::trace!("try to send message, {} bytes", encoded.len());
+
         self.stream
             .write_all(&size)
             .await
@@ -330,6 +344,7 @@ impl SocketService for Libp2pSocket {
                 .map_err(|e| P2pError::DecodeFailure(e.to_string()))?,
             Err(_) => return Err(P2pError::PeerDisconnected),
         };
+        log::trace!("try to read message, {} bytes", size);
 
         if size > MESSAGE_MAX_SIZE {
             return Err(P2pError::DecodeFailure("Message is too big".to_string()));

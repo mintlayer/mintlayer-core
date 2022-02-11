@@ -21,6 +21,7 @@ use crate::{
     peer::*,
 };
 use common::primitives::time;
+use logging::log;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ConnectivityState {
@@ -72,6 +73,7 @@ where
         match state {
             ConnectivityState::PingSent { nonce, .. } => {
                 if sent_nonce == nonce {
+                    log::trace!("{:?}: pong received", self.id);
                     self.state = PeerState::Listening(ListeningState::Connectivity(
                         ConnectivityState::PongReceived,
                     ));
@@ -110,6 +112,7 @@ where
             (ListeningState::Any, ConnectivityMessage::Pong { .. }) => {
                 // Receiving a stray Pong message is invalid behaviour but closing the connection
                 // would be an overraction so just exit early (TODO: adjust peer reputation?)
+                log::warn!("{:?}: stray pong received", self.id);
                 Ok(())
             }
         }
@@ -149,6 +152,7 @@ where
                         period,
                     }));
                 }
+                log::trace!("{:?}: send ping", self.id);
 
                 let nonce: u64 = rand::random();
                 self.socket
@@ -209,6 +213,7 @@ where
             }
             ConnectivityState::PingSent { nonce, retries } => {
                 if retries >= max_retries {
+                    log::error!("{:?}: remote is unresponsive", self.id);
                     return Err(P2pError::ProtocolError(ProtocolError::Unresponsive));
                 }
 
