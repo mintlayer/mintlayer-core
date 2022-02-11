@@ -12,3 +12,4 @@ common = { path = '../common'}
 rand = "0.8.4"
 logging = { path = '../logging'}
 thiserror = "1.0.30"
+proptest = "1.0.0"

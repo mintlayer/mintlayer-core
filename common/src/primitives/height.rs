@@ -10,9 +10,15 @@ impl fmt::Display for BlockHeight {
     }
 }
 
-impl Into<u64> for BlockHeight {
-    fn into(self) -> u64 {
-        self.0
+// impl Into<u64> for BlockHeight {
+//     fn into(self) -> u64 {
+//         self.0
+//     }
+// }
+
+impl From<BlockHeight> for u64 {
+    fn from(block_height: BlockHeight) -> u64 {
+        block_height.inner()
     }
 }
 

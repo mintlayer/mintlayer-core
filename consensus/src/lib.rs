@@ -1,7 +1,7 @@
 use blockchain_storage::{BlockchainStorage, Error};
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
-use common::primitives::{time, BlockHeight, Id, Idable, H256};
+use common::primitives::{time, BlockHeight, Id, Idable};
 use std::cell::RefCell;
 use std::collections::{BTreeSet, HashSet};
 use std::rc::Rc;
@@ -39,17 +39,11 @@ impl<S: BlockchainStorage> Consensus<S> {
         self.check_block(&block)?;
         let mut rc_block = Rc::new(block);
         let mut_block = Rc::get_mut(&mut rc_block).expect(RC_FAIL);
-        let block_index = self.accept_block(mut_block).map_err(|err| {
-            dbg!(&err);
-            match err {
-                BlockError::Orphan => self
-                    .new_orphan_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL))
-                    .expect("Storage failure"),
-                _ => (),
-            }
-            err
-        })?;
-        Ok(self.activate_best_chain(block_index)?)
+        let block_index = self.accept_block(mut_block);
+        if block_index == Err(BlockError::Orphan) {
+            self.new_orphan_block(Rc::get_mut(&mut rc_block).expect(RC_FAIL))?;
+        }
+        self.activate_best_chain(block_index?)
     }
 
     /// Mark new block as an orphan
@@ -57,14 +51,12 @@ impl<S: BlockchainStorage> Consensus<S> {
     /// Err(BlockError) - StorageFailure  
     fn new_orphan_block(&mut self, block: &Block) -> Result<(), BlockError> {
         // If we have not the previous block we have to move it to OrphanBlocksPool, except if it genesis block
-        if block.get_id() != self.chain_config.genesis_block().get_id() {
-            if self.get_block(block.get_prev_block_id())?.is_none() {
-                self.orphan_blocks.add_block(block.clone()).map_err(|err| {
-                    return match err {
-                        OrphanAddError::BlockAlreadyInOrphanList(_) => BlockError::Orphan,
-                    };
-                })?;
-            }
+        if block.get_id() != self.chain_config.genesis_block().get_id()
+            && self.get_block(block.get_prev_block_id())?.is_none()
+        {
+            self.orphan_blocks.add_block(block.clone()).map_err(|err| match err {
+                OrphanAddError::BlockAlreadyInOrphanList(_) => BlockError::Orphan,
+            })?;
         }
         Ok(())
     }
@@ -153,15 +145,15 @@ impl<S: BlockchainStorage> Consensus<S> {
             return Ok(());
         }
         // Initialize disconnected chain
-        let mut current_ancestor = tip.clone();
+        let mut current_ancestor = *tip;
         current_ancestor.status = BlockStatus::NoLongerOnMainChain;
-        self.update_block_index(&tip)?;
+        self.update_block_index(tip)?;
         // Collect blocks that should be disconnected
 
         while current_ancestor.hash_block == common_ancestor.hash_block {
             current_ancestor = self.get_ancestor(&current_ancestor.get_id())?;
             current_ancestor.status = BlockStatus::NoLongerOnMainChain;
-            self.update_block_index(&tip)?;
+            self.update_block_index(tip)?;
         }
         Ok(())
     }
@@ -174,11 +166,11 @@ impl<S: BlockchainStorage> Consensus<S> {
     ) -> Result<Vec<BlockIndex>, BlockError> {
         if block_index.hash_block == common_ancestor.hash_block {
             // Nothing to do here
-            return Ok(vec![block_index.clone()]);
+            return Ok(vec![*block_index]);
         }
         // Initialize disconnected chain
         let mut result = Vec::new();
-        let mut current_ancestor = block_index.clone();
+        let mut current_ancestor = *block_index;
         current_ancestor.status = BlockStatus::Valid;
         result.push(current_ancestor);
         // Connect blocks
@@ -191,7 +183,7 @@ impl<S: BlockchainStorage> Consensus<S> {
     }
 
     // Connect mew blocks
-    fn connect_blocks(&mut self, blocks: &Vec<BlockIndex>) -> Result<(), BlockError> {
+    fn connect_blocks(&mut self, blocks: &[BlockIndex]) -> Result<(), BlockError> {
         for block_index in blocks {
             self.update_block_index(&BlockIndex {
                 status: BlockStatus::Valid,
@@ -247,23 +239,18 @@ impl<S: BlockchainStorage> Consensus<S> {
         // TODO: We have to decide how we can generate `chain_trust`, at the moment it is wrong
         block_index.chain_trust = self.current_block_height.into();
         let best_block = self.get_best_block_id()?;
-        println!("BEST BLOCK: {:?}", &best_block);
         if let Some(best_block) = best_block {
             let starting_tip = self.index_from_opt_id(best_block)?;
             if self.genesis_block_index() == starting_tip {
-                println!("CONNECT THE FIRST BLOCK");
-                self.connect_blocks(&mut vec![block_index])?;
+                self.connect_blocks(&[block_index])?;
             } else {
                 let common_ancestor = self.get_common_ancestor(&starting_tip, &block_index)?;
-                println!("COMMON ANCESTOR: {:?}", &common_ancestor.hash_block);
                 self.disconnect_blocks(&starting_tip, &common_ancestor)?;
                 let new_chain = &mut self.make_new_chain(&block_index, &common_ancestor)?;
                 self.connect_blocks(new_chain)?;
-                println!("SET UP THE NEW CHAIN HAS BEEN FINISHED");
             }
         }
         self.set_best_block_id(&block_index.get_id())?;
-
         // Chain trust most be higher
         self.current_block_height.increment();
         Ok(None)
@@ -365,42 +352,9 @@ impl<S: BlockchainStorage> Consensus<S> {
     }
 }
 
-// To make tests more transparent
-fn internal_get_common_ancestor<FUNC, HASH256>(
-    tip: H256,
-    new_block: H256,
-    get_ancestor: FUNC,
-) -> Result<H256, BlockError>
-where
-    FUNC: Fn(&Id<HASH256>) -> Result<BlockIndex, BlockError>,
-{
-    // Initialize two BtreeSet, one for the main chain and another for the new chain
-    let mut mainchain = BTreeSet::new();
-    let mut mainchain_ancestor = tip;
-    mainchain.insert(mainchain_ancestor);
-
-    let mut newchain = BTreeSet::new();
-    let mut newchain_ancestor = new_block;
-    newchain.insert(newchain_ancestor);
-
-    // In every loop, we are checking if there are intersection hashes, if not, then load the previous blocks in chains
-    loop {
-        let intersection: Vec<_> = mainchain.intersection(&newchain).cloned().collect();
-        if !intersection.is_empty() {
-            // The common ancestor found
-            return Ok(*intersection.get(0).ok_or(BlockError::NotFound)?);
-        }
-        // Load next blocks from chains
-        mainchain_ancestor = get_ancestor(&Id::new(&mainchain_ancestor))?.hash_block;
-        mainchain.insert(mainchain_ancestor);
-
-        newchain_ancestor = get_ancestor(&Id::new(&newchain_ancestor))?.hash_block;
-        newchain.insert(newchain_ancestor);
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    // TODO: Add proptest here
     use super::*;
     use blockchain_storage::Store;
     use common::address::Address;
@@ -409,18 +363,6 @@ mod tests {
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::consensus_data::ConsensusData;
     use common::primitives::{Amount, Id, H256};
-
-    #[test]
-    fn test_storage() {
-        let config = create_mainnet();
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
-        let result = consensus.process_block(config.genesis_block().clone());
-        println!("hash: {:?}", config.genesis_block().get_id());
-        assert!(result.is_ok());
-        let result = consensus.get_block(config.genesis_block().get_id());
-        assert!(result.unwrap().is_some());
-    }
 
     fn produce_block(config: &ChainConfig, id_prev_block: Id<Block>) -> Block {
         use rand::prelude::*;
@@ -448,7 +390,7 @@ mod tests {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn test_block_accept() {
+    fn test_parallel_chains() {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config.clone(), storage);
@@ -471,11 +413,6 @@ mod tests {
             new_id
         );
 
-        // Process the orphan block
-        let new_block = produce_block(&config, Id::<Block>::new(&H256::zero()));
-        dbg!(new_block.get_id());
-        assert_eq!(consensus.process_block(new_block), Err(BlockError::Orphan));
-
         // Process the parallel block and choose the better one
         let new_block = produce_block(&config, config.genesis_block().get_id());
         let new_id = Some(new_block.get_id());
@@ -488,7 +425,38 @@ mod tests {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn test_connect_chains() {
+    fn test_orphans_chains() -> Result<(), BlockError> {
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage);
+
+        // process the genesis block
+        let result = dbg!(consensus.process_block(config.genesis_block().clone()));
+        assert!(result.is_ok());
+        assert_eq!(
+            consensus.get_best_block_id()?,
+            Some(config.genesis_block().get_id())
+        );
+
+        // Process the second block
+        let new_block = produce_block(&config, config.genesis_block().get_id());
+        dbg!(new_block.get_id());
+        let new_id = Some(new_block.get_id());
+        assert!(dbg!(consensus.process_block(new_block)).is_ok());
+        assert_eq!(consensus.get_best_block_id()?, new_id);
+
+        // Process the orphan block
+        for _ in 0..255 {
+            let new_block = produce_block(&config, Id::<Block>::new(&H256::zero()));
+            dbg!(new_block.get_id());
+            assert_eq!(consensus.process_block(new_block), Err(BlockError::Orphan));
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn test_connect_straight_chains() -> Result<(), BlockError> {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config.clone(), storage);
@@ -515,14 +483,25 @@ mod tests {
             new_id
         );
 
-        // Process another block
-        let new_block = produce_block(&config, new_id.unwrap());
-        println!("\nPROCESSING BLOCK 2: {:?}", &new_block.get_id().get());
-        let new_id = Some(new_block.get_id());
-        assert!(consensus.process_block(new_block).is_ok());
-        assert_eq!(
-            consensus.get_best_block_id().expect("Best block didn't found"),
-            new_id
-        );
+        for i in 2..255 {
+            // Process another block
+            let previous_block_id = new_id.clone().unwrap();
+            let new_block = produce_block(&config, previous_block_id.clone());
+            println!("\nPROCESSING BLOCK {}: {:?}", i, &new_block.get_id().get());
+            let new_id = Some(new_block.get_id());
+            assert!(consensus.process_block(new_block).is_ok());
+            assert_eq!(consensus.get_best_block_id()?, new_id);
+            let block_id = consensus.get_best_block_id()?.unwrap();
+            assert_eq!(
+                consensus.get_block(block_id)?.unwrap().get_prev_block_id(),
+                previous_block_id
+            )
+        }
+        Ok(())
     }
+
+    // TODO: Not ready tests for this PR related to:
+    //  Fail block processing
+    //  More cases for reorg
+    //  Tests with chain trust
 }
