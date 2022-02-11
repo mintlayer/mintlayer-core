@@ -10,10 +10,19 @@ fn transaction_id_snapshots() {
 
     let outs0: Vec<TxOutput> =
         [TxOutput::new(25.into(), Destination::ScriptHash(Id::new(&hash0)))].to_vec();
-    let ins0: Vec<TxInput> = [TxInput::new(Id::new(&hash0), 5, vec![])].to_vec();
+    let ins0: Vec<TxInput> =
+        [TxInput::new(OutpointSource::Transaction(Id::new(&hash0)), 5, vec![])].to_vec();
     let ins1: Vec<TxInput> = [
-        TxInput::new(Id::new(&hash1), 3, vec![0x01, 0x05, 0x09]),
-        TxInput::new(Id::new(&hash2), 0, vec![0x91, 0x55, 0x19, 0x00]),
+        TxInput::new(
+            OutpointSource::Transaction(Id::new(&hash1)),
+            3,
+            vec![0x01, 0x05, 0x09],
+        ),
+        TxInput::new(
+            OutpointSource::Transaction(Id::new(&hash2)),
+            0,
+            vec![0x91, 0x55, 0x19, 0x00],
+        ),
     ]
     .to_vec();
 
@@ -31,25 +40,25 @@ fn transaction_id_snapshots() {
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0xf94788524c18ef1fc4b402398f7dc75a42bc6cba31465c14d3fcc1c25bd71a2e
+        0xafeecf94474aeac499b40f453762fe9fff9667b277eadaea03e66d89338921fa
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0xdfe2df919b4eab0ee3d10fff2f1f964f33c6a50c9b2e3a18fd9297088b64576e
+        0xed50231c2c10fee8b0f273471be0db24913696b83a4400068859f6befe203c78
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     expect![[r#"
-        0xd6361975b7013da6a67a449bfd2d5beddcd02ed86aabfa04fd25f8a15443f7ad
+        0xe8c2995509921f0355bd6be90edc4fb392a2a501a11cb107ecb3cdf87e2145ca
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
     expect![[r#"
-        0xab0e6bfe8878d893f153ba10846fb965373f6aa09c998ab8b61260e2c23affd5
+        0x2408a863a0ed230c12bc02e1b84ba6c3f59afa6a84fd977295e757bbf28a02b2
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 }
