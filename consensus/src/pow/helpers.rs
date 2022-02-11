@@ -1,6 +1,6 @@
 use crate::pow::temp::BlockIndex;
 use crate::pow::Error;
-use common::primitives::{BlockHeight, Compact, H256};
+use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
 
 /// checks if retargeting is due for the provided block_height
@@ -8,9 +8,12 @@ pub fn is_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockH
     block_height.inner() % difficulty_adjustment_interval == 0
 }
 
-/// The block time of the nth block, based on the difficulty adjustment interval,
-/// where nth block = height of given block - difficulty adjustment interval - 1 (off by one)
-pub fn retarget_block_time(difficulty_adjustment_interval: u64, block_index: &BlockIndex) -> u32 {
+/// The block time of the first block, based on the difficulty adjustment interval,
+/// where first block = height of given block - difficulty adjustment interval - 1 (off by one)
+pub fn get_starting_block_time(
+    difficulty_adjustment_interval: u64,
+    block_index: &BlockIndex,
+) -> u32 {
     let retarget_height = {
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
         let old_block_height = block_index.height.inner() - (difficulty_adjustment_interval - 1);
@@ -57,7 +60,7 @@ pub fn calculate_new_target(
         ))
     })?;
 
-    // new target is coputed by  multiplying the old target by ratio of the actual timespan / target timespan.
+    // new target is computed by  multiplying the old target by ratio of the actual timespan / target timespan.
     // see Bitcoin's Protocol rules of Difficulty change: https://en.bitcoin.it/wiki/Protocol_rules
     let mut new_target = old_target * actual_timespan;
     new_target = new_target / target_timespan;
@@ -69,12 +72,6 @@ pub fn calculate_new_target(
     };
 
     Ok(Compact::from(new_target))
-}
-
-pub fn check_difficulty(block_hash: H256, difficulty: &Uint256) -> bool {
-    let id: Uint256 = block_hash.into(); //TODO: needs to be tested
-
-    id <= *difficulty
 }
 
 pub mod special_rules {

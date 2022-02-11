@@ -1,42 +1,34 @@
 #![allow(dead_code)]
 
 use crate::pow::helpers::{
-    calculate_new_target, check_difficulty, is_for_retarget, retarget_block_time, special_rules,
+    calculate_new_target, get_starting_block_time, is_for_retarget, special_rules,
 };
 use crate::pow::temp::BlockIndex;
 use crate::pow::{Error, PoW};
 use common::chain::block::Block;
 use common::primitives::consensus_data::{ConsensusData, PoWData};
-use common::primitives::{Compact, Idable};
+use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-pub fn check_proof_of_work(hash: Uint256, bits: Compact) -> bool {
-    if let Ok(target) = Uint256::try_from(bits) {
-        hash > target
-    } else {
-        false
+pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> bool {
+    if let Ok(target) = Uint256::try_from(block_bits) {
+        let hash: Uint256 = block_hash.into(); //TODO: needs to be tested
+        return hash < target;
     }
+
+    false
 }
 
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
-    /// This difference should be inclusive between (2 weeks/4) and (2 weeks*4).
-    /// See Bitcoin's Protocol rules on [Difficulty change](https://en.bitcoin.it/wiki/Protocol_rules)
     pub fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
         let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
 
-        // 2 weeks / 4
-        let lower_bound = self.min_target_timespan_in_secs();
-        // 2 wees * 4
-        let upper_bound = self.max_target_timespan_in_secs();
-
-        if actual_timespan < lower_bound {
-            lower_bound
-        } else if actual_timespan > upper_bound {
-            upper_bound
-        } else {
-            actual_timespan
-        }
+        num::clamp(
+            actual_timespan,
+            self.min_target_timespan_in_secs(),
+            self.max_target_timespan_in_secs(),
+        )
     }
 
     pub fn get_work_required(
@@ -54,11 +46,13 @@ impl PoW {
         let current_height = prev_block_index
             .height
             .checked_add(1)
-            .ok_or_else(|| Error::OutofBounds("max block height has been reached.".to_string()))?;
+            .expect("max block height has been reached.");
+
         let adjustment_interval = self.difficulty_adjustment_interval();
 
         if is_for_retarget(adjustment_interval, current_height) {
-            let retarget_block_time = retarget_block_time(adjustment_interval, prev_block_index);
+            let retarget_block_time =
+                get_starting_block_time(adjustment_interval, prev_block_index);
             self.next_work_required(retarget_block_time, prev_block_index)
         }
         // special difficulty rules
@@ -107,27 +101,16 @@ impl PoW {
     }
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<(), Error> {
-    match Uint256::try_from(bits) {
-        Ok(difficulty) => {
-            for nonce in 0..max_nonce {
-                let data = PoWData::new(bits, nonce);
+pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> bool {
+    for nonce in 0..max_nonce {
+        let data = PoWData::new(bits, nonce);
 
-                block.update_consensus_data(ConsensusData::PoW(data));
+        block.update_consensus_data(ConsensusData::PoW(data));
 
-                if check_difficulty(block.get_id().get(), &difficulty) {
-                    return Ok(());
-                }
-            }
-        }
-        Err(e) => {
-            return Err(Error::ConversionError(format!(
-                "conversion of bits {:?} to Uint256 type: {:?}",
-                bits, e
-            )));
+        if check_proof_of_work(block.get_id().get(), bits) {
+            return true;
         }
     }
 
-    let err = format!("max nonce {} has been reached.", max_nonce);
-    Err(Error::BlockToMineError(err))
+    false
 }

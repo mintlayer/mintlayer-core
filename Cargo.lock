@@ -565,6 +565,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "logging",
+ "num",
  "rand 0.8.4",
 ]
 

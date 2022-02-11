@@ -38,10 +38,14 @@ impl PoW {
         self.0.target_timespan().as_secs()
     }
 
+    /// Follows the upper bound of the target timespan (2 weeks * 4) of Bitcoin.
+    /// See Bitcoin's Protocol rules on [Difficulty change](https://en.bitcoin.it/wiki/Protocol_rules)
     pub fn max_target_timespan_in_secs(&self) -> u64 {
         self.target_timespan_in_secs() * self.max_retarget_factor()
     }
 
+    /// Follows the lower bound of the target timespan  (2 weeks / 4) of Bitcoin.
+    /// See Bitcoin's Protocol rules on [Difficulty change](https://en.bitcoin.it/wiki/Protocol_rules)
     pub fn min_target_timespan_in_secs(&self) -> u64 {
         self.target_timespan_in_secs() / self.max_retarget_factor()
     }
