@@ -2696,6 +2696,7 @@ dependencies = [
  "futures-timer",
  "itertools",
  "libp2p",
+ "logging",
  "parity-scale-codec",
  "rand 0.8.4",
  "test-utils",
