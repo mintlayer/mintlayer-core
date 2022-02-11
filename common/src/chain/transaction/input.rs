@@ -9,9 +9,22 @@ pub enum OutpointSource {
     BlockReward(Id<Block>),
 }
 
+impl From<Id<Transaction>> for OutpointSource {
+    fn from(tx: Id<Transaction>) -> Self {
+        OutpointSource::Transaction(tx)
+    }
+}
+
+impl From<Id<Block>> for OutpointSource {
+    fn from(blkrwd: Id<Block>) -> Self {
+        OutpointSource::BlockReward(blkrwd)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct OutPoint {
     id: OutpointSource,
+    #[codec(compact)]
     index: u32,
 }
 
