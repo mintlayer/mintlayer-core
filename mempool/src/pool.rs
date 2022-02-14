@@ -115,14 +115,14 @@ pub struct MempoolImpl<C: ChainState> {
 #[derive(Debug)]
 struct MempoolStore {
     txs_by_id: HashMap<H256, Rc<TxMempoolEntry>>,
-    txs_by_fee: BTreeSet<Rc<TxMempoolEntry>>,
+    txs_by_fee: BTreeMap<Amount, BTreeSet<Rc<TxMempoolEntry>>>,
     spender_txs: BTreeMap<OutPoint, Rc<TxMempoolEntry>>,
 }
 
 impl MempoolStore {
     fn new() -> Self {
         Self {
-            txs_by_fee: BTreeSet::new(),
+            txs_by_fee: BTreeMap::new(),
             txs_by_id: HashMap::new(),
             spender_txs: BTreeMap::new(),
         }
@@ -140,7 +140,7 @@ impl MempoolStore {
             .ok_or_else(|| MempoolError::from(TxValidationError::TransactionFeeOverflow))?;
         let entry = Rc::new(entry);
         self.txs_by_id.insert(id, Rc::clone(&entry));
-        self.txs_by_fee.insert(Rc::clone(&entry));
+        self.txs_by_fee.entry(entry.fee).or_default().insert(Rc::clone(&entry));
 
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
             self.spender_txs.insert(outpoint.clone(), Rc::clone(&entry));
@@ -149,11 +149,13 @@ impl MempoolStore {
     }
 
     fn drop_tx(&mut self, tx_id: &Id<Transaction>) {
-        if let Some(tx) = self.txs_by_id.remove(&tx_id.get()) {
-            self.txs_by_fee.remove(&tx).then(|| ()).expect("Inconsistent mempool store");
+        if let Some(entry) = self.txs_by_id.remove(&tx_id.get()) {
+            self.txs_by_fee.entry(entry.fee).and_modify(|entries| {
+                entries.remove(&entry).then(|| ()).expect("Inconsistent mempool store")
+            });
             self.spender_txs.retain(|_, entry| entry.tx.get_id() != *tx_id)
         } else {
-            assert!(!self.txs_by_fee.iter().any(|entry| entry.tx.get_id() == *tx_id));
+            assert!(!self.txs_by_fee.values().flatten().any(|entry| entry.tx.get_id() == *tx_id));
             assert!(!self.spender_txs.iter().any(|(_, entry)| entry.tx.get_id() == *tx_id));
         }
     }
@@ -286,7 +288,7 @@ impl<C: ChainState + Debug> Mempool<C> for MempoolImpl<C> {
     }
 
     fn get_all(&self) -> Vec<&Transaction> {
-        self.store.txs_by_fee.iter().map(|mempool_tx| &mempool_tx.tx).collect()
+        self.store.txs_by_fee.values().flatten().map(|entry| &entry.tx).collect()
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
