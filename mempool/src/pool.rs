@@ -92,21 +92,17 @@ impl TxMempoolEntry {
             }
         }
     }
-
-    fn get_fee(&self) -> Amount {
-        self.fee
-    }
 }
 
 impl PartialOrd for TxMempoolEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(other.get_fee().cmp(&self.get_fee()))
+        Some(other.tx.get_id().get().cmp(&self.tx.get_id().get()))
     }
 }
 
 impl Ord for TxMempoolEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.get_fee().cmp(&self.get_fee())
+        other.tx.get_id().get().cmp(&self.tx.get_id().get())
     }
 }
 
