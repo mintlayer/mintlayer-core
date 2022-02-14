@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::{error, message};
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
@@ -50,10 +50,13 @@ where
 
     /// One one more peers have expired
     PeerExpired(Vec<AddrInfo<T>>),
+
+    /// Message received from a Floodsub topic
+    MessageReceived(FloodsubTopic, message::Message),
 }
 
 #[derive(Debug)]
-pub enum GossipSubTopic {
+pub enum FloodsubTopic {
     Transactions,
     Blocks,
 }
@@ -86,11 +89,11 @@ pub trait NetworkService {
     /// # Arguments
     /// `addr` - socket address for incoming P2P traffic
     /// `strategies` - list of strategies that are used for peer discovery
-    /// `topics` - list of gossipsub topics that the implementation should subscribe to
+    /// `topics` - list of floodsub topics that the implementation should subscribe to
     async fn new(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        topics: &[GossipSubTopic],
+        topics: &[FloodsubTopic],
     ) -> error::Result<Self>
     where
         Self: Sized;
@@ -109,18 +112,18 @@ pub trait NetworkService {
     ///
     /// There are three types of events that can be received:
     /// - incoming peer connections
-    /// - incoming messages from gossipsub topics
+    /// - incoming messages from floodsub topics
     /// - new discovered peers
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
         T: NetworkService<Socket = Self::Socket, Address = Self::Address, PeerId = Self::PeerId>;
 
-    /// Publish data in a given gossip topic
+    /// Publish data in a given floodsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
+    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode;
 }

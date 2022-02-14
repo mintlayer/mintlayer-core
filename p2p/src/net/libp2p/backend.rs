@@ -17,17 +17,20 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError},
+    message,
     net::{self, libp2p::common},
 };
 use futures::StreamExt;
 use libp2p::{
     core::{connection::ConnectedPoint, either::EitherError},
+    floodsub::{FloodsubEvent, Topic},
     mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
+use parity_scale_codec::Decode;
 use std::collections::HashMap;
 use tokio::sync::{
     mpsc::{Receiver, Sender},
@@ -109,11 +112,15 @@ impl Backend {
     }
 
     /// Handle event received from the swarm object
+    #[allow(clippy::type_complexity)]
     async fn on_event(
         &mut self,
         event: SwarmEvent<
             common::ComposedEvent,
-            EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+            EitherError<
+                EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+                ProtocolsHandlerUpgrErr<std::io::Error>,
+            >,
         >,
     ) -> error::Result<()> {
         match event {
@@ -217,6 +224,52 @@ impl Backend {
                 })
                 .await
             }
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Message(message),
+            )) => {
+                // for mintlayer there should only ever be one topic per message
+                // because transactions are not published in block topic and vice versa
+                //
+                // message with multiple topics is considered invalid
+                let topic = if message.topics.len() == 1 {
+                    match net::FloodsubTopic::try_from(&message.topics[0]) {
+                        Ok(topic) => topic,
+                        Err(e) => {
+                            log::warn!(
+                                "failed to convert ({:#?}) to a topic: {:?}",
+                                message.topics[0],
+                                e
+                            );
+                            return Ok(());
+                        }
+                    }
+                } else {
+                    log::warn!(
+                        "message with multiple topics ({:#?}) but only one expected",
+                        message.topics
+                    );
+                    return Ok(());
+                };
+
+                let message = match message::Message::decode(&mut &message.data[..]) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        log::warn!("failed to decode floodsub message: {:?}", e);
+                        return Ok(());
+                    }
+                };
+
+                log::trace!(
+                    "message ({:#?}) received from floodsub topic {:?}",
+                    message,
+                    topic
+                );
+
+                self.event_tx
+                    .send(common::Event::MessageReceived { topic, message })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed)
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -249,6 +302,17 @@ impl Backend {
                 self.streams.insert(stream_id, response);
                 Ok(())
             }
+            common::Command::SendMessage {
+                topic,
+                message,
+                response,
+            } => {
+                log::trace!("publish message on floodsub topic {:?}", topic);
+
+                let topic: Topic = (&topic).into();
+                self.swarm.behaviour_mut().floodsub.publish(topic, message);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }
@@ -258,6 +322,7 @@ mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
+        floodsub::Floodsub,
         identity,
         mdns::Mdns,
         mplex, noise,
@@ -286,15 +351,13 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        SwarmBuilder::new(
-            transport,
-            common::ComposedBehaviour {
-                streaming: Streaming::<IdentityCodec>::default(),
-                mdns: Mdns::new(Default::default()).await.unwrap(),
-            },
-            peer_id,
-        )
-        .build()
+        let behaviour = common::ComposedBehaviour {
+            streaming: Streaming::<IdentityCodec>::default(),
+            mdns: Mdns::new(Default::default()).await.unwrap(),
+            floodsub: Floodsub::new(peer_id),
+        };
+
+        SwarmBuilder::new(transport, behaviour, peer_id).build()
     }
 
     // verify that binding to a free network interface succeeds
