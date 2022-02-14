@@ -1,3 +1,4 @@
+// Copyright (c) 2018 Parity Technologies (UK) Ltd.
 // Copyright (c) 2021 Protocol Labs
 // Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
@@ -17,13 +18,14 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{self, Event, GossipSubTopic, NetworkService, SocketService},
+    net::{self, Event, GossipsubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use futures::prelude::*;
 use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
+    gossipsub::{self, MessageAuthenticity, ValidationMode},
     identity,
     mdns::Mdns,
     mplex,
@@ -36,7 +38,7 @@ use libp2p::{
 };
 use logging::log;
 use parity_scale_codec::{Decode, Encode};
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -169,7 +171,7 @@ impl NetworkService for Libp2pService {
     async fn new(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        _topics: &[GossipSubTopic],
+        topics: &[GossipsubTopic],
     ) -> error::Result<Self> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -183,15 +185,31 @@ impl NetworkService for Libp2pService {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        let swarm = SwarmBuilder::new(
-            transport,
-            common::ComposedBehaviour {
-                streaming: Streaming::<IdentityCodec>::default(),
-                mdns: Mdns::new(Default::default()).await?,
-            },
-            peer_id,
-        )
-        .build();
+        let swarm = {
+            let gossipsub_config = gossipsub::GossipsubConfigBuilder::default()
+                .heartbeat_interval(Duration::from_secs(10))
+                .validation_mode(ValidationMode::Strict)
+                .build()?;
+
+            let mut gossipsub: gossipsub::Gossipsub =
+                gossipsub::Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)?;
+
+            for topic in topics.iter() {
+                log::debug!("subscribing to gossipsub topic {:?}", topic);
+                gossipsub.subscribe(&topic.into())?;
+            }
+
+            SwarmBuilder::new(
+                transport,
+                common::ComposedBehaviour {
+                    streaming: Streaming::<IdentityCodec>::default(),
+                    mdns: Mdns::new(Default::default()).await?,
+                    gossipsub,
+                },
+                peer_id,
+            )
+            .build()
+        };
 
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
@@ -297,14 +315,28 @@ impl NetworkService for Libp2pService {
                 Ok(Event::PeerDiscovered(parse_peers(peers)))
             }
             common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(parse_peers(peers))),
+            common::Event::MessageReceived { topic, message } => {
+                Ok(Event::MessageReceived(topic, message))
+            }
         }
     }
 
-    async fn publish<T>(&mut self, _topic: GossipSubTopic, _data: &T)
+    async fn publish<T>(&mut self, topic: GossipsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(common::Command::SendMessage {
+                topic,
+                message: data.encode(),
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 }
 

@@ -17,17 +17,20 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError},
+    message,
     net::{self, libp2p::common},
 };
 use futures::StreamExt;
 use libp2p::{
     core::{connection::ConnectedPoint, either::EitherError},
+    gossipsub::{error::GossipsubHandlerError, GossipsubEvent},
     mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
+use parity_scale_codec::Decode;
 use std::collections::HashMap;
 use tokio::sync::{
     mpsc::{Receiver, Sender},
@@ -113,7 +116,10 @@ impl Backend {
         &mut self,
         event: SwarmEvent<
             common::ComposedEvent,
-            EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+            EitherError<
+                EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+                GossipsubHandlerError,
+            >,
         >,
     ) -> error::Result<()> {
         match event {
@@ -217,6 +223,40 @@ impl Backend {
                 })
                 .await
             }
+            SwarmEvent::Behaviour(common::ComposedEvent::GossipsubEvent(
+                GossipsubEvent::Message {
+                    propagation_source: _,
+                    message_id: _,
+                    message,
+                },
+            )) => {
+                let topic = match message.topic.clone().try_into() {
+                    Ok(topic) => topic,
+                    Err(e) => {
+                        log::warn!("failed to convert topic ({:?}): {}", message.topic, e);
+                        return Ok(());
+                    }
+                };
+
+                let message = match message::Message::decode(&mut &message.data[..]) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        log::warn!("failed to decode gossipsub message: {:?}", e);
+                        return Ok(());
+                    }
+                };
+
+                log::trace!(
+                    "message ({:#?}) received from gossipsub topic {:?}",
+                    message,
+                    topic
+                );
+
+                self.event_tx
+                    .send(common::Event::MessageReceived { topic, message })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed)
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -249,6 +289,22 @@ impl Backend {
                 self.streams.insert(stream_id, response);
                 Ok(())
             }
+            common::Command::SendMessage {
+                topic,
+                message,
+                response,
+            } => {
+                log::trace!("publish message on gossipsub topic {:?}", topic);
+
+                let res = self
+                    .swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish((&topic).into(), message)
+                    .map(|_| ())
+                    .map_err(|e| e.into());
+                response.send(res).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }
@@ -258,6 +314,7 @@ mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
+        gossipsub::{self, MessageAuthenticity, ValidationMode},
         identity,
         mdns::Mdns,
         mplex, noise,
@@ -266,6 +323,7 @@ mod tests {
         tcp::TcpConfig,
         Transport,
     };
+    use std::time::Duration;
     use tokio::sync::oneshot;
 
     // create a swarm object which is the top-level object of libp2p
@@ -286,11 +344,22 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
+        let gossipsub_config = gossipsub::GossipsubConfigBuilder::default()
+            .heartbeat_interval(Duration::from_secs(10))
+            .validation_mode(ValidationMode::Strict)
+            .build()
+            .unwrap();
+
+        let gossipsub: gossipsub::Gossipsub =
+            gossipsub::Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
+                .unwrap();
+
         SwarmBuilder::new(
             transport,
             common::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await.unwrap(),
+                gossipsub,
             },
             peer_id,
         )

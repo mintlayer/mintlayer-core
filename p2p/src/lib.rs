@@ -295,6 +295,24 @@ where
         Ok(())
     }
 
+    /// Handle gossipsub event
+    fn on_gossisub_event(
+        &mut self,
+        topic: net::GossipsubTopic,
+        message: message::Message,
+    ) -> error::Result<()> {
+        match topic {
+            net::GossipsubTopic::Transactions => {
+                log::debug!("received new transaction: {:#?}", message);
+            }
+            net::GossipsubTopic::Blocks => {
+                log::debug!("received new block: {:#?}", message);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Handle network event received from the network service provider
     async fn on_network_event(
         &mut self,
@@ -306,6 +324,7 @@ where
             }
             net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
             net::Event::PeerExpired(peers) => self.peer_expired(&peers),
+            net::Event::MessageReceived(topic, message) => self.on_gossisub_event(topic, message),
         }
     }
 

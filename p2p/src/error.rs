@@ -28,6 +28,8 @@ pub enum Libp2pError {
     NoiseError(String),
     TransportError(String),
     DialError(String),
+    SubscriptionError(String),
+    PublishError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -97,6 +99,24 @@ impl From<tokio::sync::oneshot::error::RecvError> for P2pError {
 impl<T> From<tokio::sync::mpsc::error::SendError<T>> for P2pError {
     fn from(_: tokio::sync::mpsc::error::SendError<T>) -> P2pError {
         P2pError::ChannelClosed
+    }
+}
+
+impl From<&str> for P2pError {
+    fn from(e: &str) -> P2pError {
+        P2pError::Unknown(e.to_owned())
+    }
+}
+
+impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::SubscriptionError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::SubscriptionError(e.to_string()))
+    }
+}
+
+impl From<libp2p::gossipsub::error::PublishError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::PublishError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::PublishError(e.to_string()))
     }
 }
 

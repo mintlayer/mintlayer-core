@@ -15,8 +15,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, net};
+use crate::{error, message, net};
 use libp2p::{
+    gossipsub::{Gossipsub, GossipsubEvent, IdentTopic as Topic, TopicHash},
     mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
@@ -31,12 +32,14 @@ pub enum Command {
         addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
     },
+
     /// Connect to a remote peer at address `peer_addr` whose PeerId is `peer_id`
     Dial {
         peer_id: PeerId,
         peer_addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
     },
+
     /// Open a bidirectional data stream to a remote peer
     ///
     /// Before opening a stream, connection must've been established with the peer
@@ -44,6 +47,13 @@ pub enum Command {
     OpenStream {
         peer_id: PeerId,
         response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
+    },
+
+    /// Publish a message on the designated Gossipsub topic
+    SendMessage {
+        topic: net::GossipsubTopic,
+        message: Vec<u8>,
+        response: oneshot::Sender<error::Result<()>>,
     },
 }
 
@@ -58,6 +68,33 @@ pub enum Event {
 
     /// One or more peers that were previously discovered have expired
     PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
+
+    // Message received from one of the Gossipsub topics
+    MessageReceived {
+        topic: net::GossipsubTopic,
+        message: message::Message,
+    },
+}
+
+impl From<&net::GossipsubTopic> for Topic {
+    fn from(t: &net::GossipsubTopic) -> Topic {
+        match t {
+            net::GossipsubTopic::Transactions => Topic::new("mintlayer-gossipsub-transactions"),
+            net::GossipsubTopic::Blocks => Topic::new("mintlayer-gossipsub-blocks"),
+        }
+    }
+}
+
+impl TryFrom<TopicHash> for net::GossipsubTopic {
+    type Error = &'static str;
+
+    fn try_from(t: TopicHash) -> Result<Self, Self::Error> {
+        match t.as_str() {
+            "mintlayer-gossipsub-transactions" => Ok(net::GossipsubTopic::Transactions),
+            "mintlayer-gossipsub-blocks" => Ok(net::GossipsubTopic::Blocks),
+            _ => Err("Invalid Gossipsub topic"),
+        }
+    }
 }
 
 #[derive(NetworkBehaviour)]
@@ -65,12 +102,15 @@ pub enum Event {
 pub struct ComposedBehaviour {
     pub streaming: Streaming<IdentityCodec>,
     pub mdns: Mdns,
+    pub gossipsub: Gossipsub,
 }
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
+    GossipsubEvent(GossipsubEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -82,5 +122,11 @@ impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
 impl From<MdnsEvent> for ComposedEvent {
     fn from(event: MdnsEvent) -> Self {
         ComposedEvent::MdnsEvent(event)
+    }
+}
+
+impl From<GossipsubEvent> for ComposedEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        ComposedEvent::GossipsubEvent(event)
     }
 }

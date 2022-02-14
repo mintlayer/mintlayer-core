@@ -66,3 +66,6 @@ async fn test_libp2p_peer_discovery() {
         }
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_libp2p_gossipsub() {}

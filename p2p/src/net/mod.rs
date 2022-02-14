@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::{error, message};
 use async_trait::async_trait;
 use parity_scale_codec::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
@@ -50,10 +50,13 @@ where
 
     /// One one more peers have expired
     PeerExpired(Vec<AddrInfo<T>>),
+
+    /// Message received from a Gossipsub topic
+    MessageReceived(GossipsubTopic, message::Message),
 }
 
 #[derive(Debug)]
-pub enum GossipSubTopic {
+pub enum GossipsubTopic {
     Transactions,
     Blocks,
 }
@@ -90,7 +93,7 @@ pub trait NetworkService {
     async fn new(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        topics: &[GossipSubTopic],
+        topics: &[GossipsubTopic],
     ) -> error::Result<Self>
     where
         Self: Sized;
@@ -120,7 +123,7 @@ pub trait NetworkService {
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
+    async fn publish<T>(&mut self, topic: GossipsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode;
 }
