@@ -20,6 +20,7 @@ use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
 use crate::primitives::{Id, Idable};
+pub mod block_index;
 mod block_v1;
 
 use crate::primitives::consensus_data::ConsensusData;

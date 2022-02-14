@@ -15,9 +15,7 @@
 //
 // Author(s): Anton Sinitsyn
 
-use common::chain::block::Block;
-use common::chain::ChainConfig;
-use common::primitives::{BlockHeight, Id, Idable, H256};
+use common::primitives::{BlockHeight, H256};
 use thiserror::Error;
 
 #[allow(dead_code)]
@@ -57,43 +55,6 @@ pub struct Tip {
     pub last_block_hash: H256,
     /// The previous block
     pub prev_block_hash: H256,
-}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code, unused_variables)]
-pub struct BlockIndex {
-    pub hash_block: H256,
-    pub prev_block_hash: H256,
-    pub next_block_hash: Option<H256>,
-    pub chain_trust: u64,
-    pub status: BlockStatus,
-    pub height: BlockHeight,
-}
-
-impl BlockIndex {
-    pub fn new(block: &Block) -> Self {
-        // We have to use the whole block because we are not able to take hash_block from the header
-        Self {
-            hash_block: block.get_id().get(),
-            prev_block_hash: block.get_prev_block_id().get(),
-            next_block_hash: None,
-            chain_trust: 0,
-            status: BlockStatus::Unknown,
-            height: BlockHeight::new(0),
-        }
-    }
-
-    pub fn get_id(&self) -> Id<Block> {
-        Id::new(&self.hash_block)
-    }
-
-    pub fn get_prev_block_id(&self) -> Id<Block> {
-        Id::new(&self.prev_block_hash)
-    }
-
-    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.prev_block_hash == H256::zero()
-            && chain_config.genesis_block().get_id().get() == self.hash_block
-    }
 }
 
 #[cfg(test)]

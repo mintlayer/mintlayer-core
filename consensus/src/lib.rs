@@ -10,6 +10,7 @@ use chain_state::*;
 mod orphan_blocks;
 use crate::orphan_blocks::OrphanAddError;
 use orphan_blocks::OrphanBlocksPool;
+use common::chain::block::block_index::BlockIndex;
 
 #[allow(dead_code)]
 struct Consensus<S: BlockchainStorage> {
@@ -146,13 +147,13 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
         // Initialize disconnected chain
         let mut current_ancestor = *tip;
-        current_ancestor.status = BlockStatus::NoLongerOnMainChain;
+        // current_ancestor.status = BlockStatus::NoLongerOnMainChain;
         self.update_block_index(tip)?;
         // Collect blocks that should be disconnected
 
         while current_ancestor.hash_block == common_ancestor.hash_block {
             current_ancestor = self.get_ancestor(&current_ancestor.get_id())?;
-            current_ancestor.status = BlockStatus::NoLongerOnMainChain;
+            // current_ancestor.status = BlockStatus::NoLongerOnMainChain;
             self.update_block_index(tip)?;
         }
         Ok(())
@@ -171,25 +172,25 @@ impl<S: BlockchainStorage> Consensus<S> {
         // Initialize disconnected chain
         let mut result = Vec::new();
         let mut current_ancestor = *block_index;
-        current_ancestor.status = BlockStatus::Valid;
+        // current_ancestor.status = BlockStatus::Valid;
         result.push(current_ancestor);
         // Connect blocks
         while current_ancestor.hash_block == common_ancestor.hash_block {
             current_ancestor = self.get_ancestor(&current_ancestor.get_id())?;
-            current_ancestor.status = BlockStatus::Valid;
+            // current_ancestor.status = BlockStatus::Valid;
             result.push(current_ancestor);
         }
         Ok(result)
     }
 
     // Connect mew blocks
-    fn connect_blocks(&mut self, blocks: &[BlockIndex]) -> Result<(), BlockError> {
-        for block_index in blocks {
-            self.update_block_index(&BlockIndex {
-                status: BlockStatus::Valid,
-                ..*block_index
-            })?;
-        }
+    fn connect_blocks(&mut self, _blocks: &[BlockIndex]) -> Result<(), BlockError> {
+        // for block_index in blocks {
+        //     self.update_block_index(&BlockIndex {
+        //         status: BlockStatus::Valid,
+        //         ..*block_index
+        //     })?;
+        // }
         Ok(())
     }
 
@@ -272,15 +273,17 @@ impl<S: BlockchainStorage> Consensus<S> {
         }
         // Get prev block index
         if !blk_index.is_genesis(&self.chain_config) {
+            let prev_block_id = blk_index.get_prev_block_id().ok_or(BlockError::Orphan)?;
             let _prev_blk_index =
-                self.get_block(blk_index.get_prev_block_id())?.ok_or(BlockError::Orphan)?;
+                self.get_block(prev_block_id)?.ok_or(BlockError::Orphan)?;
         }
 
         // TODO: Will be expanded
-        Ok(BlockIndex {
-            status: BlockStatus::Valid,
-            ..*blk_index
-        })
+        // Ok(BlockIndex {
+        //     status: BlockStatus::Valid,
+        //     ..*blk_index
+        // })
+        Ok(*blk_index)
     }
 
     #[allow(dead_code)]

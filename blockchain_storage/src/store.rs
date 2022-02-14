@@ -1,3 +1,4 @@
+use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id, Idable};
@@ -36,6 +37,8 @@ mod well_known {
 struct DBValues;
 // Store tag for blocks.
 struct DBBlocks;
+// Store tag for blocks indexes.
+struct DBBlocksIndexes;
 // Store tag for transaction indices.
 struct DBTxIndices;
 // Store for block IDs indexed by block height.
@@ -51,6 +54,11 @@ impl storage::schema::Column for DBBlocks {
     type Kind = storage::schema::Single;
 }
 
+impl storage::schema::Column for DBBlocksIndexes {
+    const NAME: &'static str = "BlocksIndexes";
+    type Kind = storage::schema::Single;
+}
+
 impl storage::schema::Column for DBTxIndices {
     const NAME: &'static str = "TxIndicesV0";
     type Kind = storage::schema::Single;
@@ -62,7 +70,13 @@ impl storage::schema::Column for DBBlockByHeight {
 }
 
 // Complete database schema
-type Schema = (DBValues, (DBBlocks, (DBTxIndices, (DBBlockByHeight, ()))));
+type Schema = (
+    DBValues,
+    (
+        DBBlocks,
+        (DBBlocksIndexes, (DBTxIndices, (DBBlockByHeight, ()))),
+    ),
+);
 
 /// Persistent store for blockchain data
 #[derive(Clone)]
@@ -120,6 +134,8 @@ impl BlockchainStorage for Store {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -172,6 +188,14 @@ impl BlockchainStorage for StoreTxRw<'_> {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
+    }
+
+    fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
+        self.read::<DBBlocksIndexes, _, _>(id.as_ref())
+    }
+
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
+        self.write::<DBBlocksIndexes, _, _>(block_index.get_id().encode(), block_index)
     }
 
     /// Get the hash of the best block

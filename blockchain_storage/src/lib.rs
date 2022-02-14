@@ -1,5 +1,6 @@
 //! Application-level interface for the persistent blockchain storage.
 
+use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
@@ -40,6 +41,9 @@ pub trait BlockchainStorage {
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+
+    fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
