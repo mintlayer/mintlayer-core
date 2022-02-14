@@ -1,5 +1,5 @@
 use common::chain::block::Block;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::transaction::{JointTxMainChainPosition, Transaction, TxMainChainIndex};
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::*;
@@ -139,7 +139,7 @@ impl BlockchainStorage for Store {
 
         fn get_mainchain_tx_by_position(
             &self,
-            tx_index: &TxMainChainPosition,
+            tx_index: &JointTxMainChainPosition,
         ) -> crate::Result<Option<Transaction>>;
 
         fn get_mainchain_tx(&self, tx: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
@@ -224,18 +224,39 @@ impl BlockchainStorage for StoreTxRw<'_> {
     /// Get transaction
     fn get_mainchain_tx_by_position(
         &self,
-        tx_index: &TxMainChainPosition,
+        tx_index: &JointTxMainChainPosition,
     ) -> crate::Result<Option<Transaction>> {
-        let block_id = tx_index.get_block_id();
-        match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let begin = tx_index.get_byte_offset_in_block() as usize;
-                let end = begin + tx_index.get_serialized_size() as usize;
-                let tx = block.get(begin..end).expect("Transaction outside of block range");
-                let tx = Transaction::decode_all(tx).expect("Invalid tx encoding in DB");
-                Ok(Some(tx))
+        match tx_index {
+            JointTxMainChainPosition::NormalTxPosition(tx_index) => {
+                let block_id = tx_index.get_block_id();
+                match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
+                    Err(e) => Err(e.into()),
+                    Ok(None) => Ok(None),
+                    Ok(Some(block)) => {
+                        let begin = tx_index.get_byte_offset_in_block() as usize;
+                        let end = begin + tx_index.get_serialized_size() as usize;
+                        let tx = block.get(begin..end).expect("Transaction outside of block range");
+                        let tx = Transaction::decode_all(tx).expect("Invalid tx encoding in DB");
+                        Ok(Some(tx))
+                    }
+                }
+            }
+
+            JointTxMainChainPosition::BlockRewardTxPosition(block_id) => {
+                const BLOCK_REWARD_TX_OFFSET: u32 = 103; // HEADER, TO BE CORRECTED
+                const BLOCK_REWARD_TX_SERIALIZED_SIZE: u32 = 11; // TO BE CORRECTED
+
+                match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
+                    Err(e) => Err(e.into()),
+                    Ok(None) => Ok(None),
+                    Ok(Some(block)) => {
+                        let begin = BLOCK_REWARD_TX_OFFSET as usize;
+                        let end = begin + BLOCK_REWARD_TX_SERIALIZED_SIZE as usize;
+                        let tx = block.get(begin..end).expect("Transaction outside of block range");
+                        let tx = Transaction::decode_all(tx).expect("Invalid tx encoding in DB");
+                        Ok(Some(tx))
+                    }
+                }
             }
         }
     }
@@ -323,6 +344,7 @@ impl TransactionRo for StoreTxRw<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use common::chain::transaction::TxMainChainPosition;
     use common::primitives::consensus_data::ConsensusData;
 
     #[test]
@@ -331,17 +353,26 @@ mod test {
         use common::primitives::H256;
 
         // Prepare some test data
+        let blkreward0 = Transaction::new(0x00000000, vec![], vec![], 12).unwrap();
+        let blkreward1 = Transaction::new(0x00000000, vec![], vec![], 34).unwrap();
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
+
         let block0 = Block::new(
-            vec![tx0.clone()],
+            vec![blkreward0.clone(), tx0.clone()],
             Id::new(&H256::default()),
             12,
             ConsensusData::None,
         )
         .unwrap();
-        let block1 =
-            Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
+
+        let block1 = Block::new(
+            vec![blkreward1.clone(), tx1.clone()],
+            block0.get_id(),
+            34,
+            ConsensusData::None,
+        )
+        .unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();
@@ -368,22 +399,39 @@ mod test {
         assert_eq!(&store.get_block(block0.get_id()).unwrap().unwrap(), &block0);
 
         // Test the transaction extraction from a block
+        let enc_blkrwrd0 = blkreward0.encode();
         let enc_tx0 = tx0.encode();
         let enc_block0 = block0.encode();
+        let offset_blkrwrd0 = enc_block0
+            .windows(enc_blkrwrd0.len())
+            .enumerate()
+            .find_map(|(i, d)| (d == enc_blkrwrd0).then(|| i))
+            .unwrap();
         let offset_tx0 = enc_block0
             .windows(enc_tx0.len())
             .enumerate()
             .find_map(|(i, d)| (d == enc_tx0).then(|| i))
             .unwrap();
+
         assert!(
             &enc_block0[offset_tx0..].starts_with(&enc_tx0),
             "Transaction format has changed, adjust the offset in this test",
         );
-        let pos_tx0 = TxMainChainPosition::new(
+        assert!(
+            &enc_block0[offset_blkrwrd0..].starts_with(&enc_blkrwrd0),
+            "Transaction format has changed, adjust the offset in this test",
+        );
+        let pos_blkrwrd0 = JointTxMainChainPosition::from(block0.get_id().get());
+        assert_eq!(
+            &store.get_mainchain_tx_by_position(&pos_blkrwrd0).unwrap().unwrap(),
+            &blkreward0
+        );
+
+        let pos_tx0 = JointTxMainChainPosition::from(TxMainChainPosition::new(
             &block0.get_id().get(),
             offset_tx0 as u32,
             enc_tx0.len() as u32,
-        );
+        ));
         assert_eq!(
             &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
             &tx0

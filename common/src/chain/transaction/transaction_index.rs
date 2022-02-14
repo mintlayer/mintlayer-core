@@ -1,10 +1,12 @@
 use crate::primitives::H256;
 use parity_scale_codec_derive::{Decode, Encode};
 
+type BlockId = H256;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
     Unspent,
-    SpentBy(H256),
+    SpentBy(BlockId),
 }
 
 /// A transaction is stored in the database as part of a block,
@@ -15,13 +17,13 @@ pub enum OutputSpentState {
 /// This struct represents the position of a transaction in the database
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainPosition {
-    block_id: H256,
+    block_id: BlockId,
     byte_offset_in_block: u32,
     serialized_size: u32,
 }
 
 impl TxMainChainPosition {
-    pub fn new(block_id: &H256, byte_offset_in_block: u32, serialized_size: u32) -> Self {
+    pub fn new(block_id: &BlockId, byte_offset_in_block: u32, serialized_size: u32) -> Self {
         TxMainChainPosition {
             block_id: *block_id,
             byte_offset_in_block,
@@ -29,7 +31,7 @@ impl TxMainChainPosition {
         }
     }
 
-    pub fn get_block_id(&self) -> &H256 {
+    pub fn get_block_id(&self) -> &BlockId {
         &self.block_id
     }
 
@@ -42,9 +44,27 @@ impl TxMainChainPosition {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum JointTxMainChainPosition {
+    NormalTxPosition(TxMainChainPosition),
+    BlockRewardTxPosition(BlockId),
+}
+
+impl From<TxMainChainPosition> for JointTxMainChainPosition {
+    fn from(txpos: TxMainChainPosition) -> Self {
+        JointTxMainChainPosition::NormalTxPosition(txpos)
+    }
+}
+
+impl From<BlockId> for JointTxMainChainPosition {
+    fn from(blkid: BlockId) -> Self {
+        JointTxMainChainPosition::BlockRewardTxPosition(blkid)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpendError {
-    AlreadySpent(H256),
+    AlreadySpent(BlockId),
     AlreadyUnspent,
     OutOfRange,
 }
@@ -60,14 +80,14 @@ pub enum TxMainChainIndexError {
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
-    position: TxMainChainPosition,
+    position: JointTxMainChainPosition,
     spent: Vec<OutputSpentState>,
 }
 
 impl TxMainChainIndex {
     fn spend_internal(
         spent_state: &mut OutputSpentState,
-        spender: &H256,
+        spender: &BlockId,
     ) -> Result<(), SpendError> {
         match spent_state {
             OutputSpentState::Unspent => {
@@ -88,7 +108,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn spend(&mut self, index: u32, spender: &H256) -> Result<(), SpendError> {
+    pub fn spend(&mut self, index: u32, spender: &BlockId) -> Result<(), SpendError> {
         let index = index as usize;
         if index >= self.spent.len() {
             return Err(SpendError::OutOfRange);
@@ -112,7 +132,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_tx_position(&self) -> &TxMainChainPosition {
+    pub fn get_tx_position(&self) -> &JointTxMainChainPosition {
         &self.position
     }
 
@@ -132,7 +152,7 @@ impl TxMainChainIndex {
     }
 
     pub fn new(
-        tx_position: TxMainChainPosition,
+        tx_position: JointTxMainChainPosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
@@ -153,16 +173,25 @@ impl TxMainChainIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    //use std::slice::Join;
     use std::str::FromStr;
 
     #[test]
     fn invalid_output_count() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
-        let tx_index = TxMainChainIndex::new(pos, 0);
+        let normal_pos =
+            JointTxMainChainPosition::from(TxMainChainPosition::new(&block_id.unwrap(), 1, 2));
+        let normal_tx_index = TxMainChainIndex::new(normal_pos, 0);
         assert_eq!(
-            tx_index.unwrap_err(),
+            normal_tx_index.unwrap_err(),
+            TxMainChainIndexError::InvalidOutputCount
+        );
+
+        let blkrwrd_pos = JointTxMainChainPosition::from(block_id.unwrap());
+        let blkrwrd_tx_index = TxMainChainIndex::new(blkrwrd_pos, 0);
+        assert_eq!(
+            blkrwrd_tx_index.unwrap_err(),
             TxMainChainIndexError::InvalidOutputCount
         );
     }
@@ -171,8 +200,14 @@ mod tests {
     fn basic_spending() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
-        let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
+        let normal_tx_pos =
+            JointTxMainChainPosition::from(TxMainChainPosition::new(&block_id.unwrap(), 1, 2));
+        let mut tx_index = TxMainChainIndex::new(normal_tx_pos, 3).unwrap();
+
+        let reward_block_id =
+            H256::from_str("000000000000000000000000000000000000000000000000000000000000007c");
+        let blkrwrd_tx_pos = JointTxMainChainPosition::from(reward_block_id.unwrap());
+        let blkrwrd_tx_index = TxMainChainIndex::new(blkrwrd_tx_pos, 3).unwrap();
 
         // ensure index accesses are correct
         assert!(tx_index.get_spent_state(0).is_ok());
@@ -189,7 +224,24 @@ mod tests {
         assert_eq!(tx_index.get_output_count(), 3);
 
         // check that all are unspent
-        assert_eq!(tx_index.position.block_id, H256::from_low_u64_be(123));
+        match &tx_index.position {
+            JointTxMainChainPosition::NormalTxPosition(txmcpos) => {
+                assert_eq!(txmcpos.block_id, H256::from_low_u64_be(123))
+            }
+            JointTxMainChainPosition::BlockRewardTxPosition(blkrwrdpos) => {
+                assert_eq!(*blkrwrdpos, H256::from_low_u64_be(124))
+            }
+        }
+
+        match &blkrwrd_tx_index.position {
+            JointTxMainChainPosition::NormalTxPosition(txmcpos) => {
+                assert_eq!(txmcpos.block_id, H256::from_low_u64_be(123))
+            }
+            JointTxMainChainPosition::BlockRewardTxPosition(blkrwrdpos) => {
+                assert_eq!(*blkrwrdpos, H256::from_low_u64_be(124))
+            }
+        }
+
         for output in &tx_index.spent {
             assert_eq!(*output, OutputSpentState::Unspent);
         }

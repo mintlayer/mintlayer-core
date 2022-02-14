@@ -1,7 +1,9 @@
 //! A mock version of the blockchian storage.
 
 use common::chain::block::Block;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::transaction::{
+    JointTxMainChainPosition, Transaction, TxMainChainIndex, TxMainChainPosition,
+};
 use common::primitives::{BlockHeight, Id};
 
 mockall::mock! {
@@ -31,7 +33,7 @@ mockall::mock! {
 
         fn get_mainchain_tx_by_position(
             &self,
-            tx_index: &TxMainChainPosition,
+            tx_index: &JointTxMainChainPosition,
         ) -> crate::Result<Option<Transaction>>;
 
         fn get_mainchain_tx(&self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
@@ -85,7 +87,7 @@ mockall::mock! {
 
         fn get_mainchain_tx_by_position(
             &self,
-            tx_index: &TxMainChainPosition,
+            tx_index: &JointTxMainChainPosition,
         ) -> crate::Result<Option<Transaction>>;
 
         fn get_mainchain_tx(

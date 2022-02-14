@@ -1,7 +1,9 @@
 //! Application-level interface for the persistent blockchain storage.
 
 use common::chain::block::Block;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::transaction::{
+    JointTxMainChainPosition, Transaction, TxMainChainIndex,
+};
 use common::primitives::{BlockHeight, Id};
 
 #[cfg(any(test, feature = "mock"))]
@@ -68,7 +70,7 @@ pub trait BlockchainStorage {
     /// Get transaction by block ID and position
     fn get_mainchain_tx_by_position(
         &self,
-        tx_index: &TxMainChainPosition,
+        tx_index: &JointTxMainChainPosition,
     ) -> crate::Result<Option<Transaction>>;
 
     /// Get transaction by transaction ID. Transaction must be in the index.
