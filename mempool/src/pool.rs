@@ -85,7 +85,7 @@ impl TxMempoolEntry {
     fn unconfirmed_ancestors_inner(&self, visited: &mut BTreeSet<Rc<TxMempoolEntry>>) {
         for parent in self.parents.iter() {
             if visited.contains(parent) {
-                break;
+                continue;
             } else {
                 visited.insert(Rc::clone(parent));
                 parent.unconfirmed_ancestors_inner(visited);
