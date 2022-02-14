@@ -11,6 +11,7 @@ pub struct BlockIndex {
     pub next_block_hash: Option<H256>,
     pub chain_trust: u64,
     pub height: BlockHeight,
+    pub time: u32,
 }
 
 impl BlockIndex {
@@ -22,6 +23,7 @@ impl BlockIndex {
             next_block_hash: None,
             chain_trust: 0,
             height: BlockHeight::new(0),
+            time: block.get_block_time(),
         }
     }
 
@@ -36,5 +38,9 @@ impl BlockIndex {
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.prev_block_hash == None
             && chain_config.genesis_block().get_id().get() == self.hash_block
+    }
+
+    pub fn get_block_time(&self) -> u32 {
+        self.time
     }
 }

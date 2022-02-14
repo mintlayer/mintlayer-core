@@ -15,18 +15,8 @@
 //
 // Author(s): Anton Sinitsyn
 
-use common::primitives::{BlockHeight, H256};
+use common::primitives::BlockHeight;
 use thiserror::Error;
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BlockStatus {
-    Unknown,
-    Valid,
-    Failed,
-    NoLongerOnMainChain,
-    // To be expanded
-}
 
 #[allow(dead_code)]
 #[derive(Error, Debug, PartialEq, Eq)]
@@ -47,14 +37,10 @@ pub enum BlockError {
     // To be expanded
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Tip {
-    /// Height of the tip (max height of the fork)
-    pub height_tip: BlockHeight,
-    /// The last block pushed to the fork
-    pub last_block_hash: H256,
-    /// The previous block
-    pub prev_block_hash: H256,
+impl From<blockchain_storage::Error> for BlockError {
+    fn from(_: blockchain_storage::Error) -> Self {
+        BlockError::Unknown
+    }
 }
 
 #[cfg(test)]
