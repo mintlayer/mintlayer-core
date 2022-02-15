@@ -8,6 +8,7 @@ use chain_state::*;
 mod orphan_blocks;
 use crate::orphan_blocks::OrphanAddError;
 use common::chain::block::block_index::BlockIndex;
+use common::chain::Transaction;
 use orphan_blocks::OrphanBlocksPool;
 
 #[allow(dead_code)]
@@ -78,6 +79,35 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         }
     }
 
+    fn apply_tx_in_undo(&mut self, _tx: &Transaction) {
+        //TODO: not implemented yet
+    }
+
+    fn disconnect_block(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        let block = self
+            .blockchain_storage
+            .get_block(block_index.get_id())?
+            .ok_or(BlockError::Unknown)?;
+        for tx in block.get_transactions().iter().rev() {
+            // TODO: Check that all outputs are available and match the outputs in the block itself
+            //  exactly.
+            for _output in tx.get_outputs() {
+                // if output.is_spendable() {
+                // TODO: We have to check that coin was spent, and that match outputs, height, coinbase
+                // }
+            }
+            // Restore inputs
+            if !tx.is_coinbase() {
+                self.apply_tx_in_undo(tx);
+                //TODO: Check undo status and
+            }
+        }
+        // Not sure what we should return here, might be a new status instead of BlockError?
+        self.blockchain_storage
+            .set_best_block_id(&block_index.get_prev_block_id().ok_or(BlockError::Unknown)?)?;
+        Ok(())
+    }
+
     // Disconnect active blocks which are no longer in the best chain.
     fn disconnect_blocks(
         &mut self,
@@ -90,13 +120,14 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         }
         // Initialize disconnected chain
         let mut current_ancestor = *tip;
-        // current_ancestor.status = BlockStatus::NoLongerOnMainChain;
+        current_ancestor.next_block_hash = None;
         self.blockchain_storage.set_block_index(tip)?;
         // Collect blocks that should be disconnected
 
         while current_ancestor.hash_block == common_ancestor.hash_block {
             current_ancestor = self.get_ancestor(&current_ancestor.get_id())?;
-            // current_ancestor.status = BlockStatus::NoLongerOnMainChain;
+            current_ancestor.next_block_hash = None;
+            self.disconnect_block(&current_ancestor)?;
             self.blockchain_storage.set_block_index(tip)?;
         }
         Ok(())
@@ -127,13 +158,8 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
     }
 
     // Connect mew blocks
-    fn connect_blocks(&mut self, _blocks: &[BlockIndex]) -> Result<(), BlockError> {
-        // for block_index in blocks {
-        //     self.update_block_index(&BlockIndex {
-        //         status: BlockStatus::Valid,
-        //         ..*block_index
-        //     })?;
-        // }
+    fn connect_blocks(&mut self, blocks: &[BlockIndex]) -> Result<(), BlockError> {
+        for block_index in blocks {}
         Ok(())
     }
 
@@ -177,10 +203,8 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
     #[allow(dead_code)]
     fn activate_best_chain(
         &mut self,
-        mut block_index: BlockIndex,
+        block_index: BlockIndex,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        // TODO: We have to decide how we can generate `chain_trust`, at the moment it is wrong
-        block_index.chain_trust = self.current_block_height.into();
         let best_block = self.blockchain_storage.get_best_block_id()?;
         if let Some(best_block) = best_block {
             let starting_tip = self
@@ -206,7 +230,7 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         Ok(None)
     }
 
-    fn accept_block_header(&self, block: &Block) -> Result<BlockIndex, BlockError> {
+    fn accept_block_header(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         // TODO: Check for duplicate block
         // TODO: If any previous block was invalid, then we have to mark all chain as invalid.
         self.add_block_index(block)
@@ -217,12 +241,12 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         10
     }
 
-    fn add_block_index(&self, block: &Block) -> Result<BlockIndex, BlockError> {
+    fn add_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         // TODO: Check for duplicate block index
         let mut block_index = BlockIndex::new(block);
         let prev_block_index = self
             .blockchain_storage
-            .get_block_index(&block_index.get_prev_block_id().ok_or(BlockIndex::Unknown)?)
+            .get_block_index(&block_index.get_prev_block_id().ok_or(BlockError::Unknown)?)
             .map_err(|e| BlockError::from(e))?;
         // Set the block height
         block_index.height = if let Some(prev_block_index) = prev_block_index {
@@ -291,10 +315,6 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         }
 
         // TODO: Will be expanded
-        // Ok(BlockIndex {
-        //     status: BlockStatus::Valid,
-        //     ..*blk_index
-        // })
         Ok(*blk_index)
     }
 

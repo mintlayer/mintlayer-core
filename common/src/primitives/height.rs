@@ -1,5 +1,7 @@
 use parity_scale_codec_derive::{Decode, Encode};
 use std::fmt;
+use std::ops::Add;
+
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
 pub struct BlockHeight(u64);
 
@@ -25,6 +27,16 @@ impl From<BlockHeight> for u64 {
 impl From<u64> for BlockHeight {
     fn from(w: u64) -> BlockHeight {
         BlockHeight(w)
+    }
+}
+
+impl Add<u64> for BlockHeight {
+    type Output = Self;
+
+    fn add(self, other: u64) -> Self {
+        Self {
+            0: self.0.checked_add(other).expect("overflow when adding BlockHeight to instant"),
+        }
     }
 }
 

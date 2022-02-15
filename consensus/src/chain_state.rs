@@ -38,7 +38,7 @@ pub enum BlockError {
 }
 
 impl From<blockchain_storage::Error> for BlockError {
-    fn from(err: blockchain_storage::Error) -> Self {
+    fn from(_: blockchain_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         BlockError::Unknown
