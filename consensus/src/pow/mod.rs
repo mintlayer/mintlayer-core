@@ -5,6 +5,7 @@ mod helpers;
 mod temp;
 pub mod work;
 
+#[derive(Debug)]
 pub enum Error {
     BlockToMineError(String),
     ConversionError(String),

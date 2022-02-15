@@ -5,18 +5,24 @@ use crate::pow::helpers::{
 };
 use crate::pow::temp::BlockIndex;
 use crate::pow::{Error, PoW};
-use common::chain::block::Block;
-use common::primitives::consensus_data::{ConsensusData, PoWData};
+use common::chain::block::consensus_data::PoWData;
+use common::chain::block::{Block, ConsensusData};
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> bool {
-    if let Ok(target) = Uint256::try_from(block_bits) {
-        let hash: Uint256 = block_hash.into(); //TODO: needs to be tested
-        return hash < target;
-    }
+pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Error> {
+    Uint256::try_from(block_bits)
+        .map(|target| {
+            let hash: Uint256 = block_hash.into();
 
-    false
+            hash <= target
+        })
+        .map_err(|e| {
+            Error::ConversionError(format!(
+                "conversion of {:?} to Uint256 type: {:?}",
+                block_bits, e
+            ))
+        })
 }
 
 impl PoW {
@@ -101,16 +107,51 @@ impl PoW {
     }
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> bool {
+pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<bool, Error> {
     for nonce in 0..max_nonce {
-        let data = PoWData::new(bits, nonce);
+        //TODO: block reward is currently empty.
+        let data = PoWData::new(bits, nonce, vec![]);
 
         block.update_consensus_data(ConsensusData::PoW(data));
 
-        if check_proof_of_work(block.get_id().get(), bits) {
-            return true;
+        if check_proof_of_work(block.get_id().get(), bits)? {
+            return Ok(true);
         }
     }
 
-    false
+    Ok(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::check_proof_of_work;
+    use common::primitives::{Compact, H256};
+    use std::str::FromStr;
+
+    #[test]
+    fn proof_of_work_ok_test() {
+        fn test(bits: u32, hash: &str) {
+            let hash = H256::from_str(hash).expect("should not fail");
+            let bits = Compact(bits);
+
+            let res = check_proof_of_work(hash, bits).expect("should not fail");
+            assert!(res);
+        }
+
+        // block 722731
+        test(
+            386_567_092,
+            "000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c",
+        );
+        // block 721311
+        test(
+            386_568_320,
+            "0000000000000000000838523baafc5f5904e472de7ffba2a431b53179a03eb3",
+        );
+        //block 2
+        test(
+            486_604_799,
+            "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
+        );
+    }
 }

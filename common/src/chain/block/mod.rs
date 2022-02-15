@@ -21,10 +21,11 @@ use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
 use crate::primitives::{Id, Idable};
 mod block_v1;
+pub mod consensus_data;
 
-use crate::primitives::consensus_data::ConsensusData;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
+pub use consensus_data::ConsensusData;
 use parity_scale_codec::{Decode, Encode};
 
 pub fn calculate_tx_merkle_root(

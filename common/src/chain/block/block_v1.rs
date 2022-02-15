@@ -1,5 +1,5 @@
+use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
-use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::{id, Id, Idable, H256};
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 

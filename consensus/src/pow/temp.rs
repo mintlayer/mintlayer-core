@@ -1,8 +1,8 @@
 #![allow(dead_code, unused_variables)]
 // Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
 
+use common::chain::block::consensus_data::PoWData;
 use common::chain::block::Block;
-use common::primitives::consensus_data::PoWData;
 use common::primitives::{BlockHeight, Id};
 
 pub struct BlockIndex {

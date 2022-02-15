@@ -1,9 +1,9 @@
 use crate::address::Address;
 use crate::chain::block::Block;
+use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::id::{Id, H256};
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;

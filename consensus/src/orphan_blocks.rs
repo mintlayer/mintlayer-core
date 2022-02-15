@@ -195,8 +195,8 @@ mod tests {
 
     mod helpers {
         use super::*;
+        use common::chain::block::ConsensusData;
         use common::chain::transaction::Transaction;
-        use common::primitives::consensus_data::ConsensusData;
         use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {

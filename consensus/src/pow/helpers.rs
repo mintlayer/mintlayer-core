@@ -105,3 +105,25 @@ pub mod special_rules {
         todo!()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::pow::helpers::is_for_retarget;
+    use common::primitives::BlockHeight;
+
+    #[test]
+    fn is_for_retarget_test() {
+        let interval = 2016;
+        let test = |h: BlockHeight| is_for_retarget(interval, h);
+
+        assert!(test(BlockHeight::zero()));
+        assert!(!test(BlockHeight::one()));
+        assert!(test(BlockHeight::new(interval)));
+        assert!(!test(BlockHeight::new(interval + 1)));
+        assert!(test(BlockHeight::new(interval * 2)));
+        assert!(test(BlockHeight::new(interval * 5)));
+        assert!(test(BlockHeight::new(interval * 10)));
+        assert!(!test(BlockHeight::new((interval * 10) + 1)));
+        assert!(!test(BlockHeight::new((interval * 10) - 1)));
+    }
+}
