@@ -1116,21 +1116,39 @@ mod tests {
         let tx2 = Transaction::new(2, vec![], vec![], 0).map_err(anyhow::Error::from)?;
         let tx3 = Transaction::new(3, vec![], vec![], 0).map_err(anyhow::Error::from)?;
         let tx4 = Transaction::new(4, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let tx5 = Transaction::new(5, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+
+        let tx6 = Transaction::new(6, vec![], vec![], 0).map_err(anyhow::Error::from)?;
         let fee = Amount::from(0);
 
-        let entry1 = Rc::new(TxMempoolEntry::new(tx1, fee, BTreeSet::default()));
-        let tx2_parents = vec![Rc::clone(&entry1)].into_iter().collect();
+        // Generation 1
+        let tx1_parents = BTreeSet::default();
+        let entry1 = Rc::new(TxMempoolEntry::new(tx1, fee, tx1_parents));
+        let tx2_parents = BTreeSet::default();
         let entry2 = Rc::new(TxMempoolEntry::new(tx2, fee, tx2_parents));
 
+        // Generation 2
         let tx3_parents = vec![Rc::clone(&entry1), Rc::clone(&entry2)].into_iter().collect();
         let entry3 = Rc::new(TxMempoolEntry::new(tx3, fee, tx3_parents));
 
+        // Generation 3
         let tx4_parents = vec![Rc::clone(&entry3)].into_iter().collect();
-        let entry4 = TxMempoolEntry::new(tx4, fee, tx4_parents);
-        assert_eq!(entry4.unconfirmed_ancestors().len(), 3);
-        assert_eq!(entry3.unconfirmed_ancestors().len(), 2);
-        assert_eq!(entry2.unconfirmed_ancestors().len(), 1);
+        let tx5_parents = vec![Rc::clone(&entry3)].into_iter().collect();
+        let entry4 = Rc::new(TxMempoolEntry::new(tx4, fee, tx4_parents));
+        let entry5 = Rc::new(TxMempoolEntry::new(tx5, fee, tx5_parents));
+
+        // Generation 4
+        let tx6_parents = vec![Rc::clone(&entry3), Rc::clone(&entry4), Rc::clone(&entry5)]
+            .into_iter()
+            .collect();
+        let entry6 = Rc::new(TxMempoolEntry::new(tx6, fee, tx6_parents));
+
         assert_eq!(entry1.unconfirmed_ancestors().len(), 0);
+        assert_eq!(entry2.unconfirmed_ancestors().len(), 0);
+        assert_eq!(entry3.unconfirmed_ancestors().len(), 2);
+        assert_eq!(entry4.unconfirmed_ancestors().len(), 3);
+        assert_eq!(entry5.unconfirmed_ancestors().len(), 3);
+        assert_eq!(entry6.unconfirmed_ancestors().len(), 5);
         Ok(())
     }
 }
