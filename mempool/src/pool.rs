@@ -295,10 +295,11 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
             .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
             .collect::<Vec<_>>();
 
-        for entry in conflicts {
-            if !entry.is_replaceable() {
-                return Err(TxValidationError::ConflictWithIrreplaceableTransaction);
-            }
+        for entry in &conflicts {
+            entry
+                .is_replaceable()
+                .then(|| ())
+                .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
         }
 
         self.verify_inputs_available(tx)?;
