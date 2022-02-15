@@ -68,6 +68,7 @@ struct TxMempoolEntry {
     tx: Transaction,
     fee: Amount,
     parents: BTreeSet<Rc<TxMempoolEntry>>,
+    children: BTreeSet<Rc<TxMempoolEntry>>,
 }
 
 trait TryGetFee {
@@ -76,7 +77,12 @@ trait TryGetFee {
 
 impl TxMempoolEntry {
     fn new(tx: Transaction, fee: Amount, parents: BTreeSet<Rc<TxMempoolEntry>>) -> TxMempoolEntry {
-        Self { tx, fee, parents }
+        Self {
+            tx,
+            fee,
+            parents,
+            children: BTreeSet::default(),
+        }
     }
 
     fn is_replaceable(&self) -> bool {
