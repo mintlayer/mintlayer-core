@@ -17,11 +17,10 @@
 // Author(s): A. Altonen
 use crate::{error, message, net};
 use libp2p::{
-    gossipsub::{Gossipsub, GossipsubEvent, IdentTopic as Topic, TopicHash},
-    mdns::{Mdns, MdnsEvent},
-    streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
+    gossipsub::{IdentTopic as Topic, TopicHash},
+    streaming::StreamHandle,
     swarm::NegotiatedSubstream,
-    Multiaddr, NetworkBehaviour, PeerId,
+    Multiaddr, PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -94,39 +93,5 @@ impl TryFrom<TopicHash> for net::GossipsubTopic {
             "mintlayer-gossipsub-blocks" => Ok(net::GossipsubTopic::Blocks),
             _ => Err("Invalid Gossipsub topic"),
         }
-    }
-}
-
-#[derive(NetworkBehaviour)]
-#[behaviour(out_event = "ComposedEvent")]
-pub struct ComposedBehaviour {
-    pub streaming: Streaming<IdentityCodec>,
-    pub mdns: Mdns,
-    pub gossipsub: Gossipsub,
-}
-
-#[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
-pub enum ComposedEvent {
-    StreamingEvent(StreamingEvent<IdentityCodec>),
-    MdnsEvent(MdnsEvent),
-    GossipsubEvent(GossipsubEvent),
-}
-
-impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
-    fn from(event: StreamingEvent<IdentityCodec>) -> Self {
-        ComposedEvent::StreamingEvent(event)
-    }
-}
-
-impl From<MdnsEvent> for ComposedEvent {
-    fn from(event: MdnsEvent) -> Self {
-        ComposedEvent::MdnsEvent(event)
-    }
-}
-
-impl From<GossipsubEvent> for ComposedEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        ComposedEvent::GossipsubEvent(event)
     }
 }

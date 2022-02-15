@@ -45,6 +45,7 @@ use tokio::sync::{
 };
 
 mod backend;
+mod behaviour;
 mod common;
 
 // Maximum message size of 10 MB
@@ -201,7 +202,7 @@ impl NetworkService for Libp2pService {
 
             SwarmBuilder::new(
                 transport,
-                common::ComposedBehaviour {
+                behaviour::ComposedBehaviour {
                     streaming: Streaming::<IdentityCodec>::default(),
                     mdns: Mdns::new(Default::default()).await?,
                     gossipsub,

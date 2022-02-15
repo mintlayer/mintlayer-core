@@ -18,7 +18,7 @@
 use crate::{
     error::{self, P2pError},
     message,
-    net::{self, libp2p::common},
+    net::{self, libp2p::behaviour, libp2p::common},
 };
 use futures::StreamExt;
 use libp2p::{
@@ -39,7 +39,7 @@ use tokio::sync::{
 
 pub struct Backend {
     /// Created libp2p swarm object
-    swarm: Swarm<common::ComposedBehaviour>,
+    swarm: Swarm<behaviour::ComposedBehaviour>,
 
     /// Receiver for incoming commands
     cmd_rx: Receiver<common::Command>,
@@ -65,7 +65,7 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(
-        swarm: Swarm<common::ComposedBehaviour>,
+        swarm: Swarm<behaviour::ComposedBehaviour>,
         cmd_rx: Receiver<common::Command>,
         event_tx: Sender<common::Event>,
         relay_mdns: bool,
@@ -115,7 +115,7 @@ impl Backend {
     async fn on_event(
         &mut self,
         event: SwarmEvent<
-            common::ComposedEvent,
+            behaviour::ComposedEvent,
             EitherError<
                 EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
                 GossipsubHandlerError,
@@ -123,7 +123,7 @@ impl Backend {
         >,
     ) -> error::Result<()> {
         match event {
-            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+            SwarmEvent::Behaviour(behaviour::ComposedEvent::StreamingEvent(
                 StreamingEvent::StreamOpened {
                     id,
                     peer_id,
@@ -182,7 +182,7 @@ impl Backend {
                     Ok(())
                 }
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+            SwarmEvent::Behaviour(behaviour::ComposedEvent::StreamingEvent(
                 StreamingEvent::NewIncoming {
                     peer_id, stream, ..
                 },
@@ -207,7 +207,7 @@ impl Backend {
                 log::trace!("new listen address {:?}", address);
                 Ok(())
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
+            SwarmEvent::Behaviour(behaviour::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
                 peers,
             ))) => {
                 self.send_discovery_event(peers.collect(), |peers| common::Event::PeerDiscovered {
@@ -215,7 +215,7 @@ impl Backend {
                 })
                 .await
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
+            SwarmEvent::Behaviour(behaviour::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
                 expired,
             ))) => {
                 self.send_discovery_event(expired.collect(), |peers| common::Event::PeerExpired {
@@ -223,7 +223,7 @@ impl Backend {
                 })
                 .await
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::GossipsubEvent(
+            SwarmEvent::Behaviour(behaviour::ComposedEvent::GossipsubEvent(
                 GossipsubEvent::Message {
                     propagation_source: _,
                     message_id: _,
@@ -330,7 +330,7 @@ mod tests {
     //
     // it contains the selected transport for the swarm (in this case TCP + Noise)
     // and any custom network behaviour such as streaming or mDNS support
-    async fn make_swarm() -> Swarm<common::ComposedBehaviour> {
+    async fn make_swarm() -> Swarm<behaviour::ComposedBehaviour> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys =
@@ -356,7 +356,7 @@ mod tests {
 
         SwarmBuilder::new(
             transport,
-            common::ComposedBehaviour {
+            behaviour::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await.unwrap(),
                 gossipsub,
