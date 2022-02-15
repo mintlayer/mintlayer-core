@@ -75,21 +75,8 @@ trait TryGetFee {
 }
 
 impl TxMempoolEntry {
-    fn new<C: ChainState>(tx: Transaction, pool: &MempoolImpl<C>) -> Option<TxMempoolEntry> {
-        let parents = tx
-            .inputs()
-            .iter()
-            .filter_map(|input| {
-                pool.store
-                    .txs_by_id
-                    .get(&input.outpoint().tx_id().get_tx_id().expect("Not coinbase").get())
-            })
-            .cloned()
-            .collect::<BTreeSet<_>>();
-
-        let fee = pool.try_get_fee(&tx).ok()?;
-
-        Some(Self { tx, fee, parents })
+    fn new(tx: Transaction, fee: Amount, parents: BTreeSet<Rc<TxMempoolEntry>>) -> TxMempoolEntry {
+        Self { tx, fee, parents }
     }
 
     fn is_replaceable(&self) -> bool {
@@ -260,6 +247,22 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
         self.store.contains_outpoint(outpoint) || self.chain_state.contains_outpoint(outpoint)
     }
 
+    fn create_entry(&self, tx: Transaction) -> Result<TxMempoolEntry, TxValidationError> {
+        let parents = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| {
+                self.store
+                    .txs_by_id
+                    .get(&input.outpoint().tx_id().get_tx_id().expect("Not Coinbase").get())
+            })
+            .cloned()
+            .collect::<BTreeSet<_>>();
+
+        let fee = self.try_get_fee(&tx)?;
+        Ok(TxMempoolEntry::new(tx, fee, parents))
+    }
+
     fn validate_transaction(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         if tx.inputs().is_empty() {
             return Err(TxValidationError::NoInputs);
@@ -325,8 +328,7 @@ impl<C: ChainState + Debug> Mempool<C> for MempoolImpl<C> {
             return Err(MempoolError::MempoolFull);
         }
         self.validate_transaction(&tx)?;
-        let entry = TxMempoolEntry::new(tx, self)
-            .ok_or_else(|| MempoolError::from(TxValidationError::TransactionFeeOverflow))?;
+        let entry = self.create_entry(tx)?;
         self.store.add_tx(entry)?;
         Ok(())
     }
