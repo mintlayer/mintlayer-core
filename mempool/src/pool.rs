@@ -429,6 +429,15 @@ mod tests {
                 .chain(self.chain_state.confirmed_outpoints())
                 .collect()
         }
+
+        fn get_input_value(&self, input: &TxInput) -> anyhow::Result<Amount> {
+            self.available_outpoints()
+                .iter()
+                .find_map(|valued_outpoint| {
+                    (valued_outpoint.outpoint == *input.outpoint()).then(|| valued_outpoint.value)
+                })
+                .ok_or_else(|| anyhow::anyhow!("No such unconfirmed output"))
+        }
     }
 
     #[derive(Debug, Clone)]
@@ -658,7 +667,10 @@ mod tests {
                 left_to_spend = (left_to_spend - value).expect("subtraction failed");
             }
 
-            outputs.push(TxOutput::new(left_to_spend, Destination::AnyoneCanSpend));
+            outputs.push(TxOutput::new(
+                left_to_spend,
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ));
             Ok(outputs)
         }
 
@@ -701,18 +713,15 @@ mod tests {
             .expect("genesis tx not found");
 
         let outpoint_source_id = OutPointSourceId::Transaction(genesis_tx.get_id());
+
+        let flags = 0;
+        let locktime = 0;
         let input = TxInput::new(
             outpoint_source_id,
             0,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-        let outputs = spend_input(&mempool, &input)?;
-
-        let flags = 0;
-        let inputs = vec![input];
-        let locktime = 0;
-        let tx = Transaction::new(flags, inputs, outputs, locktime)
-            .map_err(|e| anyhow::anyhow!("failed to create transaction: {:?}", e))?;
+        let tx = tx_spend_input(&mempool, input, None, flags, locktime)?;
 
         let tx_clone = tx.clone();
         let tx_id = tx.get_id();
@@ -795,33 +804,6 @@ mod tests {
         Ok(())
     }
 
-    fn spend_input(
-        mempool: &MempoolImpl<ChainStateMock>,
-        input: &TxInput,
-    ) -> anyhow::Result<Vec<TxOutput>> {
-        let outpoint = input.outpoint();
-        let input_value = mempool.chain_state.get_outpoint_value(outpoint).or_else(|_| {
-            mempool
-                .available_outpoints()
-                .iter()
-                .find_map(|valued_outpoint| {
-                    (valued_outpoint.outpoint == *outpoint).then(|| valued_outpoint.value)
-                })
-                .ok_or_else(|| anyhow::anyhow!("No such unconfirmed output"))
-        })?;
-        let output_value = (input_value / 2).expect("failed to divide input");
-        let output_pay = TxOutput::new(
-            output_value,
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-        );
-        let output_change_amount = (input_value - output_value).expect("underflow");
-        let output_change = TxOutput::new(
-            output_change_amount,
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-        );
-        Ok(vec![output_pay, output_change])
-    }
-
     #[test]
     fn tx_duplicate_inputs() -> anyhow::Result<()> {
         let mut mempool = MempoolImpl::create(ChainStateMock::new());
@@ -845,12 +827,13 @@ mod tests {
             0,
             InputWitness::NoSignature(Some(witness)),
         );
-        let outputs = spend_input(&mempool, &input)?;
-        let inputs = vec![input, duplicate_input];
         let flags = 0;
         let locktime = 0;
-        let tx = Transaction::new(flags, inputs, outputs, locktime)
-            .map_err(|e| anyhow::anyhow!("failed to create transaction: {:?}", e))?;
+        let outputs = tx_spend_input(&mempool, input.clone(), None, flags, locktime)?
+            .outputs()
+            .clone();
+        let inputs = vec![input, duplicate_input];
+        let tx = Transaction::new(flags, inputs, outputs, locktime)?;
 
         assert!(matches!(
             mempool.add_transaction(tx),
@@ -878,12 +861,10 @@ mod tests {
             0,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-        let outputs = spend_input(&mempool, &input)?;
 
         let flags = 0;
-        let inputs = vec![input];
         let locktime = 0;
-        let tx = Transaction::new(flags, inputs, outputs, locktime)?;
+        let tx = tx_spend_input(&mempool, input, None, flags, locktime)?;
 
         mempool.add_transaction(tx.clone())?;
         assert!(matches!(
@@ -907,12 +888,17 @@ mod tests {
             .expect("genesis tx not found");
 
         let outpoint_source_id = OutPointSourceId::Transaction(genesis_tx.get_id());
+
         let good_input = TxInput::new(
             outpoint_source_id.clone(),
             0,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-        let outputs = spend_input(&mempool, &good_input)?;
+        let flags = 0;
+        let locktime = 0;
+        let outputs =
+            tx_spend_input(&mempool, good_input, None, flags, locktime)?.outputs().clone();
+
         let bad_outpoint_index = 1;
         let bad_input = TxInput::new(
             outpoint_source_id,
@@ -920,9 +906,7 @@ mod tests {
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
 
-        let flags = 0;
         let inputs = vec![bad_input];
-        let locktime = 0;
         let tx = Transaction::new(flags, inputs, outputs, locktime)?;
 
         assert!(matches!(
@@ -995,9 +979,7 @@ mod tests {
         // replaced
         let flags = 0;
         let locktime = 0;
-        let outputs = spend_input(&mempool, &child_tx_input)?;
-        let inputs = vec![child_tx_input];
-        let child_tx = Transaction::new(flags, inputs, outputs, locktime)?;
+        let child_tx = tx_spend_input(&mempool, child_tx_input, None, flags, locktime)?;
         mempool.add_transaction(child_tx)?;
         Ok(())
     }
@@ -1005,29 +987,52 @@ mod tests {
     fn tx_spend_input(
         mempool: &MempoolImpl<ChainStateMock>,
         input: TxInput,
+        fee: Option<Amount>,
         flags: u32,
         locktime: u32,
     ) -> anyhow::Result<Transaction> {
-        let input_value = mempool
-            .available_outpoints()
+        tx_spend_several_inputs(mempool, &[input], fee, flags, locktime)
+    }
+
+    fn tx_spend_several_inputs(
+        mempool: &MempoolImpl<ChainStateMock>,
+        inputs: &[TxInput],
+        fee: impl Into<Option<Amount>>,
+        flags: u32,
+        locktime: u32,
+    ) -> anyhow::Result<Transaction> {
+        let input_value = inputs
             .iter()
-            .find_map(|valued_outpoint| {
-                (valued_outpoint.outpoint == *input.outpoint()).then(|| valued_outpoint.value)
-            })
-            .ok_or_else(|| anyhow::anyhow!("No such unconfirmed output"))?;
-        let output_value = (input_value / 2).expect("failed to divide input");
-        let output_pay = TxOutput::new(
-            output_value,
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-        );
-        let output_change_amount = (input_value - output_value).expect("underflow");
-        let output_change = TxOutput::new(
-            output_change_amount,
-            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
-        );
-        let outputs = vec![output_pay, output_change];
-        let inputs = vec![input];
-        Transaction::new(flags, inputs, outputs, locktime).map_err(Into::into)
+            .map(|input| mempool.get_input_value(input))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .sum::<Option<_>>()
+            .expect("tx_spend_input: overflow");
+
+        let output_value = if let Some(fee) = fee.into() {
+            (fee <= input_value)
+                .then(|| (input_value - fee).expect("tx_spend_input: subtraction error"))
+                .ok_or_else(|| anyhow::anyhow!("Not enough funds"))?
+        } else {
+            (input_value / 2).expect("tx_spend_input: division error")
+        };
+
+        Transaction::new(
+            flags,
+            inputs.to_owned(),
+            vec![
+                TxOutput::new(
+                    output_value,
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                ),
+                TxOutput::new(
+                    (input_value - output_value).expect("underflow"),
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                ),
+            ],
+            locktime,
+        )
+        .map_err(Into::into)
     }
 
     #[test]
@@ -1053,6 +1058,7 @@ mod tests {
                 0,
                 InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             ),
+            None,
             flags_replaceable,
             locktime,
         )?;
@@ -1064,6 +1070,7 @@ mod tests {
                 1,
                 InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             ),
+            None,
             flags_irreplaceable,
             locktime,
         )?;
@@ -1082,11 +1089,12 @@ mod tests {
             0,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
+
+        let original_fee = Amount::from_atoms(10);
         let dummy_output = TxOutput::new(
-            Amount::from_atoms(0),
+            original_fee,
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         );
-
         let replaced_tx = Transaction::new(
             flags_irreplaceable,
             vec![input_with_irreplaceable_parent.clone(), input_with_replaceable_parent],
@@ -1119,7 +1127,7 @@ mod tests {
         let tx5 = Transaction::new(5, vec![], vec![], 0).map_err(anyhow::Error::from)?;
 
         let tx6 = Transaction::new(6, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-        let fee = Amount::from(0);
+        let fee = Amount::from_atoms(0);
 
         // Generation 1
         let tx1_parents = BTreeSet::default();
