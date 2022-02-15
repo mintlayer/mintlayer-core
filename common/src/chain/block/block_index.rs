@@ -12,6 +12,7 @@ pub struct BlockIndex {
     pub chain_trust: u64,
     pub height: BlockHeight,
     pub time: u32,
+    pub time_max: u32,
 }
 
 impl BlockIndex {
@@ -24,6 +25,7 @@ impl BlockIndex {
             chain_trust: 0,
             height: BlockHeight::new(0),
             time: block.get_block_time(),
+            time_max: 0,
         }
     }
 

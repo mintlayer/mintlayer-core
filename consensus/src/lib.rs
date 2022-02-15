@@ -188,8 +188,10 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
                 .get_block_index(&best_block)?
                 .ok_or(BlockError::NotFound)?;
             if self.genesis_block_index() == starting_tip {
+                // If genesis block when just put it in the chain
                 self.connect_blocks(&[block_index])?;
             } else {
+                // connect block to the chain
                 let common_ancestor = self.get_common_ancestor(&starting_tip, &block_index)?;
                 self.disconnect_blocks(&starting_tip, &common_ancestor)?;
                 let new_chain = &mut self.make_new_chain(&block_index, &common_ancestor)?;
@@ -204,15 +206,55 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
         Ok(None)
     }
 
-    #[allow(dead_code)]
-    fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
-        // TODO: Look at BTC, write block index,
-        let block_index = BlockIndex::new(block);
-        self.check_block_index(&block_index)?;
+    fn accept_block_header(&self, block: &Block) -> Result<BlockIndex, BlockError> {
+        // TODO: Check for duplicate block
+        // TODO: If any previous block was invalid, then we have to mark all chain as invalid.
+        self.add_block_index(block)
+    }
+
+    fn get_block_proof(&self, _block_index: &BlockIndex) -> u64 {
+        //TODO: We have to make correct one
+        10
+    }
+
+    fn add_block_index(&self, block: &Block) -> Result<BlockIndex, BlockError> {
+        // TODO: Check for duplicate block index
+        let mut block_index = BlockIndex::new(block);
+        let prev_block_index = self
+            .blockchain_storage
+            .get_block_index(&block_index.get_prev_block_id().ok_or(BlockIndex::Unknown)?)
+            .map_err(|e| BlockError::from(e))?;
+        // Set the block height
+        block_index.height = if let Some(prev_block_index) = prev_block_index {
+            prev_block_index.height + 1
+        } else {
+            BlockHeight::zero()
+        };
+        // Set Time Max
+        block_index.time_max = if let Some(prev_block_index) = prev_block_index {
+            std::cmp::max(prev_block_index.time_max, block_index.get_block_time())
+        } else {
+            block_index.get_block_time()
+        };
+        // Set Chain Trust
+        block_index.chain_trust = if let Some(prev_block_index) = prev_block_index {
+            prev_block_index.chain_trust
+        } else {
+            0
+        } + self.get_block_proof(&block_index);
+
         self.blockchain_storage
             .set_block_index(&block_index)
             .map_err(|e| BlockError::from(e))?;
+
+        Ok(block_index)
+    }
+
+    #[allow(dead_code)]
+    fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+        let block_index = self.accept_block_header(&block)?;
         self.blockchain_storage.add_block(block).map_err(|e| BlockError::from(e))?;
+        self.check_block_index(&block_index)?;
         Ok(block_index)
     }
 
@@ -226,6 +268,19 @@ impl<'a, S: BlockchainStorage> Consensus<'a, S> {
             println!("exist_block");
             return Err(BlockError::Unknown);
         }
+
+        // TODO: Iterate over the entire block tree, using depth-first search. \
+        //  Along the way, remember whether there are blocks on the path from genesis \
+        //  block being explored which are the first to have certain properties.
+
+        // TODO: Add genesis block checks.
+        // TODO: Add consistency checks.
+        // TODO: Check that for every block except the genesis block, the chainwork must be larger than the parent's.
+        // TODO: The prev_block_id must point back for all blocks.
+        // TODO: TREE valid implies all parents are TREE valid. CHAIN valid implies all parents are CHAIN valid. \
+        //  SCRIPTS valid implies all parents are SCRIPTS valid
+        // TODO: Process the unlinked blocks.
+
         // Get prev block index
         if !blk_index.is_genesis(&self.chain_config) {
             let prev_block_id = blk_index.get_prev_block_id().ok_or(BlockError::Orphan)?;
