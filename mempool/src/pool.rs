@@ -1107,4 +1107,30 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn tx_mempool_entry_num_ancestors() -> anyhow::Result<()> {
+        // Input different flag values just to make the hashes of these dummy transactions
+        // different
+        let tx1 = Transaction::new(1, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let tx2 = Transaction::new(2, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let tx3 = Transaction::new(3, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let tx4 = Transaction::new(4, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let fee = Amount::from(0);
+
+        let entry1 = Rc::new(TxMempoolEntry::new(tx1, fee, BTreeSet::default()));
+        let tx2_parents = vec![Rc::clone(&entry1)].into_iter().collect();
+        let entry2 = Rc::new(TxMempoolEntry::new(tx2, fee, tx2_parents));
+
+        let tx3_parents = vec![Rc::clone(&entry1), Rc::clone(&entry2)].into_iter().collect();
+        let entry3 = Rc::new(TxMempoolEntry::new(tx3, fee, tx3_parents));
+
+        let tx4_parents = vec![Rc::clone(&entry3)].into_iter().collect();
+        let entry4 = TxMempoolEntry::new(tx4, fee, tx4_parents);
+        assert_eq!(entry4.unconfirmed_ancestors().len(), 3);
+        assert_eq!(entry3.unconfirmed_ancestors().len(), 2);
+        assert_eq!(entry2.unconfirmed_ancestors().len(), 1);
+        assert_eq!(entry1.unconfirmed_ancestors().len(), 0);
+        Ok(())
+    }
 }
