@@ -6,7 +6,7 @@ use parity_scale_codec::{Decode, Encode};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
-    pub hash_block: H256,
+    pub block_hash: H256,
     pub prev_block_hash: Option<H256>,
     pub next_block_hash: Option<H256>,
     pub chain_trust: u64,
@@ -17,9 +17,9 @@ pub struct BlockIndex {
 
 impl BlockIndex {
     pub fn new(block: &Block) -> Self {
-        // We have to use the whole block because we are not able to take hash_block from the header
+        // We have to use the whole block because we are not able to take block_hash from the header
         Self {
-            hash_block: block.get_id().get(),
+            block_hash: block.get_id().get(),
             prev_block_hash: Some(block.get_prev_block_id().get()),
             next_block_hash: None,
             chain_trust: 0,
@@ -29,8 +29,8 @@ impl BlockIndex {
         }
     }
 
-    pub fn get_id(&self) -> Id<Block> {
-        Id::new(&self.hash_block)
+    pub fn get_block_id(&self) -> Id<Block> {
+        Id::new(&self.block_hash)
     }
 
     pub fn get_prev_block_id(&self) -> Option<Id<Block>> {
@@ -39,7 +39,7 @@ impl BlockIndex {
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.prev_block_hash == None
-            && chain_config.genesis_block().get_id().get() == self.hash_block
+            && chain_config.genesis_block().get_id().get() == self.block_hash
     }
 
     pub fn get_block_time(&self) -> u32 {

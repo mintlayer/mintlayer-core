@@ -10,7 +10,9 @@ pub use storage::error::Recoverable;
 pub mod mock;
 mod store;
 
+pub use storage::transaction::{TransactionRo, TransactionRw, Transactional};
 pub use store::Store;
+pub use store::StoreTxRw;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]

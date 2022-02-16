@@ -195,7 +195,7 @@ impl BlockchainStorage for StoreTxRw<'_> {
     }
 
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
-        self.write::<DBBlocksIndexes, _, _>(block_index.get_id().encode(), block_index)
+        self.write::<DBBlocksIndexes, _, _>(block_index.get_block_id().encode(), block_index)
     }
 
     /// Get the hash of the best block
