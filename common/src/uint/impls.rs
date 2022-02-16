@@ -3,7 +3,7 @@
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
 // Modified in 2022 by
-//     Carla Yap <carla.yap@rbblab.com>
+//     Carla Yap <carla.yap@mintlayer.org>
 // To the extent possible under law, the author(s) have dedicated all
 // copyright and related and neighboring rights to this software to
 // the public domain worldwide. This software is distributed without

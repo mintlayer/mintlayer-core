@@ -1,7 +1,7 @@
 // Copyright 2020 Parity Technologies
 //
 // Modified in 2022 by
-//   Carla Yap <carla.yap@rbblab.com>
+//   Carla Yap <carla.yap@mintlayer.org>
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
