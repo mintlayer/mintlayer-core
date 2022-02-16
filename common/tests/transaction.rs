@@ -19,37 +19,37 @@ fn transaction_id_snapshots() {
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x01).unwrap();
     expect![[r#"
-        0xa87e4adcb5a356a3247b699d2c36cf217a135b43a29c3883f46eaed72abbd128
+        0x28d1bb2ad7ae6ef483389ca2435b137a21cf362c9d697b24a356a3b5dc4a7ea8
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, vec![], vec![], 0x02).unwrap();
     expect![[r#"
-        0x228fea54993e15647ec580ccabde223444b43bd52c82579a2d99ffcfb756c662
+        0x62c656b7cfff992d9a57822cd53bb4443422deabcc80c57e64153e9954ea8f22
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0xf94788524c18ef1fc4b402398f7dc75a42bc6cba31465c14d3fcc1c25bd71a2e
+        0x2e1ad75bc2c1fcd3145c4631ba6cbc425ac77d8f3902b4c41fef184c528847f9
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0xdfe2df919b4eab0ee3d10fff2f1f964f33c6a50c9b2e3a18fd9297088b64576e
+        0x6e57648b089792fd183a2e9b0ca5c6334f961f2fff0fd1e30eab4e9b91dfe2df
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     expect![[r#"
-        0xd6361975b7013da6a67a449bfd2d5beddcd02ed86aabfa04fd25f8a15443f7ad
+        0xadf74354a1f825fd04faab6ad82ed0dced5b2dfd9b447aa6a63d01b7751936d6
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
     expect![[r#"
-        0xab0e6bfe8878d893f153ba10846fb965373f6aa09c998ab8b61260e2c23affd5
+        0xd5ff3ac2e26012b6b88a999ca06a3f3765b96f8410ba53f193d87888fe6b0eab
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 }
