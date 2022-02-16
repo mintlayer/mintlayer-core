@@ -21,6 +21,7 @@ use crate::{
     peer::Peer,
 };
 use async_trait::async_trait;
+use logging::log;
 use parity_scale_codec::{Decode, Encode};
 use std::{
     collections::HashMap,
@@ -80,6 +81,8 @@ impl NetworkService for MockService {
         &mut self,
         addr: Self::Address,
     ) -> error::Result<(Self::PeerId, Self::Socket)> {
+        log::debug!("try to establish outbound connection, address {:?}", addr);
+
         if self.addr == addr {
             return Err(P2pError::SocketError(ErrorKind::AddrNotAvailable));
         }
@@ -120,7 +123,11 @@ impl SocketService for MockSocket {
     where
         T: Sync + Send + Encode,
     {
-        match self.socket.write(&data.encode()).await? {
+        let encoded = data.encode();
+
+        log::trace!("try to send message, {} bytes", encoded.len());
+
+        match self.socket.write(&encoded).await? {
             0 => Err(P2pError::PeerDisconnected),
             _ => Ok(()),
         }

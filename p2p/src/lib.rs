@@ -24,6 +24,7 @@ use crate::{
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
+use logging::log;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -154,15 +155,17 @@ where
         event: Option<PeerEvent<NetworkingBackend>>,
     ) -> error::Result<()> {
         let event = event.ok_or(P2pError::ChannelClosed)?;
-
         match event.event {
-            PeerEventType::HandshakeFailed => self
-                .peers
-                .remove(&event.peer_id)
-                .map(|_| ())
-                .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string())),
+            PeerEventType::HandshakeFailed => {
+                log::error!("handshake failed, peer id {:?}", event.peer_id);
+                self.peers
+                    .remove(&event.peer_id)
+                    .map(|_| ())
+                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
+            }
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
+                    log::info!("new peer joined, peer id {:?}", event.peer_id);
                     (*peer).state = PeerState::Active;
                     Ok(())
                 }
@@ -185,9 +188,15 @@ where
     ) -> error::Result<()> {
         match event {
             ConnectivityEvent::Accept(peer_id, socket) => {
+                log::debug!("accept incoming connection, peer id {:?}", peer_id);
                 self.create_peer(peer_id, socket, PeerRole::Inbound)
             }
             ConnectivityEvent::Connect(address) => {
+                log::debug!(
+                    "try to establish outbound connection, address {:?}",
+                    address
+                );
+
                 self.network.connect(address).await.map(|(peer_id, socket)| {
                     self.create_peer(peer_id, socket, PeerRole::Outbound)
                 })?
@@ -206,9 +215,15 @@ where
         if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
             return Ok(());
         }
+        log::debug!("try to establish more outbound connections");
 
         // we don't know of any peers
         if self.discovered.is_empty() {
+            log::error!(
+                "# of connections below threshold ({} < {}) but no peers",
+                self.peers.len(),
+                MAX_ACTIVE_CONNECTIONS,
+            );
             return Err(P2pError::NoPeers);
         }
 
@@ -242,6 +257,8 @@ where
             .collect::<_>();
 
         for (id, addr) in peers.into_iter() {
+            log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
+
             self.discovered.remove(&id);
             let _ = self.on_connectivity_event(ConnectivityEvent::Connect((*addr).clone())).await;
         }
@@ -251,6 +268,8 @@ where
 
     /// Update the list of peers we know about or update a known peers list of addresses
     fn peer_discovered(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
+        log::info!("discovered {} new peers", peers.len());
+
         for info in peers.iter() {
             if self.peers.contains_key(&info.id) {
                 continue;
@@ -261,6 +280,8 @@ where
                 ip6: HashSet::new(),
             }) {
                 PeerAddrInfo::Raw { ip4, ip6 } => {
+                    log::trace!("discovered ipv4 {:#?}, ipv6 {:#?}", ip4, ip6);
+
                     ip4.extend(info.ip4.clone());
                     ip6.extend(info.ip6.clone());
                 }
@@ -290,6 +311,8 @@ where
 
     /// Run the `P2P` event loop.
     pub async fn run(&mut self) -> error::Result<()> {
+        log::info!("starting event loop");
+
         loop {
             tokio::select! {
                 res = self.network.poll_next() => {
@@ -323,6 +346,8 @@ where
                 tx,
             },
         );
+
+        log::debug!("spawning a task for peer {:?}, role {:?}", id, role);
 
         tokio::spawn(async move {
             Peer::<NetworkingBackend>::new(id, role, config, socket, mgr_tx, rx).run().await;

@@ -24,6 +24,7 @@ use libp2p::{
 };
 use tokio::sync::oneshot;
 
+#[derive(Debug)]
 pub enum Command {
     /// Start listening on the network interface specified by `addr`
     Listen {

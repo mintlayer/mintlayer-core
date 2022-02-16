@@ -24,6 +24,7 @@ use crate::{
 use common::{chain::ChainConfig, primitives::time};
 use futures::{stream::FuturesUnordered, FutureExt, StreamExt};
 use futures_timer::Delay;
+use logging::log;
 use std::{sync::Arc, time::Duration};
 
 // pub type PeerId = u64;
@@ -191,6 +192,10 @@ where
                 self.on_inbound_connectivity_event(state, msg).await
             }
             MessageType::Handshake(_) => {
+                log::error!(
+                    "{:?}: remote sent a handshaking message, expected ping/pong",
+                    self.id
+                );
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
@@ -202,17 +207,31 @@ where
     /// which case we must respond with Pong, or it may be, e.g., GetHeaders in which
     /// case the message is sent to the P2P object for further processing
     pub async fn on_peer_event(&mut self, msg: error::Result<Message>) -> error::Result<()> {
+        log::trace!("{:?}: handle incoming message {:?}", self.id, msg);
+
         // if `msg` contains an error, it means that there was a socket error,
         // i.e., remote peer closed the connection. Exit from the peer event loop
         //
         // Based on whether the handshake is in process or not, either a `SocketError`
         // or `ProtocolError` is returned
         let msg = msg.map_err(|err| match self.state {
-            PeerState::Handshaking(_) => P2pError::ProtocolError(ProtocolError::Incompatible),
+            PeerState::Handshaking(_) => {
+                log::error!(
+                    "{:?}: remote closed connection during handshaking, incompatible nodes",
+                    self.id,
+                );
+                P2pError::ProtocolError(ProtocolError::Incompatible)
+            }
             _ => err,
         })?;
 
         if msg.magic != *self.config.magic_bytes() {
+            log::error!(
+                "{:?}: remote ({:?}) is in different network, our network {:?}",
+                self.id,
+                msg.magic,
+                self.config.magic_bytes()
+            );
             return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
         }
 
@@ -263,6 +282,7 @@ where
         match self.state {
             PeerState::Listening(state) => self.on_listening_state_timer_event(state, task).await,
             PeerState::Handshaking(_) => {
+                log::error!("{:?}: stray handshaking message received", self.id);
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
@@ -278,6 +298,8 @@ where
     /// This function has its own loop so it must not be polled by
     /// an upper-level event loop but a task must be spawned for it
     pub async fn run(&mut self) -> error::Result<()> {
+        log::debug!("{:?}: starting event loop", self.id);
+
         let mut tasks = FuturesUnordered::new();
         tasks.push(schedule_event(TaskInfo {
             task: Task::Connectivity(ConnectivityTask::Ping {

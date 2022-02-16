@@ -15,6 +15,9 @@ itertools = "0.10.3"
 [dependencies.common]
 path = "../common/"
 
+[dependencies.logging]
+path = "../logging/"
+
 [dependencies.libp2p]
 git = "https://github.com/mintlayer/rust-libp2p"
 branch = "streaming-protocol-v0.42.2"
