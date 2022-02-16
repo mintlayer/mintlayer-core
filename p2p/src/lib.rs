@@ -166,6 +166,7 @@ where
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
                     log::info!("new peer joined, peer id {:?}", event.peer_id);
+                    self.network.register_peer(event.peer_id).await?;
                     (*peer).state = PeerState::Active;
                     Ok(())
                 }

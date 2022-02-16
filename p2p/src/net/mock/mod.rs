@@ -115,6 +115,14 @@ impl NetworkService for MockService {
     {
         todo!();
     }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait]

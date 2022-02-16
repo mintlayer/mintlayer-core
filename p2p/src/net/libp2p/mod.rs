@@ -38,7 +38,7 @@ use libp2p::{
 };
 use logging::log;
 use parity_scale_codec::{Decode, Encode};
-use std::{sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -206,6 +206,7 @@ impl NetworkService for Libp2pService {
                     streaming: Streaming::<IdentityCodec>::default(),
                     mdns: Mdns::new(Default::default()).await?,
                     gossipsub,
+                    established: HashMap::new(),
                 },
                 peer_id,
             )
@@ -334,6 +335,28 @@ impl NetworkService for Libp2pService {
                 response: tx,
             })
             .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("register peer {:?} to libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("unregister peer {:?} from libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
 
         rx.await
             .map_err(|e| e)? // channel closed

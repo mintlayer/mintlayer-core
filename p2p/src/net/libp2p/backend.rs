@@ -26,7 +26,7 @@ use libp2p::{
     gossipsub::{error::GossipsubHandlerError, GossipsubEvent},
     mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
-    swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
+    swarm::{NegotiatedSubstream, NetworkBehaviour, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
@@ -305,6 +305,31 @@ impl Backend {
                     .map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
+            common::Command::Register { peer, response } => {
+                let info = self
+                    .swarm
+                    .behaviour_mut()
+                    .established
+                    .get(&peer)
+                    .ok_or_else(|| {
+                        P2pError::Unknown(
+                            "Peer does not have an established connection".to_string(),
+                        )
+                    })?
+                    .clone();
+                self.swarm.behaviour_mut().gossipsub.inject_connected(&peer);
+                self.swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .inject_connection_established(&peer, &info.0, &info.1, None);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            common::Command::Unregister { peer, response } => {
+                let _ = self.swarm.behaviour_mut().established.remove(&peer).ok_or_else(|| {
+                    P2pError::Unknown("Peer does not have an established connection".to_string())
+                })?;
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }
@@ -360,6 +385,7 @@ mod tests {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await.unwrap(),
                 gossipsub,
+                established: HashMap::new(),
             },
             peer_id,
         )

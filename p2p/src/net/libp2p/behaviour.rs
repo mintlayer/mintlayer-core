@@ -16,7 +16,10 @@
 // Author(s): A. Altonen
 #![allow(clippy::type_complexity)]
 use libp2p::{
-    core::{connection, either, ConnectedPoint, Multiaddr, PeerId},
+    core::{
+        connection::{self, ConnectionId},
+        either, ConnectedPoint, Multiaddr, PeerId,
+    },
     gossipsub::{Gossipsub, GossipsubEvent},
     mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, Streaming, StreamingEvent},
@@ -25,12 +28,20 @@ use libp2p::{
         NetworkBehaviourAction, PollParameters, ProtocolsHandler,
     },
 };
-use std::task::Poll;
+use std::{collections::HashMap, task::Poll};
 
 pub struct ComposedBehaviour {
+    /// Streaming response protocol
     pub streaming: Streaming<IdentityCodec>,
+
+    /// Multicast DNS
     pub mdns: Mdns,
+
+    /// Gossipsub
     pub gossipsub: Gossipsub,
+
+    /// Hashmap of established but unregistered connections
+    pub established: HashMap<PeerId, (ConnectionId, ConnectedPoint)>,
 }
 
 #[derive(Debug)]
@@ -95,7 +106,6 @@ where
     fn inject_connected(&mut self, peer_id: &PeerId) {
         self.streaming.inject_connected(peer_id);
         self.mdns.inject_connected(peer_id);
-        self.gossipsub.inject_connected(peer_id);
     }
 
     fn inject_disconnected(&mut self, peer_id: &PeerId) {
@@ -117,8 +127,7 @@ where
         self.mdns
             .inject_connection_established(peer_id, connection_id, endpoint, errors);
 
-        self.gossipsub
-            .inject_connection_established(peer_id, connection_id, endpoint, errors);
+        self.established.insert(*peer_id, (*connection_id, endpoint.clone()));
     }
 
     fn inject_address_change(
