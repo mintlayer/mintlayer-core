@@ -3970,6 +3970,7 @@ name = "test-utils"
 version = "0.1.0"
 dependencies = [
  "common",
+ "libp2p",
  "p2p",
  "portpicker",
  "tokio",
