@@ -32,7 +32,7 @@ impl From<GenericArray<u8, typenum::U32>> for H256 {
 
 impl From<H256> for Uint256 {
     fn from(hash: H256) -> Self {
-        Uint256::from_le_bytes(hash.0)
+        Uint256::from(hash.0)
     }
 }
 
@@ -123,13 +123,13 @@ mod tests {
     fn h256_to_uint256() {
         fn check(value: &str) {
             let hash_value = H256::from_str(value).expect("nothing wrong");
-            let uint_value = Uint256::from(hash_value.clone());
+            let uint_value = Uint256::from(hash_value);
 
             let hash_str = format!("{:?}", hash_value);
             let uint_str = format!("{:?}", uint_value);
             assert_eq!(hash_str, uint_str);
 
-            let uint_bytes = uint_value.to_le_bytes();
+            let uint_bytes: [u8; 32] = uint_value.into();
             let hash_bytes = hash_value.0;
             assert_eq!(hash_bytes, uint_bytes);
         }

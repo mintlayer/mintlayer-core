@@ -322,33 +322,12 @@ macro_rules! construct_fixed_hash {
 		impl_rand_for_fixed_hash!($name);
 		impl_cmp_for_fixed_hash!($name);
 		impl_rustc_hex_for_fixed_hash!($name);
-		impl_quickcheck_for_fixed_hash!($name);
+		// impl_quickcheck_for_fixed_hash!($name);
 		impl_arbitrary_for_fixed_hash!($name);
 	}
 }
 
-// // Implementation for disabled byteorder crate support.
-// //
-// // # Note
-// //
-// // Feature guarded macro definitions instead of feature guarded impl blocks
-// // to work around the problems of introducing `byteorder` crate feature in
-// // a user crate.
-// #[cfg(not(feature = "byteorder"))]
-// #[macro_export]
-// #[doc(hidden)]
-// macro_rules! impl_byteorder_for_fixed_hash {
-// 	( $name:ident ) => {};
-// }
-
 // Implementation for enabled byteorder crate support.
-//
-// # Note
-//
-// Feature guarded macro definitions instead of feature guarded impl blocks
-// to work around the problems of introducing `byteorder` crate feature in
-// a user crate.
-// #[cfg(feature = "byteorder")]
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_byteorder_for_fixed_hash {
@@ -462,28 +441,7 @@ macro_rules! impl_byteorder_for_fixed_hash {
     };
 }
 
-// // Implementation for disabled rand crate support.
-// //
-// // # Note
-// //
-// // Feature guarded macro definitions instead of feature guarded impl blocks
-// // to work around the problems of introducing `rand` crate feature in
-// // a user crate.
-// #[cfg(not(feature = "rand"))]
-// #[macro_export]
-// #[doc(hidden)]
-// macro_rules! impl_rand_for_fixed_hash {
-// 	( $name:ident ) => {};
-// }
-
-// Implementation for enabled rand crate support.
-//
-// # Note
-//
-// Feature guarded macro definitions instead of feature guarded impl blocks
-// to work around the problems of introducing `rand` crate feature in
-// a user crate.
-// #[cfg(feature = "rand")]
+// Implementation for rand crate support.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_rand_for_fixed_hash {
@@ -557,28 +515,7 @@ macro_rules! impl_cmp_for_fixed_hash {
     };
 }
 
-// // Implementation for disabled rustc-hex crate support.
-// //
-// // # Note
-// //
-// // Feature guarded macro definitions instead of feature guarded impl blocks
-// // to work around the problems of introducing `rustc-hex` crate feature in
-// // a user crate.
-// #[cfg(not(feature = "rustc-hex"))]
-// #[macro_export]
-// #[doc(hidden)]
-// macro_rules! impl_rustc_hex_for_fixed_hash {
-// 	( $name:ident ) => {};
-// }
-
-// Implementation for enabled rustc-hex crate support.
-//
-// # Note
-//
-// Feature guarded macro definitions instead of feature guarded impl blocks
-// to work around the problems of introducing `rustc-hex` crate feature in
-// a user crate.
-// #[cfg(feature = "rustc-hex")]
+// Implementation for rustc-hex crate support.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_rustc_hex_for_fixed_hash {
@@ -615,71 +552,33 @@ macro_rules! impl_rustc_hex_for_fixed_hash {
     };
 }
 
-// // Implementation for disabled quickcheck crate support.
-// //
-// // # Note
-// //
-// // Feature guarded macro definitions instead of feature guarded impl blocks
-// // to work around the problems of introducing `quickcheck` crate feature in
-// // a user crate.
-// #[cfg(not(feature = "quickcheck"))]
+//
+// TODO: works on version 0.9.0. But has version conflicts with env_logger.
+// Upgrading the quickcheck version also removes the `fill_bytes` method.
+// See issue: [missing fill_bytes](https://github.com/BurntSushi/quickcheck/issues/291)
+//
+//Implementation for quickcheck crate support.
 // #[macro_export]
 // #[doc(hidden)]
 // macro_rules! impl_quickcheck_for_fixed_hash {
-// 	( $name:ident ) => {};
+//     ( $name:ident ) => {
+//         impl quickcheck::Arbitrary for $name {
+//             fn arbitrary(g: &mut quickcheck::Gen) -> Self {
+//                 let mut res = [0u8; core::mem::size_of::<Self>()];
+//                 g.fill_bytes(&mut res[..Self::len_bytes()]);
+//                 Self::from(res)
+//             }
+//         }
+//     };
 // }
 
-// Implementation for enabled quickcheck crate support.
-//
-// # Note
-//
-// Feature guarded macro definitions instead of feature guarded impl blocks
-// to work around the problems of introducing `quickcheck` crate feature in
-// a user crate.
-// #[cfg(feature = "quickcheck")]
-#[macro_export]
-#[doc(hidden)]
-macro_rules! impl_quickcheck_for_fixed_hash {
-    ( $name:ident ) => {
-        impl quickcheck::Arbitrary for $name {
-            fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
-                let mut res = [0u8; core::mem::size_of::<Self>()];
-                g.fill_bytes(&mut res[..Self::len_bytes()]);
-                Self::from(res)
-            }
-        }
-    };
-}
-
-// // When the `arbitrary` feature is disabled.
-// //
-// // # Note
-// //
-// // Feature guarded macro definitions instead of feature guarded impl blocks
-// // to work around the problems of introducing `arbitrary` crate feature in
-// // a user crate.
-// #[cfg(not(feature = "arbitrary"))]
-// #[macro_export]
-// #[doc(hidden)]
-// macro_rules! impl_arbitrary_for_fixed_hash {
-// 	( $name:ident ) => {};
-// }
-
-// When the `arbitrary` feature is enabled.
-//
-// # Note
-//
-// Feature guarded macro definitions instead of feature guarded impl blocks
-// to work around the problems of introducing `arbitrary` crate feature in
-// a user crate.
-// #[cfg(feature = "arbitrary")]
-
+// Implementation for arbitrary crate support
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_arbitrary_for_fixed_hash {
     ( $name:ident ) => {
-        impl arbitrary::Arbitrary for $name {
-            fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
+        impl<'a> arbitrary::Arbitrary<'a> for $name {
+            fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
                 let mut res = Self::zero();
                 u.fill_buffer(&mut res.0)?;
                 Ok(Self::from(res))
