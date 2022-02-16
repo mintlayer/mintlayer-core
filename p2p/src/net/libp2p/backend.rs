@@ -313,6 +313,14 @@ impl Backend {
                 self.swarm.behaviour_mut().floodsub.publish(topic, message);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
+            common::Command::Register { peer, response } => {
+                self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            common::Command::Unregister { peer, response } => {
+                self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }

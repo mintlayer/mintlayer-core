@@ -327,6 +327,28 @@ impl NetworkService for Libp2pService {
             .map_err(|e| e)? // channel closed
             .map_err(|e| e) // command failure
     }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("register peer {:?} to libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("unregister peer {:?} from libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
 }
 
 #[async_trait]

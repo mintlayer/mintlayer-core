@@ -126,6 +126,12 @@ pub trait NetworkService {
     async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode;
+
+    /// Register peer to the network service provider
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()>;
+
+    /// Unregister peer from the network service provider
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()>;
 }
 
 /// `SocketService` provides the low-level socket interface that

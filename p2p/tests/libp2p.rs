@@ -15,16 +15,16 @@
 //
 // Author(s): A. Altonen
 #![cfg(not(loom))]
-#![allow(unused)]
 extern crate test_utils;
 
 use common::{chain::config, sync::Arc};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
+    message::{self, ConnectivityMessage, MessageType},
     net::{
         self,
         libp2p::{Libp2pService, Libp2pStrategy},
-        Event, NetworkService,
+        Event, FloodsubTopic, NetworkService,
     },
     P2P,
 };
@@ -67,5 +67,76 @@ async fn test_libp2p_peer_discovery() {
     }
 }
 
+// verify that libp2p floodsub works
 #[tokio::test(flavor = "multi_thread")]
-async fn test_libp2p_gossipsub() {}
+async fn test_libp2p_floodsub() {
+    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let mut server1 = Libp2pService::new(addr1, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+
+    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let mut server2 = Libp2pService::new(addr2, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+
+    let (server1_res, server2_res) =
+        tokio::join!(server1.connect(server2.addr.clone()), server2.poll_next());
+    let server2_res: Event<Libp2pService> = server2_res.unwrap();
+    let server1_id = match server2_res {
+        Event::IncomingConnection(id, _socket) => id,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
+    let server2_id = server1_res.unwrap().0;
+
+    server1.register_peer(server2_id).await.unwrap();
+    server2.register_peer(server1_id).await.unwrap();
+
+    // wait a little bit to allow the servers to exchange their topic information
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
+    tokio::spawn(async move {
+        loop {
+            let serv_res: Event<Libp2pService> = server2.poll_next().await.unwrap();
+            if let Event::MessageReceived(topic, _message) = serv_res {
+                assert_eq!(
+                    server2
+                        .publish(
+                            topic,
+                            &message::Message {
+                                magic: [0u8; 4],
+                                msg: MessageType::Connectivity(ConnectivityMessage::Pong {
+                                    nonce: u64::MAX
+                                }),
+                            }
+                        )
+                        .await,
+                    Ok(())
+                );
+            }
+        }
+    });
+
+    assert_eq!(
+        server1
+            .publish(
+                net::FloodsubTopic::Transactions,
+                &message::Message {
+                    magic: [0u8; 4],
+                    msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX }),
+                }
+            )
+            .await,
+        Ok(())
+    );
+
+    let serv_res: Event<Libp2pService> = server1.poll_next().await.unwrap();
+    match serv_res {
+        Event::MessageReceived(_, message) => {
+            assert_eq!(
+                message,
+                message::Message {
+                    magic: [0u8; 4],
+                    msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
+                }
+            );
+        }
+        _ => panic!("invalid event received"),
+    }
+}
