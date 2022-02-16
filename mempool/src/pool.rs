@@ -993,6 +993,7 @@ mod tests {
 
     #[test]
     fn tx_replace_child() -> anyhow::Result<()> {
+        // TODO this test doesn't test what it's supposed to test!
         let mut mempool = setup();
         let num_inputs = 1;
         let num_outputs = 1;
