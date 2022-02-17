@@ -1010,7 +1010,20 @@ mod tests {
 
     #[test]
     fn tx_replace() -> anyhow::Result<()> {
-        test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(15)).map_err(anyhow::Error::from)
+        assert!(test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(15)).is_ok());
+        assert!(matches!(
+            test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(10)),
+            Err(MempoolError::TxValidationError(
+                TxValidationError::ReplacementFeeLowerThanOriginal
+            ))
+        ));
+        assert!(matches!(
+            test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(5)),
+            Err(MempoolError::TxValidationError(
+                TxValidationError::ReplacementFeeLowerThanOriginal
+            ))
+        ));
+        Ok(())
     }
 
     #[test]
