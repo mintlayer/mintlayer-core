@@ -84,13 +84,25 @@ impl OrphanBlocksPool {
         // remove from the prevs
         let prevs = self
             .orphan_by_prev_id
-            .get_mut(&block.get_prev_block_id().get())
+            .get_mut(
+                &block
+                    .get_prev_block_id()
+                    .map(|block_id| block_id.get())
+                    // TODO: Check this part due to Block type now has optional hash_prev_block
+                    .expect("Corrupted orphan key"),
+            )
             .expect("This should always be there since it was added with the other map");
         assert!(!prevs.is_empty());
         if prevs.len() == 1 {
             // if this is the only element left, we remove the whole vector
             self.orphan_by_prev_id
-                .remove(&block.get_prev_block_id().get())
+                .remove(
+                    &block
+                        .get_prev_block_id()
+                        // TODO: Check this part due to Block type now has optional hash_prev_block
+                        .expect("Corrupted orphan key")
+                        .get(),
+                )
                 .expect("Was already found before");
         } else {
             // we find the element that matches the block id
@@ -141,7 +153,13 @@ impl OrphanBlocksPool {
         self.orphan_by_id.insert(block_id.get(), rc_block.clone());
         self.orphan_ids.push(block_id.get());
         self.orphan_by_prev_id
-            .entry(rc_block.get_prev_block_id().get())
+            .entry(
+                rc_block
+                    .get_prev_block_id()
+                    // TODO: Check this part due to Block type now has optional hash_prev_block
+                    .expect("Corrupted orphan key")
+                    .get(),
+            )
             .or_default()
             .push(rc_block.clone());
         Ok(())

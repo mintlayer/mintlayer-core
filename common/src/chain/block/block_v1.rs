@@ -5,7 +5,7 @@ use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
-    pub(super) hash_prev_block: Id<BlockV1>,
+    pub(super) hash_prev_block: Option<Id<BlockV1>>,
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
@@ -50,7 +50,7 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn get_prev_block_id(&self) -> &Id<BlockV1> {
+    pub fn get_prev_block_id(&self) -> &Option<Id<BlockV1>> {
         &self.header.hash_prev_block
     }
 }

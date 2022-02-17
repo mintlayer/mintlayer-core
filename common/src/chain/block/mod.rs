@@ -82,10 +82,22 @@ impl From<Id<Block>> for Id<BlockV1> {
     }
 }
 
+impl From<&Id<Block>> for Id<BlockV1> {
+    fn from(id_block: &Id<Block>) -> Id<BlockV1> {
+        Id::new(&id_block.get())
+    }
+}
+
+impl From<&Id<BlockV1>> for Id<Block> {
+    fn from(id_block_v1: &Id<BlockV1>) -> Self {
+        Id::new(&id_block_v1.get())
+    }
+}
+
 impl Block {
     pub fn new(
         transactions: Vec<Transaction>,
-        hash_prev_block: Id<Block>,
+        hash_prev_block: Option<Id<BlockV1>>,
         time: u32,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
@@ -95,7 +107,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block: hash_prev_block.into(),
+            hash_prev_block: hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -150,7 +162,7 @@ impl Block {
         }
     }
 
-    pub fn get_prev_block_id(&self) -> Id<Block> {
+    pub fn get_prev_block_id(&self) -> Option<Id<BlockV1>> {
         match &self {
             Block::V1(blk) => blk.get_prev_block_id().clone().into(),
         }
