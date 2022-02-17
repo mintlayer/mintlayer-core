@@ -62,16 +62,16 @@ pub trait ChainState {
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
 
+trait TryGetFee {
+    fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct TxMempoolEntry {
     tx: Transaction,
     fee: Amount,
     parents: BTreeSet<H256>,
     children: BTreeSet<H256>,
-}
-
-trait TryGetFee {
-    fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
 }
 
 impl TxMempoolEntry {
