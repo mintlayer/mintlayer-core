@@ -4,7 +4,6 @@ use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::rc::Rc;
 
 use serialization::Encode;
 use thiserror::Error;
@@ -67,8 +66,8 @@ pub trait ChainState {
 struct TxMempoolEntry {
     tx: Transaction,
     fee: Amount,
-    parents: BTreeSet<Rc<TxMempoolEntry>>,
-    children: BTreeSet<Rc<TxMempoolEntry>>,
+    parents: BTreeSet<H256>,
+    children: BTreeSet<H256>,
 }
 
 trait TryGetFee {
@@ -76,7 +75,7 @@ trait TryGetFee {
 }
 
 impl TxMempoolEntry {
-    fn new(tx: Transaction, fee: Amount, parents: BTreeSet<Rc<TxMempoolEntry>>) -> TxMempoolEntry {
+    fn new(tx: Transaction, fee: Amount, parents: BTreeSet<H256>) -> TxMempoolEntry {
         Self {
             tx,
             fee,
@@ -85,24 +84,30 @@ impl TxMempoolEntry {
         }
     }
 
-    fn is_replaceable(&self) -> bool {
+    fn is_replaceable(&self, store: &MempoolStore) -> bool {
         self.tx.is_replaceable()
-            || self.unconfirmed_ancestors().iter().any(|ancestor| ancestor.tx.is_replaceable())
+            || self
+                .unconfirmed_ancestors(store)
+                .iter()
+                .any(|ancestor| store.get_entry(ancestor).expect("entry").tx.is_replaceable())
     }
 
-    fn unconfirmed_ancestors(&self) -> BTreeSet<Rc<TxMempoolEntry>> {
+    fn unconfirmed_ancestors(&self, store: &MempoolStore) -> BTreeSet<H256> {
         let mut visited = BTreeSet::new();
-        self.unconfirmed_ancestors_inner(&mut visited);
+        self.unconfirmed_ancestors_inner(&mut visited, store);
         visited
     }
 
-    fn unconfirmed_ancestors_inner(&self, visited: &mut BTreeSet<Rc<TxMempoolEntry>>) {
+    fn unconfirmed_ancestors_inner(&self, visited: &mut BTreeSet<H256>, store: &MempoolStore) {
         for parent in self.parents.iter() {
             if visited.contains(parent) {
                 continue;
             } else {
-                visited.insert(Rc::clone(parent));
-                parent.unconfirmed_ancestors_inner(visited);
+                visited.insert(*parent);
+                store
+                    .get_entry(parent)
+                    .expect("entry")
+                    .unconfirmed_ancestors_inner(visited, store);
             }
         }
     }
@@ -128,9 +133,9 @@ pub struct MempoolImpl<C: ChainState> {
 
 #[derive(Debug)]
 struct MempoolStore {
-    txs_by_id: HashMap<H256, Rc<TxMempoolEntry>>,
-    txs_by_fee: BTreeMap<Amount, BTreeSet<Rc<TxMempoolEntry>>>,
-    spender_txs: BTreeMap<OutPoint, Rc<TxMempoolEntry>>,
+    txs_by_id: HashMap<H256, TxMempoolEntry>,
+    txs_by_fee: BTreeMap<Amount, BTreeSet<H256>>,
+    spender_txs: BTreeMap<OutPoint, H256>,
 }
 
 impl MempoolStore {
@@ -166,22 +171,22 @@ impl MempoolStore {
             .map(|output| output.value())
     }
 
+    fn get_entry(&self, id: &H256) -> Option<&TxMempoolEntry> {
+        self.txs_by_id.get(id)
+    }
+
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx.get_id().get();
-        let entry = Rc::new(entry);
-        self.txs_by_id.insert(id, Rc::clone(&entry));
-        self.txs_by_fee.entry(entry.fee).or_default().insert(Rc::clone(&entry));
+        for parent in &entry.parents {
+            self.txs_by_id.get_mut(parent).map(|parent| parent.children.insert(id));
+        }
 
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
-            self.spender_txs.insert(outpoint.clone(), Rc::clone(&entry));
+            self.spender_txs.insert(outpoint.clone(), id);
         }
 
-        for mut parent in entry.parents.clone() {
-            assert!(Rc::get_mut(&mut parent)
-                .expect("exclusive access to parent")
-                .children
-                .insert(Rc::clone(&entry)))
-        }
+        self.txs_by_fee.entry(entry.fee).or_default().insert(id);
+        self.txs_by_id.insert(id, entry);
 
         Ok(())
     }
@@ -189,16 +194,16 @@ impl MempoolStore {
     fn drop_tx(&mut self, tx_id: &Id<Transaction>) {
         if let Some(entry) = self.txs_by_id.remove(&tx_id.get()) {
             self.txs_by_fee.entry(entry.fee).and_modify(|entries| {
-                entries.remove(&entry).then(|| ()).expect("Inconsistent mempool store")
+                entries.remove(&tx_id.get()).then(|| ()).expect("Inconsistent mempool store")
             });
-            self.spender_txs.retain(|_, entry| entry.tx.get_id() != *tx_id)
+            self.spender_txs.retain(|_, id| *id != tx_id.get())
         } else {
-            assert!(!self.txs_by_fee.values().flatten().any(|entry| entry.tx.get_id() == *tx_id));
-            assert!(!self.spender_txs.iter().any(|(_, entry)| entry.tx.get_id() == *tx_id));
+            assert!(!self.txs_by_fee.values().flatten().any(|id| *id == tx_id.get()));
+            assert!(!self.spender_txs.iter().any(|(_, id)| *id == tx_id.get()));
         }
     }
 
-    fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Rc<TxMempoolEntry>> {
+    fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<H256> {
         self.spender_txs.get(outpoint).cloned()
     }
 }
@@ -267,12 +272,8 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
         let parents = tx
             .inputs()
             .iter()
-            .filter_map(|input| {
-                self.store
-                    .txs_by_id
-                    .get(&input.outpoint().tx_id().get_tx_id().expect("Not Coinbase").get())
-            })
-            .cloned()
+            .map(|input| input.outpoint().tx_id().get_tx_id().expect("Not coinbase").get())
+            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then(|| id))
             .collect::<BTreeSet<_>>();
 
         let fee = self.try_get_fee(&tx)?;
@@ -309,11 +310,12 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
             .inputs()
             .iter()
             .filter_map(|input| self.store.find_conflicting_tx(input.outpoint()))
+            .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
         for entry in &conflicts {
             entry
-                .is_replaceable()
+                .is_replaceable(&self.store)
                 .then(|| ())
                 .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
 
@@ -328,7 +330,7 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
     fn pays_more_than_conflicts(
         &self,
         tx: &Transaction,
-        conflicts: &[Rc<TxMempoolEntry>],
+        conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let replacement_fee = self.try_get_fee(tx)?;
         conflicts
@@ -366,7 +368,12 @@ impl<C: ChainState + Debug> Mempool<C> for MempoolImpl<C> {
     }
 
     fn get_all(&self) -> Vec<&Transaction> {
-        self.store.txs_by_fee.values().flatten().map(|entry| &entry.tx).collect()
+        self.store
+            .txs_by_fee
+            .values()
+            .flatten()
+            .map(|id| &self.store.get_entry(id).expect("entry").tx)
+            .collect()
     }
 
     fn contains_transaction(&self, tx_id: &Id<Transaction>) -> bool {
@@ -1152,6 +1159,7 @@ mod tests {
 
     #[test]
     fn tx_mempool_entry_num_ancestors() -> anyhow::Result<()> {
+        let mut mempool = setup();
         // Input different flag values just to make the hashes of these dummy transactions
         // different
         let tx1 = Transaction::new(1, vec![], vec![], 0).map_err(anyhow::Error::from)?;
@@ -1165,32 +1173,45 @@ mod tests {
 
         // Generation 1
         let tx1_parents = BTreeSet::default();
-        let entry1 = Rc::new(TxMempoolEntry::new(tx1, fee, tx1_parents));
+        let entry1 = TxMempoolEntry::new(tx1, fee, tx1_parents);
         let tx2_parents = BTreeSet::default();
-        let entry2 = Rc::new(TxMempoolEntry::new(tx2, fee, tx2_parents));
+        let entry2 = TxMempoolEntry::new(tx2, fee, tx2_parents);
 
         // Generation 2
-        let tx3_parents = vec![Rc::clone(&entry1), Rc::clone(&entry2)].into_iter().collect();
-        let entry3 = Rc::new(TxMempoolEntry::new(tx3, fee, tx3_parents));
+        let tx3_parents =
+            vec![entry1.tx.get_id().get(), entry2.tx.get_id().get()].into_iter().collect();
+        let entry3 = TxMempoolEntry::new(tx3, fee, tx3_parents);
 
         // Generation 3
-        let tx4_parents = vec![Rc::clone(&entry3)].into_iter().collect();
-        let tx5_parents = vec![Rc::clone(&entry3)].into_iter().collect();
-        let entry4 = Rc::new(TxMempoolEntry::new(tx4, fee, tx4_parents));
-        let entry5 = Rc::new(TxMempoolEntry::new(tx5, fee, tx5_parents));
+        let tx4_parents = vec![entry3.tx.get_id().get()].into_iter().collect();
+        let tx5_parents = vec![entry3.tx.get_id().get()].into_iter().collect();
+        let entry4 = TxMempoolEntry::new(tx4, fee, tx4_parents);
+        let entry5 = TxMempoolEntry::new(tx5, fee, tx5_parents);
 
         // Generation 4
-        let tx6_parents = vec![Rc::clone(&entry3), Rc::clone(&entry4), Rc::clone(&entry5)]
-            .into_iter()
-            .collect();
-        let entry6 = Rc::new(TxMempoolEntry::new(tx6, fee, tx6_parents));
+        let tx6_parents =
+            vec![entry3.tx.get_id().get(), entry4.tx.get_id().get(), entry5.tx.get_id().get()]
+                .into_iter()
+                .collect();
+        let entry6 = TxMempoolEntry::new(tx6, fee, tx6_parents);
 
-        assert_eq!(entry1.unconfirmed_ancestors().len(), 0);
-        assert_eq!(entry2.unconfirmed_ancestors().len(), 0);
-        assert_eq!(entry3.unconfirmed_ancestors().len(), 2);
-        assert_eq!(entry4.unconfirmed_ancestors().len(), 3);
-        assert_eq!(entry5.unconfirmed_ancestors().len(), 3);
-        assert_eq!(entry6.unconfirmed_ancestors().len(), 5);
+        for entry in vec![
+            entry1.clone(),
+            entry2.clone(),
+            entry3.clone(),
+            entry4.clone(),
+            entry5.clone(),
+            entry6.clone(),
+        ] {
+            mempool.store.add_tx(entry)?
+        }
+
+        assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).len(), 0);
+        assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).len(), 0);
+        assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).len(), 2);
+        assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).len(), 3);
+        assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
+        assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
         Ok(())
     }
 }
