@@ -84,6 +84,14 @@ impl TxMempoolEntry {
         }
     }
 
+    fn get_parents(&self) -> impl Iterator<Item = &H256> {
+        self.parents.iter()
+    }
+
+    fn get_children_mut(&mut self) -> &mut BTreeSet<H256> {
+        &mut self.children
+    }
+
     fn is_replaceable(&self, store: &MempoolStore) -> bool {
         self.tx.is_replaceable()
             || self
@@ -177,8 +185,10 @@ impl MempoolStore {
 
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx.get_id().get();
-        for parent in &entry.parents {
-            self.txs_by_id.get_mut(parent).map(|parent| parent.children.insert(id));
+        for parent in entry.get_parents() {
+            self.txs_by_id
+                .get_mut(parent)
+                .map(|parent| parent.get_children_mut().insert(id));
         }
 
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
