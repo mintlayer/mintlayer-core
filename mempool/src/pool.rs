@@ -989,20 +989,16 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn tx_replace() -> anyhow::Result<()> {
+    fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), MempoolError> {
         let mut mempool = setup();
         let num_inputs = 1;
         let num_outputs = 1;
-        let original_fee = Amount::from_atoms(10);
         let tx = TxGenerator::new(&mempool, num_inputs, num_outputs)
             .with_fee(original_fee)
             .generate_replaceable_tx()
             .expect("generate_replaceable_tx");
         mempool.add_transaction(tx)?;
 
-        let fee_delta = Amount::from_atoms(5);
-        let replacement_fee = (original_fee + fee_delta).expect("overflow");
         let tx = TxGenerator::new(&mempool, num_inputs, num_outputs)
             .with_fee(replacement_fee)
             .generate_tx()
@@ -1010,6 +1006,11 @@ mod tests {
 
         mempool.add_transaction(tx)?;
         Ok(())
+    }
+
+    #[test]
+    fn tx_replace() -> anyhow::Result<()> {
+        test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(15)).map_err(anyhow::Error::from)
     }
 
     #[test]
