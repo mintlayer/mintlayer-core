@@ -107,7 +107,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block: hash_prev_block,
+            hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -164,7 +164,7 @@ impl Block {
 
     pub fn get_prev_block_id(&self) -> Option<Id<BlockV1>> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().clone().into(),
+            Block::V1(blk) => blk.get_prev_block_id().clone(),
         }
     }
 }
@@ -192,7 +192,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: Id::new(&H256::zero()),
+            hash_prev_block: None,
             time: rng.gen(),
         };
 
@@ -212,7 +212,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: Id::new(&H256::zero()),
+            hash_prev_block: None,
             time: rng.gen(),
         };
 

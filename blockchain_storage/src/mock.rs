@@ -1,5 +1,6 @@
 //! A mock version of the blockchian storage.
 
+use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::primitives::{BlockHeight, Id};
@@ -13,6 +14,8 @@ mockall::mock! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -67,6 +70,8 @@ mockall::mock! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -205,8 +210,13 @@ mod tests {
                 None => return storage::abort("top not set"),
                 Some(best_id) => {
                     // Check the parent block is the current best block
-                    if best_id != block.get_prev_block_id() {
-                        return storage::abort("not on top");
+                    match block.get_prev_block_id() {
+                        Some(prev_block_id) => {
+                            if Id::<Block>::from(prev_block_id) != best_id {
+                                return storage::abort("not on top");
+                            }
+                        }
+                        None => return storage::abort("DB corrupted"),
                     }
                     best_id
                 }
@@ -233,14 +243,14 @@ mod tests {
     fn sample_data() -> (Block, Block) {
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(
-            vec![tx0],
-            Id::new(&H256::default()),
-            12,
+        let block0 = Block::new(vec![tx0], None, 12, ConsensusData::None).unwrap();
+        let block1 = Block::new(
+            vec![tx1],
+            Some(Id::from(block0.get_id())),
+            34,
             ConsensusData::None,
         )
         .unwrap();
-        let block1 = Block::new(vec![tx1], block0.get_id(), 34, ConsensusData::None).unwrap();
         (block0, block1)
     }
 

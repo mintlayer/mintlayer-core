@@ -352,20 +352,17 @@ mod test {
     #[test]
     #[cfg(not(loom))]
     fn test_storage_manipulation() {
-        use common::primitives::H256;
-
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(
-            vec![tx0.clone()],
-            Id::new(&H256::default()),
-            12,
+        let block0 = Block::new(vec![tx0.clone()], None, 12, ConsensusData::None).unwrap();
+        let block1 = Block::new(
+            vec![tx1.clone()],
+            Some(Id::from(block0.get_id())),
+            34,
             ConsensusData::None,
         )
         .unwrap();
-        let block1 =
-            Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();
