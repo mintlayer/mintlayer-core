@@ -84,6 +84,10 @@ impl TxMempoolEntry {
         }
     }
 
+    fn tx_id(&self) -> H256 {
+        self.tx.get_id().get()
+    }
+
     fn get_parents(&self) -> impl Iterator<Item = &H256> {
         self.parents.iter()
     }
@@ -123,13 +127,13 @@ impl TxMempoolEntry {
 
 impl PartialOrd for TxMempoolEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(other.tx.get_id().get().cmp(&self.tx.get_id().get()))
+        Some(other.tx_id().cmp(&self.tx_id()))
     }
 }
 
 impl Ord for TxMempoolEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        other.tx.get_id().get().cmp(&self.tx.get_id().get())
+        other.tx_id().cmp(&self.tx_id())
     }
 }
 
@@ -184,7 +188,7 @@ impl MempoolStore {
     }
 
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
-        let id = entry.tx.get_id().get();
+        let id = entry.tx_id();
         for parent in entry.get_parents() {
             self.txs_by_id
                 .get_mut(parent)
@@ -1188,21 +1192,18 @@ mod tests {
         let entry2 = TxMempoolEntry::new(tx2, fee, tx2_parents);
 
         // Generation 2
-        let tx3_parents =
-            vec![entry1.tx.get_id().get(), entry2.tx.get_id().get()].into_iter().collect();
+        let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
         let entry3 = TxMempoolEntry::new(tx3, fee, tx3_parents);
 
         // Generation 3
-        let tx4_parents = vec![entry3.tx.get_id().get()].into_iter().collect();
-        let tx5_parents = vec![entry3.tx.get_id().get()].into_iter().collect();
+        let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
+        let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
         let entry4 = TxMempoolEntry::new(tx4, fee, tx4_parents);
         let entry5 = TxMempoolEntry::new(tx5, fee, tx5_parents);
 
         // Generation 4
         let tx6_parents =
-            vec![entry3.tx.get_id().get(), entry4.tx.get_id().get(), entry5.tx.get_id().get()]
-                .into_iter()
-                .collect();
+            vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
         let entry6 = TxMempoolEntry::new(tx6, fee, tx6_parents);
 
         for entry in vec![
