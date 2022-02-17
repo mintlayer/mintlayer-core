@@ -2,8 +2,8 @@
 // Written in 2014 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
-// Modified by
-//     Carla Yap <carla.yap@rbblab.com>
+// Modified in 2022 by
+//     Carla Yap <carla.yap@mintlayer.org>
 // To the extent possible under law, the author(s) have dedicated all
 // copyright and related and neighboring rights to this software to
 // the public domain worldwide. This software is distributed without
@@ -21,7 +21,7 @@
 
 macro_rules! construct_uint {
     ($name:ident, $n_words:expr) => {
-        /// Little-endian large integer type
+        /// little endian large integer type
         #[derive(Copy, Clone, PartialEq, Eq, Hash, Default)]
         pub struct $name(pub [u64; $n_words]);
         impl_array_newtype!($name, u64, $n_words);
@@ -94,13 +94,13 @@ macro_rules! construct_uint {
             }
 
             /// Creates big integer value from a byte array using
-            /// big-endian encoding
+            /// big endian encoding
             pub fn from_be_bytes(bytes: [u8; $n_words * 8]) -> $name {
                 Self::_from_be_slice(&bytes)
             }
 
             /// Creates big integer value from a byte slice using
-            /// big-endian encoding
+            /// big endian encoding
             pub fn from_be_slice(bytes: &[u8]) -> Result<$name, ParseLengthError> {
                 if bytes.len() != $n_words * 8 {
                     Err(ParseLengthError {
@@ -123,7 +123,7 @@ macro_rules! construct_uint {
                 $name(slice)
             }
 
-            /// Convert a big integer into a byte array using big-endian encoding
+            /// Convert a big integer into a byte array using big endian encoding
             pub fn to_be_bytes(&self) -> [u8; $n_words * 8] {
                 use crate::uint::endian::u64_to_array_be;
                 let mut res = [0; $n_words * 8];
@@ -131,6 +131,46 @@ macro_rules! construct_uint {
                     let start = i * 8;
                     res[start..start + 8]
                         .copy_from_slice(&u64_to_array_be(self.0[$n_words - (i + 1)]));
+                }
+                res
+            }
+
+            /// Creates big integer value from a byte array using
+            /// little endian encoding
+            pub fn from_bytes(bytes: [u8; $n_words * 8]) -> $name {
+                Self::inner_from_slice(&bytes)
+            }
+
+            /// Creates big integer value from a byte slice using
+            /// little endian encoding
+            pub fn from_slice(bytes: &[u8]) -> Result<$name, ParseLengthError> {
+                if bytes.len() != $n_words * 8 {
+                    Err(ParseLengthError {
+                        actual: bytes.len(),
+                        expected: $n_words * 8,
+                    })
+                } else {
+                    Ok(Self::inner_from_slice(bytes))
+                }
+            }
+
+            fn inner_from_slice(bytes: &[u8]) -> $name {
+                use crate::uint::endian::slice_to_u64_le;
+                let mut slice = [0u64; $n_words];
+                slice
+                    .iter_mut()
+                    .zip(bytes.chunks(8))
+                    .for_each(|(word, bytes)| *word = slice_to_u64_le(bytes));
+                $name(slice)
+            }
+
+            /// Convert a big integer into a byte array using little endian encoding
+            pub fn to_bytes(&self) -> [u8; $n_words * 8] {
+                use crate::uint::endian::u64_to_array_le;
+                let mut res = [0; $n_words * 8];
+                for i in 0..$n_words {
+                    let start = i * 8;
+                    res[start..start + 8].copy_from_slice(&u64_to_array_le(self.0[i]));
                 }
                 res
             }
@@ -184,6 +224,31 @@ macro_rules! construct_uint {
             }
         }
 
+        impl From<[u8; $n_words * 8]> for $name {
+            /// Creates a Uint256 from the given bytes array of fixed length.
+            ///
+            /// # Note
+            ///
+            /// The given bytes are assumed to be in little endian order.
+            #[inline]
+            fn from(data: [u8; $n_words * 8]) -> Self {
+                Self::from_bytes(data)
+            }
+        }
+
+        impl<'a> From<&'a [u8; $n_words * 8]> for $name {
+            /// Creates a Uint256 from the given reference
+            /// to the bytes array of fixed length.
+            ///
+            /// # Note
+            ///
+            /// The given bytes are assumed to be in little endian order.
+            #[inline]
+            fn from(data: &'a [u8; $n_words * 8]) -> Self {
+                Self::inner_from_slice(data)
+            }
+        }
+
         impl PartialOrd for $name {
             #[inline]
             fn partial_cmp(&self, other: &$name) -> Option<::core::cmp::Ordering> {
@@ -194,9 +259,9 @@ macro_rules! construct_uint {
         impl Ord for $name {
             #[inline]
             fn cmp(&self, other: &$name) -> ::core::cmp::Ordering {
-                // We need to manually implement ordering because we use little-endian
+                // We need to manually implement ordering because we use little endian
                 // and the auto derive is a lexicographic ordering(i.e. memcmp)
-                // which with numbers is equivalent to big-endian
+                // which with numbers is equivalent to big endian
                 for i in 0..$n_words {
                     if self[$n_words - 1 - i] < other[$n_words - 1 - i] {
                         return ::core::cmp::Ordering::Less;
@@ -588,6 +653,57 @@ mod tests {
                 0x1b, 0xad, 0xca, 0xfe, 0xde, 0xad, 0xbe, 0xef, 0xde, 0xaf, 0xba, 0xbe, 0x2b, 0xed,
                 0xfe, 0xed, 0xba, 0xad, 0xf0, 0x0d, 0xde, 0xfa, 0xce, 0xda, 0x11, 0xfe, 0xd2, 0xba,
                 0xd1, 0xc0, 0xff, 0xe0
+            ]
+        );
+    }
+
+    #[test]
+    pub fn uint_from_le_bytes() {
+        assert_eq!(
+            Uint128::from([
+                0xed, 0xfe, 0xed, 0x2b, 0xbe, 0xba, 0xaf, 0xde, 0xef, 0xbe, 0xad, 0xde, 0xfe, 0xca,
+                0xad, 0x1b
+            ]),
+            Uint128([0xdeafbabe2bedfeed, 0x1badcafedeadbeef])
+        );
+
+        assert_eq!(
+            Uint256::from([
+                0xe0, 0xff, 0xc0, 0xd1, 0xba, 0xd2, 0xfe, 0x11, 0xda, 0xce, 0xfa, 0xde, 0x0d, 0xf0,
+                0xad, 0xba, 0xed, 0xfe, 0xed, 0x2b, 0xbe, 0xba, 0xaf, 0xde, 0xef, 0xbe, 0xad, 0xde,
+                0xfe, 0xca, 0xad, 0x1b,
+            ]),
+            Uint256([
+                0x11fed2bad1c0ffe0,
+                0xbaadf00ddefaceda,
+                0xdeafbabe2bedfeed,
+                0x1badcafedeadbeef
+            ])
+        );
+    }
+
+    #[test]
+    pub fn uint_to_le_bytes() {
+        assert_eq!(
+            Uint128([0xdeafbabe2bedfeed, 0x1badcafedeadbeef]).to_bytes(),
+            [
+                0xed, 0xfe, 0xed, 0x2b, 0xbe, 0xba, 0xaf, 0xde, 0xef, 0xbe, 0xad, 0xde, 0xfe, 0xca,
+                0xad, 0x1b
+            ]
+        );
+
+        assert_eq!(
+            Uint256([
+                0x11fed2bad1c0ffe0,
+                0xbaadf00ddefaceda,
+                0xdeafbabe2bedfeed,
+                0x1badcafedeadbeef,
+            ])
+            .to_bytes(),
+            [
+                0xe0, 0xff, 0xc0, 0xd1, 0xba, 0xd2, 0xfe, 0x11, 0xda, 0xce, 0xfa, 0xde, 0x0d, 0xf0,
+                0xad, 0xba, 0xed, 0xfe, 0xed, 0x2b, 0xbe, 0xba, 0xaf, 0xde, 0xef, 0xbe, 0xad, 0xde,
+                0xfe, 0xca, 0xad, 0x1b,
             ]
         );
     }

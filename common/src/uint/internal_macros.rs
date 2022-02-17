@@ -2,6 +2,8 @@
 // Written in 2014 by
 //     Andrew Poelstra <apoelstra@wpsoftware.net>
 //
+// Modified in 2022 by
+//     Carla Yap <carla.yap@mintlayer.org>
 // To the extent possible under law, the author(s) have dedicated all
 // copyright and related and neighboring rights to this software to
 // the public domain worldwide. This software is distributed without
@@ -45,19 +47,19 @@ macro_rules! impl_array_newtype {
 
             #[inline]
             /// Returns the underlying bytes.
-            pub fn as_bytes(&self) -> &[$ty; $len] {
+            pub fn as_inner(&self) -> &[$ty; $len] {
                 &self.0
             }
 
             #[inline]
             /// Returns the underlying bytes.
-            pub fn to_bytes(&self) -> [$ty; $len] {
+            pub fn inner(&self) -> [$ty; $len] {
                 self.0.clone()
             }
 
             #[inline]
             /// Returns the underlying bytes.
-            pub fn into_bytes(self) -> [$ty; $len] {
+            pub fn into_inner(self) -> [$ty; $len] {
                 self.0
             }
         }
