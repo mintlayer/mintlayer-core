@@ -16,7 +16,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::{self, Libp2pError, P2pError},
     message,
     net::{self, libp2p::common},
 };
@@ -31,7 +31,7 @@ use libp2p::{
 };
 use logging::log;
 use parity_scale_codec::Decode;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -59,6 +59,9 @@ pub struct Backend {
         oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     >,
 
+    /// Hashmap of topics and their participants
+    active_floodsubs: HashMap<Topic, HashSet<PeerId>>,
+
     /// Whether mDNS peer events should be relayed to P2P manager
     relay_mdns: bool,
 }
@@ -77,6 +80,7 @@ impl Backend {
             dials: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
+            active_floodsubs: HashMap::new(),
             relay_mdns,
         }
     }
@@ -225,6 +229,40 @@ impl Backend {
                 .await
             }
             SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Subscribed { peer_id, topic },
+            )) => {
+                log::debug!(
+                    "add new subscriber ({:?}) to floodsub topic {:?}",
+                    peer_id,
+                    topic
+                );
+
+                self.active_floodsubs.entry(topic).or_insert_with(HashSet::new).insert(peer_id);
+                Ok(())
+            }
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Unsubscribed { peer_id, topic },
+            )) => match self.active_floodsubs.get_mut(&topic) {
+                Some(peers) => {
+                    log::debug!(
+                        "remove subscriber ({:?}) from floodsub topic {:?}",
+                        peer_id,
+                        topic
+                    );
+
+                    peers.remove(&peer_id);
+                    Ok(())
+                }
+                None => {
+                    log::warn!(
+                        "topic {:?} does not exist, cannot remove subscriber {:?}",
+                        topic,
+                        peer_id
+                    );
+                    Ok(())
+                }
+            },
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
                 FloodsubEvent::Message(message),
             )) => {
                 // for mintlayer there should only ever be one topic per message
@@ -307,9 +345,27 @@ impl Backend {
                 message,
                 response,
             } => {
+                let topic: Topic = (&topic).into();
                 log::trace!("publish message on floodsub topic {:?}", topic);
 
-                let topic: Topic = (&topic).into();
+                // check if the floodsub topic where the message is supposed to be sent
+                // exists (the hashmap entry exists) and that it contains subscribers
+                if let Err(e) = match self.active_floodsubs.get(&topic) {
+                    None => Err(Libp2pError::PublishError("NoPeers".to_string())),
+                    Some(peers) => {
+                        if peers.is_empty() {
+                            Err(Libp2pError::PublishError("NoPeers".to_string()))
+                        } else {
+                            Ok(())
+                        }
+                    }
+                } {
+                    response
+                        .send(Err(P2pError::Libp2pError(e)))
+                        .map_err(|_| P2pError::ChannelClosed)?;
+                    return Ok(());
+                }
+
                 self.swarm.behaviour_mut().floodsub.publish(topic, message);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }

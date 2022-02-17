@@ -55,7 +55,7 @@ where
     MessageReceived(FloodsubTopic, message::Message),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum FloodsubTopic {
     Transactions,
     Blocks,

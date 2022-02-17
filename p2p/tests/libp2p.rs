@@ -20,6 +20,7 @@ extern crate test_utils;
 use common::{chain::config, sync::Arc};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
+    error::{Libp2pError, P2pError},
     message::{self, ConnectivityMessage, MessageType},
     net::{
         self,
@@ -68,7 +69,7 @@ async fn test_libp2p_peer_discovery() {
 }
 
 // verify that libp2p floodsub works
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_libp2p_floodsub() {
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let mut server1 = Libp2pService::new(addr1, &[], &[FloodsubTopic::Transactions]).await.unwrap();
@@ -85,58 +86,63 @@ async fn test_libp2p_floodsub() {
     };
     let server2_id = server1_res.unwrap().0;
 
-    server1.register_peer(server2_id).await.unwrap();
-    server2.register_peer(server1_id).await.unwrap();
+    let (_, _) = tokio::join!(
+        server1.register_peer(server2_id),
+        server2.register_peer(server1_id)
+    );
 
-    // wait a little bit to allow the servers to exchange their topic information
-    std::thread::sleep(std::time::Duration::from_millis(300));
-
-    tokio::spawn(async move {
-        loop {
-            let serv_res: Event<Libp2pService> = server2.poll_next().await.unwrap();
-            if let Event::MessageReceived(topic, _message) = serv_res {
-                assert_eq!(
-                    server2
-                        .publish(
-                            topic,
-                            &message::Message {
-                                magic: [0u8; 4],
-                                msg: MessageType::Connectivity(ConnectivityMessage::Pong {
-                                    nonce: u64::MAX
-                                }),
-                            }
-                        )
-                        .await,
-                    Ok(())
-                );
-            }
-        }
-    });
-
-    assert_eq!(
-        server1
+    // spam the message on the floodsub until it succeeds (= until we have a peer)
+    loop {
+        let res = server1
             .publish(
                 net::FloodsubTopic::Transactions,
                 &message::Message {
                     magic: [0u8; 4],
                     msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX }),
-                }
+                },
             )
-            .await,
-        Ok(())
-    );
+            .await;
 
-    let serv_res: Event<Libp2pService> = server1.poll_next().await.unwrap();
-    match serv_res {
-        Event::MessageReceived(_, message) => {
+        if res.is_ok() {
+            break;
+        } else {
             assert_eq!(
-                message,
-                message::Message {
-                    magic: [0u8; 4],
-                    msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
-                }
+                res,
+                Err(P2pError::Libp2pError(Libp2pError::PublishError(
+                    "NoPeers".to_string()
+                )))
             );
         }
-        _ => panic!("invalid event received"),
+    }
+
+    // poll an event from the network for server2
+    let res2: Result<Event<Libp2pService>, _> = server2.poll_next().await;
+    let server2_send_fut = if let Event::MessageReceived(topic, _message) = res2.unwrap() {
+        server2.publish(
+            topic,
+            &message::Message {
+                magic: [0u8; 4],
+                msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
+            },
+        )
+    } else {
+        panic!("invalid event received for server2, expected floodsub message");
+    };
+
+    // receive the response (pong) from server2 through floodsub
+    let (res1, res2): (Result<Event<Libp2pService>, _>, _) =
+        tokio::join!(server1.poll_next(), server2_send_fut);
+
+    assert!(res2.is_ok());
+    if let Event::MessageReceived(_, message) = res1.unwrap() {
+        assert_eq!(
+            message,
+            message::Message {
+                magic: [0u8; 4],
+                msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
+            }
+        );
+    } else {
+        panic!("invalid event received for server1, expected floodsub message");
     }
 }
