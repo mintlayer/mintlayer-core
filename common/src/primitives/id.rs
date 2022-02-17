@@ -36,6 +36,12 @@ impl From<H256> for Uint256 {
     }
 }
 
+impl From<Uint256> for H256 {
+    fn from(val: Uint256) -> Self {
+        H256(val.to_bytes())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Id<T: ?Sized> {
     id: H256,
@@ -120,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn h256_to_uint256() {
+    fn h256_to_uint256_and_vice_versa() {
         fn check(value: &str) {
             let hash_value = H256::from_str(value).expect("nothing wrong");
             let uint_value = Uint256::from(hash_value);
@@ -129,9 +135,9 @@ mod tests {
             let uint_str = format!("{:?}", uint_value);
             assert_eq!(hash_str, uint_str);
 
-            let uint_bytes: [u8; 32] = uint_value.into();
-            let hash_bytes = hash_value.0;
-            assert_eq!(hash_bytes, uint_bytes);
+            // make sure the position of the bytes are the same.
+            assert_eq!(hash_value.0, uint_value.to_bytes());
+            assert_eq!(hash_value, H256::from(uint_value));
         }
 
         check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");

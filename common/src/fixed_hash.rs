@@ -211,7 +211,7 @@ macro_rules! construct_fixed_hash {
 			}
 		}
 
-		/// Returns the big-endian format
+		/// Returns the big endian format
 		impl core::fmt::Debug for $name {
 			fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
 				let mut inner = self.0;
@@ -327,7 +327,7 @@ macro_rules! construct_fixed_hash {
 	}
 }
 
-// Implementation for enabled byteorder crate support.
+// Implementation for byteorder crate support.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! impl_byteorder_for_fixed_hash {
@@ -355,7 +355,7 @@ macro_rules! impl_byteorder_for_fixed_hash {
                 B::read_u64(&buf)
             }
 
-            /// Returns the lowest 8 bytes interpreted as little-endian.
+            /// Returns the lowest 8 bytes interpreted as little endian.
             ///
             /// # Note
             ///
@@ -366,7 +366,7 @@ macro_rules! impl_byteorder_for_fixed_hash {
                 self.to_low_u64_with_byteorder::<byteorder::BigEndian>()
             }
 
-            /// Returns the lowest 8 bytes interpreted as little-endian.
+            /// Returns the lowest 8 bytes interpreted as little endian.
             ///
             /// # Note
             ///
