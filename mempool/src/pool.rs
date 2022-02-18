@@ -210,14 +210,18 @@ impl MempoolStore {
         }
     }
 
+    fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
+        let id = entry.tx_id();
+        for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
+            self.spender_txs.insert(outpoint.clone(), id);
+        }
+    }
+
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx_id();
         self.append_to_parents(&entry);
         self.update_ancestor_count(&entry);
-
-        for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
-            self.spender_txs.insert(outpoint.clone(), id);
-        }
+        self.mark_outpoints_as_spent(&entry);
 
         self.txs_by_fee.entry(entry.fee).or_default().insert(id);
         self.txs_by_id.insert(id, entry);
