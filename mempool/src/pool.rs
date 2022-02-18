@@ -218,13 +218,12 @@ impl MempoolStore {
     }
 
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
-        let id = entry.tx_id();
         self.append_to_parents(&entry);
         self.update_ancestor_count(&entry);
         self.mark_outpoints_as_spent(&entry);
 
-        self.txs_by_fee.entry(entry.fee).or_default().insert(id);
-        self.txs_by_id.insert(id, entry);
+        self.txs_by_fee.entry(entry.fee).or_default().insert(entry.tx_id());
+        self.txs_by_id.insert(entry.tx_id(), entry);
 
         Ok(())
     }
