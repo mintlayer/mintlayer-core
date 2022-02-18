@@ -86,7 +86,6 @@ impl TxMempoolEntry {
         }
     }
 
-    #[allow(unused)]
     fn count_with_descendants(&self) -> usize {
         self.count_with_descendants
     }
@@ -197,18 +196,16 @@ impl MempoolStore {
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx_id();
         for parent in entry.get_parents() {
-            self.txs_by_id
-                .get_mut(parent)
-                .map(|parent| parent.get_children_mut().insert(id));
-        }
-
-        for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
-            self.spender_txs.insert(outpoint.clone(), id);
+            self.txs_by_id.get_mut(parent).expect("be there").get_children_mut().insert(id);
         }
 
         for ancestor in entry.unconfirmed_ancestors(self) {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.count_with_descendants += 1;
+        }
+
+        for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
+            self.spender_txs.insert(outpoint.clone(), id);
         }
 
         self.txs_by_fee.entry(entry.fee).or_default().insert(id);
@@ -265,6 +262,8 @@ pub enum TxValidationError {
     TransactionFeeOverflow,
     #[error("ReplacementFeeLowerThanOriginal")]
     ReplacementFeeLowerThanOriginal,
+    #[error("TooManyPotentialReplacements")]
+    TooManyPotentialReplacements,
 }
 
 impl From<TxValidationError> for MempoolError {
@@ -346,6 +345,7 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
                 .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
 
             self.pays_more_than_conflicts(tx, &conflicts)?;
+            self.potential_replacements_within_limit(&conflicts)?;
         }
 
         self.verify_inputs_available(tx)?;
@@ -364,6 +364,21 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
             .all(|conflict| conflict.fee < replacement_fee)
             .then(|| ())
             .ok_or(TxValidationError::ReplacementFeeLowerThanOriginal)
+    }
+
+    fn potential_replacements_within_limit(
+        &self,
+        conflicts: &[&TxMempoolEntry],
+    ) -> Result<(), TxValidationError> {
+        const MAX_BIP125_REPLACEMENT_CANDIATES: usize = 100;
+        let mut num_potential_replacements = 0;
+        for conflict in conflicts {
+            num_potential_replacements += conflict.count_with_descendants();
+            if num_potential_replacements > MAX_BIP125_REPLACEMENT_CANDIATES {
+                return Err(TxValidationError::TooManyPotentialReplacements);
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1232,23 +1247,36 @@ mod tests {
             vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
         let entry6 = TxMempoolEntry::new(tx6, fee, tx6_parents);
 
-        for entry in vec![
-            entry1.clone(),
-            entry2.clone(),
-            entry3.clone(),
-            entry4.clone(),
-            entry5.clone(),
-            entry6.clone(),
-        ] {
-            mempool.store.add_tx(entry)?
+        let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
+        let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
+
+        for (index, entry) in entries.into_iter().enumerate() {
+            println!("adding {}, (entry {})", entry.tx_id(), index + 1);
+            mempool.store.add_tx(entry)?;
+            println!(
+                "after adding entry {}, store looks like this {:#?}",
+                index + 1,
+                mempool.store.txs_by_id
+            );
         }
 
+        let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");
+        let entry2 = mempool.store.get_entry(ids.get(1).expect("index")).expect("entry");
+        let entry3 = mempool.store.get_entry(ids.get(2).expect("index")).expect("entry");
+        let entry4 = mempool.store.get_entry(ids.get(3).expect("index")).expect("entry");
+        let entry5 = mempool.store.get_entry(ids.get(4).expect("index")).expect("entry");
+        let entry6 = mempool.store.get_entry(ids.get(5).expect("index")).expect("entry");
         assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).len(), 0);
         assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).len(), 0);
         assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).len(), 2);
         assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).len(), 3);
         assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
         assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
+
+        //println!("entry1 {:#?}", entry1);
+        assert_eq!(entry1.count_with_descendants(), 5);
+        //assert_eq!(entry2.count_with_descendants(&mempool.store), 4);
+
         Ok(())
     }
 }
