@@ -17,7 +17,7 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
-    net::{Event, GossipSubTopic, NetworkService, SocketService},
+    net::{Event, FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -69,7 +69,7 @@ impl NetworkService for MockService {
     async fn new(
         addr: Self::Address,
         _strategies: &[Self::Strategy],
-        _topics: &[GossipSubTopic],
+        _topics: &[FloodsubTopic],
     ) -> error::Result<Self> {
         Ok(Self {
             addr,
@@ -109,11 +109,19 @@ impl NetworkService for MockService {
         ))
     }
 
-    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
+    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
         todo!();
+    }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
     }
 }
 

@@ -15,8 +15,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, net};
+use crate::{error, message, net};
 use libp2p::{
+    floodsub::{Floodsub, FloodsubEvent, Topic},
     mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
@@ -31,12 +32,14 @@ pub enum Command {
         addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
     },
+
     /// Connect to a remote peer at address `peer_addr` whose PeerId is `peer_id`
     Dial {
         peer_id: PeerId,
         peer_addr: Multiaddr,
         response: oneshot::Sender<error::Result<()>>,
     },
+
     /// Open a bidirectional data stream to a remote peer
     ///
     /// Before opening a stream, connection must've been established with the peer
@@ -44,6 +47,25 @@ pub enum Command {
     OpenStream {
         peer_id: PeerId,
         response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
+    },
+
+    /// Publish a message on the designated Floodsub topic
+    SendMessage {
+        topic: net::FloodsubTopic,
+        message: Vec<u8>,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+
+    /// Register peer to libp2p
+    Register {
+        peer: PeerId,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+
+    /// Unregister peer from libp2p
+    Unregister {
+        peer: PeerId,
+        response: oneshot::Sender<error::Result<()>>,
     },
 }
 
@@ -58,6 +80,33 @@ pub enum Event {
 
     /// One or more peers that were previously discovered have expired
     PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
+
+    // Message received from one of the Floodsub topics
+    MessageReceived {
+        topic: net::FloodsubTopic,
+        message: message::Message,
+    },
+}
+
+impl From<&net::FloodsubTopic> for Topic {
+    fn from(t: &net::FloodsubTopic) -> Topic {
+        match t {
+            net::FloodsubTopic::Transactions => Topic::new("mintlayer-floodsub-transactions"),
+            net::FloodsubTopic::Blocks => Topic::new("mintlayer-floodsub-blocks"),
+        }
+    }
+}
+
+impl TryFrom<&Topic> for net::FloodsubTopic {
+    type Error = &'static str;
+
+    fn try_from(t: &Topic) -> Result<Self, Self::Error> {
+        match t.id() {
+            "mintlayer-floodsub-transactions" => Ok(net::FloodsubTopic::Transactions),
+            "mintlayer-floodsub-blocks" => Ok(net::FloodsubTopic::Blocks),
+            _ => Err("Invalid Floodsub topic"),
+        }
+    }
 }
 
 #[derive(NetworkBehaviour)]
@@ -65,12 +114,15 @@ pub enum Event {
 pub struct ComposedBehaviour {
     pub streaming: Streaming<IdentityCodec>,
     pub mdns: Mdns,
+    pub floodsub: Floodsub,
 }
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
+    FloodsubEvent(FloodsubEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -82,5 +134,11 @@ impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
 impl From<MdnsEvent> for ComposedEvent {
     fn from(event: MdnsEvent) -> Self {
         ComposedEvent::MdnsEvent(event)
+    }
+}
+
+impl From<FloodsubEvent> for ComposedEvent {
+    fn from(event: FloodsubEvent) -> Self {
+        ComposedEvent::FloodsubEvent(event)
     }
 }
