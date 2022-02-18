@@ -10,10 +10,19 @@ fn transaction_id_snapshots() {
 
     let outs0: Vec<TxOutput> =
         [TxOutput::new(25.into(), Destination::ScriptHash(Id::new(&hash0)))].to_vec();
-    let ins0: Vec<TxInput> = [TxInput::new(Id::new(&hash0), 5, vec![])].to_vec();
+    let ins0: Vec<TxInput> =
+        [TxInput::new(Id::<Transaction>::new(&hash0).into(), 5, vec![])].to_vec();
     let ins1: Vec<TxInput> = [
-        TxInput::new(Id::new(&hash1), 3, vec![0x01, 0x05, 0x09]),
-        TxInput::new(Id::new(&hash2), 0, vec![0x91, 0x55, 0x19, 0x00]),
+        TxInput::new(
+            Id::<Transaction>::new(&hash1).into(),
+            3,
+            vec![0x01, 0x05, 0x09],
+        ),
+        TxInput::new(
+            Id::<Transaction>::new(&hash2).into(),
+            0,
+            vec![0x91, 0x55, 0x19, 0x00],
+        ),
     ]
     .to_vec();
 
@@ -31,25 +40,25 @@ fn transaction_id_snapshots() {
 
     let tx = Transaction::new(0x00, ins0.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0x2e1ad75bc2c1fcd3145c4631ba6cbc425ac77d8f3902b4c41fef184c528847f9
+        0xfc685449a89c79298273e765eceaa0f81f6b3863b70429820a07626b9d271852
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1.clone(), vec![], 0x00).unwrap();
     expect![[r#"
-        0x6e57648b089792fd183a2e9b0ca5c6334f961f2fff0fd1e30eab4e9b91dfe2df
+        0xb54806907fa4d0763489320a6fd9f3836c560f06313a41318c32d321973ad944
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     expect![[r#"
-        0xadf74354a1f825fd04faab6ad82ed0dced5b2dfd9b447aa6a63d01b7751936d6
+        0xfe3cc928587d0603eef4ea6319076fe8e69324908a443344d3313b53fe2f592b
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
     expect![[r#"
-        0xd5ff3ac2e26012b6b88a999ca06a3f3765b96f8410ba53f193d87888fe6b0eab
+        0x70cc32e22a7cf73636f1b46f0270f3a9a7e9045e056814e9249ddd0f226aaf0b
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 }

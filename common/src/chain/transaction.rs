@@ -104,38 +104,3 @@ impl Transaction {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use parity_scale_codec::DecodeAll;
-
-    #[test]
-    fn tx_id_collision() {
-        let encoded = {
-            let mut bytes = [0u8; 36];
-            // Compact amount
-            bytes[0] = 10 << 2;
-            // Destination is an address (enum discriminant)
-            bytes[1] = 0;
-            // Compact length of address
-            bytes[2] = 33 << 2;
-            // encoded object
-            bytes
-        };
-
-        let output = TxOutput::decode(&mut &encoded[..]).expect("decoding output");
-        let pt = OutPoint::decode_all(&encoded).expect("decoding outpoint");
-        let input = TxInput::new(pt.get_tx_id(), pt.get_output_index(), vec![]);
-
-        let tx0 = Transaction::new(0x00, vec![], vec![output], 0x00).expect("tx0 bad");
-        let tx1 = Transaction::new(0x00, vec![input], vec![], 0x00).expect("tx1 bad");
-        assert_ne!(tx0, tx1);
-
-        assert_ne!(
-            tx0.get_id(),
-            tx1.get_id(),
-            "Different transactions with the same ID!"
-        );
-    }
-}
