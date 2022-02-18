@@ -94,7 +94,7 @@ impl TxMempoolEntry {
         self.tx.get_id().get()
     }
 
-    fn get_parents(&self) -> impl Iterator<Item = &H256> {
+    fn unconfirmed_parents(&self) -> impl Iterator<Item = &H256> {
         self.parents.iter()
     }
 
@@ -195,7 +195,7 @@ impl MempoolStore {
 
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx_id();
-        for parent in entry.get_parents() {
+        for parent in entry.unconfirmed_parents() {
             self.txs_by_id.get_mut(parent).expect("be there").get_children_mut().insert(id);
         }
 
