@@ -193,11 +193,19 @@ impl MempoolStore {
         self.txs_by_id.get(id)
     }
 
+    fn update_parents(&mut self, entry: &TxMempoolEntry) {
+        for parent in entry.unconfirmed_parents() {
+            self.txs_by_id
+                .get_mut(parent)
+                .expect("be there")
+                .get_children_mut()
+                .insert(entry.tx_id());
+        }
+    }
+
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
         let id = entry.tx_id();
-        for parent in entry.unconfirmed_parents() {
-            self.txs_by_id.get_mut(parent).expect("be there").get_children_mut().insert(id);
-        }
+        self.update_parents(&entry);
 
         for ancestor in entry.unconfirmed_ancestors(self) {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
