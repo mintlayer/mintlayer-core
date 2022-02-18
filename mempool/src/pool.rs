@@ -21,6 +21,8 @@ const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 
 const MEMPOOL_MAX_TXS: usize = 1_000_000;
 
+const MAX_BIP125_REPLACEMENT_CANDIATES: usize = 100;
+
 impl<C: ChainState> TryGetFee for MempoolImpl<C> {
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
         let inputs = tx
@@ -395,7 +397,6 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
         &self,
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
-        const MAX_BIP125_REPLACEMENT_CANDIATES: usize = 100;
         let mut num_potential_replacements = 0;
         for conflict in conflicts {
             num_potential_replacements += conflict.count_with_descendants();
