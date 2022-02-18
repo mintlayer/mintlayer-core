@@ -1080,7 +1080,6 @@ mod tests {
 
     #[test]
     fn tx_replace_child() -> anyhow::Result<()> {
-        // TODO this test doesn't test what it's supposed to test!
         let mut mempool = setup();
         let num_inputs = 1;
         let num_outputs = 1;
@@ -1095,12 +1094,27 @@ mod tests {
             0,
             InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-        // We want to test that even though it doesn't signal replaceability directly, the child tx is replaceable because it's parent signalled replaceability
+        // We want to test that even though child_tx doesn't signal replaceability directly, it is replaceable because its parent signalled replaceability
         // replaced
         let flags = 0;
         let locktime = 0;
-        let child_tx = tx_spend_input(&mempool, child_tx_input, None, flags, locktime)?;
+        let child_tx = tx_spend_input(
+            &mempool,
+            child_tx_input.clone(),
+            Amount::from_atoms(10).into(),
+            flags,
+            locktime,
+        )?;
         mempool.add_transaction(child_tx)?;
+
+        let replacement_tx = tx_spend_input(
+            &mempool,
+            child_tx_input,
+            Amount::from_atoms(15).into(),
+            flags,
+            locktime,
+        )?;
+        mempool.add_transaction(replacement_tx)?;
         Ok(())
     }
 
