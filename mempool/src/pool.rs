@@ -72,6 +72,7 @@ struct TxMempoolEntry {
     fee: Amount,
     parents: BTreeSet<H256>,
     children: BTreeSet<H256>,
+    count_with_descendants: usize,
 }
 
 impl TxMempoolEntry {
@@ -81,7 +82,13 @@ impl TxMempoolEntry {
             fee,
             parents,
             children: BTreeSet::default(),
+            count_with_descendants: 1,
         }
+    }
+
+    #[allow(unused)]
+    fn count_with_descendants(&self) -> usize {
+        self.count_with_descendants
     }
 
     fn tx_id(&self) -> H256 {
@@ -197,6 +204,11 @@ impl MempoolStore {
 
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
             self.spender_txs.insert(outpoint.clone(), id);
+        }
+
+        for ancestor in entry.unconfirmed_ancestors(self) {
+            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
+            ancestor.count_with_descendants += 1;
         }
 
         self.txs_by_fee.entry(entry.fee).or_default().insert(id);
