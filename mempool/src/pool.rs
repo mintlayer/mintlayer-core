@@ -631,7 +631,7 @@ mod tests {
         coin_pool: BTreeSet<ValuedOutPoint>,
         num_inputs: usize,
         num_outputs: usize,
-        tx_fee: Option<Amount>,
+        tx_fee: Amount,
     }
 
     impl TxGenerator {
@@ -650,7 +650,7 @@ mod tests {
         }
 
         fn with_fee(mut self, fee: Amount) -> Self {
-            self.tx_fee = Some(fee);
+            self.tx_fee = fee;
             self
         }
 
@@ -685,13 +685,13 @@ mod tests {
                 coin_pool,
                 num_inputs,
                 num_outputs,
-                tx_fee: None,
+                tx_fee: 0.into(),
             }
         }
 
         fn generate_tx(&mut self) -> anyhow::Result<Transaction> {
             let valued_inputs = self.generate_tx_inputs();
-            let outputs = self.generate_tx_outputs(&valued_inputs, self.tx_fee)?;
+            let outputs = self.generate_tx_outputs(&valued_inputs)?;
             let locktime = 0;
             let flags = 0;
             let (inputs, _): (Vec<TxInput>, Vec<Amount>) = valued_inputs.into_iter().unzip();
@@ -713,7 +713,7 @@ mod tests {
 
         fn generate_replaceable_tx(mut self) -> anyhow::Result<Transaction> {
             let valued_inputs = self.generate_tx_inputs();
-            let outputs = self.generate_tx_outputs(&valued_inputs, self.tx_fee)?;
+            let outputs = self.generate_tx_outputs(&valued_inputs)?;
             let locktime = 0;
             let flags = 1;
             let (inputs, _values): (Vec<TxInput>, Vec<Amount>) = valued_inputs.into_iter().unzip();
@@ -732,7 +732,6 @@ mod tests {
         fn generate_tx_outputs(
             &self,
             inputs: &[(TxInput, Amount)],
-            tx_fee: Option<Amount>,
         ) -> anyhow::Result<Vec<TxOutput>> {
             if self.num_outputs == 0 {
                 return Ok(vec![]);
@@ -746,11 +745,7 @@ mod tests {
             let sum_of_inputs =
                 values.into_iter().sum::<Option<_>>().expect("Overflow in sum of input values");
 
-            let total_to_spend = if let Some(fee) = tx_fee {
-                (sum_of_inputs - fee).expect("underflow")
-            } else {
-                sum_of_inputs
-            };
+            let total_to_spend = (sum_of_inputs - self.tx_fee).expect("underflow");
 
             let mut left_to_spend = total_to_spend;
             let mut outputs = Vec::new();
