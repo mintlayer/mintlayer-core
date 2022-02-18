@@ -7,6 +7,7 @@ use crate::pow::temp::BlockIndex;
 use crate::pow::{Error, PoW};
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};
+use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
@@ -107,12 +108,17 @@ impl PoW {
     }
 }
 
-pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<bool, Error> {
+pub fn mine(
+    block: &mut Block,
+    max_nonce: u128,
+    bits: Compact,
+    block_rewards: Vec<TxOutput>,
+) -> Result<bool, Error> {
+    let mut data = PoWData::new(bits, 0, block_rewards);
     for nonce in 0..max_nonce {
-        //TODO: block reward is currently empty.
-        let data = PoWData::new(bits, nonce, vec![]);
-
-        block.update_consensus_data(ConsensusData::PoW(data));
+        //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
+        data.update_nonce(nonce);
+        block.update_consensus_data(ConsensusData::PoW(data.clone()));
 
         if check_proof_of_work(block.get_id().get(), bits)? {
             return Ok(true);
