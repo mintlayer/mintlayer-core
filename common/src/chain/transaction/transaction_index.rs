@@ -72,6 +72,25 @@ pub enum SpendError {
     OutOfRange,
 }
 
+/// This enum represents that we can either spend from a block reward or a regular transaction
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum SepndablePosition {
+    Transaction(TxMainChainPosition),
+    BlockReward(Id<Block>),
+}
+
+impl From<TxMainChainPosition> for SepndablePosition {
+    fn from(pos: TxMainChainPosition) -> SepndablePosition {
+        SepndablePosition::Transaction(pos)
+    }
+}
+
+impl From<Id<Block>> for SepndablePosition {
+    fn from(pos: Id<Block>) -> SepndablePosition {
+        SepndablePosition::BlockReward(pos)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TxMainChainIndexError {
     InvalidOutputCount,
@@ -83,7 +102,7 @@ pub enum TxMainChainIndexError {
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
-    position: TxMainChainPosition,
+    position: SepndablePosition,
     spent: Vec<OutputSpentState>,
 }
 
@@ -135,7 +154,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_tx_position(&self) -> &TxMainChainPosition {
+    pub fn get_tx_position(&self) -> &SepndablePosition {
         &self.position
     }
 
@@ -155,7 +174,7 @@ impl TxMainChainIndex {
     }
 
     pub fn new(
-        tx_position: TxMainChainPosition,
+        tx_position: SepndablePosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
@@ -182,7 +201,7 @@ mod tests {
     fn invalid_output_count() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
+        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
         let tx_index = TxMainChainIndex::new(pos, 0);
         assert_eq!(
             tx_index.unwrap_err(),
@@ -194,7 +213,7 @@ mod tests {
     fn basic_spending() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
+        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
         let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
         // ensure index accesses are correct
@@ -211,8 +230,14 @@ mod tests {
         );
         assert_eq!(tx_index.get_output_count(), 3);
 
+        let p = if let SepndablePosition::Transaction(ref p) = tx_index.position {
+            p
+        } else {
+            unreachable!();
+        };
+
         // check that all are unspent
-        assert_eq!(tx_index.position.block_id, H256::from_low_u64_be(123));
+        assert_eq!(p.block_id, H256::from_low_u64_be(123));
         for output in &tx_index.spent {
             assert_eq!(*output, OutputSpentState::Unspent);
         }
