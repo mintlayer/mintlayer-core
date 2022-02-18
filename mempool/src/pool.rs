@@ -1244,51 +1244,42 @@ mod tests {
     }
 
     #[test]
-    fn tx_mempool_entry_num_ancestors() -> anyhow::Result<()> {
+    fn tx_mempool_entry() -> anyhow::Result<()> {
         let mut mempool = setup();
         // Input different flag values just to make the hashes of these dummy transactions
         // different
-        let tx1 = Transaction::new(1, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-        let tx2 = Transaction::new(2, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-        let tx3 = Transaction::new(3, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-        let tx4 = Transaction::new(4, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-        let tx5 = Transaction::new(5, vec![], vec![], 0).map_err(anyhow::Error::from)?;
-
-        let tx6 = Transaction::new(6, vec![], vec![], 0).map_err(anyhow::Error::from)?;
+        let txs = (1..=6)
+            .into_iter()
+            .map(|i| Transaction::new(i, vec![], vec![], 0).unwrap_or_else(|_| panic!("tx {}", i)))
+            .collect::<Vec<_>>();
         let fee = Amount::from_atoms(0);
 
         // Generation 1
         let tx1_parents = BTreeSet::default();
-        let entry1 = TxMempoolEntry::new(tx1, fee, tx1_parents);
+        let entry1 = TxMempoolEntry::new(txs.get(0).unwrap().clone(), fee, tx1_parents);
         let tx2_parents = BTreeSet::default();
-        let entry2 = TxMempoolEntry::new(tx2, fee, tx2_parents);
+        let entry2 = TxMempoolEntry::new(txs.get(1).unwrap().clone(), fee, tx2_parents);
 
         // Generation 2
         let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
-        let entry3 = TxMempoolEntry::new(tx3, fee, tx3_parents);
+        let entry3 = TxMempoolEntry::new(txs.get(2).unwrap().clone(), fee, tx3_parents);
 
         // Generation 3
         let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
         let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
-        let entry4 = TxMempoolEntry::new(tx4, fee, tx4_parents);
-        let entry5 = TxMempoolEntry::new(tx5, fee, tx5_parents);
+        let entry4 = TxMempoolEntry::new(txs.get(3).unwrap().clone(), fee, tx4_parents);
+        let entry5 = TxMempoolEntry::new(txs.get(4).unwrap().clone(), fee, tx5_parents);
 
         // Generation 4
         let tx6_parents =
             vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
-        let entry6 = TxMempoolEntry::new(tx6, fee, tx6_parents);
+        let entry6 = TxMempoolEntry::new(txs.get(5).unwrap().clone(), fee, tx6_parents);
 
         let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
         let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
 
-        for (index, entry) in entries.into_iter().enumerate() {
-            println!("adding {}, (entry {})", entry.tx_id(), index + 1);
+        for entry in entries.into_iter() {
             mempool.store.add_tx(entry)?;
-            println!(
-                "after adding entry {}, store looks like this {:#?}",
-                index + 1,
-                mempool.store.txs_by_id
-            );
         }
 
         let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");
@@ -1304,9 +1295,12 @@ mod tests {
         assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
         assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
 
-        //println!("entry1 {:#?}", entry1);
         assert_eq!(entry1.count_with_descendants(), 5);
-        //assert_eq!(entry2.count_with_descendants(&mempool.store), 4);
+        assert_eq!(entry2.count_with_descendants(), 5);
+        assert_eq!(entry3.count_with_descendants(), 4);
+        assert_eq!(entry4.count_with_descendants(), 2);
+        assert_eq!(entry5.count_with_descendants(), 2);
+        assert_eq!(entry6.count_with_descendants(), 1);
 
         Ok(())
     }
