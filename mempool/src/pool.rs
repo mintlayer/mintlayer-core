@@ -275,7 +275,12 @@ pub enum TxValidationError {
     #[error("TransactionFeeOverflow")]
     TransactionFeeOverflow,
     #[error("ReplacementFeeLowerThanOriginal")]
-    ReplacementFeeLowerThanOriginal,
+    ReplacementFeeLowerThanOriginal {
+        replacement_tx: H256,
+        replacement_fee: Amount,
+        original_tx: H256,
+        original_fee: Amount,
+    },
     #[error("TooManyPotentialReplacements")]
     TooManyPotentialReplacements,
 }
@@ -373,11 +378,17 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
         conflicts: &[&TxMempoolEntry],
     ) -> Result<(), TxValidationError> {
         let replacement_fee = self.try_get_fee(tx)?;
-        conflicts
-            .iter()
-            .all(|conflict| conflict.fee < replacement_fee)
-            .then(|| ())
-            .ok_or(TxValidationError::ReplacementFeeLowerThanOriginal)
+        conflicts.iter().find(|conflict| conflict.fee >= replacement_fee).map_or_else(
+            || Ok(()),
+            |conflict| {
+                Err(TxValidationError::ReplacementFeeLowerThanOriginal {
+                    replacement_tx: tx.get_id().get(),
+                    replacement_fee,
+                    original_fee: conflict.fee,
+                    original_tx: conflict.tx_id(),
+                })
+            },
+        )
     }
 
     fn potential_replacements_within_limit(
@@ -1055,13 +1066,13 @@ mod tests {
         assert!(matches!(
             test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(10)),
             Err(MempoolError::TxValidationError(
-                TxValidationError::ReplacementFeeLowerThanOriginal
+                TxValidationError::ReplacementFeeLowerThanOriginal { .. }
             ))
         ));
         assert!(matches!(
             test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(5)),
             Err(MempoolError::TxValidationError(
-                TxValidationError::ReplacementFeeLowerThanOriginal
+                TxValidationError::ReplacementFeeLowerThanOriginal { .. }
             ))
         ));
         Ok(())
