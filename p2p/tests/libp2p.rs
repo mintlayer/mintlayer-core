@@ -48,18 +48,21 @@ async fn test_libp2p_peer_discovery() {
         let serv_res: Event<Libp2pService> = serv.poll_next().await.unwrap();
         match serv_res {
             Event::PeerDiscovered(peers) => {
-                assert_eq!(peers.len(), 1);
+                assert!(!peers.is_empty());
 
-                let addrs = &peers.get(0).unwrap();
-
-                // libp2p may have discovered an ipv4 address
-                // but there must be at least one ipv6 address available
-                assert_eq!(addrs.ip6.len(), 1);
-
-                let mut addr = addrs.ip6[0].iter();
-                assert!(matches!(addr.next(), Some(Protocol::Ip6(_))));
-                assert!(matches!(addr.next(), Some(Protocol::Tcp(_))));
-                assert!(matches!(addr.next(), Some(Protocol::P2p(_))));
+                // verify that all discovered addresses are either ipv4 or ipv6,
+                // they have tcp as the transport protocol and that all end with the peer id
+                for peer in peers {
+                    for addr in peer.ip6.iter().chain(peer.ip4.iter()) {
+                        let mut components = addr.iter();
+                        assert!(matches!(
+                            components.next(),
+                            Some(Protocol::Ip6(_)) | Some(Protocol::Ip4(_))
+                        ));
+                        assert!(matches!(components.next(), Some(Protocol::Tcp(_))));
+                        assert!(matches!(components.next(), Some(Protocol::P2p(_))));
+                    }
+                }
 
                 return;
             }
