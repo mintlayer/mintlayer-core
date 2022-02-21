@@ -691,7 +691,7 @@ mod tests {
                 coin_pool,
                 num_inputs,
                 num_outputs,
-                tx_fee: 0.into(),
+                tx_fee: Amount::from_atoms(0),
             }
         }
 
@@ -1102,7 +1102,7 @@ mod tests {
         let child_tx = tx_spend_input(
             &mempool,
             child_tx_input.clone(),
-            Amount::from_atoms(10).into(),
+            Amount::from_atoms(10),
             flags,
             locktime,
         )?;
@@ -1111,7 +1111,7 @@ mod tests {
         let replacement_tx = tx_spend_input(
             &mempool,
             child_tx_input,
-            Amount::from_atoms(15).into(),
+            Amount::from_atoms(15),
             flags,
             locktime,
         )?;
@@ -1122,7 +1122,7 @@ mod tests {
     fn tx_spend_input(
         mempool: &MempoolImpl<ChainStateMock>,
         input: TxInput,
-        fee: Option<Amount>,
+        fee: impl Into<Option<Amount>>,
         flags: u32,
         locktime: u32,
     ) -> anyhow::Result<Transaction> {
@@ -1329,13 +1329,13 @@ mod tests {
                 index.try_into().unwrap(),
                 DUMMY_WITNESS_MSG.to_vec(),
             );
-            let fee = Amount::from(0).into();
+            let fee = Amount::from_atoms(0);
             let tx = tx_spend_input(mempool, input, fee, flags, locktime)?;
             mempool.add_transaction(tx)?;
         }
 
         let replacement_tx =
-            tx_spend_input(mempool, input, Amount::from(100).into(), flags, locktime)?;
+            tx_spend_input(mempool, input, Amount::from_atoms(100), flags, locktime)?;
         mempool.add_transaction(replacement_tx).map_err(anyhow::Error::from)
     }
 
