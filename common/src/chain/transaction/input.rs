@@ -4,7 +4,9 @@ use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutPointSourceId {
+    #[codec(index = 0)]
     RegularTransaction(Id<Transaction>),
+    #[codec(index = 1)]
     BlockReward(Id<Block>),
 }
 

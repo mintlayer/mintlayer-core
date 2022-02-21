@@ -8,7 +8,9 @@ use super::Transaction;
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum Spender {
+    #[codec(index = 0)]
     RegularInput(Id<Transaction>),
+    #[codec(index = 1)]
     StakeKernel(Id<Block>),
 }
 
