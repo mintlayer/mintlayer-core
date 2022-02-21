@@ -59,7 +59,7 @@ pub trait Mempool<C> {
     fn new_tip_set(&mut self) -> Result<(), MempoolError>;
 }
 
-pub trait ChainState {
+pub trait ChainState: Debug {
     fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
@@ -293,7 +293,7 @@ impl From<TxValidationError> for MempoolError {
     }
 }
 
-impl<C: ChainState + Debug> MempoolImpl<C> {
+impl<C: ChainState> MempoolImpl<C> {
     fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         tx.inputs()
             .iter()
@@ -413,7 +413,7 @@ impl<C: ChainState + Debug> MempoolImpl<C> {
     }
 }
 
-impl<C: ChainState + Debug> Mempool<C> for MempoolImpl<C> {
+impl<C: ChainState> Mempool<C> for MempoolImpl<C> {
     fn create(chain_state: C) -> Self {
         Self {
             store: MempoolStore::new(),
