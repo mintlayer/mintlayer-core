@@ -230,10 +230,11 @@ mod tests {
         );
         assert_eq!(tx_index.get_output_count(), 3);
 
-        let p = if let SpendablePosition::Transaction(ref p) = tx_index.position {
-            p
-        } else {
-            unreachable!();
+        let p = match tx_index.position {
+            SpendablePosition::Transaction(ref p) => p,
+            _ => {
+                unreachable!();
+            }
         };
 
         // check that all are unspent
