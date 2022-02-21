@@ -74,20 +74,20 @@ pub enum SpendError {
 
 /// This enum represents that we can either spend from a block reward or a regular transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
-pub enum SepndablePosition {
+pub enum SpendablePosition {
     Transaction(TxMainChainPosition),
     BlockReward(Id<Block>),
 }
 
-impl From<TxMainChainPosition> for SepndablePosition {
-    fn from(pos: TxMainChainPosition) -> SepndablePosition {
-        SepndablePosition::Transaction(pos)
+impl From<TxMainChainPosition> for SpendablePosition {
+    fn from(pos: TxMainChainPosition) -> SpendablePosition {
+        SpendablePosition::Transaction(pos)
     }
 }
 
-impl From<Id<Block>> for SepndablePosition {
-    fn from(pos: Id<Block>) -> SepndablePosition {
-        SepndablePosition::BlockReward(pos)
+impl From<Id<Block>> for SpendablePosition {
+    fn from(pos: Id<Block>) -> SpendablePosition {
+        SpendablePosition::BlockReward(pos)
     }
 }
 
@@ -102,7 +102,7 @@ pub enum TxMainChainIndexError {
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
-    position: SepndablePosition,
+    position: SpendablePosition,
     spent: Vec<OutputSpentState>,
 }
 
@@ -154,7 +154,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_tx_position(&self) -> &SepndablePosition {
+    pub fn get_tx_position(&self) -> &SpendablePosition {
         &self.position
     }
 
@@ -174,7 +174,7 @@ impl TxMainChainIndex {
     }
 
     pub fn new(
-        tx_position: SepndablePosition,
+        tx_position: SpendablePosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
@@ -230,7 +230,7 @@ mod tests {
         );
         assert_eq!(tx_index.get_output_count(), 3);
 
-        let p = if let SepndablePosition::Transaction(ref p) = tx_index.position {
+        let p = if let SpendablePosition::Transaction(ref p) = tx_index.position {
             p
         } else {
             unreachable!();
