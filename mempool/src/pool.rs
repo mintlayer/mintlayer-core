@@ -285,6 +285,8 @@ pub enum TxValidationError {
     },
     #[error("TooManyPotentialReplacements")]
     TooManyPotentialReplacements,
+    #[error("SpendsNewUnconfirmedInput")]
+    SpendsNewUnconfirmedOutput,
 }
 
 impl From<TxValidationError> for MempoolError {
@@ -374,9 +376,32 @@ impl<C: ChainState> MempoolImpl<C> {
 
             self.pays_more_than_conflicts(tx, &conflicts)?;
             self.potential_replacements_within_limit(&conflicts)?;
-            // TODO no new unconfirmed
+            self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
         }
         Ok(())
+    }
+
+    fn spends_no_new_unconfirmed_outputs(
+        &self,
+        tx: &Transaction,
+        conflicts: &[&TxMempoolEntry],
+    ) -> Result<(), TxValidationError> {
+        let outpoints_spent_by_conflicts = conflicts
+            .iter()
+            .flat_map(|conflict| conflict.tx.get_inputs().iter().map(|input| input.get_outpoint()))
+            .collect::<BTreeSet<_>>();
+
+        tx.get_inputs()
+            .iter()
+            .find(|input| {
+                // input spends an unconfirmed output
+                input.spends_unconfirmed(self) &&
+                // this unconfirmed output is not spent by one of the conflicts
+                !outpoints_spent_by_conflicts.contains(&input.get_outpoint())
+            })
+            .map_or(Ok(()), |_| {
+                Err(TxValidationError::SpendsNewUnconfirmedOutput)
+            })
     }
 
     fn pays_more_than_conflicts(
@@ -410,6 +435,18 @@ impl<C: ChainState> MempoolImpl<C> {
             }
         }
         Ok(())
+    }
+}
+
+trait SpendsUnconfirmed<C: ChainState> {
+    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C>) -> bool;
+}
+
+impl<C: ChainState> SpendsUnconfirmed<C> for TxInput {
+    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C>) -> bool {
+        mempool.contains_transaction(
+            self.get_outpoint().get_tx_id().get_tx_id().expect("Not coinbase"),
+        )
     }
 }
 
@@ -1359,5 +1396,43 @@ mod tests {
         let mut mempool = setup();
         let num_potential_replacements = MAX_BIP125_REPLACEMENT_CANDIDATES;
         test_bip125_max_replacements(&mut mempool, num_potential_replacements)
+    }
+
+    #[test]
+    fn spends_new_unconfirmed() -> anyhow::Result<()> {
+        let mut mempool = setup();
+        let num_inputs = 1;
+        let num_outputs = 2;
+        let tx = TxGenerator::new(&mempool, num_inputs, num_outputs)
+            .generate_replaceable_tx()
+            .expect("generate_replaceable_tx");
+        let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
+        mempool.add_transaction(tx)?;
+
+        let input1 = TxInput::new(outpoint_source_id.clone(), 0, DUMMY_WITNESS_MSG.to_vec());
+        let input2 = TxInput::new(outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec());
+
+        let locktime = 0;
+        let flags = 0;
+        let original_fee = Amount::from_atoms(0);
+        let replaced_tx = tx_spend_input(&mempool, input1.clone(), original_fee, flags, locktime)?;
+        mempool.add_transaction(replaced_tx)?;
+        let replacement_fee = Amount::from_atoms(10);
+        let incoming_tx = tx_spend_several_inputs(
+            &mempool,
+            &[input1, input2],
+            replacement_fee,
+            flags,
+            locktime,
+        )?;
+
+        let res = mempool.add_transaction(incoming_tx);
+        assert!(matches!(
+            res,
+            Err(MempoolError::TxValidationError(
+                TxValidationError::SpendsNewUnconfirmedOutput
+            ))
+        ));
+        Ok(())
     }
 }
