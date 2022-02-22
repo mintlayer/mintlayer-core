@@ -131,6 +131,26 @@ impl TxMempoolEntry {
             }
         }
     }
+
+    fn unconfirmed_descendants(&self, store: &MempoolStore) -> BTreeSet<H256> {
+        let mut visited = BTreeSet::new();
+        self.unconfirmed_descendants_inner(&mut visited, store);
+        visited
+    }
+
+    fn unconfirmed_descendants_inner(&self, visited: &mut BTreeSet<H256>, store: &MempoolStore) {
+        for child in self.children.iter() {
+            if visited.contains(child) {
+                continue;
+            } else {
+                visited.insert(child.to_owned());
+                store
+                    .get_entry(child)
+                    .expect("entry")
+                    .unconfirmed_descendants_inner(visited, store);
+            }
+        }
+    }
 }
 
 impl PartialOrd for TxMempoolEntry {
@@ -287,6 +307,10 @@ pub enum TxValidationError {
     TooManyPotentialReplacements,
     #[error("SpendsNewUnconfirmedInput")]
     SpendsNewUnconfirmedOutput,
+    #[error("ConflictsFeeOverflow")]
+    ConflictsFeeOverflow,
+    #[error("TransactionFeeLowerThanConflictsWithDescendants")]
+    TransactionFeeLowerThanConflictsWithDescendants,
 }
 
 impl From<TxValidationError> for MempoolError {
@@ -382,10 +406,33 @@ impl<C: ChainState> MempoolImpl<C> {
             // that the replacement transaction pays more than its direct conflicts.
             self.pays_more_than_direct_conflicts(tx, &conflicts)?;
             // Enforce BIP125 Rule #5.
-            self.potential_replacements_within_limit(&conflicts)?;
+            let conflicts_with_descendants =
+                self.potential_replacements_within_limit(&conflicts)?;
             // Enforce BIP125 Rule #2.
             self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
+            // Enforce BIP125 Rule #3.
+            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
         }
+        Ok(())
+    }
+
+    fn pays_more_than_conflicts_with_descendants(
+        &self,
+        tx: &Transaction,
+        conflicts_with_descendants: &BTreeSet<H256>,
+    ) -> Result<(), TxValidationError> {
+        let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
+            self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
+        });
+
+        let total_conflict_fees = conflicts_with_descendants
+            .map(|conflict| conflict.fee)
+            .sum::<Option<Amount>>()
+            .ok_or(TxValidationError::ConflictsFeeOverflow)?;
+        let replacement_fee = self.try_get_fee(tx)?;
+        (replacement_fee > total_conflict_fees)
+            .then(|| ())
+            .ok_or(TxValidationError::TransactionFeeLowerThanConflictsWithDescendants)?;
         Ok(())
     }
 
@@ -434,7 +481,7 @@ impl<C: ChainState> MempoolImpl<C> {
     fn potential_replacements_within_limit(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<BTreeSet<H256>, TxValidationError> {
         let mut num_potential_replacements = 0;
         for conflict in conflicts {
             num_potential_replacements += conflict.count_with_descendants();
@@ -442,7 +489,13 @@ impl<C: ChainState> MempoolImpl<C> {
                 return Err(TxValidationError::TooManyPotentialReplacements);
             }
         }
-        Ok(())
+        let replacements_with_descendants = conflicts
+            .iter()
+            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store))
+            .chain(conflicts.iter().map(|conflict| conflict.tx_id()))
+            .collect();
+
+        Ok(replacements_with_descendants)
     }
 }
 
