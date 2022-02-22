@@ -374,8 +374,16 @@ impl<C: ChainState> MempoolImpl<C> {
                 .then(|| ())
                 .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
 
-            self.pays_more_than_conflicts(tx, &conflicts)?;
+            // It's possible that the replacement pays more fees than its direct conflicts but not more
+            // than all conflicts (i.e. the direct conflicts have high-fee descendants). However, if the
+            // replacement doesn't pay more fees than its direct conflicts, then we can be sure it's not
+            // more economically rational to mine. Before we go digging through the mempool for all
+            // transactions that would need to be removed (direct conflicts and all descendants), check
+            // that the replacement transaction pays more than its direct conflicts.
+            self.pays_more_than_direct_conflicts(tx, &conflicts)?;
+            // Enforce BIP125 Rule #5.
             self.potential_replacements_within_limit(&conflicts)?;
+            // Enforce BIP125 Rule #2.
             self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
         }
         Ok(())
@@ -404,7 +412,7 @@ impl<C: ChainState> MempoolImpl<C> {
             })
     }
 
-    fn pays_more_than_conflicts(
+    fn pays_more_than_direct_conflicts(
         &self,
         tx: &Transaction,
         conflicts: &[&TxMempoolEntry],
