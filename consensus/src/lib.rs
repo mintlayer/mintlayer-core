@@ -11,6 +11,57 @@ mod chain_state;
 use chain_state::*;
 mod orphan_blocks;
 
+// struct BlockIndexCandidates {
+//     inner: Vec<BlockIndex>,
+// }
+//
+// impl BlockIndexCandidates {
+//     pub fn insertion_sort<T>(values: &mut [T])
+//     where
+//         T: Ord,
+//     {
+//         for i in 0..values.len() {
+//             for j in (0..i).rev() {
+//                 if values[j] >= values[j + 1] {
+//                     values.swap(j, j + 1);
+//                 } else {
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+//
+//     fn insert(&mut self, block_index: BlockIndex) -> bool {
+//         self.inner.insert(block_index)
+//     }
+//
+//     fn erase(&mut self, block_index: &BlockIndex) -> bool {
+//         self.inner.remove(block_index)
+//     }
+//
+//     fn get_best_candidate(&self) -> BlockIndex {
+//         unimplemented!()
+//     }
+//
+//     fn compare(pa: &BlockIndex, pb: &BlockIndex) -> bool {
+//         // First sort by most total trust
+//         if pa.chain_trust > pb.chain_trust {
+//             return false;
+//         }
+//         if pa.chain_trust < pb.chain_trust {
+//             return true;
+//         }
+//         // ... then be earliest time received
+//         if pa.time < pb.time {
+//             return false;
+//         }
+//         if pa.time > pb.time {
+//             return true;
+//         }
+//         false
+//     }
+// }
+
 #[allow(dead_code)]
 // TODO: We will generalize it when Lukas will be ready for that. At the moment, he recommended use
 //  types directly.
@@ -19,31 +70,47 @@ struct Consensus {
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store, //&'a mut S,
     orphan_blocks: OrphanBlocksPool,
+    highest_block_trust: u64,
+}
+
+type PeerId = u32;
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum BlockSource {
+    Peer(PeerId),
+    Local,
 }
 
 impl Consensus {
+    // TODO: Make fn that will return tx
+
     #[allow(dead_code)]
     pub fn new(chain_config: ChainConfig, blockchain_storage: blockchain_storage::Store) -> Self {
         Self {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
+            highest_block_trust: 0,
         }
     }
 
     #[allow(dead_code)]
-    pub fn process_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
-        // self.check_block(&block)?;
-        let tx = self.blockchain_storage.start_transaction_rw();
+    pub fn process_block(
+        &mut self,
+        block: Block,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        // self.check_block(&block)?; // Might data will change during the reading from DB? If not, we can move it back here
+        let db_tx = self.blockchain_storage.start_transaction_rw();
         let mut consensus_ref = ConsensusRef {
             chain_config: &self.chain_config,
-            db_tx: tx,
+            db_tx,
             orphan_blocks: &mut self.orphan_blocks,
+            highest_block_trust: self.highest_block_trust,
         };
         consensus_ref.check_block(&block)?;
-
         let block_index = consensus_ref.accept_block(&block);
-        if block_index == Err(BlockError::Orphan) {
+        if BlockSource::Local == block_source && block_index == Err(BlockError::Orphan) {
             consensus_ref.new_orphan_block(block)?;
         }
         let block_index = block_index?;
@@ -57,6 +124,7 @@ struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     db_tx: <blockchain_storage::Store as Transactional<'a>>::TransactionRw, // TODO: make this generic over Rw and Ro
     orphan_blocks: &'a mut OrphanBlocksPool,
+    highest_block_trust: u64,
 }
 
 impl<'a> ConsensusRef<'a> {
@@ -81,11 +149,11 @@ impl<'a> ConsensusRef<'a> {
         //TODO: not implemented yet
     }
 
-    fn disconnect_block(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn disconnect_one_block(&mut self, block_index: &mut BlockIndex) -> Result<(), BlockError> {
         let block = self
             .db_tx
             .get_block(
-                //TODO: Remove clone when Lukas code will be ready
+                //TODO: Remove clone() when Lukas code will be ready
                 block_index.get_block_id().clone(),
             )?
             .ok_or(BlockError::Unknown)?;
@@ -107,106 +175,114 @@ impl<'a> ConsensusRef<'a> {
         self.db_tx.set_best_block_id(
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
+        // Update connection
+        block_index.next_block_id = None;
+        self.db_tx.set_block_index(block_index)?;
         Ok(())
     }
 
-    // Disconnect active blocks which are no longer in the best chain.
-    fn disconnect_blocks(
-        &mut self,
-        tip: &BlockIndex,
-        common_ancestor: &BlockIndex,
-    ) -> Result<(), BlockError> {
-        if tip.get_block_id() == common_ancestor.get_block_id() {
-            // Nothing to do here
-            return Ok(());
+    fn connect_blocks(&mut self, top_block_index: &BlockIndex) -> Result<(), BlockError> {
+        // Disconnect the current chain
+        if let Some(best_block_id) = self.db_tx.get_best_block_id()? {
+            let mut ancestor = self
+                .db_tx
+                .get_block_index(&best_block_id)?
+                .expect("Can't get block index. Inconsistent DB");
+            while !self.is_block_in_main_chain(&ancestor) {
+                self.disconnect_one_block(&mut ancestor)?;
+                ancestor = self.get_ancestor(ancestor.get_block_id())?;
+            }
         }
-        // Initialize disconnected chain
-        let mut current_ancestor = tip.clone();
-        current_ancestor.next_block_hash = None;
-        self.db_tx.set_block_index(tip)?;
-        // Collect blocks that should be disconnected
 
-        while current_ancestor.get_block_id() == common_ancestor.get_block_id() {
-            current_ancestor = self.get_ancestor(current_ancestor.get_block_id())?;
-            current_ancestor.next_block_hash = None;
-            self.disconnect_block(&current_ancestor)?;
-            self.db_tx.set_block_index(tip)?;
+        // Connect the new chain
+        let mut ancestor = top_block_index.clone();
+        while !self.is_block_in_main_chain(&ancestor) {
+            self.connect_one_block(&ancestor)?;
+            ancestor = self.get_ancestor(ancestor.get_block_id())?;
         }
         Ok(())
-    }
-
-    // Build list of new blocks to connect (in descending height order).
-    #[allow(dead_code)]
-    fn make_new_chain(
-        &mut self,
-        _block_index: &BlockIndex,
-        _common_ancestor: &BlockIndex,
-    ) -> Result<Vec<BlockIndex>, BlockError> {
-        // if block_index.get_block_id() == common_ancestor.get_block_id() {
-        //     // Nothing to do here
-        //     return Ok(vec![block_index.clone()]);
-        // }
-        // // Initialize disconnected chain
-        // let mut result = Vec::new();
-        // let mut current_ancestor = block_index;
-        // // current_ancestor.status = BlockStatus::Valid;
-        // result.push(current_ancestor.clone());
-        // // Connect blocks
-        // while current_ancestor.get_block_id() == common_ancestor.get_block_id() {
-        //     current_ancestor = self.get_ancestor(&current_ancestor.get_block_id())?;
-        //     // current_ancestor.status = BlockStatus::Valid;
-        //     result.push(current_ancestor.clone());
-        // }
-        // Ok(result)
-        Ok(vec![])
     }
 
     // Connect mew block
-    fn connect_block(&mut self, _block: BlockIndex) -> Result<(), BlockError> {
-        // TODO: Check that hash of the previous block is equal the best block hash
-        // TODO: Special case for the genesis block, skipping connection of its transactions
-        // TODO: Check tx inputs
-        // TODO: Check tx fees
+    fn connect_one_block(&mut self, block: &BlockIndex) -> Result<(), BlockError> {
+        assert_eq!(
+            self.db_tx.get_best_block_id().expect("Only fails at genesis"),
+            block.prev_block_id
+        );
+
+        match &block.prev_block_id {
+            Some(prev_block_id) => {
+                // TODO: Check tx outputs to prevent the overwriting of the transaction
+                // TODO: Check tx inputs:
+                //  - Any transaction validation failure in connect_block is a block consensus failure
+                //  - Check fee in the block
+                //  - Check script
+                // TODO: Check tx fees
+                // TODO: Connect transactions
+
+                // CONNECT: Set-up the next_block_id
+                let mut prev_block = self
+                    .db_tx
+                    .get_block_index(prev_block_id)?
+                    .expect("Can't get block index. Inconsistent DB");
+                prev_block.next_block_id = Some(block.block_id.clone());
+                self.db_tx
+                    .set_block_index(&prev_block)
+                    .expect("Can't set block index. Inconsistent DB");
+                self.db_tx.set_block_index(block)?;
+                Ok(())
+            }
+            None => panic!("Inconsistent block hash"),
+        }
+    }
+
+    fn store_index_without_connect(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        // TODO: Add checks
+        self.db_tx.set_block_index(block_index)?;
         Ok(())
     }
 
-    // Connect mew blocks
-    #[allow(dead_code)]
-    fn connect_blocks(&mut self, blocks: &[BlockIndex]) -> Result<(), BlockError> {
-        for block in blocks {
-            // self.connect_block(&block)?;
-            self.db_tx.set_block_index(block)?;
-        }
-        Ok(())
+    fn set_best_block_params(
+        &mut self,
+        block_index: BlockIndex,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        self.highest_block_trust = block_index.chain_trust;
+        self.db_tx
+            .set_best_block_id(block_index.get_block_id())
+            .map_err(BlockError::from)?;
+        Ok(Some(block_index))
     }
 
-    fn get_common_ancestor(&self, new_block: &BlockIndex) -> Result<BlockIndex, BlockError> {
-        let mut ancestor = new_block.clone();
-        while !self.is_block_in_main_chain(&ancestor) {
-            ancestor = self.get_ancestor(ancestor.get_block_id())?;
-        }
-        Ok(ancestor)
-    }
-
-    #[allow(dead_code)]
     fn activate_best_chain(
         &mut self,
         block_index: BlockIndex,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        match self.db_tx.get_best_block_id()? {
-            Some(best_block_index) => {
-                let best_block_index =
-                    self.db_tx.get_block_index(&best_block_index)?.expect("The DB corrupted");
-                let common_ancestor = self.get_common_ancestor(&block_index)?;
-                self.disconnect_blocks(&best_block_index, &common_ancestor)?;
-                self.connect_block(block_index)?;
+        let best_block_id = self.db_tx.get_best_block_id()?;
+        if *block_index.get_block_id() == self.chain_config.genesis_block().get_id() {
+            if best_block_id.is_some() {
+                panic!("Inconsistent DB: There is exist the best block, but at the same time was tried processing genesis block")
             }
-            None => {
-                // Genesis - Set it's as a best block
-                self.db_tx
-                    .set_best_block_id(block_index.get_block_id())
-                    .map_err(BlockError::from)?;
-                self.connect_block(block_index)?;
+            self.connect_one_block(&block_index)?;
+            return self.set_best_block_params(block_index);
+        }
+
+        if let Some(best_block_id) = best_block_id {
+            // Chain trust is higher than the best block
+            if self.highest_block_trust < block_index.chain_trust {
+                // is the main net?
+                if block_index.get_prev_block_id() == &Some(best_block_id) {
+                    // .. just connect the new block
+                    self.connect_one_block(&block_index)?;
+                    return self.set_best_block_params(block_index);
+                }
+                // It's not in the main net? Ok, let's do reorg
+                self.connect_blocks(&block_index)?;
+                return self.set_best_block_params(block_index);
+            }
+
+            // Equal chain trust or less
+            if self.highest_block_trust >= block_index.chain_trust {
+                self.store_index_without_connect(&block_index)?;
             }
         }
         Ok(None)
@@ -338,8 +414,7 @@ impl<'a> ConsensusRef<'a> {
             None => (),
         }
 
-        self.check_transactions(block)?; // Move to check_block_detail
-                                         // Will have added some checks
+        self.check_transactions(block)?;
         Ok(())
     }
 
@@ -366,7 +441,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> bool {
-        block_index.next_block_hash.is_some()
+        block_index.next_block_id.is_some()
             || match self.db_tx.get_best_block_id().ok().flatten() {
                 Some(ref block_id) => block_index.get_block_id() == block_id,
                 None => false,
