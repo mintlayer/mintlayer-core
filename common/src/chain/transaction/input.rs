@@ -5,14 +5,14 @@ use parity_scale_codec::{Decode, Encode};
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutPointSourceId {
     #[codec(index = 0)]
-    RegularTransaction(Id<Transaction>),
+    Transaction(Id<Transaction>),
     #[codec(index = 1)]
     BlockReward(Id<Block>),
 }
 
 impl From<Id<Transaction>> for OutPointSourceId {
     fn from(id: Id<Transaction>) -> OutPointSourceId {
-        OutPointSourceId::RegularTransaction(id)
+        OutPointSourceId::Transaction(id)
     }
 }
 
