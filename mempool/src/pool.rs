@@ -1496,4 +1496,81 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[test]
+    fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
+        let mut mempool = setup();
+        let num_inputs = 1;
+        let num_outputs = 1;
+        let tx = TxGenerator::new(&mempool, num_inputs, num_outputs)
+            .generate_replaceable_tx()
+            .expect("generate_replaceable_tx");
+        let tx_id = tx.get_id();
+        mempool.add_transaction(tx)?;
+
+        let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
+        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
+
+        let locktime = 0;
+        let rbf = 1;
+        let no_rbf = 0;
+
+        // Create transaction that we will attempt to replace
+        let original_fee = Amount::from(10);
+        let replaced_tx = tx_spend_input(&mempool, input.clone(), original_fee, rbf, locktime)?;
+        let replaced_id = replaced_tx.get_id();
+        mempool.add_transaction(replaced_tx)?;
+
+        // Create some children for this transaction
+        let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id);
+
+        let descendant1_fee = Amount::from(10);
+        let descendant1 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                descendant_outpoint_source_id.clone(),
+                0,
+                DUMMY_WITNESS_MSG.to_vec(),
+            ),
+            descendant1_fee,
+            no_rbf,
+            locktime,
+        )?;
+        mempool.add_transaction(descendant1)?;
+
+        let descendant2_fee = Amount::from(10);
+        let descendant2 = tx_spend_input(
+            &mempool,
+            TxInput::new(descendant_outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec()),
+            descendant2_fee,
+            no_rbf,
+            locktime,
+        )?;
+        mempool.add_transaction(descendant2)?;
+
+        //Create a new incoming transaction that conflicts with `replaced_tx` because it spends
+        //`input`. It will be rejected because its fee exactly equals (so is not greater than) the
+        //sum of the fees of the conflict together with its descendants
+        let insufficient_rbf_fee = Amount::from(30);
+        let incoming_tx = tx_spend_input(
+            &mempool,
+            input.clone(),
+            insufficient_rbf_fee,
+            no_rbf,
+            locktime,
+        )?;
+
+        assert!(matches!(
+            mempool.add_transaction(incoming_tx),
+            Err(MempoolError::TxValidationError(
+                TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
+            ))
+        ));
+
+        let sufficient_rbf_fee = Amount::from(31);
+        let incoming_tx = tx_spend_input(&mempool, input, sufficient_rbf_fee, no_rbf, locktime)?;
+        assert!(mempool.add_transaction(incoming_tx).is_ok());
+
+        Ok(())
+    }
 }
