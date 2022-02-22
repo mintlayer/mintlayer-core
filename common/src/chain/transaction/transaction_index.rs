@@ -1,10 +1,35 @@
-use crate::primitives::H256;
+use crate::{
+    chain::block::Block,
+    primitives::{Id, H256},
+};
 use parity_scale_codec_derive::{Decode, Encode};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Encode, Decode)]
+use super::Transaction;
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum Spender {
+    #[codec(index = 0)]
+    RegularInput(Id<Transaction>),
+    #[codec(index = 1)]
+    StakeKernel(Id<Block>),
+}
+
+impl From<Id<Transaction>> for Spender {
+    fn from(spender: Id<Transaction>) -> Spender {
+        Spender::RegularInput(spender)
+    }
+}
+
+impl From<Id<Block>> for Spender {
+    fn from(spender: Id<Block>) -> Spender {
+        Spender::StakeKernel(spender)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
     Unspent,
-    SpentBy(H256),
+    SpentBy(Spender),
 }
 
 /// A transaction is stored in the database as part of a block,
@@ -44,9 +69,28 @@ impl TxMainChainPosition {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SpendError {
-    AlreadySpent(H256),
+    AlreadySpent(Spender),
     AlreadyUnspent,
     OutOfRange,
+}
+
+/// This enum represents that we can either spend from a block reward or a regular transaction
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+pub enum SpendablePosition {
+    Transaction(TxMainChainPosition),
+    BlockReward(Id<Block>),
+}
+
+impl From<TxMainChainPosition> for SpendablePosition {
+    fn from(pos: TxMainChainPosition) -> SpendablePosition {
+        SpendablePosition::Transaction(pos)
+    }
+}
+
+impl From<Id<Block>> for SpendablePosition {
+    fn from(pos: Id<Block>) -> SpendablePosition {
+        SpendablePosition::BlockReward(pos)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,21 +104,21 @@ pub enum TxMainChainIndexError {
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
-    position: TxMainChainPosition,
+    position: SpendablePosition,
     spent: Vec<OutputSpentState>,
 }
 
 impl TxMainChainIndex {
     fn spend_internal(
         spent_state: &mut OutputSpentState,
-        spender: &H256,
+        spender: Spender,
     ) -> Result<(), SpendError> {
         match spent_state {
             OutputSpentState::Unspent => {
-                *spent_state = OutputSpentState::SpentBy(*spender);
+                *spent_state = OutputSpentState::SpentBy(spender);
                 Ok(())
             }
-            OutputSpentState::SpentBy(spender) => Err(SpendError::AlreadySpent(*spender)),
+            OutputSpentState::SpentBy(spender) => Err(SpendError::AlreadySpent(spender.clone())),
         }
     }
 
@@ -88,7 +132,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn spend(&mut self, index: u32, spender: &H256) -> Result<(), SpendError> {
+    pub fn spend(&mut self, index: u32, spender: Spender) -> Result<(), SpendError> {
         let index = index as usize;
         if index >= self.spent.len() {
             return Err(SpendError::OutOfRange);
@@ -112,14 +156,14 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_tx_position(&self) -> &TxMainChainPosition {
+    pub fn get_tx_position(&self) -> &SpendablePosition {
         &self.position
     }
 
     pub fn get_spent_state(&self, output_index: u32) -> Result<OutputSpentState, SpendError> {
         match self.spent.get(output_index as usize) {
             None => Err(SpendError::OutOfRange),
-            Some(state) => Ok(*state),
+            Some(state) => Ok(state.clone()),
         }
     }
 
@@ -132,7 +176,7 @@ impl TxMainChainIndex {
     }
 
     pub fn new(
-        tx_position: TxMainChainPosition,
+        tx_position: SpendablePosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
@@ -159,7 +203,7 @@ mod tests {
     fn invalid_output_count() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
+        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
         let tx_index = TxMainChainIndex::new(pos, 0);
         assert_eq!(
             tx_index.unwrap_err(),
@@ -171,7 +215,7 @@ mod tests {
     fn basic_spending() {
         let block_id =
             H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2);
+        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
         let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
         // ensure index accesses are correct
@@ -188,8 +232,15 @@ mod tests {
         );
         assert_eq!(tx_index.get_output_count(), 3);
 
+        let p = match tx_index.position {
+            SpendablePosition::Transaction(ref p) => p,
+            _ => {
+                unreachable!();
+            }
+        };
+
         // check that all are unspent
-        assert_eq!(tx_index.position.block_id, H256::from_low_u64_be(123));
+        assert_eq!(p.block_id, H256::from_low_u64_be(123));
         for output in &tx_index.spent {
             assert_eq!(*output, OutputSpentState::Unspent);
         }
@@ -202,24 +253,27 @@ mod tests {
             );
         }
 
-        let tx_spending_output_0 =
-            H256::from_str("0000000000000000000000000000000000000000000000000000000000000333")
-                .unwrap();
-        let tx_spending_output_1 =
-            H256::from_str("0000000000000000000000000000000000000000000000000000000000000444")
-                .unwrap();
-        let tx_spending_output_2 =
-            H256::from_str("0000000000000000000000000000000000000000000000000000000000000555")
-                .unwrap();
+        let tx_spending_output_0 = Id::<Transaction>::new(
+            &H256::from_str("0000000000000000000000000000000000000000000000000000000000000333")
+                .unwrap(),
+        );
+        let tx_spending_output_1 = Id::<Block>::new(
+            &H256::from_str("0000000000000000000000000000000000000000000000000000000000000444")
+                .unwrap(),
+        );
+        let tx_spending_output_2 = Id::<Transaction>::new(
+            &H256::from_str("0000000000000000000000000000000000000000000000000000000000000555")
+                .unwrap(),
+        );
 
         // spend one output
-        let spend_0_res = tx_index.spend(0, &tx_spending_output_0);
+        let spend_0_res = tx_index.spend(0, tx_spending_output_0.clone().into());
         assert!(spend_0_res.is_ok());
 
         // check state
         assert_eq!(
             tx_index.get_spent_state(0).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_0)
+            OutputSpentState::SpentBy(tx_spending_output_0.clone().into())
         );
         assert_eq!(
             tx_index.get_spent_state(1).unwrap(),
@@ -234,28 +288,28 @@ mod tests {
 
         // attempt double-spend
         assert_eq!(
-            tx_index.spend(0, &tx_spending_output_1).unwrap_err(),
-            SpendError::AlreadySpent(tx_spending_output_0)
+            tx_index.spend(0, tx_spending_output_1.clone().into()).unwrap_err(),
+            SpendError::AlreadySpent(tx_spending_output_0.clone().into())
         );
 
         // spend all other outputs
-        assert!(tx_index.spend(1, &tx_spending_output_1).is_ok());
-        assert!(tx_index.spend(2, &tx_spending_output_2).is_ok());
+        assert!(tx_index.spend(1, tx_spending_output_1.clone().into()).is_ok());
+        assert!(tx_index.spend(2, tx_spending_output_2.clone().into()).is_ok());
 
         // check that all are spent
         assert!(tx_index.all_outputs_spent());
 
         assert_eq!(
             tx_index.get_spent_state(0).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_0)
+            OutputSpentState::SpentBy(tx_spending_output_0.into())
         );
         assert_eq!(
             tx_index.get_spent_state(1).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_1)
+            OutputSpentState::SpentBy(tx_spending_output_1.clone().into())
         );
         assert_eq!(
             tx_index.get_spent_state(2).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_2)
+            OutputSpentState::SpentBy(tx_spending_output_2.clone().into())
         );
 
         // unspend output 1
@@ -272,11 +326,11 @@ mod tests {
         );
         assert_eq!(
             tx_index.get_spent_state(1).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_1)
+            OutputSpentState::SpentBy(tx_spending_output_1.into())
         );
         assert_eq!(
             tx_index.get_spent_state(2).unwrap(),
-            OutputSpentState::SpentBy(tx_spending_output_2)
+            OutputSpentState::SpentBy(tx_spending_output_2.into())
         );
 
         // unspent the rest

@@ -71,9 +71,6 @@ pub trait BlockchainStorage {
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>>;
 
-    /// Get transaction by transaction ID. Transaction must be in the index.
-    fn get_mainchain_tx(&self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
-
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
 

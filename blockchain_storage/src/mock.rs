@@ -34,8 +34,6 @@ mockall::mock! {
             tx_index: &TxMainChainPosition,
         ) -> crate::Result<Option<Transaction>>;
 
-        fn get_mainchain_tx(&self, txid: &Id<Transaction>) -> crate::Result<Option<Transaction>>;
-
         fn get_block_id_by_height(
             &self,
             height: &BlockHeight,
@@ -86,11 +84,6 @@ mockall::mock! {
         fn get_mainchain_tx_by_position(
             &self,
             tx_index: &TxMainChainPosition,
-        ) -> crate::Result<Option<Transaction>>;
-
-        fn get_mainchain_tx(
-            &self,
-            txid: &Id<Transaction>,
         ) -> crate::Result<Option<Transaction>>;
 
         fn get_block_id_by_height(
