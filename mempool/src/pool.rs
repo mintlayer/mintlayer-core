@@ -393,6 +393,7 @@ impl<C: ChainState> MempoolImpl<C> {
             .collect::<Vec<_>>();
 
         for entry in &conflicts {
+            // Enforce BIP125 Rule #1.
             entry
                 .is_replaceable(&self.store)
                 .then(|| ())
@@ -405,11 +406,11 @@ impl<C: ChainState> MempoolImpl<C> {
             // transactions that would need to be removed (direct conflicts and all descendants), check
             // that the replacement transaction pays more than its direct conflicts.
             self.pays_more_than_direct_conflicts(tx, &conflicts)?;
+            // Enforce BIP125 Rule #2.
+            self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
             // Enforce BIP125 Rule #5.
             let conflicts_with_descendants =
                 self.potential_replacements_within_limit(&conflicts)?;
-            // Enforce BIP125 Rule #2.
-            self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
             // Enforce BIP125 Rule #3.
             self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
         }
