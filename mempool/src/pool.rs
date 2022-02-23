@@ -421,7 +421,7 @@ impl<C: ChainState> MempoolImpl<C> {
         &self,
         tx: &Transaction,
         conflicts_with_descendants: &BTreeSet<H256>,
-    ) -> Result<(), TxValidationError> {
+    ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
             self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
         });
@@ -434,7 +434,7 @@ impl<C: ChainState> MempoolImpl<C> {
         (replacement_fee > total_conflict_fees)
             .then(|| ())
             .ok_or(TxValidationError::TransactionFeeLowerThanConflictsWithDescendants)?;
-        Ok(())
+        Ok(total_conflict_fees)
     }
 
     fn spends_no_new_unconfirmed_outputs(
