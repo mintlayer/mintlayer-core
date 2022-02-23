@@ -765,11 +765,6 @@ mod tests {
     }
 
     impl TxGenerator {
-        fn with_fee(mut self, fee: Amount) -> Self {
-            self.tx_fee = fee;
-            self
-        }
-
         fn with_num_inputs(mut self, num_inputs: usize) -> Self {
             self.num_inputs = num_inputs;
             self
@@ -1140,27 +1135,37 @@ mod tests {
 
     fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), MempoolError> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
-            .with_fee(original_fee)
-            .replaceable()
-            .generate_tx()
-            .expect("generate_replaceable_tx");
+        let outpoint = mempool
+            .available_outpoints()
+            .iter()
+            .next()
+            .expect("there should be an outpoint since setup creates the genesis transaction")
+            .outpoint
+            .to_owned();
+
+        let outpoint_source_id = OutPointSourceId::from(
+            outpoint.get_tx_id().get_tx_id().expect("Not Coinbase").to_owned(),
+        );
+
+        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
+        let flags = 1;
+        let locktime = 0;
+        let tx = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
+            .expect("should be able to spend here");
         mempool.add_transaction(tx)?;
 
-        let tx = TxGenerator::new(&mempool)
-            .with_fee(replacement_fee)
-            .generate_tx()
-            .expect("generate_tx_failed");
-
+        let flags = 0;
+        let tx = tx_spend_input(&mempool, input, replacement_fee, flags, locktime)
+            .expect("should be able to spend here");
         mempool.add_transaction(tx)?;
+
         Ok(())
     }
 
     #[test]
     fn tx_replace() -> anyhow::Result<()> {
         let relay_fee =
-            u128::try_from(TX_GENERATOR_SINGLE_INPUT_SINGLE_OUTPUT_SIZE * RELAY_FEE_PER_BYTE)
-                .expect("relay fee overflow");
+            u128::try_from(TX_SPEND_INPUT_SIZE * RELAY_FEE_PER_BYTE).expect("relay fee overflow");
         let replacement_fee = Amount::from_atoms(relay_fee + 100);
         assert!(test_replace_tx(Amount::from_atoms(100), replacement_fee).is_ok());
         assert!(matches!(
@@ -1223,9 +1228,6 @@ mod tests {
 
     // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this scycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
     const TX_SPEND_INPUT_SIZE: usize = 82;
-    // Similarly, we have precomputed the value of any single-input, single-output transaction
-    // created using `TxGenerator`.
-    const TX_GENERATOR_SINGLE_INPUT_SINGLE_OUTPUT_SIZE: usize = 74;
 
     fn tx_spend_input(
         mempool: &MempoolImpl<ChainStateMock>,
