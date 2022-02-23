@@ -1,3 +1,0 @@
-# mock network service
-
-TODO
