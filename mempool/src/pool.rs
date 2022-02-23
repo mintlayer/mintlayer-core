@@ -765,11 +765,6 @@ mod tests {
     }
 
     impl TxGenerator {
-        fn new(mempool: &MempoolImpl<ChainStateMock>) -> Self {
-            let unconfirmed_outputs = BTreeSet::new();
-            Self::create_tx_generator(&mempool.chain_state, &unconfirmed_outputs)
-        }
-
         fn with_fee(mut self, fee: Amount) -> Self {
             self.tx_fee = fee;
             self
@@ -790,7 +785,7 @@ mod tests {
             self
         }
 
-        fn new_with_unconfirmed(mempool: &MempoolImpl<ChainStateMock>) -> Self {
+        fn new(mempool: &MempoolImpl<ChainStateMock>) -> Self {
             let unconfirmed_outputs = mempool.available_outpoints();
             Self::create_tx_generator(&mempool.chain_state, &unconfirmed_outputs)
         }
@@ -1192,7 +1187,7 @@ mod tests {
     #[test]
     fn tx_replace_child() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new_with_unconfirmed(&mempool)
+        let tx = TxGenerator::new(&mempool)
             .replaceable()
             .generate_tx()
             .expect("generate_replaceable_tx");
@@ -1278,7 +1273,7 @@ mod tests {
     #[test]
     fn one_ancestor_signal_is_enough() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new_with_unconfirmed(&mempool)
+        let tx = TxGenerator::new(&mempool)
             .with_num_outputs(2)
             .generate_tx()
             .expect("generate_replaceable_tx");
