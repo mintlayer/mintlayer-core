@@ -951,9 +951,6 @@ mod tests {
         Ok(())
     }
 
-    // The "fees" now a are calculated as sum of the outputs
-    // This test creates transactions with a single input and a single output to check that the
-    // mempool sorts txs by fee
     #[test]
     fn txs_sorted() -> anyhow::Result<()> {
         let chain_state = ChainStateMock::new();
