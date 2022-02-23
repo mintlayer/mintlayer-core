@@ -576,7 +576,7 @@ mod tests {
 
     const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 
-    #[derive(PartialEq, Eq, PartialOrd, Ord, Clone)]
+    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
     struct ValuedOutPoint {
         outpoint: OutPoint,
         value: Amount,
