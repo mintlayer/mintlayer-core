@@ -22,6 +22,8 @@ const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 const MEMPOOL_MAX_TXS: usize = 1_000_000;
 
 const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
+// TODO this should really be taken from some global node settings
+const RELAY_FEE_PER_BYTE: usize = 1;
 
 impl<C: ChainState> TryGetFee for MempoolImpl<C> {
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
@@ -311,6 +313,10 @@ pub enum TxValidationError {
     ConflictsFeeOverflow,
     #[error("TransactionFeeLowerThanConflictsWithDescendants")]
     TransactionFeeLowerThanConflictsWithDescendants,
+    #[error("AdditionalFeesUnderflow")]
+    AdditionalFeesUnderflow,
+    #[error("InsufficientFeesToRelay")]
+    InsufficientFeesToRelay,
 }
 
 impl From<TxValidationError> for MempoolError {
@@ -412,9 +418,26 @@ impl<C: ChainState> MempoolImpl<C> {
             let conflicts_with_descendants =
                 self.potential_replacements_within_limit(&conflicts)?;
             // Enforce BIP125 Rule #3.
-            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
+            let total_conflict_fees =
+                self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
+            self.pays_for_bandwidth(tx, total_conflict_fees)?;
         }
         Ok(())
+    }
+
+    fn pays_for_bandwidth(
+        &self,
+        tx: &Transaction,
+        total_conflict_fees: Amount,
+    ) -> Result<(), TxValidationError> {
+        let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
+            .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
+        // TODO should we return an error here instead of expect?
+        let relay_fee =
+            Amount::from(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"));
+        (additional_fees >= relay_fee)
+            .then(|| ())
+            .ok_or(TxValidationError::InsufficientFeesToRelay)
     }
 
     fn pays_more_than_conflicts_with_descendants(
