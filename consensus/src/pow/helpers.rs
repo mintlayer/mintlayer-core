@@ -4,7 +4,7 @@ use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
 
 /// checks if retargeting is due for the provided block_height
-pub fn is_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockHeight) -> bool {
+pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockHeight) -> bool {
     block_height.inner() % difficulty_adjustment_interval == 0
 }
 
@@ -78,7 +78,7 @@ pub mod special_rules {
     use super::*;
 
     /// Checks if it took > 20 minutes to find a block
-    pub fn is_restart_difficulty(
+    pub fn block_production_stalled(
         target_spacing_in_secs: u64,
         new_block_time: u32,
         prev_block_time: u32,
@@ -95,7 +95,7 @@ pub mod special_rules {
         //         return block_bits;
         //     }
         //
-        //     if is_for_retarget(pow_cfg, ctr_index.height) && block_bits == pow_cfg.limit() {
+        //     if due_for_retarget(pow_cfg, ctr_index.height) && block_bits == pow_cfg.limit() {
         //         match ctr_index.prev() {
         //             None => { return block_bits; }
         //             Some(id) => {   }
@@ -108,13 +108,13 @@ pub mod special_rules {
 
 #[cfg(test)]
 mod tests {
-    use crate::pow::helpers::is_for_retarget;
+    use crate::pow::helpers::due_for_retarget;
     use common::primitives::BlockHeight;
 
     #[test]
-    fn is_for_retarget_test() {
+    fn due_for_retarget_test() {
         let interval = 2016;
-        let test = |h: BlockHeight| is_for_retarget(interval, h);
+        let test = |h: BlockHeight| due_for_retarget(interval, h);
 
         assert!(test(BlockHeight::zero()));
         assert!(!test(BlockHeight::one()));

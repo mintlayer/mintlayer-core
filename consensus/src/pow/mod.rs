@@ -1,5 +1,6 @@
 use common::chain::PoWChainConfig;
 use common::Uint256;
+use std::time::Duration;
 
 mod helpers;
 mod temp;
@@ -27,8 +28,8 @@ impl PoW {
         self.0.allow_min_difficulty_blocks()
     }
 
-    pub fn target_spacing_in_secs(&self) -> u64 {
-        self.0.target_spacing().as_secs()
+    pub fn target_spacing(&self) -> Duration {
+        self.0.target_spacing()
     }
 
     pub fn max_retarget_factor(&self) -> u64 {
@@ -53,6 +54,6 @@ impl PoW {
 
     pub fn difficulty_adjustment_interval(&self) -> u64 {
         // or a total of 2016 blocks
-        self.target_timespan_in_secs() / self.target_spacing_in_secs()
+        self.target_timespan_in_secs() / self.target_spacing().as_secs()
     }
 }

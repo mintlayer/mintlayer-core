@@ -92,8 +92,10 @@ const fn limit(chain_type: ChainType) -> Uint256 {
 
 #[cfg(test)]
 mod tests {
+    use crate::chain::block::ConsensusData;
     use crate::chain::config::{create_mainnet, ChainType};
     use crate::chain::pow::{allow_min_difficulty_blocks, limit, no_retargeting};
+    use crate::Uint256;
 
     #[test]
     fn check_mainnet_powconfig() {
@@ -113,5 +115,26 @@ mod tests {
 
         assert!(!mainnet_cfg.no_retargeting());
         assert!(!mainnet_cfg.allow_min_difficulty_blocks());
+
+        assert_eq!(
+            mainnet_cfg.target_timespan().as_secs() % mainnet_cfg.target_spacing().as_secs(),
+            0
+        );
+
+        assert_eq!(&ConsensusData::None, cfg.genesis_block().get_consensus_data());
+
+        if !mainnet_cfg.no_retargeting() {
+            let target_max = Uint256([
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+                0xFFFFFFFFFFFFFFFF,
+            ]);
+
+            let target_max = target_max
+                / Uint256::from_u64(mainnet_cfg.target_timespan().as_secs() * 4)
+                    .expect("should be okay");
+            assert!(mainnet_cfg.limit() < target_max);
+        }
     }
 }

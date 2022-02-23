@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::pow::helpers::{
-    calculate_new_target, get_starting_block_time, is_for_retarget, special_rules,
+    calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
 use crate::pow::temp::BlockIndex;
 use crate::pow::{Error, PoW};
@@ -57,17 +57,18 @@ impl PoW {
 
         let adjustment_interval = self.difficulty_adjustment_interval();
 
-        if is_for_retarget(adjustment_interval, current_height) {
-            let retarget_block_time =
-                get_starting_block_time(adjustment_interval, prev_block_index);
-            self.next_work_required(retarget_block_time, prev_block_index)
+        // Only change once per difficulty adjustment interval
+        if !due_for_retarget(adjustment_interval, current_height) {
+            return if self.allow_min_difficulty_blocks() {
+                // special difficulty rules
+                Ok(self.next_work_required_for_min_difficulty(new_block_time, prev_block_index))
+            } else {
+                Ok(prev_block_bits)
+            };
         }
-        // special difficulty rules
-        else if self.allow_min_difficulty_blocks() {
-            Ok(self.next_work_required_for_min_difficulty(new_block_time, prev_block_index))
-        } else {
-            Ok(prev_block_bits)
-        }
+
+        let retarget_block_time = get_starting_block_time(adjustment_interval, prev_block_index);
+        self.next_work_required(retarget_block_time, prev_block_index)
     }
 
     /// retargeting proof of work
@@ -95,8 +96,8 @@ impl PoW {
     ) -> Compact {
         // If the new block's timestamp is more than 2 * 10 minutes
         // then allow mining of a min-difficulty block.
-        if special_rules::is_restart_difficulty(
-            self.target_spacing_in_secs(),
+        if special_rules::block_production_stalled(
+            self.target_spacing().as_secs(),
             new_block_time,
             prev_block_index.get_block_time(),
         ) {
@@ -131,8 +132,11 @@ pub fn mine(
 #[cfg(test)]
 mod tests {
     use crate::check_proof_of_work;
+    use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
     use std::str::FromStr;
+
+    //TODO: add `CalculateNextWorkRequired` test cases from Bitcoin
 
     #[test]
     fn proof_of_work_ok_test() {
@@ -159,5 +163,37 @@ mod tests {
             486_604_799,
             "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
         );
+
+        test(
+            0,
+            "0000000000000000000000000000000000000000000000000000000000000000",
+        );
+    }
+
+    #[test]
+    fn proof_of_work_not_ok_test() {
+        let cfg = create_mainnet();
+        let pow_cfg = cfg.get_proof_of_work_config();
+        let pow_limit = pow_cfg.limit();
+
+        // bigger hash than target
+        {
+            let bits = Compact::from(pow_limit);
+            let hash = H256::from(pow_limit.mul_u32(2));
+
+            let res = check_proof_of_work(hash, bits).expect("should not error out");
+            assert!(!res);
+        }
+
+        // too easy target
+        {
+            let bits = Compact::from(pow_limit.mul_u32(2));
+            let hash =
+                H256::from_str("1000000000000000000000000000000000000000000000000000000000000000")
+                    .expect("uh oh");
+
+            let res = check_proof_of_work(hash, bits).expect("should not error out");
+            assert!(!res);
+        }
     }
 }

@@ -114,6 +114,12 @@ impl Block {
         }
     }
 
+    pub fn get_consensus_data(&self) -> &ConsensusData {
+        match self {
+            Block::V1(blk) => blk.get_consensus_data()
+        }
+    }
+
     pub fn get_merkle_root(&self) -> H256 {
         match &self {
             Block::V1(blk) => blk.get_tx_merkle_root(),

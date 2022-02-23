@@ -38,6 +38,10 @@ impl BlockV1 {
         self.header.consensus_data = consensus_data;
     }
 
+    pub fn get_consensus_data(&self) -> &ConsensusData {
+        &self.header.consensus_data
+    }
+
     pub fn get_block_time(&self) -> u32 {
         self.header.time
     }
