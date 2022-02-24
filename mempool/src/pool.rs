@@ -54,11 +54,11 @@ impl<C: ChainState> TryGetFee for MempoolImpl<C> {
 
 pub trait Mempool<C> {
     fn create(chain_state: C) -> Self;
-    fn add_transaction(&mut self, tx: Transaction) -> Result<(), MempoolError>;
+    fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
-    fn new_tip_set(&mut self) -> Result<(), MempoolError>;
+    fn new_tip_set(&mut self) -> Result<(), Error>;
 }
 
 pub trait ChainState: Debug {
@@ -145,7 +145,7 @@ impl TxMempoolEntry {
             if visited.contains(child) {
                 continue;
             } else {
-                visited.insert(child.to_owned());
+                visited.insert(*child);
                 store
                     .get_entry(child)
                     .expect("entry")
@@ -199,10 +199,10 @@ impl MempoolStore {
         &self,
         outpoint: &OutPoint,
     ) -> Result<Amount, TxValidationError> {
-        let tx_id = outpoint.tx_id().get_tx_id().expect("Not coinbase").clone();
+        let tx_id = *outpoint.tx_id().get_tx_id().expect("Not coinbase");
         let err = || TxValidationError::OutPointNotFound {
             outpoint: outpoint.clone(),
-            tx_id: tx_id.clone(),
+            tx_id,
         };
         self.txs_by_id
             .get(&tx_id.get())
@@ -241,7 +241,7 @@ impl MempoolStore {
         }
     }
 
-    fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), MempoolError> {
+    fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
         self.append_to_parents(&entry);
         self.update_ancestor_count(&entry);
         self.mark_outpoints_as_spent(&entry);
@@ -270,7 +270,7 @@ impl MempoolStore {
 }
 
 #[derive(Debug, Error)]
-pub enum MempoolError {
+pub enum Error {
     #[error("Mempool is full")]
     MempoolFull,
     #[error(transparent)]
@@ -319,9 +319,9 @@ pub enum TxValidationError {
     InsufficientFeesToRelay,
 }
 
-impl From<TxValidationError> for MempoolError {
+impl From<TxValidationError> for Error {
     fn from(e: TxValidationError) -> Self {
-        MempoolError::TxValidationError(e)
+        Error::TxValidationError(e)
     }
 }
 
@@ -468,16 +468,16 @@ impl<C: ChainState> MempoolImpl<C> {
     ) -> Result<(), TxValidationError> {
         let outpoints_spent_by_conflicts = conflicts
             .iter()
-            .flat_map(|conflict| conflict.tx.get_inputs().iter().map(|input| input.get_outpoint()))
+            .flat_map(|conflict| conflict.tx.inputs().iter().map(|input| input.outpoint()))
             .collect::<BTreeSet<_>>();
 
-        tx.get_inputs()
+        tx.inputs()
             .iter()
             .find(|input| {
                 // input spends an unconfirmed output
                 input.spends_unconfirmed(self) &&
                 // this unconfirmed output is not spent by one of the conflicts
-                !outpoints_spent_by_conflicts.contains(&input.get_outpoint())
+                !outpoints_spent_by_conflicts.contains(&input.outpoint())
             })
             .map_or(Ok(()), |_| {
                 Err(TxValidationError::SpendsNewUnconfirmedOutput)
@@ -530,9 +530,7 @@ trait SpendsUnconfirmed<C: ChainState> {
 
 impl<C: ChainState> SpendsUnconfirmed<C> for TxInput {
     fn spends_unconfirmed(&self, mempool: &MempoolImpl<C>) -> bool {
-        mempool.contains_transaction(
-            self.get_outpoint().get_tx_id().get_tx_id().expect("Not coinbase"),
-        )
+        mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
@@ -544,17 +542,17 @@ impl<C: ChainState> Mempool<C> for MempoolImpl<C> {
         }
     }
 
-    fn new_tip_set(&mut self) -> Result<(), MempoolError> {
+    fn new_tip_set(&mut self) -> Result<(), Error> {
         unimplemented!()
     }
     //
 
-    fn add_transaction(&mut self, tx: Transaction) -> Result<(), MempoolError> {
+    fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
         // TODO (1). First, we need to decide on criteria for the Mempool to be considered full. Maybe number
         // of transactions is not a good enough indicator. Consider checking mempool size as well
         // TODO (2) What to do when the mempool is full. Instead of rejecting Do incoming transaction we probably want to evict a low-score transaction
         if self.store.txs_by_fee.len() >= MEMPOOL_MAX_TXS {
-            return Err(MempoolError::MempoolFull);
+            return Err(Error::MempoolFull);
         }
         self.validate_transaction(&tx)?;
         let entry = self.create_entry(tx)?;
@@ -977,7 +975,7 @@ mod tests {
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(TxValidationError::NoInputs))
+            Err(Error::TxValidationError(TxValidationError::NoInputs))
         ));
         Ok(())
     }
@@ -995,9 +993,7 @@ mod tests {
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(
-                TxValidationError::NoOutputs
-            ))
+            Err(Error::TxValidationError(TxValidationError::NoOutputs))
         ));
         Ok(())
     }
@@ -1035,9 +1031,7 @@ mod tests {
 
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(
-                TxValidationError::DuplicateInputs
-            ))
+            Err(Error::TxValidationError(TxValidationError::DuplicateInputs))
         ));
         Ok(())
     }
@@ -1067,7 +1061,7 @@ mod tests {
         mempool.add_transaction(tx.clone())?;
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::TransactionAlreadyInMempool
             ))
         ));
@@ -1109,7 +1103,7 @@ mod tests {
 
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::OutPointNotFound { .. }
             ))
         ));
@@ -1126,14 +1120,14 @@ mod tests {
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::ExceedsMaxBlockSize
             ))
         ));
         Ok(())
     }
 
-    fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), MempoolError> {
+    fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
         let mut mempool = setup();
         let outpoint = mempool
             .available_outpoints()
@@ -1141,13 +1135,16 @@ mod tests {
             .next()
             .expect("there should be an outpoint since setup creates the genesis transaction")
             .outpoint
-            .to_owned();
+            .clone();
 
-        let outpoint_source_id = OutPointSourceId::from(
-            outpoint.get_tx_id().get_tx_id().expect("Not Coinbase").to_owned(),
+        let outpoint_source_id =
+            OutPointSourceId::from(*outpoint.tx_id().get_tx_id().expect("Not Coinbase"));
+
+        let input = TxInput::new(
+            outpoint_source_id,
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-
-        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
         let flags = 1;
         let locktime = 0;
         let tx = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
@@ -1170,19 +1167,19 @@ mod tests {
         assert!(test_replace_tx(Amount::from_atoms(100), replacement_fee).is_ok());
         assert!(matches!(
             test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(relay_fee + 99)),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::InsufficientFeesToRelay
             ))
         ));
         assert!(matches!(
             test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(10)),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::ReplacementFeeLowerThanOriginal { .. }
             ))
         ));
         assert!(matches!(
             test_replace_tx(Amount::from_atoms(10), Amount::from_atoms(5)),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::ReplacementFeeLowerThanOriginal { .. }
             ))
         ));
@@ -1424,8 +1421,8 @@ mod tests {
             .replaceable()
             .generate_tx()
             .expect("generate_tx failed");
-        let input = tx.get_inputs().first().expect("one input").to_owned();
-        let outputs = tx.get_outputs().clone();
+        let input = tx.inputs().first().expect("one input").clone();
+        let outputs = tx.outputs().clone();
         let tx_id = tx.get_id();
         mempool.add_transaction(tx)?;
 
@@ -1436,7 +1433,7 @@ mod tests {
             let input = TxInput::new(
                 outpoint_source_id.clone(),
                 index.try_into().unwrap(),
-                DUMMY_WITNESS_MSG.to_vec(),
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             );
             let fee = Amount::from_atoms(0);
             let tx = tx_spend_input(mempool, input, fee, flags, locktime)?;
@@ -1458,7 +1455,7 @@ mod tests {
             .expect("failed to downcast");
         assert!(matches!(
             err,
-            MempoolError::TxValidationError(TxValidationError::TooManyPotentialReplacements)
+            Error::TxValidationError(TxValidationError::TooManyPotentialReplacements)
         ));
         Ok(())
     }
@@ -1481,8 +1478,16 @@ mod tests {
         let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
         mempool.add_transaction(tx)?;
 
-        let input1 = TxInput::new(outpoint_source_id.clone(), 0, DUMMY_WITNESS_MSG.to_vec());
-        let input2 = TxInput::new(outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec());
+        let input1 = TxInput::new(
+            outpoint_source_id.clone(),
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        );
+        let input2 = TxInput::new(
+            outpoint_source_id,
+            1,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        );
 
         let locktime = 0;
         let flags = 0;
@@ -1501,7 +1506,7 @@ mod tests {
         let res = mempool.add_transaction(incoming_tx);
         assert!(matches!(
             res,
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::SpendsNewUnconfirmedOutput
             ))
         ));
@@ -1519,7 +1524,11 @@ mod tests {
         mempool.add_transaction(tx)?;
 
         let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
-        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
+        let input = TxInput::new(
+            outpoint_source_id,
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+        );
 
         let locktime = 0;
         let rbf = 1;
@@ -1540,7 +1549,7 @@ mod tests {
             TxInput::new(
                 descendant_outpoint_source_id.clone(),
                 0,
-                DUMMY_WITNESS_MSG.to_vec(),
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             ),
             descendant1_fee,
             no_rbf,
@@ -1551,7 +1560,11 @@ mod tests {
         let descendant2_fee = Amount::from_atoms(100);
         let descendant2 = tx_spend_input(
             &mempool,
-            TxInput::new(descendant_outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec()),
+            TxInput::new(
+                descendant_outpoint_source_id,
+                1,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
             descendant2_fee,
             no_rbf,
             locktime,
@@ -1572,7 +1585,7 @@ mod tests {
 
         assert!(matches!(
             mempool.add_transaction(incoming_tx),
-            Err(MempoolError::TxValidationError(
+            Err(Error::TxValidationError(
                 TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
             ))
         ));
