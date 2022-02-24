@@ -393,7 +393,15 @@ impl<C: ChainState> MempoolImpl<C> {
 
         self.verify_inputs_available(tx)?;
 
+        self.pays_minimum_relay_fees(tx)?;
+
         Ok(())
+    }
+
+    fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        (self.try_get_fee(tx)? >= get_relay_fee(tx))
+            .then(|| ())
+            .ok_or(TxValidationError::InsufficientFeesToRelay)
     }
 
     fn rbf_checks(&self, tx: &Transaction) -> Result<(), TxValidationError> {
