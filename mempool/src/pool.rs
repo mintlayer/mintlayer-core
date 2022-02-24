@@ -384,6 +384,14 @@ impl<C: ChainState> MempoolImpl<C> {
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
+        self.rbf_checks(tx)?;
+
+        self.verify_inputs_available(tx)?;
+
+        Ok(())
+    }
+
+    fn rbf_checks(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let conflicts = tx
             .inputs()
             .iter()
@@ -391,16 +399,14 @@ impl<C: ChainState> MempoolImpl<C> {
             .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
-        if !conflicts.is_empty() {
-            self.rbf_checks(tx, &conflicts)?;
+        if conflicts.is_empty() {
+            Ok(())
+        } else {
+            self.do_rbf_checks(tx, &conflicts)
         }
-
-        self.verify_inputs_available(tx)?;
-
-        Ok(())
     }
 
-    fn rbf_checks(
+    fn do_rbf_checks(
         &self,
         tx: &Transaction,
         conflicts: &[&TxMempoolEntry],
