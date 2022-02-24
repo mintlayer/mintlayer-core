@@ -384,13 +384,6 @@ impl<C: ChainState> MempoolImpl<C> {
             return Err(TxValidationError::TransactionAlreadyInMempool);
         }
 
-        self.rbf_checks(tx)?;
-        self.verify_inputs_available(tx)?;
-
-        Ok(())
-    }
-
-    fn rbf_checks(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let conflicts = tx
             .inputs()
             .iter()
@@ -398,30 +391,42 @@ impl<C: ChainState> MempoolImpl<C> {
             .map(|id_conflict| self.store.get_entry(&id_conflict).expect("entry for id"))
             .collect::<Vec<_>>();
 
-        for entry in &conflicts {
+        if !conflicts.is_empty() {
+            self.rbf_checks(tx, &conflicts)?;
+        }
+
+        self.verify_inputs_available(tx)?;
+
+        Ok(())
+    }
+
+    fn rbf_checks(
+        &self,
+        tx: &Transaction,
+        conflicts: &[&TxMempoolEntry],
+    ) -> Result<(), TxValidationError> {
+        for entry in conflicts {
             // Enforce BIP125 Rule #1.
             entry
                 .is_replaceable(&self.store)
                 .then(|| ())
                 .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
-
-            // It's possible that the replacement pays more fees than its direct conflicts but not more
-            // than all conflicts (i.e. the direct conflicts have high-fee descendants). However, if the
-            // replacement doesn't pay more fees than its direct conflicts, then we can be sure it's not
-            // more economically rational to mine. Before we go digging through the mempool for all
-            // transactions that would need to be removed (direct conflicts and all descendants), check
-            // that the replacement transaction pays more than its direct conflicts.
-            self.pays_more_than_direct_conflicts(tx, &conflicts)?;
-            // Enforce BIP125 Rule #2.
-            self.spends_no_new_unconfirmed_outputs(tx, &conflicts)?;
-            // Enforce BIP125 Rule #5.
-            let conflicts_with_descendants =
-                self.potential_replacements_within_limit(&conflicts)?;
-            // Enforce BIP125 Rule #3.
-            let total_conflict_fees =
-                self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
-            self.pays_for_bandwidth(tx, total_conflict_fees)?;
         }
+        // It's possible that the replacement pays more fees than its direct conflicts but not more
+        // than all conflicts (i.e. the direct conflicts have high-fee descendants). However, if the
+        // replacement doesn't pay more fees than its direct conflicts, then we can be sure it's not
+        // more economically rational to mine. Before we go digging through the mempool for all
+        // transactions that would need to be removed (direct conflicts and all descendants), check
+        // that the replacement transaction pays more than its direct conflicts.
+        self.pays_more_than_direct_conflicts(tx, conflicts)?;
+        // Enforce BIP125 Rule #2.
+        self.spends_no_new_unconfirmed_outputs(tx, conflicts)?;
+        // Enforce BIP125 Rule #5.
+        let conflicts_with_descendants = self.potential_replacements_within_limit(conflicts)?;
+        // Enforce BIP125 Rule #3.
+        let total_conflict_fees =
+            self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
+        self.pays_for_bandwidth(tx, total_conflict_fees)?;
         Ok(())
     }
 
@@ -454,6 +459,7 @@ impl<C: ChainState> MempoolImpl<C> {
             .map(|conflict| conflict.fee)
             .sum::<Option<Amount>>()
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
+
         let replacement_fee = self.try_get_fee(tx)?;
         (replacement_fee > total_conflict_fees)
             .then(|| ())
