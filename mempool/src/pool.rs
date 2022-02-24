@@ -432,6 +432,7 @@ impl<C: ChainState> MempoolImpl<C> {
         // Enforce BIP125 Rule #3.
         let total_conflict_fees =
             self.pays_more_than_conflicts_with_descendants(tx, &conflicts_with_descendants)?;
+        // Enforce BIP125 Rule #4.
         self.pays_for_bandwidth(tx, total_conflict_fees)?;
         Ok(())
     }
