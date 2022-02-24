@@ -52,6 +52,11 @@ impl<C: ChainState> TryGetFee for MempoolImpl<C> {
     }
 }
 
+fn get_relay_fee(tx: &Transaction) -> Amount {
+    // TODO we should never reach the expect, but should this be an error anyway?
+    Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
+}
+
 pub trait Mempool<C> {
     fn create(chain_state: C) -> Self;
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
@@ -445,9 +450,7 @@ impl<C: ChainState> MempoolImpl<C> {
         let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
             .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
         // TODO should we return an error here instead of expect?
-        let relay_fee = Amount::from_atoms(
-            u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"),
-        );
+        let relay_fee = get_relay_fee(tx);
         (additional_fees >= relay_fee)
             .then(|| ())
             .ok_or(TxValidationError::InsufficientFeesToRelay)
