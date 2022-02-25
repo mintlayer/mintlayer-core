@@ -17,10 +17,11 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
-    net::{ConnectivityEvent, Event, FloodsubTopic, NetworkService, SocketService},
+    net::{ConnectivityEvent, Event, FloodsubEvent, FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
+use futures::FutureExt;
 use logging::log;
 use parity_scale_codec::{Decode, Encode};
 use std::{
@@ -48,8 +49,11 @@ pub struct MockService {
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
 
-    /// RX channel for receiving events from mock backend
-    event_rx: mpsc::Receiver<types::Event>,
+    /// RX channel for receiving connectivity events from mock backend
+    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+
+    /// RX channel for receiving floodsub events from mock backend
+    flood_rx: mpsc::Receiver<types::FloodsubEvent>,
 }
 
 #[derive(Debug)]
@@ -76,18 +80,20 @@ impl NetworkService for MockService {
         _topics: &[FloodsubTopic],
     ) -> error::Result<Self> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (event_tx, event_rx) = mpsc::channel(16);
+        let (conn_tx, conn_rx) = mpsc::channel(16);
+        let (flood_tx, flood_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(socket, cmd_rx, event_tx);
+            let mut mock = backend::Backend::new(socket, cmd_rx, conn_tx, flood_tx);
             let _ = mock.run().await;
         });
 
         Ok(Self {
             addr,
             cmd_tx,
-            event_rx,
+            conn_rx,
+            flood_rx,
         })
     }
 
@@ -116,10 +122,17 @@ impl NetworkService for MockService {
     where
         T: NetworkService<Socket = MockSocket, PeerId = SocketAddr>,
     {
-        match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::Event::IncomingConnection { peer_id, socket } => Ok(Event::Connectivity(
-                ConnectivityEvent::IncomingConnection(peer_id, MockSocket { socket }),
-            )),
+        tokio::select! {
+            event = self.conn_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                types::ConnectivityEvent::IncomingConnection { peer_id, socket } => Ok(Event::Connectivity(
+                    ConnectivityEvent::IncomingConnection(peer_id, MockSocket { socket }),
+                )),
+            },
+            event = self.flood_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                types::FloodsubEvent::MessageReceived { peer_id: _, topic, message } => {
+                    Ok(Event::Floodsub(FloodsubEvent::MessageReceived(topic, message)))
+                }
+            }
         }
     }
 

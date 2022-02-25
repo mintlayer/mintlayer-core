@@ -44,19 +44,24 @@ pub struct Backend {
     cmd_rx: mpsc::Receiver<types::Command>,
 
     /// TX channel for sending events to the frontend
-    event_tx: mpsc::Sender<types::Event>,
+    conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+
+    /// TX channel for sending events to the frontend
+    _flood_tx: mpsc::Sender<types::FloodsubEvent>,
 }
 
 impl Backend {
     pub fn new(
         socket: TcpListener,
         cmd_rx: mpsc::Receiver<types::Command>,
-        event_tx: mpsc::Sender<types::Event>,
+        conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+        _flood_tx: mpsc::Sender<types::FloodsubEvent>,
     ) -> Self {
         Self {
             socket,
             cmd_rx,
-            event_tx,
+            conn_tx,
+            _flood_tx,
         }
     }
 
@@ -64,7 +69,7 @@ impl Backend {
         loop {
             tokio::select! {
                 event = self.socket.accept() => match event {
-                    Ok(socket) => self.event_tx.send(types::Event::IncomingConnection {
+                    Ok(socket) => self.conn_tx.send(types::ConnectivityEvent::IncomingConnection {
                         peer_id: socket.1,
                         socket: socket.0,
                     }).await?,
