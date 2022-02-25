@@ -75,6 +75,12 @@ trait TryGetFee {
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError>;
 }
 
+#[derive(Debug)]
+struct Ancestors(BTreeSet<H256>);
+
+#[derive(Debug)]
+struct Descendants(BTreeSet<H256>);
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct TxMempoolEntry {
     tx: Transaction,
@@ -115,22 +121,23 @@ impl TxMempoolEntry {
         self.tx.is_replaceable()
             || self
                 .unconfirmed_ancestors(store)
+                .0
                 .iter()
                 .any(|ancestor| store.get_entry(ancestor).expect("entry").tx.is_replaceable())
     }
 
-    fn unconfirmed_ancestors(&self, store: &MempoolStore) -> BTreeSet<H256> {
-        let mut visited = BTreeSet::new();
+    fn unconfirmed_ancestors(&self, store: &MempoolStore) -> Ancestors {
+        let mut visited = Ancestors(BTreeSet::new());
         self.unconfirmed_ancestors_inner(&mut visited, store);
         visited
     }
 
-    fn unconfirmed_ancestors_inner(&self, visited: &mut BTreeSet<H256>, store: &MempoolStore) {
+    fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {
         for parent in self.parents.iter() {
-            if visited.contains(parent) {
+            if visited.0.contains(parent) {
                 continue;
             } else {
-                visited.insert(*parent);
+                visited.0.insert(*parent);
                 store
                     .get_entry(parent)
                     .expect("entry")
@@ -139,26 +146,18 @@ impl TxMempoolEntry {
         }
     }
 
-    fn unconfirmed_descendants(&self, store: &MempoolStore) -> BTreeSet<H256> {
-        let mut visited = BTreeSet::new();
+    fn unconfirmed_descendants(&self, store: &MempoolStore) -> Descendants {
+        let mut visited = Descendants(BTreeSet::new());
         self.unconfirmed_descendants_inner(&mut visited, store);
-        eprintln!(
-            "found {} unconfirmed descendants:\n {:?}",
-            visited.len(),
-            visited
-        );
         visited
     }
 
-    fn unconfirmed_descendants_inner(&self, visited: &mut BTreeSet<H256>, store: &MempoolStore) {
-        eprintln!("unconfirmed_descendants_inner");
+    fn unconfirmed_descendants_inner(&self, visited: &mut Descendants, store: &MempoolStore) {
         for child in self.children.iter() {
-            eprintln!("iterating: child: {:?}", child);
-            if visited.contains(child) {
-                eprintln!("child already visited");
+            if visited.0.contains(child) {
                 continue;
             } else {
-                visited.insert(*child);
+                visited.0.insert(*child);
                 store
                     .get_entry(child)
                     .expect("entry")
@@ -241,7 +240,7 @@ impl MempoolStore {
     }
 
     fn update_ancestor_count(&mut self, entry: &TxMempoolEntry) {
-        for ancestor in entry.unconfirmed_ancestors(self) {
+        for ancestor in entry.unconfirmed_ancestors(self).0 {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.count_with_descendants += 1;
         }
@@ -556,7 +555,7 @@ impl<C: ChainState> MempoolImpl<C> {
         }
         let replacements_with_descendants = conflicts
             .iter()
-            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store))
+            .flat_map(|conflict| conflict.unconfirmed_descendants(&self.store).0)
             .chain(conflicts.iter().map(|conflict| conflict.tx_id()))
             .collect();
 
@@ -1499,12 +1498,12 @@ mod tests {
         let entry4 = mempool.store.get_entry(ids.get(3).expect("index")).expect("entry");
         let entry5 = mempool.store.get_entry(ids.get(4).expect("index")).expect("entry");
         let entry6 = mempool.store.get_entry(ids.get(5).expect("index")).expect("entry");
-        assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).len(), 0);
-        assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).len(), 0);
-        assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).len(), 2);
-        assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).len(), 3);
-        assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).len(), 3);
-        assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).len(), 5);
+        assert_eq!(entry1.unconfirmed_ancestors(&mempool.store).0.len(), 0);
+        assert_eq!(entry2.unconfirmed_ancestors(&mempool.store).0.len(), 0);
+        assert_eq!(entry3.unconfirmed_ancestors(&mempool.store).0.len(), 2);
+        assert_eq!(entry4.unconfirmed_ancestors(&mempool.store).0.len(), 3);
+        assert_eq!(entry5.unconfirmed_ancestors(&mempool.store).0.len(), 3);
+        assert_eq!(entry6.unconfirmed_ancestors(&mempool.store).0.len(), 5);
 
         assert_eq!(entry1.count_with_descendants(), 5);
         assert_eq!(entry2.count_with_descendants(), 5);
