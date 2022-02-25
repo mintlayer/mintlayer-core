@@ -22,6 +22,7 @@ use p2p::{
     net::{
         // libp2p::Libp2pService,
         mock::{MockService, MockSocket},
+        ConnectivityEvent,
         Event,
         NetworkService,
     },
@@ -72,7 +73,7 @@ pub async fn create_two_mock_peers(
     let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
     let remote_res: Event<MockService> = remote_res.unwrap();
     let remote_res = match remote_res {
-        Event::IncomingConnection(_, socket) => socket,
+        Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();

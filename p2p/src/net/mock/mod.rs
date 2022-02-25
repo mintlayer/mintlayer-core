@@ -17,7 +17,7 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
-    net::{Event, FloodsubTopic, NetworkService, SocketService},
+    net::{ConnectivityEvent, Event, FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -117,9 +117,9 @@ impl NetworkService for MockService {
         T: NetworkService<Socket = MockSocket, PeerId = SocketAddr>,
     {
         match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::Event::IncomingConnection { peer_id, socket } => {
-                Ok(Event::IncomingConnection(peer_id, MockSocket { socket }))
-            }
+            types::Event::IncomingConnection { peer_id, socket } => Ok(Event::Connectivity(
+                ConnectivityEvent::IncomingConnection(peer_id, MockSocket { socket }),
+            )),
         }
     }
 
@@ -172,7 +172,7 @@ impl SocketService for MockSocket {
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
-    use crate::net::Event;
+    use crate::net::{ConnectivityEvent, Event};
     use crate::peer::{Peer, PeerRole};
     use common::chain::config;
     use parity_scale_codec::{Decode, Encode};
@@ -264,7 +264,7 @@ mod tests {
 
         let server_res: Event<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::IncomingConnection(_, socket) => socket,
+            Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
@@ -309,7 +309,7 @@ mod tests {
 
         let server_res: Event<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::IncomingConnection(_, socket) => socket,
+            Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 

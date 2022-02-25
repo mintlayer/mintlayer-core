@@ -39,7 +39,7 @@ async fn test_peer_new_mock() {
 
     let server_res: net::Event<MockService> = server_res.unwrap();
     let server_res = match server_res {
-        net::Event::IncomingConnection(_, socket) => socket,
+        net::Event::Connectivity(net::ConnectivityEvent::IncomingConnection(_, socket)) => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 

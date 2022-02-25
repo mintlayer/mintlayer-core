@@ -320,12 +320,17 @@ where
         event: net::Event<NetworkingBackend>,
     ) -> error::Result<()> {
         match event {
-            net::Event::IncomingConnection(peer_id, socket) => {
-                self.on_connectivity_event(ConnectivityEvent::Accept(peer_id, socket)).await
+            net::Event::Connectivity(event) => match event {
+                net::ConnectivityEvent::IncomingConnection(peer_id, socket) => {
+                    self.on_connectivity_event(ConnectivityEvent::Accept(peer_id, socket)).await
+                }
+                net::ConnectivityEvent::PeerDiscovered(peers) => self.peer_discovered(&peers),
+                net::ConnectivityEvent::PeerExpired(peers) => self.peer_expired(&peers),
+            },
+            net::Event::Floodsub(event) => {
+                let net::FloodsubEvent::MessageReceived(topic, message) = event;
+                self.on_floodsub_event(topic, message)
             }
-            net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
-            net::Event::PeerExpired(peers) => self.peer_expired(&peers),
-            net::Event::MessageReceived(topic, message) => self.on_floodsub_event(topic, message),
         }
     }
 
