@@ -15,6 +15,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+/*
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
@@ -501,3 +502,4 @@ mod tests {
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));
     }
 }
+*/

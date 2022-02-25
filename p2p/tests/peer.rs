@@ -18,8 +18,8 @@
 extern crate test_utils;
 
 use common::chain::config;
-use libp2p::Multiaddr;
-use p2p::net::{self, libp2p::Libp2pService, mock::MockService, NetworkService};
+// use libp2p::Multiaddr;
+use p2p::net::{self, /*libp2p::Libp2pService, */ mock::MockService, NetworkService};
 use p2p::peer::{Peer, PeerRole};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -55,6 +55,7 @@ async fn test_peer_new_mock() {
     );
 }
 
+/*
 // connect two libp2p service peers together
 #[tokio::test]
 async fn test_peer_new_libp2p() {
@@ -87,3 +88,4 @@ async fn test_peer_new_libp2p() {
         rx,
     );
 }
+*/

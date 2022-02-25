@@ -16,6 +16,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
 use crate::{
     error::{self, Libp2pError, P2pError},
     net::{self, Event, FloodsubTopic, NetworkService, SocketService},
@@ -161,6 +162,7 @@ where
         .collect::<Vec<net::AddrInfo<T>>>()
 }
 
+/*
 #[async_trait]
 impl NetworkService for Libp2pService {
     type Address = Multiaddr;
@@ -777,3 +779,4 @@ mod tests {
         );
     }
 }
+*/

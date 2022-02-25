@@ -17,6 +17,7 @@
 #![cfg(not(loom))]
 extern crate test_utils;
 
+/*
 use common::{chain::config, sync::Arc};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
@@ -149,3 +150,4 @@ async fn test_libp2p_floodsub() {
         panic!("invalid event received for server1, expected floodsub message");
     }
 }
+*/

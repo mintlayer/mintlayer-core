@@ -17,12 +17,13 @@
 #![cfg(not(loom))]
 
 use common::chain::ChainConfig;
-use libp2p::Multiaddr;
+// use libp2p::Multiaddr;
 use p2p::{
     net::{
-        libp2p::Libp2pService,
+        // libp2p::Libp2pService,
         mock::{MockService, MockSocket},
-        Event, NetworkService,
+        Event,
+        NetworkService,
     },
     peer::*,
 };
@@ -109,6 +110,7 @@ pub async fn create_two_mock_peers(
     (local, remote)
 }
 
+/*
 // create two libp2p peers that are connected to each other
 pub async fn create_two_libp2p_peers(
     config: Arc<ChainConfig>,
@@ -161,3 +163,4 @@ pub async fn create_two_libp2p_peers(
 
     (local, remote)
 }
+*/
