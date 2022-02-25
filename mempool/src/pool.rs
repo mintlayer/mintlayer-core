@@ -1039,7 +1039,7 @@ mod tests {
         let chain_state = ChainStateMock::new();
         let mut mempool = MempoolImpl::create(chain_state);
         let mut tx_generator = TxGenerator::new(&mempool);
-        let target_txs = 100;
+        let target_txs = 10;
 
         for _ in 0..target_txs {
             match tx_generator.generate_tx() {
@@ -1053,8 +1053,8 @@ mod tests {
         let fees = mempool
             .get_all()
             .iter()
-            .map(|tx| tx.outputs().first().expect("TX should have exactly one output").value())
-            .collect::<Vec<_>>();
+            .map(|tx| mempool.try_get_fee(tx))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut fees_sorted = fees.clone();
         fees_sorted.sort_by(|a, b| b.cmp(a));
         assert_eq!(fees, fees_sorted);
