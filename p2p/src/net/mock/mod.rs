@@ -62,6 +62,9 @@ pub struct MockConnectivityHandle<T>
 where
     T: NetworkService,
 {
+    /// Socket address of the network service provider
+    addr: SocketAddr,
+
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
 
@@ -108,6 +111,7 @@ impl NetworkService for MockService {
 
         Ok((
             Self::ConnectivityHandle {
+                addr,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
                 _marker: Default::default(),
@@ -138,6 +142,10 @@ where
             .map_err(|e| e)?; // command failure
 
         Ok((addr, MockSocket::new(socket)))
+    }
+
+    fn local_addr(&self) -> &T::Address {
+        &self.addr
     }
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {

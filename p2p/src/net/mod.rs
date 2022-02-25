@@ -37,6 +37,7 @@ where
     pub ip6: Vec<Arc<T::Address>>,
 }
 
+#[derive(Debug)]
 pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
@@ -55,6 +56,7 @@ where
 }
 
 // TODO: separate events for blocks and transactions?
+#[derive(Debug)]
 pub enum FloodsubEvent<T>
 where
     T: NetworkService,
@@ -67,7 +69,7 @@ where
     },
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FloodsubTopic {
     Transactions,
     Blocks,
@@ -130,6 +132,9 @@ where
     /// # Arguments
     /// `addr` - socket address of the peer
     async fn connect(&mut self, address: T::Address) -> error::Result<(T::PeerId, T::Socket)>;
+
+    /// Return the socket address of the network service provider
+    fn local_addr(&self) -> &T::Address;
 
     /// Poll events from the network service provider
     ///

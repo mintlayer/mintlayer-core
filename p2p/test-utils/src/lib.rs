@@ -17,14 +17,12 @@
 #![cfg(not(loom))]
 
 use common::chain::ChainConfig;
-// use libp2p::Multiaddr;
+use libp2p::Multiaddr;
 use p2p::{
     net::{
-        // libp2p::Libp2pService,
+        libp2p::Libp2pService,
         mock::{MockService, MockSocket},
-        ConnectivityEvent,
-        ConnectivityService,
-        NetworkService,
+        ConnectivityEvent, ConnectivityService, NetworkService,
     },
     peer::*,
 };
@@ -111,23 +109,22 @@ pub async fn create_two_mock_peers(
     (local, remote)
 }
 
-/*
 // create two libp2p peers that are connected to each other
 pub async fn create_two_libp2p_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<Libp2pService>, Peer<Libp2pService>) {
     let addr1: Multiaddr = make_address("/ip6/::1/tcp/");
-    let mut server1 = Libp2pService::new(addr1, &[], &[]).await.unwrap();
+    let (mut server1, _) = Libp2pService::start(addr1, &[], &[]).await.unwrap();
 
     let addr2: Multiaddr = make_address("/ip6/::1/tcp/");
-    let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
+    let (mut server2, _) = Libp2pService::start(addr2, &[], &[]).await.unwrap();
 
-    let server1_conn_fut = server1.connect(server2.addr.clone());
+    let server1_conn_fut = server1.connect(server2.local_addr().clone());
 
     let (local_res, remote_res) = tokio::join!(server1_conn_fut, server2.poll_next());
-    let remote_res: Event<Libp2pService> = remote_res.unwrap();
+    let remote_res: ConnectivityEvent<Libp2pService> = remote_res.unwrap();
     let (id, remote_res) = match remote_res {
-        Event::IncomingConnection(id, socket) => (id, socket),
+        ConnectivityEvent::IncomingConnection { peer_id, socket } => (peer_id, socket),
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();
@@ -164,4 +161,3 @@ pub async fn create_two_libp2p_peers(
 
     (local, remote)
 }
-*/
