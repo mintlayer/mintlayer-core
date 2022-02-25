@@ -19,7 +19,7 @@
 #![allow(unused)]
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{self, Event, FloodsubTopic, NetworkService, SocketService},
+    net::{self, FloodsubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use futures::prelude::*;

@@ -18,7 +18,7 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{Event, FloodsubTopic, NetworkService, SocketService},
+    net::{FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -37,6 +37,9 @@ use tokio::{
 };
 
 pub struct Backend {
+    /// Socket address of the backend
+    addr: SocketAddr,
+
     /// Socket for listening to incoming connections
     socket: TcpListener,
 
@@ -52,12 +55,14 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(
+        addr: SocketAddr,
         socket: TcpListener,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _flood_tx: mpsc::Sender<types::FloodsubEvent>,
     ) -> Self {
         Self {
+            addr,
             socket,
             cmd_rx,
             conn_tx,
@@ -80,6 +85,11 @@ impl Backend {
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { addr, response } => {
+                        if self.addr == addr {
+                            let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
+                            continue;
+                        }
+
                         let _ = match TcpStream::connect(addr).await {
                             Ok(socket) => response.send(Ok(socket)),
                             Err(e) => response.send(Err(e.into())),

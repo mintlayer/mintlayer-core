@@ -19,7 +19,7 @@
 use crate::{
     error::P2pError,
     event::{Event, PeerEvent, PeerEventType},
-    net::NetworkService,
+    net::{ConnectivityService, FloodsubService, NetworkService},
     peer::{Peer, PeerRole},
 };
 use common::chain::ChainConfig;
@@ -52,12 +52,12 @@ enum PeerState {
 
 #[allow(unused)]
 #[derive(Debug)]
-struct PeerContext<NetworkingBackend>
+struct PeerContext<T>
 where
-    NetworkingBackend: NetworkService,
+    T: NetworkService,
 {
     /// Unique peer ID
-    id: NetworkingBackend::PeerId,
+    id: T::PeerId,
 
     /// Peer state
     state: PeerState,
@@ -90,36 +90,35 @@ where
 }
 
 #[allow(unused)]
-pub struct P2P<NetworkingBackend>
+pub struct P2P<T>
 where
-    NetworkingBackend: NetworkService,
+    T: NetworkService,
 {
     /// Network backend (libp2p, mock)
-    network: NetworkingBackend,
+    network: (T::ConnectivityHandle, T::FloodsubHandle),
 
     /// Chain config
     config: Arc<ChainConfig>,
 
     /// Hashmap for peer information
-    peers: HashMap<NetworkingBackend::PeerId, PeerContext<NetworkingBackend>>,
+    peers: HashMap<T::PeerId, PeerContext<T>>,
 
     /// Hashmap of discovered peers we don't have an active connection with
-    discovered: HashMap<NetworkingBackend::PeerId, PeerAddrInfo<NetworkingBackend>>,
+    discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
 
     /// Peer backlog maximum size
     peer_backlock: usize,
 
     /// Channel for p2p<->peers communication
-    mgr_chan: (
-        Sender<PeerEvent<NetworkingBackend>>,
-        Receiver<PeerEvent<NetworkingBackend>>,
-    ),
+    mgr_chan: (Sender<PeerEvent<T>>, Receiver<PeerEvent<T>>),
 }
 
 #[allow(unused)]
-impl<NetworkingBackend> P2P<NetworkingBackend>
+impl<T> P2P<T>
 where
-    NetworkingBackend: 'static + NetworkService,
+    T: 'static + NetworkService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::FloodsubHandle: FloodsubService<T>,
 {
     /// Create new P2P
     ///
@@ -128,11 +127,11 @@ where
     pub async fn new(
         mgr_backlog: usize,
         peer_backlock: usize,
-        addr: NetworkingBackend::Address,
+        addr: T::Address,
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
         Ok(Self {
-            network: NetworkingBackend::new(addr, &[], &[]).await?,
+            network: T::start(addr, &[], &[]).await?,
             config,
             peer_backlock,
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
@@ -150,10 +149,7 @@ where
     /// The event is wrapped in an `Option` because the peer might have ungracefully
     /// failed and reading from the closed channel might gives a `None` value, indicating
     /// a protocol error which should be handled accordingly.
-    async fn on_peer_event(
-        &mut self,
-        event: Option<PeerEvent<NetworkingBackend>>,
-    ) -> error::Result<()> {
+    async fn on_peer_event(&mut self, event: Option<PeerEvent<T>>) -> error::Result<()> {
         let event = event.ok_or(P2pError::ChannelClosed)?;
         match event.event {
             PeerEventType::HandshakeFailed => {
@@ -166,7 +162,7 @@ where
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
                     log::info!("new peer joined, peer id {:?}", event.peer_id);
-                    self.network.register_peer(event.peer_id).await?;
+                    self.network.0.register_peer(event.peer_id).await?;
                     (*peer).state = PeerState::Active;
                     Ok(())
                 }
@@ -183,10 +179,7 @@ where
     /// This may be a socket event (new peer, `accept()` failed) or it may be
     /// a connection request from some other part of the system indicating that
     /// P2P should try to establish a connection with a specific remote peer.
-    async fn on_connectivity_event(
-        &mut self,
-        event: ConnectivityEvent<NetworkingBackend>,
-    ) -> error::Result<()> {
+    async fn on_connectivity_event(&mut self, event: ConnectivityEvent<T>) -> error::Result<()> {
         match event {
             ConnectivityEvent::Accept(peer_id, socket) => {
                 log::debug!("accept incoming connection, peer id {:?}", peer_id);
@@ -198,7 +191,7 @@ where
                     address
                 );
 
-                self.network.connect(address).await.map(|(peer_id, socket)| {
+                self.network.0.connect(address).await.map(|(peer_id, socket)| {
                     self.create_peer(peer_id, socket, PeerRole::Outbound)
                 })?
             }
@@ -237,7 +230,7 @@ where
         let mut iter = self.discovered.iter();
 
         #[allow(clippy::needless_collect)]
-        let peers: Vec<(NetworkingBackend::PeerId, Arc<NetworkingBackend::Address>)> = (0..npeers)
+        let peers: Vec<(T::PeerId, Arc<T::Address>)> = (0..npeers)
             .map(|i| {
                 let peer_info = iter.nth(i).expect("Peer to exist");
 
@@ -268,7 +261,7 @@ where
     }
 
     /// Update the list of peers we know about or update a known peers list of addresses
-    fn peer_discovered(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
+    fn peer_discovered(&mut self, peers: &[net::AddrInfo<T>]) -> error::Result<()> {
         log::info!("discovered {} new peers", peers.len());
 
         for info in peers.iter() {
@@ -292,16 +285,18 @@ where
         Ok(())
     }
 
-    fn peer_expired(&mut self, peers: &[net::AddrInfo<NetworkingBackend>]) -> error::Result<()> {
+    fn peer_expired(&mut self, peers: &[net::AddrInfo<T>]) -> error::Result<()> {
         Ok(())
     }
 
     /// Handle floodsub event
-    fn on_floodsub_event(
-        &mut self,
-        topic: net::FloodsubTopic,
-        message: message::Message,
-    ) -> error::Result<()> {
+    fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
+        let net::FloodsubEvent::MessageReceived {
+            peer_id: _,
+            topic,
+            message,
+        } = event;
+
         match topic {
             net::FloodsubTopic::Transactions => {
                 log::debug!("received new transaction: {:#?}", message);
@@ -315,22 +310,13 @@ where
     }
 
     /// Handle network event received from the network service provider
-    async fn on_network_event(
-        &mut self,
-        event: net::Event<NetworkingBackend>,
-    ) -> error::Result<()> {
+    async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
-            net::Event::Connectivity(event) => match event {
-                net::ConnectivityEvent::IncomingConnection(peer_id, socket) => {
-                    self.on_connectivity_event(ConnectivityEvent::Accept(peer_id, socket)).await
-                }
-                net::ConnectivityEvent::PeerDiscovered(peers) => self.peer_discovered(&peers),
-                net::ConnectivityEvent::PeerExpired(peers) => self.peer_expired(&peers),
-            },
-            net::Event::Floodsub(event) => {
-                let net::FloodsubEvent::MessageReceived(topic, message) = event;
-                self.on_floodsub_event(topic, message)
+            net::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
+                self.on_connectivity_event(ConnectivityEvent::Accept(peer_id, socket)).await
             }
+            net::ConnectivityEvent::PeerDiscovered { peers } => self.peer_discovered(&peers),
+            net::ConnectivityEvent::PeerExpired { peers } => self.peer_expired(&peers),
         }
     }
 
@@ -340,9 +326,14 @@ where
 
         loop {
             tokio::select! {
-                res = self.network.poll_next() => {
+                res = self.network.0.poll_next() => {
                     res.map(|event| async {
                         self.on_network_event(event).await
+                    })?;
+                }
+                res = self.network.1.poll_next() => {
+                    res.map(|event| {
+                        self.on_floodsub_event(event)
                     })?;
                 }
                 event = self.mgr_chan.1.recv().fuse() => {
@@ -353,12 +344,7 @@ where
     }
 
     /// Create `Peer` object from a socket object and spawn task for it
-    fn create_peer(
-        &mut self,
-        id: NetworkingBackend::PeerId,
-        socket: NetworkingBackend::Socket,
-        role: PeerRole,
-    ) {
+    fn create_peer(&mut self, id: T::PeerId, socket: T::Socket, role: PeerRole) {
         let config = self.config.clone();
         let mgr_tx = self.mgr_chan.0.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
@@ -375,7 +361,7 @@ where
         log::debug!("spawning a task for peer {:?}, role {:?}", id, role);
 
         tokio::spawn(async move {
-            Peer::<NetworkingBackend>::new(id, role, config, socket, mgr_tx, rx).run().await;
+            Peer::<T>::new(id, role, config, socket, mgr_tx, rx).run().await;
         });
     }
 }
