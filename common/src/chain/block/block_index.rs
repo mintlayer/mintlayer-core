@@ -1,6 +1,7 @@
 use crate::chain::block::Block;
 use crate::chain::ChainConfig;
 use crate::primitives::{BlockHeight, Id, Idable};
+use crate::Uint256;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -9,14 +10,14 @@ pub struct BlockIndex {
     pub block_id: Id<Block>,
     pub prev_block_id: Option<Id<Block>>,
     pub next_block_id: Option<Id<Block>>,
-    pub chain_trust: u64,
+    pub chain_trust: Uint256,
     pub height: BlockHeight,
     pub time: u32,
     pub time_max: u32,
 }
 
 impl BlockIndex {
-    pub fn new(block: &Block, chain_trust: u64, height: BlockHeight, time_max: u32) -> Self {
+    pub fn new(block: &Block, chain_trust: Uint256, height: BlockHeight, time_max: u32) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
             block_id: block.get_id(),

@@ -75,4 +75,8 @@ impl BlockHeight {
     pub fn increment(&mut self) {
         self.0 += 1;
     }
+
+    fn next_height(&self) -> BlockHeight {
+        BlockHeight(self.0 + 1)
+    }
 }
