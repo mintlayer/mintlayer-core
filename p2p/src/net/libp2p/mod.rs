@@ -1,3 +1,4 @@
+// Copyright (c) 2018 Parity Technologies (UK) Ltd.
 // Copyright (c) 2021 Protocol Labs
 // Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
@@ -17,13 +18,14 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{self, Event, GossipSubTopic, NetworkService, SocketService},
+    net::{self, Event, FloodsubTopic, NetworkService, SocketService},
 };
 use async_trait::async_trait;
 use futures::prelude::*;
 use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
+    floodsub::Floodsub,
     identity,
     mdns::Mdns,
     mplex,
@@ -169,7 +171,7 @@ impl NetworkService for Libp2pService {
     async fn new(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        _topics: &[GossipSubTopic],
+        topics: &[FloodsubTopic],
     ) -> error::Result<Self> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -183,15 +185,20 @@ impl NetworkService for Libp2pService {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        let swarm = SwarmBuilder::new(
-            transport,
-            common::ComposedBehaviour {
+        let swarm = {
+            let mut behaviour = common::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
-            },
-            peer_id,
-        )
-        .build();
+                floodsub: Floodsub::new(peer_id),
+            };
+
+            for topic in topics.iter() {
+                log::debug!("subscribing to floodsub topic {:?}", topic);
+                behaviour.floodsub.subscribe(topic.into());
+            }
+
+            SwarmBuilder::new(transport, behaviour, peer_id).build()
+        };
 
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
@@ -297,14 +304,50 @@ impl NetworkService for Libp2pService {
                 Ok(Event::PeerDiscovered(parse_peers(peers)))
             }
             common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(parse_peers(peers))),
+            common::Event::MessageReceived { topic, message } => {
+                Ok(Event::MessageReceived(topic, message))
+            }
         }
     }
 
-    async fn publish<T>(&mut self, _topic: GossipSubTopic, _data: &T)
+    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(common::Command::SendMessage {
+                topic,
+                message: data.encode(),
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("register peer {:?} to libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        log::debug!("unregister peer {:?} from libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 }
 

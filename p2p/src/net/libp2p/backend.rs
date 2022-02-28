@@ -16,19 +16,22 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::{self, Libp2pError, P2pError},
+    message,
     net::{self, libp2p::common},
 };
 use futures::StreamExt;
 use libp2p::{
     core::{connection::ConnectedPoint, either::EitherError},
+    floodsub::{FloodsubEvent, Topic},
     mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
-use std::collections::HashMap;
+use parity_scale_codec::Decode;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::{
     mpsc::{Receiver, Sender},
     oneshot,
@@ -56,6 +59,9 @@ pub struct Backend {
         oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     >,
 
+    /// Hashmap of topics and their participants
+    active_floodsubs: HashMap<Topic, HashSet<PeerId>>,
+
     /// Whether mDNS peer events should be relayed to P2P manager
     relay_mdns: bool,
 }
@@ -74,6 +80,7 @@ impl Backend {
             dials: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
+            active_floodsubs: HashMap::new(),
             relay_mdns,
         }
     }
@@ -109,11 +116,15 @@ impl Backend {
     }
 
     /// Handle event received from the swarm object
+    #[allow(clippy::type_complexity)]
     async fn on_event(
         &mut self,
         event: SwarmEvent<
             common::ComposedEvent,
-            EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+            EitherError<
+                EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+                ProtocolsHandlerUpgrErr<std::io::Error>,
+            >,
         >,
     ) -> error::Result<()> {
         match event {
@@ -217,6 +228,86 @@ impl Backend {
                 })
                 .await
             }
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Subscribed { peer_id, topic },
+            )) => {
+                log::debug!(
+                    "add new subscriber ({:?}) to floodsub topic {:?}",
+                    peer_id,
+                    topic
+                );
+
+                self.active_floodsubs.entry(topic).or_insert_with(HashSet::new).insert(peer_id);
+                Ok(())
+            }
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Unsubscribed { peer_id, topic },
+            )) => match self.active_floodsubs.get_mut(&topic) {
+                Some(peers) => {
+                    log::debug!(
+                        "remove subscriber ({:?}) from floodsub topic {:?}",
+                        peer_id,
+                        topic
+                    );
+
+                    peers.remove(&peer_id);
+                    Ok(())
+                }
+                None => {
+                    log::warn!(
+                        "topic {:?} does not exist, cannot remove subscriber {:?}",
+                        topic,
+                        peer_id
+                    );
+                    Ok(())
+                }
+            },
+            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+                FloodsubEvent::Message(message),
+            )) => {
+                // for mintlayer there should only ever be one topic per message
+                // because transactions are not published in block topic and vice versa
+                //
+                // message with multiple topics is considered invalid
+                let topic = if message.topics.len() == 1 {
+                    match net::FloodsubTopic::try_from(&message.topics[0]) {
+                        Ok(topic) => topic,
+                        Err(e) => {
+                            log::warn!(
+                                "failed to convert ({:#?}) to a topic: {:?}",
+                                message.topics[0],
+                                e
+                            );
+                            return Ok(());
+                        }
+                    }
+                } else {
+                    log::warn!(
+                        "message with multiple topics ({:#?}) but only one expected",
+                        message.topics
+                    );
+                    return Ok(());
+                };
+
+                let message = match message::Message::decode(&mut &message.data[..]) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        log::warn!("failed to decode floodsub message: {:?}", e);
+                        return Ok(());
+                    }
+                };
+
+                log::trace!(
+                    "message ({:#?}) received from floodsub topic {:?}",
+                    message,
+                    topic
+                );
+
+                self.event_tx
+                    .send(common::Event::MessageReceived { topic, message })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed)
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -249,6 +340,43 @@ impl Backend {
                 self.streams.insert(stream_id, response);
                 Ok(())
             }
+            common::Command::SendMessage {
+                topic,
+                message,
+                response,
+            } => {
+                let topic: Topic = (&topic).into();
+                log::trace!("publish message on floodsub topic {:?}", topic);
+
+                // check if the floodsub topic where the message is supposed to be sent
+                // exists (the hashmap entry exists) and that it contains subscribers
+                if let Err(e) = match self.active_floodsubs.get(&topic) {
+                    None => Err(Libp2pError::PublishError("NoPeers".to_string())),
+                    Some(peers) => {
+                        if peers.is_empty() {
+                            Err(Libp2pError::PublishError("NoPeers".to_string()))
+                        } else {
+                            Ok(())
+                        }
+                    }
+                } {
+                    response
+                        .send(Err(P2pError::Libp2pError(e)))
+                        .map_err(|_| P2pError::ChannelClosed)?;
+                    return Ok(());
+                }
+
+                self.swarm.behaviour_mut().floodsub.publish(topic, message);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            common::Command::Register { peer, response } => {
+                self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            common::Command::Unregister { peer, response } => {
+                self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }
@@ -258,6 +386,7 @@ mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
+        floodsub::Floodsub,
         identity,
         mdns::Mdns,
         mplex, noise,
@@ -286,15 +415,13 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        SwarmBuilder::new(
-            transport,
-            common::ComposedBehaviour {
-                streaming: Streaming::<IdentityCodec>::default(),
-                mdns: Mdns::new(Default::default()).await.unwrap(),
-            },
-            peer_id,
-        )
-        .build()
+        let behaviour = common::ComposedBehaviour {
+            streaming: Streaming::<IdentityCodec>::default(),
+            mdns: Mdns::new(Default::default()).await.unwrap(),
+            floodsub: Floodsub::new(peer_id),
+        };
+
+        SwarmBuilder::new(transport, behaviour, peer_id).build()
     }
 
     // verify that binding to a free network interface succeeds

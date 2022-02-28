@@ -15,10 +15,11 @@
 //
 // Author(s): S. Afach
 
+use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use parity_scale_codec::{Decode, Encode};
 
-fixed_hash::construct_fixed_hash! {
+construct_fixed_hash! {
     #[derive(Encode, Decode)]
     pub struct H256(32);
 }
@@ -26,6 +27,18 @@ fixed_hash::construct_fixed_hash! {
 impl From<GenericArray<u8, typenum::U32>> for H256 {
     fn from(val: GenericArray<u8, typenum::U32>) -> Self {
         Self(val.into())
+    }
+}
+
+impl From<H256> for Uint256 {
+    fn from(hash: H256) -> Self {
+        Uint256::from(hash.0)
+    }
+}
+
+impl From<Uint256> for H256 {
+    fn from(val: Uint256) -> Self {
+        H256(val.to_bytes())
     }
 }
 
@@ -93,6 +106,8 @@ pub fn hash_encoded<T: Encode>(value: &T) -> H256 {
 mod tests {
     use super::*;
     use crypto::hash::StreamHasher;
+    use hex::FromHex;
+    use std::str::FromStr;
 
     #[test]
     fn hashes_stream_and_msg_identical() {
@@ -109,5 +124,47 @@ mod tests {
         let h3 = crypto::hash::hash::<DefaultHashAlgo, _>(&random_bytes);
 
         assert_eq!(h1, h3.into());
+    }
+
+    #[test]
+    fn h256_to_uint256_and_vice_versa() {
+        fn check(value: &str) {
+            let hash_value = H256::from_str(value).expect("nothing wrong");
+            let uint_value = Uint256::from(hash_value);
+
+            let hash_str = format!("{:?}", hash_value);
+            let uint_str = format!("{:?}", uint_value);
+            assert_eq!(hash_str, uint_str);
+
+            // make sure the position of the bytes are the same.
+            assert_eq!(hash_value.0, uint_value.to_bytes());
+            assert_eq!(hash_value, H256::from(uint_value));
+        }
+
+        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
+        check("000000000000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
+        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
+    }
+
+    #[test]
+    fn h256_and_uint256_from_bytes_and_bytes_form() {
+        fn check(hex: &str) {
+            // reverse pairs of bytes as hex
+            let hex_reversed =
+                String::from_utf8(hex.as_bytes().chunks(2).rev().collect::<Vec<&[u8]>>().concat())
+                    .unwrap();
+
+            let bytes: Vec<u8> = FromHex::from_hex(hex_reversed).unwrap();
+            let bytes = bytes.as_slice();
+            let h = H256::from_str(hex).unwrap();
+            let u = Uint256::from_bytes(bytes.try_into().unwrap());
+            assert_eq!(h.as_bytes(), bytes);
+            assert_eq!(u.to_bytes(), bytes);
+        }
+        check("0000000000000000000000000000000000000000000000000000000000000000");
+        check("0000000000000000000000000000000000000000000000000000000000000001");
+        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
+        check("02f0000ff000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
+        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
     }
 }

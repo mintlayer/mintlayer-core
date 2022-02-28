@@ -74,7 +74,11 @@ fn create_mainnet_genesis() -> Block {
     let genesis_message = b"".to_vec();
     let genesis_mint_receiver = Address::new_with_hrp(MAINNET_ADDRESS_PREFIX, [])
         .expect("Failed to create genesis mint address");
-    let input = TxInput::new(Id::new(&H256::zero()), 0, genesis_message);
+    let input = TxInput::new(
+        Id::<Transaction>::new(&H256::zero()).into(),
+        0,
+        genesis_message,
+    );
     let output = TxOutput::new(
         Amount::new(100000000000000),
         Destination::Address(genesis_mint_receiver),

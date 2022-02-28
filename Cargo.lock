@@ -79,6 +79,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94a45b455c14666b85fc40a019e8ab9eb75e3a124e05494f5397122bc9eb06e0"
 
 [[package]]
+name = "arbitrary"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c38b6b6b79f671c25e1a3e785b7b82d7562ffc9cd3efdc98627e5668a2472490"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -593,12 +599,13 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "bech32",
  "bitcoin-bech32",
+ "byteorder 1.4.3",
  "crypto",
  "displaydoc",
  "expect-test",
- "fixed-hash",
  "generic-array",
  "hex",
  "hex-literal",
@@ -608,6 +615,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "rand 0.8.4",
+ "rustc-hex",
  "script",
  "sscanf",
  "static_assertions",
@@ -1061,18 +1069,6 @@ checksum = "b2958d04124b9f27f175eaeb9a9f383d026098aa837eadd8ba22c11f13a05b9e"
 dependencies = [
  "rand_core 0.6.3",
  "subtle",
-]
-
-[[package]]
-name = "fixed-hash"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcf0ed7fe52a17a03854ec54a9f76d6d84508d1c0e66bc1793301c73fc8493c"
-dependencies = [
- "byteorder 1.4.3",
- "rand 0.8.4",
- "rustc-hex",
- "static_assertions",
 ]
 
 [[package]]
@@ -3972,6 +3968,7 @@ name = "test-utils"
 version = "0.1.0"
 dependencies = [
  "common",
+ "libp2p",
  "p2p",
  "portpicker",
  "tokio",

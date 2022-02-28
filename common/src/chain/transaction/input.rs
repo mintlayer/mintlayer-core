@@ -1,22 +1,43 @@
-use crate::chain::transaction::Transaction;
+use crate::chain::{block::Block, transaction::Transaction};
 use crate::primitives::Id;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+pub enum OutPointSourceId {
+    #[codec(index = 0)]
+    Transaction(Id<Transaction>),
+    #[codec(index = 1)]
+    BlockReward(Id<Block>),
+}
+
+impl From<Id<Transaction>> for OutPointSourceId {
+    fn from(id: Id<Transaction>) -> OutPointSourceId {
+        OutPointSourceId::Transaction(id)
+    }
+}
+
+impl From<Id<Block>> for OutPointSourceId {
+    fn from(id: Id<Block>) -> OutPointSourceId {
+        OutPointSourceId::BlockReward(id)
+    }
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct OutPoint {
-    id: Id<Transaction>,
+    id: OutPointSourceId,
     index: u32,
 }
 
 impl OutPoint {
-    pub fn new(prev_tx_id: Id<Transaction>, output_index: u32) -> Self {
+    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32) -> Self {
         OutPoint {
-            id: prev_tx_id,
+            id: outpoint_source_id,
             index: output_index,
         }
     }
 
-    pub fn get_tx_id(&self) -> Id<Transaction> {
+    pub fn get_tx_id(&self) -> OutPointSourceId {
         self.id.clone()
     }
 
@@ -32,9 +53,9 @@ pub struct TxInput {
 }
 
 impl TxInput {
-    pub fn new(prev_tx_id: Id<Transaction>, output_index: u32, witness: Vec<u8>) -> Self {
+    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32, witness: Vec<u8>) -> Self {
         TxInput {
-            outpoint: OutPoint::new(prev_tx_id, output_index),
+            outpoint: OutPoint::new(outpoint_source_id, output_index),
             witness,
         }
     }

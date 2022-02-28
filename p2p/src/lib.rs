@@ -46,7 +46,7 @@ enum PeerState {
     /// Peer is handshaking
     Handshaking,
 
-    /// Peer is ready for gossiping/syncing
+    /// Peer is ready for flooding/syncing
     Active,
 }
 
@@ -166,6 +166,7 @@ where
             PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
                 Some(peer) => {
                     log::info!("new peer joined, peer id {:?}", event.peer_id);
+                    self.network.register_peer(event.peer_id).await?;
                     (*peer).state = PeerState::Active;
                     Ok(())
                 }
@@ -295,6 +296,24 @@ where
         Ok(())
     }
 
+    /// Handle floodsub event
+    fn on_floodsub_event(
+        &mut self,
+        topic: net::FloodsubTopic,
+        message: message::Message,
+    ) -> error::Result<()> {
+        match topic {
+            net::FloodsubTopic::Transactions => {
+                log::debug!("received new transaction: {:#?}", message);
+            }
+            net::FloodsubTopic::Blocks => {
+                log::debug!("received new block: {:#?}", message);
+            }
+        }
+
+        Ok(())
+    }
+
     /// Handle network event received from the network service provider
     async fn on_network_event(
         &mut self,
@@ -306,6 +325,7 @@ where
             }
             net::Event::PeerDiscovered(peers) => self.peer_discovered(&peers),
             net::Event::PeerExpired(peers) => self.peer_expired(&peers),
+            net::Event::MessageReceived(topic, message) => self.on_floodsub_event(topic, message),
         }
     }
 

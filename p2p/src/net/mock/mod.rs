@@ -17,7 +17,7 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
-    net::{Event, GossipSubTopic, NetworkService, SocketService},
+    net::{Event, FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -31,21 +31,25 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
+    sync::{mpsc, oneshot},
 };
 
-/// This file provides a mock implementation of the network service.
-/// It implements the `NetworkService` trait on top of `tokio::net::TcpListener`
+pub mod backend;
+pub mod types;
 
 #[derive(Debug)]
 pub enum MockStrategy {}
 
 #[derive(Debug)]
 pub struct MockService {
-    /// Local node's TCP socket for listening to incoming connections
-    socket: TcpListener,
-
-    /// Address the local node has bind itself to
+    /// Address the mock service has been bind to
     addr: SocketAddr,
+
+    /// TX channel for sending commands to mock backend
+    cmd_tx: mpsc::Sender<types::Command>,
+
+    /// RX channel for receiving events from mock backend
+    event_rx: mpsc::Receiver<types::Event>,
 }
 
 #[derive(Debug)]
@@ -69,11 +73,21 @@ impl NetworkService for MockService {
     async fn new(
         addr: Self::Address,
         _strategies: &[Self::Strategy],
-        _topics: &[GossipSubTopic],
+        _topics: &[FloodsubTopic],
     ) -> error::Result<Self> {
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        let (event_tx, event_rx) = mpsc::channel(16);
+        let socket = TcpListener::bind(addr).await?;
+
+        tokio::spawn(async move {
+            let mut mock = backend::Backend::new(socket, cmd_rx, event_tx);
+            let _ = mock.run().await;
+        });
+
         Ok(Self {
             addr,
-            socket: TcpListener::bind(addr).await?,
+            cmd_tx,
+            event_rx,
         })
     }
 
@@ -87,33 +101,41 @@ impl NetworkService for MockService {
             return Err(P2pError::SocketError(ErrorKind::AddrNotAvailable));
         }
 
-        Ok((
-            addr,
-            MockSocket {
-                socket: TcpStream::connect(addr).await?,
-            },
-        ))
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
+
+        let socket = rx
+            .await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e)?; // command failure
+
+        Ok((addr, MockSocket::new(socket)))
     }
 
     async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
     where
         T: NetworkService<Socket = MockSocket, PeerId = SocketAddr>,
     {
-        let connection = self.socket.accept().await?;
-
-        Ok(Event::IncomingConnection(
-            connection.1,
-            MockSocket {
-                socket: connection.0,
-            },
-        ))
+        match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::Event::IncomingConnection { peer_id, socket } => {
+                Ok(Event::IncomingConnection(peer_id, MockSocket { socket }))
+            }
+        }
     }
 
-    async fn publish<T>(&mut self, topic: GossipSubTopic, data: &T)
+    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
     where
         T: Sync + Send + Encode,
     {
         todo!();
+    }
+
+    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
+    }
+
+    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
+        Ok(())
     }
 }
 

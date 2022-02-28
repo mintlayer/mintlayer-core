@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,26 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach
+// Author(s): A. Altonen
+use crate::error;
+use std::net::SocketAddr;
+use tokio::{net::TcpStream, sync::oneshot};
 
-pub mod address;
-pub mod chain;
-pub mod primitives;
-pub mod uint;
+pub enum Command {
+    Connect {
+        addr: SocketAddr,
+        response: oneshot::Sender<error::Result<TcpStream>>,
+    },
+}
 
-mod concurrency_impl;
-
-#[macro_use]
-mod fixed_hash;
-
-pub use concurrency_impl::*;
-pub use uint::{Uint128, Uint256};
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
+pub enum Event {
+    IncomingConnection {
+        peer_id: SocketAddr,
+        socket: TcpStream,
+    },
 }
