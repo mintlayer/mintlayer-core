@@ -1,0 +1,18 @@
+[package]
+name = "subsystem"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+
+# Local dependencies
+logging = { path = "../logging" }
+
+[dependencies.tokio]
+version = "1"
+default-features = false
+features = ["macros", "rt", "rt-multi-thread", "signal", "sync"]
+
+[dev-dependencies]
+common = { path = "../common" }
