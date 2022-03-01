@@ -41,14 +41,14 @@ impl<C: ChainState> TryGetFee for MempoolImpl<C> {
             .iter()
             .cloned()
             .sum::<Option<_>>()
-            .ok_or(TxValidationError::TransactionFeeOverflow)?;
+            .ok_or(TxValidationError::InputValuesOverflow)?;
         let sum_outputs = tx
             .outputs()
             .iter()
             .map(|output| output.value())
             .sum::<Option<_>>()
-            .ok_or(TxValidationError::TransactionFeeOverflow)?;
-        (sum_inputs - sum_outputs).ok_or(TxValidationError::TransactionFeeOverflow)
+            .ok_or(TxValidationError::OutputValuesOverflow)?;
+        (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
     }
 }
 
@@ -310,8 +310,12 @@ pub enum TxValidationError {
     TransactionAlreadyInMempool,
     #[error("ConflictWithIrreplaceableTransaction")]
     ConflictWithIrreplaceableTransaction,
-    #[error("TransactionFeeOverflow")]
-    TransactionFeeOverflow,
+    #[error("InputValuesOverflow")]
+    InputValuesOverflow,
+    #[error("OutputValuesOverflow")]
+    OutputValuesOverflow,
+    #[error("InputsBelowOutputs")]
+    InputsBelowOutputs,
     #[error("ReplacementFeeLowerThanOriginal: The replacement transaction has fee {replacement_fee:?}, the original transaction has fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
