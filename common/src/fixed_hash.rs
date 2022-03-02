@@ -244,7 +244,7 @@ macro_rules! construct_fixed_hash {
 				}
 
 				let ctr = &self.0[0..];
-                for i in ctr.iter().rev() {
+				for i in ctr.iter().rev() {
 					core::write!(f, "{:02x}", i)?;
 				}
 				Ok(())
@@ -257,8 +257,8 @@ macro_rules! construct_fixed_hash {
 					core::write!(f, "0X")?;
 				}
 
-                let ctr = &self.0[0..];
-                for i in ctr.iter().rev() {
+				let ctr = &self.0[0..];
+				for i in ctr.iter().rev() {
 					core::write!(f, "{:02X}", i)?;
 				}
 				Ok(())
