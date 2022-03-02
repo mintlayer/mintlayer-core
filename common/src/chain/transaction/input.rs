@@ -1,5 +1,5 @@
 use crate::chain::{block::Block, transaction::Transaction};
-use crate::primitives::Id;
+use crate::primitives::{Id, H256};
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -8,6 +8,15 @@ pub enum OutPointSourceId {
     Transaction(Id<Transaction>),
     #[codec(index = 1)]
     BlockReward(Id<Block>),
+}
+
+impl OutPointSourceId {
+    pub fn hash(&self) -> H256 {
+        match self {
+            OutPointSourceId::Transaction(inner) => inner.get(),
+            OutPointSourceId::BlockReward(inner) => inner.get(),
+        }
+    }
 }
 
 impl From<Id<Transaction>> for OutPointSourceId {
