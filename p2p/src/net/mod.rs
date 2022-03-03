@@ -87,7 +87,7 @@ pub trait NetworkService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Debug + PartialEq + Eq + Hash + Clone;
+    type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
