@@ -20,6 +20,7 @@ use crate::net::{ConnectivityService, FloodsubService, NetworkService};
 use common::chain::ChainConfig;
 use logging::log;
 use std::sync::Arc;
+use tokio::sync::mpsc;
 
 pub mod error;
 pub mod event;
@@ -36,6 +37,9 @@ where
 {
     /// Chain config
     config: Arc<ChainConfig>,
+
+    /// TX channel for sending swarm control events
+    tx_swarm: mpsc::Sender<event::SwarmControlEvent<T>>,
 
     /// Handle for sending/receiving floodsub events
     flood: T::FloodsubHandle,
@@ -60,14 +64,24 @@ where
     ) -> error::Result<Self> {
         let (conn, flood) = T::start(addr, &[], &[]).await?;
         let swarm_config = Arc::clone(&config);
+        let (tx_swarm, rx_swarm) = mpsc::channel(16);
 
         tokio::spawn(async move {
-            let mut swarm =
-                swarm::SwarmManager::<T>::new(swarm_config, conn, mgr_backlog, peer_backlock);
+            let mut swarm = swarm::SwarmManager::<T>::new(
+                swarm_config,
+                conn,
+                rx_swarm,
+                mgr_backlog,
+                peer_backlock,
+            );
             let _ = swarm.run().await;
         });
 
-        Ok(Self { config, flood })
+        Ok(Self {
+            config,
+            flood,
+            tx_swarm,
+        })
     }
 
     /// Handle floodsub event

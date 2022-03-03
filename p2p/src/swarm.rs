@@ -109,6 +109,9 @@ where
     /// Peer backlog maximum size
     peer_backlock: usize,
 
+    /// RX channel for receiving control events
+    rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+
     /// Channel for p2p<->peers communication
     mgr_chan: (
         mpsc::Sender<event::PeerEvent<T>>,
@@ -124,6 +127,7 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
+        rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
         mgr_backlog: usize,
         peer_backlock: usize,
     ) -> Self {
@@ -131,14 +135,44 @@ where
             config,
             handle,
             peer_backlock,
+            rx_swarm,
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             discovered: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
         }
     }
 
+    /// Handle swarm control event
+    async fn on_swarm_control_event(
+        &mut self,
+        event: Option<event::SwarmControlEvent<T>>,
+    ) -> error::Result<()> {
+        match event.ok_or(P2pError::ChannelClosed)? {
+            event::SwarmControlEvent::Connect { addr } => {
+                log::debug!(
+                    "try to establish outbound connection to peer at address {:?}",
+                    addr
+                );
+
+                match self.handle.connect(addr).await {
+                    Ok((peer_id, socket)) => {
+                        self.create_peer(peer_id, socket, PeerRole::Outbound);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        log::error!("failed to establish outbound connection: {:?}", e);
+                        Err(e)
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn run(&mut self) -> error::Result<()> {
-        Ok(())
+        loop {
+            let event = self.rx_swarm.recv().await;
+            self.on_swarm_control_event(event);
+        }
     }
 
     /// Handle an event coming from peer
@@ -306,6 +340,7 @@ mod tests {
     #![allow(unused)]
     use super::*;
     use crate::error::P2pError;
+    use crate::event;
     use crate::peer;
     use common::chain::config;
     use libp2p::Multiaddr;
@@ -320,41 +355,43 @@ mod tests {
     {
         let config = Arc::new(config::create_mainnet());
         let (conn, _) = T::start(addr, &[], &[]).await.unwrap();
-        SwarmManager::<T>::new(Arc::clone(&config), conn, 256, 32)
+        let (_, rx) = tokio::sync::mpsc::channel(16);
+
+        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, 256, 32)
     }
 
     // try to connect to an address that no one listening on and verify it fails
-    // #[tokio::test]
-    // async fn test_p2p_connect_mock() {
-    //     let config = Arc::new(config::create_mainnet());
-    //     let addr: SocketAddr = test_utils::make_address("[::1]:");
-    //     let mut p2p = P2P::<MockService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+    #[tokio::test]
+    async fn test_swarm_connect_mock() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut swarm = make_swarm_manager::<MockService>(addr).await;
 
-    //     let remote: SocketAddr = "[::1]:6666".parse().unwrap();
-    //     let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
-    //     assert_eq!(
-    //         res,
-    //         Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-    //     );
-    // }
+        let addr: SocketAddr = "[::1]:6666".parse().unwrap();
+        assert_eq!(
+            swarm
+                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
+                .await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+    }
 
     // try to connect to an address that no one listening on and verify it fails
-    // #[tokio::test]
-    // async fn test_p2p_connect_libp2p() {
-    //     let config = Arc::new(config::create_mainnet());
-    //     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    //     let mut p2p = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
+    #[tokio::test]
+    async fn test_swarm_connect_libp2p() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let mut swarm = make_swarm_manager::<Libp2pService>(addr).await;
 
-    //     let remote: Multiaddr =
-    //         "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
-    //             .parse()
-    //             .unwrap();
-    //     let res = p2p.on_connectivity_event(ConnectivityEvent::Connect(remote)).await;
-    //     assert_eq!(
-    //         res,
-    //         Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-    //     );
-    // }
+        let addr: Multiaddr =
+            "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
+                .parse()
+                .unwrap();
+        assert_eq!(
+            swarm
+                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
+                .await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+    }
 
     // verify that if handshake succeeds, peer state is set to `Active`
     #[tokio::test]
