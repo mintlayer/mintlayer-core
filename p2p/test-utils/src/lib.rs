@@ -17,12 +17,14 @@
 #![cfg(not(loom))]
 
 use common::chain::ChainConfig;
-use libp2p::Multiaddr;
+// use libp2p::Multiaddr;
 use p2p::{
     net::{
-        libp2p::Libp2pService,
+        // libp2p::Libp2pService,
         mock::{MockService, MockSocket},
-        Event, NetworkService,
+        ConnectivityEvent,
+        Event,
+        NetworkService,
     },
     peer::*,
 };
@@ -71,7 +73,7 @@ pub async fn create_two_mock_peers(
     let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
     let remote_res: Event<MockService> = remote_res.unwrap();
     let remote_res = match remote_res {
-        Event::IncomingConnection(_, socket) => socket,
+        Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();
@@ -109,6 +111,7 @@ pub async fn create_two_mock_peers(
     (local, remote)
 }
 
+/*
 // create two libp2p peers that are connected to each other
 pub async fn create_two_libp2p_peers(
     config: Arc<ChainConfig>,
@@ -161,3 +164,4 @@ pub async fn create_two_libp2p_peers(
 
     (local, remote)
 }
+*/

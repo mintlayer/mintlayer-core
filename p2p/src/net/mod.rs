@@ -37,8 +37,7 @@ where
     pub ip6: Vec<Arc<T::Address>>,
 }
 
-#[derive(Debug)]
-pub enum Event<T>
+pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
 {
@@ -50,9 +49,20 @@ where
 
     /// One one more peers have expired
     PeerExpired(Vec<AddrInfo<T>>),
+}
 
+// TODO: separate events for blocks and transactions?
+pub enum FloodsubEvent {
     /// Message received from a Floodsub topic
     MessageReceived(FloodsubTopic, message::Message),
+}
+
+pub enum Event<T>
+where
+    T: NetworkService,
+{
+    Connectivity(ConnectivityEvent<T>),
+    Floodsub(FloodsubEvent),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]

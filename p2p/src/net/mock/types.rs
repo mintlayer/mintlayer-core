@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::error;
+use crate::{error, message, net};
 use std::net::SocketAddr;
 use tokio::{net::TcpStream, sync::oneshot};
 
@@ -25,9 +25,19 @@ pub enum Command {
     },
 }
 
-pub enum Event {
+pub enum ConnectivityEvent {
     IncomingConnection {
         peer_id: SocketAddr,
         socket: TcpStream,
+    },
+}
+
+// TODO: use two events, one for txs and one for blocks?
+pub enum FloodsubEvent {
+    /// Message received from one of the floodsub topics
+    MessageReceived {
+        peer_id: SocketAddr,
+        topic: net::FloodsubTopic,
+        message: message::Message,
     },
 }
