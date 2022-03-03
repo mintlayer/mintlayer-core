@@ -2,14 +2,18 @@
 
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id};
+use common::utxo::Utxo;
 use storage::traits;
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 mod store;
+mod utxo;
 
 pub use store::Store;
+pub use utxo::UtxoDB;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
@@ -89,13 +93,30 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 }
 
+/// Queries to get the Utxo Entry
+pub(crate) trait UtxoRead {
+    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+}
+
+pub(crate) trait UtxoWrite: UtxoRead {
+    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+}
+
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: traits::TransactionRo<Error = crate::Error> + BlockchainStorageRead + 't;
+    type TransactionRo: traits::TransactionRo<Error = crate::Error>
+        + BlockchainStorageRead
+        //+ UtxoRead
+        + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: traits::TransactionRw<Error = crate::Error> + BlockchainStorageWrite + 't;
+    type TransactionRw: traits::TransactionRw<Error = crate::Error>
+        + BlockchainStorageWrite
+        //+ UtxoWrite
+        + 't;
 
     /// Start a read-only transaction.
     fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
@@ -104,4 +125,8 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
 }
 
-pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> {}
+pub trait BlockchainStorage:
+BlockchainStorageWrite //+ UtxoWrite
++ for<'tx> Transactional<'tx>
+{
+}

@@ -1,0 +1,131 @@
+//TODO: need a better way than this.
+
+use crate::chain::OutPoint;
+use crate::chainstate::test::{create_utxo, DIRTY, FRESH};
+use crate::chainstate::utxo::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
+use crate::primitives::H256;
+use crate::utxo::UtxoEntry;
+use rand::Rng;
+
+fn random_bool() -> bool {
+    let rng = rand::thread_rng().gen_range(0..2);
+    rng == 0
+}
+
+fn random_u64() -> u64 {
+    rand::thread_rng().gen_range(0..50u64)
+}
+
+fn populate_cache<'a>(
+    parent: &'a UtxosCache,
+    size: u64,
+    existing_outpoints: &[OutPoint],
+) -> (UtxosCache<'a>, Vec<OutPoint>) {
+    let mut cache = UtxosCache::new(parent);
+
+    // trackers:
+    let mut outps: Vec<OutPoint> = vec![];
+
+    // let's add utxos based on `size`.
+    for i in 0..size {
+        let block_height = if random_bool() {
+            i
+        } else {
+            // setting a random height based on the `size`.
+            let rng = rand::thread_rng().gen_range(0..size);
+            rng
+        };
+
+        let (utxo, outpoint) = create_utxo(block_height);
+
+        let outpoint = if random_bool() && existing_outpoints.len() > 1 {
+            // setting a random existing 'spent' outpoint
+            let rng = rand::thread_rng().gen_range(0..existing_outpoints.len());
+            let outpoint = &existing_outpoints[rng];
+
+            outpoint.clone()
+        } else {
+            // tracking the outpoints
+            outps.push(outpoint.clone());
+            outpoint
+        };
+
+        // randomly set the `possible_overwrite`
+        let possible_overwrite = random_bool();
+        let _ = cache.add_utxo(utxo, &outpoint, possible_overwrite);
+
+        // println!("child, insert: {:?}, overwrite: {}", outpoint,possible_overwrite );
+    }
+
+    // let's create a number of 'spent' utxos in the parent_size.
+    // To give way to other situations, the number of 'spent' utxos should be <= parent_size/2.
+    // let parent_spent_size = if random_bool() { parent_size/2 } else {
+    //     let rng = rand::thread_rng().gen_range(0..parent_size/2);
+    //     rng
+    // };
+    let spent_size = outps.len() / 2;
+
+    for _ in 0..spent_size {
+        // randomly select which outpoint should be marked as "spent"
+        if random_bool() && existing_outpoints.len() > 1 {
+            let outp_idx = rand::thread_rng().gen_range(0..existing_outpoints.len());
+            let to_spend = &existing_outpoints[outp_idx];
+            assert!(cache.spend_utxo(to_spend));
+
+            //println!("child, spend: {:?}, removed", to_spend);
+        } else {
+            let outp_idx = rand::thread_rng().gen_range(0..outps.len());
+            let to_spend = &outps[outp_idx];
+
+            let key = OutPointKey::from(to_spend);
+
+            // randomly select which flags should the spent utxo have.
+            // 0 - NOT FRESH, NOT DIRTY, 1 - FRESH, 2 - DIRTY, 3 - FRESH AND DIRTY
+            let flags = rand::thread_rng().gen_range(0..4u8);
+
+            let new_entry = match flags {
+                FRESH => UtxoEntry::new_spent(true, false),
+                DIRTY => UtxoEntry::new_spent(false, true),
+                x if x == (FRESH + DIRTY) => UtxoEntry::new_spent(true, true),
+                _ => UtxoEntry::new_spent(false, false),
+            };
+            cache.utxos.insert(key, new_entry);
+
+            //println!("child, spend: {:?}, flags: {}", to_spend,flags );
+        };
+    }
+
+    (cache, outps)
+}
+
+#[test]
+fn stack_flush_test() {
+    let mut outps: Vec<OutPoint> = vec![];
+
+    let block_hash = H256::random();
+    let mut parent = UtxosCache::default();
+    parent.set_best_block(block_hash);
+
+    let parent_clone = parent.clone();
+    let (cache1, mut cache1_outps) = populate_cache(&parent_clone, random_u64(), &outps);
+    outps.append(&mut cache1_outps);
+
+    let cache1_clone = cache1.clone();
+    let (cache2, mut cache2_outps) = populate_cache(&cache1_clone, random_u64(), &outps);
+    outps.append(&mut cache2_outps);
+
+    let cache2_clone = cache2.clone();
+    let (cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(), &outps);
+    outps.append(&mut cache3_outps);
+
+    let new_block_hash = H256::random();
+    let cache3_clone = cache3.clone();
+    assert!(flush_to_base(cache3_clone, new_block_hash, &mut parent).is_ok());
+
+    for (key, utxo_entry) in &parent.utxos {
+        let outpoint = OutPoint::from(key);
+        let utxo = cache3.get_utxo(&outpoint);
+
+        assert_eq!(utxo_entry.utxo(), utxo);
+    }
+}

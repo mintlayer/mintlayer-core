@@ -1,10 +1,15 @@
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id, Idable};
+use common::utxo::Utxo;
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
 
-use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
+use crate::{
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UtxoRead,
+    UtxoWrite,
+};
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -42,6 +47,8 @@ storage::decl_schema! {
         pub DBTxIndices: Single,
         // Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Single,
+        // Store for Utxo Entries
+        pub DBUtxo: Single
     }
 }
 
@@ -126,6 +133,12 @@ impl BlockchainStorageRead for Store {
     }
 }
 
+impl UtxoRead for Store {
+    delegate_to_transaction! {
+        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+    }
+}
+
 impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
@@ -148,6 +161,13 @@ impl BlockchainStorageWrite for Store {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+    }
+}
+
+impl UtxoWrite for Store {
+    delegate_to_transaction! {
+        fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
     }
 }
 
@@ -198,6 +218,13 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     }
 }
 
+/// Utxo data storage transaction
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+        self.read::<DBUtxo, _, _>(&outpoint.encode())
+    }
+}
+
 impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for StoreTx<Tx> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
@@ -237,6 +264,21 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
         self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
+    }
+}
+
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
+    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+        println!("setting storage version...");
+        let key = outpoint.encode();
+        //self.write_value::<well_known::StoreVersion>(&version)
+
+        self.write::<DBUtxo, _, _>(key, &entry)
+    }
+
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
+        let key = outpoint.encode();
+        self.0.get_mut::<DBUtxo, _>().del(&key).map_err(Into::into)
     }
 }
 

@@ -356,8 +356,10 @@ name = "blockchain-storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "iter_tools",
  "mockall",
  "parity-scale-codec",
+ "rand 0.8.4",
  "storage",
  "thiserror",
 ]
@@ -1353,6 +1355,15 @@ name = "ipnet"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
+
+[[package]]
+name = "iter_tools"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fc962511e9e85f92f36d5ccaf971bd558269f8037b729eaf2db36c79c19c325"
+dependencies = [
+ "itertools",
+]
 
 [[package]]
 name = "itertools"

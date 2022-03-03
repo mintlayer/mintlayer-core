@@ -10,15 +10,6 @@ pub enum OutPointSourceId {
     BlockReward(Id<Block>),
 }
 
-impl OutPointSourceId {
-    pub fn hash(&self) -> H256 {
-        match self {
-            OutPointSourceId::Transaction(inner) => inner.get(),
-            OutPointSourceId::BlockReward(inner) => inner.get(),
-        }
-    }
-}
-
 impl From<Id<Transaction>> for OutPointSourceId {
     fn from(id: Id<Transaction>) -> OutPointSourceId {
         OutPointSourceId::Transaction(id)
@@ -51,6 +42,13 @@ impl OutPoint {
 
     pub fn get_output_index(&self) -> u32 {
         self.index
+    }
+
+    pub fn hash(&self) -> H256 {
+        match &self.id {
+            OutPointSourceId::Transaction(inner) => inner.get(),
+            OutPointSourceId::BlockReward(inner) => inner.get(),
+        }
     }
 }
 

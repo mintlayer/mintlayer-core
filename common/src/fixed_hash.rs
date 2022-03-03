@@ -709,31 +709,30 @@ macro_rules! impl_fixed_hash_conversions {
     };
 }
 
-
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
     use crate::primitives::H256;
+    use std::str::FromStr;
 
     #[test]
     fn display_test() {
-        fn check(hash:&str) {
+        fn check(hash: &str) {
             let h256 = H256::from_str(hash).expect("should not fail");
 
-            let debug = format!("{:?}",h256);
-            assert_eq!(debug, format!("0x{}",hash));
+            let debug = format!("{:?}", h256);
+            assert_eq!(debug, format!("0x{}", hash));
 
-            let display = format!("{}",h256);
-            let (_,last_value) = hash.split_at(hash.len()-4);
-            assert_eq!(display, format!("0x{}…{}",&hash[0..4],last_value));
+            let display = format!("{}", h256);
+            let (_, last_value) = hash.split_at(hash.len() - 4);
+            assert_eq!(display, format!("0x{}…{}", &hash[0..4], last_value));
 
-            let no_0x = format!("{:x}",h256);
+            let no_0x = format!("{:x}", h256);
             assert_eq!(no_0x, hash.to_string());
 
-            let sharp = format!("{:#x}",h256);
+            let sharp = format!("{:#x}", h256);
             assert_eq!(sharp, debug);
 
-            let upper_hex = format!("{:#010X}",h256);
+            let upper_hex = format!("{:#010X}", h256);
             assert_eq!(upper_hex, format!("0X{}", hash.to_uppercase()));
         }
 
@@ -741,5 +740,4 @@ mod test {
         check("000000000000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
         check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
     }
-
 }

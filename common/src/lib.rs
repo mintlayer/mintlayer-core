@@ -26,6 +26,8 @@ mod concurrency_impl;
 mod fixed_hash;
 mod chainstate;
 
+pub use chainstate::{utxo, Error as ChainStateError};
+
 pub use concurrency_impl::*;
 pub use uint::{Uint128, Uint256};
 
