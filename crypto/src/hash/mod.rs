@@ -164,7 +164,7 @@ mod tests {
             0x2f, 0xed, 0x78, 0xdb, 0xef, 0x80, 0x2f, 0x2a, 0x85, 0xcb, 0x91, 0xd4, 0x55, 0xa8,
             0xf5, 0x24, 0x9d, 0x33, 0x08, 0x53, 0xcb, 0x3c,
         ];
-        let buf_blake2 = hash::<Blake2b, _>((b"a").to_vec());
+        let buf_blake2 = hash::<Blake2b, _>(b"a");
         assert_eq!(buf_blake2.len(), exp_res.len());
         assert!(buf_blake2.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
     }
@@ -179,7 +179,7 @@ mod tests {
             0xf5, 0x24, 0x9d, 0x33, 0x08, 0x53, 0xcb, 0x3c,
         ];
         let mut hasher = Blake2bStream::new();
-        hasher.write((b"a").to_vec());
+        hasher.write(b"a");
         let buf_blake2 = hasher.finalize();
         assert_eq!(buf_blake2.len(), exp_res.len());
         assert!(buf_blake2.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
@@ -191,7 +191,7 @@ mod tests {
             0xaa, 0xec, 0x09, 0x69, 0xb8, 0xf7, 0x7b, 0x8d, 0x63, 0xbc, 0x43, 0xa1, 0x35, 0x2e,
             0x67, 0x5e, 0x9c, 0x86, 0x5e, 0xbd,
         ];
-        let buf_sha1 = hash::<Sha1, _>((b"algo").to_vec());
+        let buf_sha1 = hash::<Sha1, _>(b"algo");
         assert_eq!(buf_sha1.len(), exp_res.len());
         assert!(buf_sha1.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
     }
@@ -203,8 +203,8 @@ mod tests {
             0x67, 0x5e, 0x9c, 0x86, 0x5e, 0xbd,
         ];
         let mut hasher = Sha1Stream::new();
-        hasher.write((b"al").to_vec());
-        hasher.write((b"go").to_vec());
+        hasher.write(b"al");
+        hasher.write(b"go");
         let buf_sha1 = hasher.finalize();
         assert_eq!(buf_sha1.len(), exp_res.len());
         assert!(buf_sha1.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
@@ -217,7 +217,7 @@ mod tests {
             0xb1, 0x85, 0xf0, 0xae, 0x0a, 0x5d, 0x48, 0x5e, 0x0d, 0x27, 0xda, 0xa7, 0xeb, 0x83,
             0x8c, 0x9d, 0x71, 0x69,
         ];
-        let buf_sha2 = hash::<Sha256, _>((b"mintlayer").to_vec());
+        let buf_sha2 = hash::<Sha256, _>(b"mintlayer");
         assert_eq!(buf_sha2.len(), exp_res.len());
         assert!(buf_sha2.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
     }
@@ -230,8 +230,8 @@ mod tests {
             0x8c, 0x9d, 0x71, 0x69,
         ];
         let mut hasher = Sha256Stream::new();
-        hasher.write((b"mint").to_vec());
-        hasher.write((b"layer").to_vec());
+        hasher.write(b"mint");
+        hasher.write(b"layer");
         let buf_sha2 = hasher.finalize();
         assert_eq!(buf_sha2.len(), exp_res.len());
         assert!(buf_sha2.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
@@ -246,7 +246,7 @@ mod tests {
             0x5c, 0x6b, 0x77, 0x07, 0x09, 0x4d, 0x33, 0x6f, 0x96, 0x9a, 0x6a, 0x72, 0xeb, 0xbd,
             0xf8, 0x16, 0x68, 0xf7, 0x11, 0x26, 0x20, 0xa9,
         ];
-        let buf_sha3 = hash::<Sha3_512, _>((b"sha3-5").to_vec());
+        let buf_sha3 = hash::<Sha3_512, _>(b"sha3-5");
         assert_eq!(buf_sha3.len(), exp_res.len());
         assert!(buf_sha3.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
     }
@@ -261,8 +261,8 @@ mod tests {
             0xf8, 0x16, 0x68, 0xf7, 0x11, 0x26, 0x20, 0xa9,
         ];
         let mut hasher = Sha3_512Stream::new();
-        hasher.write((b"sha3").to_vec());
-        hasher.write((b"-5").to_vec());
+        hasher.write(b"sha3");
+        hasher.write(b"-5");
         let buf_sha3 = hasher.finalize();
         assert_eq!(buf_sha3.len(), exp_res.len());
         assert!(buf_sha3.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
@@ -274,7 +274,7 @@ mod tests {
             0x90, 0x33, 0x91, 0xa1, 0xc0, 0x49, 0x9e, 0xc8, 0xdf, 0xb5, 0x1a, 0x53, 0x4b, 0xa5,
             0x56, 0x57, 0xf9, 0x7c, 0x57, 0xd5,
         ];
-        let buf_ripemd160 = hash::<Ripemd160, _>((b"ripemd160").to_vec());
+        let buf_ripemd160 = hash::<Ripemd160, _>(b"ripemd160");
         assert_eq!(buf_ripemd160.len(), exp_res.len());
         assert!(buf_ripemd160.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
     }
@@ -286,8 +286,8 @@ mod tests {
             0x56, 0x57, 0xf9, 0x7c, 0x57, 0xd5,
         ];
         let mut hasher = Ripemd160Stream::new();
-        hasher.write((b"ripemd").to_vec());
-        hasher.write((b"160").to_vec());
+        hasher.write(b"ripemd");
+        hasher.write(b"160");
         let buf_ripemd160 = hasher.finalize();
         assert_eq!(buf_ripemd160.len(), exp_res.len());
         assert!(buf_ripemd160.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
@@ -300,7 +300,7 @@ mod tests {
             174, 183, 216, 205, 49, 68, 162, 107, 201, 149, 236, 151, 159, 218, 170, 44, 33, 144,
             233, 122,
         ];
-        let tmp_sha = hash::<Sha256, _>((b"bitcointest").to_vec());
+        let tmp_sha = hash::<Sha256, _>(b"bitcointest");
         let ans = hash::<Ripemd160, _>(tmp_sha);
         assert_eq!(ans.len(), exp_res.len());
         assert!(ans.iter().zip(exp_res.iter()).all(|(a, b)| a == b));
