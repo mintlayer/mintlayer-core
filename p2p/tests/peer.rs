@@ -19,7 +19,9 @@ extern crate test_utils;
 
 use common::chain::config;
 // use libp2p::Multiaddr;
-use p2p::net::{self, /*libp2p::Libp2pService, */ mock::MockService, NetworkService};
+use p2p::net::{
+    self, /*libp2p::Libp2pService, */ mock::MockService, ConnectivityService, NetworkService,
+};
 use p2p::peer::{Peer, PeerRole};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -30,16 +32,16 @@ use tokio::net::TcpStream;
 async fn test_peer_new_mock() {
     let config = Arc::new(config::create_mainnet());
     let addr: SocketAddr = test_utils::make_address("[::1]:");
-    let mut server = MockService::new(addr, &[], &[]).await.unwrap();
+    let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
     let peer_fut = TcpStream::connect(addr);
 
     let (server_res, peer_res) = tokio::join!(server.poll_next(), peer_fut);
     assert!(server_res.is_ok());
     assert!(peer_res.is_ok());
 
-    let server_res: net::Event<MockService> = server_res.unwrap();
+    let server_res: net::ConnectivityEvent<MockService> = server_res.unwrap();
     let server_res = match server_res {
-        net::Event::Connectivity(net::ConnectivityEvent::IncomingConnection(_, socket)) => socket,
+        net::ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 

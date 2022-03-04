@@ -17,7 +17,10 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
-    net::{ConnectivityEvent, Event, FloodsubEvent, FloodsubTopic, NetworkService, SocketService},
+    net::{
+        ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService, FloodsubTopic,
+        NetworkService, SocketService,
+    },
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -42,19 +45,7 @@ pub mod types;
 pub enum MockStrategy {}
 
 #[derive(Debug)]
-pub struct MockService {
-    /// Address the mock service has been bind to
-    addr: SocketAddr,
-
-    /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
-
-    /// RX channel for receiving connectivity events from mock backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
-
-    /// RX channel for receiving floodsub events from mock backend
-    flood_rx: mpsc::Receiver<types::FloodsubEvent>,
-}
+pub struct MockService;
 
 #[derive(Debug)]
 pub struct MockSocket {
@@ -67,45 +58,76 @@ impl MockSocket {
     }
 }
 
+pub struct MockConnectivityHandle<T>
+where
+    T: NetworkService,
+{
+    /// TX channel for sending commands to mock backend
+    cmd_tx: mpsc::Sender<types::Command>,
+
+    /// RX channel for receiving connectivity events from mock backend
+    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+pub struct MockFloodsubHandle<T>
+where
+    T: NetworkService,
+{
+    /// TX channel for sending commands to mock backend
+    cmd_tx: mpsc::Sender<types::Command>,
+
+    /// RX channel for receiving floodsub events from mock backend
+    _flood_rx: mpsc::Receiver<types::FloodsubEvent>,
+    _marker: std::marker::PhantomData<T>,
+}
+
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
     type Socket = MockSocket;
     type Strategy = MockStrategy;
     type PeerId = SocketAddr;
+    type ConnectivityHandle = MockConnectivityHandle<Self>;
+    type FloodsubHandle = MockFloodsubHandle<Self>;
 
-    async fn new(
+    async fn start(
         addr: Self::Address,
         _strategies: &[Self::Strategy],
         _topics: &[FloodsubTopic],
-    ) -> error::Result<Self> {
+    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (flood_tx, flood_rx) = mpsc::channel(16);
+        let (flood_tx, _flood_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(socket, cmd_rx, conn_tx, flood_tx);
+            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx);
             let _ = mock.run().await;
         });
 
-        Ok(Self {
-            addr,
-            cmd_tx,
-            conn_rx,
-            flood_rx,
-        })
+        Ok((
+            Self::ConnectivityHandle {
+                cmd_tx: cmd_tx.clone(),
+                conn_rx,
+                _marker: Default::default(),
+            },
+            Self::FloodsubHandle {
+                cmd_tx,
+                _flood_rx,
+                _marker: Default::default(),
+            },
+        ))
     }
+}
 
-    async fn connect(
-        &mut self,
-        addr: Self::Address,
-    ) -> error::Result<(Self::PeerId, Self::Socket)> {
+#[async_trait]
+impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
+where
+    T: NetworkService<Address = SocketAddr, PeerId = SocketAddr, Socket = MockSocket> + Send,
+{
+    async fn connect(&mut self, addr: T::Address) -> error::Result<(T::PeerId, T::Socket)> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
-
-        if self.addr == addr {
-            return Err(P2pError::SocketError(ErrorKind::AddrNotAvailable));
-        }
 
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
@@ -118,37 +140,40 @@ impl NetworkService for MockService {
         Ok((addr, MockSocket::new(socket)))
     }
 
-    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
-    where
-        T: NetworkService<Socket = MockSocket, PeerId = SocketAddr>,
-    {
-        tokio::select! {
-            event = self.conn_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                types::ConnectivityEvent::IncomingConnection { peer_id, socket } => Ok(Event::Connectivity(
-                    ConnectivityEvent::IncomingConnection(peer_id, MockSocket { socket }),
-                )),
-            },
-            event = self.flood_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                types::FloodsubEvent::MessageReceived { peer_id: _, topic, message } => {
-                    Ok(Event::Floodsub(FloodsubEvent::MessageReceived(topic, message)))
-                }
+    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
+        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
+                Ok(ConnectivityEvent::IncomingConnection {
+                    peer_id,
+                    socket: MockSocket { socket },
+                })
             }
         }
     }
 
-    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
+    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
+        Ok(())
+    }
+
+    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl<T> FloodsubService<T> for MockFloodsubHandle<T>
+where
+    T: NetworkService<PeerId = SocketAddr> + Send,
+{
+    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
     where
-        T: Sync + Send + Encode,
+        U: Sync + Send + Encode,
     {
         todo!();
     }
 
-    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
-        Ok(())
-    }
-
-    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
-        Ok(())
+    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>> {
+        todo!();
     }
 }
 
@@ -185,7 +210,7 @@ impl SocketService for MockSocket {
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
-    use crate::net::{ConnectivityEvent, Event};
+    use crate::net::ConnectivityEvent;
     use crate::peer::{Peer, PeerRole};
     use common::chain::config;
     use parity_scale_codec::{Decode, Encode};
@@ -202,19 +227,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_new() {
-        let srv_ipv4 = MockService::new("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
+        let srv_ipv4 = MockService::start("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
         assert!(srv_ipv4.is_ok());
 
         // address already in use
-        let err = MockService::new("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
+        let err = MockService::start("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
         assert!(err.is_err());
 
         // bind to IPv6 localhost
-        let srv_ipv6 = MockService::new("[::1]:5555".parse().unwrap(), &[], &[]).await;
+        let srv_ipv6 = MockService::start("[::1]:5555".parse().unwrap(), &[], &[]).await;
         assert!(srv_ipv6.is_ok());
 
         // address already in use
-        let s_ipv6 = MockService::new("[::1]:5555".parse().unwrap(), &[], &[]).await;
+        let s_ipv6 = MockService::start("[::1]:5555".parse().unwrap(), &[], &[]).await;
         assert!(s_ipv6.is_err());
     }
 
@@ -233,12 +258,13 @@ mod tests {
         });
 
         // create service that is used for testing `connect()`
-        let srv = MockService::new("127.0.0.1:7777".parse().unwrap(), &[], &[]).await;
+        let srv = MockService::start("127.0.0.1:7777".parse().unwrap(), &[], &[]).await;
         assert!(srv.is_ok());
-        let mut srv = srv.unwrap();
+        let (mut srv, _) = srv.unwrap();
 
         // try to connect to self, should fail
         let res = srv.connect("127.0.0.1:7777".parse().unwrap()).await;
+        println!("{:?}", res);
         assert!(res.is_err());
 
         // try to connect to an address that (hopefully)
@@ -255,12 +281,13 @@ mod tests {
     async fn test_accept() {
         // create service that is used for testing `accept()`
         let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let mut srv = MockService::new("[::1]:9999".parse().unwrap(), &[], &[]).await.unwrap();
+        let (mut srv, _) =
+            MockService::start("[::1]:9999".parse().unwrap(), &[], &[]).await.unwrap();
 
         let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
         assert!(acc.is_ok());
         assert!(con.is_ok());
-        let acc: Event<MockService> = acc.unwrap();
+        let acc: ConnectivityEvent<MockService> = acc.unwrap();
 
         // TODO: is there any sensible way to make `accept()` fail?
     }
@@ -268,16 +295,16 @@ mod tests {
     #[tokio::test]
     async fn test_peer_send() {
         let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
+        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
         let remote_fut = TcpStream::connect(addr);
 
         let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
-        let server_res: Event<MockService> = server_res.unwrap();
+        let server_res: ConnectivityEvent<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
+            ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
@@ -313,16 +340,16 @@ mod tests {
     async fn test_peer_recv() {
         // create a `MockService`, connect to it with a `TcpStream` and exchange data
         let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let mut server = MockService::new(addr, &[], &[]).await.unwrap();
+        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
         let remote_fut = TcpStream::connect(addr);
 
         let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
-        let server_res: Event<MockService> = server_res.unwrap();
+        let server_res: ConnectivityEvent<MockService> = server_res.unwrap();
         let server_res = match server_res {
-            Event::Connectivity(ConnectivityEvent::IncomingConnection(_, socket)) => socket,
+            ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
