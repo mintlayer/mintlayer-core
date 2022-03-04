@@ -25,27 +25,24 @@ pub enum Event {
     Hello,
 }
 
-pub struct PeerEvent<T>
+pub enum PeerEvent<T>
 where
     T: NetworkService,
 {
-    pub peer_id: T::PeerId,
-    pub event: PeerEventType,
-}
-
-/// P2P uses these events to communicate with Peer
-pub enum PeerEventType {
     /// Handshaking failed
-    HandshakeFailed,
+    HandshakeFailed { peer_id: T::PeerId },
 
     /// Handshaking succeeded
-    HandshakeSucceeded,
+    HandshakeSucceeded { peer_id: T::PeerId },
 
     /// Remote peer disconnected
-    Disconnected,
+    Disconnected { peer_id: T::PeerId },
 
     /// Inbound or outbound message
-    Message(message::Message),
+    Message {
+        peer_id: T::PeerId,
+        message: message::Message,
+    },
 }
 
 pub enum SwarmControlEvent<T>

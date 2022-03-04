@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError, ProtocolError},
-    event::{PeerEvent, PeerEventType},
+    event::PeerEvent,
     message::{HandshakeMessage, Message, MessageType},
     net::{NetworkService, SocketService},
     peer::{ListeningState, Peer, PeerState},
@@ -91,12 +91,7 @@ where
                 };
 
                 self.socket.send(&msg).await?;
-                self.mgr_tx
-                    .send(PeerEvent {
-                        peer_id: self.id,
-                        event: PeerEventType::HandshakeSucceeded,
-                    })
-                    .await?;
+                self.mgr_tx.send(PeerEvent::HandshakeSucceeded { peer_id: self.id }).await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -144,12 +139,7 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
 
-                self.mgr_tx
-                    .send(PeerEvent {
-                        peer_id: self.id,
-                        event: PeerEventType::HandshakeSucceeded,
-                    })
-                    .await?;
+                self.mgr_tx.send(PeerEvent::HandshakeSucceeded { peer_id: self.id }).await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -190,12 +180,7 @@ where
         match res {
             Ok(_) => Ok(()),
             Err(e) => {
-                self.mgr_tx
-                    .send(PeerEvent {
-                        peer_id: self.id,
-                        event: PeerEventType::HandshakeFailed,
-                    })
-                    .await?;
+                self.mgr_tx.send(PeerEvent::HandshakeFailed { peer_id: self.id }).await?;
                 Err(e)
             }
         }

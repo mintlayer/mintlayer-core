@@ -35,7 +35,6 @@
 use crate::{
     error::{self, P2pError},
     event,
-    event::PeerEventType,
     net::{self, ConnectivityService, NetworkService},
     peer::{Peer, PeerRole},
 };
@@ -174,24 +173,30 @@ where
     /// a protocol error which should be handled accordingly.
     async fn on_peer_event(&mut self, event: Option<event::PeerEvent<T>>) -> error::Result<()> {
         let event = event.ok_or(P2pError::ChannelClosed)?;
-        match event.event {
-            PeerEventType::HandshakeFailed => {
-                log::error!("handshake failed, peer id {:?}", event.peer_id);
+        match event {
+            event::PeerEvent::HandshakeFailed { peer_id } => {
+                log::error!("handshake failed, peer id {:?}", peer_id);
                 self.peers
-                    .remove(&event.peer_id)
+                    .remove(&peer_id)
                     .map(|_| ())
                     .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
             }
-            PeerEventType::HandshakeSucceeded => match self.peers.get_mut(&event.peer_id) {
-                Some(peer) => {
-                    log::info!("new peer joined, peer id {:?}", event.peer_id);
-                    self.handle.register_peer(event.peer_id).await?;
-                    (*peer).state = PeerState::Active;
-                    Ok(())
+            event::PeerEvent::HandshakeSucceeded { peer_id } => {
+                match self.peers.get_mut(&peer_id) {
+                    Some(peer) => {
+                        log::info!("new peer joined, peer id {:?}", peer_id);
+                        self.handle.register_peer(peer_id).await?;
+                        (*peer).state = PeerState::Active;
+                        Ok(())
+                    }
+                    None => Err(P2pError::Unknown("Peer does not exist".to_string())),
                 }
-                None => Err(P2pError::Unknown("Peer does not exist".to_string())),
-            },
-            PeerEventType::Disconnected | PeerEventType::Message(_) => {
+            }
+            event::PeerEvent::Disconnected { peer_id: _ }
+            | event::PeerEvent::Message {
+                peer_id: _,
+                message: _,
+            } => {
                 todo!();
             }
         }
@@ -426,10 +431,7 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent {
-                    peer_id: addr,
-                    event: PeerEventType::HandshakeSucceeded,
-                }))
+                .on_peer_event(Some(event::PeerEvent::HandshakeSucceeded { peer_id: addr }))
                 .await,
             Ok(())
         );
@@ -461,10 +463,7 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent {
-                    peer_id: addr,
-                    event: PeerEventType::HandshakeFailed,
-                }))
+                .on_peer_event(Some(event::PeerEvent::HandshakeFailed { peer_id: addr }))
                 .await,
             Ok(())
         );
