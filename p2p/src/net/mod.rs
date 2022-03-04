@@ -90,7 +90,7 @@ pub trait NetworkService {
     type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
+    type PeerId: Send + Sync + Copy + PartialEq + Eq + Hash + Debug;
 
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;

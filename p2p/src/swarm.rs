@@ -142,36 +142,24 @@ where
         }
     }
 
-    /// Handle swarm control event
-    async fn on_swarm_control_event(
-        &mut self,
-        event: Option<event::SwarmControlEvent<T>>,
-    ) -> error::Result<()> {
-        match event.ok_or(P2pError::ChannelClosed)? {
-            event::SwarmControlEvent::Connect { addr } => {
-                log::debug!(
-                    "try to establish outbound connection to peer at address {:?}",
-                    addr
-                );
-
-                match self.handle.connect(addr).await {
-                    Ok((peer_id, socket)) => {
-                        self.create_peer(peer_id, socket, PeerRole::Outbound);
-                        Ok(())
-                    }
+    /// SwarmManager event loop
+    pub async fn run(&mut self) -> error::Result<()> {
+        loop {
+            tokio::select! {
+                event = self.rx_swarm.recv().fuse() => {
+                    self.on_swarm_control_event(event).await?;
+                }
+                event = self.mgr_chan.1.recv().fuse() => {
+                    self.on_peer_event(event).await?;
+                }
+                event = self.handle.poll_next() => match event {
+                    Ok(event) => self.on_network_event(event).await?,
                     Err(e) => {
-                        log::error!("failed to establish outbound connection: {:?}", e);
-                        Err(e)
+                        log::error!("failed to read network event: {:?}", e);
+                        return Err(e);
                     }
                 }
             }
-        }
-    }
-
-    pub async fn run(&mut self) -> error::Result<()> {
-        loop {
-            let event = self.rx_swarm.recv().await;
-            self.on_swarm_control_event(event);
         }
     }
 
@@ -205,6 +193,32 @@ where
             },
             PeerEventType::Disconnected | PeerEventType::Message(_) => {
                 todo!();
+            }
+        }
+    }
+
+    /// Handle swarm control event
+    async fn on_swarm_control_event(
+        &mut self,
+        event: Option<event::SwarmControlEvent<T>>,
+    ) -> error::Result<()> {
+        match event.ok_or(P2pError::ChannelClosed)? {
+            event::SwarmControlEvent::Connect { addr } => {
+                log::debug!(
+                    "try to establish outbound connection to peer at address {:?}",
+                    addr
+                );
+
+                match self.handle.connect(addr).await {
+                    Ok((peer_id, socket)) => {
+                        self.create_peer(peer_id, socket, PeerRole::Outbound);
+                        Ok(())
+                    }
+                    Err(e) => {
+                        log::error!("failed to establish outbound connection: {:?}", e);
+                        Err(e)
+                    }
+                }
             }
         }
     }
