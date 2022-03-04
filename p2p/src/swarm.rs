@@ -182,15 +182,14 @@ where
                     .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
             }
             event::PeerEvent::HandshakeSucceeded { peer_id } => {
-                match self.peers.get_mut(&peer_id) {
-                    Some(peer) => {
-                        log::info!("new peer joined, peer id {:?}", peer_id);
-                        self.handle.register_peer(peer_id).await?;
-                        (*peer).state = PeerState::Active;
-                        Ok(())
-                    }
-                    None => Err(P2pError::Unknown("Peer does not exist".to_string())),
-                }
+                log::info!("new peer joined, peer id {:?}", peer_id);
+
+                self.peers
+                    .get_mut(&peer_id)
+                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
+                    .map(|peer| (*peer).state = PeerState::Active)?;
+
+                self.handle.register_peer(peer_id).await
             }
             event::PeerEvent::Disconnected { peer_id: _ }
             | event::PeerEvent::Message {
@@ -468,6 +467,27 @@ mod tests {
             Ok(())
         );
         assert_eq!(swarm.peers.len(), 0);
+    }
+
+    // verify that handshake event for unknown peer results in error
+    #[tokio::test]
+    async fn test_on_peer_event_unknown_peer() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let mut swarm = make_swarm_manager::<MockService>(addr).await;
+
+        assert_eq!(
+            swarm
+                .on_peer_event(Some(event::PeerEvent::HandshakeSucceeded { peer_id: addr }))
+                .await,
+            Err(P2pError::Unknown("Peer does not exist".to_string())),
+        );
+
+        assert_eq!(
+            swarm
+                .on_peer_event(Some(event::PeerEvent::HandshakeFailed { peer_id: addr }))
+                .await,
+            Err(P2pError::Unknown("Peer does not exist".to_string())),
+        );
     }
 
     #[tokio::test]
