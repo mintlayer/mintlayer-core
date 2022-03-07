@@ -17,7 +17,7 @@
 // Author(s): A. Altonen
 use crate::{error, message, net};
 use libp2p::{
-    floodsub::{Floodsub, FloodsubEvent, Topic},
+    floodsub::{Floodsub, FloodsubEvent as Libp2pFloodsubEvent, Topic},
     mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
@@ -69,7 +69,7 @@ pub enum Command {
     },
 }
 
-pub enum Event {
+pub enum ConnectivityEvent {
     /// Connection with a data stream has been opened by a remote peer
     ConnectionAccepted {
         socket: Box<net::libp2p::Libp2pSocket>,
@@ -80,9 +80,13 @@ pub enum Event {
 
     /// One or more peers that were previously discovered have expired
     PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
+}
 
+#[derive(Clone)]
+pub enum FloodsubEvent {
     // Message received from one of the Floodsub topics
     MessageReceived {
+        peer_id: PeerId,
         topic: net::FloodsubTopic,
         message: message::Message,
     },
@@ -122,7 +126,7 @@ pub struct ComposedBehaviour {
 pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
-    FloodsubEvent(FloodsubEvent),
+    Libp2pFloodsubEvent(Libp2pFloodsubEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -137,8 +141,8 @@ impl From<MdnsEvent> for ComposedEvent {
     }
 }
 
-impl From<FloodsubEvent> for ComposedEvent {
-    fn from(event: FloodsubEvent) -> Self {
-        ComposedEvent::FloodsubEvent(event)
+impl From<Libp2pFloodsubEvent> for ComposedEvent {
+    fn from(event: Libp2pFloodsubEvent) -> Self {
+        ComposedEvent::Libp2pFloodsubEvent(event)
     }
 }

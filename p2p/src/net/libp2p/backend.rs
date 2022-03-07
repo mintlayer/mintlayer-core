@@ -15,7 +15,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-/*
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
@@ -33,20 +32,20 @@ use libp2p::{
 use logging::log;
 use parity_scale_codec::Decode;
 use std::collections::{HashMap, HashSet};
-use tokio::sync::{
-    mpsc::{Receiver, Sender},
-    oneshot,
-};
+use tokio::sync::{mpsc, oneshot};
 
 pub struct Backend {
     /// Created libp2p swarm object
     swarm: Swarm<common::ComposedBehaviour>,
 
     /// Receiver for incoming commands
-    cmd_rx: Receiver<common::Command>,
+    cmd_rx: mpsc::Receiver<common::Command>,
 
-    /// Sender for outgoing events (peers, pubsub messages)
-    event_tx: Sender<common::Event>,
+    /// Sender for outgoing connectivity events
+    conn_tx: mpsc::Sender<common::ConnectivityEvent>,
+
+    /// Sender for outgoing floodsub events
+    flood_tx: mpsc::Sender<common::FloodsubEvent>,
 
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
@@ -70,14 +69,16 @@ pub struct Backend {
 impl Backend {
     pub fn new(
         swarm: Swarm<common::ComposedBehaviour>,
-        cmd_rx: Receiver<common::Command>,
-        event_tx: Sender<common::Event>,
+        cmd_rx: mpsc::Receiver<common::Command>,
+        conn_tx: mpsc::Sender<common::ConnectivityEvent>,
+        flood_tx: mpsc::Sender<common::FloodsubEvent>,
         relay_mdns: bool,
     ) -> Self {
         Self {
             swarm,
             cmd_rx,
-            event_tx,
+            conn_tx,
+            flood_tx,
             dials: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
@@ -107,13 +108,13 @@ impl Backend {
     async fn send_discovery_event(
         &mut self,
         peers: Vec<(PeerId, Multiaddr)>,
-        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> common::Event,
+        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> common::ConnectivityEvent,
     ) -> error::Result<()> {
         if !self.relay_mdns || peers.is_empty() {
             return Ok(());
         }
 
-        self.event_tx.send(event_fn(peers)).await.map_err(|_| P2pError::ChannelClosed)
+        self.conn_tx.send(event_fn(peers)).await.map_err(|_| P2pError::ChannelClosed)
     }
 
     /// Handle event received from the swarm object
@@ -198,8 +199,8 @@ impl Backend {
                 let addr = self.conns.remove(&peer_id).ok_or_else(|| {
                     P2pError::Unknown("Pending connection does not exist".to_string())
                 })?;
-                self.event_tx
-                    .send(common::Event::ConnectionAccepted {
+                self.conn_tx
+                    .send(common::ConnectivityEvent::ConnectionAccepted {
                         socket: Box::new(net::libp2p::Libp2pSocket {
                             id: peer_id,
                             addr,
@@ -216,20 +217,20 @@ impl Backend {
             SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
                 peers,
             ))) => {
-                self.send_discovery_event(peers.collect(), |peers| common::Event::PeerDiscovered {
-                    peers,
+                self.send_discovery_event(peers.collect(), |peers| {
+                    common::ConnectivityEvent::PeerDiscovered { peers }
                 })
                 .await
             }
             SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
                 expired,
             ))) => {
-                self.send_discovery_event(expired.collect(), |peers| common::Event::PeerExpired {
-                    peers,
+                self.send_discovery_event(expired.collect(), |peers| {
+                    common::ConnectivityEvent::PeerExpired { peers }
                 })
                 .await
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Subscribed { peer_id, topic },
             )) => {
                 log::debug!(
@@ -241,7 +242,7 @@ impl Backend {
                 self.active_floodsubs.entry(topic).or_insert_with(HashSet::new).insert(peer_id);
                 Ok(())
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Unsubscribed { peer_id, topic },
             )) => match self.active_floodsubs.get_mut(&topic) {
                 Some(peers) => {
@@ -263,13 +264,15 @@ impl Backend {
                     Ok(())
                 }
             },
-            SwarmEvent::Behaviour(common::ComposedEvent::FloodsubEvent(
+            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Message(message),
             )) => {
                 // for mintlayer there should only ever be one topic per message
                 // because transactions are not published in block topic and vice versa
                 //
                 // message with multiple topics is considered invalid
+                let peer_id = message.source;
+
                 let topic = if message.topics.len() == 1 {
                     match net::FloodsubTopic::try_from(&message.topics[0]) {
                         Ok(topic) => topic,
@@ -304,8 +307,12 @@ impl Backend {
                     topic
                 );
 
-                self.event_tx
-                    .send(common::Event::MessageReceived { topic, message })
+                self.flood_tx
+                    .send(common::FloodsubEvent::MessageReceived {
+                        peer_id,
+                        topic,
+                        message,
+                    })
                     .await
                     .map_err(|_| P2pError::ChannelClosed)
             }
@@ -429,9 +436,10 @@ mod tests {
     #[tokio::test]
     async fn test_command_listen_success() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
-        let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        let (flood_tx, _) = mpsc::channel(64);
+        let (conn_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -454,9 +462,10 @@ mod tests {
     #[tokio::test]
     async fn test_command_listen_addrinuse() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
-        let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        let (flood_tx, _) = mpsc::channel(64);
+        let (conn_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -494,12 +503,12 @@ mod tests {
     #[tokio::test]
     async fn test_drop_command_tx() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
-        let (event_tx, _) = tokio::sync::mpsc::channel(16);
-        let mut backend = Backend::new(swarm, cmd_rx, event_tx, false);
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        let (flood_tx, _) = mpsc::channel(64);
+        let (conn_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));
     }
 }
-*/

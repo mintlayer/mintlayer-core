@@ -371,8 +371,8 @@ mod tests {
     use super::*;
     use crate::error::P2pError;
     use common::chain::config;
-    // use libp2p::Multiaddr;
-    use net::mock::MockService;
+    use libp2p::Multiaddr;
+    use net::{libp2p::Libp2pService, mock::MockService};
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
 
@@ -391,7 +391,6 @@ mod tests {
         );
     }
 
-    /*
     // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]
     async fn test_p2p_connect_libp2p() {
@@ -409,7 +408,6 @@ mod tests {
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
     }
-    */
 
     // verify that if handshake succeeds, peer state is set to `Active`
     #[tokio::test]
@@ -475,7 +473,6 @@ mod tests {
         assert_eq!(p2p.peers.len(), 0);
     }
 
-    /*
     #[tokio::test]
     async fn test_peer_discovered_libp2p() {
         let config = Arc::new(config::create_mainnet());
@@ -609,7 +606,6 @@ mod tests {
             vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
         );
     }
-    */
 
     // verify that if the node is aware of any peers on the network,
     // call to `auto_connect()` will establish a connection with them

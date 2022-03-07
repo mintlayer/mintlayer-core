@@ -18,9 +18,9 @@
 extern crate test_utils;
 
 use common::chain::config;
-// use libp2p::Multiaddr;
+use libp2p::Multiaddr;
 use p2p::net::{
-    self, /*libp2p::Libp2pService, */ mock::MockService, ConnectivityService, NetworkService,
+    self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkService,
 };
 use p2p::peer::{Peer, PeerRole};
 use std::net::SocketAddr;
@@ -57,25 +57,24 @@ async fn test_peer_new_mock() {
     );
 }
 
-/*
 // connect two libp2p service peers together
 #[tokio::test]
 async fn test_peer_new_libp2p() {
     let config = Arc::new(config::create_mainnet());
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let mut server1 = Libp2pService::new(addr1.clone(), &[], &[]).await.unwrap();
+    let (mut server1, _) = Libp2pService::start(addr1.clone(), &[], &[]).await.unwrap();
 
-    let conn_addr = server1.addr.clone();
+    let conn_addr = server1.local_addr().clone();
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
+    let (mut server2, _) = Libp2pService::start(addr2, &[], &[]).await.unwrap();
 
     let (server1_res, server2_res) = tokio::join!(server1.poll_next(), server2.connect(conn_addr));
     assert!(server1_res.is_ok());
     assert!(server2_res.is_ok());
 
-    let server1_res: net::Event<Libp2pService> = server1_res.unwrap();
+    let server1_res: net::ConnectivityEvent<Libp2pService> = server1_res.unwrap();
     let (id, socket) = match server1_res {
-        net::Event::IncomingConnection(id, socket) => (id, socket),
+        net::ConnectivityEvent::IncomingConnection { peer_id, socket } => (peer_id, socket),
         _ => panic!("invalid event received, expected incoming connection"),
     };
 
@@ -90,4 +89,3 @@ async fn test_peer_new_libp2p() {
         rx,
     );
 }
-*/

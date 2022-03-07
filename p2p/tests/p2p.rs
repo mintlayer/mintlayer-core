@@ -18,8 +18,11 @@
 extern crate test_utils;
 
 use common::{chain::config, sync::Arc};
-// use libp2p::Multiaddr;
-use p2p::{net::mock::MockService, P2P};
+use libp2p::Multiaddr;
+use p2p::{
+    net::{libp2p::Libp2pService, mock::MockService},
+    P2P,
+};
 use std::net::SocketAddr;
 
 // create new p2p object with mock service
@@ -40,7 +43,6 @@ async fn test_p2p_new_mock() {
     assert!(res.is_ok());
 }
 
-/*
 // create new p2p object with libp2p service
 #[ignore]
 #[tokio::test]
@@ -59,4 +61,3 @@ async fn test_p2p_new_libp2p() {
     let res = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await;
     assert!(res.is_ok());
 }
-*/

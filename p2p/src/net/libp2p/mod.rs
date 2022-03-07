@@ -16,10 +16,12 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 use crate::{
     error::{self, Libp2pError, P2pError},
-    net::{self, FloodsubTopic, NetworkService, SocketService},
+    net::{
+        self, ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService,
+        FloodsubTopic, NetworkService, SocketService,
+    },
 };
 use async_trait::async_trait;
 use futures::prelude::*;
@@ -40,10 +42,7 @@ use libp2p::{
 use logging::log;
 use parity_scale_codec::{Decode, Encode};
 use std::sync::Arc;
-use tokio::sync::{
-    mpsc::{Receiver, Sender},
-    oneshot,
-};
+use tokio::sync::{mpsc, oneshot};
 
 mod backend;
 mod common;
@@ -59,16 +58,7 @@ pub enum Libp2pStrategy {
 }
 
 #[derive(Debug)]
-pub struct Libp2pService {
-    /// Multiaddress of the local peer
-    pub addr: Multiaddr,
-
-    /// TX channel for sending commands to libp2p backend
-    cmd_tx: Sender<common::Command>,
-
-    /// RX channel for receiving events from libp2p backend
-    event_rx: Receiver<common::Event>,
-}
+pub struct Libp2pService;
 
 #[derive(Debug)]
 #[allow(unused)]
@@ -81,6 +71,33 @@ pub struct Libp2pSocket {
 
     /// Stream handle for the remote peer
     stream: StreamHandle<NegotiatedSubstream>,
+}
+
+pub struct Libp2pConnectivityHandle<T>
+where
+    T: NetworkService,
+{
+    /// Address where the network services has been bound
+    addr: Multiaddr,
+
+    /// Channel for sending commands to libp2p backend
+    cmd_tx: mpsc::Sender<common::Command>,
+
+    /// Channel for receiving connectivity events from libp2p backend
+    conn_rx: mpsc::Receiver<common::ConnectivityEvent>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+pub struct Libp2pFloodsubHandle<T>
+where
+    T: NetworkService,
+{
+    /// Channel for sending commands to libp2p backend
+    cmd_tx: mpsc::Sender<common::Command>,
+
+    /// Channel for receiving floodsub events from libp2p backend
+    flood_rx: mpsc::Receiver<common::FloodsubEvent>,
+    _marker: std::marker::PhantomData<T>,
 }
 
 /// Verify that the discovered multiaddress is in a format that Mintlayer supports:
@@ -162,19 +179,20 @@ where
         .collect::<Vec<net::AddrInfo<T>>>()
 }
 
-/*
 #[async_trait]
 impl NetworkService for Libp2pService {
     type Address = Multiaddr;
     type Socket = Libp2pSocket;
     type Strategy = Libp2pStrategy;
     type PeerId = PeerId;
+    type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
+    type FloodsubHandle = Libp2pFloodsubHandle<Self>;
 
-    async fn new(
+    async fn start(
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[FloodsubTopic],
-    ) -> error::Result<Self> {
+    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys)?;
@@ -202,8 +220,9 @@ impl NetworkService for Libp2pService {
             SwarmBuilder::new(transport, behaviour, peer_id).build()
         };
 
-        let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(16);
-        let (event_tx, event_rx) = tokio::sync::mpsc::channel(16);
+        let (cmd_tx, cmd_rx) = mpsc::channel(16);
+        let (flood_tx, flood_rx) = mpsc::channel(64);
+        let (conn_tx, conn_rx) = mpsc::channel(64);
 
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
@@ -214,7 +233,7 @@ impl NetworkService for Libp2pService {
         log::debug!("spawning libp2p backend to background");
 
         tokio::spawn(async move {
-            let mut backend = backend::Backend::new(swarm, cmd_rx, event_tx, relay_mdns);
+            let mut backend = backend::Backend::new(swarm, cmd_rx, conn_tx, flood_tx, relay_mdns);
             backend.run().await
         });
 
@@ -229,17 +248,28 @@ impl NetworkService for Libp2pService {
             .await?;
         rx.await?.map_err(|_| P2pError::SocketError(std::io::ErrorKind::AddrInUse))?;
 
-        Ok(Self {
-            addr: addr.with(Protocol::P2p(peer_id.into())),
-            cmd_tx,
-            event_rx,
-        })
+        Ok((
+            Self::ConnectivityHandle {
+                addr: addr.with(Protocol::P2p(peer_id.into())),
+                cmd_tx: cmd_tx.clone(),
+                conn_rx,
+                _marker: Default::default(),
+            },
+            Self::FloodsubHandle {
+                cmd_tx,
+                flood_rx,
+                _marker: Default::default(),
+            },
+        ))
     }
+}
 
-    async fn connect(
-        &mut self,
-        addr: Self::Address,
-    ) -> error::Result<(Self::PeerId, Self::Socket)> {
+#[async_trait]
+impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
+where
+    T: NetworkService<Address = Multiaddr, PeerId = PeerId, Socket = Libp2pSocket> + Send,
+{
+    async fn connect(&mut self, addr: T::Address) -> error::Result<(T::PeerId, T::Socket)> {
         log::trace!("try to establish outbound connection, address {:?}", addr);
 
         let peer_id = match addr.iter().last() {
@@ -294,27 +324,62 @@ impl NetworkService for Libp2pService {
         ))
     }
 
-    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
-    where
-        T: NetworkService<Socket = Libp2pSocket, Address = Multiaddr, PeerId = PeerId>,
-    {
-        match self.event_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            common::Event::ConnectionAccepted { socket } => {
-                Ok(Event::IncomingConnection(socket.id, *socket))
+    fn local_addr(&self) -> &T::Address {
+        &self.addr
+    }
+
+    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
+        log::debug!("register peer {:?} to libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
+        log::debug!("unregister peer {:?} from libp2p backend", peer);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
+        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            common::ConnectivityEvent::ConnectionAccepted { socket } => {
+                Ok(ConnectivityEvent::IncomingConnection {
+                    peer_id: socket.id,
+                    socket: *socket,
+                })
             }
-            common::Event::PeerDiscovered { peers } => {
-                Ok(Event::PeerDiscovered(parse_peers(peers)))
+            common::ConnectivityEvent::PeerDiscovered { peers } => {
+                Ok(ConnectivityEvent::PeerDiscovered {
+                    peers: parse_peers(peers),
+                })
             }
-            common::Event::PeerExpired { peers } => Ok(Event::PeerExpired(parse_peers(peers))),
-            common::Event::MessageReceived { topic, message } => {
-                Ok(Event::MessageReceived(topic, message))
+            common::ConnectivityEvent::PeerExpired { peers } => {
+                Ok(ConnectivityEvent::PeerExpired {
+                    peers: parse_peers(peers),
+                })
             }
         }
     }
+}
 
-    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
+#[async_trait]
+impl<T> FloodsubService<T> for Libp2pFloodsubHandle<T>
+where
+    T: NetworkService<PeerId = PeerId> + Send,
+{
+    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
     where
-        T: Sync + Send + Encode,
+        U: Sync + Send + Encode,
     {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
@@ -330,26 +395,18 @@ impl NetworkService for Libp2pService {
             .map_err(|e| e) // command failure
     }
 
-    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
-        log::debug!("register peer {:?} to libp2p backend", peer);
-
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
-
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
-    }
-
-    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()> {
-        log::debug!("unregister peer {:?} from libp2p backend", peer);
-
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
-
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>> {
+        match self.flood_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            common::FloodsubEvent::MessageReceived {
+                peer_id,
+                topic,
+                message,
+            } => Ok(FloodsubEvent::MessageReceived {
+                peer_id,
+                topic,
+                message,
+            }),
+        }
     }
 }
 
@@ -416,7 +473,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect_new() {
-        let service = Libp2pService::new("/ip6/::1/tcp/8900".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start("/ip6/::1/tcp/8900".parse().unwrap(), &[], &[]).await;
         assert!(service.is_ok());
     }
 
@@ -424,10 +481,10 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_connect_new_addrinuse() {
-        let service = Libp2pService::new("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
         assert!(service.is_ok());
 
-        let service = Libp2pService::new("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
 
         match service {
             Err(e) => {
@@ -441,16 +498,16 @@ mod tests {
     // and having `service2` trying to connect to `service1`
     #[tokio::test]
     async fn test_connect_accept() {
-        let service1 = Libp2pService::new("/ip6/::1/tcp/8902".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::new("/ip6/::1/tcp/8903".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start("/ip6/::1/tcp/8902".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::start("/ip6/::1/tcp/8903".parse().unwrap(), &[], &[]).await;
         assert!(service1.is_ok());
         assert!(service2.is_ok());
 
-        let mut service1 = service1.unwrap();
-        let mut service2 = service2.unwrap();
-        let conn_addr = service1.addr.clone();
+        let (mut service1, _) = service1.unwrap();
+        let (mut service2, _) = service2.unwrap();
+        let conn_addr = service1.local_addr().clone();
 
-        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         assert!(res2.is_ok());
@@ -461,11 +518,11 @@ mod tests {
     // and verify that the connection fails
     #[tokio::test]
     async fn test_connect_peer_id_missing() {
-        let addr1: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
-        let mut service2 = Libp2pService::new("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[])
+        let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
+        let (mut service, _) = Libp2pService::start("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[])
             .await
             .unwrap();
-        match service2.connect(addr1).await {
+        match service.connect(addr).await {
             Ok(_) => panic!("connect succeeded without peer id"),
             Err(e) => {
                 assert_eq!(
@@ -483,18 +540,18 @@ mod tests {
     // it decodes to the same transaction that was sent.
     #[tokio::test]
     async fn test_peer_send() {
-        let service1 = Libp2pService::new("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::new("/ip6/::1/tcp/8906".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::start("/ip6/::1/tcp/8906".parse().unwrap(), &[], &[]).await;
 
-        let mut service1 = service1.unwrap();
-        let mut service2 = service2.unwrap();
+        let (mut service1, _) = service1.unwrap();
+        let (mut service2, _) = service2.unwrap();
         let conn_addr = service1.addr.clone();
 
-        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(_, socket) => socket,
+            net::ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
         let mut socket2 = res2.unwrap().1;
@@ -526,18 +583,18 @@ mod tests {
     // it decodes to the same transaction that was sent.
     #[tokio::test]
     async fn test_peer_recv() {
-        let service1 = Libp2pService::new("/ip6/::1/tcp/8907".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::new("/ip6/::1/tcp/8908".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start("/ip6/::1/tcp/8907".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::start("/ip6/::1/tcp/8908".parse().unwrap(), &[], &[]).await;
 
-        let mut service1 = service1.unwrap();
-        let mut service2 = service2.unwrap();
+        let (mut service1, _) = service1.unwrap();
+        let (mut service2, _) = service2.unwrap();
         let conn_addr = service1.addr.clone();
 
-        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(_, socket) => socket,
+            net::ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
         let mut socket2 = res2.unwrap().1;
@@ -561,18 +618,18 @@ mod tests {
     // end and decoded as three separate transactions
     #[tokio::test]
     async fn test_peer_buffered_recv() {
-        let service1 = Libp2pService::new("/ip6/::1/tcp/8909".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::new("/ip6/::1/tcp/8910".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start("/ip6/::1/tcp/8909".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::start("/ip6/::1/tcp/8910".parse().unwrap(), &[], &[]).await;
 
-        let mut service1 = service1.unwrap();
-        let mut service2 = service2.unwrap();
+        let (mut service1, _) = service1.unwrap();
+        let (mut service2, _) = service2.unwrap();
         let conn_addr = service1.addr.clone();
 
-        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(_, socket) => socket,
+            net::ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
         let mut socket2 = res2.unwrap().1;
@@ -598,18 +655,18 @@ mod tests {
     // that is too big and verify that it is rejected
     #[tokio::test]
     async fn test_too_large_message_size() {
-        let service1 = Libp2pService::new("/ip6/::1/tcp/8911".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::new("/ip6/::1/tcp/8912".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start("/ip6/::1/tcp/8911".parse().unwrap(), &[], &[]).await;
+        let service2 = Libp2pService::start("/ip6/::1/tcp/8912".parse().unwrap(), &[], &[]).await;
 
-        let mut service1 = service1.unwrap();
-        let mut service2 = service2.unwrap();
+        let (mut service1, _) = service1.unwrap();
+        let (mut service2, _) = service2.unwrap();
         let conn_addr = service1.addr.clone();
 
-        let (res1, res2): (error::Result<Event<Libp2pService>>, _) =
+        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         let mut socket1 = match res1.unwrap() {
-            net::Event::IncomingConnection(_, socket) => socket,
+            net::ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
             _ => panic!("invalid event received, expected incoming connection"),
         };
         let mut socket2 = res2.unwrap().1;
@@ -686,8 +743,8 @@ mod tests {
     }
 
     impl PartialEq for Libp2pService {
-        fn eq(&self, other: &Self) -> bool {
-            self.addr == other.addr
+        fn eq(&self, _: &Self) -> bool {
+            true
         }
     }
 
@@ -779,4 +836,3 @@ mod tests {
         );
     }
 }
-*/
