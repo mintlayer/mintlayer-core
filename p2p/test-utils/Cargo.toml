@@ -16,7 +16,9 @@ path = "../../common/"
 [dependencies.libp2p]
 git = "https://github.com/mintlayer/rust-libp2p"
 branch = "streaming-protocol-v0.42.2"
+default-features = false
+features = ["floodsub", "mdns", "mplex", "noise", "streaming", "tcp-async-io"]
 
 [dependencies.tokio]
 version = "1"
-features = ["full"]
+features = ["io-util", "macros", "net", "rt", "sync"]
