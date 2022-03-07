@@ -86,13 +86,13 @@ impl Amount {
 
         if amount_str.matches('.').count() > 1 {
             // only 1 decimal point allowed
-            return None;
+            None
         } else if amount_str.matches('.').count() == 0 {
             // if there is no decimal point, then just add N zeros to the right and we're done
             let zeros = std::iter::repeat('0').take(decimals).collect::<String>();
             let amount_str = amount_str.to_owned() + &zeros;
             let result = amount_str.parse::<IntType>().ok().map(|v| Amount { val: v });
-            return result;
+            result
         } else {
             // if there's 1 decomal point, split, join the numbers, then add zeros to the right
             let amount_split = amount_str.split(".").collect::<Vec<&str>>();
@@ -107,7 +107,7 @@ impl Amount {
             let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
             let atoms_str = atoms_str.trim_start_matches('0');
             let result = atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v });
-            return result;
+            result
         }
     }
 }
