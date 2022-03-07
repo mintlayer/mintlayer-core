@@ -277,6 +277,13 @@ impl MempoolStore {
         }
     }
 
+    // TODO test that conflicts are dropped
+    fn drop_conflicts(&mut self, conflicts: Conflicts) {
+        for conflict in conflicts.0 {
+            self.drop_tx(&Id::new(&conflict))
+        }
+    }
+
     fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<H256> {
         self.spender_txs.get(outpoint).cloned()
     }
@@ -565,11 +572,10 @@ impl<C: ChainState> MempoolImpl<C> {
         Ok(replacements_with_descendants)
     }
 
-    fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
+    fn finalize_tx(&mut self, tx: Transaction, conflicts: Conflicts) -> Result<(), Error> {
+        self.store.drop_conflicts(conflicts);
         let entry = self.create_entry(tx)?;
         self.store.add_tx(entry)?;
-        // TODO evict conflicts
-        // add the tx
         // limit mempool size
         Ok(())
     }
@@ -610,8 +616,8 @@ impl<C: ChainState> Mempool<C> for MempoolImpl<C> {
         if self.store.txs_by_fee.len() >= MEMPOOL_MAX_TXS {
             return Err(Error::MempoolFull);
         }
-        self.validate_transaction(&tx)?;
-        self.finalize_tx(tx)?;
+        let conflicts = self.validate_transaction(&tx)?;
+        self.finalize_tx(tx, conflicts)?;
         Ok(())
     }
 
