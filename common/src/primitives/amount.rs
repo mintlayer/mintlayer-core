@@ -36,7 +36,7 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
     }
     let s = s.trim_end_matches('0');
     let s = s.trim_end_matches('.');
-    return s.to_owned();
+    s.to_owned()
 }
 
 impl Amount {
@@ -50,10 +50,10 @@ impl Amount {
         let decimals = decimals as usize;
         if amount_str.len() <= decimals {
             let zeros =
-                std::iter::repeat('0').take(decimals - amount_str.len()).collect::<String>();
+                "0".repeat(decimals - amount_str.len());
             let result = "0.".to_owned() + &zeros + &amount_str;
-            let result = remove_right_most_zeros_and_decimal_point(result);
-            result
+            
+            remove_right_most_zeros_and_decimal_point(result)
         } else {
             // insert decimal point at position number N from the right
             let insert_pos = amount_str.len() - decimals;
@@ -62,8 +62,8 @@ impl Amount {
             } else {
                 amount_str
             };
-            let result = remove_right_most_zeros_and_decimal_point(result);
-            result
+            
+            remove_right_most_zeros_and_decimal_point(result)
         }
     }
 
@@ -89,25 +89,23 @@ impl Amount {
             None
         } else if amount_str.matches('.').count() == 0 {
             // if there is no decimal point, then just add N zeros to the right and we're done
-            let zeros = std::iter::repeat('0').take(decimals).collect::<String>();
+            let zeros = "0".repeat(decimals);
             let amount_str = amount_str.to_owned() + &zeros;
-            let result = amount_str.parse::<IntType>().ok().map(|v| Amount { val: v });
-            result
+            
+            amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         } else {
             // if there's 1 decomal point, split, join the numbers, then add zeros to the right
-            let amount_split = amount_str.split(".").collect::<Vec<&str>>();
+            let amount_split = amount_str.split('.').collect::<Vec<&str>>();
             debug_assert!(amount_split.len() == 2); // we already checked we have 1 decimal exactly
             if amount_split[1].len() > decimals {
                 // there cannot be more decimals than the assumed amount
                 return None;
             }
-            let zeros = std::iter::repeat('0')
-                .take(decimals - amount_split[1].len())
-                .collect::<String>();
+            let zeros = "0".repeat(decimals - amount_split[1].len());
             let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
             let atoms_str = atoms_str.trim_start_matches('0');
-            let result = atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v });
-            result
+            
+            atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         }
     }
 }
@@ -357,7 +355,7 @@ mod tests {
         assert_eq!(y >> 6, Some(Amount { val: 2 }));
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_8_decimals() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 8).unwrap(), Amount { val: 98765432100000000 });
@@ -424,7 +422,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1.23e4567891", 8).is_none());
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_0_decimals() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 0).unwrap(), Amount { val: 987654321 });
@@ -500,7 +498,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1", 0).is_none());
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn from_fixedpoint_1_decimal() {
         assert_eq!(Amount::from_fixedpoint_str("987654321", 1).unwrap(), Amount { val: 9876543210 });
@@ -568,7 +566,7 @@ mod tests {
         assert!(Amount::from_fixedpoint_str("-1.2", 1).is_none());
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_8_decimals() {
         assert_eq!(Amount { val: 0 }.into_fixedpoint_str(8), "0");
@@ -609,7 +607,7 @@ mod tests {
         assert_eq!(Amount { val: 11234567800 }.into_fixedpoint_str(8), "112.345678");
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_0_decimals() {
         assert_eq!(Amount { val: 1 }.into_fixedpoint_str(0), "1");
@@ -654,7 +652,7 @@ mod tests {
 
     }
 
-    #[cfg_attr(rustfmt, rustfmt_skip)]
+    #[rustfmt::skip]
     #[test]
     fn to_fixedpoint_1_decimal() {
         assert_eq!(Amount { val: 1 }.into_fixedpoint_str(1), "0.1");
