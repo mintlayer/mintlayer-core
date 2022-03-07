@@ -2192,10 +2192,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "common",
+ "lazy_static",
+ "mockall",
  "parity-scale-codec 2.3.1",
  "rand 0.8.5",
  "serialization",
  "thiserror",
+ "utils",
 ]
 
 [[package]]

@@ -1,12 +1,13 @@
-use std::cmp::Ord;
+use std::cell::Cell;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::time::Duration;
 
+use mockall::*;
 use serialization::Encode;
-use thiserror::Error;
 
 use common::chain::transaction::Transaction;
 use common::chain::transaction::TxInput;
@@ -17,6 +18,12 @@ use common::primitives::Idable;
 use common::primitives::H256;
 use utils::newtype;
 
+use crate::error::Error;
+use crate::error::TxValidationError;
+use crate::feerate::FeeRate;
+use crate::feerate::INCREMENTAL_RELAY_FEE_RATE;
+
+const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
 // TODO this willbe defined elsewhere (some of limits.rs file)
 const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 
@@ -26,7 +33,30 @@ const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
 // TODO this should really be taken from some global node settings
 const RELAY_FEE_PER_BYTE: usize = 1;
 
-impl<C: ChainState> TryGetFee for MempoolImpl<C> {
+const MAX_MEMPOOL_SIZE_BYTES: usize = 300_000_000;
+
+const DEFAULT_MEMPOOL_EXPIRY: Duration = Duration::new(336 * 60 * 60, 0);
+
+const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
+
+pub(crate) type MemoryUsage = usize;
+
+#[automock]
+pub trait GetMemoryUsage: 'static {
+    fn get_memory_usage(&self) -> MemoryUsage;
+}
+
+pub(crate) type Time = Duration;
+pub trait GetTime: Clone + 'static {
+    fn get_time(&self) -> Time;
+}
+
+impl<C, T, M> TryGetFee for MempoolImpl<C, T, M>
+where
+    C: ChainState,
+    T: GetTime,
+    M: GetMemoryUsage,
+{
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
         let inputs = tx
             .inputs()
@@ -58,16 +88,16 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait Mempool<C> {
-    fn create(chain_state: C) -> Self;
+pub trait Mempool<C, T, M> {
+    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self;
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
-    fn new_tip_set(&mut self) -> Result<(), Error>;
+    fn new_tip_set(&mut self, chain_state: C);
 }
 
-pub trait ChainState: Debug {
+pub trait ChainState: Debug + 'static {
     fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
@@ -87,16 +117,23 @@ struct TxMempoolEntry {
     parents: BTreeSet<H256>,
     children: BTreeSet<H256>,
     count_with_descendants: usize,
+    creation_time: Time,
 }
 
 impl TxMempoolEntry {
-    fn new(tx: Transaction, fee: Amount, parents: BTreeSet<H256>) -> TxMempoolEntry {
+    fn new(
+        tx: Transaction,
+        fee: Amount,
+        parents: BTreeSet<H256>,
+        creation_time: Time,
+    ) -> TxMempoolEntry {
         Self {
             tx,
             fee,
             parents,
             children: BTreeSet::default(),
             count_with_descendants: 1,
+            creation_time,
         }
     }
 
@@ -112,8 +149,16 @@ impl TxMempoolEntry {
         self.parents.iter()
     }
 
+    fn unconfirmed_children(&self) -> impl Iterator<Item = &H256> {
+        self.children.iter()
+    }
+
     fn get_children_mut(&mut self) -> &mut BTreeSet<H256> {
         &mut self.children
+    }
+
+    fn get_parents_mut(&mut self) -> &mut BTreeSet<H256> {
+        &mut self.parents
     }
 
     fn is_replaceable(&self, store: &MempoolStore) -> bool {
@@ -178,16 +223,64 @@ impl Ord for TxMempoolEntry {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct RollingFeeRate {
+    block_since_last_rolling_fee_bump: bool,
+    rolling_minimum_fee_rate: FeeRate,
+    last_rolling_fee_update: Time,
+}
+
+impl RollingFeeRate {
+    fn decay_fee(mut self, halflife: Time, current_time: Time) -> Result<Self, TxValidationError> {
+        println!(
+            "decay_fee: old fee rate:  {:?}",
+            self.rolling_minimum_fee_rate
+        );
+        println!("current_time {:?}", current_time);
+        println!("last_rolling_fee_update {:?}", self.last_rolling_fee_update);
+        println!("halflife {:?}", halflife);
+        let divisor = 2f64.powf(
+            (current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
+                / (halflife.as_secs() as f64),
+        );
+        self.rolling_minimum_fee_rate =
+            FeeRate::new(self.rolling_minimum_fee_rate.tokens_per_byte().div_by_float(divisor));
+
+        println!(
+            "decay_fee: new fee rate:  {:?}",
+            self.rolling_minimum_fee_rate
+        );
+        self.last_rolling_fee_update = current_time;
+        Ok(self)
+    }
+}
+
+impl RollingFeeRate {
+    pub(crate) fn new(creation_time: Time) -> Self {
+        Self {
+            block_since_last_rolling_fee_bump: false,
+            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
+            last_rolling_fee_update: creation_time,
+        }
+    }
+}
+
 #[derive(Debug)]
-pub struct MempoolImpl<C: ChainState> {
+pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
     store: MempoolStore,
+    rolling_fee_rate: Cell<RollingFeeRate>,
+    max_size: usize,
+    max_tx_age: Duration,
     chain_state: C,
+    clock: T,
+    memory_usage_estimator: M,
 }
 
 #[derive(Debug)]
 struct MempoolStore {
     txs_by_id: HashMap<H256, TxMempoolEntry>,
     txs_by_fee: BTreeMap<Amount, BTreeSet<H256>>,
+    txs_by_creation_time: BTreeMap<Time, BTreeSet<H256>>,
     spender_txs: BTreeMap<OutPoint, H256>,
 }
 
@@ -196,8 +289,14 @@ impl MempoolStore {
         Self {
             txs_by_fee: BTreeMap::new(),
             txs_by_id: HashMap::new(),
+            txs_by_creation_time: BTreeMap::new(),
             spender_txs: BTreeMap::new(),
         }
+    }
+
+    fn is_empty(&self) -> bool {
+        self.txs_by_id.is_empty()
+        // TODO maybe add some asserts here
     }
 
     // Checks whether the outpoint is to be created by an unconfirmed tx
@@ -232,9 +331,29 @@ impl MempoolStore {
         for parent in entry.unconfirmed_parents() {
             self.txs_by_id
                 .get_mut(parent)
-                .expect("be there")
+                .expect("append_to_parents")
                 .get_children_mut()
                 .insert(entry.tx_id());
+        }
+    }
+
+    fn remove_from_parents(&mut self, entry: &TxMempoolEntry) {
+        for parent in entry.unconfirmed_parents() {
+            self.txs_by_id
+                .get_mut(parent)
+                .expect("remove_from_parents")
+                .get_children_mut()
+                .remove(&entry.tx_id());
+        }
+    }
+
+    fn remove_from_children(&mut self, entry: &TxMempoolEntry) {
+        for child in entry.unconfirmed_children() {
+            self.txs_by_id
+                .get_mut(child)
+                .expect("remove_from_children")
+                .get_parents_mut()
+                .remove(&entry.tx_id());
         }
     }
 
@@ -252,34 +371,68 @@ impl MempoolStore {
         }
     }
 
-    fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
+    fn add_tx(&mut self, entry: TxMempoolEntry) {
         self.append_to_parents(&entry);
         self.update_ancestor_count(&entry);
         self.mark_outpoints_as_spent(&entry);
 
         self.txs_by_fee.entry(entry.fee).or_default().insert(entry.tx_id());
+        self.txs_by_creation_time
+            .entry(entry.creation_time)
+            .or_default()
+            .insert(entry.tx_id());
         let tx_id = entry.tx_id();
         self.txs_by_id.insert(entry.tx_id(), entry);
         assert!(self.txs_by_id.get(&tx_id).is_some());
-
-        Ok(())
     }
 
-    fn drop_tx(&mut self, tx_id: &Id<Transaction>) {
+    fn remove_tx(&mut self, tx_id: &Id<Transaction>) {
+        println!("remove_tx: {}", tx_id.get());
         if let Some(entry) = self.txs_by_id.remove(&tx_id.get()) {
-            self.txs_by_fee.entry(entry.fee).and_modify(|entries| {
-                entries.remove(&tx_id.get()).then(|| ()).expect("Inconsistent mempool store")
-            });
-            self.spender_txs.retain(|_, id| *id != tx_id.get())
+            self.update_for_drop(&entry);
+            self.drop_tx(&entry);
         } else {
             assert!(!self.txs_by_fee.values().flatten().any(|id| *id == tx_id.get()));
             assert!(!self.spender_txs.iter().any(|(_, id)| *id == tx_id.get()));
         }
     }
 
+    fn update_for_drop(&mut self, entry: &TxMempoolEntry) {
+        self.remove_from_parents(entry);
+        self.remove_from_children(entry);
+    }
+
+    fn drop_tx(&mut self, entry: &TxMempoolEntry) {
+        self.txs_by_fee.entry(entry.fee).and_modify(|entries| {
+            entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
+        });
+        self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
+            entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
+        });
+        self.spender_txs.retain(|_, id| *id != entry.tx_id())
+    }
+
     fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
-            self.drop_tx(&Id::new(conflict))
+            self.remove_tx(&Id::new(conflict))
+        }
+    }
+
+    fn drop_tx_and_descendants(&mut self, tx_id: Id<Transaction>) {
+        if let Some(entry) = self.txs_by_id.get(&tx_id.get()).cloned() {
+            let descendants = entry.unconfirmed_descendants(self);
+            println!(
+                "about to drop {} which has {} descendants",
+                tx_id.get(),
+                descendants.len()
+            );
+            self.remove_tx(&entry.tx.get_id());
+            for descendant_id in descendants.0 {
+                // It may be that this descendant has several ancestors and has already been removed
+                if let Some(descendant) = self.txs_by_id.get(&descendant_id).cloned() {
+                    self.remove_tx(&descendant.tx.get_id())
+                }
+            }
         }
     }
 
@@ -288,69 +441,80 @@ impl MempoolStore {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("Mempool is full")]
-    MempoolFull,
-    #[error(transparent)]
-    TxValidationError(TxValidationError),
-}
-
-#[derive(Debug, Error)]
-pub enum TxValidationError {
-    #[error("No Inputs")]
-    NoInputs,
-    #[error("No Ouputs")]
-    NoOutputs,
-    #[error("DuplicateInputs")]
-    DuplicateInputs,
-    #[error("OutPointNotFound {outpoint:?}")]
-    OutPointNotFound {
-        outpoint: OutPoint,
-        tx_id: Id<Transaction>,
-    },
-    #[error("ExceedsMaxBlockSize")]
-    ExceedsMaxBlockSize,
-    #[error("TransactionAlreadyInMempool")]
-    TransactionAlreadyInMempool,
-    #[error("ConflictWithIrreplaceableTransaction")]
-    ConflictWithIrreplaceableTransaction,
-    #[error("InputValuesOverflow")]
-    InputValuesOverflow,
-    #[error("OutputValuesOverflow")]
-    OutputValuesOverflow,
-    #[error("InputsBelowOutputs")]
-    InputsBelowOutputs,
-    #[error("ReplacementFeeLowerThanOriginal: The replacement transaction has fee {replacement_fee:?}, the original transaction has fee {original_fee:?}")]
-    ReplacementFeeLowerThanOriginal {
-        replacement_tx: H256,
-        replacement_fee: Amount,
-        original_tx: H256,
-        original_fee: Amount,
-    },
-    #[error("TooManyPotentialReplacements")]
-    TooManyPotentialReplacements,
-    #[error("SpendsNewUnconfirmedInput")]
-    SpendsNewUnconfirmedOutput,
-    #[error("ConflictsFeeOverflow")]
-    ConflictsFeeOverflow,
-    #[error("TransactionFeeLowerThanConflictsWithDescendants")]
-    TransactionFeeLowerThanConflictsWithDescendants,
-    #[error("AdditionalFeesUnderflow")]
-    AdditionalFeesUnderflow,
-    #[error("InsufficientFeesToRelay")]
-    InsufficientFeesToRelay,
-    #[error("InsufficientFeesToRelayRBF")]
-    InsufficientFeesToRelayRBF,
-}
-
-impl From<TxValidationError> for Error {
-    fn from(e: TxValidationError) -> Self {
-        Error::TxValidationError(e)
+impl<C, T, M> MempoolImpl<C, T, M>
+where
+    C: ChainState,
+    T: GetTime,
+    M: GetMemoryUsage,
+{
+    fn rolling_fee_halflife(&self) -> Time {
+        let mem_usage = self.get_memory_usage();
+        if mem_usage < self.max_size / 4 {
+            ROLLING_FEE_BASE_HALFLIFE / 4
+        } else if mem_usage < self.max_size / 2 {
+            ROLLING_FEE_BASE_HALFLIFE / 2
+        } else {
+            ROLLING_FEE_BASE_HALFLIFE
+        }
     }
-}
 
-impl<C: ChainState> MempoolImpl<C> {
+    fn get_memory_usage(&self) -> usize {
+        self.memory_usage_estimator.get_memory_usage()
+    }
+
+    pub(crate) fn update_min_fee_rate(&self, rate: FeeRate) {
+        let mut rolling_fee_rate = self.rolling_fee_rate.get();
+        rolling_fee_rate.rolling_minimum_fee_rate = rate;
+        rolling_fee_rate.block_since_last_rolling_fee_bump = false;
+        self.rolling_fee_rate.set(rolling_fee_rate)
+    }
+
+    pub(crate) fn get_update_min_fee_rate(&self) -> Result<FeeRate, TxValidationError> {
+        let rolling_fee_rate = self.rolling_fee_rate.get();
+        if !rolling_fee_rate.block_since_last_rolling_fee_bump
+            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
+        {
+            return Ok(rolling_fee_rate.rolling_minimum_fee_rate);
+        } else if self.clock.get_time()
+            > rolling_fee_rate.last_rolling_fee_update + ROLLING_FEE_DECAY_INTERVAL
+        {
+            // Decay the rolling fee
+            self.decay_rolling_fee_rate()?;
+            println!(
+                "rolling fee rate after decay_rolling_fee_rate {:?}",
+                self.rolling_fee_rate
+            );
+
+            if self.rolling_fee_rate.get().rolling_minimum_fee_rate
+                < (*INCREMENTAL_RELAY_FEE_RATE / FeeRate::new(Amount::from_atoms(2)))
+                    .expect("not division by zero")
+            {
+                println!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.get().rolling_minimum_fee_rate);
+                self.drop_rolling_fee();
+                return Ok(self.rolling_fee_rate.get().rolling_minimum_fee_rate);
+            }
+        }
+
+        Ok(std::cmp::max(
+            self.rolling_fee_rate.get().rolling_minimum_fee_rate,
+            *INCREMENTAL_RELAY_FEE_RATE,
+        ))
+    }
+
+    fn drop_rolling_fee(&self) {
+        let mut rolling_fee_rate = self.rolling_fee_rate.get();
+        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
+        self.rolling_fee_rate.set(rolling_fee_rate)
+    }
+
+    fn decay_rolling_fee_rate(&self) -> Result<(), TxValidationError> {
+        let halflife = self.rolling_fee_halflife();
+        let time = self.clock.get_time();
+        self.rolling_fee_rate
+            .set(self.rolling_fee_rate.get().decay_fee(halflife, time)?);
+        Ok(())
+    }
+
     fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         tx.inputs()
             .iter()
@@ -380,7 +544,19 @@ impl<C: ChainState> MempoolImpl<C> {
             .collect::<BTreeSet<_>>();
 
         let fee = self.try_get_fee(&tx)?;
-        Ok(TxMempoolEntry::new(tx, fee, parents))
+        let time = self.clock.get_time();
+        Ok(TxMempoolEntry::new(tx, fee, parents, time))
+    }
+
+    fn get_update_minimum_mempool_fee(
+        &self,
+        tx: &Transaction,
+    ) -> Result<Amount, TxValidationError> {
+        let minimum_fee_rate = self.get_update_min_fee_rate()?;
+        println!("minimum fee rate {:?}", minimum_fee_rate);
+        println!("tx_size: {:?}", tx.encoded_size());
+
+        minimum_fee_rate.compute_fee(tx.encoded_size())
     }
 
     fn validate_transaction(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
@@ -415,13 +591,29 @@ impl<C: ChainState> MempoolImpl<C> {
 
         self.pays_minimum_relay_fees(tx)?;
 
+        self.pays_minimum_mempool_fee(tx)?;
+
         Ok(conflicts)
     }
 
-    fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
-        (self.try_get_fee(tx)? >= get_relay_fee(tx))
+    fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        let tx_fee = self.try_get_fee(tx)?;
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
+        (tx_fee >= minimum_fee)
             .then(|| ())
-            .ok_or(TxValidationError::InsufficientFeesToRelay)
+            .ok_or(TxValidationError::RollingFeeThresholdNotMet {
+                minimum_fee,
+                tx_fee,
+            })
+    }
+
+    fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
+        let tx_fee = self.try_get_fee(tx)?;
+        let relay_fee = get_relay_fee(tx);
+        eprintln!("tx_fee {:?}, relay_fee {:?}", tx_fee, relay_fee);
+        (tx_fee >= relay_fee)
+            .then(|| ())
+            .ok_or(TxValidationError::InsufficientFeesToRelay { tx_fee, relay_fee })
     }
 
     fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
@@ -477,12 +669,7 @@ impl<C: ChainState> MempoolImpl<C> {
     ) -> Result<(), TxValidationError> {
         let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
             .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
-        // TODO should we return an error here instead of expect?
         let relay_fee = get_relay_fee(tx);
-        eprintln!(
-            "relay_fee: {:?}, additional_fees {:?}, total_conflict_fees {:?}, replacement_fee: {:?}",
-            relay_fee, additional_fees, total_conflict_fees, self.try_get_fee(tx)?
-        );
         (additional_fees >= relay_fee)
             .then(|| ())
             .ok_or(TxValidationError::InsufficientFeesToRelayRBF)
@@ -574,37 +761,142 @@ impl<C: ChainState> MempoolImpl<C> {
     fn finalize_tx(&mut self, tx: Transaction, conflicts: Conflicts) -> Result<(), Error> {
         self.store.drop_conflicts(conflicts);
         let entry = self.create_entry(tx)?;
-        self.store.add_tx(entry)?;
-        // limit mempool size
-        Ok(())
+        let id = entry.tx.get_id().get();
+        self.store.add_tx(entry);
+        self.limit_mempool_size()?;
+        self.store.txs_by_id.contains_key(&id).then(|| ()).ok_or(Error::MempoolFull)
     }
 
-    #[allow(unused)]
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
+        self.remove_expired_transactions();
+        let removed_fees = self.trim()?;
+        if !removed_fees.is_empty() {
+            let new_minimum_fee_rate =
+                (*removed_fees.iter().max().expect("removed_fees should not be empty")
+                    + *INCREMENTAL_RELAY_FEE_RATE)
+                    .ok_or(TxValidationError::FeeRateError)?;
+            if new_minimum_fee_rate > self.rolling_fee_rate.get().rolling_minimum_fee_rate {
+                self.update_min_fee_rate(new_minimum_fee_rate)
+            }
+        }
+
         Ok(())
+    }
+
+    fn remove_expired_transactions(&mut self) {
+        let expired: Vec<_> = self
+            .store
+            .txs_by_creation_time
+            .values()
+            .flatten()
+            .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
+            .filter(|entry| {
+                let now = self.clock.get_time();
+                if now - entry.creation_time > self.max_tx_age {
+                    println!(
+                        "will evict {} which was created at {:?} and it is now {:?}",
+                        entry.tx_id(),
+                        entry.creation_time,
+                        now
+                    );
+                    true
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        for tx_id in expired.iter().map(|entry| entry.tx.get_id()) {
+            self.store.drop_tx_and_descendants(tx_id)
+        }
+    }
+
+    fn trim(&mut self) -> Result<Vec<FeeRate>, Error> {
+        let mut removed_fees = Vec::new();
+        while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
+            // TODO sort by descendant score, not by fee
+            let removed_id =
+                self.store.txs_by_fee.values().flatten().next().expect("pool not empty");
+            let removed =
+                self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
+
+            println!(
+                "removed tx pays a fee of {:?} and has size {}",
+                removed.fee,
+                removed.tx.encoded_size()
+            );
+            removed_fees.push(FeeRate::of_tx(removed.fee, removed.tx.encoded_size())?);
+            self.store.drop_tx_and_descendants(removed.tx.get_id());
+        }
+        Ok(removed_fees)
     }
 }
 
-trait SpendsUnconfirmed<C: ChainState> {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C>) -> bool;
+trait SpendsUnconfirmed<C, T, M>
+where
+    C: ChainState,
+    T: GetTime,
+    M: GetMemoryUsage,
+{
+    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool;
 }
 
-impl<C: ChainState> SpendsUnconfirmed<C> for TxInput {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C>) -> bool {
+impl<C, T, M> SpendsUnconfirmed<C, T, M> for TxInput
+where
+    C: ChainState,
+    T: GetTime,
+    M: GetMemoryUsage,
+{
+    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool {
         mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
-impl<C: ChainState> Mempool<C> for MempoolImpl<C> {
-    fn create(chain_state: C) -> Self {
+#[derive(Clone)]
+struct SystemClock;
+impl GetTime for SystemClock {
+    fn get_time(&self) -> Duration {
+        common::primitives::time::get()
+    }
+}
+
+#[derive(Clone)]
+struct SystemUsageEstimator;
+impl GetMemoryUsage for SystemUsageEstimator {
+    fn get_memory_usage(&self) -> MemoryUsage {
+        //TODO implement real usage estimation here
+        0
+    }
+}
+
+impl<C, T, M> Mempool<C, T, M> for MempoolImpl<C, T, M>
+where
+    C: ChainState,
+    T: GetTime,
+    M: GetMemoryUsage,
+{
+    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self {
         Self {
             store: MempoolStore::new(),
             chain_state,
+            max_size: MAX_MEMPOOL_SIZE_BYTES,
+            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
+            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
+            clock,
+            memory_usage_estimator,
         }
     }
 
-    fn new_tip_set(&mut self) -> Result<(), Error> {
-        unimplemented!()
+    fn new_tip_set(&mut self, chain_state: C) {
+        self.chain_state = chain_state;
+        self.rolling_fee_rate.set({
+            let mut rolling_fee_rate = self.rolling_fee_rate.get();
+            // TODO Not sure we should set the flag to true when a block is disconnected/during a
+            // reorg
+            rolling_fee_rate.block_since_last_rolling_fee_bump = true;
+            rolling_fee_rate
+        })
     }
     //
 
@@ -635,7 +927,7 @@ impl<C: ChainState> Mempool<C> for MempoolImpl<C> {
 
     // TODO Consider returning an error
     fn drop_transaction(&mut self, tx_id: &Id<Transaction>) {
-        self.store.drop_tx(tx_id);
+        self.store.remove_tx(tx_id);
     }
 }
 
@@ -656,7 +948,8 @@ mod tests {
     use common::chain::OutPointSourceId;
     use common::chain::OutputPurpose;
     use core::panic;
-    use rand::Rng;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Arc;
 
     const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 
@@ -748,22 +1041,56 @@ mod tests {
         }
     }
 
-    impl MempoolImpl<ChainStateMock> {
-        fn available_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
-            self.store
+    impl<T, M> MempoolImpl<ChainStateMock, T, M>
+    where
+        T: GetTime,
+        M: GetMemoryUsage,
+    {
+        fn available_outpoints(&self, allow_double_spend: bool) -> BTreeSet<ValuedOutPoint> {
+            let mut available = self
+                .store
                 .unconfirmed_outpoints()
                 .into_iter()
                 .chain(self.chain_state.confirmed_outpoints())
-                .collect()
+                .collect::<BTreeSet<_>>();
+            if !allow_double_spend {
+                available.retain(|valued_outpoint| {
+                    !self.store.spender_txs.contains_key(&valued_outpoint.outpoint)
+                });
+            }
+            available
         }
 
         fn get_input_value(&self, input: &TxInput) -> anyhow::Result<Amount> {
-            self.available_outpoints()
+            let allow_double_spend = true;
+            self.available_outpoints(allow_double_spend)
                 .iter()
                 .find_map(|valued_outpoint| {
                     (valued_outpoint.outpoint == *input.outpoint()).then(|| valued_outpoint.value)
                 })
                 .ok_or_else(|| anyhow::anyhow!("No such unconfirmed output"))
+        }
+
+        fn get_minimum_rolling_fee(&self) -> FeeRate {
+            self.rolling_fee_rate.get().rolling_minimum_fee_rate
+        }
+
+        fn process_block(&mut self, tx_id: &Id<Transaction>) -> anyhow::Result<()> {
+            let mut chain_state = self.chain_state.clone();
+            chain_state.add_confirmed_tx(
+                self.store
+                    .txs_by_id
+                    .get(&tx_id.get())
+                    .cloned()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("process_block: tx {} not found in mempool", tx_id.get())
+                    })?
+                    .tx,
+            );
+            println!("Setting tip to {:?}", chain_state);
+            self.new_tip_set(chain_state);
+            self.drop_transaction(tx_id);
+            Ok(())
         }
     }
 
@@ -789,34 +1116,8 @@ mod tests {
             }
         }
 
-        fn unspent_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
-            self.available_outpoints
-                .iter()
-                .map(|outpoint| {
-                    let value =
-                        self.get_outpoint_value(outpoint).expect("Inconsistent Chain State");
-                    ValuedOutPoint {
-                        outpoint: outpoint.clone(),
-                        value,
-                    }
-                })
-                .collect()
-        }
-
         fn confirmed_txs(&self) -> &HashMap<H256, Transaction> {
             &self.confirmed_txs
-        }
-
-        fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error> {
-            self.confirmed_txs
-                .get(&outpoint.tx_id().get_tx_id().expect("Not Coinbase").get())
-                .ok_or_else(|| anyhow::anyhow!("tx for outpoint sought in chain state, not found"))
-                .and_then(|tx| {
-                    tx.outputs()
-                        .get(outpoint.output_index() as usize)
-                        .ok_or_else(|| anyhow::anyhow!("outpoint index out of bounds"))
-                        .map(|output| output.value())
-                })
         }
 
         fn confirmed_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
@@ -840,6 +1141,20 @@ mod tests {
                 })
                 .collect()
         }
+
+        fn add_confirmed_tx(&mut self, tx: Transaction) {
+            let outpoints_spent: BTreeSet<_> =
+                tx.inputs().iter().map(|input| input.outpoint()).collect();
+            let outpoints_created: BTreeSet<_> = tx
+                .outputs()
+                .iter()
+                .enumerate()
+                .map(|(i, _)| OutPoint::new(OutPointSourceId::Transaction(tx.get_id()), i as u32))
+                .collect();
+            self.available_outpoints.extend(outpoints_created);
+            self.available_outpoints.retain(|outpoint| !outpoints_spent.contains(outpoint));
+            self.confirmed_txs.insert(tx.get_id().get(), tx);
+        }
     }
 
     impl ChainState for ChainStateMock {
@@ -860,12 +1175,20 @@ mod tests {
         }
     }
 
+    /* FIXME The second call in the following flow sometimes returns TransactionAlreadyInMempool
+    let tx1 = TxGenerator::new(&mempool).generate_tx()?;
+    mempool.add_transaction(tx1)?;
+
+    let tx2 = TxGenerator::new(&mempool).generate_tx()?;
+    mempool.add_transaction(tx2)?;
+    */
     struct TxGenerator {
         coin_pool: BTreeSet<ValuedOutPoint>,
         num_inputs: usize,
         num_outputs: usize,
         tx_fee: Amount,
         replaceable: bool,
+        allow_double_spend: bool,
     }
 
     impl TxGenerator {
@@ -884,40 +1207,27 @@ mod tests {
             self
         }
 
-        // TODO not sure if we need this
-        /*
-        fn with_fee(mut self, tx_fee: Amount) -> Self {
-            self.tx_fee = tx_fee;
+        fn with_fee(mut self, fee: Amount) -> Self {
+            self.tx_fee = fee;
             self
         }
-        */
 
-        fn new(mempool: &MempoolImpl<ChainStateMock>) -> Self {
-            let unconfirmed_outputs = mempool.available_outpoints();
-            Self::create_tx_generator(&mempool.chain_state, &unconfirmed_outputs)
-        }
-
-        fn create_tx_generator(
-            chain_state: &ChainStateMock,
-            unconfirmed_outputs: &BTreeSet<ValuedOutPoint>,
-        ) -> Self {
-            let coin_pool = chain_state
-                .unspent_outpoints()
-                .iter()
-                .chain(unconfirmed_outputs)
-                .cloned()
-                .collect();
-
+        fn new() -> Self {
             Self {
-                coin_pool,
+                coin_pool: BTreeSet::new(),
                 num_inputs: 1,
                 num_outputs: 1,
                 tx_fee: Amount::from_atoms(0),
                 replaceable: false,
+                allow_double_spend: false,
             }
         }
 
-        fn generate_tx(&mut self) -> anyhow::Result<Transaction> {
+        fn generate_tx<T: GetTime, M: GetMemoryUsage>(
+            &mut self,
+            mempool: &MempoolImpl<ChainStateMock, T, M>,
+        ) -> anyhow::Result<Transaction> {
+            self.coin_pool = mempool.available_outpoints(self.allow_double_spend);
             self.tx_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(
                 self.num_inputs,
                 self.num_outputs,
@@ -1016,12 +1326,7 @@ mod tests {
             let num_outpoints = self.coin_pool.len();
             (num_outpoints > 0)
                 .then(|| {
-                    let index = rand::thread_rng().gen_range(0..num_outpoints);
-                    self.coin_pool
-                        .iter()
-                        .nth(index)
-                        .cloned()
-                        .expect("Outpoint set should not be empty")
+                    self.coin_pool.iter().next().cloned().expect("Outpoint set should not be empty")
                 })
                 .ok_or_else(|| anyhow::anyhow!("no outpoints left"))
         }
@@ -1033,7 +1338,7 @@ mod tests {
 
     #[test]
     fn add_single_tx() -> anyhow::Result<()> {
-        let mut mempool = MempoolImpl::create(ChainStateMock::new());
+        let mut mempool = setup();
 
         let genesis_tx = mempool
             .chain_state
@@ -1069,13 +1374,12 @@ mod tests {
 
     #[test]
     fn txs_sorted() -> anyhow::Result<()> {
-        let chain_state = ChainStateMock::new();
-        let mut mempool = MempoolImpl::create(chain_state);
-        let mut tx_generator = TxGenerator::new(&mempool);
+        let mut mempool = setup();
+        let mut tx_generator = TxGenerator::new();
         let target_txs = 10;
 
         for _ in 0..target_txs {
-            match tx_generator.generate_tx() {
+            match tx_generator.generate_tx(&mempool) {
                 Ok(tx) => {
                     mempool.add_transaction(tx.clone())?;
                 }
@@ -1097,9 +1401,9 @@ mod tests {
     #[test]
     fn tx_no_inputs() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .with_num_inputs(0)
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
@@ -1108,16 +1412,20 @@ mod tests {
         Ok(())
     }
 
-    fn setup() -> MempoolImpl<ChainStateMock> {
-        MempoolImpl::create(ChainStateMock::new())
+    fn setup() -> MempoolImpl<ChainStateMock, SystemClock, SystemUsageEstimator> {
+        MempoolImpl::create(
+            ChainStateMock::new(),
+            SystemClock {},
+            SystemUsageEstimator {},
+        )
     }
 
     #[test]
     fn tx_no_outputs() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .with_num_outputs(0)
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
@@ -1128,7 +1436,7 @@ mod tests {
 
     #[test]
     fn tx_duplicate_inputs() -> anyhow::Result<()> {
-        let mut mempool = MempoolImpl::create(ChainStateMock::new());
+        let mut mempool = setup();
 
         let genesis_tx = mempool
             .chain_state
@@ -1166,7 +1474,7 @@ mod tests {
 
     #[test]
     fn tx_already_in_mempool() -> anyhow::Result<()> {
-        let mut mempool = MempoolImpl::create(ChainStateMock::new());
+        let mut mempool = setup();
 
         let genesis_tx = mempool
             .chain_state
@@ -1198,7 +1506,7 @@ mod tests {
 
     #[test]
     fn outpoint_not_found() -> anyhow::Result<()> {
-        let mut mempool = MempoolImpl::create(ChainStateMock::new());
+        let mut mempool = setup();
 
         let genesis_tx = mempool
             .chain_state
@@ -1242,9 +1550,9 @@ mod tests {
     #[test]
     fn tx_too_big() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .with_num_outputs(400_000)
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_tx failed");
         assert!(matches!(
             mempool.add_transaction(tx),
@@ -1258,7 +1566,7 @@ mod tests {
     fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
         let mut mempool = setup();
         let outpoint = mempool
-            .available_outpoints()
+            .available_outpoints(true)
             .iter()
             .next()
             .expect("there should be an outpoint since setup creates the genesis transaction")
@@ -1321,9 +1629,9 @@ mod tests {
     #[test]
     fn tx_replace_child() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .replaceable()
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_replaceable_tx");
         mempool.add_transaction(tx.clone())?;
 
@@ -1354,11 +1662,11 @@ mod tests {
         Ok(())
     }
 
-    // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this scycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
-    const TX_SPEND_INPUT_SIZE: usize = 82;
+    // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
+    const TX_SPEND_INPUT_SIZE: usize = 84;
 
-    fn tx_spend_input(
-        mempool: &MempoolImpl<ChainStateMock>,
+    fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
+        mempool: &MempoolImpl<ChainStateMock, T, M>,
         input: TxInput,
         fee: impl Into<Option<Amount>>,
         flags: u32,
@@ -1371,8 +1679,8 @@ mod tests {
         tx_spend_several_inputs(mempool, &[input], fee, flags, locktime)
     }
 
-    fn tx_spend_several_inputs(
-        mempool: &MempoolImpl<ChainStateMock>,
+    fn tx_spend_several_inputs<T: GetTime, M: GetMemoryUsage>(
+        mempool: &MempoolImpl<ChainStateMock, T, M>,
         inputs: &[TxInput],
         fee: Amount,
         flags: u32,
@@ -1417,9 +1725,9 @@ mod tests {
         let mut mempool = setup();
         // TODO add a function which calculates the tx size based on number of outputs and inputs,
         // so that we can calculate the minimum relay fee
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .with_num_outputs(2)
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_replaceable_tx");
 
         mempool.add_transaction(tx.clone())?;
@@ -1500,6 +1808,7 @@ mod tests {
 
     #[test]
     fn tx_mempool_entry() -> anyhow::Result<()> {
+        use common::primitives::time;
         let mut mempool = setup();
         // Input different flag values just to make the hashes of these dummy transactions
         // different
@@ -1511,30 +1820,36 @@ mod tests {
 
         // Generation 1
         let tx1_parents = BTreeSet::default();
-        let entry1 = TxMempoolEntry::new(txs.get(0).unwrap().clone(), fee, tx1_parents);
+        let entry1 =
+            TxMempoolEntry::new(txs.get(0).unwrap().clone(), fee, tx1_parents, time::get());
         let tx2_parents = BTreeSet::default();
-        let entry2 = TxMempoolEntry::new(txs.get(1).unwrap().clone(), fee, tx2_parents);
+        let entry2 =
+            TxMempoolEntry::new(txs.get(1).unwrap().clone(), fee, tx2_parents, time::get());
 
         // Generation 2
         let tx3_parents = vec![entry1.tx_id(), entry2.tx_id()].into_iter().collect();
-        let entry3 = TxMempoolEntry::new(txs.get(2).unwrap().clone(), fee, tx3_parents);
+        let entry3 =
+            TxMempoolEntry::new(txs.get(2).unwrap().clone(), fee, tx3_parents, time::get());
 
         // Generation 3
         let tx4_parents = vec![entry3.tx_id()].into_iter().collect();
         let tx5_parents = vec![entry3.tx_id()].into_iter().collect();
-        let entry4 = TxMempoolEntry::new(txs.get(3).unwrap().clone(), fee, tx4_parents);
-        let entry5 = TxMempoolEntry::new(txs.get(4).unwrap().clone(), fee, tx5_parents);
+        let entry4 =
+            TxMempoolEntry::new(txs.get(3).unwrap().clone(), fee, tx4_parents, time::get());
+        let entry5 =
+            TxMempoolEntry::new(txs.get(4).unwrap().clone(), fee, tx5_parents, time::get());
 
         // Generation 4
         let tx6_parents =
             vec![entry3.tx_id(), entry4.tx_id(), entry5.tx_id()].into_iter().collect();
-        let entry6 = TxMempoolEntry::new(txs.get(5).unwrap().clone(), fee, tx6_parents);
+        let entry6 =
+            TxMempoolEntry::new(txs.get(5).unwrap().clone(), fee, tx6_parents, time::get());
 
         let entries = vec![entry1, entry2, entry3, entry4, entry5, entry6];
         let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
 
         for entry in entries.into_iter() {
-            mempool.store.add_tx(entry)?;
+            mempool.store.add_tx(entry);
         }
 
         let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");
@@ -1560,14 +1875,14 @@ mod tests {
         Ok(())
     }
 
-    fn test_bip125_max_replacements(
-        mempool: &mut MempoolImpl<ChainStateMock>,
+    fn test_bip125_max_replacements<T: GetTime, M: GetMemoryUsage>(
+        mempool: &mut MempoolImpl<ChainStateMock, T, M>,
         num_potential_replacements: usize,
     ) -> anyhow::Result<()> {
-        let tx = TxGenerator::new(mempool)
+        let tx = TxGenerator::new()
             .with_num_outputs(num_potential_replacements - 1)
             .replaceable()
-            .generate_tx()
+            .generate_tx(mempool)
             .expect("generate_tx failed");
         let input = tx.inputs().first().expect("one input").clone();
         let outputs = tx.outputs().clone();
@@ -1626,10 +1941,10 @@ mod tests {
     #[test]
     fn spends_new_unconfirmed() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool)
+        let tx = TxGenerator::new()
             .with_num_outputs(2)
             .replaceable()
-            .generate_tx()
+            .generate_tx(&mempool)
             .expect("generate_replaceable_tx");
         let outpoint_source_id = OutPointSourceId::Transaction(tx.get_id());
         mempool.add_transaction(tx)?;
@@ -1673,7 +1988,7 @@ mod tests {
     #[test]
     fn pays_more_than_conflicts_with_descendants() -> anyhow::Result<()> {
         let mut mempool = setup();
-        let tx = TxGenerator::new(&mempool).generate_tx().expect("generate_replaceable_tx");
+        let tx = TxGenerator::new().generate_tx(&mempool).expect("generate_replaceable_tx");
         let tx_id = tx.get_id();
         mempool.add_transaction(tx)?;
 
@@ -1696,7 +2011,7 @@ mod tests {
         mempool.add_transaction(replaced_tx)?;
 
         // Create some children for this transaction
-        let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id.clone());
+        let descendant_outpoint_source_id = OutPointSourceId::Transaction(replaced_id);
 
         let descendant1_fee = Amount::from_atoms(100);
         let descendant1 = tx_spend_input(
@@ -1758,6 +2073,247 @@ mod tests {
         assert!(!mempool.contains_transaction(&replaced_id));
         assert!(!mempool.contains_transaction(&descendant1_id));
         assert!(!mempool.contains_transaction(&descendant2_id));
+        Ok(())
+    }
+
+    #[derive(Clone)]
+    struct MockClock {
+        time: Arc<AtomicU64>,
+    }
+
+    impl MockClock {
+        fn new() -> Self {
+            Self {
+                time: Arc::new(AtomicU64::new(0)),
+            }
+        }
+
+        fn set(&self, time: Time) {
+            self.time.store(time.as_secs(), Ordering::SeqCst)
+        }
+
+        fn increment(&self, inc: Time) {
+            self.time.store(
+                self.time.load(Ordering::SeqCst) + inc.as_secs(),
+                Ordering::SeqCst,
+            )
+        }
+    }
+
+    impl GetTime for MockClock {
+        fn get_time(&self) -> Time {
+            Duration::new(self.time.load(Ordering::SeqCst), 0)
+        }
+    }
+
+    #[test]
+    fn only_expired_entries_removed() -> anyhow::Result<()> {
+        let mock_clock = MockClock::new();
+
+        let mut mempool = MempoolImpl::create(
+            ChainStateMock::new(),
+            mock_clock.clone(),
+            SystemUsageEstimator {},
+        );
+
+        let num_inputs = 1;
+        let num_outputs = 2;
+        let big_fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100;
+        let parent = TxGenerator::new()
+            .with_num_inputs(num_inputs)
+            .with_num_outputs(num_outputs)
+            .with_fee(Amount::from_atoms(big_fee))
+            .generate_tx(&mempool)?;
+        let parent_id = parent.get_id();
+        mempool.add_transaction(parent)?;
+
+        let flags = 0;
+        let locktime = 0;
+        let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
+        let child_0 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id.clone(),
+                0,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            None,
+            flags,
+            locktime,
+        )?;
+
+        let child_1 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id,
+                1,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            None,
+            flags,
+            locktime,
+        )?;
+        let child_1_id = child_1.get_id();
+
+        let expired_tx_id = child_0.get_id();
+        mempool.add_transaction(child_0)?;
+
+        // Simulate the parent being added to a block
+        // We have to do this because if we leave this parent in the mempool then it will be
+        // expired, and so removed along with both its children, and thus the addition of child_1 to
+        // the mempool will fail
+        mempool.process_block(&parent_id)?;
+        mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + Duration::new(1, 0));
+
+        mempool.add_transaction(child_1)?;
+        assert!(!mempool.contains_transaction(&expired_tx_id));
+        assert!(mempool.contains_transaction(&child_1_id));
+        Ok(())
+    }
+
+    #[test]
+    fn rolling_fee() -> anyhow::Result<()> {
+        let mock_clock = MockClock::new();
+        let mut mock_usage = MockGetMemoryUsage::new();
+        // Add parent
+        // Add first child
+        mock_usage.expect_get_memory_usage().times(2).return_const(0usize);
+        // Add second child, triggering the trimming process
+        mock_usage
+            .expect_get_memory_usage()
+            .times(1)
+            .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
+        // After removing one entry, cause the code to exit the loop by showing a small usage
+        mock_usage.expect_get_memory_usage().return_const(0usize);
+
+        let chain_state = ChainStateMock::new();
+        let mut mempool = MempoolImpl::create(chain_state, mock_clock.clone(), mock_usage);
+
+        let num_inputs = 1;
+        let num_outputs = 3;
+
+        // Use a higher than default fee because we don't want this transction to be evicted during
+        // the trimming process
+        let parent = TxGenerator::new()
+            .with_num_inputs(num_inputs)
+            .with_num_outputs(num_outputs)
+            .generate_tx(&mempool)?;
+        let parent_id = parent.get_id();
+        mempool.add_transaction(parent)?;
+
+        let flags = 0;
+        let locktime = 0;
+        let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
+
+        // child_0 has the lower fee so it will be evicted when memory usage is too high
+        let child_0 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id.clone(),
+                0,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            None,
+            flags,
+            locktime,
+        )?;
+        let child_0_id = child_0.get_id();
+
+        let big_fee = Amount::from_atoms(
+            get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs)) + 100,
+        );
+        let child_1 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id.clone(),
+                1,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            big_fee,
+            flags,
+            locktime,
+        )?;
+        let child_1_id = child_1.get_id();
+        mempool.add_transaction(child_0.clone())?;
+        println!("added child_0");
+        mempool.add_transaction(child_1)?;
+        println!("added child_1");
+
+        assert_eq!(mempool.store.txs_by_id.len(), 2);
+        assert!(mempool.contains_transaction(&child_1_id));
+        assert!(!mempool.contains_transaction(&child_0_id));
+        let rolling_fee = mempool.get_minimum_rolling_fee();
+        assert_eq!(
+            rolling_fee,
+            (FeeRate::of_tx(mempool.try_get_fee(&child_0)?, child_0.encoded_size())?
+                + *INCREMENTAL_RELAY_FEE_RATE)
+                .ok_or(TxValidationError::FeeRateError)?
+        );
+
+        // Now that the minimum rolling fee has been bumped up, a low-fee tx will not pass
+        // validation
+        let child_2 = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id.clone(),
+                2,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            None,
+            flags,
+            locktime,
+        )?;
+        assert!(matches!(
+            mempool.add_transaction(child_2),
+            Err(Error::TxValidationError(
+                TxValidationError::RollingFeeThresholdNotMet { .. }
+            ))
+        ));
+
+        // We provide a sufficient fee for the tx to pass the minimum rolling fee requirement
+        let child_2_high_fee = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                outpoint_source_id,
+                2,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
+            mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1))?,
+            flags,
+            locktime,
+        )?;
+        mempool.add_transaction(child_2_high_fee)?;
+
+        // We simulate a block being accepted so the rolling fee will begin to decay
+        mempool.process_block(&parent_id)?;
+
+        // Because the rolling fee is only updated when we attempt to add a tx to the mempool
+        // we need to submit a "dummy" tx to trigger these updates.
+
+        // Since memory usage is now zero, it is less than 1/4 of the max size
+        // and ROLLING_FEE_BASE_HALFLIFE / 4 is the time it will take for the fee to halve
+        let halflife = ROLLING_FEE_BASE_HALFLIFE / 4;
+        mock_clock.increment(halflife);
+        let dummy_tx = TxGenerator::new().generate_tx(&mempool)?;
+        assert!(matches!(
+            mempool.add_transaction(dummy_tx.clone()),
+            Err(Error::TxValidationError(
+                TxValidationError::RollingFeeThresholdNotMet { .. }
+            ))
+        ));
+        assert_eq!(
+            mempool.get_minimum_rolling_fee(),
+            (rolling_fee / FeeRate::new(Amount::from_atoms(2))).unwrap()
+        );
+
+        mock_clock.increment(halflife);
+        // Fee will have dropped under INCREMENTAL_RELAY_FEE_RATE / 2 by now, so it will be set to
+        // zero and our tx will be submitted successfully
+        mempool.add_transaction(dummy_tx)?;
+        assert_eq!(
+            mempool.get_minimum_rolling_fee(),
+            FeeRate::new(Amount::from_atoms(0))
+        );
         Ok(())
     }
 }
