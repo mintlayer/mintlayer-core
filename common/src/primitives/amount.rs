@@ -49,10 +49,9 @@ impl Amount {
         let amount_str = self.val.to_string();
         let decimals = decimals as usize;
         if amount_str.len() <= decimals {
-            let zeros =
-                "0".repeat(decimals - amount_str.len());
+            let zeros = "0".repeat(decimals - amount_str.len());
             let result = "0.".to_owned() + &zeros + &amount_str;
-            
+
             remove_right_most_zeros_and_decimal_point(result)
         } else {
             // insert decimal point at position number N from the right
@@ -62,7 +61,7 @@ impl Amount {
             } else {
                 amount_str
             };
-            
+
             remove_right_most_zeros_and_decimal_point(result)
         }
     }
@@ -91,7 +90,7 @@ impl Amount {
             // if there is no decimal point, then just add N zeros to the right and we're done
             let zeros = "0".repeat(decimals);
             let amount_str = amount_str.to_owned() + &zeros;
-            
+
             amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         } else {
             // if there's 1 decomal point, split, join the numbers, then add zeros to the right
@@ -104,7 +103,7 @@ impl Amount {
             let zeros = "0".repeat(decimals - amount_split[1].len());
             let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
             let atoms_str = atoms_str.trim_start_matches('0');
-            
+
             atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         }
     }
