@@ -134,6 +134,13 @@ impl Amount {
     pub fn random(range: std::ops::RangeInclusive<Amount>) -> Amount {
         Amount::from_atoms(rand::thread_rng().gen_range(range.start().val..=range.end().val))
     }
+
+    pub fn pow(self, exponent: usize) -> Option<Self> {
+        (0..exponent).into_iter().try_fold(Amount::from(1), |mut partial_result, _| {
+            partial_result = (partial_result * self)?;
+            Some(partial_result)
+        })
+    }
 }
 
 impl From<Amount> for u128 {
@@ -801,5 +808,11 @@ mod tests {
         assert_eq!(Amount { val: 1234567890100 }.into_fixedpoint_str(1), "123456789010");
         assert_eq!(Amount { val: 12345678901200 }.into_fixedpoint_str(1), "1234567890120");
         assert_eq!(Amount { val: 123456789012300 }.into_fixedpoint_str(1), "12345678901230");
+    }
+
+    #[test]
+    fn pow() {
+        let x = Amount { val: 2 };
+        assert_eq!(x.pow(4), Some(Amount { val: 16 }));
     }
 }
