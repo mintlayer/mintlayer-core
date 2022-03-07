@@ -26,7 +26,7 @@ features = ["floodsub", "mdns", "mplex", "noise", "streaming", "tcp-async-io"]
 
 [dependencies.tokio]
 version = "1"
-features = ["io-util", "macros", "net", "rt", "sync"]
+features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync"]
 
 [dependencies.parity-scale-codec]
 default-features = false
