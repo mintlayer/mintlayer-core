@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use crate::message;
 use crate::net::NetworkService;
 use parity_scale_codec::{Decode, Encode};
@@ -23,27 +25,29 @@ pub enum Event {
     Hello,
 }
 
-#[allow(unused)]
-pub struct PeerEvent<T>
+pub enum PeerEvent<T>
 where
     T: NetworkService,
 {
-    pub peer_id: T::PeerId,
-    pub event: PeerEventType,
-}
-
-/// P2P uses these events to communicate with Peer
-#[allow(unused)]
-pub enum PeerEventType {
     /// Handshaking failed
-    HandshakeFailed,
+    HandshakeFailed { peer_id: T::PeerId },
 
     /// Handshaking succeeded
-    HandshakeSucceeded,
+    HandshakeSucceeded { peer_id: T::PeerId },
 
     /// Remote peer disconnected
-    Disconnected,
+    Disconnected { peer_id: T::PeerId },
 
     /// Inbound or outbound message
-    Message(message::Message),
+    Message {
+        peer_id: T::PeerId,
+        message: message::Message,
+    },
+}
+
+pub enum SwarmControlEvent<T>
+where
+    T: NetworkService,
+{
+    Connect { addr: T::Address },
 }
