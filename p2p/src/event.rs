@@ -19,6 +19,7 @@
 use crate::message;
 use crate::net::NetworkService;
 use parity_scale_codec::{Decode, Encode};
+use tokio::sync::mpsc;
 
 #[derive(Debug, Encode, Decode)]
 pub enum Event {
@@ -45,9 +46,39 @@ where
     },
 }
 
+#[derive(Debug)]
+pub enum PeerSyncEvent<T>
+where
+    T: NetworkService,
+{
+    Dummy { peer_id: T::PeerId },
+}
+
+#[derive(Debug)]
 pub enum SwarmControlEvent<T>
 where
     T: NetworkService,
 {
     Connect { addr: T::Address },
+}
+
+#[derive(Debug)]
+pub enum SyncControlEvent<T>
+where
+    T: NetworkService,
+{
+    /// Peer connected
+    Connected {
+        /// Unique peer ID
+        peer_id: T::PeerId,
+
+        /// TX channel for sending syncing messages to peer
+        tx: mpsc::Sender<PeerEvent<T>>,
+    },
+
+    /// Peer disconnected
+    Disconnected {
+        /// Unique peer ID
+        peer_id: T::PeerId,
+    },
 }

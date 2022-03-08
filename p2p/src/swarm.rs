@@ -111,6 +111,12 @@ where
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
 
+    /// TX channel for sending events to SyncManager
+    tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+
+    /// TX channel given to Peer objects for communication with SyncManager
+    tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
+
     /// Channel for p2p<->peers communication
     mgr_chan: (
         mpsc::Sender<event::PeerEvent<T>>,
@@ -127,6 +133,8 @@ where
         config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+        tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+        tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
         mgr_backlog: usize,
         peer_backlock: usize,
     ) -> Self {
@@ -135,6 +143,8 @@ where
             handle,
             peer_backlock,
             rx_swarm,
+            tx_sync,
+            tx_peer_sync,
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             discovered: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
@@ -374,8 +384,10 @@ mod tests {
         let config = Arc::new(config::create_mainnet());
         let (conn, _) = T::start(addr, &[], &[]).await.unwrap();
         let (_, rx) = tokio::sync::mpsc::channel(16);
+        let (tx_sync, _) = tokio::sync::mpsc::channel(16);
+        let (tx_peer, _) = tokio::sync::mpsc::channel(16);
 
-        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, 256, 32)
+        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync, tx_peer, 256, 32)
     }
 
     // try to connect to an address that no one listening on and verify it fails
