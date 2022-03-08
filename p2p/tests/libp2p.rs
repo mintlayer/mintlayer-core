@@ -17,7 +17,6 @@
 #![cfg(not(loom))]
 extern crate test_utils;
 
-use common::{chain::config, sync::Arc};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
     error::{Libp2pError, P2pError},
@@ -28,26 +27,25 @@ use p2p::{
         ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService, FloodsubTopic,
         NetworkService,
     },
-    P2P,
 };
 
 // verify that libp2p mdns peer discovery works
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn test_libp2p_peer_discovery() {
-    let config = Arc::new(config::create_mainnet());
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut serv, _) = Libp2pService::start(addr.clone(), &[Libp2pStrategy::MulticastDns], &[])
         .await
         .unwrap();
 
-    tokio::spawn(async move {
-        let mut p2p = P2P::<Libp2pService>::new(256, 32, addr, Arc::clone(&config)).await.unwrap();
-        let _ = p2p.run().await;
-    });
+    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let (mut serv2, _) = Libp2pService::start(addr2.clone(), &[Libp2pStrategy::MulticastDns], &[])
+        .await
+        .unwrap();
 
     loop {
-        let serv_res: ConnectivityEvent<Libp2pService> = serv.poll_next().await.unwrap();
-        match serv_res {
+        let (serv_res, _) = tokio::join!(serv.poll_next(), serv2.poll_next());
+
+        match serv_res.unwrap() {
             ConnectivityEvent::PeerDiscovered { peers } => {
                 assert!(!peers.is_empty());
 
