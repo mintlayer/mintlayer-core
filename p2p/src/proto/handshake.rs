@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError, ProtocolError},
-    event::PeerEvent,
+    event::PeerSwarmEvent,
     message::{HandshakeMessage, Message, MessageType},
     net::{NetworkService, SocketService},
     peer::{ListeningState, Peer, PeerState},
@@ -91,7 +91,9 @@ where
                 };
 
                 self.socket.send(&msg).await?;
-                self.mgr_tx.send(PeerEvent::HandshakeSucceeded { peer_id: self.id }).await?;
+                self.mgr_tx
+                    .send(PeerSwarmEvent::HandshakeSucceeded { peer_id: self.id })
+                    .await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -139,7 +141,9 @@ where
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
 
-                self.mgr_tx.send(PeerEvent::HandshakeSucceeded { peer_id: self.id }).await?;
+                self.mgr_tx
+                    .send(PeerSwarmEvent::HandshakeSucceeded { peer_id: self.id })
+                    .await?;
                 self.state = PeerState::Listening(ListeningState::Any);
                 return Ok(());
             }
@@ -180,7 +184,7 @@ where
         match res {
             Ok(_) => Ok(()),
             Err(e) => {
-                self.mgr_tx.send(PeerEvent::HandshakeFailed { peer_id: self.id }).await?;
+                self.mgr_tx.send(PeerSwarmEvent::HandshakeFailed { peer_id: self.id }).await?;
                 Err(e)
             }
         }
@@ -218,13 +222,14 @@ mod tests {
     // make a mock service peer
     async fn make_peer() -> Peer<MockService> {
         let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
+        let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
         let (_, rx) = tokio::sync::mpsc::channel(1);
 
         // spawn dummy task that listens to the peer RX channel and
         // acts as though a P2P object was listening to events from the peer
         tokio::spawn(async move {
             loop {
-                let _ = peer_rx.recv().await;
+                let (_, _) = tokio::join!(peer_rx.recv(), sync_rx.recv());
             }
         });
 
@@ -234,6 +239,7 @@ mod tests {
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),
             peer_tx,
+            sync_tx,
             rx,
         )
     }

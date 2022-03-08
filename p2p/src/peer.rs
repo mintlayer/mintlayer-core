@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError, ProtocolError},
-    event::{Event, PeerEvent},
+    event,
     message::{HandshakeMessage, Message, MessageType},
     net::{NetworkService, SocketService},
     proto::{connectivity::*, handshake::*},
@@ -122,10 +122,13 @@ where
     pub state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
-    pub mgr_tx: tokio::sync::mpsc::Sender<PeerEvent<NetworkingBackend>>,
+    pub mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<NetworkingBackend>>,
+
+    /// Channel for sending messages to SyncManager
+    sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<NetworkingBackend>>,
 
     /// Channel for reading events from the `NetworkManager`
-    mgr_rx: tokio::sync::mpsc::Receiver<Event>,
+    mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<NetworkingBackend>>,
 
     /// Socket of the peer
     pub socket: NetworkingBackend::Socket,
@@ -156,8 +159,9 @@ where
         role: PeerRole,
         config: Arc<ChainConfig>,
         socket: NetworkingBackend::Socket,
-        mgr_tx: tokio::sync::mpsc::Sender<PeerEvent<NetworkingBackend>>,
-        mgr_rx: tokio::sync::mpsc::Receiver<Event>,
+        mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<NetworkingBackend>>,
+        sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<NetworkingBackend>>,
+        mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<NetworkingBackend>>,
     ) -> Self {
         let state = match role {
             PeerRole::Outbound => {
@@ -173,6 +177,7 @@ where
             role,
             state,
             mgr_tx,
+            sync_tx,
             mgr_rx,
             socket,
             config,
@@ -246,7 +251,10 @@ where
     /// This might be a request the local node must make to remote peer, e.g. GetHeaders,
     /// it might be the response to request the remote peer sent us, or it might be
     /// a shutdown signal which instructs us to close the connection and exit the event loop
-    async fn on_manager_event(&mut self, event: Option<Event>) -> error::Result<()> {
+    async fn on_manager_event(
+        &mut self,
+        event: Option<event::PeerEvent<NetworkingBackend>>,
+    ) -> error::Result<()> {
         todo!();
     }
 
@@ -358,6 +366,7 @@ mod tests {
     // make a mock service peer
     async fn make_peer() -> Peer<MockService> {
         let (peer_tx, _) = tokio::sync::mpsc::channel(1);
+        let (sync_tx, _) = tokio::sync::mpsc::channel(1);
         let (_, rx) = tokio::sync::mpsc::channel(1);
 
         Peer::<MockService>::new(
@@ -366,6 +375,7 @@ mod tests {
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),
             peer_tx,
+            sync_tx,
             rx,
         )
     }

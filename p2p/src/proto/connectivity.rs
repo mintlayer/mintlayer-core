@@ -313,6 +313,7 @@ mod tests {
     // make a mock service peer
     async fn make_peer() -> Peer<MockService> {
         let (peer_tx, _) = tokio::sync::mpsc::channel(1);
+        let (sync_tx, _) = tokio::sync::mpsc::channel(1);
         let (_, rx) = tokio::sync::mpsc::channel(1);
 
         Peer::<MockService>::new(
@@ -321,6 +322,7 @@ mod tests {
             Arc::new(config::create_mainnet()),
             MockSocket::new(test_utils::get_tcp_socket().await),
             peer_tx,
+            sync_tx,
             rx,
         )
     }
