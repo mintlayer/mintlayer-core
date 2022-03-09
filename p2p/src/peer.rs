@@ -336,7 +336,10 @@ where
         loop {
             tokio::select! {
                 event = self.socket.recv() => {
-                    self.on_peer_event(event).await?;
+                    if let Err(e) = self.on_peer_event(event).await {
+                        self.mgr_tx.send(event::PeerSwarmEvent::Disconnected { peer_id: self.id }).await?;
+                        return Err(P2pError::PeerDisconnected);
+                    }
                     self.last_activity = time::get();
                 }
                 event = self.mgr_rx.recv().fuse() => {

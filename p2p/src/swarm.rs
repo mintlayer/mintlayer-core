@@ -218,8 +218,22 @@ where
 
                 Ok(())
             }
-            PeerSwarmEvent::Disconnected { peer_id: _ }
-            | PeerSwarmEvent::Message {
+            PeerSwarmEvent::Disconnected { peer_id } => {
+                log::debug!("peer {:?} disconnected", peer_id);
+
+                if !std::matches!(
+                    tokio::join!(
+                        self.handle.unregister_peer(peer_id),
+                        self.tx_sync.send(event::SyncControlEvent::Disconnected { peer_id })
+                    ),
+                    (Ok(_), Ok(_))
+                ) {
+                    return Err(P2pError::ChannelClosed);
+                }
+
+                Ok(())
+            }
+            PeerSwarmEvent::Message {
                 peer_id: _,
                 message: _,
             } => {
