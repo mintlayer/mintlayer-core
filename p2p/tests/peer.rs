@@ -46,6 +46,7 @@ async fn test_peer_new_mock() {
     };
 
     let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let _ = Peer::<MockService>::new(
         addr,
@@ -53,6 +54,7 @@ async fn test_peer_new_mock() {
         Arc::clone(&config),
         server_res,
         peer_tx,
+        sync_tx,
         rx,
     );
 }
@@ -79,6 +81,7 @@ async fn test_peer_new_libp2p() {
     };
 
     let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let _ = Peer::<Libp2pService>::new(
         id,
@@ -86,6 +89,7 @@ async fn test_peer_new_libp2p() {
         Arc::clone(&config),
         socket,
         peer_tx,
+        sync_tx,
         rx,
     );
 }

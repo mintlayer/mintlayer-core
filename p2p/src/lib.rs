@@ -29,6 +29,7 @@ pub mod net;
 pub mod peer;
 pub mod proto;
 pub mod swarm;
+pub mod sync;
 
 #[allow(unused)]
 pub struct P2P<T>
@@ -40,9 +41,6 @@ where
 
     /// TX channel for sending swarm control events
     tx_swarm: mpsc::Sender<event::SwarmControlEvent<T>>,
-
-    /// Handle for sending/receiving floodsub events
-    flood: T::FloodsubHandle,
 }
 
 #[allow(unused)]
@@ -63,59 +61,39 @@ where
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
         let (conn, flood) = T::start(addr, &[], &[]).await?;
-        let swarm_config = Arc::clone(&config);
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
+        let (tx_sync, rx_sync) = mpsc::channel(16);
+        let (tx_peer, rx_peer) = mpsc::channel(16);
 
+        let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
             let mut swarm = swarm::SwarmManager::<T>::new(
                 swarm_config,
                 conn,
                 rx_swarm,
+                tx_sync,
+                tx_peer,
                 mgr_backlog,
                 peer_backlock,
             );
             let _ = swarm.run().await;
         });
 
-        Ok(Self {
-            config,
-            flood,
-            tx_swarm,
-        })
-    }
+        let sync_config = Arc::clone(&config);
+        tokio::spawn(async move {
+            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync, rx_peer);
+            let _ = sync_mgr.run().await;
+        });
 
-    /// Handle floodsub event
-    fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
-        let net::FloodsubEvent::MessageReceived {
-            peer_id: _,
-            topic,
-            message,
-        } = event;
-
-        match topic {
-            net::FloodsubTopic::Transactions => {
-                log::debug!("received new transaction: {:#?}", message);
-            }
-            net::FloodsubTopic::Blocks => {
-                log::debug!("received new block: {:#?}", message);
-            }
-        }
-
-        Ok(())
+        Ok(Self { config, tx_swarm })
     }
 
     /// Run the `P2P` event loop.
     pub async fn run(&mut self) -> error::Result<()> {
-        log::info!("starting event loop");
+        log::info!("starting p2p event loop");
 
         loop {
-            tokio::select! {
-                res = self.flood.poll_next() => {
-                    res.map(|event| {
-                        self.on_floodsub_event(event)
-                    })?;
-                }
-            };
+            std::thread::sleep(std::time::Duration::from_secs(5));
         }
     }
 }

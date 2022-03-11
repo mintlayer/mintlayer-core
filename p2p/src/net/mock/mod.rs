@@ -318,6 +318,7 @@ mod tests {
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+        let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
             test_utils::get_mock_id(),
@@ -325,6 +326,7 @@ mod tests {
             config.clone(),
             server_res,
             peer_tx,
+            sync_tx,
             rx,
         );
         let mut socket = remote_res.unwrap();
@@ -363,6 +365,7 @@ mod tests {
 
         let config = Arc::new(config::create_mainnet());
         let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
+        let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
         let (_tx, rx) = tokio::sync::mpsc::channel(1);
         let mut peer = Peer::<MockService>::new(
             test_utils::get_mock_id(),
@@ -370,6 +373,7 @@ mod tests {
             config.clone(),
             server_res,
             peer_tx,
+            sync_tx,
             rx,
         );
         let mut socket = remote_res.unwrap();

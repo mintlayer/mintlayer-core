@@ -77,6 +77,7 @@ pub async fn create_two_mock_peers(
     let local_res = local_res.unwrap();
 
     let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
 
@@ -84,7 +85,7 @@ pub async fn create_two_mock_peers(
     // acts as though a P2P object was listening to events from the peer
     tokio::spawn(async move {
         loop {
-            let _ = peer_rx.recv().await;
+            let (_, _) = tokio::join!(peer_rx.recv(), sync_rx.recv());
         }
     });
 
@@ -94,6 +95,7 @@ pub async fn create_two_mock_peers(
         config.clone(),
         remote_res,
         peer_tx.clone(),
+        sync_tx.clone(),
         rx,
     );
 
@@ -103,6 +105,7 @@ pub async fn create_two_mock_peers(
         config.clone(),
         MockSocket::new(local_res),
         peer_tx,
+        sync_tx,
         rx2,
     );
 
@@ -130,6 +133,7 @@ pub async fn create_two_libp2p_peers(
     let local_res = local_res.unwrap();
 
     let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
 
@@ -137,7 +141,7 @@ pub async fn create_two_libp2p_peers(
     // acts as though a P2P object was listening to events from the peer
     tokio::spawn(async move {
         loop {
-            let _ = peer_rx.recv().await;
+            let (_, _) = tokio::join!(peer_rx.recv(), sync_rx.recv());
         }
     });
 
@@ -147,6 +151,7 @@ pub async fn create_two_libp2p_peers(
         config.clone(),
         remote_res,
         peer_tx.clone(),
+        sync_tx.clone(),
         rx,
     );
 
@@ -156,6 +161,7 @@ pub async fn create_two_libp2p_peers(
         config.clone(),
         local_res.1,
         peer_tx,
+        sync_tx,
         rx2,
     );
 

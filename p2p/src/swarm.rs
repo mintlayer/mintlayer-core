@@ -34,7 +34,7 @@
 ///! information or considers the peer invalid and destroys any context it had.
 use crate::{
     error::{self, P2pError},
-    event,
+    event::{self, PeerEvent, PeerSwarmEvent},
     net::{self, ConnectivityService, NetworkService},
     peer::{Peer, PeerRole},
 };
@@ -72,7 +72,7 @@ where
     state: PeerState,
 
     /// Channel for communication with the peer
-    tx: mpsc::Sender<event::Event>,
+    tx: mpsc::Sender<event::PeerEvent<T>>,
 }
 
 #[allow(unused)]
@@ -111,10 +111,16 @@ where
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
 
+    /// TX channel for sending events to SyncManager
+    tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+
+    /// TX channel given to Peer objects for communication with SyncManager
+    tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
+
     /// Channel for p2p<->peers communication
     mgr_chan: (
-        mpsc::Sender<event::PeerEvent<T>>,
-        mpsc::Receiver<event::PeerEvent<T>>,
+        mpsc::Sender<event::PeerSwarmEvent<T>>,
+        mpsc::Receiver<event::PeerSwarmEvent<T>>,
     ),
 }
 
@@ -127,6 +133,8 @@ where
         config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+        tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+        tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
         mgr_backlog: usize,
         peer_backlock: usize,
     ) -> Self {
@@ -135,6 +143,8 @@ where
             handle,
             peer_backlock,
             rx_swarm,
+            tx_sync,
+            tx_peer_sync,
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             discovered: HashMap::new(),
             mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
@@ -171,28 +181,59 @@ where
     /// The event is wrapped in an `Option` because the peer might have ungracefully
     /// failed and reading from the closed channel might gives a `None` value, indicating
     /// a protocol error which should be handled accordingly.
-    async fn on_peer_event(&mut self, event: Option<event::PeerEvent<T>>) -> error::Result<()> {
+    async fn on_peer_event(
+        &mut self,
+        event: Option<event::PeerSwarmEvent<T>>,
+    ) -> error::Result<()> {
         let event = event.ok_or(P2pError::ChannelClosed)?;
         match event {
-            event::PeerEvent::HandshakeFailed { peer_id } => {
+            PeerSwarmEvent::HandshakeFailed { peer_id } => {
                 log::error!("handshake failed, peer id {:?}", peer_id);
                 self.peers
                     .remove(&peer_id)
                     .map(|_| ())
                     .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
             }
-            event::PeerEvent::HandshakeSucceeded { peer_id } => {
+            PeerSwarmEvent::HandshakeSucceeded { peer_id } => {
                 log::info!("new peer joined, peer id {:?}", peer_id);
 
-                self.peers
+                let tx = self
+                    .peers
                     .get_mut(&peer_id)
                     .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
-                    .map(|peer| (*peer).state = PeerState::Active)?;
+                    .map(|peer| {
+                        (*peer).state = PeerState::Active;
+                        peer.tx.clone()
+                    })?;
 
-                self.handle.register_peer(peer_id).await
+                if !std::matches!(
+                    tokio::join!(
+                        self.handle.register_peer(peer_id),
+                        self.tx_sync.send(event::SyncControlEvent::Connected { peer_id, tx })
+                    ),
+                    (Ok(_), Ok(_))
+                ) {
+                    return Err(P2pError::ChannelClosed);
+                }
+
+                Ok(())
             }
-            event::PeerEvent::Disconnected { peer_id: _ }
-            | event::PeerEvent::Message {
+            PeerSwarmEvent::Disconnected { peer_id } => {
+                log::debug!("peer {:?} disconnected", peer_id);
+
+                if !std::matches!(
+                    tokio::join!(
+                        self.handle.unregister_peer(peer_id),
+                        self.tx_sync.send(event::SyncControlEvent::Disconnected { peer_id })
+                    ),
+                    (Ok(_), Ok(_))
+                ) {
+                    return Err(P2pError::ChannelClosed);
+                }
+
+                Ok(())
+            }
+            PeerSwarmEvent::Message {
                 peer_id: _,
                 message: _,
             } => {
@@ -335,6 +376,7 @@ where
     fn create_peer(&mut self, id: T::PeerId, socket: T::Socket, role: PeerRole) {
         let config = self.config.clone();
         let mgr_tx = self.mgr_chan.0.clone();
+        let sync_tx = self.tx_peer_sync.clone();
         let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
 
         self.peers.insert(
@@ -348,7 +390,7 @@ where
         log::debug!("spawning a task for peer {:?}, role {:?}", id, role);
 
         tokio::spawn(async move {
-            Peer::<T>::new(id, role, config, socket, mgr_tx, rx).run().await;
+            Peer::<T>::new(id, role, config, socket, mgr_tx, sync_tx, rx).run().await;
         });
     }
 }
@@ -374,8 +416,16 @@ mod tests {
         let config = Arc::new(config::create_mainnet());
         let (conn, _) = T::start(addr, &[], &[]).await.unwrap();
         let (_, rx) = tokio::sync::mpsc::channel(16);
+        let (tx_sync, mut rx_sync) = tokio::sync::mpsc::channel(16);
+        let (tx_peer, _) = tokio::sync::mpsc::channel(16);
 
-        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, 256, 32)
+        tokio::spawn(async move {
+            loop {
+                let _ = rx_sync.recv().await;
+            }
+        });
+
+        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync, tx_peer, 256, 32)
     }
 
     // try to connect to an address that no one listening on and verify it fails
@@ -430,7 +480,9 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent::HandshakeSucceeded { peer_id: addr }))
+                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded {
+                    peer_id: addr
+                }))
                 .await,
             Ok(())
         );
@@ -462,7 +514,9 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent::HandshakeFailed { peer_id: addr }))
+                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeFailed {
+                    peer_id: addr
+                }))
                 .await,
             Ok(())
         );
@@ -477,14 +531,18 @@ mod tests {
 
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent::HandshakeSucceeded { peer_id: addr }))
+                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded {
+                    peer_id: addr
+                }))
                 .await,
             Err(P2pError::Unknown("Peer does not exist".to_string())),
         );
 
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerEvent::HandshakeFailed { peer_id: addr }))
+                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeFailed {
+                    peer_id: addr
+                }))
                 .await,
             Err(P2pError::Unknown("Peer does not exist".to_string())),
         );
