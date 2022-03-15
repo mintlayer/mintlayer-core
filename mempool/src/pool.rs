@@ -972,10 +972,10 @@ mod tests {
             let mut left_to_spend = total_to_spend;
             let mut outputs = Vec::new();
 
-            let max_output_value = Amount::from_atoms(1_000);
+            let max_output_value = Amount::from_atoms(10_000);
             // We want every output to be spendable in a single-input, single-output transaction
             // So it has to larger in value than the relay fee for such a transaction
-            let min_output_value = Amount::from_atoms(100);
+            let min_output_value = Amount::from_atoms(1000);
             for _ in 0..self.num_outputs - 1 {
                 let max_output_value = std::cmp::min(
                     (left_to_spend / 2).expect("division failed"),
