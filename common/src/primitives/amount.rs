@@ -139,7 +139,7 @@ impl Amount {
         (0..exponent)
             .into_iter()
             .try_fold(Amount::from_atoms(1), |mut partial_result, _| {
-                partial_result = (partial_result * self.into())?;
+                partial_result = (partial_result * self.val)?;
                 Some(partial_result)
             })
     }

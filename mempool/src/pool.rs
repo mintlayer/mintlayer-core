@@ -964,8 +964,9 @@ mod tests {
             let sum_of_inputs =
                 values.into_iter().sum::<Option<_>>().expect("Overflow in sum of input values");
 
-            let total_to_spend = (sum_of_inputs - self.tx_fee)
-                .expect("generate_tx_outputs: underflow computing total_to_spend");
+            let total_to_spend = (sum_of_inputs - self.tx_fee).ok_or_else(||anyhow::anyhow!(
+                "generate_tx_outputs: underflow computing total_to_spend - sum_of_inputs = {:?}, fee = {:?}", sum_of_inputs, self.tx_fee
+            ))?;
 
             let mut left_to_spend = total_to_spend;
             let mut outputs = Vec::new();
@@ -1383,8 +1384,13 @@ mod tests {
             .sum::<Option<_>>()
             .expect("tx_spend_input: overflow");
 
-        let available_for_spending = (input_value - fee)
-            .expect("tx_spend_several_inputs: underflow computing available_for_spending");
+        let available_for_spending = (input_value - fee).ok_or_else(|| {
+            anyhow::anyhow!(
+                "tx_spend_several_inputs: input_value ({:?}) lower than fee ({:?})",
+                input_value,
+                fee
+            )
+        })?;
         let spent = (available_for_spending / 2).expect("division error");
 
         let change = (available_for_spending - spent)
