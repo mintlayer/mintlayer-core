@@ -769,8 +769,8 @@ mod tests {
 
     #[derive(Debug, Clone)]
     pub(crate) struct ChainStateMock {
-        txs: HashMap<H256, Transaction>,
-        outpoints: BTreeSet<OutPoint>,
+        confirmed_txs: HashMap<H256, Transaction>,
+        available_outpoints: BTreeSet<OutPoint>,
     }
 
     impl ChainStateMock {
@@ -784,13 +784,13 @@ mod tests {
                 .map(|(index, _)| OutPoint::new(outpoint_source_id.clone(), index as u32))
                 .collect();
             Self {
-                txs: std::iter::once((genesis_tx.get_id().get(), genesis_tx)).collect(),
-                outpoints,
+                confirmed_txs: std::iter::once((genesis_tx.get_id().get(), genesis_tx)).collect(),
+                available_outpoints: outpoints,
             }
         }
 
         fn unspent_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
-            self.outpoints
+            self.available_outpoints
                 .iter()
                 .map(|outpoint| {
                     let value =
@@ -804,11 +804,11 @@ mod tests {
         }
 
         fn confirmed_txs(&self) -> &HashMap<H256, Transaction> {
-            &self.txs
+            &self.confirmed_txs
         }
 
         fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error> {
-            self.txs
+            self.confirmed_txs
                 .get(&outpoint.tx_id().get_tx_id().expect("Not Coinbase").get())
                 .ok_or_else(|| anyhow::anyhow!("tx for outpoint sought in chain state, not found"))
                 .and_then(|tx| {
@@ -820,7 +820,7 @@ mod tests {
         }
 
         fn confirmed_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
-            self.outpoints
+            self.available_outpoints
                 .iter()
                 .map(|outpoint| {
                     let tx_id = outpoint
@@ -829,7 +829,8 @@ mod tests {
                         .cloned()
                         .expect("Outpoints in these tests are created from TXs");
                     let index = outpoint.output_index();
-                    let tx = self.txs.get(&tx_id.get()).expect("Inconsistent Chain State");
+                    let tx =
+                        self.confirmed_txs.get(&tx_id.get()).expect("Inconsistent Chain State");
                     let output = tx
                         .outputs()
                         .get(index as usize)
@@ -843,11 +844,11 @@ mod tests {
 
     impl ChainState for ChainStateMock {
         fn contains_outpoint(&self, outpoint: &OutPoint) -> bool {
-            self.outpoints.iter().any(|value| *value == *outpoint)
+            self.available_outpoints.iter().any(|value| *value == *outpoint)
         }
 
         fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error> {
-            self.txs
+            self.confirmed_txs
                 .get(&outpoint.tx_id().get_tx_id().expect("Not coinbase").get())
                 .ok_or_else(|| anyhow::anyhow!("tx for outpoint sought in chain state, not found"))
                 .and_then(|tx| {
