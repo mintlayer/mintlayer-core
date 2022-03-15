@@ -819,12 +819,22 @@ mod tests {
         }
 
         fn confirmed_outpoints(&self) -> BTreeSet<ValuedOutPoint> {
-            self.txs
-                .values()
-                .flat_map(|tx| {
-                    std::iter::repeat(tx.get_id())
-                        .zip(tx.outputs().iter().enumerate())
-                        .map(move |(tx_id, (i, output))| valued_outpoint(&tx_id, i as u32, output))
+            self.outpoints
+                .iter()
+                .map(|outpoint| {
+                    let tx_id = outpoint
+                        .tx_id()
+                        .get_tx_id()
+                        .cloned()
+                        .expect("Outpoints in these tests are created from TXs");
+                    let index = outpoint.output_index();
+                    let tx = self.txs.get(&tx_id.get()).expect("Inconsistent Chain State");
+                    let output = tx
+                        .outputs()
+                        .get(index as usize)
+                        .expect("Inconsistent Chain State: output not found");
+
+                    valued_outpoint(&tx_id, index, output)
                 })
                 .collect()
         }
