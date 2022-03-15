@@ -54,13 +54,10 @@ impl Amount {
 
             remove_right_most_zeros_and_decimal_point(result)
         } else {
-            // insert decimal point at position number N from the right
-            let insert_pos = amount_str.len() - decimals;
-            let result = if insert_pos < amount_str.len() {
-                amount_str[..insert_pos].to_owned() + "." + &amount_str[insert_pos..]
-            } else {
-                amount_str
-            };
+            let unit = 10_u128.pow(decimals as u32);
+            let whole = self.val / unit;
+            let fraction = self.val % unit;
+            let result = format!("{whole}.{fraction:00$}", decimals as usize);
 
             remove_right_most_zeros_and_decimal_point(result)
         }
