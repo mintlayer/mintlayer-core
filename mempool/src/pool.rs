@@ -1311,7 +1311,7 @@ mod tests {
         }
 
         fn generate_input(&self) -> anyhow::Result<(TxInput, Amount)> {
-            let ValuedOutPoint { outpoint, value } = self.random_unspent_outpoint()?;
+            let ValuedOutPoint { outpoint, value } = self.get_unspent_outpoint()?;
             Ok((
                 TxInput::new(
                     outpoint.tx_id(),
@@ -1322,7 +1322,7 @@ mod tests {
             ))
         }
 
-        fn random_unspent_outpoint(&self) -> anyhow::Result<ValuedOutPoint> {
+        fn get_unspent_outpoint(&self) -> anyhow::Result<ValuedOutPoint> {
             let num_outpoints = self.coin_pool.len();
             (num_outpoints > 0)
                 .then(|| {
