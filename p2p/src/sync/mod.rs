@@ -28,6 +28,8 @@ use logging::log;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
 
+pub mod mock_consensus;
+
 /// State of the peer
 enum PeerState {
     /// No activity with the peer
