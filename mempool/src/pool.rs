@@ -1186,7 +1186,7 @@ mod tests {
         coin_pool: BTreeSet<ValuedOutPoint>,
         num_inputs: usize,
         num_outputs: usize,
-        tx_fee: Amount,
+        tx_fee: Option<Amount>,
         replaceable: bool,
         allow_double_spend: bool,
     }
@@ -1208,7 +1208,7 @@ mod tests {
         }
 
         fn with_fee(mut self, fee: Amount) -> Self {
-            self.tx_fee = fee;
+            self.tx_fee = Some(fee);
             self
         }
 
@@ -1217,7 +1217,7 @@ mod tests {
                 coin_pool: BTreeSet::new(),
                 num_inputs: 1,
                 num_outputs: 1,
-                tx_fee: Amount::from_atoms(0),
+                tx_fee: None,
                 replaceable: false,
                 allow_double_spend: false,
             }
@@ -1228,12 +1228,16 @@ mod tests {
             mempool: &MempoolImpl<ChainStateMock, T, M>,
         ) -> anyhow::Result<Transaction> {
             self.coin_pool = mempool.available_outpoints(self.allow_double_spend);
-            self.tx_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(
-                self.num_inputs,
-                self.num_outputs,
-            )));
+            let fee = if let Some(tx_fee) = self.tx_fee {
+                tx_fee
+            } else {
+                Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(
+                    self.num_inputs,
+                    self.num_outputs,
+                )))
+            };
             let valued_inputs = self.generate_tx_inputs()?;
-            let outputs = self.generate_tx_outputs(&valued_inputs)?;
+            let outputs = self.generate_tx_outputs(&valued_inputs, fee)?;
             let locktime = 0;
             let flags = if self.replaceable { 1 } else { 0 };
             let (inputs, _): (Vec<TxInput>, Vec<Amount>) = valued_inputs.into_iter().unzip();
@@ -1274,6 +1278,7 @@ mod tests {
         fn generate_tx_outputs(
             &self,
             inputs: &[(TxInput, Amount)],
+            tx_fee: Amount,
         ) -> anyhow::Result<Vec<TxOutput>> {
             if self.num_outputs == 0 {
                 return Ok(vec![]);
@@ -1287,8 +1292,8 @@ mod tests {
             let sum_of_inputs =
                 values.into_iter().sum::<Option<_>>().expect("Overflow in sum of input values");
 
-            let total_to_spend = (sum_of_inputs - self.tx_fee).ok_or_else(||anyhow::anyhow!(
-                "generate_tx_outputs: underflow computing total_to_spend - sum_of_inputs = {:?}, fee = {:?}", sum_of_inputs, self.tx_fee
+            let total_to_spend = (sum_of_inputs - tx_fee).ok_or_else(||anyhow::anyhow!(
+                "generate_tx_outputs: underflow computing total_to_spend - sum_of_inputs = {:?}, fee = {:?}", sum_of_inputs, tx_fee
             ))?;
 
             let mut left_to_spend = total_to_spend;
