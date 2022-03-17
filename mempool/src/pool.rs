@@ -953,11 +953,24 @@ mod tests {
 
     const DUMMY_WITNESS_MSG: &[u8] = b"dummy_witness_msg";
 
-    #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+    #[derive(Debug, PartialEq, Eq, Clone)]
     struct ValuedOutPoint {
         outpoint: OutPoint,
         value: Amount,
     }
+
+    impl std::cmp::PartialOrd for ValuedOutPoint {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            other.value.partial_cmp(&self.value)
+        }
+    }
+
+    impl std::cmp::Ord for ValuedOutPoint {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            other.value.cmp(&self.value)
+        }
+    }
+
     fn dummy_input() -> TxInput {
         let outpoint_source_id = OutPointSourceId::Transaction(Id::new(H256::zero()));
         let output_index = 0;
