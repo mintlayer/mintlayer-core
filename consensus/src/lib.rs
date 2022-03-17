@@ -5,11 +5,14 @@ use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
-use common::chain::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::primitives::{time, BlockHeight, Id, Idable};
+use common::chain::{
+    OutPoint, OutPointSourceId, SpendablePosition, Spender, Transaction, TxMainChainIndex,
+};
+use common::primitives::{time, Amount, BlockHeight, Id, Idable};
 mod chain_state;
 use chain_state::*;
 mod orphan_blocks;
+use std::collections::BTreeMap;
 
 #[allow(dead_code)]
 // TODO: We will generalize it when Lukas will be ready for that. At the moment, he recommended use
@@ -19,11 +22,9 @@ struct Consensus {
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store, //&'a mut S,
     orphan_blocks: OrphanBlocksPool,
-    // TODO: Nothing add here, use storage level.highest_block_trust is block trust in best block
-    // NOTE: The best block state should strictly come from the database layer, not from anything in memory
-    highest_block_trust: u64,
 }
 
+type CachedInputs = BTreeMap<Id<Transaction>, TxMainChainIndex>;
 type PeerId = u32;
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -39,7 +40,6 @@ impl Consensus {
             chain_config: &self.chain_config,
             db_tx,
             orphan_blocks: &mut self.orphan_blocks,
-            highest_block_trust: self.highest_block_trust,
         }
     }
 
@@ -49,7 +49,6 @@ impl Consensus {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
-            highest_block_trust: 0,
         }
     }
 
@@ -76,7 +75,6 @@ struct ConsensusRef<'a> {
     // TODO: make this generic over Rw and Ro
     db_tx: <blockchain_storage::Store as Transactional<'a>>::TransactionRw,
     orphan_blocks: &'a mut OrphanBlocksPool,
-    highest_block_trust: u64,
 }
 
 impl<'a> ConsensusRef<'a> {
@@ -97,24 +95,25 @@ impl<'a> ConsensusRef<'a> {
         }
     }
 
-    fn apply_tx_in_undo(&mut self, _tx: &Transaction) {
-        //TODO: not implemented yet
-    }
-
     fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
         Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
     }
 
-    fn reorganize(&mut self, top_block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn reorganize(
+        &mut self,
+        cached_inputs: &mut CachedInputs,
+        best_block_id: Option<Id<Block>>,
+        top_block_index: &BlockIndex,
+    ) -> Result<(), BlockError> {
         // Disconnect the current chain
         // TODO: Reasonably minimize amount of calls to storage, use function params
-        if let Some(best_block_id) = self.db_tx.get_best_block_id()? {
+        if let Some(best_block_id) = best_block_id {
             let mut ancestor = self
                 .db_tx
                 .get_block_index(&best_block_id)?
                 .expect("Can't get block index. Inconsistent DB");
             while !self.is_block_in_main_chain(&ancestor) {
-                self.disconnect_tip(&mut ancestor)?;
+                self.disconnect_tip(cached_inputs, &mut ancestor)?;
                 ancestor = self.get_ancestor(ancestor.get_block_id())?;
             }
         }
@@ -122,32 +121,178 @@ impl<'a> ConsensusRef<'a> {
         // Connect the new chain
         let mut ancestor = top_block_index.clone();
         while !self.is_block_in_main_chain(&ancestor) {
-            self.connect_tip(&ancestor)?;
+            self.connect_tip(cached_inputs, &ancestor)?;
             ancestor = self.get_ancestor(ancestor.get_block_id())?;
         }
         Ok(())
     }
 
-    fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        // TODO: I guess, we can change in transaction_index.rs u32 to usize
-        for (index, tx) in block.get_transactions().iter().enumerate() {
-            let serialized_size = std::mem::size_of::<Transaction>() as u32;
-            // TODO: Check it
-            let byte_offset_in_block = serialized_size * index as u32;
-            let pos = TxMainChainPosition::new(
-                &block.get_id().get(),
-                byte_offset_in_block,
-                serialized_size,
-            );
-            let output_count = tx.get_outputs().len() as u32;
-            let tx_index = TxMainChainIndex::new(pos, output_count).unwrap();
-            self.db_tx.set_mainchain_tx_index(&tx.get_id(), &tx_index)?;
+    fn store_cached_inputs(&mut self, cached_inputs: &mut CachedInputs) -> Result<(), BlockError> {
+        for (tx_id, tx_index) in cached_inputs.iter() {
+            self.db_tx.set_mainchain_tx_index(tx_id, tx_index)?;
         }
         Ok(())
     }
 
-    // Connect mew block
-    fn connect_tip(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
+    fn connect_transactions(
+        &mut self,
+        cached_inputs: &mut CachedInputs,
+        transactions: &Vec<Transaction>,
+    ) -> Result<(), BlockError> {
+        for tx in transactions.iter() {
+            let inputs = tx.get_inputs();
+
+            for input in inputs {
+                let input_index = input.get_outpoint().get_output_index();
+
+                let mut tx_index = match cached_inputs.get(&tx.get_id()) {
+                    Some(tx_index) => tx_index.clone(),
+                    None => {
+                        Self::find_mainchain_index_by_outpoint(&self.db_tx, input.get_outpoint())?
+                    }
+                };
+
+                if input_index >= tx_index.get_output_count() {
+                    return Err(BlockError::Unknown);
+                }
+
+                // Add checks
+                tx_index
+                    .spend(input_index, Spender::from(tx.get_id()))
+                    .map_err(BlockError::from)?;
+
+                // TODO: Check that all outputs are available and match the outputs in the block itself
+                //  exactly.
+
+                cached_inputs.insert(tx.get_id(), tx_index.clone());
+            }
+        }
+        self.store_cached_inputs(cached_inputs)?;
+        Ok(())
+    }
+
+    fn disconnect_transactions(
+        &mut self,
+        cached_inputs: &mut CachedInputs,
+        transactions: &Vec<Transaction>,
+    ) -> Result<(), BlockError> {
+        for tx in transactions.iter().rev() {
+            let inputs = tx.get_inputs();
+            for input in inputs {
+                let input_index = input.get_outpoint().get_output_index();
+
+                let mut tx_index = match cached_inputs.get(&tx.get_id()) {
+                    Some(tx_index) => tx_index.clone(),
+                    None => self
+                        .db_tx
+                        .get_mainchain_tx_index(&tx.get_id())?
+                        .ok_or(BlockError::Unknown)?,
+                };
+
+                if input_index >= tx_index.get_output_count() {
+                    return Err(BlockError::Unknown);
+                }
+
+                // Add checks
+                tx_index.unspend(input_index).map_err(BlockError::from)?;
+
+                // TODO: Check that all outputs are available and match the outputs in the block itself
+                //  exactly.
+
+                cached_inputs.insert(tx.get_id(), tx_index.clone());
+            }
+            // Restore inputs
+            self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
+        }
+        Ok(())
+    }
+
+    fn find_mainchain_index_by_outpoint(
+        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+        outpoint: &OutPoint,
+    ) -> Result<TxMainChainIndex, BlockError> {
+        let tx_id = match outpoint.get_tx_id() {
+            OutPointSourceId::Transaction(tx_id) => tx_id,
+            OutPointSourceId::BlockReward(_) => {
+                unimplemented!()
+            }
+        };
+        Ok(tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)?)
+    }
+
+    fn find_by_outpoint(
+        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+        outpoint: &OutPoint,
+    ) -> Result<Transaction, BlockError> {
+        let tx_id = match outpoint.get_tx_id() {
+            OutPointSourceId::Transaction(tx_id) => tx_id,
+            OutPointSourceId::BlockReward(_) => {
+                unimplemented!()
+            }
+        };
+        let tx_index = tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)?;
+        match tx_index.get_tx_position() {
+            SpendablePosition::Transaction(position) => {
+                tx_db.get_mainchain_tx_by_position(position)?.ok_or(BlockError::Unknown)
+            }
+            SpendablePosition::BlockReward(_) => unimplemented!(),
+        }
+    }
+
+    fn get_input_value(
+        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+        input: &common::chain::TxInput,
+    ) -> Result<Amount, BlockError> {
+        // Read the transaction from DB
+        let tx = Self::find_by_outpoint(tx_db, input.get_outpoint())?;
+        let output_index = input.get_outpoint().get_output_index();
+        Ok(tx.get_outputs()[output_index as usize].get_value())
+    }
+
+    fn check_block_fee(&self, transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+        let input_mlt = transactions
+            .iter()
+            .map(|x| {
+                x.get_inputs()
+                    .iter()
+                    .map(|input| {
+                        Self::get_input_value(&self.db_tx, input).expect("Couldn't get input")
+                    })
+                    .sum::<Amount>()
+            })
+            .sum();
+        let output_mlt: Amount = transactions
+            .iter()
+            .map(|x| x.get_outputs().iter().map(|output| output.get_value()).sum::<Amount>())
+            .sum();
+
+        // Check that fee is not negative
+        if output_mlt > input_mlt {
+            return Err(BlockError::Unknown);
+        }
+        Ok(())
+    }
+
+    fn check_script(&self, _transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+        //TODO: Check script
+        Ok(())
+    }
+
+    fn check_tx_inputs(&self, _transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+        Ok(())
+    }
+
+    fn check_tx_outputs(&self, _transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+        // TODO: Check tx outputs to prevent the overwriting of the transaction
+        Ok(())
+    }
+
+    // Connect new block
+    fn connect_tip(
+        &mut self,
+        cached_inputs: &mut CachedInputs,
+        block_index: &BlockIndex,
+    ) -> Result<(), BlockError> {
         assert_eq!(
             &self.db_tx.get_best_block_id().expect("Only fails at genesis"),
             block_index.get_prev_block_id()
@@ -155,15 +300,15 @@ impl<'a> ConsensusRef<'a> {
 
         match &block_index.get_prev_block_id() {
             Some(prev_block_id) => {
-                // TODO: Check tx outputs to prevent the overwriting of the transaction
-                // TODO: Check tx inputs:
-                //  - Any transaction validation failure in connect_block is a block consensus failure
-                //  - Check fee in the block
-                //  - Check script
-                // TODO: Check tx fees
-
                 let block = self.get_block_from_index(block_index)?.expect("Inconsistent DB");
-                self.connect_transactions(&block)?;
+                let transactions = block.get_transactions();
+
+                self.check_block_fee(transactions)?;
+                self.check_script(transactions)?;
+                self.check_tx_inputs(transactions)?;
+                self.check_tx_outputs(transactions)?;
+
+                self.connect_transactions(cached_inputs, transactions)?;
 
                 // CONNECT: Set-up the next_block_id
                 let mut prev_block = self
@@ -177,20 +322,22 @@ impl<'a> ConsensusRef<'a> {
                 self.db_tx.set_block_index(block_index)?;
                 Ok(())
             }
-            None => panic!("Inconsistent block hash"),
+            None => panic!("Failed to read block"),
         }
     }
 
-    /
-    fn disconnect_tip(&mut self, block_index: &mut BlockIndex) -> Result<(), BlockError> {
+    fn disconnect_tip(
+        &mut self,
+        cached_inputs: &mut CachedInputs,
+        block_index: &mut BlockIndex,
+    ) -> Result<(), BlockError> {
         assert_eq!(
             &self.db_tx.get_best_block_id().expect("Only fails at genesis"),
             block_index.get_prev_block_id()
         );
 
         let block = self.get_block_from_index(block_index)?.expect("Inconsistent DB");
-        self.disconnect_transactions(&block)?;
-        // Not sure what we should return here, might be a new status instead of BlockError?
+        self.disconnect_transactions(cached_inputs, block.get_transactions())?;
         self.db_tx.set_best_block_id(
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
@@ -200,78 +347,51 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        for tx in block.get_transactions().iter().rev() {
-            // TODO: to check whether transactions are spendable, you load their inputs incrementally from the database, and put them in the map, and then after this function, you flush that map back into the database
-            // TODO: Check that all outputs are available and match the outputs in the block itself
-            //  exactly.
-            for output in tx.get_outputs() {
-
-                // self.db_tx.
-                // if output.is_spendable() {
-                // TODO: We have to check that coin was spent, and that match outputs, height, coinbase
-                // }
-            }
-            // Restore inputs
-            if !tx.is_coinbase() {
-                self.apply_tx_in_undo(tx);
-                //TODO: Check undo status and
-            }
-            self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
-        }
-        Ok(())
-    }
-
-    fn store_index_without_connect(&mut self, block_index: &BlockIndex) -> Result<(), BlockError> {
-        // TODO: Add checks
-        self.db_tx.set_block_index(block_index)?;
-        Ok(())
-    }
-
-    fn set_best_block_params(
-        &mut self,
-        block_index: BlockIndex,
-    ) -> Result<Option<BlockIndex>, BlockError> {
-        self.highest_block_trust = block_index.chain_trust;
-        self.db_tx
-            .set_best_block_id(block_index.get_block_id())
-            .map_err(BlockError::from)?;
-        Ok(Some(block_index))
+    fn get_best_block_index(&self, best_block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
+        Ok(self
+            .db_tx
+            .get_block_index(best_block_id)
+            .map_err(BlockError::from)?
+            .expect("Inconsistent DB"))
     }
 
     fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        let mut cached_inputs = CachedInputs::new();
+
         let best_block_id = self.db_tx.get_best_block_id()?;
         if *new_block_index.get_block_id() == self.chain_config.genesis_block().get_id() {
             if best_block_id.is_some() {
                 panic!("Inconsistent DB: There is exist the best block, but at the same time was tried processing genesis block")
             }
-            self.connect_tip(&new_block_index)?;
-            return self.set_best_block_params(new_block_index);
+            self.connect_tip(&mut cached_inputs, &new_block_index)?;
+            self.db_tx
+                .set_best_block_id(new_block_index.get_block_id())
+                .map_err(BlockError::from)?;
+            return Ok(Some(new_block_index));
         }
 
         if let Some(best_block_id) = best_block_id {
             // Chain trust is higher than the best block
-            let current_best_block_index = self.db_tx.get_best_block_index();
+            let current_best_block_index = self.get_best_block_index(&best_block_id)?;
             if new_block_index.chain_trust > current_best_block_index.chain_trust {
-                // 1. Find the common ancestor block
-                // 2. Disconnect blocks until the common ancestor (excluding the common ancestor)
-                // 3. Connect all the blocks from the common ancestor until the new block
-                // It's not in the main chain? Ok, let's do reorg
-                self.reorganize(&new_block_index)?;
-                return self.set_best_block_params(new_block_index);
+                self.reorganize(&mut cached_inputs, Some(best_block_id), &new_block_index)?;
+                self.db_tx
+                    .set_best_block_id(new_block_index.get_block_id())
+                    .map_err(BlockError::from)?;
+                return Ok(Some(new_block_index));
             } else {
                 // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
                 // Equal chain trust or less
-                self.store_index_without_connect(&new_block_index)?;
+                self.db_tx.set_block_index(&new_block_index)?;
             }
         }
         Ok(None)
     }
 
-    fn get_block_proof(&self, _block: &Block) -> Uint256 {
+    fn get_block_proof(&self, _block: &Block) -> u128 {
         //TODO: We have to make correct one
         10
     }
@@ -297,9 +417,8 @@ impl<'a> ConsensusRef<'a> {
         // Set Chain Trust
         let chain_trust = match &prev_block_index {
             Some(prev_block_index) => prev_block_index.chain_trust,
-            None => Uint256::zero(),
+            None => 0,
         } + self.get_block_proof(block);
-
         let block_index = BlockIndex::new(block, chain_trust, height, time_max);
         self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
         Ok(block_index)
@@ -379,14 +498,14 @@ impl<'a> ConsensusRef<'a> {
             }
         }
 
-        // TODO: Check it 
+        // TODO: Check it
         match &block.get_prev_block_id() {
             Some(block_id) => {
                 let previous_block = self
                     .db_tx
                     .get_block_index(&Id::<Block>::from(block_id))?
                     .ok_or(BlockError::NotFound)?; // TODO: Fix it
-                // Time
+                                                   // Time
                 let block_time = block.get_block_time();
                 if previous_block.get_block_time() > block_time {
                     return Err(BlockError::Unknown);
@@ -475,7 +594,11 @@ mod tests {
         address.shuffle(&mut rng);
 
         let receiver = Address::new(config, address).expect("Failed to create address");
-        let input = TxInput::new(Id::new(&H256::zero()), 0, witness);
+        let input = TxInput::new(
+            common::chain::OutPointSourceId::Transaction(Id::new(&H256::zero())),
+            0,
+            witness,
+        );
         let output = TxOutput::new(Amount::new(100000000000000), Destination::Address(receiver));
         let tx = Transaction::new(0, vec![input], vec![output], 0)
             .expect("Failed to create coinbase transaction");
@@ -603,6 +726,12 @@ mod tests {
 
     // TODO: Not ready tests for this PR related to:
     //  Fail block processing
+    fn test_fail_block_processing() {}
+
     //  More cases for reorg
+    fn test_reorg_simple() {}
+
+    fn test_reorg_simple() {}
+
     //  Tests with chain trust
 }

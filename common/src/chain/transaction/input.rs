@@ -1,5 +1,6 @@
 use crate::chain::{block::Block, transaction::Transaction};
-use crate::primitives::Id;
+use crate::primitives::{id, Id, Idable};
+use crypto::hash::StreamHasher;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -21,7 +22,6 @@ impl From<Id<Block>> for OutPointSourceId {
         OutPointSourceId::BlockReward(id)
     }
 }
-
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct OutPoint {
@@ -66,5 +66,15 @@ impl TxInput {
 
     pub fn get_witness(&self) -> &Vec<u8> {
         &self.witness
+    }
+}
+
+impl Idable<TxInput> for TxInput {
+    fn get_id(&self) -> Id<Self> {
+        let mut hash_stream = id::DefaultHashAlgoStream::new();
+
+        id::hash_encoded_to(&self.get_outpoint(), &mut hash_stream);
+        id::hash_encoded_to(&self.get_witness(), &mut hash_stream);
+        Id::new(&hash_stream.finalize().into())
     }
 }

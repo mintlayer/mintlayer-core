@@ -100,7 +100,7 @@ pub enum TxMainChainIndexError {
 
 /// Assuming a transaction is in the mainchain, its index contains two things:
 /// 1. The state on whether its outputs are spent
-/// 2. The position on where to find that transaction in the mainchain (block + bianry position)
+/// 2. The position on where to find that transaction in the mainchain (block + binary position)
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {

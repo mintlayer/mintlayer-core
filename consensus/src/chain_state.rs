@@ -15,6 +15,7 @@
 //
 // Author(s): Anton Sinitsyn
 
+use common::chain::SpendError;
 use common::primitives::BlockHeight;
 use thiserror::Error;
 
@@ -41,6 +42,13 @@ impl From<blockchain_storage::Error> for BlockError {
     fn from(_: blockchain_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
+        BlockError::Unknown
+    }
+}
+
+impl From<SpendError> for BlockError {
+    fn from(_: SpendError) -> Self {
+        // To be expanded
         BlockError::Unknown
     }
 }

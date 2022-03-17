@@ -34,9 +34,7 @@ impl Add<u64> for BlockHeight {
     type Output = Self;
 
     fn add(self, other: u64) -> Self {
-        Self {
-            0: self.0.checked_add(other).expect("overflow when adding BlockHeight to instant"),
-        }
+        Self(self.0.checked_add(other).expect("overflow when adding BlockHeight to instant"))
     }
 }
 
@@ -72,11 +70,7 @@ impl BlockHeight {
         self.0.checked_add(rhs).map(Self::new)
     }
 
-    pub fn increment(&mut self) {
-        self.0 += 1;
-    }
-
-    fn next_height(&self) -> BlockHeight {
+    pub fn next_height(&self) -> BlockHeight {
         BlockHeight(self.0 + 1)
     }
 }
