@@ -995,8 +995,14 @@ mod tests {
         let locktime = 0;
         let size = Transaction::new(flags, inputs, outputs, locktime).unwrap().encoded_size();
         // Take twice the encoded size of the dummy tx.Real Txs are larger than these dummy ones,
-        // but taking 2 times the size seems to work
-        2 * size
+        // but taking 3 times the size seems to ensure our txs won't fail the minimum relay fee
+        // validation (see the function `pays_minimum_relay_fees`)
+        let result = 3 * size;
+        println!(
+            "estimated size for tx with {} inputs and {} outputs: {}",
+            num_inputs, num_outputs, result
+        );
+        result
     }
 
     #[test]
@@ -1249,7 +1255,11 @@ mod tests {
                     self.num_outputs,
                 )))
             };
-            let valued_inputs = self.generate_tx_inputs()?;
+            println!(
+                "Trying to build a tx with {} inputs, {} outputs, and a fee of {:?}",
+                self.num_inputs, self.num_outputs, fee
+            );
+            let valued_inputs = self.generate_tx_inputs(fee)?;
             let outputs = self.generate_tx_outputs(&valued_inputs, fee)?;
             let locktime = 0;
             let flags = if self.replaceable { 1 } else { 0 };
@@ -1270,9 +1280,9 @@ mod tests {
             Ok(tx)
         }
 
-        fn generate_tx_inputs(&mut self) -> anyhow::Result<Vec<(TxInput, Amount)>> {
+        fn generate_tx_inputs(&mut self, fee: Amount) -> anyhow::Result<Vec<(TxInput, Amount)>> {
             Ok(self
-                .get_unspent_outpoints(self.num_inputs)?
+                .get_unspent_outpoints(self.num_inputs, fee)?
                 .iter()
                 .map(|valued_outpoint| {
                     let ValuedOutPoint { outpoint, value } = valued_outpoint;
@@ -1312,19 +1322,8 @@ mod tests {
             let mut left_to_spend = total_to_spend;
             let mut outputs = Vec::new();
 
-            let max_output_value = Amount::from_atoms(100_000);
-            // We want every output to be spendable in a single-input, single-output transaction
-            // So it has to larger in value than the relay fee for such a transaction
-            let min_output_value = Amount::from_atoms(1000);
             for _ in 0..self.num_outputs - 1 {
-                let max_output_value = std::cmp::min(
-                    (left_to_spend / 2).expect("division failed"),
-                    max_output_value,
-                );
-                if max_output_value == Amount::from_atoms(0) {
-                    return Err(anyhow::Error::msg("No more funds to spend"));
-                }
-                let value = Amount::random(min_output_value..=max_output_value);
+                let value = std::cmp::min(Amount::from_atoms(1000), left_to_spend);
                 outputs.push(TxOutput::new(
                     value,
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
@@ -1339,11 +1338,35 @@ mod tests {
             Ok(outputs)
         }
 
-        fn get_unspent_outpoints(&self, num_outputs: usize) -> anyhow::Result<Vec<ValuedOutPoint>> {
+        fn get_unspent_outpoints(
+            &self,
+            num_outputs: usize,
+            fee: Amount,
+        ) -> anyhow::Result<Vec<ValuedOutPoint>> {
+            println!(
+                "get_unspent_outpoints: num_outputs: {}, fee: {:?}",
+                num_outputs, fee
+            );
             let num_available_outpoints = self.coin_pool.len();
-            (num_available_outpoints >= num_outputs)
+            let outpoints: Vec<_> = (num_available_outpoints >= num_outputs)
                 .then(|| self.coin_pool.iter().take(num_outputs).cloned().collect())
-                .ok_or_else(|| anyhow::anyhow!("no outpoints left"))
+                .ok_or_else(|| anyhow::anyhow!("no outpoints left"))?;
+            let sum_of_outputs = outpoints
+                .iter()
+                .map(|valued_outpoint| valued_outpoint.value)
+                .sum::<Option<_>>()
+                .expect("sum error");
+            if fee > sum_of_outputs {
+                println!(
+                    "get_unspent_outpoints: fee is {:?} but sum_of_outputs is {:?}",
+                    fee, sum_of_outputs
+                );
+                return Err(anyhow::Error::msg(
+                    "get_unspent_outpoints:: not enough for fees",
+                ));
+            }
+
+            Ok(outpoints)
         }
     }
 
@@ -1418,6 +1441,7 @@ mod tests {
         let mut mempool = setup();
         let tx = TxGenerator::new()
             .with_num_inputs(0)
+            .with_fee(Amount::from_atoms(0))
             .generate_tx(&mempool)
             .expect("generate_tx failed");
         assert!(matches!(
