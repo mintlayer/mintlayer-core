@@ -1012,6 +1012,17 @@ mod tests {
         eprintln!("1, 400: {}", estimate_tx_size(1, 400));
     }
 
+    #[test]
+    fn real_size() -> anyhow::Result<()> {
+        let mempool = setup();
+        let tx = TxGenerator::new()
+            .with_num_inputs(1)
+            .with_num_outputs(400)
+            .generate_tx(&mempool)?;
+        println!("real size of tx {}", tx.encoded_size());
+        Ok(())
+    }
+
     fn valued_outpoint(
         tx_id: &Id<Transaction>,
         outpoint_index: u32,
