@@ -15,7 +15,7 @@
 //
 // Author(s): Anton Sinitsyn
 
-use common::chain::SpendError;
+use common::chain::{SpendError, TxMainChainIndexError};
 use common::primitives::BlockHeight;
 use thiserror::Error;
 
@@ -35,19 +35,29 @@ pub enum BlockError {
     StorageFailure(blockchain_storage::Error),
     #[error("The block not found")]
     NotFound,
+    #[error("Invalid block source")]
+    InvalidBlockSource,
     // To be expanded
 }
 
 impl From<blockchain_storage::Error> for BlockError {
-    fn from(_: blockchain_storage::Error) -> Self {
+    fn from(_err: blockchain_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
+        dbg!(_err);
         BlockError::Unknown
     }
 }
 
 impl From<SpendError> for BlockError {
     fn from(_: SpendError) -> Self {
+        // To be expanded
+        BlockError::Unknown
+    }
+}
+
+impl From<TxMainChainIndexError> for BlockError {
+    fn from(_: TxMainChainIndexError) -> Self {
         // To be expanded
         BlockError::Unknown
     }
