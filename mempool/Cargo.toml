@@ -11,6 +11,7 @@ parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
 serialization = { path = '../serialization' }
 common = { path = '../common' }
 utils = { path = '../utils' }
+logging = { path = '../logging' }
 anyhow = "1.0"
 thiserror = "1.0"
 lazy_static = "1.4"
