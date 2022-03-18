@@ -30,9 +30,8 @@ const ROLLING_FEE_BASE_HALFLIFE: Time = Duration::new(60 * 60 * 12, 1);
 // TODO this willbe defined elsewhere (some of limits.rs file)
 const MAX_BLOCK_SIZE_BYTES: usize = 1_000_000;
 
-const MEMPOOL_MAX_TXS: usize = 1_000_000;
-
 const MAX_BIP125_REPLACEMENT_CANDIDATES: usize = 100;
+
 // TODO this should really be taken from some global node settings
 const RELAY_FEE_PER_BYTE: usize = 1;
 
@@ -906,12 +905,6 @@ where
     //
 
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
-        // TODO (1). First, we need to decide on criteria for the Mempool to be considered full. Maybe number
-        // of transactions is not a good enough indicator. Consider checking mempool size as well
-        // TODO (2) What to do when the mempool is full. Instead of rejecting Do incoming transaction we probably want to evict a low-score transaction
-        if self.store.txs_by_fee.len() >= MEMPOOL_MAX_TXS {
-            return Err(Error::MempoolFull);
-        }
         let conflicts = self.validate_transaction(&tx)?;
         self.finalize_tx(tx, conflicts)?;
         Ok(())
