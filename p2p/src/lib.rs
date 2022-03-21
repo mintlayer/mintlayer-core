@@ -41,6 +41,9 @@ where
 
     /// TX channel for sending swarm control events
     tx_swarm: mpsc::Sender<event::SwarmControlEvent<T>>,
+
+    /// RX channel for receiving subsystem wrapper related events
+    rx_p2p: mpsc::Receiver<event::P2pEvent>,
 }
 
 #[allow(unused)]
@@ -64,6 +67,7 @@ where
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let (tx_sync, rx_sync) = mpsc::channel(16);
         let (tx_peer, rx_peer) = mpsc::channel(16);
+        let (tx_p2p, rx_p2p) = mpsc::channel(16);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
@@ -81,11 +85,16 @@ where
 
         let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync, rx_peer);
+            let mut sync_mgr =
+                sync::SyncManager::<T>::new(sync_config, flood, tx_p2p, rx_sync, rx_peer);
             let _ = sync_mgr.run().await;
         });
 
-        Ok(Self { config, tx_swarm })
+        Ok(Self {
+            config,
+            tx_swarm,
+            rx_p2p,
+        })
     }
 
     /// Run the `P2P` event loop.

@@ -18,6 +18,7 @@
 use parity_scale_codec::{Decode, Encode};
 use rand::Rng;
 use std::collections::BTreeMap;
+use tokio::sync::{mpsc, oneshot};
 
 pub type Hash = u64;
 pub type Amount = u64;
@@ -248,7 +249,7 @@ impl Consensus {
     }
 
     // walk from tip towards the genesis and collect block headers into a vector
-    fn as_vec(&self) -> Vec<BlockHeader> {
+    pub fn as_vec(&self) -> Vec<BlockHeader> {
         let mut res = vec![];
         let mut id: Option<BlockId> = Some(self.mainchain.blkid);
 
@@ -425,6 +426,37 @@ impl Consensus {
     pub fn get_blocks(&self, headers: &[BlockHeader]) -> Vec<Block> {
         headers.iter().map(|hdr| self.blks.get(&hdr.id).unwrap()).cloned().collect()
     }
+
+    pub async fn start(&mut self, mut rx_p2p: mpsc::Receiver<ConsEvent>) {
+        loop {
+            match rx_p2p.recv().await.unwrap() {
+                ConsEvent::GetLocator { response } => {
+                    let locator = self.get_locator();
+                    response.send(locator);
+                }
+                ConsEvent::NewBlock { block } => {
+                    self.accept_block(block);
+                }
+                ConsEvent::GetUniqHeaders { headers, response } => {
+                    let uniq_headers = self.get_uniq_headers(&headers);
+                    response.send(uniq_headers);
+                }
+            }
+        }
+    }
+}
+
+pub enum ConsEvent {
+    GetLocator {
+        response: oneshot::Sender<Vec<BlockHeader>>,
+    },
+    NewBlock {
+        block: Block,
+    },
+    GetUniqHeaders {
+        headers: Vec<BlockHeader>,
+        response: oneshot::Sender<Vec<BlockHeader>>,
+    },
 }
 
 #[cfg(test)]
@@ -829,8 +861,7 @@ mod tests {
         for i in 0..20 {
             let height: u64 = rng.gen_range(8..128);
             let mut cons = Consensus::with_height(height);
-            let headers: Vec<BlockHeader> =
-                cons.as_vec().into_iter().rev().collect();
+            let headers: Vec<BlockHeader> = cons.as_vec().into_iter().rev().collect();
             let loc = cons.get_locator();
             let fetched = cons.get_headers(&loc);
 
@@ -861,8 +892,7 @@ mod tests {
                 .collect::<_>();
 
             let fetched = cons.get_headers(&loc);
-            let headers: Vec<BlockHeader> =
-                cons.as_vec().into_iter().rev().collect();
+            let headers: Vec<BlockHeader> = cons.as_vec().into_iter().rev().collect();
 
             assert_eq!(fetched, headers[(height as usize) - 1..]);
         }
@@ -915,8 +945,7 @@ mod tests {
         // should get the common ancestor G and all the blocks from H to O
         let loc_cons1 = cons1.get_locator();
         let requested = cons2.get_headers(&loc_cons1);
-        let hdrs_cons2: Vec<BlockHeader> =
-            cons2.as_vec().into_iter().rev().collect();
+        let hdrs_cons2: Vec<BlockHeader> = cons2.as_vec().into_iter().rev().collect();
 
         assert_eq!(requested.len(), 7);
         assert_eq!(requested, hdrs_cons2[hdrs_cons2.len() - 7..]);

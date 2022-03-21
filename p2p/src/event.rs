@@ -16,10 +16,9 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::message;
-use crate::net::NetworkService;
+use crate::{message, net::NetworkService, sync};
 use parity_scale_codec::{Decode, Encode};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug, Encode, Decode)]
 pub enum PeerEvent<T>
@@ -56,7 +55,22 @@ pub enum PeerSyncEvent<T>
 where
     T: NetworkService,
 {
-    Dummy { peer_id: T::PeerId },
+    GetHeaders {
+        peer_id: Option<T::PeerId>,
+        locator: Vec<sync::mock_consensus::BlockHeader>,
+    },
+    Headers {
+        peer_id: Option<T::PeerId>,
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+    },
+    GetBlocks {
+        peer_id: Option<T::PeerId>,
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+    },
+    Blocks {
+        peer_id: Option<T::PeerId>,
+        blocks: Vec<sync::mock_consensus::Block>,
+    },
 }
 
 #[derive(Debug)]
@@ -85,5 +99,23 @@ where
     Disconnected {
         /// Unique peer ID
         peer_id: T::PeerId,
+    },
+}
+
+#[derive(Debug)]
+pub enum P2pEvent {
+    GetLocator {
+        response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
+    },
+    NewBlock {
+        block: sync::mock_consensus::Block,
+    },
+    GetHeaders {
+        locator: Vec<sync::mock_consensus::BlockHeader>,
+        response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
+    },
+    GetUniqHeaders {
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+        response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
     },
 }
