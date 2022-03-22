@@ -19,6 +19,7 @@
 use crate::{message, net::NetworkService, sync};
 use parity_scale_codec::{Decode, Encode};
 use tokio::sync::{mpsc, oneshot};
+use util::Handle;
 
 #[derive(Debug, Encode, Decode)]
 pub enum PeerEvent<T>
@@ -102,13 +103,14 @@ where
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Handle)]
 pub enum P2pEvent {
     GetLocator {
         response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
     },
     NewBlock {
         block: sync::mock_consensus::Block,
+        response: oneshot::Sender<()>,
     },
     GetHeaders {
         locator: Vec<sync::mock_consensus::BlockHeader>,

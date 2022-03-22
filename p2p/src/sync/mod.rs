@@ -16,7 +16,6 @@
 // Author(s): A. Altonen
 #![cfg(not(loom))]
 #![allow(unused)]
-
 use crate::{
     error::{self, P2pError},
     event,
@@ -83,7 +82,7 @@ where
     handle: T::FloodsubHandle,
 
     /// TX channel for sending subsystem-related queries
-    tx_p2p: mpsc::Sender<event::P2pEvent>,
+    p2p_handle: event::P2pEventHandle,
 
     /// RX channel for receiving syncing-related control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -111,7 +110,7 @@ where
             config,
             state: SyncState::Idle,
             handle,
-            tx_p2p,
+            p2p_handle: event::P2pEventHandle::new(tx_p2p),
             rx_sync,
             rx_peer,
             peers: Default::default(),
@@ -152,15 +151,10 @@ where
                         blkidx: None,
                     });
 
-                    // TODO: find a way to clean this up!
-                    let (tx_o, rx_o) = oneshot::channel();
-                    self.tx_p2p.send(event::P2pEvent::GetLocator { response: tx_o }).await?;
-                    let locator = rx_o.await?;
-
                     tx.send(event::PeerEvent::Syncing(
                         event::PeerSyncEvent::GetHeaders {
                             peer_id: None,
-                            locator,
+                            locator: self.p2p_handle.get_locator().await?,
                         },
                     ))
                     .await?;
@@ -184,16 +178,9 @@ where
     async fn on_peer_event(&mut self, event: event::PeerSyncEvent<T>) -> error::Result<()> {
         match event {
             event::PeerSyncEvent::GetHeaders { peer_id, locator } => {
-                let (tx_o, rx_o) = oneshot::channel();
-                self.tx_p2p
-                    .send(event::P2pEvent::GetHeaders {
-                        locator,
-                        response: tx_o,
-                    })
-                    .await?;
-                let headers = rx_o.await?;
-
+                let headers = self.p2p_handle.get_headers(locator).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
+
                 match peer {
                     Some(peer) => {
                         peer.tx
@@ -210,16 +197,9 @@ where
             }
             event::PeerSyncEvent::Headers { peer_id, headers } => {
                 let blkidx = blkidx::PeerBlockIndex::from_headers(&headers);
-                let (tx_o, rx_o) = oneshot::channel();
-                self.tx_p2p
-                    .send(event::P2pEvent::GetUniqHeaders {
-                        headers,
-                        response: tx_o,
-                    })
-                    .await?;
-                let uniq_headers = rx_o.await?;
-
+                let uniq_headers = self.p2p_handle.get_uniq_headers(headers).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
+
                 match peer {
                     Some(peer) => {
                         (*peer).blkidx = Some(blkidx);
@@ -239,7 +219,7 @@ where
             }
             event::PeerSyncEvent::Blocks { peer_id, blocks } => {
                 for block in blocks {
-                    self.tx_p2p.send(event::P2pEvent::NewBlock { block }).await?;
+                    self.p2p_handle.new_block(block).await?;
                 }
             }
             _ => println!("unknown event"),
