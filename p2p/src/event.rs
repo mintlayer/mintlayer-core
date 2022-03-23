@@ -112,6 +112,10 @@ pub enum P2pEvent {
         block: sync::mock_consensus::Block,
         response: oneshot::Sender<()>,
     },
+    GetBlocks {
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+        response: oneshot::Sender<Vec<sync::mock_consensus::Block>>,
+    },
     GetHeaders {
         locator: Vec<sync::mock_consensus::BlockHeader>,
         response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,

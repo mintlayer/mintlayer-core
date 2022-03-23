@@ -222,7 +222,24 @@ where
                     self.p2p_handle.new_block(block).await?;
                 }
             }
-            _ => println!("unknown event"),
+            event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
+                let blocks = self.p2p_handle.get_blocks(headers).await?;
+                let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
+
+                match peer {
+                    Some(peer) => {
+                        peer.tx
+                            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks {
+                                peer_id: None,
+                                blocks,
+                            }))
+                            .await?;
+                    }
+                    None => {
+                        log::error!("peer {:?} not known by sync manager", peer_id)
+                    }
+                }
+            }
         }
 
         Ok(())
