@@ -40,6 +40,65 @@ macro_rules! get_message {
     }
 }
 
+async fn accept_n_blocks(
+    rx: &mut mpsc::Receiver<event::P2pEvent>,
+    cons: &mut mock_consensus::Consensus,
+    blocks: usize,
+) {
+    for _ in 0..blocks {
+        get_message!(
+            rx.recv().await.unwrap(),
+            event::P2pEvent::NewBlock { block, response },
+            {
+                cons.accept_block(block);
+                response.send(());
+            }
+        );
+    }
+}
+
+async fn get_locator(
+    rx: &mut mpsc::Receiver<event::P2pEvent>,
+    cons: &mut mock_consensus::Consensus,
+) {
+    get_message!(
+        rx.recv().await.unwrap(),
+        event::P2pEvent::GetLocator { response },
+        {
+            response.send(cons.get_locator());
+        }
+    );
+}
+
+async fn get_uniq_headers_and_verify(
+    rx: &mut mpsc::Receiver<event::P2pEvent>,
+    cons: &mut mock_consensus::Consensus,
+    remote: &[mock_consensus::BlockHeader],
+) {
+    get_message!(
+        rx.recv().await.unwrap(),
+        event::P2pEvent::GetUniqHeaders { headers, response },
+        {
+            let uniq = cons.get_uniq_headers(&headers);
+            assert_eq!(&uniq, remote);
+            response.send(uniq);
+        }
+    );
+}
+
+async fn get_blocks(
+    rx: &mut mpsc::Receiver<event::P2pEvent>,
+    cons: &mut mock_consensus::Consensus,
+) {
+    get_message!(
+        rx.recv().await.unwrap(),
+        event::P2pEvent::GetBlocks { headers, response },
+        {
+            response.send(cons.get_blocks(&headers));
+        }
+    );
+}
+
 async fn make_sync_manager<T>(
     addr: T::Address,
 ) -> (
@@ -80,26 +139,12 @@ async fn local_and_remote_in_sync() {
     let mut local_cons = remote_cons.clone();
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
         // verify that after getheaders has been sent (internally) and remote peer has responded
         // to it with their (possibly) new headers, getuniqheaders request is received and as local
         // and remote node are in sync, `get_uniq_headers()` returns an empty vector
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert!(uniq.is_empty());
-                response.send(uniq);
-            }
-        );
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
 
         // verify that after local node has sent its header request, the remote node sends its own headers
         // request, process is appropriately. In practice these could come in either order
@@ -210,40 +255,16 @@ async fn remote_ahead_by_7_blocks() {
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
         // verify that as the remote is ahead of local by 7 blocks, extracting the unique
         // headers from the header response results in 7 new headers and that the headers
         // belong to the 7 new blocks that were added to the remote chain
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert_eq!(uniq.len(), 7);
-                assert_eq!(uniq, new_block_hdrs);
-                response.send(uniq);
-            }
-        );
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_block_hdrs).await;
 
         // local syncmanager sent block request to remote and for each now block it receives,
         // it sends the blockindex a newblock event that tells it to accept the new block
-        for _ in 0..7 {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, response },
-                {
-                    let uniq = local_cons.accept_block(block);
-                    response.send(());
-                }
-            );
-        }
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 7).await;
 
         // return the updates blockindex after the tests have been run
         // so it can be compared against remote's blockindex
@@ -328,24 +349,10 @@ async fn local_ahead_by_12_blocks() {
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
         // as local is ahead of remote, getuniqheaders returns an empty vector
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert!(uniq.is_empty());
-                response.send(uniq);
-            }
-        );
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
 
         // verify that as the local node is ahead of remote by 12 blocks,
         // the header response contains at least 12 headers
@@ -360,13 +367,7 @@ async fn local_ahead_by_12_blocks() {
         );
 
         // verify that remote downloads the blocks it doesn't have and does a reorg
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetBlocks { headers, response },
-            {
-                response.send(local_cons.get_blocks(&headers));
-            }
-        );
+        get_blocks(&mut rx_p2p, &mut local_cons).await;
 
         local_cons
     });
@@ -487,26 +488,11 @@ async fn remote_local_diff_chains_remote_higher() {
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
         // as remote is a different branch that has 8 new blocks since the common ancestor
         // `get_uniq_headers()` will return those headers from the entire response
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert_eq!(uniq.len(), 8);
-                assert_eq!(uniq, new_remote_block_hdrs);
-                response.send(uniq);
-            }
-        );
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
 
         // as the local node is in a different branch than remote that has 5 blocks
         // since the common ancestors, the response contains at least 5 headers
@@ -522,25 +508,10 @@ async fn remote_local_diff_chains_remote_higher() {
 
         // accept the 8 new blocks received from remote
         // (internally `accept_block()` des a reorg which is tested later in the test)
-        for _ in 0..8 {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, response },
-                {
-                    let uniq = local_cons.accept_block(block);
-                    response.send(());
-                }
-            );
-        }
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 8).await;
 
         // respond to block request received from remote
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetBlocks { headers, response },
-            {
-                response.send(local_cons.get_blocks(&headers));
-            }
-        );
+        get_blocks(&mut rx_p2p, &mut local_cons).await;
 
         local_cons
     });
@@ -687,24 +658,11 @@ async fn remote_local_diff_chains_local_higher() {
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert_eq!(uniq.len(), 3);
-                assert_eq!(uniq, new_remote_block_hdrs);
-                response.send(uniq);
-            }
-        );
+        // verify that the  uniq headers received from remote
+        // are the ones they added before the test started
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
 
         get_message!(
             rx_p2p.recv().await.unwrap(),
@@ -718,24 +676,8 @@ async fn remote_local_diff_chains_local_higher() {
 
         // accept the remote blocks to our chain but because the height of that
         // chhain is shorter than ours, no reorg happens which is tested later on
-        for _ in 0..3 {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, response },
-                {
-                    let uniq = local_cons.accept_block(block);
-                    response.send(());
-                }
-            );
-        }
-
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetBlocks { headers, response },
-            {
-                response.send(local_cons.get_blocks(&headers));
-            }
-        );
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 3).await;
+        get_blocks(&mut rx_p2p, &mut local_cons).await;
 
         local_cons
     });
@@ -882,78 +824,29 @@ async fn two_remote_nodes_different_chains() {
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
+        get_locator(&mut rx_p2p, &mut local_cons).await;
 
         // as remote_1 is a different branch that has 8 new blocks since the common ancestor
         // `get_uniq_headers()` will return those headers from the entire response
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert_eq!(uniq.len(), 8);
-                assert_eq!(uniq, new_remote1_block_hdrs);
-                response.send(uniq);
-            }
-        );
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote1_block_hdrs).await;
 
         get_message!(
             rx_p2p.recv().await.unwrap(),
             event::P2pEvent::GetHeaders { locator, response },
             {
-                let headers = local_cons.get_headers(&locator);
-                response.send(headers);
+                response.send(local_cons.get_headers(&locator));
             }
         );
 
         // accept the blocks from first remote node (reorg done)
-        for _ in 0..8 {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, response },
-                {
-                    let uniq = local_cons.accept_block(block);
-                    response.send(());
-                }
-            );
-        }
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 8).await;
 
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetLocator { response },
-            {
-                response.send(local_cons.get_locator());
-            }
-        );
-
-        get_message!(
-            rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetUniqHeaders { headers, response },
-            {
-                let uniq = local_cons.get_uniq_headers(&headers);
-                assert_eq!(uniq.len(), 5);
-                assert_eq!(uniq, new_remote2_block_hdrs);
-                response.send(uniq);
-            }
-        );
+        // handler locator and header request for the second peer
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote2_block_hdrs).await;
 
         // accept the blcoks from the second remote node (no reorg is done)
-        for _ in 0..5 {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, response },
-                {
-                    let uniq = local_cons.accept_block(block);
-                    response.send(());
-                }
-            );
-        }
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 5).await;
 
         local_cons
     });
