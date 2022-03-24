@@ -99,6 +99,27 @@ async fn get_blocks(
     );
 }
 
+async fn peer_get_headers<T, F, Fut>(
+    rx: &mut mpsc::Receiver<event::PeerEvent<T>>,
+    cons: &mut mock_consensus::Consensus,
+    f: F,
+) where
+    T: NetworkService,
+    F: FnOnce(Vec<mock_consensus::BlockHeader>) -> Fut,
+    Fut: futures::Future<Output = ()>,
+{
+    get_message!(
+        rx.recv().await.unwrap(),
+        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
+            peer_id: _,
+            locator
+        }),
+        {
+            f(cons.get_headers(&locator)).await;
+        }
+    );
+}
+
 async fn make_sync_manager<T>(
     addr: T::Address,
 ) -> (
@@ -152,12 +173,10 @@ async fn local_and_remote_in_sync() {
             rx_p2p.recv().await.unwrap(),
             event::P2pEvent::GetHeaders { locator, response },
             {
-                let headers = local_cons.get_headers(&locator);
                 let all_headers = local_cons.as_vec();
+                let headers = local_cons.get_headers(&locator);
 
-                // verify that only the two most recent block headers are sent to remote node
                 assert_eq!((headers[0], headers[1]), (all_headers[1], all_headers[0]));
-
                 response.send(headers);
             }
         );
@@ -175,29 +194,22 @@ async fn local_and_remote_in_sync() {
 
     // verify that when the connection has been established,
     // the remote peer will receive getheaders request
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
-        {
-            let headers = remote_cons.get_headers(&locator);
-            let all_headers = remote_cons.as_vec();
+    let all_headers = remote_cons.as_vec();
 
-            // verify that only the two most recent block headers are sent to local node
-            assert_eq!((headers[0], headers[1]), (all_headers[1], all_headers[0]),);
+    peer_get_headers(&mut peer_rx, &mut remote_cons, |headers| async {
+        // verify that only the two most recent block headers are sent to local node
+        assert_eq!((headers[0], headers[1]), (all_headers[1], all_headers[0]));
 
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer_id),
-                    headers,
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
+        assert_eq!(
+            mgr.on_peer_event(event::PeerSyncEvent::Headers {
+                peer_id: Some(peer_id),
+                headers,
+            })
+            .await,
+            Ok(())
+        );
+    })
+    .await;
 
     // now remote peer sends getheaders request to local sync node and it should
     // get the same response
