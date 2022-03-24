@@ -15,15 +15,17 @@
 //
 // Author(s): A. Altonen
 #![cfg(not(loom))]
+#![allow(unused)]
 extern crate test_utils;
 
+use futures::{executor, FutureExt};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
     error::{Libp2pError, P2pError},
     message::{self, ConnectivityMessage, MessageType},
     net::{
         self,
-        libp2p::{Libp2pService, Libp2pStrategy},
+        libp2p::{Libp2pConnectivityHandle, Libp2pFloodsubHandle, Libp2pService, Libp2pStrategy},
         ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService, FloodsubTopic,
         NetworkService,
     },
@@ -149,4 +151,93 @@ async fn test_libp2p_floodsub() {
             msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
         }
     );
+}
+
+async fn connect_peers(
+    peer1: &mut Libp2pConnectivityHandle<Libp2pService>,
+    peer2: &mut Libp2pConnectivityHandle<Libp2pService>,
+) {
+    let (peer1_res, peer2_res) =
+        tokio::join!(peer1.connect(peer2.local_addr().clone()), peer2.poll_next());
+
+    let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
+    let peer1_id = match peer2_res {
+        ConnectivityEvent::IncomingConnection { peer_id, socket: _ } => peer_id,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
+
+    let peer2_id = peer1_res.unwrap().0;
+    let (_, _) = tokio::join!(peer1.register_peer(peer2_id), peer2.register_peer(peer1_id));
+}
+
+// test libp2p floodsub with multiple peers
+#[tokio::test]
+async fn test_libp2p_floodsub_4_peers() {
+    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let (mut conn1, mut flood1) =
+        Libp2pService::start(addr1, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+
+    let (mut peer1, mut peer2, mut peer3) = {
+        let mut peers = futures::future::join_all((0..3).map(|_| async {
+            let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+            let res =
+                Libp2pService::start(addr, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+            (res.0, res.1)
+        }))
+        .await;
+
+        (
+            peers.pop().unwrap(),
+            peers.pop().unwrap(),
+            peers.pop().unwrap(),
+        )
+    };
+
+    // connect peers into a partial mesh topology
+    connect_peers(&mut conn1, &mut peer1.0).await;
+    connect_peers(&mut peer1.0, &mut peer2.0).await;
+    connect_peers(&mut peer2.0, &mut peer3.0).await;
+
+    // spam the message on the floodsub until it succeeds (= until we have a peer)
+    loop {
+        let res = flood1
+            .publish(
+                net::FloodsubTopic::Transactions,
+                &message::Message {
+                    magic: [0u8; 4],
+                    msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX }),
+                },
+            )
+            .await;
+
+        if res.is_ok() {
+            break;
+        } else {
+            assert_eq!(
+                res,
+                Err(P2pError::Libp2pError(Libp2pError::PublishError(
+                    "NoPeers".to_string()
+                )))
+            );
+        }
+    }
+
+    // verify that all peers received the message even though they weren't directy connected
+    let res: Result<FloodsubEvent<Libp2pService>, _> = peer1.1.poll_next().await;
+    assert!(std::matches!(
+        res.unwrap(),
+        FloodsubEvent::MessageReceived { .. }
+    ));
+
+    let res: Result<FloodsubEvent<Libp2pService>, _> = peer2.1.poll_next().await;
+    assert!(std::matches!(
+        res.unwrap(),
+        FloodsubEvent::MessageReceived { .. }
+    ));
+
+    let res: Result<FloodsubEvent<Libp2pService>, _> = peer3.1.poll_next().await;
+    assert!(std::matches!(
+        res.unwrap(),
+        FloodsubEvent::MessageReceived { .. }
+    ));
 }
