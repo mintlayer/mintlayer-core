@@ -24,7 +24,7 @@ pub type Hash = u64;
 pub type Amount = u64;
 pub type BlockId = u64;
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq)]
+#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
     vin: Vec<(Hash, Amount)>,
     vout: Vec<(Hash, Amount)>,
@@ -54,7 +54,7 @@ impl Transaction {
     }
 }
 
-#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq)]
+#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq, Eq)]
 pub struct BlockHeader {
     pub id: BlockId,
     pub prev_id: Option<BlockId>,
@@ -80,7 +80,7 @@ impl BlockHeader {
     }
 }
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq)]
+#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,

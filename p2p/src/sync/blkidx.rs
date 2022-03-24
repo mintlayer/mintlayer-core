@@ -22,14 +22,14 @@ use crate::{
 };
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockIndex {
     id: BlockId,
     prev_id: Option<BlockId>,
     next_id: Option<BlockId>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerBlockIndex {
     blks: BTreeMap<BlockId, BlockIndex>,
     active: Option<BlockId>,

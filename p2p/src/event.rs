@@ -21,7 +21,7 @@ use parity_scale_codec::{Decode, Encode};
 use tokio::sync::{mpsc, oneshot};
 use util::Handle;
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum PeerEvent<T>
 where
     T: NetworkService,
@@ -30,7 +30,7 @@ where
     Syncing(PeerSyncEvent<T>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PeerSwarmEvent<T>
 where
     T: NetworkService,
@@ -51,7 +51,7 @@ where
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PeerSyncEvent<T>
 where
     T: NetworkService,

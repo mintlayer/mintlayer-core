@@ -24,15 +24,19 @@ use crate::{
 use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 use tokio::sync::{mpsc, oneshot};
 
 pub mod blkidx;
 pub mod mock_consensus;
+pub mod peer;
 
 /// State of the peer
 #[derive(Debug, PartialEq, Eq)]
-enum SyncState {
+pub enum SyncState {
     /// No activity with the peer
     Idle,
 
@@ -41,23 +45,6 @@ enum SyncState {
 
     /// Downloading blocks
     DownloadingBlocks,
-}
-
-struct PeerSyncState<T>
-where
-    T: NetworkService,
-{
-    /// Unique peer ID
-    peer_id: T::PeerId,
-
-    // State of the peer
-    state: SyncState,
-
-    /// TX channel for sending syncing messages to remote peer
-    tx: mpsc::Sender<event::PeerEvent<T>>,
-
-    /// Peer block index
-    blkidx: Option<blkidx::PeerBlockIndex>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -91,7 +78,7 @@ where
     rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
 
     /// Hashmap of connected peers
-    peers: HashMap<T::PeerId, PeerSyncState<T>>,
+    peers: HashMap<T::PeerId, peer::PeerSyncState<T>>,
 }
 
 impl<T> SyncManager<T>
@@ -143,21 +130,10 @@ where
             event::SyncControlEvent::Connected { peer_id, tx } => {
                 log::debug!("create new entry for peer {:?}", peer_id);
 
-                if let std::collections::hash_map::Entry::Vacant(e) = self.peers.entry(peer_id) {
-                    e.insert(PeerSyncState {
-                        peer_id,
-                        state: SyncState::DownloadingHeaders,
-                        tx: tx.clone(),
-                        blkidx: None,
-                    });
-
-                    tx.send(event::PeerEvent::Syncing(
-                        event::PeerSyncEvent::GetHeaders {
-                            peer_id: None,
-                            locator: self.p2p_handle.get_locator().await?,
-                        },
-                    ))
-                    .await?;
+                if let Entry::Vacant(e) = self.peers.entry(peer_id) {
+                    e.insert(peer::PeerSyncState::new(peer_id, tx.clone()))
+                        .get_headers(self.p2p_handle.get_locator().await?)
+                        .await?;
                 } else {
                     log::error!("peer {:?} already known by sync manager", peer_id);
                 }
@@ -182,17 +158,8 @@ where
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
                 match peer {
-                    Some(peer) => {
-                        peer.tx
-                            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-                                peer_id: None,
-                                headers,
-                            }))
-                            .await?;
-                    }
-                    None => {
-                        log::error!("peer {:?} not known by sync manager", peer_id)
-                    }
+                    Some(peer) => peer.send_headers(headers).await?,
+                    None => log::error!("peer {:?} not known by sync manager", peer_id),
                 }
             }
             event::PeerSyncEvent::Headers { peer_id, headers } => {
@@ -202,15 +169,8 @@ where
 
                 match peer {
                     Some(peer) => {
-                        (*peer).blkidx = Some(blkidx);
-                        if !uniq_headers.is_empty() {
-                            peer.tx
-                                .send(event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-                                    peer_id: None,
-                                    headers: uniq_headers,
-                                }))
-                                .await?;
-                        }
+                        peer.add_blkidx(blkidx);
+                        peer.get_blocks(uniq_headers).await?;
                     }
                     None => {
                         log::error!("peer {:?} not known by sync manager", peer_id)
@@ -227,17 +187,8 @@ where
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
                 match peer {
-                    Some(peer) => {
-                        peer.tx
-                            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks {
-                                peer_id: None,
-                                blocks,
-                            }))
-                            .await?;
-                    }
-                    None => {
-                        log::error!("peer {:?} not known by sync manager", peer_id)
-                    }
+                    Some(peer) => peer.send_blocks(blocks).await?,
+                    None => log::error!("peer {:?} not known by sync manager", peer_id),
                 }
             }
         }
