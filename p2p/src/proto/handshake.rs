@@ -201,7 +201,8 @@ where
                 // found in src/proto/handshake.rs
                 self.on_handshake_event(state, msg).await
             }
-            MessageType::Connectivity(_) => {
+            // TODO: add test where a sync message ruins the handshake when mock stuff has been removed
+            MessageType::Connectivity(_) | MessageType::Syncing(_) => {
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }

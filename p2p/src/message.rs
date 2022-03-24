@@ -44,11 +44,31 @@ pub enum ConnectivityMessage {
     Pong { nonce: u64 },
 }
 
-#[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum SyncingMessage {
+    GetHeaders {
+        locator: Vec<crate::sync::mock_consensus::BlockHeader>,
+    },
+    Headers {
+        headers: Vec<crate::sync::mock_consensus::BlockHeader>,
+    },
+    GetBlocks {
+        headers: Vec<crate::sync::mock_consensus::BlockHeader>,
+    },
+    Blocks {
+        blocks: Vec<crate::sync::mock_consensus::Block>,
+    },
+    Block {
+        block: crate::sync::mock_consensus::Block,
+    },
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 #[allow(unused)]
 pub enum MessageType {
     Handshake(HandshakeMessage),
     Connectivity(ConnectivityMessage),
+    Syncing(SyncingMessage),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

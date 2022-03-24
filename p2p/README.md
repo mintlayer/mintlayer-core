@@ -139,3 +139,37 @@ Publish a block on the network.
 | Length | Description | Type | Comments |
 |--------|-------------|------|----------|
 | N bytes | Transaction | `Vec<u8>` | SCALE-encoded block
+
+#### GetHeaders
+
+Request headers
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| N bytes | Transaction | `Vec<u8>` | SCALE-encoded locator object
+
+TODO: explain locator object
+
+#### Headers
+
+Response to a header request
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| N bytes | Transaction | `Vec<u8>` | SCALE-encoded vector of block headers
+
+#### GetBlocks
+
+Request blocks
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| N bytes | Transaction | `Vec<u8>` | SCALE-encoded vector of block headers
+
+#### Blocks
+
+Response to a block request
+
+| Length | Description | Type | Comments |
+|--------|-------------|------|----------|
+| N bytes | Transaction | `Vec<u8>` | SCALE-encoded vector of blocks

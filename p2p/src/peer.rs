@@ -203,6 +203,9 @@ where
                 );
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
+            MessageType::Syncing(_) => {
+                todo!();
+            }
         }
     }
 
