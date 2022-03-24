@@ -638,6 +638,8 @@ dependencies = [
  "blockchain-storage",
  "common",
  "logging",
+ "parity-scale-codec",
+ "parity-scale-codec-derive",
  "proptest",
  "rand 0.8.4",
  "thiserror",
