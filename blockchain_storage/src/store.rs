@@ -31,38 +31,19 @@ mod well_known {
     declare_entry!(BestBlockId: Id<Block>);
 }
 
-// Type-level tags for individual key-value stores:
-// Store tag for individual values.
-pub struct DBValues;
-// Store tag for blocks.
-pub struct DBBlocks;
-// Store tag for transaction indices.
-pub struct DBTxIndices;
-// Store for block IDs indexed by block height.
-pub struct DBBlockByHeight;
-
-impl storage::schema::Column for DBValues {
-    const NAME: &'static str = "ValuesV0";
-    type Kind = storage::schema::Single;
+storage::decl_schema! {
+    // Database schema for blockchain storage
+    Schema {
+        // Storage for individual values.
+        pub DBValues: Single,
+        // Storage for blocks.
+        pub DBBlocks: Single,
+        // Storage for transaction indices.
+        pub DBTxIndices: Single,
+        // Storage for block IDs indexed by block height.
+        pub DBBlockByHeight: Single,
+    }
 }
-
-impl storage::schema::Column for DBBlocks {
-    const NAME: &'static str = "BlocksV0";
-    type Kind = storage::schema::Single;
-}
-
-impl storage::schema::Column for DBTxIndices {
-    const NAME: &'static str = "TxIndicesV0";
-    type Kind = storage::schema::Single;
-}
-
-impl storage::schema::Column for DBBlockByHeight {
-    const NAME: &'static str = "BlkByHgtV0";
-    type Kind = storage::schema::Single;
-}
-
-// Complete database schema
-type Schema = (DBValues, (DBBlocks, (DBTxIndices, (DBBlockByHeight, ()))));
 
 type StoreImpl = storage::Store<Schema>;
 type RoTxImpl<'tx> = <StoreImpl as traits::Transactional<'tx, Schema>>::TransactionRo;
