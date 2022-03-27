@@ -28,6 +28,8 @@ use block_v1::BlockHeader;
 use block_v1::BlockV1;
 use parity_scale_codec::{Decode, Encode};
 
+use super::ChainConfig;
+
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
 ) -> Result<H256, merkle::MerkleTreeFormError> {
@@ -166,6 +168,10 @@ impl Block {
         match &self {
             Block::V1(blk) => blk.get_prev_block_id().clone(),
         }
+    }
+
+    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
+        self.get_prev_block_id() == None && chain_config.genesis_block().get_id() == self.get_id()
     }
 }
 

@@ -344,7 +344,7 @@ mod test {
     #[test]
     #[cfg(not(loom))]
     fn test_storage_manipulation() {
-        use common::{chain::SpendablePosition, primitives::H256};
+        use common::chain::SpendablePosition;
 
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();

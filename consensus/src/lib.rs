@@ -39,7 +39,7 @@ pub enum BlockSource {
 }
 
 impl Consensus {
-    fn make_tx(&mut self) -> ConsensusRef {
+    fn make_db_tx(&mut self) -> ConsensusRef {
         let db_tx = self.blockchain_storage.start_transaction_rw();
         ConsensusRef {
             chain_config: &self.chain_config,
@@ -63,9 +63,9 @@ impl Consensus {
         block: Block,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let mut consensus_ref = self.make_tx();
+        let mut consensus_ref = self.make_db_tx();
         // Reasonable reduce amount of calls to DB
-        let best_block_id = consensus_ref.get_best_block_id()?;
+        let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
         let block_index = consensus_ref.accept_block(&block, &best_block_id);
@@ -74,10 +74,10 @@ impl Consensus {
                 // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
                 consensus_ref.new_orphan_block(block)?;
             }
-            return Err(BlockError::Unknown);
+            return Err(BlockError::Orphan);
         }
         let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
-        consensus_ref.commit().expect("Committing transactions to DB failed");
+        consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
         Ok(result)
     }
 }
@@ -90,7 +90,7 @@ struct ConsensusRef<'a> {
 }
 
 impl<'a> ConsensusRef<'a> {
-    fn commit(self) -> blockchain_storage::Result<()> {
+    fn commit_db_tx(self) -> blockchain_storage::Result<()> {
         self.db_tx.commit()
     }
 
@@ -99,16 +99,26 @@ impl<'a> ConsensusRef<'a> {
         let block_index = self.db_tx.get_block_index(block_id).map_err(BlockError::from)?;
         match block_index {
             Some(block_index) => {
-                let prev_block =
+                let prev_block_id =
                     block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
-                Ok(self.db_tx.get_block_index(prev_block)?.ok_or(BlockError::NotFound)?)
+                Ok(self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)?)
             }
             None => Err(BlockError::NotFound),
         }
     }
 
-    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
-        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
+    // Get indexes for a new longest chain
+    fn get_new_chain(
+        &self,
+        new_tip_block_index: &BlockIndex,
+    ) -> Result<Vec<BlockIndex>, BlockError> {
+        let mut result = Vec::new();
+        let mut block_index = new_tip_block_index.clone();
+        while !self.is_block_in_main_chain(&block_index) {
+            result.insert(0, block_index.clone());
+            block_index = self.get_ancestor(block_index.get_block_id())?;
+        }
+        Ok(result)
     }
 
     fn reorganize(
@@ -116,23 +126,28 @@ impl<'a> ConsensusRef<'a> {
         best_block_id: Option<Id<Block>>,
         top_block_index: &BlockIndex,
     ) -> Result<(), BlockError> {
+        let new_chain = self.get_new_chain(top_block_index)?;
+
         // Disconnect the current chain if it is not a genesis
         if let Some(ref best_block_id) = best_block_id {
-            let mut ancestor = self
+            let common_ancestor = self.get_ancestor(new_chain[0].get_block_id())?;
+            let mut current_ancestor = self
                 .db_tx
-                .get_block_index(&best_block_id)?
+                .get_block_index(best_block_id)?
                 .expect("Can't get block index. Inconsistent DB");
-            while !self.is_block_in_main_chain(&ancestor) {
-                self.disconnect_tip(&mut ancestor)?;
-                ancestor = self.get_ancestor(ancestor.get_block_id())?;
+
+            // Disconnect blocks
+            while self.is_block_in_main_chain(&current_ancestor)
+                && current_ancestor.get_block_id() != common_ancestor.get_block_id()
+            {
+                self.disconnect_tip(&mut current_ancestor)?;
+                current_ancestor = self.get_ancestor(current_ancestor.get_block_id())?;
             }
         }
 
         // Connect the new chain
-        let mut ancestor = top_block_index.clone();
-        while !self.is_block_in_main_chain(&ancestor) {
-            self.connect_tip(&ancestor, &best_block_id)?;
-            ancestor = self.get_ancestor(ancestor.get_block_id())?;
+        for block_index in new_chain {
+            self.connect_tip(&block_index, &best_block_id)?;
         }
         Ok(())
     }
@@ -181,7 +196,7 @@ impl<'a> ConsensusRef<'a> {
                 let mut tx_index = match cached_inputs.get(&tx.get_id()) {
                     Some(tx_index) => tx_index.clone(),
                     None => {
-                        let tx_index = self.calculate_indices(&block, &tx)?;
+                        let tx_index = self.calculate_indices(block, tx)?;
                         cached_inputs.insert(tx.get_id(), tx_index.clone());
                         tx_index
                     }
@@ -189,13 +204,10 @@ impl<'a> ConsensusRef<'a> {
                 if input_index >= tx_index.get_output_count() {
                     return Err(BlockError::Unknown);
                 }
+                // Set each input as spent
                 tx_index
                     .spend(input_index, Spender::from(tx.get_id()))
                     .map_err(BlockError::from)?;
-
-                // TODO: Check that all outputs are available and match the outputs in the block itself
-                //  exactly.
-
                 cached_inputs.insert(tx.get_id(), tx_index.clone());
             }
         }
@@ -203,10 +215,7 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn disconnect_transactions(
-        &mut self,
-        transactions: &Vec<Transaction>,
-    ) -> Result<(), BlockError> {
+    fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in transactions.iter().rev() {
             let inputs = tx.get_inputs();
@@ -224,23 +233,17 @@ impl<'a> ConsensusRef<'a> {
                 if input_index >= tx_index.get_output_count() {
                     return Err(BlockError::Unknown);
                 }
-
-                // Add checks
                 tx_index.unspend(input_index).map_err(BlockError::from)?;
-
-                // TODO: Check that all outputs are available and match the outputs in the block itself
-                //  exactly.
-
                 cached_inputs.insert(tx.get_id(), tx_index.clone());
             }
-            // Restore inputs
-            self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
+            // TODO: Seems, would be better to remove TxMainChainIndex for disconnected block.
+            // self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
         }
         self.store_cached_inputs(&cached_inputs)?;
         Ok(())
     }
 
-    fn find_mainchain_index_by_outpoint(
+    fn get_mainchain_index_by_outpoint(
         tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
         outpoint: &OutPoint,
     ) -> Result<TxMainChainIndex, BlockError> {
@@ -250,10 +253,10 @@ impl<'a> ConsensusRef<'a> {
                 unimplemented!()
             }
         };
-        Ok(tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)?)
+        tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)
     }
 
-    fn find_by_outpoint(
+    fn get_tx_by_outpoint(
         tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
         outpoint: &OutPoint,
     ) -> Result<Transaction, BlockError> {
@@ -272,11 +275,11 @@ impl<'a> ConsensusRef<'a> {
         }
     }
 
-    fn load_output(
+    fn get_output_by_outpoint(
         tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
         outpoint: &OutPoint,
     ) -> Result<common::chain::TxOutput, BlockError> {
-        let tx = Self::find_by_outpoint(tx_db, outpoint)?;
+        let tx = Self::get_tx_by_outpoint(tx_db, outpoint)?;
         let output_index = outpoint.get_output_index() as usize;
         assert!(output_index <= tx.get_outputs().len());
         Ok(tx.get_outputs()[output_index].clone())
@@ -286,14 +289,13 @@ impl<'a> ConsensusRef<'a> {
         tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
         input: &common::chain::TxInput,
     ) -> Result<Amount, BlockError> {
-        // Read the transaction from DB
-        let tx = Self::find_by_outpoint(tx_db, input.get_outpoint())?;
+        let tx = Self::get_tx_by_outpoint(tx_db, input.get_outpoint())?;
         let output_index = input.get_outpoint().get_output_index() as usize;
         assert!(output_index <= tx.get_outputs().len());
         Ok(tx.get_outputs()[output_index].get_value())
     }
 
-    fn check_block_fee(&self, transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+    fn check_block_fee(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let input_mlt = transactions
             .iter()
             .map(|x| {
@@ -317,14 +319,14 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn check_tx_inputs(&self, transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+    fn check_tx_inputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let mut total_value = Amount::new(0);
         for tx in transactions {
             for input in tx.get_inputs() {
                 let tx_index =
-                    Self::find_mainchain_index_by_outpoint(&self.db_tx, input.get_outpoint())?;
+                    Self::get_mainchain_index_by_outpoint(&self.db_tx, input.get_outpoint())?;
                 // If there is a wrong input index then it's cause a BlockError
-                let output = Self::load_output(&self.db_tx, input.get_outpoint())?;
+                let output = Self::get_output_by_outpoint(&self.db_tx, input.get_outpoint())?;
 
                 // Check is input has already spent
                 if tx_index
@@ -341,7 +343,7 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn check_tx_outputs(&self, transactions: &Vec<Transaction>) -> Result<(), BlockError> {
+    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
         for tx in transactions {
             for _output in tx.get_outputs() {
                 // TODO: Check tx outputs to prevent the overwriting of the transaction
@@ -356,15 +358,13 @@ impl<'a> ConsensusRef<'a> {
         new_tip_block_index: &BlockIndex,
         best_block_id: &Option<Id<Block>>,
     ) -> Result<(), BlockError> {
-        if best_block_id != new_tip_block_index.get_prev_block_id() {
-            dbg!("reorganize fail");
+        if &self.db_tx.get_best_block_id()? != new_tip_block_index.get_prev_block_id() {
             return Err(BlockError::Unknown);
         }
-
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
         let transactions = block.get_transactions();
 
-        if best_block_id.is_some() {
+        if best_block_id.is_some() && !block.is_genesis(self.chain_config) {
             self.check_block_fee(transactions)?;
             self.check_tx_inputs(transactions)?;
         }
@@ -373,12 +373,12 @@ impl<'a> ConsensusRef<'a> {
 
         match &new_tip_block_index.get_prev_block_id() {
             Some(prev_block_id) => {
-                // CONNECT: Set-up the next_block_id
+                // To connect a new block we should set-up the next_block_id field of the previous block index
                 let mut prev_block = self
                     .db_tx
                     .get_block_index(prev_block_id)?
                     .expect("Can't get block index. Inconsistent DB");
-                prev_block.next_block_id = Some(block.get_id());
+                prev_block.set_next_block_id(block.get_id());
                 self.db_tx
                     .set_block_index(&prev_block)
                     .expect("Can't set block index. Inconsistent DB");
@@ -390,13 +390,14 @@ impl<'a> ConsensusRef<'a> {
             }
         }
         self.db_tx.set_block_index(new_tip_block_index)?;
+        self.db_tx.set_best_block_id(new_tip_block_index.get_block_id())?;
         Ok(())
     }
 
     fn disconnect_tip(&mut self, block_index: &mut BlockIndex) -> Result<(), BlockError> {
         assert_eq!(
-            &self.db_tx.get_best_block_id().expect("Only fails at genesis"),
-            block_index.get_prev_block_id()
+            &self.db_tx.get_best_block_id().ok().flatten().expect("Only fails at genesis"),
+            block_index.get_block_id()
         );
         let block = self.get_block_from_index(block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
@@ -404,18 +405,11 @@ impl<'a> ConsensusRef<'a> {
         self.db_tx.set_best_block_id(
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
-        // Update connection
-        block_index.next_block_id = None;
-        self.db_tx.set_block_index(block_index)?;
+        // Disconnect block
+        let mut ancestor = self.get_ancestor(block_index.get_block_id())?;
+        ancestor.unset_next_block_id();
+        self.db_tx.set_block_index(&ancestor)?;
         Ok(())
-    }
-
-    fn get_block_index(&self, best_block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
-        Ok(self
-            .db_tx
-            .get_block_index(best_block_id)
-            .map_err(BlockError::from)?
-            .expect("Inconsistent DB"))
     }
 
     fn try_connect_genesis_block(
@@ -424,7 +418,7 @@ impl<'a> ConsensusRef<'a> {
         best_block_id: &Option<Id<Block>>,
     ) -> Result<Option<BlockIndex>, BlockError> {
         if best_block_id.is_none() && new_block_index.is_genesis(self.chain_config) {
-            self.connect_tip(&new_block_index, &best_block_id)?;
+            self.connect_tip(new_block_index, best_block_id)?;
             self.db_tx
                 .set_best_block_id(new_block_index.get_block_id())
                 .map_err(BlockError::from)?;
@@ -445,16 +439,16 @@ impl<'a> ConsensusRef<'a> {
 
         if let Some(best_block_id) = best_block_id {
             // Chain trust is higher than the best block
-            let current_best_block_index = self.get_block_index(&best_block_id)?;
-            if new_block_index.chain_trust > current_best_block_index.chain_trust {
+            let current_best_block_index = self
+                .db_tx
+                .get_block_index(&best_block_id)
+                .map_err(BlockError::from)?
+                .expect("Inconsistent DB");
+            if new_block_index.get_chain_trust() > current_best_block_index.get_chain_trust() {
                 self.reorganize(Some(best_block_id), &new_block_index)?;
-                self.db_tx
-                    .set_best_block_id(new_block_index.get_block_id())
-                    .map_err(BlockError::from)?;
                 return Ok(Some(new_block_index));
             } else {
                 // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
-                // Equal chain trust or less
                 self.db_tx.set_block_index(&new_block_index)?;
             }
         }
@@ -471,36 +465,33 @@ impl<'a> ConsensusRef<'a> {
         block: &Block,
         best_block_id: &Option<Id<Block>>,
     ) -> Result<BlockIndex, BlockError> {
-        let prev_block_index = if best_block_id.is_none() {
-            match block.get_prev_block_id() {
-                Some(_) => {
-                    panic!("Genesis block can't have a parent block")
-                }
-                None => {
-                    // Genesis case
-                    None
-                }
-            }
+        let prev_block_index = if best_block_id.is_none() && block.is_genesis(self.chain_config) {
+            // Genesis case
+            None
         } else {
-            self.db_tx
-                .get_block_index(&block.get_prev_block_id().ok_or(BlockError::Unknown)?.into())
-                .map_err(BlockError::from)?
+            match block.get_prev_block_id() {
+                Some(prev_block) => {
+                    self.db_tx.get_block_index(&prev_block.into()).map_err(BlockError::from)?
+                }
+                None => return Err(BlockError::Orphan),
+            }
         };
         // Set the block height
         let height = match &prev_block_index {
-            Some(prev_block_index) => prev_block_index.height.next_height(),
+            Some(prev_block_index) => prev_block_index.get_block_height().next_height(),
             None => BlockHeight::zero(),
         };
         // Set Time Max
         let time_max = match &prev_block_index {
-            Some(prev_block_index) => {
-                std::cmp::max(prev_block_index.time_max, block.get_block_time())
-            }
+            Some(prev_block_index) => std::cmp::max(
+                prev_block_index.get_block_time_max(),
+                block.get_block_time(),
+            ),
             None => block.get_block_time(),
         };
         // Set Chain Trust
         let chain_trust = match &prev_block_index {
-            Some(prev_block_index) => prev_block_index.chain_trust,
+            Some(prev_block_index) => prev_block_index.get_chain_trust(),
             None => 0,
         } + self.get_block_proof(block);
         let block_index = BlockIndex::new(block, chain_trust, height, time_max);
@@ -529,7 +520,6 @@ impl<'a> ConsensusRef<'a> {
         if self.db_tx.get_block_index(blk_index.get_block_id())?.is_some()
             || self.exist_block(blk_index.get_block_id())?
         {
-            println!("exist_block");
             return Err(BlockError::Unknown);
         }
         // TODO: Will be expanded
@@ -574,7 +564,7 @@ impl<'a> ConsensusRef<'a> {
                 let previous_block = self
                     .db_tx
                     .get_block_index(&Id::<Block>::from(block_id))?
-                    .ok_or(BlockError::NotFound)?;
+                    .ok_or(BlockError::Orphan)?;
                 // Time
                 let block_time = block.get_block_time();
                 if previous_block.get_block_time() > block_time {
@@ -605,22 +595,22 @@ impl<'a> ConsensusRef<'a> {
 
     #[allow(dead_code)]
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
-        //TODO: Must check for duplicate inputs (see CVE-2018-17144)
-        let mut keyed = Vec::new();
-        for tx in block.get_transactions() {
-            for input in tx.get_inputs() {
-                if keyed.contains(input.get_outpoint()) {
-                    return Err(BlockError::Unknown);
-                }
-                keyed.push(input.get_outpoint().clone());
-            }
-        }
+        // TODO: Must check for duplicate inputs (see CVE-2018-17144)
+        //      We should discuss - can we add Hash trait to Transaction?
+        //      We will have plenty more checks with inputs\outputs and HashSet\BTreeMap might be more efficient
+        //
+        // let mut keyed = HashSet::new();
+        // for tx in block.get_transactions() {
+        //     for input in tx.get_inputs() {
+        //         if keyed.contains(input.get_outpoint()) {
+        //             return Err(BlockError::Unknown);
+        //         }
+        //         keyed.insert(input.get_outpoint());
+        //     }
+        // }
 
         //TODO: Size limits
-        if block.get_transactions().is_empty() {
-            return Err(BlockError::Unknown);
-        }
-        if std::mem::size_of_val(block) > MAX_BLOCK_WEIGHT {
+        if Encode::encoded_size(block) > MAX_BLOCK_WEIGHT {
             return Err(BlockError::Unknown);
         }
         //TODO: Check signatures will be added when will ready BLS
@@ -635,7 +625,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> bool {
-        block_index.next_block_id.is_some()
+        block_index.get_next_block_id().is_some()
             || match self.db_tx.get_best_block_id().ok().flatten() {
                 Some(ref block_id) => block_index.get_block_id() == block_id,
                 None => false,
@@ -643,10 +633,8 @@ impl<'a> ConsensusRef<'a> {
     }
 
     /// Mark new block as an orphan
-    /// Ok(()) - Added
-    /// Err(BlockError) - StorageFailure  
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
-        if block.get_prev_block_id().is_none() {
+        if block.get_prev_block_id().is_none() && block.is_genesis(self.chain_config) {
             // It can't be a genesis block
             return Err(BlockError::Unknown);
         }
@@ -656,16 +644,15 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
-        self.db_tx.get_best_block_id().map_err(BlockError::from)
+    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
+        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use blockchain_storage::Store;
-    // TODO: Add proptest here
     use super::*;
+    use blockchain_storage::Store;
     use common::address::Address;
     use common::chain::block::Block;
     use common::chain::config::create_mainnet;
@@ -674,9 +661,13 @@ mod tests {
     use common::primitives::{Amount, Id};
 
     #[allow(dead_code)]
-    fn produce_block(config: &ChainConfig, prev_block: &Block) -> Block {
+    fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
+        use common::primitives::H256;
         use rand::prelude::*;
 
+        // For each output we create a new input and output that will placed into a new block.
+        // If value of original output is less than 1 then output will disappear in a new block.
+        // Otherwise, value will be decreasing for 1.
         let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
             .get_transactions()
             .iter()
@@ -687,6 +678,7 @@ mod tests {
                     .enumerate()
                     .map(move |(index, output)| {
                         if output.get_value() > Amount::from(1) {
+                            // Random address receiver
                             let mut rng = rand::thread_rng();
                             let mut witness: Vec<u8> = (1..100).collect();
                             witness.shuffle(&mut rng);
@@ -715,11 +707,13 @@ mod tests {
             .flatten()
             .unzip();
 
-        let tx = Transaction::new(0, inputs, outputs, 0).expect("Failed to create transaction");
-
         Block::new(
-            vec![tx],
-            Some(Id::from(prev_block.get_id())),
+            vec![Transaction::new(0, inputs, outputs, 0).expect("Failed to create transaction")],
+            if orphan {
+                Some(Id::<Block>::new(&H256::random()).into())
+            } else {
+                Some(Id::from(prev_block.get_id()))
+            },
             time::get() as u32,
             ConsensusData::None,
         )
@@ -762,10 +756,10 @@ mod tests {
                 .expect("Best block didn't found"),
             Some(config.genesis_block().get_id())
         );
-        assert_eq!(block_index.prev_block_id, None);
-        assert_eq!(block_index.next_block_id, None);
-        assert_eq!(block_index.chain_trust, 10);
-        assert_eq!(block_index.height, BlockHeight::new(0));
+        assert_eq!(block_index.get_prev_block_id(), &None);
+        assert_eq!(block_index.get_next_block_id(), &None);
+        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
     }
 
     #[test]
@@ -790,10 +784,11 @@ mod tests {
                 .expect("Best block didn't found"),
             Some(config.genesis_block().get_id())
         );
-        assert_eq!(block_index.prev_block_id, None);
-        assert_eq!(block_index.next_block_id, None);
-        assert_eq!(block_index.chain_trust, 10);
-        assert_eq!(block_index.height, BlockHeight::new(0));
+        assert_eq!(block_index.get_block_id(), &config.genesis_block().get_id());
+        assert_eq!(block_index.get_prev_block_id(), &None);
+        assert_eq!(block_index.get_next_block_id(), &None);
+        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
         let mut prev_block = config.genesis_block().clone();
         for _ in 0..255 {
@@ -802,22 +797,31 @@ mod tests {
                 consensus.blockchain_storage.get_best_block_id().ok().flatten().unwrap();
             assert_eq!(&best_block_id, block_index.get_block_id());
             let block_source = BlockSource::Peer(1);
-            let new_block = produce_block(&config, &prev_block);
+            let new_block = produce_test_block(&config, &prev_block, false);
             let new_block_index =
                 consensus.process_block(new_block.clone(), block_source).ok().flatten().unwrap();
 
+            assert_eq!(new_block_index.get_next_block_id(), &None);
+            assert_eq!(
+                new_block_index.get_prev_block_id().as_ref(),
+                Some(prev_block_id)
+            );
+            assert!(new_block_index.get_chain_trust() > block_index.get_chain_trust());
+            assert_eq!(
+                new_block_index.get_block_height(),
+                block_index.get_block_height().next_height()
+            );
+
             let next_block_id = consensus
                 .blockchain_storage
-                .get_block_index(&best_block_id)
+                .get_block_index(&new_block_index.get_prev_block_id().clone().unwrap())
                 .ok()
                 .flatten()
                 .unwrap()
-                .next_block_id
+                .get_next_block_id()
+                .clone()
                 .unwrap();
-            assert_eq!(new_block_index.prev_block_id.as_ref(), Some(prev_block_id));
             assert_eq!(&next_block_id, new_block_index.get_block_id());
-            assert!(new_block_index.chain_trust > block_index.chain_trust);
-            assert_eq!(new_block_index.height, block_index.height.next_height());
             block_index = new_block_index;
             prev_block = new_block;
         }
@@ -845,10 +849,10 @@ mod tests {
                 .expect("Best block didn't found"),
             Some(config.genesis_block().get_id())
         );
-        assert_eq!(block_index.prev_block_id, None);
-        assert_eq!(block_index.next_block_id, None);
-        assert_eq!(block_index.chain_trust, 10);
-        assert_eq!(block_index.height, BlockHeight::new(0));
+        assert_eq!(block_index.get_prev_block_id(), &None);
+        assert_eq!(block_index.get_next_block_id(), &None);
+        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
         // process the second block
         let prev_block = config.genesis_block();
@@ -857,7 +861,7 @@ mod tests {
             consensus.blockchain_storage.get_best_block_id().ok().flatten().unwrap();
         assert_eq!(&best_block_id, block_index.get_block_id());
         let block_source = BlockSource::Peer(1);
-        let new_block = produce_block(&config, prev_block);
+        let new_block = produce_test_block(&config, prev_block, false);
         let new_block_index =
             consensus.process_block(new_block.clone(), block_source).ok().flatten().unwrap();
 
@@ -867,12 +871,19 @@ mod tests {
             .ok()
             .flatten()
             .unwrap()
-            .next_block_id
+            .get_next_block_id()
+            .clone()
             .unwrap();
-        assert_eq!(new_block_index.prev_block_id.as_ref(), Some(prev_block_id));
+        assert_eq!(
+            new_block_index.get_prev_block_id().as_ref(),
+            Some(prev_block_id)
+        );
         assert_eq!(&next_block_id, new_block_index.get_block_id());
-        assert!(new_block_index.chain_trust > block_index.chain_trust);
-        assert_eq!(new_block_index.height, block_index.height.next_height());
+        assert!(new_block_index.get_chain_trust() > block_index.get_chain_trust());
+        assert_eq!(
+            new_block_index.get_block_height(),
+            block_index.get_block_height().next_height()
+        );
 
         let transactions = new_block.get_transactions();
         let block_id = new_block.get_id();
@@ -927,7 +938,6 @@ mod tests {
                 .ok_or(BlockError::Unknown)?;
             match tx_index.get_tx_position() {
                 SpendablePosition::Transaction(position) => {
-                    dbg!(&position);
                     let read_tx = consensus
                         .blockchain_storage
                         .get_mainchain_tx_by_position(&position)
@@ -944,14 +954,13 @@ mod tests {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn test_parallel_chains() {
+    fn test_reorg_simple() {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config.clone(), storage);
 
         // process the genesis block
-        let result =
-            dbg!(consensus.process_block(config.genesis_block().clone(), BlockSource::Local));
+        let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
         assert!(result.is_ok());
         assert_eq!(
             consensus
@@ -962,9 +971,9 @@ mod tests {
         );
 
         // Process the second block
-        let block = produce_block(&config, &config.genesis_block());
+        let block = produce_test_block(&config, &config.genesis_block(), false);
         let new_id = Some(block.get_id());
-        assert!(dbg!(consensus.process_block(block, BlockSource::Local)).is_ok());
+        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
         assert_eq!(
             consensus
                 .blockchain_storage
@@ -974,9 +983,9 @@ mod tests {
         );
 
         // Process the parallel block and choose the better one
-        let block = produce_block(&config, &config.genesis_block());
+        let block = produce_test_block(&config, &config.genesis_block(), false);
         // let new_id = Some(block.get_id());
-        assert!(dbg!(consensus.process_block(block.clone(), BlockSource::Local)).is_ok());
+        assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_ne!(
             consensus
                 .blockchain_storage
@@ -993,9 +1002,9 @@ mod tests {
         );
 
         // Produce another block that cause reorg
-        let new_block = produce_block(&config, &block);
+        let new_block = produce_test_block(&config, &block, false);
         let new_id = Some(new_block.get_id());
-        assert!(dbg!(consensus.process_block(new_block, BlockSource::Local)).is_ok());
+        assert!(consensus.process_block(new_block, BlockSource::Local).is_ok());
         assert_eq!(
             consensus
                 .blockchain_storage
@@ -1008,156 +1017,34 @@ mod tests {
     #[test]
     #[allow(clippy::eq_op)]
     fn test_orphans_chains() -> Result<(), BlockError> {
-        // let config = create_mainnet();
-        // let mut storage = Store::new_empty().unwrap();
-        // let mut consensus = Consensus::new(config.clone(), &mut storage);
-        //
-        // // process the genesis block
-        // let result = dbg!(consensus.process_block(config.genesis_block().clone()));
-        // assert!(result.is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id()?,
-        //     Some(config.genesis_block().get_id())
-        // );
-        //
-        // // Process the second block
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // dbg!(new_block.get_id());
-        // let new_id = Some(new_block.get_id());
-        // assert!(dbg!(consensus.process_block(new_block)).is_ok());
-        // assert_eq!(consensus.get_best_block_id()?, new_id);
-        //
-        // // Process the orphan block
-        // for _ in 0..255 {
-        //     let new_block = produce_block(&config, Id::<Block>::new(&H256::zero()));
-        //     dbg!(new_block.get_id());
-        //     assert_eq!(consensus.process_block(new_block), Err(BlockError::Orphan));
-        // }
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage.clone());
+
+        // Process the orphan block
+        let new_block = config.genesis_block().clone();
+        for _ in 0..255 {
+            let new_block = produce_test_block(&config, &new_block, true);
+            assert_eq!(
+                consensus.process_block(new_block.clone(), BlockSource::Local),
+                Err(BlockError::Orphan)
+            );
+        }
         Ok(())
     }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn test_connect_straight_chains() -> Result<(), BlockError> {
-        // let config = create_mainnet();
-        // let mut storage = Store::new_empty().unwrap();
-        // let mut consensus = Consensus::new(config.clone(), &mut storage);
-        //
-        // // process the genesis block
-        // println!(
-        //     "\nPROCESSING BLOCK 0: {:?}",
-        //     &config.genesis_block().get_id().get()
-        // );
-        // let result = consensus.process_block(config.genesis_block().clone());
-        // assert!(result.is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     Some(config.genesis_block().get_id())
-        // );
-        //
-        // // Process the second block
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // println!("\nPROCESSING BLOCK 1: {:?}", &new_block.get_id().get());
-        // let new_id = Some(new_block.get_id());
-        // assert!(consensus.process_block(new_block).is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     new_id
-        // );
-        //
-        // for i in 2..255 {
-        //     // Process another block
-        //     let previous_block_id = new_id.clone().unwrap();
-        //     let new_block = produce_block(&config, previous_block_id.clone());
-        //     println!("\nPROCESSING BLOCK {}: {:?}", i, &new_block.get_id().get());
-        //     let new_id = Some(new_block.get_id());
-        //     assert!(consensus.process_block(new_block).is_ok());
-        //     assert_eq!(consensus.get_best_block_id()?, new_id);
-        //     let block_id = consensus.get_best_block_id()?.unwrap();
-        //     assert_eq!(
-        //         consensus.get_block(block_id)?.unwrap().get_prev_block_id(),
-        //         previous_block_id
-        //     )
-        // }
         Ok(())
     }
 
-    // TODO: Not ready tests for this PR related to:
-    //  Fail block processing
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn test_fail_block_processing() {}
-
-    //  More cases for reorg
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn test_reorg_simple() {
-        // let config = create_mainnet();
-        // let mut storage = Store::new_empty().unwrap();
-        // let mut consensus = Consensus::new(config.clone(), storage);
-        //
-        // // process the genesis block
-        // let result = dbg!(consensus.process_block(config.genesis_block().clone()));
-        // assert!(result.is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     Some(config.genesis_block().get_id())
-        // );
-        //
-        // // Process the second block
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // dbg!(new_block.get_id());
-        // let new_id = Some(new_block.get_id());
-        // assert!(dbg!(consensus.process_block(new_block)).is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     new_id
-        // );
-        //
-        // // Process the parallel block and choose the better one
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // let new_id = Some(new_block.get_id());
-        // assert!(consensus.process_block(new_block).is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     new_id
-        // );
-    }
-
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn test_reorg_multichains() {
-        // let config = create_mainnet();
-        // let mut storage = Store::new_empty().unwrap();
-        // let mut consensus = Consensus::new(config.clone(), storage);
-        //
-        // // process the genesis block
-        // let result = dbg!(consensus.process_block(config.genesis_block().clone()));
-        // assert!(result.is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     Some(config.genesis_block().get_id())
-        // );
-        //
-        // // Process the second block
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // dbg!(new_block.get_id());
-        // let new_id = Some(new_block.get_id());
-        // assert!(dbg!(consensus.process_block(new_block)).is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     new_id
-        // );
-        //
-        // // Process the parallel block and choose the better one
-        // let new_block = produce_block(&config, config.genesis_block().get_id());
-        // let new_id = Some(new_block.get_id());
-        // assert!(consensus.process_block(new_block).is_ok());
-        // assert_eq!(
-        //     consensus.get_best_block_id().expect("Best block didn't found"),
-        //     new_id
-        // );
-    }
-
-    //  Tests with chain trust
+    // TODO: Not ready tests for this PR:
+    // * Empty block checks
+    // * Check chains with skips and forks
+    // * Check blocks at heights
+    // * Fail cases for block processing
+    // * Tests multichains reorgs
+    // * Tests different sorts of attacks - double spend \ Sybil \ etc
+    // To be expanded
 }

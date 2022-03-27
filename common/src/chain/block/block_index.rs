@@ -7,15 +7,15 @@ use parity_scale_codec::{Decode, Encode};
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
-    pub block_id: Id<Block>,
-    pub prev_block_id: Option<Id<Block>>,
-    pub next_block_id: Option<Id<Block>>,
+    block_id: Id<Block>,
+    prev_block_id: Option<Id<Block>>,
+    next_block_id: Option<Id<Block>>,
     // TODO: When Carla finish her code, we should use Uint256 at the moment it's unable to store to DB
     //  pub chain_trust: Uint256,
-    pub chain_trust: u128,
-    pub height: BlockHeight,
-    pub time: u32,
-    pub time_max: u32,
+    chain_trust: u128,
+    height: BlockHeight,
+    time: u32,
+    time_max: u32,
 }
 
 impl BlockIndex {
@@ -40,11 +40,35 @@ impl BlockIndex {
         &self.prev_block_id
     }
 
+    pub fn get_next_block_id<'a: 'b, 'b>(&'a self) -> &'b Option<Id<Block>> {
+        &self.next_block_id
+    }
+
+    pub fn set_next_block_id(&mut self, id_block: Id<Block>) {
+        self.next_block_id = Some(id_block);
+    }
+
+    pub fn unset_next_block_id(&mut self) {
+        self.next_block_id = None;
+    }
+
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.prev_block_id == None && chain_config.genesis_block().get_id() == self.block_id
     }
 
     pub fn get_block_time(&self) -> u32 {
         self.time
+    }
+
+    pub fn get_block_time_max(&self) -> u32 {
+        self.time_max
+    }
+
+    pub fn get_block_height(&self) -> BlockHeight {
+        self.height
+    }
+
+    pub fn get_chain_trust(&self) -> u128 {
+        self.chain_trust
     }
 }
