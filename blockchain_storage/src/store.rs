@@ -38,7 +38,7 @@ pub struct DBValues;
 // Store tag for blocks.
 pub struct DBBlocks;
 // Store tag for blocks indexes.
-struct DBBlocksIndexes;
+pub struct DBBlocksIndexes;
 // Store tag for transaction indices.
 pub struct DBTxIndices;
 // Store for block IDs indexed by block height.
@@ -140,9 +140,7 @@ impl BlockchainStorageRead for Store {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
-        fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
-        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
         fn get_mainchain_tx_index(
@@ -166,6 +164,7 @@ impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
@@ -196,17 +195,8 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
     }
 
-    /// Set storage version
-    fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
-        self.write_value::<well_known::StoreVersion>(&version)
-    }
-
     fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
         self.read::<DBBlocksIndexes, _, _>(id.as_ref())
-    }
-
-    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
-        self.write::<DBBlocksIndexes, _, _>(block_index.get_block_id().encode(), block_index)
     }
 
     /// Get the hash of the best block
@@ -263,6 +253,10 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
         self.0.get_mut::<DBBlocks, _>().del(id.as_ref()).map_err(Into::into)
+    }
+
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
+        self.write::<DBBlocksIndexes, _, _>(block_index.get_block_id().encode(), block_index)
     }
 
     fn set_mainchain_tx_index(

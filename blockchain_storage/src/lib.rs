@@ -10,9 +10,9 @@ use storage::traits;
 pub mod mock;
 mod store;
 
-pub use storage::transaction::{TransactionRo, TransactionRw, Transactional};
+pub use storage::transaction::{TransactionRo, TransactionRw};
 pub use store::Store;
-pub use store::StoreTxRw;
+pub use store::StoreTx;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
@@ -38,11 +38,7 @@ pub trait BlockchainStorageRead {
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
 
-    /// Set the hash of the best block
-    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
-
     fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
-    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
@@ -70,6 +66,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+
+    // Set the block index
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
 
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> crate::Result<()>;
