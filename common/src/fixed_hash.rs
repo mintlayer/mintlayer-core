@@ -214,9 +214,7 @@ macro_rules! construct_fixed_hash {
 		/// Returns the big endian format
 		impl core::fmt::Debug for $name {
 			fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-				let mut inner = self.0;
-				inner.reverse();
-				core::write!(f, "{:#x}", $name(inner))
+				core::write!(f, "{:#x}", $name(self.0))
 			}
 		}
 
@@ -244,7 +242,9 @@ macro_rules! construct_fixed_hash {
 				if f.alternate() {
 					core::write!(f, "0x")?;
 				}
-				for i in &self.0[..] {
+
+				let ctr = &self.0[0..];
+				for i in ctr.iter().rev() {
 					core::write!(f, "{:02x}", i)?;
 				}
 				Ok(())
@@ -256,7 +256,9 @@ macro_rules! construct_fixed_hash {
 				if f.alternate() {
 					core::write!(f, "0X")?;
 				}
-				for i in &self.0[..] {
+
+				let ctr = &self.0[0..];
+				for i in ctr.iter().rev() {
 					core::write!(f, "{:02X}", i)?;
 				}
 				Ok(())
@@ -705,4 +707,39 @@ macro_rules! impl_fixed_hash_conversions {
             }
         }
     };
+}
+
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+    use crate::primitives::H256;
+
+    #[test]
+    fn display_test() {
+        fn check(hash:&str) {
+            let h256 = H256::from_str(hash).expect("should not fail");
+
+            let debug = format!("{:?}",h256);
+            assert_eq!(debug, format!("0x{}",hash));
+
+            let display = format!("{}",h256);
+            let (_,last_value) = hash.split_at(hash.len()-4);
+            assert_eq!(display, format!("0x{}…{}",&hash[0..4],last_value));
+
+            let no_0x = format!("{:x}",h256);
+            assert_eq!(no_0x, hash.to_string());
+
+            let sharp = format!("{:#x}",h256);
+            assert_eq!(sharp, debug);
+
+            let upper_hex = format!("{:#010X}",h256);
+            assert_eq!(upper_hex, format!("0X{}", hash.to_uppercase()));
+        }
+
+        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
+        check("000000000000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
+        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
+    }
+
 }

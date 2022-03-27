@@ -70,6 +70,8 @@ impl<Sch: Schema> Clone for Store<Sch> {
     }
 }
 
+impl<Sch: 'static + Schema> crate::traits::Backend<Sch> for Store<Sch> {}
+
 pub trait InitStore: Schema {
     fn init() -> BTreeMap<&'static str, StoreMap>;
 }
@@ -100,15 +102,15 @@ impl<Sch: InitStore> Store<Sch> {
     }
 }
 
-impl<'st, Sch: 'static + Schema> crate::transaction::Transactional<'st> for Store<Sch> {
-    type TransactionRo = TransactionRo<'st, Sch>;
-    type TransactionRw = TransactionRw<'st, Sch>;
+impl<'tx, Sch: 'static + Schema> crate::traits::Transactional<'tx, Sch> for Store<Sch> {
+    type TransactionRo = TransactionRo<'tx, Sch>;
+    type TransactionRw = TransactionRw<'tx, Sch>;
 
-    fn start_transaction_ro(&'st self) -> Self::TransactionRo {
+    fn transaction_ro<'st: 'tx>(&'st self) -> Self::TransactionRo {
         TransactionRo::start(self)
     }
 
-    fn start_transaction_rw(&'st self) -> Self::TransactionRw {
+    fn transaction_rw<'st: 'tx>(&'st self) -> Self::TransactionRw {
         TransactionRw::start(self)
     }
 }
@@ -119,8 +121,7 @@ impl<Sch: InitStore> Default for Store<Sch> {
     }
 }
 
-// Read-only transaction is a read-write transaction internally for now.
-// TODO: We can get some code clarity and efficiency gains by making this a separate type.
+/// Store read-only transaction.
 pub struct TransactionRo<'st, Sch> {
     store: sync::RwLockReadGuard<'st, StoreMapSet>,
     _phantom: std::marker::PhantomData<fn() -> Sch>,
@@ -137,10 +138,10 @@ impl<'st, Sch: Schema> TransactionRo<'st, Sch> {
     }
 }
 
-impl<'st, Sch: Schema> crate::traits::GetMapRef<'st, Sch> for TransactionRo<'st, Sch> {
-    type MapRef = SingleMapView<'st>;
+impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRo<'st, Sch> {
+    type MapRef = SingleMapView<'m>;
 
-    fn get<Col: schema::Column, I>(&self) -> SingleMapView<'_> {
+    fn get<'tx: 'm, Col: schema::Column, I>(&'tx self) -> Self::MapRef {
         if let Some(StoreMap::Single(store)) = self.store.get(Col::NAME) {
             SingleMapView::new(store)
         } else {
@@ -149,7 +150,7 @@ impl<'st, Sch: Schema> crate::traits::GetMapRef<'st, Sch> for TransactionRo<'st,
     }
 }
 
-/// Store transaction.
+/// Store read/write transaction.
 ///
 /// Contains a pointer to the original store and a set of changes to it. If the transaction is
 /// commited, the changes are flushed to the store. If the transaction is aborted, the changes are
@@ -183,10 +184,10 @@ impl<'st, Sch: Schema> TransactionRw<'st, Sch> {
     }
 }
 
-impl<'st, Sch: Schema> crate::traits::GetMapRef<'st, Sch> for TransactionRw<'st, Sch> {
-    type MapRef = SingleMapRef<'st>;
+impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRw<'st, Sch> {
+    type MapRef = SingleMapRef<'m>;
 
-    fn get<Col: schema::Column, I>(&self) -> SingleMapRef<'_> {
+    fn get<'tx: 'm, Col: schema::Column, I>(&'tx self) -> Self::MapRef {
         match (self.store.get(Col::NAME), self.delta.get(Col::NAME)) {
             (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) => {
                 SingleMapRef::new(store, delta)
@@ -196,10 +197,10 @@ impl<'st, Sch: Schema> crate::traits::GetMapRef<'st, Sch> for TransactionRw<'st,
     }
 }
 
-impl<'tx, 'st: 'tx, Sch: Schema> crate::traits::GetMapMut<'tx, Sch> for TransactionRw<'st, Sch> {
-    type MapMut = SingleMapMut<'tx>;
+impl<'st, 'm, Sch: Schema> crate::traits::GetMapMut<'m, Sch> for TransactionRw<'st, Sch> {
+    type MapMut = SingleMapMut<'m>;
 
-    fn get_mut<Col: schema::Column, I>(&'tx mut self) -> SingleMapMut<'tx> {
+    fn get_mut<'tx: 'm, Col: schema::Column, I>(&'tx mut self) -> Self::MapMut {
         match (self.store.get(Col::NAME), self.delta.get_mut(Col::NAME)) {
             (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) => {
                 SingleMapMut::new(store, delta)

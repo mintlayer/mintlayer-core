@@ -18,7 +18,7 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{Event, FloodsubTopic, NetworkService, SocketService},
+    net::{FloodsubTopic, NetworkService, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;
@@ -37,6 +37,9 @@ use tokio::{
 };
 
 pub struct Backend {
+    /// Socket address of the backend
+    addr: SocketAddr,
+
     /// Socket for listening to incoming connections
     socket: TcpListener,
 
@@ -44,19 +47,26 @@ pub struct Backend {
     cmd_rx: mpsc::Receiver<types::Command>,
 
     /// TX channel for sending events to the frontend
-    event_tx: mpsc::Sender<types::Event>,
+    conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+
+    /// TX channel for sending events to the frontend
+    _flood_tx: mpsc::Sender<types::FloodsubEvent>,
 }
 
 impl Backend {
     pub fn new(
+        addr: SocketAddr,
         socket: TcpListener,
         cmd_rx: mpsc::Receiver<types::Command>,
-        event_tx: mpsc::Sender<types::Event>,
+        conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+        _flood_tx: mpsc::Sender<types::FloodsubEvent>,
     ) -> Self {
         Self {
+            addr,
             socket,
             cmd_rx,
-            event_tx,
+            conn_tx,
+            _flood_tx,
         }
     }
 
@@ -64,7 +74,7 @@ impl Backend {
         loop {
             tokio::select! {
                 event = self.socket.accept() => match event {
-                    Ok(socket) => self.event_tx.send(types::Event::IncomingConnection {
+                    Ok(socket) => self.conn_tx.send(types::ConnectivityEvent::IncomingConnection {
                         peer_id: socket.1,
                         socket: socket.0,
                     }).await?,
@@ -75,6 +85,11 @@ impl Backend {
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { addr, response } => {
+                        if self.addr == addr {
+                            let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
+                            continue;
+                        }
+
                         let _ = match TcpStream::connect(addr).await {
                             Ok(socket) => response.send(Ok(socket)),
                             Err(e) => response.send(Err(e.into())),

@@ -38,24 +38,38 @@ where
 }
 
 #[derive(Debug)]
-pub enum Event<T>
+pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
 {
     /// Incoming connection from remote peer
-    IncomingConnection(T::PeerId, T::Socket),
+    IncomingConnection {
+        peer_id: T::PeerId,
+        socket: T::Socket,
+    },
 
     /// One or more peers discovered
-    PeerDiscovered(Vec<AddrInfo<T>>),
+    PeerDiscovered { peers: Vec<AddrInfo<T>> },
 
     /// One one more peers have expired
-    PeerExpired(Vec<AddrInfo<T>>),
-
-    /// Message received from a Floodsub topic
-    MessageReceived(FloodsubTopic, message::Message),
+    PeerExpired { peers: Vec<AddrInfo<T>> },
 }
 
-#[derive(Debug, PartialEq, Eq, Hash)]
+// TODO: separate events for blocks and transactions?
+#[derive(Debug)]
+pub enum FloodsubEvent<T>
+where
+    T: NetworkService,
+{
+    /// Message received from a Floodsub topic
+    MessageReceived {
+        peer_id: T::PeerId,
+        topic: FloodsubTopic,
+        message: message::Message,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FloodsubTopic {
     Transactions,
     Blocks,
@@ -73,7 +87,7 @@ pub trait NetworkService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Debug + PartialEq + Eq + Hash + Clone;
+    type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone;
 
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
@@ -84,20 +98,32 @@ pub trait NetworkService {
     // Enum of different peer discovery strategies that the implementation provides
     type Strategy;
 
+    /// Handle for sending/receiving connecitivity-related events
+    type ConnectivityHandle: Send;
+
+    /// Handle for sending/receiving floodsub-related events
+    type FloodsubHandle: Send;
+
     /// Initialize the network service provider
     ///
     /// # Arguments
     /// `addr` - socket address for incoming P2P traffic
     /// `strategies` - list of strategies that are used for peer discovery
     /// `topics` - list of floodsub topics that the implementation should subscribe to
-    async fn new(
+    async fn start(
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[FloodsubTopic],
-    ) -> error::Result<Self>
-    where
-        Self: Sized;
+    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)>;
+}
 
+/// ConnectivityService provides an interface through which objects can send
+/// and receive connectivity-related events to/from the network service provider
+#[async_trait]
+pub trait ConnectivityService<T>
+where
+    T: NetworkService,
+{
     /// Connect to a remote node
     ///
     /// If the connection succeeds, the socket object is returned
@@ -105,33 +131,44 @@ pub trait NetworkService {
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, addr: Self::Address)
-        -> error::Result<(Self::PeerId, Self::Socket)>;
+    async fn connect(&mut self, address: T::Address) -> error::Result<(T::PeerId, T::Socket)>;
+
+    /// Return the socket address of the network service provider
+    fn local_addr(&self) -> &T::Address;
 
     /// Poll events from the network service provider
     ///
     /// There are three types of events that can be received:
     /// - incoming peer connections
-    /// - incoming messages from floodsub topics
     /// - new discovered peers
-    async fn poll_next<T>(&mut self) -> error::Result<Event<T>>
-    where
-        T: NetworkService<Socket = Self::Socket, Address = Self::Address, PeerId = Self::PeerId>;
+    /// - peer expiration events
+    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>>;
 
+    /// Register peer to the network service provider
+    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()>;
+
+    /// Unregister peer from the network service provider
+    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()>;
+}
+
+/// FloodsubService provides an interface through which objects can send
+/// and receive floodsub-related events to/from the network service provider
+#[async_trait]
+pub trait FloodsubService<T>
+where
+    T: NetworkService,
+{
     /// Publish data in a given floodsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<T>(&mut self, topic: FloodsubTopic, data: &T) -> error::Result<()>
+    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
     where
-        T: Sync + Send + Encode;
+        U: Sync + Send + Encode;
 
-    /// Register peer to the network service provider
-    async fn register_peer(&mut self, peer: Self::PeerId) -> error::Result<()>;
-
-    /// Unregister peer from the network service provider
-    async fn unregister_peer(&mut self, peer: Self::PeerId) -> error::Result<()>;
+    /// Poll floodsub-related events from the network service provider
+    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>>;
 }
 
 /// `SocketService` provides the low-level socket interface that

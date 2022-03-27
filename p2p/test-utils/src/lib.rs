@@ -22,7 +22,7 @@ use p2p::{
     net::{
         libp2p::Libp2pService,
         mock::{MockService, MockSocket},
-        Event, NetworkService,
+        ConnectivityEvent, ConnectivityService, NetworkService,
     },
     peer::*,
 };
@@ -65,18 +65,19 @@ pub async fn create_two_mock_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<MockService>, Peer<MockService>) {
     let addr: SocketAddr = make_address("[::1]:");
-    let mut server = MockService::new(addr, &[], &[]).await.unwrap();
+    let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
     let peer_fut = TcpStream::connect(addr);
 
     let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
-    let remote_res: Event<MockService> = remote_res.unwrap();
+    let remote_res: ConnectivityEvent<MockService> = remote_res.unwrap();
     let remote_res = match remote_res {
-        Event::IncomingConnection(_, socket) => socket,
+        ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();
 
     let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
 
@@ -84,7 +85,7 @@ pub async fn create_two_mock_peers(
     // acts as though a P2P object was listening to events from the peer
     tokio::spawn(async move {
         loop {
-            let _ = peer_rx.recv().await;
+            let (_, _) = tokio::join!(peer_rx.recv(), sync_rx.recv());
         }
     });
 
@@ -94,6 +95,7 @@ pub async fn create_two_mock_peers(
         config.clone(),
         remote_res,
         peer_tx.clone(),
+        sync_tx.clone(),
         rx,
     );
 
@@ -103,6 +105,7 @@ pub async fn create_two_mock_peers(
         config.clone(),
         MockSocket::new(local_res),
         peer_tx,
+        sync_tx,
         rx2,
     );
 
@@ -114,22 +117,23 @@ pub async fn create_two_libp2p_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<Libp2pService>, Peer<Libp2pService>) {
     let addr1: Multiaddr = make_address("/ip6/::1/tcp/");
-    let mut server1 = Libp2pService::new(addr1, &[], &[]).await.unwrap();
+    let (mut server1, _) = Libp2pService::start(addr1, &[], &[]).await.unwrap();
 
     let addr2: Multiaddr = make_address("/ip6/::1/tcp/");
-    let mut server2 = Libp2pService::new(addr2, &[], &[]).await.unwrap();
+    let (mut server2, _) = Libp2pService::start(addr2, &[], &[]).await.unwrap();
 
-    let server1_conn_fut = server1.connect(server2.addr.clone());
+    let server1_conn_fut = server1.connect(server2.local_addr().clone());
 
     let (local_res, remote_res) = tokio::join!(server1_conn_fut, server2.poll_next());
-    let remote_res: Event<Libp2pService> = remote_res.unwrap();
+    let remote_res: ConnectivityEvent<Libp2pService> = remote_res.unwrap();
     let (id, remote_res) = match remote_res {
-        Event::IncomingConnection(id, socket) => (id, socket),
+        ConnectivityEvent::IncomingConnection { peer_id, socket } => (peer_id, socket),
         _ => panic!("invalid event received, expected incoming connection"),
     };
     let local_res = local_res.unwrap();
 
     let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
+    let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let (_tx2, rx2) = tokio::sync::mpsc::channel(1);
 
@@ -137,7 +141,7 @@ pub async fn create_two_libp2p_peers(
     // acts as though a P2P object was listening to events from the peer
     tokio::spawn(async move {
         loop {
-            let _ = peer_rx.recv().await;
+            let (_, _) = tokio::join!(peer_rx.recv(), sync_rx.recv());
         }
     });
 
@@ -147,6 +151,7 @@ pub async fn create_two_libp2p_peers(
         config.clone(),
         remote_res,
         peer_tx.clone(),
+        sync_tx.clone(),
         rx,
     );
 
@@ -156,6 +161,7 @@ pub async fn create_two_libp2p_peers(
         config.clone(),
         local_res.1,
         peer_tx,
+        sync_tx,
         rx2,
     );
 

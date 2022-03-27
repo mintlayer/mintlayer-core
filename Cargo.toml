@@ -23,6 +23,7 @@ members = [
   "serialization", # serialization interfaces and implementations
   "node",          # node executable
   "wallet",        # wallet executable
+  "utils",         # various utilities
 #  "test",          # integration tests
 ]
 
@@ -39,6 +40,7 @@ default-members = [
   "serialization",
   "node",
   "wallet",
+  "utils",
 #  "test",
 ]
 

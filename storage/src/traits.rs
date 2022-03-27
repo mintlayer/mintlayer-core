@@ -1,27 +1,27 @@
 //! Traits that constitute storage interface.
 
 use crate::schema;
-pub use crate::transaction::{TransactionRo, TransactionRw, Transactional};
+pub use crate::transaction::{TransactionRo, TransactionRw};
 
-/// Get a reference to given single-valued column
-pub trait GetMapRef<'tx, Sch: schema::Schema> {
+/// Get an immutable reference to given single-valued column
+pub trait GetMapRef<'m, Sch: schema::Schema> {
     /// Type representing the map reference
-    type MapRef: MapRef;
+    type MapRef: MapRef + 'm;
 
     /// Get key-value store for given column mutably (key-to-single-value only for now)
-    fn get<Col, I>(&'tx self) -> Self::MapRef
+    fn get<'c: 'm, Col, I>(&'c self) -> Self::MapRef
     where
         Col: schema::Column<Kind = schema::Single>,
         Sch: schema::HasColumn<Col, I>;
 }
 
 /// Get a mutable reference to given single-valued column
-pub trait GetMapMut<'tx, Sch: schema::Schema> {
+pub trait GetMapMut<'m, Sch: schema::Schema>: GetMapRef<'m, Sch> {
     /// Type representing the map reference
-    type MapMut: MapMut;
+    type MapMut: MapMut + 'm;
 
     /// Get key-value store for given column mutably (key-to-single-value only for now)
-    fn get_mut<Col, I>(&'tx mut self) -> Self::MapMut
+    fn get_mut<'c: 'm, Col, I>(&'c mut self) -> Self::MapMut
     where
         Col: schema::Column<Kind = schema::Single>,
         Sch: schema::HasColumn<Col, I>;
@@ -43,9 +43,41 @@ pub trait MapMut: MapRef {
 }
 
 /// A transaction over an immutable store
-pub trait StoreTxRo<'tx, Sch: schema::Schema>: TransactionRo + GetMapRef<'tx, Sch> {}
-impl<'tx, S: schema::Schema, T: TransactionRo + GetMapRef<'tx, S>> StoreTxRo<'tx, S> for T {}
+pub trait StoreTxRo<Sch: schema::Schema>:
+    TransactionRo<Error = crate::Error> + for<'m> GetMapRef<'m, Sch>
+{
+}
+
+impl<S: schema::Schema, T: TransactionRo<Error = crate::Error> + for<'m> GetMapRef<'m, S>>
+    StoreTxRo<S> for T
+{
+}
 
 /// A transaction over a mutable store
-pub trait StoreTxRw<'tx, Sch: schema::Schema>: TransactionRw + GetMapMut<'tx, Sch> {}
-impl<'tx, S: schema::Schema, T: TransactionRw + GetMapMut<'tx, S>> StoreTxRw<'tx, S> for T {}
+pub trait StoreTxRw<Sch: schema::Schema>:
+    TransactionRw<Error = crate::Error> + for<'m> GetMapMut<'m, Sch>
+{
+}
+
+impl<S: schema::Schema, T: TransactionRw<Error = crate::Error> + for<'m> GetMapMut<'m, S>>
+    StoreTxRw<S> for T
+{
+}
+
+/// Type supporting storage transactions.
+pub trait Transactional<'t, Sch: schema::Schema> {
+    /// Associated read-only transaction type.
+    type TransactionRo: TransactionRo<Error = crate::Error> + StoreTxRo<Sch> + 't;
+
+    /// Associated read-write transaction type.
+    type TransactionRw: TransactionRw<Error = crate::Error> + StoreTxRw<Sch> + 't;
+
+    /// Start a read-only transaction.
+    fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
+
+    /// Start a read-write transaction.
+    fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
+}
+
+/// Storage backend
+pub trait Backend<Sch: schema::Schema>: for<'tx> Transactional<'tx, Sch> {}

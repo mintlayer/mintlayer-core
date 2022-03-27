@@ -1,5 +1,6 @@
 use crate::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
-use blockchain_storage::BlockchainStorage;
+use blockchain_storage::BlockchainStorageRead;
+use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
@@ -40,7 +41,7 @@ pub enum BlockSource {
 
 impl Consensus {
     fn make_db_tx(&mut self) -> ConsensusRef {
-        let db_tx = self.blockchain_storage.start_transaction_rw();
+        let db_tx = self.blockchain_storage.transaction_rw();
         ConsensusRef {
             chain_config: &self.chain_config,
             db_tx,
