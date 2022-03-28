@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach, Anton Sinitsyn
+// Author(s): S. Afach, A. Sinitsyn
 
 use crate::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
 use blockchain_storage::BlockchainStorageRead;
