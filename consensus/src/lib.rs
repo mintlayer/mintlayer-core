@@ -372,7 +372,7 @@ impl<'a> ConsensusRef<'a> {
             .sum();
 
         // Check that fee is not negative
-        if output_mlt >= input_mlt {
+        if output_mlt > input_mlt {
             return Err(BlockError::Unknown);
         }
         Ok(())
