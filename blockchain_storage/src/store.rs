@@ -336,13 +336,18 @@ mod test {
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
             vec![tx0.clone()],
-            Id::new(&H256::default()),
+            Some(Id::new(&H256::default())),
             12,
             ConsensusData::None,
         )
         .unwrap();
-        let block1 =
-            Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
+        let block1 = Block::new(
+            vec![tx1.clone()],
+            Some(Id::new(&block0.get_id().get())),
+            34,
+            ConsensusData::None,
+        )
+        .unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();

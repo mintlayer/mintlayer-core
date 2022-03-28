@@ -732,12 +732,12 @@ mod tests {
         let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
             .get_transactions()
             .iter()
-            .map(|tx| {
+            .flat_map(|tx| {
                 let tx_id = tx.get_id();
                 tx.get_outputs()
                     .iter()
                     .enumerate()
-                    .map(move |(index, output)| {
+                    .filter_map(move |(index, output)| {
                         if output.get_value() > Amount::from(1) {
                             // Random address receiver
                             let mut rng = rand::thread_rng();
@@ -762,10 +762,8 @@ mod tests {
                             None
                         }
                     })
-                    .filter_map(|x| x)
                     .collect::<Vec<(TxInput, TxOutput)>>()
             })
-            .flatten()
             .unzip();
 
         Block::new(
@@ -1001,7 +999,7 @@ mod tests {
                 SpendablePosition::Transaction(position) => {
                     let read_tx = consensus
                         .blockchain_storage
-                        .get_mainchain_tx_by_position(&position)
+                        .get_mainchain_tx_by_position(position)
                         .unwrap()
                         .ok_or(BlockError::Unknown)
                         .unwrap();
@@ -1032,7 +1030,7 @@ mod tests {
         );
 
         // Process the second block
-        let block = produce_test_block(&config, &config.genesis_block(), false);
+        let block = produce_test_block(&config, config.genesis_block(), false);
         let new_id = Some(block.get_id());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
         assert_eq!(
@@ -1044,7 +1042,7 @@ mod tests {
         );
 
         // Process the parallel block and choose the better one
-        let block = produce_test_block(&config, &config.genesis_block(), false);
+        let block = produce_test_block(&config, config.genesis_block(), false);
         // let new_id = Some(block.get_id());
         assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_ne!(
@@ -1080,7 +1078,7 @@ mod tests {
     fn test_orphans_chains() -> Result<(), BlockError> {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage.clone());
+        let mut consensus = Consensus::new(config.clone(), storage);
 
         // Process the orphan block
         let new_block = config.genesis_block().clone();
