@@ -530,7 +530,7 @@ impl<'a> ConsensusRef<'a> {
         } else {
             match block.get_prev_block_id() {
                 Some(prev_block) => {
-                    self.db_tx.get_block_index(&prev_block.into()).map_err(BlockError::from)?
+                    self.db_tx.get_block_index(&prev_block).map_err(BlockError::from)?
                 }
                 None => return Err(BlockError::Orphan),
             }

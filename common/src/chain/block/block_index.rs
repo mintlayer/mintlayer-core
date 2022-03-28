@@ -23,7 +23,7 @@ impl BlockIndex {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
             block_id: block.get_id(),
-            prev_block_id: block.get_prev_block_id().map(|block_id| block_id.into()),
+            prev_block_id: block.get_prev_block_id(),
             next_block_id: None,
             chain_trust,
             height,

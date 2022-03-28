@@ -253,7 +253,7 @@ mod tests {
                     // Check the parent block is the current best block
                     match block.get_prev_block_id() {
                         Some(prev_block_id) => {
-                            if Id::<Block>::from(prev_block_id) != best_id {
+                            if prev_block_id != best_id {
                                 return storage::abort("not on top");
                             }
                         }

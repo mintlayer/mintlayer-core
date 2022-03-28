@@ -106,7 +106,11 @@ impl Transaction {
 
     pub fn is_coinbase(&self) -> bool {
         // TODO: Outpoint should be Option type because for the coinbase it's should be None
-        let tx_id = self.get_inputs()[0].get_outpoint().get_tx_id();
+        let inputs = self.get_inputs();
+        if inputs.is_empty() {
+            return false;
+        }
+        let tx_id = inputs[0].get_outpoint().get_tx_id();
         self.get_inputs().len() == 1
             && match tx_id {
                 OutPointSourceId::Transaction(id_tx) => id_tx.get() == H256::zero(),
