@@ -153,9 +153,11 @@ impl Block {
         }
     }
 
-    pub fn get_prev_block_id(&self) -> Option<Id<BlockV1>> {
+    pub fn get_prev_block_id(&self) -> Option<Id<Block>> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().clone(),
+            Block::V1(blk) => {
+                blk.get_prev_block_id().as_ref().map(|prev_block_id| prev_block_id.into())
+            }
         }
     }
 

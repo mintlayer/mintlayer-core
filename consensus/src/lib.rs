@@ -622,7 +622,7 @@ impl<'a> ConsensusRef<'a> {
             Some(block_id) => {
                 let previous_block = self
                     .db_tx
-                    .get_block_index(&Id::<Block>::from(block_id))?
+                    .get_block_index(&Id::<Block>::new(&block_id.get()))?
                     .ok_or(BlockError::Orphan)?;
                 // Time
                 let block_time = block.get_block_time();
