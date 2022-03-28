@@ -3,28 +3,28 @@
 use crate::schema;
 pub use crate::transaction::{TransactionRo, TransactionRw};
 
-/// Get an immutable reference to given single-valued column
+/// Get an immutable reference to given single-valued map
 pub trait GetMapRef<'m, Sch: schema::Schema> {
     /// Type representing the map reference
     type MapRef: MapRef + 'm;
 
-    /// Get key-value store for given column mutably (key-to-single-value only for now)
-    fn get<'c: 'm, Col, I>(&'c self) -> Self::MapRef
+    /// Get key-value store for given map mutably (key-to-single-value only for now)
+    fn get<'c: 'm, DBIdx, I>(&'c self) -> Self::MapRef
     where
-        Col: schema::Column<Kind = schema::Single>,
-        Sch: schema::HasColumn<Col, I>;
+        DBIdx: schema::DBIndex<Kind = schema::Single>,
+        Sch: schema::HasDBIndex<DBIdx, I>;
 }
 
-/// Get a mutable reference to given single-valued column
+/// Get a mutable reference to given single-valued map
 pub trait GetMapMut<'m, Sch: schema::Schema>: GetMapRef<'m, Sch> {
     /// Type representing the map reference
     type MapMut: MapMut + 'm;
 
-    /// Get key-value store for given column mutably (key-to-single-value only for now)
-    fn get_mut<'c: 'm, Col, I>(&'c mut self) -> Self::MapMut
+    /// Get key-value store for given map mutably (key-to-single-value only for now)
+    fn get_mut<'c: 'm, DBIdx, I>(&'c mut self) -> Self::MapMut
     where
-        Col: schema::Column<Kind = schema::Single>,
-        Sch: schema::HasColumn<Col, I>;
+        DBIdx: schema::DBIndex<Kind = schema::Single>,
+        Sch: schema::HasDBIndex<DBIdx, I>;
 }
 
 /// Read operations on a single-valued map

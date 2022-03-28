@@ -1,11 +1,11 @@
 //! Describe the database schema at type level
 
 /// Describes single key-value map
-pub trait Column {
-    /// Column name.
+pub trait DBIndex {
+    /// Index name.
     const NAME: &'static str;
 
-    /// Expected size of values in the column. May be used for storage optimization.
+    /// Expected size of values in the map. May be used for storage optimization.
     const SIZE_HINT: core::ops::Range<usize> = 0..usize::MAX;
 
     /// Whether this maps keys to single or multiple values.
@@ -17,12 +17,15 @@ pub trait Schema: internal::Sealed {}
 
 impl Schema for () {}
 
-impl<Col: Column, Rest: Schema> Schema for (Col, Rest) {}
+impl<DBIdx: DBIndex, Rest: Schema> Schema for (DBIdx, Rest) {}
 
-/// Require given schema to contain given column
-pub trait HasColumn<Col: Column, I>: Schema {}
-impl<Col: Column, Rest: Schema> HasColumn<Col, ()> for (Col, Rest) {}
-impl<Col: Column, Head: Column, Rest: HasColumn<Col, I>, I> HasColumn<Col, (I,)> for (Head, Rest) {}
+/// Require given schema to contain given index
+pub trait HasDBIndex<DBIdx: DBIndex, I>: Schema {}
+impl<DBIdx: DBIndex, Rest: Schema> HasDBIndex<DBIdx, ()> for (DBIdx, Rest) {}
+impl<DBIdx: DBIndex, Head: DBIndex, Rest: HasDBIndex<DBIdx, I>, I> HasDBIndex<DBIdx, (I,)>
+    for (Head, Rest)
+{
+}
 
 /// Marker for key-value maps
 pub struct Single;
@@ -40,7 +43,7 @@ mod internal {
     // This is to prevent the Schema trait from being implemented on new types.
     pub trait Sealed {}
     impl Sealed for () {}
-    impl<Col: Column, Rest: Schema> Sealed for (Col, Rest) {}
+    impl<DBIdx: DBIndex, Rest: Schema> Sealed for (DBIdx, Rest) {}
 }
 
 #[macro_export]
@@ -51,9 +54,9 @@ macro_rules! decl_schema {
         }
     ) => {
         $(
-            #[doc = "Database column: "] #[doc = stringify!($name)]
+            #[doc = "Database index: "] #[doc = stringify!($name)]
             $vis struct $name;
-            impl $crate::schema::Column for $name {
+            impl $crate::schema::DBIndex for $name {
                 const NAME: &'static str = stringify!($name);
                 type Kind = $crate::schema::$mul;
             }
@@ -70,8 +73,8 @@ mod test {
 
     decl_schema! {
         MySchema {
-            Col1: Single,
-            Col2: Single,
+            DBIdx1: Single,
+            DBIdx2: Single,
         }
     }
 
