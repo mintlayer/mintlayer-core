@@ -15,16 +15,11 @@
 //! // Delcare a schema. Schema specifies which columns are present,
 //! // name of each column and its kind. Columns are identified by types.
 //! // Here, we create just one column.
-//!
-//! struct MyColumn;
-//! impl schema::Column for MyColumn {
-//!     const NAME: &'static str = "MyColumnV1";
-//!     type Kind = schema::Single;
+//! storage::decl_schema! {
+//!     Schema {
+//!         MyColumn: Single,
+//!     }
 //! }
-//!
-//! // Schema is a bunch of nested tuples listing the columns.
-//! // The format is (Column1, (Column2, ())) etc.
-//! type Schema = (MyColumn, ());
 //!
 //! // Our store type is parametrized by the schema.
 //! type MyStore = storage::Store<Schema>;
@@ -84,15 +79,14 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(test)]
 mod test {
-    use crate::{schema, traits::*};
+    use crate::traits::*;
 
-    struct MyColumn;
-    impl schema::Column for MyColumn {
-        const NAME: &'static str = "MyColumnV1";
-        type Kind = schema::Single;
+    crate::decl_schema! {
+        MySchema {
+            MyColumn: Single,
+        }
     }
 
-    type MySchema = (MyColumn, ());
     type MyStore = crate::Store<MySchema>;
 
     fn generic_aborted_write<St: Backend<MySchema>>(store: &St) -> crate::Result<()> {

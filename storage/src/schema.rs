@@ -43,23 +43,37 @@ mod internal {
     impl<Col: Column, Rest: Schema> Sealed for (Col, Rest) {}
 }
 
+#[macro_export]
+macro_rules! decl_schema {
+    (
+        $svis:vis $schema:ident {
+            $($vis:vis $name:ident: $mul:ident),* $(,)?
+        }
+    ) => {
+        $(
+            #[doc = "Database column: "] #[doc = stringify!($name)]
+            $vis struct $name;
+            impl $crate::schema::Column for $name {
+                const NAME: &'static str = stringify!($name);
+                type Kind = $crate::schema::$mul;
+            }
+        )*
+        $svis type $schema = $crate::decl_schema!(@LIST $($name)*);
+    };
+    (@LIST) => { () };
+    (@LIST $head:ident $($tail:ident)*) => { ($head, $crate::decl_schema!(@LIST $($tail)*)) };
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
-    struct Col1;
-    impl Column for Col1 {
-        const NAME: &'static str = "col1";
-        type Kind = Single;
+    decl_schema! {
+        MySchema {
+            Col1: Single,
+            Col2: Single,
+        }
     }
-
-    struct Col2;
-    impl Column for Col2 {
-        const NAME: &'static str = "col2";
-        type Kind = Multi;
-    }
-
-    type MySchema = (Col1, (Col2, ()));
 
     fn is_schema<T: Schema>() -> bool {
         true

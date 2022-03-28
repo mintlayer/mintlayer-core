@@ -21,6 +21,7 @@ use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
 use crate::primitives::{Id, Idable};
 pub mod block_index;
+pub use block_index::*;
 mod block_v1;
 
 use crate::primitives::consensus_data::ConsensusData;
@@ -72,29 +73,29 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl From<Id<BlockV1>> for Id<Block> {
-    fn from(id_block_v1: Id<BlockV1>) -> Self {
-        Id::new(&id_block_v1.get())
-    }
-}
+// impl From<Id<BlockV1>> for Id<Block> {
+//     fn from(id_block_v1: Id<BlockV1>) -> Self {
+//         Id::new(&id_block_v1.get())
+//     }
+// }
 
-impl From<Id<Block>> for Id<BlockV1> {
-    fn from(id_block: Id<Block>) -> Id<BlockV1> {
-        Id::new(&id_block.get())
-    }
-}
+// impl From<Id<Block>> for Id<BlockV1> {
+//     fn from(id_block: Id<Block>) -> Id<BlockV1> {
+//         Id::new(&id_block.get())
+//     }
+// }
 
-impl From<&Id<Block>> for Id<BlockV1> {
-    fn from(id_block: &Id<Block>) -> Id<BlockV1> {
-        Id::new(&id_block.get())
-    }
-}
+// impl From<&Id<Block>> for Id<BlockV1> {
+//     fn from(id_block: &Id<Block>) -> Id<BlockV1> {
+//         Id::new(&id_block.get())
+//     }
+// }
 
-impl From<&Id<BlockV1>> for Id<Block> {
-    fn from(id_block_v1: &Id<BlockV1>) -> Self {
-        Id::new(&id_block_v1.get())
-    }
-}
+// impl From<&Id<BlockV1>> for Id<Block> {
+//     fn from(id_block_v1: &Id<BlockV1>) -> Self {
+//         Id::new(&id_block_v1.get())
+//     }
+// }
 
 impl Block {
     pub fn new(
@@ -128,7 +129,7 @@ impl Block {
         }
     }
 
-    pub fn get_consensus_data(&self) -> ConsensusData {
+    pub fn get_consensus_data(&self) -> &ConsensusData {
         match self {
             Block::V1(blk) => blk.get_consensus_data(),
         }
