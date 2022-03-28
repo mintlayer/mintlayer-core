@@ -36,13 +36,13 @@ storage::decl_schema! {
     // Database schema for blockchain storage
     Schema {
         // Storage for individual values.
-        pub DBValues: Single,
+        pub DBValue: Single,
         // Storage for blocks.
-        pub DBBlocks: Single,
+        pub DBBlock: Single,
         // Store tag for blocks indexes.
-        pub DBBlocksIndexes: Single,
+        pub DBBlockIndex: Single,
         // Storage for transaction indices.
-        pub DBTxIndices: Single,
+        pub DBTxIndex: Single,
         // Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Single,
     }
@@ -166,7 +166,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     }
 
     fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
-        self.read::<DBBlocksIndexes, _, _>(id.as_ref())
+        self.read::<DBBlockIndex, _, _>(id.as_ref())
     }
 
     /// Get the hash of the best block
@@ -175,14 +175,14 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     }
 
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
-        self.read::<DBBlocks, _, _>(id.as_ref())
+        self.read::<DBBlock, _, _>(id.as_ref())
     }
 
     fn get_mainchain_tx_index(
         &self,
         tx_id: &Id<Transaction>,
     ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<DBTxIndices, _, _>(tx_id.as_ref())
+        self.read::<DBTxIndex, _, _>(tx_id.as_ref())
     }
 
     fn get_mainchain_tx_by_position(
@@ -190,7 +190,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>> {
         let block_id = tx_index.get_block_id();
-        match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
+        match self.0.get::<DBBlock, _>().get(block_id.as_ref()) {
             Err(e) => Err(e.into()),
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
@@ -218,15 +218,15 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 
     fn add_block(&mut self, block: &Block) -> crate::Result<()> {
-        self.write::<DBBlocks, _, _>(block.get_id().encode(), block)
+        self.write::<DBBlock, _, _>(block.get_id().encode(), block)
     }
 
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<DBBlocks, _>().del(id.as_ref()).map_err(Into::into)
+        self.0.get_mut::<DBBlock, _>().del(id.as_ref()).map_err(Into::into)
     }
 
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
-        self.write::<DBBlocksIndexes, _, _>(block_index.get_block_id().encode(), block_index)
+        self.write::<DBBlockIndex, _, _>(block_index.get_block_id().encode(), block_index)
     }
 
     fn set_mainchain_tx_index(
@@ -234,11 +234,11 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
         tx_id: &Id<Transaction>,
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()> {
-        self.write::<DBTxIndices, _, _>(tx_id.encode(), tx_index)
+        self.write::<DBTxIndex, _, _>(tx_id.encode(), tx_index)
     }
 
     fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0.get_mut::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(Into::into)
+        self.0.get_mut::<DBTxIndex, _>().del(tx_id.as_ref()).map_err(Into::into)
     }
 
     fn set_block_id_at_height(
@@ -269,7 +269,7 @@ impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
 
     // Read a value for a well-known entry
     fn read_value<E: well_known::Entry>(&'a self) -> crate::Result<Option<E::Value>> {
-        self.read::<DBValues, _, _>(E::KEY)
+        self.read::<DBValue, _, _>(E::KEY)
     }
 }
 
@@ -286,7 +286,7 @@ impl<'a, Tx: traits::GetMapMut<'a, Schema>> StoreTx<Tx> {
 
     // Write a value for a well-known entry
     fn write_value<E: well_known::Entry>(&'a mut self, val: &E::Value) -> crate::Result<()> {
-        self.write::<DBValues, _, _>(E::KEY.to_vec(), val)
+        self.write::<DBValue, _, _>(E::KEY.to_vec(), val)
     }
 }
 

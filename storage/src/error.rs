@@ -3,7 +3,7 @@
 /// Recoverable database error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 pub enum Recoverable {
-    /// Transaction has failed top execute and its effects have not taken place. This could be e.g.
+    /// Transaction has failed to execute and its effects have not taken place. This could be e.g.
     /// because of a conflicting transaction front-running this one.
     #[error("Transaction failed")]
     TransactionFailed,

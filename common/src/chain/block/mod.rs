@@ -98,7 +98,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block,
+            prev_block_hash: hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -187,7 +187,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: None,
+            prev_block_hash: None,
             time: rng.gen(),
         };
 
@@ -207,7 +207,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
-            hash_prev_block: None,
+            prev_block_hash: None,
             time: rng.gen(),
         };
 
