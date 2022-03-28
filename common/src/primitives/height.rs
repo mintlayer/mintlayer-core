@@ -8,15 +8,9 @@ pub struct BlockHeight(u64);
 // Display should be defined for thiserr crate
 impl fmt::Display for BlockHeight {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        self.0.fmt(f)
     }
 }
-
-// impl Into<u64> for BlockHeight {
-//     fn into(self) -> u64 {
-//         self.0
-//     }
-// }
 
 impl From<BlockHeight> for u64 {
     fn from(block_height: BlockHeight) -> u64 {

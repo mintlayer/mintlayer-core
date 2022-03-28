@@ -59,7 +59,6 @@ impl From<blockchain_storage::Error> for BlockError {
     fn from(_err: blockchain_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
-        dbg!(_err);
         BlockError::Unknown
     }
 }
@@ -158,15 +157,13 @@ impl<'a> ConsensusRef<'a> {
 
     /// Allow to read from storage the previous block and return itself BlockIndex
     fn get_ancestor(&self, block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
-        let block_index = self.db_tx.get_block_index(block_id).map_err(BlockError::from)?;
-        match block_index {
-            Some(block_index) => {
-                let prev_block_id =
-                    block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
-                Ok(self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)?)
-            }
-            None => Err(BlockError::NotFound),
-        }
+        let block_index = self
+            .db_tx
+            .get_block_index(block_id)
+            .map_err(BlockError::from)?
+            .ok_or(BlockError::NotFound)?;
+        let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
+        self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
     }
 
     // Get indexes for a new longest chain
@@ -539,23 +536,23 @@ impl<'a> ConsensusRef<'a> {
             }
         };
         // Set the block height
-        let height = match &prev_block_index {
-            Some(prev_block_index) => prev_block_index.get_block_height().next_height(),
-            None => BlockHeight::zero(),
-        };
+        let height = prev_block_index.as_ref().map_or(BlockHeight::zero(), |prev_block_index| {
+            prev_block_index.get_block_height().next_height()
+        });
+
         // Set Time Max
-        let time_max = match &prev_block_index {
-            Some(prev_block_index) => std::cmp::max(
-                prev_block_index.get_block_time_max(),
-                block.get_block_time(),
-            ),
-            None => block.get_block_time(),
-        };
+        let time_max =
+            prev_block_index.as_ref().map_or(block.get_block_time(), |prev_block_index| {
+                std::cmp::max(
+                    prev_block_index.get_block_time_max(),
+                    block.get_block_time(),
+                )
+            });
+
         // Set Chain Trust
-        let chain_trust = match &prev_block_index {
-            Some(prev_block_index) => prev_block_index.get_chain_trust(),
-            None => 0,
-        } + self.get_block_proof(block);
+        let chain_trust = prev_block_index
+            .map_or(0, |prev_block_index| prev_block_index.get_chain_trust())
+            + self.get_block_proof(block);
         let block_index = BlockIndex::new(block, chain_trust, height, time_max);
         Ok(block_index)
     }
@@ -573,14 +570,14 @@ impl<'a> ConsensusRef<'a> {
         Ok(block_index)
     }
 
-    fn exist_block(&self, id: &Id<Block>) -> Result<bool, BlockError> {
+    fn block_exists(&self, id: &Id<Block>) -> Result<bool, BlockError> {
         Ok(self.db_tx.get_block_index(id)?.is_some())
     }
 
-    fn check_block_index(&self, blk_index: &BlockIndex) -> Result<(), BlockError> {
+    fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
-        if self.db_tx.get_block_index(blk_index.get_block_id())?.is_some()
-            || self.exist_block(blk_index.get_block_id())?
+        if self.db_tx.get_block_index(block_index.get_block_id())?.is_some()
+            || self.block_exists(block_index.get_block_id())?
         {
             return Err(BlockError::Unknown);
         }
@@ -688,10 +685,12 @@ impl<'a> ConsensusRef<'a> {
 
     fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> bool {
         block_index.get_next_block_id().is_some()
-            || match self.db_tx.get_best_block_id().ok().flatten() {
-                Some(ref block_id) => block_index.get_block_id() == block_id,
-                None => false,
-            }
+            || self
+                .db_tx
+                .get_best_block_id()
+                .ok()
+                .flatten()
+                .map_or(false, |ref block_id| block_index.get_block_id() == block_id)
     }
 
     /// Mark new block as an orphan
@@ -772,9 +771,9 @@ mod tests {
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect("Failed to create transaction")],
             if orphan {
-                Some(Id::<Block>::new(&H256::random()).into())
+                Some(Id::new(&H256::random()))
             } else {
-                Some(Id::from(prev_block.get_id()))
+                Some(Id::new(&prev_block.get_id().get()))
             },
             time::get() as u32,
             ConsensusData::None,
