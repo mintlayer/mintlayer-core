@@ -39,8 +39,8 @@ storage::decl_schema! {
         pub DBValues: Single,
         // Storage for blocks.
         pub DBBlocks: Single,
-		// Store tag for blocks indexes.
-		pub struct DBBlocksIndexes,
+        // Store tag for blocks indexes.
+        pub DBBlocksIndexes: Single,
         // Storage for transaction indices.
         pub DBTxIndices: Single,
         // Storage for block IDs indexed by block height.
