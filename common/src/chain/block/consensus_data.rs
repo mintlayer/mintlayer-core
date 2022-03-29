@@ -2,7 +2,7 @@ use crate::chain::TxOutput;
 use crate::primitives::Compact;
 use parity_scale_codec::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
 pub enum ConsensusData {
     #[codec(index = 0)]
     None,
@@ -10,7 +10,7 @@ pub enum ConsensusData {
     PoW(PoWData),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
 pub struct PoWData {
     bits: Compact,
     nonce: u128,

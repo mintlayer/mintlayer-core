@@ -98,7 +98,7 @@ impl Block {
 
         let header = BlockHeader {
             time,
-            consensus_data,
+            consensus_data_inner: consensus_data,
             prev_block_hash: hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
@@ -118,43 +118,43 @@ impl Block {
         }
     }
 
-    pub fn get_consensus_data(&self) -> &ConsensusData {
+    pub fn consensus_data(&self) -> &ConsensusData {
         match self {
-            Block::V1(blk) => blk.get_consensus_data(),
+            Block::V1(blk) => blk.consensus_data(),
         }
     }
 
-    pub fn get_merkle_root(&self) -> H256 {
+    pub fn merkle_root(&self) -> H256 {
         match &self {
-            Block::V1(blk) => blk.get_tx_merkle_root(),
+            Block::V1(blk) => blk.tx_merkle_root(),
         }
     }
 
-    pub fn get_witness_merkle_root(&self) -> H256 {
+    pub fn witness_merkle_root(&self) -> H256 {
         match &self {
-            Block::V1(blk) => blk.get_witness_merkle_root(),
+            Block::V1(blk) => blk.witness_merkle_root(),
         }
     }
 
-    pub fn get_header(&self) -> &BlockHeader {
+    pub fn header(&self) -> &BlockHeader {
         match &self {
-            Block::V1(blk) => blk.get_header(),
+            Block::V1(blk) => blk.header(),
         }
     }
 
-    pub fn get_block_time(&self) -> u32 {
+    pub fn block_time(&self) -> u32 {
         match &self {
-            Block::V1(blk) => blk.get_block_time(),
+            Block::V1(blk) => blk.block_time(),
         }
     }
 
-    pub fn get_transactions(&self) -> &Vec<Transaction> {
+    pub fn transactions(&self) -> &Vec<Transaction> {
         match &self {
-            Block::V1(blk) => blk.get_transactions(),
+            Block::V1(blk) => blk.transactions(),
         }
     }
 
-    pub fn get_prev_block_id(&self) -> Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> Option<Id<Block>> {
         match &self {
             Block::V1(blk) => {
                 blk.get_prev_block_id().as_ref().map(|prev_block_id| prev_block_id.into())
@@ -163,7 +163,7 @@ impl Block {
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.get_prev_block_id() == None && chain_config.genesis_block().get_id() == self.get_id()
+        self.prev_block_id() == None && chain_config.genesis_block().get_id() == self.get_id()
     }
 }
 
@@ -187,7 +187,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let header = BlockHeader {
-            consensus_data: ConsensusData::None,
+            consensus_data_inner: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             prev_block_hash: None,
@@ -198,7 +198,7 @@ mod tests {
             header,
             transactions: Vec::new(),
         });
-        let _res = calculate_tx_merkle_root(block.get_transactions());
+        let _res = calculate_tx_merkle_root(block.transactions());
         assert_eq!(_res.unwrap_err(), MerkleTreeFormError::TooSmall(0));
     }
 
@@ -207,7 +207,7 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         let header = BlockHeader {
-            consensus_data: ConsensusData::None,
+            consensus_data_inner: ConsensusData::None,
             tx_merkle_root: H256::from_low_u64_be(rng.gen()),
             witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             prev_block_hash: None,
@@ -220,7 +220,7 @@ mod tests {
             header,
             transactions: vec![coinbase.clone()],
         });
-        let res = calculate_tx_merkle_root(block.get_transactions()).unwrap();
+        let res = calculate_tx_merkle_root(block.transactions()).unwrap();
         assert_eq!(res, coinbase.get_id().get());
     }
 }
