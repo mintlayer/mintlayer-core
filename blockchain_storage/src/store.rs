@@ -242,13 +242,13 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
 impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
     // Read a value from the database and decode it
-    fn read<Col, I, T>(&'a self, key: &[u8]) -> crate::Result<Option<T>>
+    fn read<DBIdx, I, T>(&'a self, key: &[u8]) -> crate::Result<Option<T>>
     where
-        Col: storage::schema::Column<Kind = storage::schema::Single>,
-        Schema: storage::schema::HasColumn<Col, I>,
+        DBIdx: storage::schema::DBIndex<Kind = storage::schema::Single>,
+        Schema: storage::schema::HasDBIndex<DBIdx, I>,
         T: Decode,
     {
-        let col = self.0.get::<Col, I>();
+        let col = self.0.get::<DBIdx, I>();
         let data = col.get(key).map_err(crate::Error::from)?;
         Ok(data.map(|d| T::decode_all(d).expect("Cannot decode a database value")))
     }
@@ -261,13 +261,13 @@ impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
 
 impl<'a, Tx: traits::GetMapMut<'a, Schema>> StoreTx<Tx> {
     // Encode a value and write it to the database
-    fn write<Col, I, T>(&'a mut self, key: Vec<u8>, value: &T) -> crate::Result<()>
+    fn write<DBIdx, I, T>(&'a mut self, key: Vec<u8>, value: &T) -> crate::Result<()>
     where
-        Col: storage::schema::Column<Kind = storage::schema::Single>,
-        Schema: storage::schema::HasColumn<Col, I>,
+        DBIdx: storage::schema::DBIndex<Kind = storage::schema::Single>,
+        Schema: storage::schema::HasDBIndex<DBIdx, I>,
         T: Encode,
     {
-        self.0.get_mut::<Col, I>().put(key, value.encode()).map_err(Into::into)
+        self.0.get_mut::<DBIdx, I>().put(key, value.encode()).map_err(Into::into)
     }
 
     // Write a value for a well-known entry
