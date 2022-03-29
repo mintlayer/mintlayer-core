@@ -114,12 +114,6 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
     pub fn queue(&mut self, data: &T) -> Result<ImportQueueState, P2pError> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
 
-        // dependency has been resolved if the export table contains an entry with this
-        // id but the lookup table doesn't meaning there is no out of order blocks
-        if self.export.contains_key(data.get_id()) && !self.lookup.contains_key(&prev_id) {
-            return Ok(ImportQueueState::Resolved);
-        }
-
         match self.export.get_mut(&prev_id) {
             Some(ancestor) => {
                 ancestor.queue(*data, 0);
@@ -137,6 +131,14 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
                         .queue(*data, idx);
                 }
                 None => {
+                    // dependency has been resolved if the export table contains an entry with this
+                    // id but the lookup table doesn't and the entry's parent is not in the export table
+                    if self.export.contains_key(data.get_id())
+                        && !self.lookup.contains_key(&prev_id)
+                    {
+                        return Ok(ImportQueueState::Resolved);
+                    }
+
                     self.export.insert(prev_id, OrderedData(vec![vec![*data]]));
                     self.lookup.insert(*data.get_id(), (prev_id, 0));
                 }
@@ -516,5 +518,35 @@ mod tests {
         );
         assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Resolved));
         assert_eq!(q.get_queued(&hdr1_1), Some(QueuedData(vec![hdr1_1_1])));
+    }
+
+    #[test]
+    fn out_of_order_temporarily_resolved() {
+        let mut q = ImportQueue::new();
+
+        let hdr1 = BlockHeader::with_id(1, Some(1337u64));
+        let hdr2 = BlockHeader::with_id(2, Some(1337u64));
+        let hdr1_1 = BlockHeader::with_id(11, Some(hdr1.id));
+        let hdr2_1 = BlockHeader::with_id(21, Some(hdr2.id));
+        let hdr1_1_1 = BlockHeader::with_id(111, Some(hdr1_1.id));
+
+        // blocks may come in any order
+        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(&hdr2_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
+
+        assert_eq!(q.num_chains(), 1);
+        assert_eq!(q.num_queued(), 5);
+
+        let missing = BlockHeader::with_id(1337u64, Some(1336u64));
+        assert_eq!(q.queue(&missing), Ok(ImportQueueState::Resolved));
+        assert_eq!(
+            q.get_queued(&missing),
+            Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr2_1, hdr1_1_1]))
+        );
+        assert_eq!(q.num_chains(), 0);
+        assert_eq!(q.num_queued(), 0);
     }
 }
