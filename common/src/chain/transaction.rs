@@ -31,7 +31,7 @@ pub use transaction_index::*;
 
 mod transaction_v1;
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Transaction {
     #[codec(index = 1)]
     V1(TransactionV1),

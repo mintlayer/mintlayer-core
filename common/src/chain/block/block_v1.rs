@@ -12,7 +12,7 @@ pub struct BlockHeader {
     pub(super) consensus_data_inner: ConsensusData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
+#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
     pub(super) transactions: Vec<Transaction>,

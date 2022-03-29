@@ -68,7 +68,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Block {
     #[codec(index = 1)]
     V1(BlockV1),
