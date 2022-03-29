@@ -156,7 +156,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     /// Allow to read from storage the previous block and return itself BlockIndex
-    fn get_ancestor(&self, block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
+    fn get_previous_block_index(&self, block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
         let block_index = self
             .db_tx
             .get_block_index(block_id)
@@ -175,7 +175,7 @@ impl<'a> ConsensusRef<'a> {
         let mut block_index = new_tip_block_index.clone();
         while !self.is_block_in_main_chain(&block_index) {
             result.insert(0, block_index.clone());
-            block_index = self.get_ancestor(block_index.get_block_id())?;
+            block_index = self.get_previous_block_index(block_index.get_block_id())?;
         }
         Ok(result)
     }
@@ -183,13 +183,13 @@ impl<'a> ConsensusRef<'a> {
     fn reorganize(
         &mut self,
         best_block_id: Option<Id<Block>>,
-        top_block_index: &BlockIndex,
+        new_block_index: &BlockIndex,
     ) -> Result<(), BlockError> {
-        let new_chain = self.get_new_chain(top_block_index)?;
+        let new_chain = self.get_new_chain(new_block_index)?;
 
         // Disconnect the current chain if it is not a genesis
         if let Some(ref best_block_id) = best_block_id {
-            let common_ancestor = self.get_ancestor(new_chain[0].get_block_id())?;
+            let common_ancestor = self.get_previous_block_index(new_chain[0].get_block_id())?;
             let mut current_ancestor = self
                 .db_tx
                 .get_block_index(best_block_id)?
@@ -200,7 +200,8 @@ impl<'a> ConsensusRef<'a> {
                 && current_ancestor.get_block_id() != common_ancestor.get_block_id()
             {
                 self.disconnect_tip(&mut current_ancestor)?;
-                current_ancestor = self.get_ancestor(current_ancestor.get_block_id())?;
+                current_ancestor =
+                    self.get_previous_block_index(current_ancestor.get_block_id())?;
             }
         }
 
@@ -465,7 +466,7 @@ impl<'a> ConsensusRef<'a> {
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
         // Disconnect block
-        let mut ancestor = self.get_ancestor(block_index.get_block_id())?;
+        let mut ancestor = self.get_previous_block_index(block_index.get_block_id())?;
         ancestor.unset_next_block_id();
         self.db_tx.set_block_index(&ancestor)?;
         Ok(())
@@ -516,7 +517,7 @@ impl<'a> ConsensusRef<'a> {
 
     fn get_block_proof(&self, _block: &Block) -> u128 {
         //TODO: We have to make correct one
-        10
+        1
     }
 
     fn add_to_block_index(
@@ -528,12 +529,9 @@ impl<'a> ConsensusRef<'a> {
             // Genesis case
             None
         } else {
-            match block.get_prev_block_id() {
-                Some(prev_block) => {
-                    self.db_tx.get_block_index(&prev_block).map_err(BlockError::from)?
-                }
-                None => return Err(BlockError::Orphan),
-            }
+            block.get_prev_block_id().map_or(Err(BlockError::Orphan), |prev_block| {
+                self.db_tx.get_block_index(&prev_block).map_err(BlockError::from)
+            })?
         };
         // Set the block height
         let height = prev_block_index.as_ref().map_or(BlockHeight::zero(), |prev_block_index| {
@@ -593,30 +591,29 @@ impl<'a> ConsensusRef<'a> {
     ) -> Result<(), BlockError> {
         // MerkleTree root
         let merkle_tree_root = block.get_merkle_root();
-        match calculate_tx_merkle_root(block.get_transactions()) {
-            Ok(merkle_tree) => {
+        calculate_tx_merkle_root(block.get_transactions()).map_or(
+            Err(BlockError::Unknown),
+            |merkle_tree| {
                 if merkle_tree_root != merkle_tree {
-                    return Err(BlockError::Unknown);
+                    Err(BlockError::Unknown)
+                } else {
+                    Ok(())
                 }
-            }
-            Err(_merkle_error) => {
-                // TODO: Should we return additional error information?
-                return Err(BlockError::Unknown);
-            }
-        }
+            },
+        )?;
 
         // Witness merkle root
         let witness_merkle_root = block.get_witness_merkle_root();
-        match calculate_witness_merkle_root(block.get_transactions()) {
-            Ok(witness_merkle) => {
+        calculate_witness_merkle_root(block.get_transactions()).map_or(
+            Err(BlockError::Unknown),
+            |witness_merkle| {
                 if witness_merkle_root != witness_merkle {
-                    return Err(BlockError::Unknown);
+                    Err(BlockError::Unknown)
+                } else {
+                    Ok(())
                 }
-            }
-            Err(_merkle_error) => {
-                return Err(BlockError::Unknown);
-            }
-        }
+            },
+        )?;
 
         match &block.get_prev_block_id() {
             Some(block_id) => {
@@ -817,7 +814,7 @@ mod tests {
         );
         assert_eq!(block_index.get_prev_block_id(), &None);
         assert_eq!(block_index.get_next_block_id(), &None);
-        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_chain_trust(), 1);
         assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
     }
 
@@ -846,7 +843,7 @@ mod tests {
         assert_eq!(block_index.get_block_id(), &config.genesis_block().get_id());
         assert_eq!(block_index.get_prev_block_id(), &None);
         assert_eq!(block_index.get_next_block_id(), &None);
-        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_chain_trust(), 1);
         assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
         let mut prev_block = config.genesis_block().clone();
@@ -910,7 +907,7 @@ mod tests {
         );
         assert_eq!(block_index.get_prev_block_id(), &None);
         assert_eq!(block_index.get_next_block_id(), &None);
-        assert_eq!(block_index.get_chain_trust(), 10);
+        assert_eq!(block_index.get_chain_trust(), 1);
         assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
         // process the second block

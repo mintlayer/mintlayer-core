@@ -15,7 +15,8 @@ pub struct BlockIndex {
     chain_trust: u128,
     height: BlockHeight,
     time: u32,
-    time_max: u32,
+    // TODO: Discuss with Sam
+    time_max: u32, 
 }
 
 impl BlockIndex {
