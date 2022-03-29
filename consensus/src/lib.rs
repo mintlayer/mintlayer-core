@@ -249,7 +249,7 @@ impl<'a> ConsensusRef<'a> {
 
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
-        for tx in block.get_transactions().iter() {
+        for tx in block.transactions().iter() {
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
 
@@ -422,7 +422,7 @@ impl<'a> ConsensusRef<'a> {
             return Err(BlockError::Unknown);
         }
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
-        let transactions = block.get_transactions();
+        let transactions = block.transactions();
 
         if best_block_id.is_some() && !block.is_genesis(self.chain_config) {
             self.check_block_fee(transactions)?;
@@ -461,7 +461,7 @@ impl<'a> ConsensusRef<'a> {
         );
         let block = self.get_block_from_index(block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(block.get_transactions())?;
+        self.disconnect_transactions(block.transactions())?;
         self.db_tx.set_best_block_id(
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
@@ -529,7 +529,7 @@ impl<'a> ConsensusRef<'a> {
             // Genesis case
             None
         } else {
-            block.get_prev_block_id().map_or(Err(BlockError::Orphan), |prev_block| {
+            block.prev_block_id().map_or(Err(BlockError::Orphan), |prev_block| {
                 self.db_tx.get_block_index(&prev_block).map_err(BlockError::from)
             })?
         };
@@ -539,13 +539,9 @@ impl<'a> ConsensusRef<'a> {
         });
 
         // Set Time Max
-        let time_max =
-            prev_block_index.as_ref().map_or(block.get_block_time(), |prev_block_index| {
-                std::cmp::max(
-                    prev_block_index.get_block_time_max(),
-                    block.get_block_time(),
-                )
-            });
+        let time_max = prev_block_index.as_ref().map_or(block.block_time(), |prev_block_index| {
+            std::cmp::max(prev_block_index.get_block_time_max(), block.block_time())
+        });
 
         // Set Chain Trust
         let chain_trust = prev_block_index
@@ -590,8 +586,8 @@ impl<'a> ConsensusRef<'a> {
         block_source: BlockSource,
     ) -> Result<(), BlockError> {
         // MerkleTree root
-        let merkle_tree_root = block.get_merkle_root();
-        calculate_tx_merkle_root(block.get_transactions()).map_or(
+        let merkle_tree_root = block.merkle_root();
+        calculate_tx_merkle_root(block.transactions()).map_or(
             Err(BlockError::Unknown),
             |merkle_tree| {
                 if merkle_tree_root != merkle_tree {
@@ -603,8 +599,8 @@ impl<'a> ConsensusRef<'a> {
         )?;
 
         // Witness merkle root
-        let witness_merkle_root = block.get_witness_merkle_root();
-        calculate_witness_merkle_root(block.get_transactions()).map_or(
+        let witness_merkle_root = block.witness_merkle_root();
+        calculate_witness_merkle_root(block.transactions()).map_or(
             Err(BlockError::Unknown),
             |witness_merkle| {
                 if witness_merkle_root != witness_merkle {
@@ -615,14 +611,14 @@ impl<'a> ConsensusRef<'a> {
             },
         )?;
 
-        match &block.get_prev_block_id() {
+        match &block.prev_block_id() {
             Some(block_id) => {
                 let previous_block = self
                     .db_tx
                     .get_block_index(&Id::<Block>::new(&block_id.get()))?
                     .ok_or(BlockError::Orphan)?;
                 // Time
-                let block_time = block.get_block_time();
+                let block_time = block.block_time();
                 if previous_block.get_block_time() > block_time {
                     return Err(BlockError::Unknown);
                 }
@@ -644,7 +640,7 @@ impl<'a> ConsensusRef<'a> {
 
     #[allow(dead_code)]
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        let _consensus_data = block.get_consensus_data();
+        let _consensus_data = block.consensus_data();
         // TODO: PoW is not in master at the moment =(
         Ok(())
     }
@@ -692,7 +688,7 @@ impl<'a> ConsensusRef<'a> {
 
     /// Mark new block as an orphan
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
-        if block.get_prev_block_id().is_none() && block.is_genesis(self.chain_config) {
+        if block.prev_block_id().is_none() && block.is_genesis(self.chain_config) {
             // It can't be a genesis block
             return Err(BlockError::Unknown);
         }
@@ -712,10 +708,9 @@ mod tests {
     use super::*;
     use blockchain_storage::Store;
     use common::address::Address;
-    use common::chain::block::Block;
+    use common::chain::block::{Block, ConsensusData};
     use common::chain::config::create_mainnet;
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
-    use common::primitives::consensus_data::ConsensusData;
     use common::primitives::{Amount, Id};
 
     #[allow(dead_code)]
@@ -727,7 +722,7 @@ mod tests {
         // If value of original output is less than 1 then output will disappear in a new block.
         // Otherwise, value will be decreasing for 1.
         let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-            .get_transactions()
+            .transactions()
             .iter()
             .flat_map(|tx| {
                 let tx_id = tx.get_id();
@@ -941,7 +936,7 @@ mod tests {
             block_index.get_block_height().next_height()
         );
 
-        let transactions = new_block.get_transactions();
+        let transactions = new_block.transactions();
         let block_id = new_block.get_id();
 
         let enc_block = new_block.encode();

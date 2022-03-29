@@ -23,10 +23,11 @@ use crate::primitives::{Id, Idable};
 pub mod block_index;
 pub use block_index::*;
 mod block_v1;
+pub mod consensus_data;
 
-use crate::primitives::consensus_data::ConsensusData;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
+pub use consensus_data::ConsensusData;
 use parity_scale_codec::{Decode, Encode};
 
 use super::ChainConfig;

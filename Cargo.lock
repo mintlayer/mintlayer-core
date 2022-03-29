@@ -565,6 +565,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "logging",
+ "num",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "proptest",

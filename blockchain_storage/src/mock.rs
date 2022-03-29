@@ -251,7 +251,7 @@ mod tests {
                 None => return storage::abort("top not set"),
                 Some(best_id) => {
                     // Check the parent block is the current best block
-                    match block.get_prev_block_id() {
+                    match block.prev_block_id() {
                         Some(prev_block_id) => {
                             if prev_block_id != best_id {
                                 return storage::abort("not on top");

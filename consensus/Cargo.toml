@@ -9,6 +9,7 @@ license = "MIT"
 [dependencies]
 blockchain-storage = { path = '../blockchain_storage'}
 common = { path = '../common'}
+num = "0.4.0"
 rand = "0.8.4"
 logging = { path = '../logging'}
 thiserror = "1.0.30"
