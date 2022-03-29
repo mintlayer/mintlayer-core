@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use crate::primitives::{Id, Idable, H256};
+use crate::primitives::{Id, Idable};
 use parity_scale_codec::{Decode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
@@ -102,19 +102,5 @@ impl Transaction {
         match &self {
             Transaction::V1(tx) => tx.get_serialized_hash(),
         }
-    }
-
-    pub fn is_coinbase(&self) -> bool {
-        // TODO: Outpoint should be Option type because for the coinbase it's should be None
-        let inputs = self.get_inputs();
-        if inputs.is_empty() {
-            return false;
-        }
-        let tx_id = inputs[0].get_outpoint().get_tx_id();
-        self.get_inputs().len() == 1
-            && match tx_id {
-                OutPointSourceId::Transaction(id_tx) => id_tx.get() == H256::zero(),
-                OutPointSourceId::BlockReward(id_block) => id_block.get() == H256::zero(),
-            }
     }
 }
