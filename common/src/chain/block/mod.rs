@@ -114,9 +114,9 @@ impl Block {
         }
     }
 
-    pub fn get_consensus_data(&self) -> &ConsensusData {
+    pub fn consensus_data(&self) -> &ConsensusData {
         match self {
-            Block::V1(blk) => blk.get_consensus_data()
+            Block::V1(blk) => blk.consensus_data()
         }
     }
 

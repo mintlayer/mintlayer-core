@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables)]
-// Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
+// TODO: Temporary placeholders. Should be deleted once an actual representation/implementation is ready.
 
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::Block;

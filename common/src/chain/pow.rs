@@ -121,7 +121,7 @@ mod tests {
             0
         );
 
-        assert_eq!(&ConsensusData::None, cfg.genesis_block().get_consensus_data());
+        assert_eq!(&ConsensusData::None, cfg.genesis_block().consensus_data());
 
         if !mainnet_cfg.no_retargeting() {
             let target_max = Uint256([
