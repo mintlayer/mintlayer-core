@@ -236,7 +236,7 @@ impl<'a> ConsensusRef<'a> {
             TxMainChainPosition::new(&block.get_id().get(), offset_tx as u32, enc_tx.len() as u32);
 
         assert_eq!(
-            &self.db_tx.get_mainchain_tx_by_position(&tx_position).ok().flatten().unwrap(),
+            &self.db_tx.get_mainchain_tx_by_position(&tx_position).ok().flatten().expect("Database corrupted! "),
             tx
         );
 
