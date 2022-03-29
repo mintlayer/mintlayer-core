@@ -110,6 +110,12 @@ impl BlockHeight {
 #[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
 pub struct BlockDistance(DistanceIntType);
 
+impl BlockDistance {
+    pub fn new(distance: DistanceIntType) -> Self {
+        Self(distance)
+    }
+}
+
 // Display should be defined for thiserr crate
 impl fmt::Display for BlockDistance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
