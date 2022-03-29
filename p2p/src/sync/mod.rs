@@ -33,6 +33,7 @@ use tokio::sync::{mpsc, oneshot};
 pub mod blkidx;
 pub mod mock_consensus;
 pub mod peer;
+pub mod queue;
 
 /// State of the peer
 #[derive(Debug, PartialEq, Eq)]

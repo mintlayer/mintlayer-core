@@ -70,6 +70,13 @@ impl BlockHeader {
         }
     }
 
+    pub fn with_id(id: BlockId, prev_id: Option<BlockId>) -> Self {
+        Self {
+            id,
+            prev_id,
+        }
+    }
+
     pub fn genesis() -> Self {
         let mut rng = rand::thread_rng();
 

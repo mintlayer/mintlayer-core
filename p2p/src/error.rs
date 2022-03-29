@@ -43,6 +43,7 @@ pub enum P2pError {
     Unknown(String),
     ChannelClosed,
     NoPeers,
+    InvalidData,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
