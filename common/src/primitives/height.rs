@@ -67,7 +67,7 @@ impl Sub<BlockHeight> for BlockHeight {
             return None;
         }
 
-        Some(BlockDistance(h1 - h2))
+        Some(BlockDistance(h1.checked_sub(h2)?))
     }
 }
 
@@ -101,7 +101,7 @@ impl BlockHeight {
     }
 
     pub fn next_height(&self) -> BlockHeight {
-        BlockHeight(self.0 + 1)
+        BlockHeight(self.0.checked_add(1).expect("Block height overflow"))
     }
 }
 
