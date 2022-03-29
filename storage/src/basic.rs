@@ -12,7 +12,7 @@ pub enum StoreMap {
     Multi(StoreMapMulti),
 }
 
-// Set of store maps, one per column.
+// Set of store maps, one per db index.
 type StoreMapSet = BTreeMap<&'static str, StoreMap>;
 
 // These store changes to the data that could be commited or discarded
@@ -32,7 +32,7 @@ enum DeltaMap {
     Multi(DeltaMapMulti),
 }
 
-// Set of delta maps, one per column.
+// Set of delta maps, one per db index.
 type DeltaMapSet = BTreeMap<&'static str, DeltaMap>;
 
 impl DeltaMap {
@@ -82,12 +82,12 @@ impl InitStore for () {
     }
 }
 
-impl<Col: schema::Column, Rest: InitStore> InitStore for (Col, Rest) {
+impl<DBIdx: schema::DBIndex, Rest: InitStore> InitStore for (DBIdx, Rest) {
     fn init() -> BTreeMap<&'static str, StoreMap> {
         let mut map = Rest::init();
         // TODO support multi
-        let orig = map.insert(Col::NAME, StoreMap::Single(BTreeMap::new()));
-        assert!(orig.is_none(), "Column names are not unique");
+        let orig = map.insert(DBIdx::NAME, StoreMap::Single(BTreeMap::new()));
+        assert!(orig.is_none(), "DB index names are not unique");
         map
     }
 }
@@ -141,8 +141,8 @@ impl<'st, Sch: Schema> TransactionRo<'st, Sch> {
 impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRo<'st, Sch> {
     type MapRef = SingleMapView<'m>;
 
-    fn get<'tx: 'm, Col: schema::Column, I>(&'tx self) -> Self::MapRef {
-        if let Some(StoreMap::Single(store)) = self.store.get(Col::NAME) {
+    fn get<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx self) -> Self::MapRef {
+        if let Some(StoreMap::Single(store)) = self.store.get(DBIdx::NAME) {
             SingleMapView::new(store)
         } else {
             panic!("Unexpected map kind")
@@ -187,8 +187,8 @@ impl<'st, Sch: Schema> TransactionRw<'st, Sch> {
 impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRw<'st, Sch> {
     type MapRef = SingleMapRef<'m>;
 
-    fn get<'tx: 'm, Col: schema::Column, I>(&'tx self) -> Self::MapRef {
-        match (self.store.get(Col::NAME), self.delta.get(Col::NAME)) {
+    fn get<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx self) -> Self::MapRef {
+        match (self.store.get(DBIdx::NAME), self.delta.get(DBIdx::NAME)) {
             (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) => {
                 SingleMapRef::new(store, delta)
             }
@@ -200,8 +200,8 @@ impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRw<'
 impl<'st, 'm, Sch: Schema> crate::traits::GetMapMut<'m, Sch> for TransactionRw<'st, Sch> {
     type MapMut = SingleMapMut<'m>;
 
-    fn get_mut<'tx: 'm, Col: schema::Column, I>(&'tx mut self) -> Self::MapMut {
-        match (self.store.get(Col::NAME), self.delta.get_mut(Col::NAME)) {
+    fn get_mut<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx mut self) -> Self::MapMut {
+        match (self.store.get(DBIdx::NAME), self.delta.get_mut(DBIdx::NAME)) {
             (Some(StoreMap::Single(store)), Some(DeltaMap::Single(delta))) => {
                 SingleMapMut::new(store, delta)
             }
