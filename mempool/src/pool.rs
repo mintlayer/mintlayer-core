@@ -380,8 +380,18 @@ impl MempoolStore {
         }
     }
 
-    fn update_ancestor_state(&mut self, entry: &TxMempoolEntry) {
+    fn update_ancestor_fees(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
+        for ancestor in entry.unconfirmed_ancestors(self).0 {
+            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
+            ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
+                .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?
+        }
+        Ok(())
+    }
+
+    fn update_ancestor_state(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
         self.update_ancestor_count(entry);
+        self.update_ancestor_fees(entry)
     }
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
@@ -395,19 +405,41 @@ impl MempoolStore {
         self.spender_txs.retain(|_, id| *id != entry.tx_id())
     }
 
-    fn add_tx(&mut self, entry: TxMempoolEntry) {
+    fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
         self.append_to_parents(&entry);
-        self.update_ancestor_state(&entry);
+        self.update_ancestor_state(&entry)?;
         self.mark_outpoints_as_spent(&entry);
 
-        self.txs_by_descendant_score.entry(entry.fee).or_default().insert(entry.tx_id());
-        self.txs_by_creation_time
-            .entry(entry.creation_time)
+        let creation_time = entry.creation_time;
+        let tx_id = entry.tx_id();
+
+        self.txs_by_id.insert(tx_id, entry.clone());
+
+        self.add_to_descendant_score_index(&entry);
+        self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
+        assert!(self.txs_by_id.get(&tx_id).is_some());
+        Ok(())
+    }
+
+    fn add_to_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
+        // Since the ancestors of `entry` have had their descendant score modified, their ordering
+        // in txs_by_descendant_score may no longer be correct. We thus remove all ancestors and
+        // reinsert them, taking the new, update fees into account
+        let ancestors = entry.unconfirmed_ancestors(self);
+        for entries in self.txs_by_descendant_score.values_mut() {
+            entries.retain(|id| !ancestors.contains(id))
+        }
+        for ancestor_id in ancestors.0 {
+            let ancestor = self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
+            self.txs_by_descendant_score
+                .entry(ancestor.fee)
+                .or_default()
+                .insert(ancestor_id);
+        }
+        self.txs_by_descendant_score
+            .entry(entry.fees_with_descendants)
             .or_default()
             .insert(entry.tx_id());
-        let tx_id = entry.tx_id();
-        self.txs_by_id.insert(entry.tx_id(), entry);
-        assert!(self.txs_by_id.get(&tx_id).is_some());
     }
 
     fn remove_tx(&mut self, tx_id: &Id<Transaction>) {
@@ -786,7 +818,7 @@ where
         self.store.drop_conflicts(conflicts);
         let entry = self.create_entry(tx)?;
         let id = entry.tx.get_id().get();
-        self.store.add_tx(entry);
+        self.store.add_tx(entry)?;
         self.limit_mempool_size()?;
         self.store.txs_by_id.contains_key(&id).then(|| ()).ok_or(Error::MempoolFull)
     }
@@ -1933,7 +1965,7 @@ mod tests {
         let ids = entries.clone().into_iter().map(|entry| entry.tx_id()).collect::<Vec<_>>();
 
         for entry in entries.into_iter() {
-            mempool.store.add_tx(entry);
+            mempool.store.add_tx(entry)?;
         }
 
         let entry1 = mempool.store.get_entry(ids.get(0).expect("index")).expect("entry");
