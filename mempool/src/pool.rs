@@ -380,6 +380,10 @@ impl MempoolStore {
         }
     }
 
+    fn update_ancestor_state(&mut self, entry: &TxMempoolEntry) {
+        self.update_ancestor_count(entry);
+    }
+
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         let id = entry.tx_id();
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
@@ -393,7 +397,7 @@ impl MempoolStore {
 
     fn add_tx(&mut self, entry: TxMempoolEntry) {
         self.append_to_parents(&entry);
-        self.update_ancestor_count(&entry);
+        self.update_ancestor_state(&entry);
         self.mark_outpoints_as_spent(&entry);
 
         self.txs_by_descendant_score.entry(entry.fee).or_default().insert(entry.tx_id());
