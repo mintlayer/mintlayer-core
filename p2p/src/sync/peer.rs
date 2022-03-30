@@ -59,6 +59,10 @@ where
         self.state = state;
     }
 
+    pub fn index(&self) -> &index::PeerIndex {
+        &self.index
+    }
+
     pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
         self.index.initialize(headers);
     }
@@ -86,6 +90,12 @@ where
         &mut self,
         locator: Vec<mock_consensus::BlockHeader>,
     ) -> error::Result<()> {
+        log::trace!(
+            "send header request {:#?} to remote peer {:?}",
+            locator,
+            self.peer_id
+        );
+
         self.tx
             .send(event::PeerEvent::Syncing(
                 event::PeerSyncEvent::GetHeaders {
@@ -101,6 +111,12 @@ where
         &mut self,
         headers: Vec<mock_consensus::BlockHeader>,
     ) -> error::Result<()> {
+        log::trace!(
+            "send headers {:#?} to remote peer {:?}",
+            headers,
+            self.peer_id
+        );
+
         self.tx
             .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
                 peer_id: None,
@@ -118,6 +134,12 @@ where
             return Ok(());
         }
 
+        log::trace!(
+            "send block request {:#?} to remote peer {:?}",
+            headers,
+            self.peer_id
+        );
+
         self.tx
             .send(event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
                 peer_id: None,
@@ -128,6 +150,12 @@ where
     }
 
     pub async fn send_blocks(&mut self, blocks: Vec<mock_consensus::Block>) -> error::Result<()> {
+        log::trace!(
+            "send blocks {:#?} to remote peer {:?}",
+            blocks,
+            self.peer_id
+        );
+
         self.tx
             .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks {
                 peer_id: None,

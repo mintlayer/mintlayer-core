@@ -19,6 +19,7 @@
 use crate::{
     error::{self, P2pError},
     event,
+    message::{MessageType, SyncingMessage},
     net::{self, FloodsubService, NetworkService},
 };
 use common::chain::ChainConfig;
@@ -109,19 +110,42 @@ where
     }
 
     /// Handle floodsub event
-    pub fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
+    pub async fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
         let net::FloodsubEvent::MessageReceived {
-            peer_id: _,
+            peer_id,
             topic,
             message,
         } = event;
 
         match topic {
             net::FloodsubTopic::Transactions => {
-                log::debug!("received new transaction: {:#?}", message);
+                log::warn!("received new transaction: {:#?}", message);
             }
             net::FloodsubTopic::Blocks => {
-                log::debug!("received new block: {:#?}", message);
+                log::debug!(
+                    "received new block ({:#?}) from peer {:?}",
+                    message,
+                    peer_id
+                );
+
+                if let MessageType::Syncing(SyncingMessage::Block { block }) = message.msg {
+                    if !self.peers.contains_key(&peer_id) {
+                        log::debug!(
+                            "received a block ({:?}) from an unknown source: {:?}",
+                            block,
+                            peer_id
+                        );
+                    }
+
+                    // update the intermediary peer indices and send the received block
+                    // to chainstate for validation
+                    for (id, ctx) in self.peers.iter_mut() {
+                        ctx.add_block(&block);
+                    }
+
+                    // TODO: if we're still syncing, this block is not send to chainstate but queued
+                    self.p2p_handle.new_block(block).await?;
+                }
             }
         }
 
@@ -170,6 +194,8 @@ where
                 let uniq_headers = self.p2p_handle.get_uniq_headers(headers.clone()).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
+                // TODO: what if `headers` is empty meaning the peers are in sync?
+
                 match peer {
                     Some(peer) => {
                         peer.initialize_index(&headers);
@@ -186,6 +212,7 @@ where
                 }
             }
             event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
+                // TODO: verify that peer has requested these headers before?
                 let blocks = self.p2p_handle.get_blocks(headers).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
@@ -206,7 +233,7 @@ where
         loop {
             tokio::select! {
                 res = self.handle.poll_next() => {
-                    self.on_floodsub_event(res?)?;
+                    self.on_floodsub_event(res?).await?;
                 }
                 res = self.rx_sync.recv().fuse() => {
                     self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
@@ -222,7 +249,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{mock::MockService, FloodsubService};
+    use crate::{
+        message::{self, MessageType, SyncingMessage},
+        net::{mock::MockService, FloodsubService},
+    };
     use common::chain::config;
     use std::net::SocketAddr;
 
@@ -326,5 +356,56 @@ mod tests {
             Ok(())
         );
         assert!(mgr.peers.is_empty());
+    }
+
+    // TODO: add more tests
+    #[tokio::test]
+    async fn new_block_from_floodsub() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(1);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+        let announced_block = mock_consensus::Block::new(Some(1337));
+        let block_copy = announced_block.clone();
+
+        let handle = tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
+
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::NewBlock { block, .. },
+                {
+                    assert_eq!(block_copy, block);
+                }
+            );
+        });
+
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
+
+        mgr.on_floodsub_event(net::FloodsubEvent::MessageReceived {
+            peer_id,
+            topic: net::FloodsubTopic::Blocks,
+            message: message::Message {
+                magic: [1, 2, 3, 4],
+                msg: MessageType::Syncing(SyncingMessage::Block {
+                    block: announced_block,
+                }),
+            },
+        })
+        .await;
+
+        handle.await.unwrap();
     }
 }

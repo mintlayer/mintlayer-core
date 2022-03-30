@@ -24,7 +24,8 @@ use logging::log;
 use p2p::{
     error::{self, P2pError},
     event,
-    net::{self, mock::MockService, FloodsubService, NetworkService},
+    message::{self, MessageType, SyncingMessage},
+    net::{self, mock::MockService, FloodsubService, FloodsubTopic, NetworkService},
     sync::{mock_consensus, SyncManager},
 };
 use std::net::SocketAddr;
@@ -133,7 +134,7 @@ where
     T::FloodsubHandle: FloodsubService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let (_, flood) = T::start(addr, &[], &[]).await.unwrap();
+    let (_, flood) = T::start(addr, &[], &[FloodsubTopic::Blocks]).await.unwrap();
     let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
     let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
     let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
@@ -985,4 +986,102 @@ async fn two_remote_nodes_different_chains() {
         local_orig_cons.blks.store.len() + 13,
         local_cons.blks.store.len()
     );
+}
+
+// nodes are in sync and remote node publishes a new block
+// and the local state is updated accordingly
+#[tokio::test]
+async fn nodes_in_sync_remote_publishes_new_block() {
+    let addr: SocketAddr = test_utils::make_address("[::1]:");
+    let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    let mut remote_cons = mock_consensus::Consensus::with_height(16);
+
+    let (peer_tx, mut peer_rx) = mpsc::channel(1);
+    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+
+    let mut local_cons = remote_cons.clone();
+    let handle = tokio::spawn(async move {
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
+
+        get_message!(
+            rx_p2p.recv().await.unwrap(),
+            event::P2pEvent::GetHeaders { locator, response },
+            {
+                response.send(local_cons.get_headers(&locator));
+            }
+        );
+
+        // accept the floodsub block
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 1).await;
+
+        local_cons
+    });
+
+    // add peer to the hashmap of known peers and send getheaders request to them
+    mgr.on_sync_event(event::SyncControlEvent::Connected {
+        peer_id,
+        tx: peer_tx,
+    })
+    .await;
+
+    // verify that when the connection has been established,
+    // the remote peer will receive getheaders request
+    get_message!(
+        peer_rx.recv().await.unwrap(),
+        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
+            peer_id: _,
+            locator
+        }),
+        {
+            mgr.on_peer_event(event::PeerSyncEvent::Headers {
+                peer_id: Some(peer_id),
+                headers: remote_cons.get_headers(&locator),
+            })
+            .await;
+        }
+    );
+
+    // now remote peer sends getheaders request to local sync node and it should
+    // get the same response
+    mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
+        peer_id: Some(peer_id),
+        locator: remote_cons.get_locator(),
+    })
+    .await;
+
+    // after the possibly new headers have been received from remote, verify that they
+    // aren't actually unique and that remote node doesn't have to download any new
+    // blocks from the local node
+    get_message!(
+        peer_rx.recv().await.unwrap(),
+        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
+            peer_id: _,
+            headers
+        }),
+        {
+            assert!(remote_cons.get_uniq_headers(&headers).is_empty());
+        }
+    );
+
+    // add new block to remote's chain and advertise it over the floodsub
+    let block = mock_consensus::Block::new(Some(remote_cons.mainchain.blkid));
+    remote_cons.accept_block(block.clone());
+
+    mgr.on_floodsub_event(net::FloodsubEvent::MessageReceived {
+        peer_id,
+        topic: net::FloodsubTopic::Blocks,
+        message: message::Message {
+            magic: [1, 2, 3, 4],
+            msg: MessageType::Syncing(SyncingMessage::Block { block }),
+        },
+    })
+    .await;
+
+    // wait for the blockindex task to finish
+    let local_cons = handle.await.unwrap();
+
+    // verify that the remote and local chains are the same
+    // after the block announcement
+    assert_eq!(remote_cons.mainchain, local_cons.mainchain);
 }
