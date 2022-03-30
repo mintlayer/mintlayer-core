@@ -67,7 +67,7 @@ pub enum ImportQueueState {
     Resolved,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ImportQueue<T: Orderable> {
     lookup: HashMap<T::Id, (T::Id, usize)>,
     export: HashMap<T::Id, OrderedData<T>>,
@@ -170,18 +170,6 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
 mod tests {
     use super::*;
     use crate::sync::mock_consensus::{BlockHeader, BlockId};
-
-    impl Orderable for BlockHeader {
-        type Id = BlockId;
-
-        fn get_id(&self) -> &Self::Id {
-            &self.id
-        }
-
-        fn get_prev_id(&self) -> &Option<Self::Id> {
-            &self.prev_id
-        }
-    }
 
     #[test]
     fn add_block() {

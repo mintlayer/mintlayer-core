@@ -20,8 +20,9 @@ use crate::{
     error::{self, P2pError},
     event,
     net::{self, FloodsubService, NetworkService},
-    sync::{self, blkidx, mock_consensus},
+    sync::{self, index, mock_consensus},
 };
+use logging::log;
 use tokio::sync::mpsc;
 
 pub struct PeerSyncState<T>
@@ -31,14 +32,14 @@ where
     /// Unique peer ID
     peer_id: T::PeerId,
 
-    // State of the peer
+    /// State of the peer
     state: sync::SyncState,
 
     /// TX channel for sending syncing messages to remote peer
     tx: mpsc::Sender<event::PeerEvent<T>>,
 
     /// Peer block index
-    blkidx: Option<blkidx::PeerBlockIndex>,
+    index: index::PeerIndex,
 }
 
 impl<T> PeerSyncState<T>
@@ -48,18 +49,37 @@ where
     pub fn new(peer_id: T::PeerId, tx: mpsc::Sender<event::PeerEvent<T>>) -> Self {
         Self {
             peer_id,
-            state: sync::SyncState::Idle,
+            state: sync::SyncState::Uninitialized,
             tx,
-            blkidx: None,
+            index: index::PeerIndex::new(),
         }
-    }
-
-    pub fn add_blkidx(&mut self, blkidx: blkidx::PeerBlockIndex) {
-        self.blkidx = Some(blkidx);
     }
 
     pub fn set_state(&mut self, state: sync::SyncState) {
         self.state = state;
+    }
+
+    pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
+        self.index.initialize(headers);
+    }
+
+    pub fn add_block(
+        &mut self,
+        block: &mock_consensus::Block,
+    ) -> error::Result<index::PeerIndexState> {
+        log::trace!(
+            "block ({:?}) accepted to peer's ({:?}) intermediary index",
+            block,
+            self.peer_id
+        );
+
+        self.index.add_block(block.header).map_err(|e| {
+            log::error!(
+                "failed to add block to peer's ({:#?}) intermediary index",
+                self.peer_id
+            );
+            e
+        })
     }
 
     pub async fn get_headers(
@@ -140,30 +160,14 @@ mod tests {
     #[test]
     fn create_new_peersyncstate() {
         let (peer, rx) = new_mock_peersyncstate();
-
-        assert_eq!(peer.blkidx, None);
-        assert_eq!(peer.state, sync::SyncState::Idle);
-    }
-
-    #[test]
-    fn test_add_block_index() {
-        let (mut peer, rx) = new_mock_peersyncstate();
-
-        assert_eq!(peer.blkidx, None);
-        assert_eq!(peer.state, sync::SyncState::Idle);
-
-        let blkidx = blkidx::PeerBlockIndex::new();
-        peer.add_blkidx(blkidx.clone());
-
-        assert_ne!(peer.blkidx, None);
-        assert_eq!(peer.blkidx, Some(blkidx));
+        assert_eq!(peer.state, sync::SyncState::Uninitialized);
     }
 
     #[test]
     fn test_set_state() {
         let (mut peer, rx) = new_mock_peersyncstate();
 
-        assert_eq!(peer.state, sync::SyncState::Idle);
+        assert_eq!(peer.state, sync::SyncState::Uninitialized);
         peer.set_state(sync::SyncState::DownloadingBlocks);
         assert_eq!(peer.state, sync::SyncState::DownloadingBlocks);
     }
@@ -267,5 +271,32 @@ mod tests {
             peer.send_blocks(blocks.clone()).await,
             Err(P2pError::ChannelClosed)
         );
+    }
+
+    #[tokio::test]
+    async fn add_blocks_before_headers() {
+        let (mut peer, mut rx) = new_mock_peersyncstate();
+        let block1 = mock_consensus::Block::new(Some(444));
+        let block1_1 = mock_consensus::Block::new(Some(block1.header.id));
+        let block1_1_1 = mock_consensus::Block::new(Some(block1_1.header.id));
+
+        assert_eq!(peer.add_block(&block1), Ok(index::PeerIndexState::Queued));
+        assert_eq!(peer.add_block(&block1_1), Ok(index::PeerIndexState::Queued));
+        assert_eq!(
+            peer.add_block(&block1_1_1),
+            Ok(index::PeerIndexState::Queued)
+        );
+
+        assert_eq!(peer.index.queue().num_chains(), 1);
+        assert_eq!(peer.index.queue().num_queued(), 3);
+
+        let headers = &[
+            mock_consensus::BlockHeader::with_id(444, Some(333)),
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(777, Some(666)),
+        ];
+        peer.initialize_index(headers);
+        assert_eq!(peer.index.queue().num_chains(), 0);
+        assert_eq!(peer.index.queue().num_queued(), 0);
     }
 }

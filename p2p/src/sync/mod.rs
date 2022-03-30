@@ -30,7 +30,7 @@ use std::{
 };
 use tokio::sync::{mpsc, oneshot};
 
-pub mod blkidx;
+pub mod index;
 pub mod mock_consensus;
 pub mod peer;
 pub mod queue;
@@ -39,13 +39,16 @@ pub mod queue;
 #[derive(Debug, PartialEq, Eq)]
 pub enum SyncState {
     /// No activity with the peer
-    Idle,
+    Uninitialized,
 
     // Downloading headers
     DownloadingHeaders,
 
     /// Downloading blocks
     DownloadingBlocks,
+
+    /// Peer is up to date and idling
+    Idle,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -96,7 +99,7 @@ where
     ) -> Self {
         Self {
             config,
-            state: SyncState::Idle,
+            state: SyncState::Uninitialized,
             handle,
             p2p_handle: event::P2pEventHandle::new(tx_p2p),
             rx_sync,
@@ -164,13 +167,12 @@ where
                 }
             }
             event::PeerSyncEvent::Headers { peer_id, headers } => {
-                let blkidx = blkidx::PeerBlockIndex::from_headers(&headers);
-                let uniq_headers = self.p2p_handle.get_uniq_headers(headers).await?;
+                let uniq_headers = self.p2p_handle.get_uniq_headers(headers.clone()).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
                 match peer {
                     Some(peer) => {
-                        peer.add_blkidx(blkidx);
+                        peer.initialize_index(&headers);
                         peer.get_blocks(uniq_headers).await?;
                     }
                     None => {

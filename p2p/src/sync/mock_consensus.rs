@@ -71,10 +71,7 @@ impl BlockHeader {
     }
 
     pub fn with_id(id: BlockId, prev_id: Option<BlockId>) -> Self {
-        Self {
-            id,
-            prev_id,
-        }
+        Self { id, prev_id }
     }
 
     pub fn genesis() -> Self {
@@ -84,6 +81,18 @@ impl BlockHeader {
             id: rng.gen::<u64>() as BlockId,
             prev_id: None,
         }
+    }
+}
+
+impl crate::sync::queue::Orderable for BlockHeader {
+    type Id = BlockId;
+
+    fn get_id(&self) -> &Self::Id {
+        &self.id
+    }
+
+    fn get_prev_id(&self) -> &Option<Self::Id> {
+        &self.prev_id
     }
 }
 
