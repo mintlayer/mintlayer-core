@@ -168,19 +168,15 @@ async fn local_and_remote_in_sync() {
         // and remote node are in sync, `get_uniq_headers()` returns an empty vector
         get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
 
-        // verify that after local node has sent its header request, the remote node sends its own headers
-        // request, process is appropriately. In practice these could come in either order
         get_message!(
             rx_p2p.recv().await.unwrap(),
-            event::P2pEvent::GetHeaders { locator, response },
+            event::P2pEvent::GetBestBlockHeader { response },
             {
-                let all_headers = local_cons.as_vec();
-                let headers = local_cons.get_headers(&locator);
-
-                assert_eq!((headers[0], headers[1]), (all_headers[1], all_headers[0]));
-                response.send(headers);
+                response.send(local_cons.get_best_block_header());
             }
         );
+
+        local_cons
     });
 
     // add peer to the hashmap of known peers and send getheaders request to them
@@ -212,32 +208,8 @@ async fn local_and_remote_in_sync() {
     })
     .await;
 
-    // now remote peer sends getheaders request to local sync node and it should
-    // get the same response
-    let locator = remote_cons.get_locator();
-
-    assert_eq!(
-        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-            peer_id: Some(peer_id),
-            locator,
-        })
-        .await,
-        Ok(())
-    );
-
-    // after the possibly new headers have been received from remote, verify that they
-    // aren't actually unique and that remote node doesn't have to download any new
-    // blocks from the local node
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-            peer_id: _,
-            headers
-        }),
-        {
-            assert!(remote_cons.get_uniq_headers(&headers).is_empty());
-        }
-    );
+    let local_cons = handle.await.unwrap();
+    assert_eq!(local_cons.mainchain, remote_cons.mainchain);
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
@@ -366,6 +338,14 @@ async fn local_ahead_by_12_blocks() {
 
         // as local is ahead of remote, getuniqheaders returns an empty vector
         get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
+
+        get_message!(
+            rx_p2p.recv().await.unwrap(),
+            event::P2pEvent::GetBestBlockHeader { response },
+            {
+                response.send(local_cons.get_best_block_header());
+            }
+        );
 
         // verify that as the local node is ahead of remote by 12 blocks,
         // the header response contains at least 12 headers
@@ -1003,6 +983,14 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     let handle = tokio::spawn(async move {
         get_locator(&mut rx_p2p, &mut local_cons).await;
         get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &[]).await;
+
+        get_message!(
+            rx_p2p.recv().await.unwrap(),
+            event::P2pEvent::GetBestBlockHeader { response },
+            {
+                response.send(local_cons.get_best_block_header());
+            }
+        );
 
         get_message!(
             rx_p2p.recv().await.unwrap(),

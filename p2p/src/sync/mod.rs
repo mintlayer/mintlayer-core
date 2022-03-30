@@ -194,12 +194,18 @@ where
                 let uniq_headers = self.p2p_handle.get_uniq_headers(headers.clone()).await?;
                 let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
 
-                // TODO: what if `headers` is empty meaning the peers are in sync?
-
                 match peer {
                     Some(peer) => {
-                        peer.initialize_index(&headers);
-                        peer.get_blocks(uniq_headers).await?;
+                        if uniq_headers.is_empty() {
+                            peer.initialize_index(&[self
+                                .p2p_handle
+                                .get_best_block_header()
+                                .await?]);
+                        } else {
+                            // TODO: create block request
+                            peer.get_blocks(uniq_headers).await?;
+                            peer.initialize_index(&headers);
+                        }
                     }
                     None => {
                         log::error!("peer {:?} not known by sync manager", peer_id)

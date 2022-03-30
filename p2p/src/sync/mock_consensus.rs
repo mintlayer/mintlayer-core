@@ -443,6 +443,10 @@ impl Consensus {
         headers.iter().map(|hdr| self.blks.get(&hdr.id).unwrap()).cloned().collect()
     }
 
+    pub fn get_best_block_header(&self) -> BlockHeader {
+        self.blks.get(&self.mainchain.blkid).unwrap().header
+    }
+
     pub async fn start(&mut self, mut rx_p2p: mpsc::Receiver<ConsEvent>) {
         loop {
             match rx_p2p.recv().await.unwrap() {

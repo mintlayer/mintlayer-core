@@ -120,6 +120,9 @@ pub enum P2pEvent {
         locator: Vec<sync::mock_consensus::BlockHeader>,
         response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
     },
+    GetBestBlockHeader {
+        response: oneshot::Sender<sync::mock_consensus::BlockHeader>,
+    },
     GetUniqHeaders {
         headers: Vec<sync::mock_consensus::BlockHeader>,
         response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
