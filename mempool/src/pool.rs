@@ -130,6 +130,7 @@ struct TxMempoolEntry {
     parents: BTreeSet<H256>,
     children: BTreeSet<H256>,
     count_with_descendants: usize,
+    fees_with_descendants: Amount,
     creation_time: Time,
 }
 
@@ -147,6 +148,7 @@ impl TxMempoolEntry {
             children: BTreeSet::default(),
             count_with_descendants: 1,
             creation_time,
+            fees_with_descendants: fee,
         }
     }
 
