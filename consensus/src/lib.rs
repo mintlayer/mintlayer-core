@@ -126,7 +126,7 @@ impl Consensus {
         let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
-        let block_index = consensus_ref.accept_block(&block, &best_block_id);
+        let block_index = consensus_ref.accept_block(&block);
         if block_index == Err(BlockError::Orphan) {
             if BlockSource::Local == block_source {
                 // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
@@ -286,23 +286,25 @@ impl<'a> ConsensusRef<'a> {
     fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in transactions.iter().rev() {
-            let inputs = tx.get_inputs();
-            for input in inputs {
+            let tx_index = match cached_inputs.get_mut(&tx.get_id()) {
+                Some(tx_index) => tx_index,
+                None => {
+                    cached_inputs.insert(
+                        tx.get_id(),
+                        self.db_tx
+                            .get_mainchain_tx_index(&tx.get_id())?
+                            .ok_or(BlockError::Unknown)?,
+                    );
+                    cached_inputs.get_mut(&tx.get_id()).expect("Software corrupted")
+                }
+            };
+            for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
-
-                let mut tx_index = match cached_inputs.get(&tx.get_id()) {
-                    Some(tx_index) => tx_index.clone(),
-                    None => self
-                        .db_tx
-                        .get_mainchain_tx_index(&tx.get_id())?
-                        .ok_or(BlockError::Unknown)?,
-                };
 
                 if input_index >= tx_index.get_output_count() {
                     return Err(BlockError::Unknown);
                 }
                 tx_index.unspend(input_index).map_err(BlockError::from)?;
-                cached_inputs.insert(tx.get_id(), tx_index.clone());
             }
             // TODO: Seems, would be better to remove TxMainChainIndex for disconnected block.
             // self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
@@ -501,21 +503,19 @@ impl<'a> ConsensusRef<'a> {
         if connected_genesis.is_some() {
             return Ok(connected_genesis);
         }
-
-        if let Some(best_block_id) = best_block_id {
-            // Chain trust is higher than the best block
-            let current_best_block_index = self
-                .db_tx
-                .get_block_index(&best_block_id)
-                .map_err(BlockError::from)?
-                .expect("Inconsistent DB");
-            if new_block_index.get_chain_trust() > current_best_block_index.get_chain_trust() {
-                self.reorganize(Some(best_block_id), &new_block_index)?;
-                return Ok(Some(new_block_index));
-            } else {
-                // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
-                self.db_tx.set_block_index(&new_block_index)?;
-            }
+        let best_block_id = best_block_id.expect("Best block must be set");
+        // Chain trust is higher than the best block
+        let current_best_block_index = self
+            .db_tx
+            .get_block_index(&best_block_id)
+            .map_err(BlockError::from)?
+            .expect("Inconsistent DB");
+        if new_block_index.get_chain_trust() > current_best_block_index.get_chain_trust() {
+            self.reorganize(Some(best_block_id), &new_block_index)?;
+            return Ok(Some(new_block_index));
+        } else {
+            // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
+            self.db_tx.set_block_index(&new_block_index)?;
         }
         Ok(None)
     }
@@ -525,13 +525,9 @@ impl<'a> ConsensusRef<'a> {
         1
     }
 
-    fn add_to_block_index(
-        &mut self,
-        block: &Block,
-        best_block_id: &Option<Id<Block>>,
-    ) -> Result<BlockIndex, BlockError> {
-        let prev_block_index = if best_block_id.is_none() && block.is_genesis(self.chain_config) {
-            // Genesis case
+    fn add_to_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+        let prev_block_index = if block.is_genesis(self.chain_config) {
+            // Genesis case. We should use then_some when stabilized feature(bool_to_option)
             None
         } else {
             block.prev_block_id().map_or(Err(BlockError::Orphan), |prev_block| {
@@ -556,12 +552,8 @@ impl<'a> ConsensusRef<'a> {
         Ok(block_index)
     }
 
-    fn accept_block(
-        &mut self,
-        block: &Block,
-        best_block_id: &Option<Id<Block>>,
-    ) -> Result<BlockIndex, BlockError> {
-        let block_index = self.add_to_block_index(block, best_block_id)?;
+    fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+        let block_index = self.add_to_block_index(block)?;
         self.check_block_index(&block_index)?;
         self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
         self.db_tx.add_block(block).map_err(BlockError::from)?;
