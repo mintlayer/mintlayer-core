@@ -125,6 +125,6 @@ pub enum P2pEvent {
     },
     GetUniqHeaders {
         headers: Vec<sync::mock_consensus::BlockHeader>,
-        response: oneshot::Sender<Vec<sync::mock_consensus::BlockHeader>>,
+        response: oneshot::Sender<Option<Vec<sync::mock_consensus::BlockHeader>>>,
     },
 }

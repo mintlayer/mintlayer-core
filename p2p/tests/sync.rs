@@ -82,7 +82,11 @@ async fn get_uniq_headers_and_verify(
         {
             let uniq = cons.get_uniq_headers(&headers);
             assert_eq!(&uniq, remote);
-            response.send(uniq);
+            if uniq.is_empty() {
+                response.send(None);
+            } else {
+                response.send(Some(uniq));
+            }
         }
     );
 }
