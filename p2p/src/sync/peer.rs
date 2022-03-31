@@ -67,6 +67,13 @@ where
         self.index.initialize(headers);
     }
 
+    pub fn get_known_headers<'a>(
+        &self,
+        headers: &'a [mock_consensus::BlockHeader],
+    ) -> Vec<&'a mock_consensus::BlockHeader> {
+        headers.iter().filter(|header| self.index.contains(header)).collect()
+    }
+
     pub fn add_block(
         &mut self,
         block: &mock_consensus::Block,
@@ -326,5 +333,60 @@ mod tests {
         peer.initialize_index(headers);
         assert_eq!(peer.index.queue().num_chains(), 0);
         assert_eq!(peer.index.queue().num_queued(), 0);
+    }
+
+    #[test]
+    fn test_get_known_headers() {
+        let (mut peer, mut rx) = new_mock_peersyncstate();
+        let headers = &[
+            mock_consensus::BlockHeader::with_id(444, Some(333)),
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(777, Some(666)),
+            mock_consensus::BlockHeader::with_id(888, Some(777)),
+            mock_consensus::BlockHeader::with_id(999, Some(888)),
+        ];
+        peer.initialize_index(headers);
+
+        assert_eq!(
+            peer.get_known_headers(&[
+                mock_consensus::BlockHeader::with_id(444, Some(333)),
+                mock_consensus::BlockHeader::with_id(666, Some(555)),
+                mock_consensus::BlockHeader::with_id(777, Some(666)),
+                mock_consensus::BlockHeader::with_id(888, Some(777)),
+                mock_consensus::BlockHeader::with_id(999, Some(888)),
+            ]),
+            vec![
+                &mock_consensus::BlockHeader::with_id(444, Some(333)),
+                &mock_consensus::BlockHeader::with_id(666, Some(555)),
+                &mock_consensus::BlockHeader::with_id(777, Some(666)),
+                &mock_consensus::BlockHeader::with_id(888, Some(777)),
+                &mock_consensus::BlockHeader::with_id(999, Some(888)),
+            ]
+        );
+
+        assert_eq!(
+            peer.get_known_headers(&[
+                mock_consensus::BlockHeader::with_id(999, Some(888)),
+                mock_consensus::BlockHeader::with_id(888, Some(777)),
+                mock_consensus::BlockHeader::with_id(444, Some(333)),
+                mock_consensus::BlockHeader::with_id(777, Some(666)),
+            ]),
+            vec![
+                &mock_consensus::BlockHeader::with_id(999, Some(888)),
+                &mock_consensus::BlockHeader::with_id(888, Some(777)),
+                &mock_consensus::BlockHeader::with_id(444, Some(333)),
+                &mock_consensus::BlockHeader::with_id(777, Some(666)),
+            ]
+        );
+
+        // unknown headers
+        assert_eq!(
+            peer.get_known_headers(&[
+                mock_consensus::BlockHeader::with_id(111, Some(1)),
+                mock_consensus::BlockHeader::with_id(222, Some(2)),
+                mock_consensus::BlockHeader::with_id(333, Some(3)),
+            ]),
+            Vec::<&mock_consensus::BlockHeader>::new()
+        );
     }
 }

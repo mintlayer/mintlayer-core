@@ -79,6 +79,10 @@ impl PeerIndex {
         &self.queue
     }
 
+    pub fn contains(&self, header: &BlockHeader) -> bool {
+        self.headers.contains_key(&header.id)
+    }
+
     /// Initialize the block index from headers
     pub fn initialize(&mut self, headers: &[BlockHeader]) {
         (self.index, self.headers) = headers
