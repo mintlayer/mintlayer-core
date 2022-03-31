@@ -34,6 +34,10 @@ mod orphan_blocks;
 use parity_scale_codec::Encode;
 use std::collections::BTreeMap;
 
+type CachedInputs = BTreeMap<Id<Transaction>, TxMainChainIndex>;
+type PeerId = u32;
+type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
+
 #[allow(dead_code)]
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
@@ -90,9 +94,6 @@ struct Consensus {
     orphan_blocks: OrphanBlocksPool,
 }
 
-type CachedInputs = BTreeMap<Id<Transaction>, TxMainChainIndex>;
-type PeerId = u32;
-
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum BlockSource {
     Peer(PeerId),
@@ -146,7 +147,7 @@ impl Consensus {
 struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
-    db_tx: <blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+    db_tx: TxRw<'a>,
     orphan_blocks: &'a mut OrphanBlocksPool,
 }
 
@@ -308,8 +309,8 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn get_mainchain_index_by_outpoint(
-        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+    fn get_mainchain_index_by_outpoint<TxRo: BlockchainStorageRead>(
+        tx_db: &TxRo,
         outpoint: &OutPoint,
     ) -> Result<TxMainChainIndex, BlockError> {
         let tx_id = match outpoint.get_tx_id() {
@@ -321,8 +322,8 @@ impl<'a> ConsensusRef<'a> {
         tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)
     }
 
-    fn get_tx_by_outpoint(
-        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+    fn get_tx_by_outpoint<TxRo: BlockchainStorageRead>(
+        tx_db: &TxRo,
         outpoint: &OutPoint,
     ) -> Result<Transaction, BlockError> {
         let tx_id = match outpoint.get_tx_id() {
@@ -340,8 +341,8 @@ impl<'a> ConsensusRef<'a> {
         }
     }
 
-    fn get_output_by_outpoint(
-        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+    fn get_output_by_outpoint<TxRo: BlockchainStorageRead>(
+        tx_db: &TxRo,
         outpoint: &OutPoint,
     ) -> Result<common::chain::TxOutput, BlockError> {
         let tx = Self::get_tx_by_outpoint(tx_db, outpoint)?;
@@ -350,8 +351,8 @@ impl<'a> ConsensusRef<'a> {
         Ok(tx.get_outputs()[output_index].clone())
     }
 
-    fn get_input_value(
-        tx_db: &<blockchain_storage::Store as Transactional<'a>>::TransactionRw,
+    fn get_input_value<TxRo: BlockchainStorageRead>(
+        tx_db: &TxRo,
         input: &common::chain::TxInput,
     ) -> Result<Amount, BlockError> {
         let tx = Self::get_tx_by_outpoint(tx_db, input.get_outpoint())?;
