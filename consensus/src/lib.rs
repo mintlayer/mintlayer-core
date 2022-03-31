@@ -580,6 +580,11 @@ impl<'a> ConsensusRef<'a> {
         block: &Block,
         block_source: BlockSource,
     ) -> Result<(), BlockError> {
+        // Allows the previous block to be None only if the block hash is genesis
+        if !block.is_genesis(self.chain_config) && block.prev_block_id().is_none() {
+            return Err(BlockError::Unknown);
+        }
+
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.transactions()).map_or(
