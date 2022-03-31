@@ -187,7 +187,9 @@ impl<'a> ConsensusRef<'a> {
 
         // Disconnect the current chain if it is not a genesis
         if let Some(ref best_block_id) = best_block_id {
-            let common_ancestor = self.get_previous_block_index(new_chain[0].get_block_id())?;
+            let common_ancestor = self.get_previous_block_index(
+                new_chain.get(0).ok_or(BlockError::Unknown)?.get_block_id(),
+            )?;
             let mut current_ancestor = self
                 .db_tx
                 .get_block_index(best_block_id)?
@@ -350,7 +352,7 @@ impl<'a> ConsensusRef<'a> {
         let tx = Self::get_tx_by_outpoint(tx_db, outpoint)?;
         let output_index: usize =
             outpoint.get_output_index().try_into().map_err(|_| BlockError::Unknown)?;
-        assert!(output_index <= tx.get_outputs().len());
+        assert!(output_index < tx.get_outputs().len());
         tx.get_outputs().get(output_index).ok_or(BlockError::Unknown).cloned()
     }
 
@@ -364,7 +366,7 @@ impl<'a> ConsensusRef<'a> {
             .get_output_index()
             .try_into()
             .map_err(|_| BlockError::Unknown)?;
-        assert!(output_index <= tx.get_outputs().len());
+        assert!(output_index < tx.get_outputs().len());
         tx.get_outputs()
             .get(output_index)
             .map(|output| output.get_value())
