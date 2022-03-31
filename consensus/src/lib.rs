@@ -207,7 +207,7 @@ impl<'a> ConsensusRef<'a> {
 
         // Connect the new chain
         for block_index in new_chain {
-            self.connect_tip(&block_index, &best_block_id)?;
+            self.connect_tip(&block_index)?;
         }
         Ok(())
     }
@@ -431,41 +431,30 @@ impl<'a> ConsensusRef<'a> {
     }
 
     // Connect new block
-    fn connect_tip(
-        &mut self,
-        new_tip_block_index: &BlockIndex,
-        best_block_id: &Option<Id<Block>>,
-    ) -> Result<(), BlockError> {
+    fn connect_tip(&mut self, new_tip_block_index: &BlockIndex) -> Result<(), BlockError> {
         if &self.db_tx.get_best_block_id()? != new_tip_block_index.get_prev_block_id() {
             return Err(BlockError::Unknown);
         }
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
         let transactions = block.transactions();
 
-        if best_block_id.is_some() && !block.is_genesis(self.chain_config) {
+        if !block.is_genesis(self.chain_config) {
             self.check_block_fee(transactions)?;
             self.check_tx_inputs(transactions)?;
         }
         self.check_tx_outputs(transactions)?;
         self.connect_transactions(&block)?;
 
-        match &new_tip_block_index.get_prev_block_id() {
-            Some(prev_block_id) => {
-                // To connect a new block we should set-up the next_block_id field of the previous block index
-                let mut prev_block = self
-                    .db_tx
-                    .get_block_index(prev_block_id)?
-                    .expect("Can't get block index. Inconsistent DB");
-                prev_block.set_next_block_id(block.get_id());
-                self.db_tx
-                    .set_block_index(&prev_block)
-                    .expect("Can't set block index. Inconsistent DB");
-            }
-            None => {
-                if best_block_id.is_some() {
-                    panic!("Failed to read block")
-                }
-            }
+        if let Some(prev_block_id) = &new_tip_block_index.get_prev_block_id() {
+            // To connect a new block we should set-up the next_block_id field of the previous block index
+            let mut prev_block = self
+                .db_tx
+                .get_block_index(prev_block_id)?
+                .expect("Can't get block index. Inconsistent DB");
+            prev_block.set_next_block_id(block.get_id());
+            self.db_tx
+                .set_block_index(&prev_block)
+                .expect("Can't set block index. Inconsistent DB");
         }
         self.db_tx.set_block_index(new_tip_block_index)?;
         self.db_tx.set_best_block_id(new_tip_block_index.get_block_id())?;
@@ -496,7 +485,7 @@ impl<'a> ConsensusRef<'a> {
         best_block_id: &Option<Id<Block>>,
     ) -> Result<Option<BlockIndex>, BlockError> {
         if best_block_id.is_none() && new_block_index.is_genesis(self.chain_config) {
-            self.connect_tip(new_block_index, best_block_id)?;
+            self.connect_tip(new_block_index)?;
             self.db_tx
                 .set_best_block_id(new_block_index.get_block_id())
                 .map_err(BlockError::from)?;
