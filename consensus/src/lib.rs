@@ -171,9 +171,10 @@ impl<'a> ConsensusRef<'a> {
         let mut result = Vec::new();
         let mut block_index = new_tip_block_index.clone();
         while !self.is_block_in_main_chain(&block_index) {
-            result.insert(0, block_index.clone());
+            result.push(block_index.clone());
             block_index = self.get_previous_block_index(block_index.get_block_id())?;
         }
+        result.reverse();
         Ok(result)
     }
 
@@ -227,10 +228,15 @@ impl<'a> ConsensusRef<'a> {
             .windows(enc_tx.len())
             .enumerate()
             .find_map(|(i, d)| (d == enc_tx).then(|| i))
-            .ok_or(BlockError::Unknown)? as u32;
+            .ok_or(BlockError::Unknown)?
+            .try_into()
+            .map_err(|_| BlockError::Unknown)?;
 
-        let tx_position =
-            TxMainChainPosition::new(&block.get_id().get(), offset_tx as u32, enc_tx.len() as u32);
+        let tx_position = TxMainChainPosition::new(
+            &block.get_id().get(),
+            offset_tx,
+            enc_tx.len().try_into().map_err(|_| BlockError::Unknown)?,
+        );
 
         assert_eq!(
             &self
@@ -244,7 +250,7 @@ impl<'a> ConsensusRef<'a> {
 
         TxMainChainIndex::new(
             SpendablePosition::from(tx_position),
-            tx.get_outputs().len() as u32,
+            tx.get_outputs().len().try_into().map_err(|_| BlockError::Unknown)?,
         )
         .map_err(BlockError::from)
     }
@@ -342,9 +348,10 @@ impl<'a> ConsensusRef<'a> {
         outpoint: &OutPoint,
     ) -> Result<common::chain::TxOutput, BlockError> {
         let tx = Self::get_tx_by_outpoint(tx_db, outpoint)?;
-        let output_index = outpoint.get_output_index() as usize;
+        let output_index: usize =
+            outpoint.get_output_index().try_into().map_err(|_| BlockError::Unknown)?;
         assert!(output_index <= tx.get_outputs().len());
-        Ok(tx.get_outputs()[output_index].clone())
+        tx.get_outputs().get(output_index).ok_or(BlockError::Unknown).cloned()
     }
 
     fn get_input_value<TxRo: BlockchainStorageRead>(
@@ -352,9 +359,16 @@ impl<'a> ConsensusRef<'a> {
         input: &common::chain::TxInput,
     ) -> Result<Amount, BlockError> {
         let tx = Self::get_tx_by_outpoint(tx_db, input.get_outpoint())?;
-        let output_index = input.get_outpoint().get_output_index() as usize;
+        let output_index: usize = input
+            .get_outpoint()
+            .get_output_index()
+            .try_into()
+            .map_err(|_| BlockError::Unknown)?;
         assert!(output_index <= tx.get_outputs().len());
-        Ok(tx.get_outputs()[output_index].get_value())
+        tx.get_outputs()
+            .get(output_index)
+            .map(|output| output.get_value())
+            .ok_or(BlockError::Unknown)
     }
 
     fn check_block_fee(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
