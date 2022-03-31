@@ -2497,4 +2497,108 @@ mod tests {
         log::info!("Total time spent creating: {:?}", time_creating_txs);
         Ok(())
     }
+
+    #[test]
+    fn descendant_score() -> anyhow::Result<()> {
+        let mut mempool = setup();
+        let tx = TxGenerator::new()
+            .with_num_outputs(2)
+            .generate_tx(&mempool)
+            .expect("generate_replaceable_tx");
+        let tx_id = tx.get_id();
+        mempool.add_transaction(tx)?;
+
+        let outpoint_source_id = OutPointSourceId::Transaction(tx_id);
+
+        let flags = 0;
+        let locktime = 0;
+
+        let tx_b_fee = Amount::from(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
+        let tx_a_fee = (tx_b_fee + Amount::from(1000)).unwrap();
+        let tx_c_fee = (tx_a_fee + Amount::from(1000)).unwrap();
+        let tx_a = tx_spend_input(
+            &mempool,
+            TxInput::new(outpoint_source_id.clone(), 0, DUMMY_WITNESS_MSG.to_vec()),
+            tx_a_fee,
+            flags,
+            locktime,
+        )?;
+        let tx_a_id = tx_a.get_id();
+        log::debug!("tx_a_id : {}", tx_a_id.get());
+        log::debug!("tx_a fee : {:?}", mempool.try_get_fee(&tx_a)?);
+        mempool.add_transaction(tx_a)?;
+
+        let tx_b = tx_spend_input(
+            &mempool,
+            TxInput::new(outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec()),
+            tx_b_fee,
+            flags,
+            locktime,
+        )?;
+        let tx_b_id = tx_b.get_id();
+        log::debug!("tx_b_id : {}", tx_b_id.get());
+        log::debug!("tx_b fee : {:?}", mempool.try_get_fee(&tx_b)?);
+        mempool.add_transaction(tx_b)?;
+
+        let tx_c = tx_spend_input(
+            &mempool,
+            TxInput::new(
+                OutPointSourceId::Transaction(tx_b_id.clone()),
+                0,
+                DUMMY_WITNESS_MSG.to_vec(),
+            ),
+            tx_c_fee,
+            flags,
+            locktime,
+        )?;
+        let tx_c_id = tx_c.get_id();
+        log::debug!("tx_c_id : {}", tx_c_id.get());
+        log::debug!("tx_c fee : {:?}", mempool.try_get_fee(&tx_c)?);
+        mempool.add_transaction(tx_c)?;
+
+        let entry_a = mempool.store.txs_by_id.get(&tx_a_id.get()).expect("tx_a");
+        log::debug!("entry a has score {:?}", entry_a.fees_with_descendants);
+        let entry_b = mempool.store.txs_by_id.get(&tx_b_id.get()).expect("tx_b");
+        log::debug!("entry b has score {:?}", entry_b.fees_with_descendants);
+        let entry_c = mempool.store.txs_by_id.get(&tx_c_id.get()).expect("tx_c").clone();
+        log::debug!("entry c has score {:?}", entry_c.fees_with_descendants);
+        assert_eq!(entry_a.fee, entry_a.fees_with_descendants);
+        assert_eq!(
+            entry_b.fees_with_descendants,
+            (entry_b.fee + entry_c.fee).unwrap()
+        );
+        assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_b_fee.into()));
+        log::debug!(
+            "raw_txs_by_descendant_score {:?}",
+            mempool.store.txs_by_descendant_score
+        );
+        check_txs_sorted_by_descendant_sore(&mempool);
+
+        mempool.drop_transaction(&entry_c.tx.get_id());
+        assert!(!mempool.store.txs_by_descendant_score.contains_key(&tx_c_fee.into()));
+        let entry_b = mempool.store.txs_by_id.get(&tx_b_id.get()).expect("tx_b");
+        assert_eq!(entry_b.fees_with_descendants, entry_b.fee);
+
+        check_txs_sorted_by_descendant_sore(&mempool);
+
+        Ok(())
+    }
+
+    fn check_txs_sorted_by_descendant_sore(
+        mempool: &MempoolImpl<ChainStateMock, SystemClock, SystemUsageEstimator>,
+    ) {
+        let txs_by_descendant_score =
+            mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
+        for i in 0..(txs_by_descendant_score.len() - 1) {
+            log::debug!("i =  {}", i);
+            let tx_id = txs_by_descendant_score.get(i).unwrap();
+            let next_tx_id = txs_by_descendant_score.get(i + 1).unwrap();
+            let entry_score = mempool.store.txs_by_id.get(tx_id).unwrap().fees_with_descendants;
+            let next_entry_score =
+                mempool.store.txs_by_id.get(next_tx_id).unwrap().fees_with_descendants;
+            log::debug!("entry_score: {:?}", entry_score);
+            log::debug!("next_entry_score: {:?}", next_entry_score);
+            assert!(entry_score <= next_entry_score)
+        }
+    }
 }
