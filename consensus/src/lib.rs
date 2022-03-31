@@ -260,17 +260,16 @@ impl<'a> ConsensusRef<'a> {
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in block.transactions() {
+            let tx_index = match cached_inputs.get_mut(&tx.get_id()) {
+                Some(tx_index) => tx_index,
+                None => {
+                    cached_inputs.insert(tx.get_id(), self.calculate_indices(block, tx)?);
+                    cached_inputs.get_mut(&tx.get_id()).expect("Software corrupted")
+                }
+            };
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
 
-                let mut tx_index = match cached_inputs.get(&tx.get_id()) {
-                    Some(tx_index) => tx_index.clone(),
-                    None => {
-                        let tx_index = self.calculate_indices(block, tx)?;
-                        cached_inputs.insert(tx.get_id(), tx_index.clone());
-                        tx_index
-                    }
-                };
                 if input_index >= tx_index.get_output_count() {
                     return Err(BlockError::Unknown);
                 }
@@ -278,7 +277,6 @@ impl<'a> ConsensusRef<'a> {
                 tx_index
                     .spend(input_index, Spender::from(tx.get_id()))
                     .map_err(BlockError::from)?;
-                cached_inputs.insert(tx.get_id(), tx_index.clone());
             }
         }
         self.store_cached_inputs(&cached_inputs)?;
