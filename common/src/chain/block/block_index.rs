@@ -16,7 +16,7 @@ pub struct BlockIndex {
     height: BlockHeight,
     time: u32,
     // TODO: Discuss with Sam
-    time_max: u32, 
+    time_max: u32,
 }
 
 impl BlockIndex {
@@ -33,15 +33,15 @@ impl BlockIndex {
         }
     }
 
-    pub fn get_block_id<'a: 'b, 'b>(&'a self) -> &'b Id<Block> {
+    pub fn get_block_id(&self) -> &Id<Block> {
         &self.block_id
     }
 
-    pub fn get_prev_block_id<'a: 'b, 'b>(&'a self) -> &'b Option<Id<Block>> {
+    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
         &self.prev_block_id
     }
 
-    pub fn get_next_block_id<'a: 'b, 'b>(&'a self) -> &'b Option<Id<Block>> {
+    pub fn get_next_block_id(&self) -> &Option<Id<Block>> {
         &self.next_block_id
     }
 
