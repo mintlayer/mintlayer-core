@@ -12,7 +12,6 @@ mod store;
 
 pub use storage::transaction::{TransactionRo, TransactionRw};
 pub use store::Store;
-pub use store::StoreTx;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
