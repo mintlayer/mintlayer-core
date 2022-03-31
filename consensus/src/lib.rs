@@ -686,7 +686,7 @@ impl<'a> ConsensusRef<'a> {
     /// Mark new block as an orphan
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
         // It can't be a genesis block
-        assert!(block.prev_block_id().is_some() && !block.is_genesis(self.chain_config));
+        assert!(!block.is_genesis(self.chain_config));
         self.orphan_blocks.add_block(block).map_err(|err| match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => BlockError::Orphan,
         })?;
