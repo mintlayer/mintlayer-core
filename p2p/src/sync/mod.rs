@@ -183,7 +183,7 @@ where
         match event {
             event::PeerSyncEvent::GetHeaders { peer_id, locator } => {
                 let headers = self.p2p_handle.get_headers(locator).await?;
-                let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
+                let peer = self.peers.get_mut(&peer_id.expect("PeerId to be valid"));
 
                 match peer {
                     Some(peer) => peer.send_headers(headers).await?,
@@ -191,42 +191,92 @@ where
                 }
             }
             event::PeerSyncEvent::Headers { peer_id, headers } => {
-                let uniq_headers = self.p2p_handle.get_uniq_headers(headers.clone()).await?;
-                let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
-
-                match peer {
-                    Some(peer) => {
-                        if uniq_headers.is_empty() {
-                            peer.initialize_index(&[self
-                                .p2p_handle
-                                .get_best_block_header()
-                                .await?]);
-                        } else {
-                            // TODO: create block request
-                            peer.get_blocks(uniq_headers).await?;
-                            peer.initialize_index(&headers);
-                        }
-                    }
-                    None => {
-                        log::error!("peer {:?} not known by sync manager", peer_id)
-                    }
-                }
+                self.initialize_peer_state(peer_id.expect("PeerId to be valid"), &headers)
+                    .await?;
             }
             event::PeerSyncEvent::Blocks { peer_id, blocks } => {
-                for block in blocks {
-                    self.p2p_handle.new_block(block).await?;
-                }
+                self.process_block_response(peer_id.expect("PeerId to be valid"), &blocks)
+                    .await?;
             }
             event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
-                // TODO: verify that peer has requested these headers before?
-                let blocks = self.p2p_handle.get_blocks(headers).await?;
-                let peer = self.peers.get_mut(&peer_id.expect("PeerID to be valid"));
-
-                match peer {
-                    Some(peer) => peer.send_blocks(blocks).await?,
-                    None => log::error!("peer {:?} not known by sync manager", peer_id),
-                }
+                self.process_block_request(peer_id.expect("PeerId to be valid"), &headers)
+                    .await?;
             }
+        }
+
+        Ok(())
+    }
+
+    async fn initialize_peer_state(
+        &mut self,
+        peer_id: T::PeerId,
+        headers: &[mock_consensus::BlockHeader],
+    ) -> error::Result<()> {
+        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
+            peer
+        } else {
+            log::error!("peer {:?} not known by sync manager", peer_id);
+            return Ok(());
+        };
+
+        match self.p2p_handle.get_uniq_headers(headers.to_vec()).await? {
+            Some(uniq) => {
+                peer.initialize_index(headers);
+                self.send_block_request(peer_id, &uniq).await?;
+            }
+            None => {
+                peer.initialize_index(&[self.p2p_handle.get_best_block_header().await?]);
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn send_block_request(
+        &mut self,
+        peer_id: T::PeerId,
+        uniq: &[mock_consensus::BlockHeader],
+    ) -> error::Result<()> {
+        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
+            peer
+        } else {
+            log::error!("peer {:?} not known by sync manager", peer_id);
+            return Ok(());
+        };
+
+        peer.get_blocks(uniq.to_vec()).await
+    }
+
+    async fn process_block_request(
+        &mut self,
+        peer_id: T::PeerId,
+        headers: &[mock_consensus::BlockHeader],
+    ) -> error::Result<()> {
+        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
+            peer
+        } else {
+            log::error!("peer {:?} not known by sync manager", peer_id);
+            return Ok(());
+        };
+
+        let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
+        peer.send_blocks(blocks).await
+    }
+
+    async fn process_block_response(
+        &mut self,
+        peer_id: T::PeerId,
+        blocks: &[mock_consensus::Block],
+    ) -> error::Result<()> {
+        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
+            peer
+        } else {
+            log::error!("peer {:?} not known by sync manager", peer_id);
+            return Ok(());
+        };
+
+        for block in blocks {
+            self.p2p_handle.new_block(block.clone()).await?;
         }
 
         Ok(())
