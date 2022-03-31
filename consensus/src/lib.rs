@@ -236,7 +236,12 @@ impl<'a> ConsensusRef<'a> {
             TxMainChainPosition::new(&block.get_id().get(), offset_tx as u32, enc_tx.len() as u32);
 
         assert_eq!(
-            &self.db_tx.get_mainchain_tx_by_position(&tx_position).ok().flatten().expect("Database corrupted! "),
+            &self
+                .db_tx
+                .get_mainchain_tx_by_position(&tx_position)
+                .ok()
+                .flatten()
+                .expect("Database corrupted! "),
             tx
         );
 
@@ -688,10 +693,8 @@ impl<'a> ConsensusRef<'a> {
 
     /// Mark new block as an orphan
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
-        if block.prev_block_id().is_none() && block.is_genesis(self.chain_config) {
-            // It can't be a genesis block
-            return Err(BlockError::Unknown);
-        }
+        // It can't be a genesis block
+        assert!(block.prev_block_id().is_some() && !block.is_genesis(self.chain_config));
         self.orphan_blocks.add_block(block).map_err(|err| match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => BlockError::Orphan,
         })?;
