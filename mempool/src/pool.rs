@@ -1333,11 +1333,13 @@ mod tests {
                 "generate_tx_outputs: underflow computing total_to_spend - sum_of_inputs = {:?}, fee = {:?}", sum_of_inputs, tx_fee
             ))?;
 
+            let value = (sum_of_inputs / u128::try_from(self.num_outputs).expect("conversion"))
+                .expect("not dividing by zero");
+
             let mut left_to_spend = total_to_spend;
             let mut outputs = Vec::new();
 
             for _ in 0..self.num_outputs - 1 {
-                let value = std::cmp::min(Amount::from_atoms(1000), left_to_spend);
                 outputs.push(TxOutput::new(
                     value,
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
