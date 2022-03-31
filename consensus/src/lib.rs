@@ -213,7 +213,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn store_cached_inputs(&mut self, cached_inputs: &CachedInputs) -> Result<(), BlockError> {
-        for (tx_id, tx_index) in cached_inputs.iter() {
+        for (tx_id, tx_index) in cached_inputs {
             self.db_tx.set_mainchain_tx_index(tx_id, tx_index)?;
         }
         Ok(())
@@ -254,7 +254,7 @@ impl<'a> ConsensusRef<'a> {
 
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
-        for tx in block.transactions().iter() {
+        for tx in block.transactions() {
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
 
