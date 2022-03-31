@@ -295,7 +295,7 @@ pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
 #[derive(Debug)]
 struct MempoolStore {
     txs_by_id: HashMap<H256, TxMempoolEntry>,
-    txs_by_fee: BTreeMap<Amount, BTreeSet<H256>>,
+    txs_by_descendant_score: BTreeMap<Amount, BTreeSet<H256>>,
     txs_by_creation_time: BTreeMap<Time, BTreeSet<H256>>,
     spender_txs: BTreeMap<OutPoint, H256>,
 }
@@ -303,7 +303,7 @@ struct MempoolStore {
 impl MempoolStore {
     fn new() -> Self {
         Self {
-            txs_by_fee: BTreeMap::new(),
+            txs_by_descendant_score: BTreeMap::new(),
             txs_by_id: HashMap::new(),
             txs_by_creation_time: BTreeMap::new(),
             spender_txs: BTreeMap::new(),
@@ -396,7 +396,7 @@ impl MempoolStore {
         self.update_ancestor_count(&entry);
         self.mark_outpoints_as_spent(&entry);
 
-        self.txs_by_fee.entry(entry.fee).or_default().insert(entry.tx_id());
+        self.txs_by_descendant_score.entry(entry.fee).or_default().insert(entry.tx_id());
         self.txs_by_creation_time
             .entry(entry.creation_time)
             .or_default()
@@ -412,7 +412,7 @@ impl MempoolStore {
             self.update_for_drop(&entry);
             self.drop_tx(&entry);
         } else {
-            assert!(!self.txs_by_fee.values().flatten().any(|id| *id == tx_id.get()));
+            assert!(!self.txs_by_descendant_score.values().flatten().any(|id| *id == tx_id.get()));
             assert!(!self.spender_txs.iter().any(|(_, id)| *id == tx_id.get()));
         }
     }
@@ -423,7 +423,7 @@ impl MempoolStore {
     }
 
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
-        self.txs_by_fee.entry(entry.fee).and_modify(|entries| {
+        self.txs_by_descendant_score.entry(entry.fee).and_modify(|entries| {
             entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
         });
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
@@ -836,8 +836,13 @@ where
         let mut removed_fees = Vec::new();
         while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
             // TODO sort by descendant score, not by fee
-            let removed_id =
-                self.store.txs_by_fee.values().flatten().next().expect("pool not empty");
+            let removed_id = self
+                .store
+                .txs_by_descendant_score
+                .values()
+                .flatten()
+                .next()
+                .expect("pool not empty");
             let removed =
                 self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
 
@@ -929,7 +934,7 @@ where
 
     fn get_all(&self) -> Vec<&Transaction> {
         self.store
-            .txs_by_fee
+            .txs_by_descendant_score
             .values()
             .flatten()
             .map(|id| &self.store.get_entry(id).expect("entry").tx)
