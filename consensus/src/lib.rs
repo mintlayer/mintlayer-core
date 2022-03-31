@@ -38,7 +38,6 @@ type CachedInputs = BTreeMap<Id<Transaction>, TxMainChainIndex>;
 type PeerId = u32;
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 
-#[allow(dead_code)]
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
     #[error("Unknown error")]
@@ -84,11 +83,10 @@ impl From<TxMainChainIndexError> for BlockError {
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
-#[allow(dead_code)]
 // TODO: We will generalize it when Lukas will be ready for that. At the moment, he recommended use
 //  types directly.
 // struct Consensus<'a, S: Transactional<'a> + BlockchainStorage> {
-struct Consensus {
+pub struct Consensus {
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store, //&'a mut S,
     orphan_blocks: OrphanBlocksPool,
@@ -110,7 +108,6 @@ impl Consensus {
         }
     }
 
-    #[allow(dead_code)]
     pub fn new(chain_config: ChainConfig, blockchain_storage: blockchain_storage::Store) -> Self {
         Self {
             chain_config,
@@ -119,7 +116,6 @@ impl Consensus {
         }
     }
 
-    #[allow(dead_code)]
     pub fn process_block(
         &mut self,
         block: Block,
@@ -557,7 +553,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(block_index)
     }
 
-    #[allow(dead_code)]
     fn accept_block(
         &mut self,
         block: &Block,
@@ -585,7 +580,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn check_block_detail(
         &self,
         block: &Block,
@@ -644,14 +638,12 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
         let _consensus_data = block.consensus_data();
         // TODO: PoW is not in master at the moment =(
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
         // TODO: Must check for duplicate inputs (see CVE-2018-17144)
         //      We should discuss - can we add Hash trait to Transaction?
@@ -675,7 +667,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
         self.check_consensus(block)?;
         self.check_block_detail(block, block_source)?;
@@ -717,7 +708,6 @@ mod tests {
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::{Amount, Id};
 
-    #[allow(dead_code)]
     fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
         use common::primitives::H256;
         use rand::prelude::*;
