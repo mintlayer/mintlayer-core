@@ -1839,8 +1839,6 @@ mod tests {
     #[test]
     fn one_ancestor_signal_is_enough() -> anyhow::Result<()> {
         let mut mempool = setup();
-        // TODO add a function which calculates the tx size based on number of outputs and inputs,
-        // so that we can calculate the minimum relay fee
         let tx = TxGenerator::new()
             .with_num_outputs(2)
             .generate_tx(&mempool)
