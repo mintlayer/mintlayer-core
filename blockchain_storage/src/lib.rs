@@ -107,16 +107,10 @@ pub(crate) trait UtxoWrite: UtxoRead {
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: traits::TransactionRo<Error = crate::Error>
-        + BlockchainStorageRead
-        //+ UtxoRead
-        + 't;
+    type TransactionRo: traits::TransactionRo<Error = crate::Error> + BlockchainStorageRead + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: traits::TransactionRw<Error = crate::Error>
-        + BlockchainStorageWrite
-        //+ UtxoWrite
-        + 't;
+    type TransactionRw: traits::TransactionRw<Error = crate::Error> + BlockchainStorageWrite + 't;
 
     /// Start a read-only transaction.
     fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
@@ -125,8 +119,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
 }
 
-pub trait BlockchainStorage:
-BlockchainStorageWrite //+ UtxoWrite
-+ for<'tx> Transactional<'tx>
-{
-}
+pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> {}

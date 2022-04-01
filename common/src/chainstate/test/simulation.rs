@@ -32,8 +32,7 @@ fn populate_cache<'a>(
             i
         } else {
             // setting a random height based on the `size`.
-            let rng = rand::thread_rng().gen_range(0..size);
-            rng
+            rand::thread_rng().gen_range(0..size)
         };
 
         let (utxo, outpoint) = create_utxo(block_height);

@@ -147,7 +147,7 @@ mod test {
             {
                 let (utxo, outpoint) = create_utxo(1);
                 let mut map = HashMap::new();
-                let entry = UtxoEntry::new(utxo.clone(), true, false);
+                let entry = UtxoEntry::new(utxo, true, false);
                 map.insert(OutPointKey::from(&outpoint), entry);
 
                 let new_hash = H256::random();
@@ -173,7 +173,7 @@ mod test {
                     utxo_db.get_best_block_hash().expect("best block should be there"),
                 );
 
-                let mut child = UtxosCache::new(&mut parent);
+                let mut child = UtxosCache::new(&parent);
                 assert!(child.spend_utxo(&outpoint));
 
                 let new_block_hash = H256::random();
