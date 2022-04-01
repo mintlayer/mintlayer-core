@@ -42,7 +42,10 @@ pub enum SyncState {
     /// No activity with the peer
     Uninitialized,
 
-    // Downloading headers
+    /// Uploading blocks
+    UplodingBlocks,
+
+    /// Downloading headers
     DownloadingHeaders,
 
     /// Downloading blocks
@@ -232,6 +235,20 @@ where
         Ok(())
     }
 
+    fn get_providers(
+        &self,
+        headers: &[mock_consensus::BlockHeader],
+    ) -> HashMap<mock_consensus::BlockId, Vec<&T::PeerId>> {
+        let mut providers: HashMap<mock_consensus::BlockId, Vec<&T::PeerId>> = HashMap::new();
+        for (id, peer) in self.peers.iter() {
+            for header in peer.get_known_headers(headers) {
+                providers.entry(header.id).or_insert_with(Vec::new).push(id);
+            }
+        }
+
+        providers
+    }
+
     async fn send_block_request(
         &mut self,
         peer_id: T::PeerId,
@@ -310,6 +327,7 @@ mod tests {
         net::{mock::MockService, FloodsubService},
     };
     use common::chain::config;
+    use itertools::*;
     use std::net::SocketAddr;
 
     macro_rules! get_message {
@@ -463,5 +481,108 @@ mod tests {
         .await;
 
         handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_providers() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(1);
+
+        let peer1: SocketAddr = format!("[::1]:{}", 8888).parse().unwrap();
+        let peer2: SocketAddr = format!("[::1]:{}", 9999).parse().unwrap();
+        mgr.peers.insert(peer1, peer::PeerSyncState::new(peer1, tx.clone()));
+        mgr.peers.insert(peer2, peer::PeerSyncState::new(peer2, tx));
+
+        let headers_peer1 = &[
+            mock_consensus::BlockHeader::with_id(444, Some(333)),
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(777, Some(666)),
+            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
+            mock_consensus::BlockHeader::with_id(1338, Some(1336)),
+            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
+            mock_consensus::BlockHeader::with_id(1342, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1343, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1344, Some(1340)),
+        ];
+
+        let headers_peer2 = &[
+            mock_consensus::BlockHeader::with_id(444, Some(333)),
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(777, Some(666)),
+            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
+            mock_consensus::BlockHeader::with_id(1338, Some(1336)),
+            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
+            mock_consensus::BlockHeader::with_id(1351, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1352, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1353, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1354, Some(1340)),
+        ];
+
+        mgr.peers.get_mut(&peer1).unwrap().initialize_index(headers_peer1);
+        mgr.peers.get_mut(&peer2).unwrap().initialize_index(headers_peer2);
+
+        let providers = mgr.get_providers(&[
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
+            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
+        ]);
+        let mut vec = Vec::from_iter(providers.iter())
+            .into_iter()
+            .sorted()
+            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
+            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
+
+        assert_eq!(
+            vec,
+            vec![
+                (&666, vec![&peer1, &peer2]),
+                (&1337, vec![&peer1, &peer2]),
+                (&1339, vec![&peer1, &peer2]),
+            ]
+        );
+
+        let providers = mgr.get_providers(&[
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(677, Some(555)),
+            mock_consensus::BlockHeader::with_id(1340, Some(1336)),
+        ]);
+        let mut vec = Vec::from_iter(providers.iter())
+            .into_iter()
+            .sorted()
+            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
+            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
+
+        assert_eq!(vec, vec![(&666, vec![&peer1, &peer2])]);
+
+        let providers = mgr.get_providers(&[
+            mock_consensus::BlockHeader::with_id(677, Some(555)),
+            mock_consensus::BlockHeader::with_id(1340, Some(1336)),
+        ]);
+        assert_eq!(Vec::from_iter(providers.iter()), vec![]);
+
+        let providers = mgr.get_providers(&[
+            mock_consensus::BlockHeader::with_id(1343, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1344, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1352, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1353, Some(1340)),
+            mock_consensus::BlockHeader::with_id(1354, Some(1340)),
+        ]);
+        let mut vec = Vec::from_iter(providers.iter())
+            .into_iter()
+            .sorted()
+            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
+            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
+
+        assert_eq!(
+            vec,
+            vec![
+                (&1343, vec![&peer1]),
+                (&1344, vec![&peer1]),
+                (&1352, vec![&peer2]),
+                (&1353, vec![&peer2]),
+                (&1354, vec![&peer2]),
+            ]
+        );
     }
 }
