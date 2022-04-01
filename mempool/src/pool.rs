@@ -238,6 +238,11 @@ impl Ord for TxMempoolEntry {
     }
 }
 
+newtype!(
+    #[derive(Debug, PartialEq, Eq, Ord, PartialOrd)]
+    struct DescendantScore(Amount)
+);
+
 #[derive(Clone, Copy, Debug)]
 struct RollingFeeRate {
     block_since_last_rolling_fee_bump: bool,
@@ -295,7 +300,7 @@ pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
 #[derive(Debug)]
 struct MempoolStore {
     txs_by_id: HashMap<H256, TxMempoolEntry>,
-    txs_by_descendant_score: BTreeMap<Amount, BTreeSet<H256>>,
+    txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<H256>>,
     txs_by_creation_time: BTreeMap<Time, BTreeSet<H256>>,
     spender_txs: BTreeMap<OutPoint, H256>,
 }
@@ -422,9 +427,17 @@ impl MempoolStore {
     }
 
     fn add_to_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
+        self.refresh_ancestors(entry);
+        self.txs_by_descendant_score
+            .entry(entry.fees_with_descendants.into())
+            .or_default()
+            .insert(entry.tx_id());
+    }
+
+    fn refresh_ancestors(&mut self, entry: &TxMempoolEntry) {
         // Since the ancestors of `entry` have had their descendant score modified, their ordering
         // in txs_by_descendant_score may no longer be correct. We thus remove all ancestors and
-        // reinsert them, taking the new, update fees into account
+        // reinsert them, taking the new, updated fees into account
         let ancestors = entry.unconfirmed_ancestors(self);
         for entries in self.txs_by_descendant_score.values_mut() {
             entries.retain(|id| !ancestors.contains(id))
@@ -432,14 +445,12 @@ impl MempoolStore {
         for ancestor_id in ancestors.0 {
             let ancestor = self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
             self.txs_by_descendant_score
-                .entry(ancestor.fee)
+                .entry(ancestor.fees_with_descendants.into())
                 .or_default()
                 .insert(ancestor_id);
         }
-        self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants)
-            .or_default()
-            .insert(entry.tx_id());
+
+        self.txs_by_descendant_score.retain(|_score, txs| !txs.is_empty());
     }
 
     fn remove_tx(&mut self, tx_id: &Id<Transaction>) {
@@ -459,9 +470,11 @@ impl MempoolStore {
     }
 
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
-        self.txs_by_descendant_score.entry(entry.fee).and_modify(|entries| {
-            entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
-        });
+        self.txs_by_descendant_score
+            .entry(entry.fees_with_descendants.into())
+            .and_modify(|entries| {
+                entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
+            });
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
             entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
         });
@@ -883,9 +896,9 @@ where
                 self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
 
             log::debug!(
-                "Mempool trim: Evicting tx {} which pays a fee of {:?} and has size {}",
+                "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
                 removed.tx_id(),
-                removed.fee,
+                removed.fees_with_descendants,
                 removed.tx.encoded_size()
             );
             removed_fees.push(FeeRate::of_tx(removed.fee, removed.tx.encoded_size())?);
