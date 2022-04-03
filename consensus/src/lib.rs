@@ -260,13 +260,8 @@ impl<'a> ConsensusRef<'a> {
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in block.transactions() {
-            let tx_index = match cached_inputs.get_mut(&tx.get_id()) {
-                Some(tx_index) => tx_index,
-                None => {
-                    cached_inputs.insert(tx.get_id(), self.calculate_indices(block, tx)?);
-                    cached_inputs.get_mut(&tx.get_id()).expect("Software corrupted")
-                }
-            };
+            let tx_index =
+                cached_inputs.entry(tx.get_id()).or_insert(self.calculate_indices(block, tx)?);
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
 
@@ -286,18 +281,9 @@ impl<'a> ConsensusRef<'a> {
     fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in transactions.iter().rev() {
-            let tx_index = match cached_inputs.get_mut(&tx.get_id()) {
-                Some(tx_index) => tx_index,
-                None => {
-                    cached_inputs.insert(
-                        tx.get_id(),
-                        self.db_tx
-                            .get_mainchain_tx_index(&tx.get_id())?
-                            .ok_or(BlockError::Unknown)?,
-                    );
-                    cached_inputs.get_mut(&tx.get_id()).expect("Software corrupted")
-                }
-            };
+            let tx_index = cached_inputs.entry(tx.get_id()).or_insert(
+                self.db_tx.get_mainchain_tx_index(&tx.get_id())?.ok_or(BlockError::Unknown)?,
+            );
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
 
