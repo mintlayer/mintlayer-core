@@ -83,12 +83,10 @@ impl From<TxMainChainIndexError> for BlockError {
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
-// TODO: We will generalize it when Lukas will be ready for that. At the moment, he recommended use
-//  types directly.
-// struct Consensus<'a, S: Transactional<'a> + BlockchainStorage> {
+// TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
     chain_config: ChainConfig,
-    blockchain_storage: blockchain_storage::Store, //&'a mut S,
+    blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
 }
 
