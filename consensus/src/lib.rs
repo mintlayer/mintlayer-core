@@ -660,7 +660,7 @@ impl<'a> ConsensusRef<'a> {
         // }
 
         //TODO: Size limits
-        if Encode::encoded_size(block) > MAX_BLOCK_WEIGHT {
+        if block.encoded_size() > MAX_BLOCK_WEIGHT {
             return Err(BlockError::Unknown);
         }
         //TODO: Check signatures will be added when will ready BLS
