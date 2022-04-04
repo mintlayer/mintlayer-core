@@ -378,25 +378,14 @@ impl MempoolStore {
         }
     }
 
-    fn update_ancestor_count(&mut self, entry: &TxMempoolEntry) {
-        for ancestor in entry.unconfirmed_ancestors(self).0 {
-            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
-            ancestor.count_with_descendants += 1;
-        }
-    }
-
-    fn update_ancestor_fees(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
+    fn update_ancestor_state_for_add(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
         for ancestor in entry.unconfirmed_ancestors(self).0 {
             let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
             ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
-                .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?
+                .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?;
+            ancestor.count_with_descendants += 1;
         }
         Ok(())
-    }
-
-    fn update_ancestor_state(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
-        self.update_ancestor_count(entry);
-        self.update_ancestor_fees(entry)
     }
 
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
@@ -412,7 +401,7 @@ impl MempoolStore {
 
     fn add_tx(&mut self, entry: TxMempoolEntry) -> Result<(), Error> {
         self.append_to_parents(&entry);
-        self.update_ancestor_state(&entry)?;
+        self.update_ancestor_state_for_add(&entry)?;
         self.mark_outpoints_as_spent(&entry);
 
         let creation_time = entry.creation_time;
