@@ -388,6 +388,15 @@ impl MempoolStore {
         Ok(())
     }
 
+    fn update_ancestor_state_for_drop(&mut self, entry: &TxMempoolEntry) {
+        for ancestor in entry.unconfirmed_ancestors(self).0 {
+            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
+            ancestor.fees_with_descendants =
+                (ancestor.fees_with_descendants - entry.fee).expect("fee with descendants");
+            ancestor.count_with_descendants -= 1;
+        }
+    }
+
     fn mark_outpoints_as_spent(&mut self, entry: &TxMempoolEntry) {
         let id = entry.tx_id();
         for outpoint in entry.tx.inputs().iter().map(|input| input.outpoint()) {
@@ -446,6 +455,7 @@ impl MempoolStore {
         log::info!("remove_tx: {}", tx_id.get());
         if let Some(entry) = self.txs_by_id.remove(&tx_id.get()) {
             self.update_for_drop(&entry);
+            self.update_ancestor_state_for_drop(&entry);
             self.drop_tx(&entry);
         } else {
             assert!(!self.txs_by_descendant_score.values().flatten().any(|id| *id == tx_id.get()));
