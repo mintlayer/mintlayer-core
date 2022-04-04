@@ -374,6 +374,10 @@ impl MempoolStore {
         }
     }
 
+    fn unspend_outpoints(&mut self, entry: &TxMempoolEntry) {
+        self.spender_txs.retain(|_, id| *id != entry.tx_id())
+    }
+
     fn add_tx(&mut self, entry: TxMempoolEntry) {
         self.append_to_parents(&entry);
         self.update_ancestor_count(&entry);
@@ -412,7 +416,7 @@ impl MempoolStore {
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
             entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
         });
-        self.spender_txs.retain(|_, id| *id != entry.tx_id())
+        self.unspend_outpoints(entry)
     }
 
     fn drop_conflicts(&mut self, conflicts: Conflicts) {
