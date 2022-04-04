@@ -54,7 +54,7 @@ impl Transaction {
     }
 }
 
-#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockHeader {
     pub id: BlockId,
     pub prev_id: Option<BlockId>,

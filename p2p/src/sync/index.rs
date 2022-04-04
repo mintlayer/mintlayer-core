@@ -104,7 +104,7 @@ impl PeerIndex {
         self.index
             .iter()
             .filter_map(|(id, _)| {
-                self.headers.get(id).and_then(|value| self.queue.get_queued(value))
+                self.headers.get(id).and_then(|value| self.queue.get_queued(&value.id))
             })
             .collect::<Vec<QueuedData<BlockHeader>>>()
             .iter()
@@ -127,7 +127,7 @@ impl PeerIndex {
 
             // check if the import queue contained blocks that depended
             // on this block and if so, import them to the block index
-            if let Some(headers) = self.queue.get_queued(&header) {
+            if let Some(headers) = self.queue.get_queued(&header.id) {
                 self.import_queued_blocks(&headers);
                 return Ok(PeerIndexState::Accepted);
             }
@@ -139,9 +139,9 @@ impl PeerIndex {
         // TODO: if `Resolved` is returned, do not move to main
         // block index automatically but to a separate, faster-expiring cache
         // until confirmation is received from the peer
-        match self.queue.queue(&header)? {
+        match self.queue.try_queue(&header)? {
             ImportQueueState::Queued => Ok(PeerIndexState::Queued),
-            ImportQueueState::Resolved => match self.queue.get_queued(&header) {
+            ImportQueueState::Resolved => match self.queue.get_queued(&header.id) {
                 Some(headers) => {
                     self.import_queued_blocks(&headers);
                     Ok(PeerIndexState::Accepted)

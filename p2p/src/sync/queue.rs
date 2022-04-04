@@ -14,6 +14,40 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
+//! Import queue
+//!
+//! Import queue is used by Mintlayer's syncing implementation to download blocks from
+//! remote peers and buffer them them until the node is fully synced and then drain and
+//! feed the queue to the chainstate. It's also used to the keep the peer intermediary
+//! indices up to date with network updates.
+//!
+//! The queue provides [`Orderable`] trait which caller must implement for the data type they
+//! wish to store intto the import queue. Each data item must have an ID and a unique parent.
+//!
+//! The import queue has two modes:
+//!  - normal queuing mode
+//!  - dependency resolvance mode
+//!
+//! The normal mode is used during syncing for block downloads and the [`BlockProcessor`]
+//! adds blocks to the [`ImportQueue`] by calling [`ImportQueue::queue()`]. [`ImportQueue`]
+//! then adds these blocks to the internal queue and and resolves any dependencies it can
+//! but when it detect that a missing data piece has been added to the queue, it accepts that data
+//! into the queue, marks the dependency chain as solved and returns [`ImportQueueState::Queued`].
+//!
+//! To get all queue all queued data, [`ImportQueue::drain()`] can be called which returns all data
+//! as a `Vec<QueuedData<T>>` where the first element of each [`QueuedData`] is an element the local
+//! node is assumed to have.
+//!
+//! If the the queue is used for resolving missing dependencies, as is the case for [`crate::sync::index::PeerIndex`],
+//! [`ImportQueue::try_queue()`] is used instead which accepts all data whose parent is either unknown
+//! to the queue or whose parent is also queued. When the caller calls the function with a missing
+//! dependency, the data is not accepted into to the queue but [`ImportQueueState::Resolved`] is returned.
+//!
+//! To get all queued and resolved data, [`ImportQueue::get_queued()`] can be called which returns
+//! all queued descendants of `data`.
+
 use crate::{error::P2pError, sync::mock_consensus};
 use std::{
     collections::{HashMap, HashSet},
@@ -22,6 +56,10 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
+/// Trait which must be implemented for the queued data
+///
+/// Import queue uses the data ID and it's ancestor's ID to order
+/// the incoming data correctly.
 pub trait Orderable {
     type Id: Debug + Hash + PartialEq + Eq + Copy + Clone;
 
@@ -63,7 +101,10 @@ impl<T> Deref for OrderedData<T> {
 
 #[derive(Debug, PartialEq)]
 pub enum ImportQueueState {
+    /// Element has been queued
     Queued,
+
+    /// Element resolves a dependency and all elements can be queried
     Resolved,
 }
 
@@ -87,7 +128,7 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
         }
     }
 
-    // return the total number of queued elements in the import queue
+    /// Return the total number of queued elements in the import queue
     pub fn num_queued(&self) -> usize {
         self.lookup.len()
     }
@@ -104,19 +145,38 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
             // import all data of the now-resolved descedant and remove all old references
             resolved.0.iter().for_each(|descendant| {
                 self.lookup.remove(descendant.get_id());
-                self.queue(descendant);
+                self.try_queue(descendant);
             });
         }
 
         Ok(ImportQueueState::Queued)
     }
 
-    pub fn queue(&mut self, data: &T) -> Result<ImportQueueState, P2pError> {
+    /// Try to queue element to the import queue and if it resolves a dependency,
+    /// return [`ImportQueueState::Resolved`] instead which indicates to the caller
+    /// they can now try and fetch all the data from the queue.
+    pub fn try_queue(&mut self, data: &T) -> Result<ImportQueueState, P2pError> {
+        let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
+
+        // dependency has been resolved if the export table contains an entry with this
+        // id but the lookup table doesn't and the entry's parent is not in the export table
+        if self.export.contains_key(data.get_id())
+            && !self.lookup.contains_key(&prev_id)
+            && !self.export.contains_key(&prev_id)
+        {
+            return Ok(ImportQueueState::Resolved);
+        }
+
+        self.queue(*data)
+    }
+
+    /// Add element to the import queue
+    pub fn queue(&mut self, data: T) -> Result<ImportQueueState, P2pError> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
 
         match self.export.get_mut(&prev_id) {
             Some(ancestor) => {
-                ancestor.queue(*data, 0);
+                ancestor.queue(data, 0);
                 self.lookup.insert(*data.get_id(), (prev_id, 0));
             }
             None => match self.lookup.get(&prev_id) {
@@ -128,18 +188,10 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
                         .export
                         .get_mut(&ancestor)
                         .ok_or(P2pError::InvalidData)?
-                        .queue(*data, idx);
+                        .queue(data, idx);
                 }
                 None => {
-                    // dependency has been resolved if the export table contains an entry with this
-                    // id but the lookup table doesn't and the entry's parent is not in the export table
-                    if self.export.contains_key(data.get_id())
-                        && !self.lookup.contains_key(&prev_id)
-                    {
-                        return Ok(ImportQueueState::Resolved);
-                    }
-
-                    self.export.insert(prev_id, OrderedData(vec![vec![*data]]));
+                    self.export.insert(prev_id, OrderedData(vec![vec![data]]));
                     self.lookup.insert(*data.get_id(), (prev_id, 0));
                 }
             },
@@ -149,20 +201,37 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
     }
 
     /// Get queued descendants
-    pub fn get_queued(&mut self, data: &T) -> Option<QueuedData<T>> {
-        if let Some(exported) = self.export.remove(data.get_id()) {
+    pub fn get_queued(&mut self, data: &T::Id) -> Option<QueuedData<T>> {
+        if let Some(exported) = self.export.remove(data) {
             let resolved = QueuedData(exported.0.into_iter().flatten().collect());
 
             // remove all export and lookup references that are no longer needed
             resolved.0.iter().for_each(|descendant| {
                 self.lookup.remove(descendant.get_id()).map_or_else(|| (), |_| ())
             });
-            self.lookup.remove(data.get_id());
+            self.lookup.remove(data);
 
             return Some(resolved);
         }
 
         None
+    }
+
+    /// Get all non-orphan chains from the import queue and clear all unresolved data
+    pub fn drain(&mut self) -> Vec<QueuedData<T>> {
+        let imported = self
+            .export
+            .keys()
+            .copied()
+            .collect::<Vec<T::Id>>()
+            .iter()
+            .filter_map(|key| self.get_queued(key))
+            .collect::<Vec<QueuedData<T>>>();
+
+        self.lookup.clear();
+        self.export.clear();
+
+        imported
     }
 }
 
@@ -170,6 +239,7 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
 mod tests {
     use super::*;
     use crate::sync::mock_consensus::{BlockHeader, BlockId};
+    use itertools::Itertools;
 
     #[test]
     fn add_block() {
@@ -178,8 +248,8 @@ mod tests {
         let hdr1 = BlockHeader::new(Some(1337u64));
         let hdr2 = BlockHeader::new(Some(1337u64));
 
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -194,8 +264,8 @@ mod tests {
         let hdr1 = BlockHeader::new(Some(1337u64));
         let hdr2 = BlockHeader::new(Some(1337u64));
 
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
         assert_eq!(
             q.export,
             HashMap::from([(1337, OrderedData(vec![vec![hdr2, hdr1]]))])
@@ -205,7 +275,7 @@ mod tests {
             id: 1338u64,
             prev_id: Some(hdr1.id),
         };
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
         assert_eq!(
             q.export,
             HashMap::from([(1337, OrderedData(vec![vec![hdr2, hdr1], vec![hdr1_1]]))])
@@ -215,7 +285,7 @@ mod tests {
             id: 1339u64,
             prev_id: Some(hdr1.id),
         };
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
         assert_eq!(
             q.export,
             HashMap::from([(
@@ -228,7 +298,7 @@ mod tests {
             id: 1340u64,
             prev_id: Some(hdr1_1.id),
         };
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
         assert_eq!(
             q.export,
             HashMap::from([(
@@ -248,11 +318,11 @@ mod tests {
         let hdr1_2 = BlockHeader::new(Some(hdr1.id));
         let hdr1_1_1 = BlockHeader::new(Some(hdr1_1.id));
 
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -267,10 +337,10 @@ mod tests {
         let hdr5_1_1 = BlockHeader::new(Some(hdr5_1.id));
         let hdr5_1_1_1 = BlockHeader::new(Some(hdr5_1_1.id));
 
-        assert_eq!(q.queue(&hdr5), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1_1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -302,11 +372,11 @@ mod tests {
         let hdr1_2 = BlockHeader::new(Some(hdr1.id));
         let hdr1_1_1 = BlockHeader::new(Some(hdr1_1.id));
 
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -320,9 +390,9 @@ mod tests {
             id: 1337u64,
             prev_id: Some(1336u64),
         };
-        assert_eq!(q.queue(&block), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block),
+            q.get_queued(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr1_2, hdr1_1_1]))
         );
     }
@@ -337,11 +407,11 @@ mod tests {
         let hdr1_2 = BlockHeader::new(Some(hdr1.id));
         let hdr1_1_1 = BlockHeader::new(Some(hdr1_1.id));
 
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -356,10 +426,10 @@ mod tests {
         let hdr5_1_1 = BlockHeader::new(Some(hdr5_1.id));
         let hdr5_1_1_1 = BlockHeader::new(Some(hdr5_1_1.id));
 
-        assert_eq!(q.queue(&hdr5), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr5_1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr5_1_1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -384,9 +454,9 @@ mod tests {
             id: 1337u64,
             prev_id: Some(1336u64),
         };
-        assert_eq!(q.queue(&block), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block),
+            q.get_queued(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr1_2, hdr1_1_1])),
         );
         assert_eq!(
@@ -406,9 +476,9 @@ mod tests {
             id: 555u64,
             prev_id: Some(444u64),
         };
-        assert_eq!(q.queue(&block), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block),
+            q.get_queued(&block.id),
             Some(QueuedData(vec![hdr5, hdr5_1, hdr5_1_1, hdr5_1_1_1])),
         );
         assert!(q.lookup.is_empty());
@@ -426,9 +496,9 @@ mod tests {
         // queue the blocks in in correct order that even if
         // they create temporary export structures, in the end
         // they are merged together and only one `QueuedData` is returned
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -452,11 +522,11 @@ mod tests {
         // queue the blocks in in correct order that even if
         // they create temporary export structures, in the end
         // they are merged together and only one `QueuedData` is returned
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -480,10 +550,10 @@ mod tests {
         // queue the blocks in in correct order that even if
         // they create temporary export structures, in the end
         // they are merged together and only one `QueuedData` is returned
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_2), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
 
         assert_eq!(
             q.export,
@@ -494,9 +564,9 @@ mod tests {
         );
 
         let block = &BlockHeader::with_id(1337, Some(1336));
-        assert_eq!(q.queue(block), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.try_queue(block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(block),
+            q.get_queued(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_2])),
         );
 
@@ -504,8 +574,8 @@ mod tests {
             q.export,
             HashMap::from([(11, OrderedData(vec![vec![hdr1_1_1]])),])
         );
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Resolved));
-        assert_eq!(q.get_queued(&hdr1_1), Some(QueuedData(vec![hdr1_1_1])));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.get_queued(&hdr1_1.id), Some(QueuedData(vec![hdr1_1_1])));
     }
 
     #[test]
@@ -519,22 +589,51 @@ mod tests {
         let hdr1_1_1 = BlockHeader::with_id(111, Some(hdr1_1.id));
 
         // blocks may come in any order
-        assert_eq!(q.queue(&hdr1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr1_1), Ok(ImportQueueState::Queued));
-        assert_eq!(q.queue(&hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.try_queue(&hdr2), Ok(ImportQueueState::Queued));
 
         assert_eq!(q.num_chains(), 1);
         assert_eq!(q.num_queued(), 5);
 
         let missing = BlockHeader::with_id(1337u64, Some(1336u64));
-        assert_eq!(q.queue(&missing), Ok(ImportQueueState::Resolved));
+        assert_eq!(q.try_queue(&missing), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&missing),
+            q.get_queued(&missing.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr2_1, hdr1_1_1]))
         );
         assert_eq!(q.num_chains(), 0);
         assert_eq!(q.num_queued(), 0);
+    }
+
+    #[test]
+    fn test_queue() {
+        let mut q = ImportQueue::new();
+
+        let hdr1 = BlockHeader::with_id(100, Some(1));
+        let hdr1_1 = BlockHeader::with_id(101, Some(100));
+        let hdr1_1_1 = BlockHeader::with_id(103, Some(102));
+        let hdr2 = BlockHeader::with_id(201, Some(100));
+        let hdr1_2 = BlockHeader::with_id(202, Some(201));
+
+        assert_eq!(q.queue(hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.num_chains(), 2);
+
+        assert_eq!(
+            q.drain().iter().flat_map(|x| x.to_vec()).sorted().collect::<Vec<BlockHeader>>(),
+            [
+                BlockHeader::with_id(100, Some(1)),
+                BlockHeader::with_id(101, Some(100)),
+                BlockHeader::with_id(103, Some(102)),
+                BlockHeader::with_id(201, Some(100)),
+                BlockHeader::with_id(202, Some(201)),
+            ]
+        )
     }
 }
