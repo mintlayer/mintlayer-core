@@ -470,15 +470,27 @@ impl MempoolStore {
     }
 
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
-        self.txs_by_descendant_score
-            .entry(entry.fees_with_descendants.into())
-            .and_modify(|entries| {
-                entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
-            });
+        self.remove_from_descendant_score_index(entry);
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
             entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
         });
         self.unspend_outpoints(entry)
+    }
+
+    fn remove_from_descendant_score_index(&mut self, entry: &TxMempoolEntry) {
+        self.refresh_ancestors(entry);
+        self.txs_by_descendant_score
+            .entry(entry.fees_with_descendants.into())
+            .or_default()
+            .remove(&entry.tx_id());
+        if self
+            .txs_by_descendant_score
+            .get(&entry.fees_with_descendants.into())
+            .expect("key must exist")
+            .is_empty()
+        {
+            self.txs_by_descendant_score.remove(&entry.fees_with_descendants.into());
+        }
     }
 
     fn drop_conflicts(&mut self, conflicts: Conflicts) {
