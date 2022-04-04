@@ -1733,6 +1733,47 @@ mod tests {
     }
 
     #[test]
+    fn try_replace_irreplaceable() -> anyhow::Result<()> {
+        let mut mempool = setup();
+        let outpoint = mempool
+            .available_outpoints(true)
+            .iter()
+            .next()
+            .expect("there should be an outpoint since setup creates the genesis transaction")
+            .outpoint
+            .to_owned();
+
+        let outpoint_source_id = OutPointSourceId::from(
+            outpoint.get_tx_id().get_tx_id().expect("Not Coinbase").to_owned(),
+        );
+
+        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
+        let flags = 0;
+        let locktime = 0;
+        let original_fee = Amount::from(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
+        let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
+            .expect("should be able to spend here");
+        let original_id = original.get_id();
+        mempool.add_transaction(original)?;
+
+        let flags = 0;
+        let replacement_fee = (original_fee + 1000.into()).unwrap();
+        let replacement = tx_spend_input(&mempool, input, replacement_fee, flags, locktime)
+            .expect("should be able to spend here");
+        assert!(matches!(
+            mempool.add_transaction(replacement.clone()),
+            Err(Error::TxValidationError(
+                TxValidationError::ConflictWithIrreplaceableTransaction
+            ))
+        ));
+
+        mempool.drop_transaction(&original_id);
+        mempool.add_transaction(replacement)?;
+
+        Ok(())
+    }
+
+    #[test]
     fn tx_replace() -> anyhow::Result<()> {
         let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
         let replacement_fee = Amount::from_atoms(relay_fee + 100);
