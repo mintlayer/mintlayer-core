@@ -68,6 +68,8 @@ pub enum TxValidationError {
     FeeRateError,
     #[error("AncestorFeeUpdateOverflow")]
     AncestorFeeUpdateOverflow,
+    #[error("Descendant of expired transaction")]
+    DescendantOfExpiredTransaction,
     #[error("Internal Error")]
     InternalError,
 }

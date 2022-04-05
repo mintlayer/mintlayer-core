@@ -842,12 +842,18 @@ where
         let entry = self.create_entry(tx)?;
         let id = entry.tx.get_id().get();
         self.store.add_tx(entry)?;
+        self.remove_expired_transactions();
+        self.store
+            .txs_by_id
+            .contains_key(&id)
+            .then(|| ())
+            .ok_or(TxValidationError::DescendantOfExpiredTransaction)?;
+
         self.limit_mempool_size()?;
         self.store.txs_by_id.contains_key(&id).then(|| ()).ok_or(Error::MempoolFull)
     }
 
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
-        self.remove_expired_transactions();
         let removed_fees = self.trim()?;
         if !removed_fees.is_empty() {
             let new_minimum_fee_rate =
