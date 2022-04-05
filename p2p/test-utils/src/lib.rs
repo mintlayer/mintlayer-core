@@ -21,7 +21,7 @@ use libp2p::Multiaddr;
 use p2p::{
     net::{
         libp2p::Libp2pService,
-        mock::{MockService, MockSocket},
+        mock::MockService,
         ConnectivityEvent, ConnectivityService, NetworkService,
     },
     peer::*,
@@ -75,17 +75,18 @@ pub fn get_mock_id_with(num: u16) -> <MockService as NetworkService>::PeerId {
 pub async fn create_two_mock_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<MockService>, Peer<MockService>) {
-    let addr: SocketAddr = make_address("[::1]:");
-    let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
-    let peer_fut = TcpStream::connect(addr);
+    let addr1: SocketAddr = make_address("[::1]:");
+    let addr2: SocketAddr = make_address("[::1]:");
+    let (mut server, _) = MockService::start(addr1, &[], &[]).await.unwrap();
+    let (mut server2, _) = MockService::start(addr2, &[], &[]).await.unwrap();
 
-    let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
+    let (remote_res, local_res) = tokio::join!(server.poll_next(), server2.connect(addr1));
     let remote_res: ConnectivityEvent<MockService> = remote_res.unwrap();
     let remote_res = match remote_res {
         ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
         _ => panic!("invalid event received, expected incoming connection"),
     };
-    let local_res = local_res.unwrap();
+    let (_, local_res) = local_res.unwrap();
 
     let (peer_tx, mut peer_rx) = tokio::sync::mpsc::channel(1);
     let (sync_tx, mut sync_rx) = tokio::sync::mpsc::channel(1);
@@ -101,7 +102,7 @@ pub async fn create_two_mock_peers(
     });
 
     let local = Peer::<MockService>::new(
-        addr,
+        addr1,
         PeerRole::Outbound,
         config.clone(),
         remote_res,
@@ -111,10 +112,12 @@ pub async fn create_two_mock_peers(
     );
 
     let remote = Peer::<MockService>::new(
-        local_res.local_addr().unwrap(),
+        addr2,
+        // local_res.local_addr().unwrap(),
         PeerRole::Inbound,
         config.clone(),
-        MockSocket::new(local_res),
+        local_res,
+        // MockSocket::new(local_res),
         peer_tx,
         sync_tx,
         rx2,

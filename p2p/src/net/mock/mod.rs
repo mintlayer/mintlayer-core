@@ -38,8 +38,9 @@ use tokio::{
     sync::{mpsc, oneshot},
 };
 
-pub mod backend;
-pub mod types;
+mod backend;
+mod floodsub;
+mod types;
 
 #[derive(Debug)]
 pub enum MockStrategy {}
@@ -97,15 +98,16 @@ impl NetworkService for MockService {
     async fn start(
         addr: Self::Address,
         _strategies: &[Self::Strategy],
-        _topics: &[FloodsubTopic],
+        topics: &[FloodsubTopic],
     ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (flood_tx, _flood_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
+        let topics = topics.to_vec();
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx);
+            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, topics);
             let _ = mock.run().await;
         });
 
@@ -136,12 +138,12 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
 
-        let socket = rx
+        let (peer_id, socket) = rx
             .await
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        Ok((addr, MockSocket::new(socket)))
+        Ok((peer_id, MockSocket::new(socket)))
     }
 
     fn local_addr(&self) -> &T::Address {
@@ -160,11 +162,17 @@ where
     }
 
     async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        Ok(())
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(types::Command::RegisterPeer { peer, response: tx }).await?;
+
+        rx.await.map_err(|e| e)? // channel closed
     }
 
     async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        Ok(())
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(types::Command::UnregisterPeer { peer, response: tx }).await?;
+
+        rx.await.map_err(|e| e)? // channel closed
     }
 }
 
@@ -253,26 +261,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect() {
-        use tokio::net::TcpListener;
-
-        // create `TcpListener`, spawn a task, and start accepting connections
-        let addr: SocketAddr = "127.0.0.1:6666".parse().unwrap();
-        let server = TcpListener::bind(addr).await.unwrap();
+        let addr1: SocketAddr = test_utils::make_address("127.0.0.1:");
+        let (mut server, _) = MockService::start(addr1, &[], &[]).await.unwrap();
 
         tokio::spawn(async move {
             loop {
-                if server.accept().await.is_ok() {}
+                if server.poll_next().await.is_ok() {}
             }
         });
 
         // create service that is used for testing `connect()`
-        let srv = MockService::start("127.0.0.1:7777".parse().unwrap(), &[], &[]).await;
+        let addr2 = test_utils::make_address("127.0.0.1:");
+        let srv = MockService::start(addr2, &[], &[]).await;
         assert!(srv.is_ok());
         let (mut srv, _) = srv.unwrap();
 
         // try to connect to self, should fail
-        let res = srv.connect("127.0.0.1:7777".parse().unwrap()).await;
-        println!("{:?}", res);
+        let res = srv.connect(addr2).await;
         assert!(res.is_err());
 
         // try to connect to an address that (hopefully)
@@ -281,7 +286,7 @@ mod tests {
         assert!(res.is_err());
 
         // try to connect to the `TcpListener` that was spawned above, should succeeed
-        let res = srv.connect("127.0.0.1:6666".parse().unwrap()).await;
+        let res = srv.connect(addr1).await;
         assert!(res.is_ok());
     }
 
@@ -289,10 +294,16 @@ mod tests {
     async fn test_accept() {
         // create service that is used for testing `accept()`
         let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let (mut srv, _) =
-            MockService::start("[::1]:9999".parse().unwrap(), &[], &[]).await.unwrap();
+        let (mut srv1, _) =
+            MockService::start("[::1]:9999".parse().unwrap(), &[], &[FloodsubTopic::Blocks])
+                .await
+                .unwrap();
+        let (mut srv2, _) =
+            MockService::start("[::1]:9998".parse().unwrap(), &[], &[FloodsubTopic::Blocks])
+                .await
+                .unwrap();
 
-        let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
+        let (acc, con) = tokio::join!(srv1.poll_next(), srv2.connect(addr));
         assert!(acc.is_ok());
         assert!(con.is_ok());
         let acc: ConnectivityEvent<MockService> = acc.unwrap();
@@ -302,11 +313,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_send() {
-        let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
-        let remote_fut = TcpStream::connect(addr);
+        let addr1: SocketAddr = test_utils::make_address("[::1]:");
+        let addr2: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut srv1, _) = MockService::start(addr1, &[], &[FloodsubTopic::Blocks]).await.unwrap();
+        let (mut srv2, _) =
+            MockService::start(addr2, &[], &[FloodsubTopic::Transactions]).await.unwrap();
 
-        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
+        let (server_res, remote_res) = tokio::join!(srv1.poll_next(), srv2.connect(addr1));
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
@@ -329,7 +342,7 @@ mod tests {
             sync_tx,
             rx,
         );
-        let mut socket = remote_res.unwrap();
+        let (_, mut socket) = remote_res.unwrap();
 
         // try to send data that implements `Encode + Decode`
         // and verify that it was received correctly
@@ -339,7 +352,8 @@ mod tests {
         };
 
         let mut buf = vec![0u8; 256];
-        let (server_res, peer_res) = tokio::join!(socket.read(&mut buf), peer.socket.send(&tx));
+        let (server_res, peer_res) =
+            tokio::join!(socket.socket.read(&mut buf), peer.socket.send(&tx));
 
         assert!(peer_res.is_ok());
         assert!(server_res.is_ok());
@@ -348,12 +362,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_recv() {
-        // create a `MockService`, connect to it with a `TcpStream` and exchange data
-        let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
-        let remote_fut = TcpStream::connect(addr);
+        let addr1: SocketAddr = test_utils::make_address("[::1]:");
+        let addr2: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut srv1, _) = MockService::start(addr1, &[], &[]).await.unwrap();
+        let (mut srv2, _) = MockService::start(addr2, &[], &[]).await.unwrap();
 
-        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
+        let (server_res, remote_res) = tokio::join!(srv1.poll_next(), srv2.connect(addr1));
         assert!(server_res.is_ok());
         assert!(remote_res.is_ok());
 
@@ -376,7 +390,7 @@ mod tests {
             sync_tx,
             rx,
         );
-        let mut socket = remote_res.unwrap();
+        let (_, mut socket) = remote_res.unwrap();
 
         // send data and decode it successfully
         let tx = Transaction {
@@ -386,9 +400,14 @@ mod tests {
         let encoded = tx.encode();
 
         let (socket_res, peer_res): (_, Result<Transaction, _>) =
-            tokio::join!(socket.write(&encoded), peer.socket.recv());
+            tokio::join!(socket.socket.write(&encoded), peer.socket.recv());
         assert!(socket_res.is_ok());
         assert!(peer_res.is_ok());
         assert_eq!(peer_res.unwrap(), tx);
+    }
+
+    #[tokio::test]
+    async fn test_mock_floodsub() {
+        // TODO:
     }
 }

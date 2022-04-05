@@ -17,21 +17,22 @@
 #![allow(unused, dead_code)]
 #![cfg(not(loom))]
 
-///! Swarm manager
-///!
-///! Swarm manager is responsible for handling all peer- and connectivity-related tasks
-///! of the P2P subsystem. By swarm, we mean a collection of peers we know about or are
-///! connected to. All connectivity-related events (incoming connections, peer discovery
-///! and expiration) are received from the network service provider and the swarm manager
-///! then decided when it needs to establish new outbound connctions and who are the peers
-///! it tries to connect to. It also accepts or rejects new incoming connections based on
-///! the number of active connections it has.
-///!
-///! After a connection has been received/established, the swarm manager creates a Peer object
-///! and spawns a task for that peer. The first thing the task does is handshake with the remote
-///! peer and the result of that handshake (success/failure) is reported to the swarm manager
-///! which then either reports that information to other subsystems of P2P that need that
-///! information or considers the peer invalid and destroys any context it had.
+//! Swarm manager
+//!
+//! Swarm manager is responsible for handling all peer- and connectivity-related tasks
+//! of the P2P subsystem. By swarm, we mean a collection of peers we know about or are
+//! connected to. All connectivity-related events (incoming connections, peer discovery
+//! and expiration) are received from the network service provider and the swarm manager
+//! then decided when it needs to establish new outbound connctions and who are the peers
+//! it tries to connect to. It also accepts or rejects new incoming connections based on
+//! the number of active connections it has.
+//!
+//! After a connection has been received/established, the swarm manager creates a Peer object
+//! and spawns a task for that peer. The first thing the task does is handshake with the remote
+//! peer and the result of that handshake (success/failure) is reported to the swarm manager
+//! which then either reports that information to other subsystems of P2P that need that
+//! information or considers the peer invalid and destroys any context it had.
+
 use crate::{
     error::{self, P2pError},
     event::{self, PeerEvent, PeerSwarmEvent},
@@ -468,10 +469,20 @@ mod tests {
         let mut swarm = make_swarm_manager::<MockService>(addr).await;
         let (tx, _) = tokio::sync::mpsc::channel(16);
 
+        let addr2: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut server2, _) = MockService::start(addr2, &[], &[]).await.unwrap();
+
+        let (remote_res, local_res) = tokio::join!(swarm.handle.poll_next(), server2.connect(addr));
+        let remote_res: crate::net::ConnectivityEvent<MockService> = remote_res.unwrap();
+        let peer_id = match remote_res {
+            crate::net::ConnectivityEvent::IncomingConnection { peer_id, socket: _ } => peer_id,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
+
         swarm.peers.insert(
-            addr,
+            peer_id,
             PeerContext {
-                id: addr,
+                id: peer_id,
                 state: PeerState::Handshaking,
                 tx: tx.clone(),
             },
@@ -480,14 +491,12 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
         assert_eq!(
             swarm
-                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded {
-                    peer_id: addr
-                }))
+                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded { peer_id }))
                 .await,
             Ok(())
         );
         assert_eq!(swarm.peers.len(), 1);
-        match swarm.peers.get(&addr) {
+        match swarm.peers.get(&peer_id) {
             Some(peer) => assert_eq!(peer.state, PeerState::Active),
             None => {
                 panic!("peer not found");
@@ -693,13 +702,13 @@ mod tests {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
         let mut swarm = make_swarm_manager::<MockService>(addr).await;
 
-        // spawn tcp server for auto-connect test
+        // spawn mock service for auto-connect test
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let server = TcpListener::bind(addr).await.unwrap();
+        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
+
         tokio::spawn(async move {
-            println!("staring tcp server...");
             loop {
-                assert!(server.accept().await.is_ok());
+                if server.poll_next().await.is_ok() {}
             }
         });
 

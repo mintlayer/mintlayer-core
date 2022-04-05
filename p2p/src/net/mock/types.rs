@@ -20,8 +20,73 @@ use tokio::{net::TcpStream, sync::oneshot};
 
 pub enum Command {
     Connect {
+        /// Remote address
         addr: SocketAddr,
-        response: oneshot::Sender<error::Result<TcpStream>>,
+
+        /// Channel for returning the result
+        response: oneshot::Sender<error::Result<(SocketAddr, TcpStream)>>,
+    },
+
+    /// Publish a message on a floodsub topic
+    SendMessage {
+        /// Floodsub topic where the message should be published
+        topic: net::FloodsubTopic,
+
+        /// Encoded message
+        message: Vec<u8>,
+
+        /// Channel for returning the status of the operation
+        response: oneshot::Sender<error::Result<()>>,
+    },
+
+    /// Register peer to the networking backend
+    RegisterPeer {
+        /// Unique ID of the peer
+        peer: SocketAddr,
+
+        /// Channel for returning the status of the operation
+        response: oneshot::Sender<error::Result<()>>,
+    },
+
+    /// Unregister peer from the networking backend
+    UnregisterPeer {
+        /// Unique ID of the peer
+        peer: SocketAddr,
+
+        /// Channel for returning the status of the operation
+        response: oneshot::Sender<error::Result<()>>,
+    },
+}
+
+pub enum FloodsubCommand {
+    /// Peer connected
+    PeerConnected {
+        /// Unique ID of the peer
+        peer: SocketAddr,
+
+        /// Floodsub socket of the peer
+        socket: net::mock::MockSocket,
+
+        /// Floodsub topics the peer listens to
+        topics: Vec<net::FloodsubTopic>,
+    },
+
+    /// Peer disconnected
+    PeerDisconnected {
+        /// Unique ID of the peer
+        peer: SocketAddr,
+    },
+
+    /// Publish a message on a floodsub topic
+    SendMessage {
+        /// Floodsub topic where the message should be published
+        topic: net::FloodsubTopic,
+
+        /// Encoded message
+        message: Vec<u8>,
+
+        /// Channel for returning the status of the operation
+        response: oneshot::Sender<error::Result<()>>,
     },
 }
 
@@ -32,12 +97,17 @@ pub enum ConnectivityEvent {
     },
 }
 
-// TODO: use two events, one for txs and one for blocks?
+#[derive(Debug, PartialEq, Eq)]
 pub enum FloodsubEvent {
     /// Message received from one of the floodsub topics
     MessageReceived {
+        /// Unique peer ID of the sender
         peer_id: SocketAddr,
+
+        /// Topic where the message was received from
         topic: net::FloodsubTopic,
-        message: message::Message,
+
+        /// Actual data that was received
+        message: Vec<u8>,
     },
 }

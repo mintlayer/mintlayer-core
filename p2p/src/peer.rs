@@ -27,7 +27,6 @@ use futures_timer::Delay;
 use logging::log;
 use std::{sync::Arc, time::Duration};
 
-// pub type PeerId = u64;
 pub type TaskId = u64;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -108,12 +107,12 @@ pub async fn schedule_event(task_info: TaskInfo) -> Task {
 }
 
 #[allow(unused)]
-pub struct Peer<NetworkingBackend>
+pub struct Peer<T>
 where
-    NetworkingBackend: NetworkService,
+    T: NetworkService,
 {
     /// Unique ID of the peer
-    pub id: NetworkingBackend::PeerId,
+    pub id: T::PeerId,
 
     /// Inbound/outbound
     pub role: PeerRole,
@@ -122,16 +121,16 @@ where
     pub state: PeerState,
 
     /// Channel for sending messages to `NetworkManager`
-    pub mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<NetworkingBackend>>,
+    pub mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<T>>,
 
     /// Channel for sending messages to SyncManager
-    sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<NetworkingBackend>>,
+    sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<T>>,
 
     /// Channel for reading events from the `NetworkManager`
-    mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<NetworkingBackend>>,
+    mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<T>>,
 
     /// Socket of the peer
-    pub socket: NetworkingBackend::Socket,
+    pub socket: T::Socket,
 
     /// Chain config
     pub config: Arc<ChainConfig>,
@@ -141,9 +140,9 @@ where
 }
 
 #[allow(unused)]
-impl<NetworkingBackend> Peer<NetworkingBackend>
+impl<T> Peer<T>
 where
-    NetworkingBackend: NetworkService,
+    T: NetworkService,
 {
     /// Create new peer
     ///
@@ -155,13 +154,13 @@ where
     /// `mgr_tx` - channel for sending messages to P2P
     /// `mgr_rx` - channel fro receiving messages from P2P
     pub fn new(
-        id: NetworkingBackend::PeerId,
+        id: T::PeerId,
         role: PeerRole,
         config: Arc<ChainConfig>,
-        socket: NetworkingBackend::Socket,
-        mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<NetworkingBackend>>,
-        sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<NetworkingBackend>>,
-        mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<NetworkingBackend>>,
+        socket: T::Socket,
+        mgr_tx: tokio::sync::mpsc::Sender<event::PeerSwarmEvent<T>>,
+        sync_tx: tokio::sync::mpsc::Sender<event::PeerSyncEvent<T>>,
+        mgr_rx: tokio::sync::mpsc::Receiver<event::PeerEvent<T>>,
     ) -> Self {
         let state = match role {
             PeerRole::Outbound => {
@@ -254,10 +253,7 @@ where
     /// This might be a request the local node must make to remote peer, e.g. GetHeaders,
     /// it might be the response to request the remote peer sent us, or it might be
     /// a shutdown signal which instructs us to close the connection and exit the event loop
-    async fn on_manager_event(
-        &mut self,
-        event: Option<event::PeerEvent<NetworkingBackend>>,
-    ) -> error::Result<()> {
+    async fn on_manager_event(&mut self, event: Option<event::PeerEvent<T>>) -> error::Result<()> {
         todo!();
     }
 

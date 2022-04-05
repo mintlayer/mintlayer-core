@@ -11,6 +11,7 @@ futures-timer = "3.0.2"
 rand = "0.8.4"
 void = "1.0.2"
 itertools = "0.10.3"
+portpicker = "0.1.1"
 
 [dependencies.common]
 path = "../common/"

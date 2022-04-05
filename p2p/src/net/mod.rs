@@ -69,7 +69,7 @@ where
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Encode, Decode)]
 pub enum FloodsubTopic {
     Transactions,
     Blocks,

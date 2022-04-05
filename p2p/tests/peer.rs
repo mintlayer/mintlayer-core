@@ -25,17 +25,18 @@ use p2p::net::{
 use p2p::peer::{Peer, PeerRole};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use tokio::net::TcpStream;
 
 // connect two mock service peers together
 #[tokio::test]
 async fn test_peer_new_mock() {
     let config = Arc::new(config::create_mainnet());
-    let addr: SocketAddr = test_utils::make_address("[::1]:");
-    let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
-    let peer_fut = TcpStream::connect(addr);
+    let addr1: SocketAddr = test_utils::make_address("[::1]:");
+    let addr2: SocketAddr = test_utils::make_address("[::1]:");
+    let (mut server, _) = MockService::start(addr1, &[], &[]).await.unwrap();
+    let (mut server2, _) = MockService::start(addr2, &[], &[]).await.unwrap();
 
-    let (server_res, peer_res) = tokio::join!(server.poll_next(), peer_fut);
+    let (server_res, peer_res) = tokio::join!(server.poll_next(), server2.connect(addr1));
+
     assert!(server_res.is_ok());
     assert!(peer_res.is_ok());
 
@@ -49,7 +50,7 @@ async fn test_peer_new_mock() {
     let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
     let (_tx, rx) = tokio::sync::mpsc::channel(1);
     let _ = Peer::<MockService>::new(
-        addr,
+        addr1,
         PeerRole::Outbound,
         Arc::clone(&config),
         server_res,

@@ -18,18 +18,21 @@
 
 use crate::{message, net::NetworkService, sync};
 use parity_scale_codec::{Decode, Encode};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use util::Handle;
 
+// TODO: remove peerswarmevent and replace it with swarmevent that controls the connected peer!
 #[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum PeerEvent<T>
 where
     T: NetworkService,
 {
     Swarm(PeerSwarmEvent<T>),
-    Syncing(PeerSyncEvent<T>),
+    Syncing(SyncEvent),
 }
 
+/// Swarm-related messages received from one of the connected peers
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerSwarmEvent<T>
 where
@@ -51,25 +54,73 @@ where
     },
 }
 
+/// Syncing-related event received from one of the connected peers
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerSyncEvent<T>
 where
     T: NetworkService,
 {
+    /// Peer requested headers
     GetHeaders {
-        peer_id: Option<T::PeerId>,
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        /// Set of headers that are used to find common ancestor between chains
         locator: Vec<sync::mock_consensus::BlockHeader>,
     },
+
+    /// Peer with unique ID `peer_id` responded to header request
     Headers {
-        peer_id: Option<T::PeerId>,
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        /// Headers that were requested
         headers: Vec<sync::mock_consensus::BlockHeader>,
     },
+
+    /// Peer with unique ID `peer_id` requested blocks
     GetBlocks {
-        peer_id: Option<T::PeerId>,
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        /// Headers of those blocks that are requested
         headers: Vec<sync::mock_consensus::BlockHeader>,
     },
+
+    /// Peer with unique ID `peer_id` responded to block request
     Blocks {
-        peer_id: Option<T::PeerId>,
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        /// Blocks that were requested
+        blocks: Vec<Arc<sync::mock_consensus::Block>>,
+    },
+}
+
+/// Syncing-related event sent to a connected peer
+#[derive(Debug, PartialEq, Eq, Encode, Decode)]
+pub enum SyncEvent {
+    /// Send header request to peer
+    GetHeaders {
+        /// Set of headers that are used to find common ancestor between chains
+        locator: Vec<sync::mock_consensus::BlockHeader>,
+    },
+
+    /// Response to header request
+    Headers {
+        /// Headers that were requested
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+    },
+
+    /// Block request
+    GetBlocks {
+        /// Headers of those blocks that are requested
+        headers: Vec<sync::mock_consensus::BlockHeader>,
+    },
+
+    /// Response to block request
+    Blocks {
+        /// Blocks that were requested
         blocks: Vec<sync::mock_consensus::Block>,
     },
 }
