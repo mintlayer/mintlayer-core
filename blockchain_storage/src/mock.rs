@@ -2,9 +2,7 @@
 
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id};
-use common::utxo::Utxo;
 
 mockall::mock! {
     /// A mock object for blockchain storage
@@ -32,10 +30,6 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<Block>>>;
     }
 
-    impl crate::UtxoRead for Store {
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-    }
-
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
@@ -55,11 +49,6 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-    }
-
-    impl crate::UtxoWrite for Store {
-        fn add_utxo(&mut self, outpoint: &OutPoint, entry:Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
     }
 
     impl<'tx> crate::Transactional<'tx> for Store {
@@ -97,10 +86,6 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<Block>>>;
     }
 
-    impl crate::UtxoRead for StoreTxRo {
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-    }
-
     impl storage::traits::TransactionRo for StoreTxRo {
         type Error = crate::Error;
         fn finalize(self) -> crate::Result<()>;
@@ -132,10 +117,6 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<Block>>>;
     }
 
-    impl crate::UtxoRead for StoreTxRw {
-        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-    }
-
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
@@ -156,11 +137,6 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-    }
-
-    impl crate::UtxoWrite for StoreTxRw {
-        fn add_utxo(&mut self, outpoint: &OutPoint, entry:Utxo) -> crate::Result<()>;
-        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
     }
 
     impl storage::traits::TransactionRw for StoreTxRw {
@@ -303,7 +279,7 @@ mod tests {
             12,
             ConsensusData::None,
         )
-        .unwrap();
+            .unwrap();
         let block1 = Block::new(vec![tx1], block0.get_id(), 34, ConsensusData::None).unwrap();
         (block0, block1)
     }
