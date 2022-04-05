@@ -2716,4 +2716,53 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[test]
+    fn no_empty_bags_in_descendant_score_index() -> anyhow::Result<()> {
+        let mut mempool = setup();
+
+        let num_inputs = 1;
+        let num_outputs = 100;
+        let fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs));
+        let parent = TxGenerator::new()
+            .with_num_inputs(num_inputs)
+            .with_num_outputs(num_outputs)
+            .with_fee(fee.into())
+            .generate_tx(&mempool)?;
+        let parent_id = parent.get_id();
+
+        let outpoint_source_id = OutPointSourceId::Transaction(parent.get_id());
+        mempool.add_transaction(parent)?;
+        let num_child_txs = num_outputs;
+        let flags = 0;
+        let locktime = 0;
+        let txs = (0..num_child_txs)
+            .into_iter()
+            .map(|i| {
+                tx_spend_input(
+                    &mempool,
+                    TxInput::new(
+                        outpoint_source_id.clone(),
+                        u32::try_from(i).unwrap(),
+                        DUMMY_WITNESS_MSG.to_vec(),
+                    ),
+                    Amount::from(fee + u128::try_from(i).unwrap()),
+                    flags,
+                    locktime,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let ids = txs.iter().map(|tx| tx.get_id()).collect::<Vec<_>>();
+
+        for tx in txs {
+            mempool.add_transaction(tx)?;
+        }
+
+        mempool.drop_transaction(&parent_id);
+        for id in ids {
+            mempool.drop_transaction(&id)
+        }
+        assert!(mempool.store.txs_by_descendant_score.is_empty());
+        Ok(())
+    }
 }
