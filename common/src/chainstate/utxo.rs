@@ -349,24 +349,6 @@ impl<'a> UtxosCache<'a> {
         })
     }
 
-    /// This is an expensive search, because in the event of a transaction output not found,
-    /// iteration will have reached up to the "maximum outputs per block" lookup in the database.
-    // pub fn get_mut_utxo_by_id<T>(&mut self, id:Id<T>) -> Option<&mut Utxo> {
-    //     let outpoint_id = OutPointSourceId::from(id);
-    //
-    //     for i in 0..MAX_OUTPUTS_PER_BLOCK {
-    //         let outpoint = OutPoint::new(outpoint_id.clone(),i);
-    //
-    //         let utxo = self.get_mut_utxo(&outpoint);
-    //
-    //         if utxo.is_some() {
-    //             return utxo;
-    //         }
-    //     }
-    //
-    //     None
-    // }
-
     pub fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = OutPointKey::from(outpoint);
         if let Some(entry) = self.utxos.get(&key) {

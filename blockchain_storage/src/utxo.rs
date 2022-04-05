@@ -57,6 +57,7 @@ impl UtxosView for UtxoDB {
         utxos: HashMap<OutPointKey, UtxoEntry>,
         block_hash: H256,
     ) -> Result<(), common::ChainStateError> {
+        // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos {
             let outpoint: OutPoint = (&key).into();
             if entry.is_dirty() {
@@ -64,7 +65,6 @@ impl UtxosView for UtxoDB {
                     self.0.add_utxo(&outpoint, utxo)?;
                 } else {
                     // entry is spent
-                    println!("delete me {:?}!!!", outpoint);
                     self.0.del_utxo(&outpoint)?;
                 }
             }

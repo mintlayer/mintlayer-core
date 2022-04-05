@@ -93,11 +93,12 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 }
 
-/// Queries to get the Utxo Entry
+/// Queries to get the Utxo
 pub(crate) trait UtxoRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
 }
 
+/// Queries to update the Utxo
 pub(crate) trait UtxoWrite: UtxoRead {
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
 

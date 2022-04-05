@@ -269,10 +269,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
 impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
-        println!("setting storage version...");
         let key = outpoint.encode();
-        //self.write_value::<well_known::StoreVersion>(&version)
-
         self.write::<DBUtxo, _, _>(key, &entry)
     }
 
