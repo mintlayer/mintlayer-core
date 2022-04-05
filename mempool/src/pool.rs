@@ -2695,4 +2695,25 @@ mod tests {
         assert!(!mempool.contains_transaction(&child_id));
         Ok(())
     }
+
+    #[test]
+    fn mempool_full() -> anyhow::Result<()> {
+        logging::try_init_logging::<&str>(None);
+        let mut mock_usage = MockGetMemoryUsage::new();
+        mock_usage
+            .expect_get_memory_usage()
+            .times(1)
+            .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
+
+        let chain_state = ChainStateMock::new();
+        let mut mempool = MempoolImpl::create(chain_state, SystemClock, mock_usage);
+
+        let tx = TxGenerator::new().generate_tx(&mempool)?;
+        log::debug!("mempool_full: tx has is {}", tx.get_id().get());
+        assert!(matches!(
+            mempool.add_transaction(tx),
+            Err(Error::MempoolFull)
+        ));
+        Ok(())
+    }
 }
