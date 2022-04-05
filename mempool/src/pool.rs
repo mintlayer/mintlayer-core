@@ -2648,4 +2648,51 @@ mod tests {
             assert!(entry_score <= next_entry_score)
         }
     }
+
+    #[test]
+    fn descendant_of_expired_entry() -> anyhow::Result<()> {
+        let mock_clock = MockClock::new();
+        logging::try_init_logging::<&str>(None);
+
+        let mut mempool = MempoolImpl::create(
+            ChainStateMock::new(),
+            mock_clock.clone(),
+            SystemUsageEstimator {},
+        );
+
+        let num_inputs = 1;
+        let num_outputs = 2;
+        let fee = get_relay_fee_from_tx_size(estimate_tx_size(num_inputs, num_outputs));
+        let parent = TxGenerator::new()
+            .with_num_inputs(num_inputs)
+            .with_num_outputs(num_outputs)
+            .with_fee(fee.into())
+            .generate_tx(&mempool)?;
+        let parent_id = parent.get_id();
+        mempool.add_transaction(parent)?;
+
+        let flags = 0;
+        let locktime = 0;
+        let outpoint_source_id = OutPointSourceId::Transaction(parent_id.clone());
+        let child = tx_spend_input(
+            &mempool,
+            TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec()),
+            None,
+            flags,
+            locktime,
+        )?;
+        let child_id = child.get_id();
+        mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + 1);
+
+        assert!(matches!(
+            mempool.add_transaction(child),
+            Err(Error::TxValidationError(
+                TxValidationError::DescendantOfExpiredTransaction
+            ))
+        ));
+
+        assert!(!mempool.contains_transaction(&parent_id));
+        assert!(!mempool.contains_transaction(&child_id));
+        Ok(())
+    }
 }
