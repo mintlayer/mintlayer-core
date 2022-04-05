@@ -38,8 +38,6 @@ struct InnerPeerIndex {
     pub prev_id: Option<BlockId>,
 }
 
-// TODO: add peer id and check the input source against that
-// and do things differently if necessary
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PeerIndex {
     index: HashMap<BlockId, InnerPeerIndex>,
@@ -104,7 +102,7 @@ impl PeerIndex {
         self.index
             .iter()
             .filter_map(|(id, _)| {
-                self.headers.get(id).and_then(|value| self.queue.get_queued(&value.id))
+                self.headers.get(id).and_then(|value| self.queue.drain_with_id(&value.id))
             })
             .collect::<Vec<QueuedData<BlockHeader>>>()
             .iter()
@@ -127,7 +125,7 @@ impl PeerIndex {
 
             // check if the import queue contained blocks that depended
             // on this block and if so, import them to the block index
-            if let Some(headers) = self.queue.get_queued(&header.id) {
+            if let Some(headers) = self.queue.drain_with_id(&header.id) {
                 self.import_queued_blocks(&headers);
                 return Ok(PeerIndexState::Accepted);
             }
@@ -136,18 +134,16 @@ impl PeerIndex {
         }
 
         // block's ancestor is not known by this peer's block index
-        // TODO: if `Resolved` is returned, do not move to main
-        // block index automatically but to a separate, faster-expiring cache
-        // until confirmation is received from the peer
         match self.queue.try_queue(&header)? {
             ImportQueueState::Queued => Ok(PeerIndexState::Queued),
-            ImportQueueState::Resolved => match self.queue.get_queued(&header.id) {
-                Some(headers) => {
+            ImportQueueState::Resolved => self
+                .queue
+                .drain_with_id(&header.id)
+                .ok_or(P2pError::InvalidData)
+                .map(|headers| {
                     self.import_queued_blocks(&headers);
-                    Ok(PeerIndexState::Accepted)
-                }
-                None => Err(P2pError::InvalidData),
-            },
+                    PeerIndexState::Accepted
+                }),
         }
     }
 }
@@ -386,23 +382,5 @@ mod tests {
         assert_eq!(peer.queue.num_chains(), 0);
         assert_eq!(peer.queue.num_queued(), 0);
         assert_eq!(peer.index.len(), 11);
-    }
-
-    // TODO: use block source to determine reorgs
-    #[test]
-    fn detect_reorg() {
-        let mut peer = PeerIndex::new();
-
-        let block0 = BlockHeader::with_id(1337u64, Some(111111u64));
-        let block1 = BlockHeader::with_id(1, Some(1337u64));
-        let block2 = BlockHeader::with_id(2, Some(1337u64));
-        let block1_1 = BlockHeader::with_id(11, Some(block1.id));
-        let block2_1 = BlockHeader::with_id(21, Some(block2.id));
-        let block1_1_1 = BlockHeader::with_id(111, Some(block1_1.id));
-
-        peer.initialize(&[block0, block1, block2, block1_1, block2_1, block1_1_1]);
-        assert_eq!(peer.queue.num_chains(), 0);
-        assert_eq!(peer.queue.num_queued(), 0);
-        assert_eq!(peer.index.len(), 6);
     }
 }

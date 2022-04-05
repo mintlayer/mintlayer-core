@@ -28,15 +28,14 @@ use p2p::{
     net::{self, mock::MockService, FloodsubService, FloodsubTopic, NetworkService},
     sync::{mock_consensus, SyncManager},
 };
-use std::net::SocketAddr;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 macro_rules! get_message {
     ($expression:expr, $($pattern:pat_param)|+, $ret:expr) => {
         match $expression {
             $($pattern)|+ => $ret,
-            _ => panic!("invalid message received")
+            e => panic!("invalid message received: {:#?}", e)
         }
     }
 }
@@ -109,16 +108,13 @@ async fn peer_get_headers<T, F, Fut>(
     cons: &mut mock_consensus::Consensus,
     f: F,
 ) where
-    T: NetworkService,
+    T: NetworkService + std::fmt::Debug,
     F: FnOnce(Vec<mock_consensus::BlockHeader>) -> Fut,
     Fut: futures::Future<Output = ()>,
 {
     get_message!(
         rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             f(cons.get_headers(&locator)).await;
         }
@@ -134,7 +130,7 @@ async fn make_sync_manager<T>(
     mpsc::Receiver<event::P2pEvent>,
 )
 where
-    T: NetworkService,
+    T: NetworkService + std::fmt::Debug,
     T::FloodsubHandle: FloodsubService<T>,
 {
     let config = Arc::new(config::create_mainnet());
@@ -158,9 +154,7 @@ async fn local_and_remote_in_sync() {
     let addr: SocketAddr = test_utils::make_address("[::1]:");
     let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
     let mut remote_cons = mock_consensus::Consensus::with_height(8);
-
-    let (peer_tx, mut peer_rx) = mpsc::channel(1);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
 
     let mut local_cons = remote_cons.clone();
     let handle = tokio::spawn(async move {
@@ -202,11 +196,7 @@ async fn local_and_remote_in_sync() {
         assert_eq!((headers[0], headers[1]), (all_headers[1], all_headers[0]));
 
         assert_eq!(
-            mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                peer_id: Some(peer_id),
-                headers,
-            })
-            .await,
+            mgr.on_peer_event(event::PeerSyncEvent::Headers { peer_id, headers }).await,
             Ok(())
         );
     })
@@ -239,8 +229,7 @@ async fn remote_ahead_by_7_blocks() {
     // verify that the chains are different
     assert_ne!(local_cons.mainchain, remote_cons.mainchain);
 
-    let (peer_tx, mut peer_rx) = mpsc::channel(1);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
@@ -274,14 +263,11 @@ async fn remote_ahead_by_7_blocks() {
     // the remote peer will receive getheaders request
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer_id),
+                    peer_id,
                     headers: remote_cons.get_headers(&locator),
                 })
                 .await,
@@ -291,23 +277,21 @@ async fn remote_ahead_by_7_blocks() {
     );
 
     // respond to getblocks request received from the local node
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-            peer_id: _,
-            headers
-        }),
-        {
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Blocks {
-                    peer_id: Some(peer_id),
-                    blocks: remote_cons.get_blocks(&headers),
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
+    for _ in 0..7 {
+        get_message!(
+            peer_rx.recv().await.unwrap(),
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }),
+            {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+        );
+    }
 
     let local_cons = handle.await.unwrap();
     assert_eq!(local_cons.mainchain, remote_cons.mainchain);
@@ -333,8 +317,7 @@ async fn local_ahead_by_12_blocks() {
     // verify that the chains are different
     assert_ne!(local_cons.mainchain, remote_cons.mainchain);
 
-    let (peer_tx, mut peer_rx) = mpsc::channel(1);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
@@ -383,14 +366,11 @@ async fn local_ahead_by_12_blocks() {
     // the remote peer will receive getheaders request
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer_id),
+                    peer_id,
                     headers: remote_cons.get_headers(&locator),
                 })
                 .await,
@@ -401,11 +381,7 @@ async fn local_ahead_by_12_blocks() {
 
     let locator = remote_cons.get_locator();
     assert_eq!(
-        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-            peer_id: Some(peer_id),
-            locator,
-        })
-        .await,
+        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders { peer_id, locator }).await,
         Ok(())
     );
 
@@ -413,10 +389,7 @@ async fn local_ahead_by_12_blocks() {
     // remote is left with 12 new block headers
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-            peer_id: _,
-            headers
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::Headers { headers }),
         {
             // based on the unique headers, request blocks from remote
             let uniq = remote_cons.get_uniq_headers(&headers);
@@ -424,7 +397,7 @@ async fn local_ahead_by_12_blocks() {
             assert_eq!(uniq, new_block_hdrs);
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::GetBlocks {
-                    peer_id: Some(peer_id),
+                    peer_id,
                     headers: uniq,
                 })
                 .await,
@@ -436,7 +409,7 @@ async fn local_ahead_by_12_blocks() {
     // request the 12 missing blocks from remote
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks { peer_id: _, blocks }),
+        event::PeerEvent::Syncing(event::SyncEvent::Blocks { blocks }),
         {
             assert_eq!(blocks.len(), 12);
             for block in blocks {
@@ -480,8 +453,7 @@ async fn remote_local_diff_chains_remote_higher() {
     let remote_orig_cons = remote_cons.clone();
     assert_ne!(local_cons.mainchain, remote_cons.mainchain);
 
-    let (peer_tx, mut peer_rx) = mpsc::channel(3);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
@@ -527,14 +499,11 @@ async fn remote_local_diff_chains_remote_higher() {
     // the remote peer will receive getheaders request
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer_id),
+                    peer_id,
                     headers: remote_cons.get_headers(&locator),
                 })
                 .await,
@@ -545,59 +514,46 @@ async fn remote_local_diff_chains_remote_higher() {
 
     let locator = remote_cons.get_locator();
     assert_eq!(
-        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-            peer_id: Some(peer_id),
-            locator,
+        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders { peer_id, locator }).await,
+        Ok(())
+    );
+
+    let mut dl_blocks = vec![];
+
+    for i in 0..9 {
+        match peer_rx.recv().await.unwrap() {
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+            event::PeerEvent::Syncing(event::SyncEvent::Headers { headers }) => {
+                let uniq = remote_cons.get_uniq_headers(&headers);
+                assert_eq!(uniq.len(), 5);
+                assert_eq!(uniq, new_local_block_hdrs);
+                dl_blocks = uniq;
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
+    assert_eq!(
+        mgr.on_peer_event(event::PeerSyncEvent::GetBlocks {
+            peer_id,
+            headers: dl_blocks,
         })
         .await,
         Ok(())
     );
 
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-            peer_id: _,
-            headers
-        }),
-        {
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Blocks {
-                    peer_id: Some(peer_id),
-                    blocks: remote_cons.get_blocks(&headers),
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
-
-    // verify that after extracting the uniq headers from the response,
-    // remote is left with 5 new block headers
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-            peer_id: _,
-            headers
-        }),
-        {
-            let uniq = remote_cons.get_uniq_headers(&headers);
-            assert_eq!(uniq.len(), 5);
-            assert_eq!(uniq, new_local_block_hdrs);
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::GetBlocks {
-                    peer_id: Some(peer_id),
-                    headers: uniq,
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
-
     // verify that remote node receives the 5 blocks it requested
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks { peer_id: _, blocks }),
+        event::PeerEvent::Syncing(event::SyncEvent::Blocks { blocks }),
         {
             assert_eq!(blocks.len(), 5);
             for block in blocks {
@@ -650,8 +606,7 @@ async fn remote_local_diff_chains_local_higher() {
     let local_orig_cons = local_cons.clone();
     assert_ne!(local_cons.mainchain, remote_cons.mainchain);
 
-    let (peer_tx, mut peer_rx) = mpsc::channel(2);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
 
     let handle = tokio::spawn(async move {
         // verify that the first message that the consensus receives is the locator request
@@ -693,14 +648,11 @@ async fn remote_local_diff_chains_local_higher() {
     // the remote peer will receive getheaders request
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer_id),
+                    peer_id,
                     headers: remote_cons.get_headers(&locator),
                 })
                 .await,
@@ -711,59 +663,45 @@ async fn remote_local_diff_chains_local_higher() {
 
     let locator = remote_cons.get_locator();
     assert_eq!(
-        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-            peer_id: Some(peer_id),
-            locator,
+        mgr.on_peer_event(event::PeerSyncEvent::GetHeaders { peer_id, locator }).await,
+        Ok(())
+    );
+
+    let mut dl_blocks = vec![];
+    for _ in 0..4 {
+        match peer_rx.recv().await.unwrap() {
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+            event::PeerEvent::Syncing(event::SyncEvent::Headers { headers }) => {
+                let uniq = remote_cons.get_uniq_headers(&headers);
+                assert_eq!(uniq.len(), 16);
+                assert_eq!(uniq, new_local_block_hdrs);
+                dl_blocks = uniq;
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
+    assert_eq!(
+        mgr.on_peer_event(event::PeerSyncEvent::GetBlocks {
+            peer_id,
+            headers: dl_blocks,
         })
         .await,
         Ok(())
     );
 
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-            peer_id: _,
-            headers
-        }),
-        {
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Blocks {
-                    peer_id: Some(peer_id),
-                    blocks: remote_cons.get_blocks(&headers),
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
-
-    // verify that remote node is behind local node by 16 blocks
-    // and send a block request to fetch those new blocks
-    get_message!(
-        peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-            peer_id: _,
-            headers
-        }),
-        {
-            let uniq = remote_cons.get_uniq_headers(&headers);
-            assert_eq!(uniq.len(), 16);
-            assert_eq!(uniq, new_local_block_hdrs);
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::GetBlocks {
-                    peer_id: Some(peer_id),
-                    headers: uniq,
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
-
     // accept the blocks to remote chain (a reorg is done as the chain is longer)
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks { peer_id: _, blocks }),
+        event::PeerEvent::Syncing(event::SyncEvent::Blocks { blocks }),
         {
             assert_eq!(blocks.len(), 16);
             for block in blocks {
@@ -827,6 +765,9 @@ async fn two_remote_nodes_different_chains() {
         // `get_uniq_headers()` will return those headers from the entire response
         get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote1_block_hdrs).await;
 
+        // accept the blocks from first remote node (reorg done)
+        accept_n_blocks(&mut rx_p2p, &mut local_cons, 8).await;
+
         get_message!(
             rx_p2p.recv().await.unwrap(),
             event::P2pEvent::GetHeaders { locator, response },
@@ -834,10 +775,6 @@ async fn two_remote_nodes_different_chains() {
                 response.send(local_cons.get_headers(&locator));
             }
         );
-
-        // accept the blocks from first remote node (reorg done)
-        accept_n_blocks(&mut rx_p2p, &mut local_cons, 8).await;
-
         // handler locator and header request for the second peer
         get_locator(&mut rx_p2p, &mut local_cons).await;
         get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote2_block_hdrs).await;
@@ -862,14 +799,11 @@ async fn two_remote_nodes_different_chains() {
     // the remote peer will receive getheaders request
     get_message!(
         peer1_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer1_id),
+                    peer_id: peer1_id,
                     headers: remote1_cons.get_headers(&locator),
                 })
                 .await,
@@ -878,10 +812,29 @@ async fn two_remote_nodes_different_chains() {
         }
     );
 
+    for _ in 0..8 {
+        match peer1_rx.recv().await.unwrap() {
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote1_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks {
+                        peer_id: peer1_id,
+                        blocks,
+                    })
+                    .await,
+                    Ok(())
+                );
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
     let locator = remote1_cons.get_locator();
     assert_eq!(
         mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-            peer_id: Some(peer1_id),
+            peer_id: peer1_id,
             locator,
         })
         .await,
@@ -890,20 +843,9 @@ async fn two_remote_nodes_different_chains() {
 
     get_message!(
         peer1_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-            peer_id: _,
-            headers
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::Headers { headers }),
         {
-            assert_eq!(headers.len(), 8);
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Blocks {
-                    peer_id: Some(peer1_id),
-                    blocks: remote1_cons.get_blocks(&headers),
-                })
-                .await,
-                Ok(())
-            );
+            assert!(remote1_cons.get_uniq_headers(&headers).is_empty());
         }
     );
 
@@ -924,14 +866,11 @@ async fn two_remote_nodes_different_chains() {
     // the remote peer will receive getheaders request
     get_message!(
         peer2_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             assert_eq!(
                 mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                    peer_id: Some(peer2_id),
+                    peer_id: peer2_id,
                     headers: remote2_cons.get_headers(&locator),
                 })
                 .await,
@@ -940,24 +879,25 @@ async fn two_remote_nodes_different_chains() {
         }
     );
 
-    get_message!(
-        peer2_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-            peer_id: _,
-            headers
-        }),
-        {
-            assert_eq!(headers.len(), 5);
-            assert_eq!(
-                mgr.on_peer_event(event::PeerSyncEvent::Blocks {
-                    peer_id: Some(peer2_id),
-                    blocks: remote2_cons.get_blocks(&headers),
-                })
-                .await,
-                Ok(())
-            );
-        }
-    );
+    for _ in 0..5 {
+        get_message!(
+            peer2_rx.recv().await.unwrap(),
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }),
+            {
+                let blocks =
+                    remote2_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks {
+                        peer_id: peer2_id,
+                        blocks,
+                    })
+                    .await,
+                    Ok(())
+                );
+            }
+        );
+    }
 
     // wait for the blockindex task to finish
     let local_cons = handle.await.unwrap();
@@ -979,9 +919,7 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     let addr: SocketAddr = test_utils::make_address("[::1]:");
     let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
     let mut remote_cons = mock_consensus::Consensus::with_height(16);
-
-    let (peer_tx, mut peer_rx) = mpsc::channel(1);
-    let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+    let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
 
     let mut local_cons = remote_cons.clone();
     let handle = tokio::spawn(async move {
@@ -1021,13 +959,10 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     // the remote peer will receive getheaders request
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::GetHeaders {
-            peer_id: _,
-            locator
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }),
         {
             mgr.on_peer_event(event::PeerSyncEvent::Headers {
-                peer_id: Some(peer_id),
+                peer_id,
                 headers: remote_cons.get_headers(&locator),
             })
             .await;
@@ -1037,7 +972,7 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     // now remote peer sends getheaders request to local sync node and it should
     // get the same response
     mgr.on_peer_event(event::PeerSyncEvent::GetHeaders {
-        peer_id: Some(peer_id),
+        peer_id,
         locator: remote_cons.get_locator(),
     })
     .await;
@@ -1047,10 +982,7 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     // blocks from the local node
     get_message!(
         peer_rx.recv().await.unwrap(),
-        event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-            peer_id: _,
-            headers
-        }),
+        event::PeerEvent::Syncing(event::SyncEvent::Headers { headers }),
         {
             assert!(remote_cons.get_uniq_headers(&headers).is_empty());
         }
@@ -1076,4 +1008,324 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     // verify that the remote and local chains are the same
     // after the block announcement
     assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+}
+
+// connect two remote nodes that are in sync and ahead of local
+// verify that downloads blocks from both nodes
+#[tokio::test]
+async fn two_remote_nodes_same_chain() {
+    let addr: SocketAddr = test_utils::make_address("[::1]:");
+    let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    let mut remote_cons = mock_consensus::Consensus::with_height(8);
+    let mut local_cons = remote_cons.clone();
+    let mut local_orig_cons = remote_cons.clone();
+    let mut new_remote_block_hdrs = vec![];
+
+    // add 10 more blocks to the remotes' chain
+    for _ in 0..10 {
+        let cur_id = remote_cons.mainchain.blkid;
+        let block = mock_consensus::Block::new(Some(cur_id));
+        new_remote_block_hdrs.push(block.header);
+        remote_cons.accept_block(block);
+    }
+
+    let ((peer1_tx, mut peer1_rx), peer1_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+    let ((peer2_tx, mut peer2_rx), peer2_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+
+    let handle = tokio::spawn(async move {
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        let mut getuniqheaders_last = false;
+
+        for i in 0..12 {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetUniqHeaders { headers, response } => {
+                    getuniqheaders_last = i == 12;
+                    let uniq = local_cons.get_uniq_headers(&headers);
+                    assert_eq!(uniq, new_remote_block_hdrs);
+                    response.send((!uniq.is_empty()).then(|| uniq));
+                }
+                event::P2pEvent::NewBlock { block, response } => {
+                    local_cons.accept_block(block);
+                    response.send(());
+                }
+                e => panic!("invalid message received: {:#?}", e),
+            }
+        }
+
+        if getuniqheaders_last {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetBestBlockHeader { response } => {
+                    response.send(local_cons.get_best_block_header());
+                }
+                _ => panic!("invalid message"),
+            }
+        }
+
+        local_cons
+    });
+
+    // add both peers to the hashmap of known peers and send getheaders request to them
+    for peer in vec![(peer1_id, peer1_tx), (peer2_id, peer2_tx)] {
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected {
+                peer_id: peer.0,
+                tx: peer.1,
+            })
+            .await,
+            Ok(())
+        );
+    }
+
+    let (mut peer1_cnt, mut peer2_cnt) = (0, 0);
+    for i in 0..12 {
+        let (event, peer_id) = tokio::select! {
+            event = peer1_rx.recv() => { peer1_cnt += 1; (event.unwrap(), peer1_id) },
+            event = peer2_rx.recv() => { peer2_cnt += 1; (event.unwrap(), peer2_id) },
+        };
+
+        match event {
+            event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }) => {
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Headers {
+                        peer_id,
+                        headers: remote_cons.get_headers(&locator),
+                    })
+                    .await,
+                    Ok(())
+                );
+            }
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
+    // wait for the blockindex task to finish
+    let local_cons = handle.await.unwrap();
+
+    // verify also that local did a reorg as its chain was shorter
+    assert_ne!(local_orig_cons.mainchain, local_cons.mainchain);
+    assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+    assert_eq!(
+        local_orig_cons.blks.store.len() + 10,
+        local_cons.blks.store.len()
+    );
+
+    // verify that both peers contributed to block requests
+    assert_ne!(peer1_cnt, 0);
+    assert_ne!(peer2_cnt, 0);
+}
+
+// connect two remote nodes that are in sync and ahead of local
+// verify that downloads blocks from both nodes
+//
+// then local "loses" the connection for a moment and misses two blocks
+// that are coming from the floodsub. It buffers the "orphan" block,
+// syncs up with the remote nodes and then adds the block to its chain
+#[tokio::test]
+async fn two_remote_nodes_local_loses_connection() {
+    let addr: SocketAddr = test_utils::make_address("[::1]:");
+    let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    let mut remote_cons = mock_consensus::Consensus::with_height(8);
+    let mut local_cons = remote_cons.clone();
+    let mut local_orig_cons = remote_cons.clone();
+    let mut new_remote_block_hdrs = vec![];
+
+    // add 10 more blocks to the remotes' chain
+    for _ in 0..10 {
+        let cur_id = remote_cons.mainchain.blkid;
+        let block = mock_consensus::Block::new(Some(cur_id));
+        new_remote_block_hdrs.push(block.header);
+        remote_cons.accept_block(block);
+    }
+
+    let ((peer1_tx, mut peer1_rx), peer1_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+    let ((peer2_tx, mut peer2_rx), peer2_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+    let ((peer3_tx, mut peer3_rx), peer3_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+
+    let handle = tokio::spawn(async move {
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        let mut getuniqheaders_last = false;
+
+        for i in 0..12 {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetUniqHeaders { headers, response } => {
+                    getuniqheaders_last = i == 12;
+                    let uniq = local_cons.get_uniq_headers(&headers);
+                    assert_eq!(uniq, new_remote_block_hdrs);
+                    response.send((!uniq.is_empty()).then(|| uniq));
+                }
+                event::P2pEvent::NewBlock { block, response } => {
+                    local_cons.accept_block(block);
+                    response.send(());
+                }
+                e => panic!("invalid message received: {:#?}", e),
+            }
+        }
+
+        if getuniqheaders_last {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetBestBlockHeader { response } => {
+                    response.send(local_cons.get_best_block_header());
+                }
+                _ => panic!("invalid message"),
+            }
+        }
+
+        // after internet connection was lost, two new nodes connected
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        get_locator(&mut rx_p2p, &mut local_cons).await;
+        getuniqheaders_last = false;
+
+        for i in 0..5 {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetUniqHeaders { headers, response } => {
+                    getuniqheaders_last = i == 4;
+                    let uniq = local_cons.get_uniq_headers(&headers);
+                    response.send((!uniq.is_empty()).then(|| uniq));
+                }
+                event::P2pEvent::NewBlock { block, response } => {
+                    local_cons.accept_block(block);
+                    response.send(());
+                }
+                e => panic!("invalid message received: {:#?}", e),
+            }
+        }
+
+        if getuniqheaders_last {
+            match rx_p2p.recv().await.unwrap() {
+                event::P2pEvent::GetBestBlockHeader { response } => {
+                    response.send(local_cons.get_best_block_header());
+                }
+                _ => panic!("invalid message"),
+            }
+        }
+
+        local_cons
+    });
+
+    // add both peers to the hashmap of known peers and send getheaders request to them
+    for peer in vec![(peer1_id, peer1_tx.clone()), (peer2_id, peer2_tx)] {
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected {
+                peer_id: peer.0,
+                tx: peer.1,
+            })
+            .await,
+            Ok(())
+        );
+    }
+
+    let (mut peer1_cnt, mut peer2_cnt) = (0, 0);
+    for i in 0..12 {
+        let (event, peer_id) = tokio::select! {
+            event = peer1_rx.recv() => { peer1_cnt += 1; (event.unwrap(), peer1_id) },
+            event = peer2_rx.recv() => { peer2_cnt += 1; (event.unwrap(), peer2_id) },
+        };
+
+        match event {
+            event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }) => {
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Headers {
+                        peer_id,
+                        headers: remote_cons.get_headers(&locator),
+                    })
+                    .await,
+                    Ok(())
+                );
+            }
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
+    // verify that both peers contributed to block requests
+    assert_ne!(peer1_cnt, 0);
+    assert_ne!(peer2_cnt, 0);
+
+    // disconnected the peers
+    mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: peer1_id })
+        .await;
+    mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: peer2_id })
+        .await;
+
+    // local node doesn't receive the next 3 blocks
+    let block = (0..3)
+        .map(|_| {
+            let cur_id = remote_cons.mainchain.blkid;
+            let block = mock_consensus::Block::new(Some(cur_id));
+            remote_cons.accept_block(block.clone());
+            block
+        })
+        .last();
+
+    // then connect one new peer and one old peer
+    for peer in vec![(peer1_id, peer1_tx), (peer3_id, peer3_tx)] {
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected {
+                peer_id: peer.0,
+                tx: peer.1,
+            })
+            .await,
+            Ok(())
+        );
+    }
+
+    for i in 0..5 {
+        let (event, peer_id) = tokio::select! {
+            event = peer1_rx.recv() => { (event.unwrap(), peer1_id) },
+            event = peer3_rx.recv() => { (event.unwrap(), peer3_id) },
+        };
+
+        match event {
+            event::PeerEvent::Syncing(event::SyncEvent::GetHeaders { locator }) => {
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Headers {
+                        peer_id,
+                        headers: remote_cons.get_headers(&locator),
+                    })
+                    .await,
+                    Ok(())
+                );
+            }
+            event::PeerEvent::Syncing(event::SyncEvent::GetBlocks { headers }) => {
+                let blocks =
+                    remote_cons.get_blocks(&headers).into_iter().map(Arc::new).collect::<Vec<_>>();
+
+                assert_eq!(
+                    mgr.on_peer_event(event::PeerSyncEvent::Blocks { peer_id, blocks }).await,
+                    Ok(())
+                );
+            }
+            e => panic!("invalid message received: {:#?}", e),
+        }
+    }
+
+    // wait for the blockindex task to finish
+    let local_cons = handle.await.unwrap();
+
+    // verify also that local did a reorg as its chain was shorter
+    assert_ne!(local_orig_cons.mainchain, local_cons.mainchain);
+    assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+    assert_eq!(
+        local_orig_cons.blks.store.len() + 13,
+        local_cons.blks.store.len()
+    );
 }

@@ -104,12 +104,9 @@ where
         );
 
         self.tx
-            .send(event::PeerEvent::Syncing(
-                event::PeerSyncEvent::GetHeaders {
-                    peer_id: None,
-                    locator,
-                },
-            ))
+            .send(event::PeerEvent::Syncing(event::SyncEvent::GetHeaders {
+                locator,
+            }))
             .await
             .map_err(|_| P2pError::ChannelClosed)
     }
@@ -125,8 +122,7 @@ where
         );
 
         self.tx
-            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Headers {
-                peer_id: None,
+            .send(event::PeerEvent::Syncing(event::SyncEvent::Headers {
                 headers,
             }))
             .await
@@ -148,8 +144,7 @@ where
         );
 
         self.tx
-            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::GetBlocks {
-                peer_id: None,
+            .send(event::PeerEvent::Syncing(event::SyncEvent::GetBlocks {
                 headers,
             }))
             .await
@@ -164,8 +159,7 @@ where
         );
 
         self.tx
-            .send(event::PeerEvent::Syncing(event::PeerSyncEvent::Blocks {
-                peer_id: None,
+            .send(event::PeerEvent::Syncing(event::SyncEvent::Blocks {
                 blocks,
             }))
             .await
@@ -178,7 +172,7 @@ mod tests {
     use super::*;
     use crate::{
         error::P2pError,
-        event::{PeerEvent, PeerSyncEvent},
+        event::{PeerEvent, PeerSyncEvent, SyncEvent},
         net::mock::MockService,
     };
     use std::net::SocketAddr;
@@ -221,10 +215,7 @@ mod tests {
         assert_eq!(peer.get_headers(locator.clone()).await, Ok(()));
         assert_eq!(
             rx.try_recv(),
-            Ok(PeerEvent::Syncing(PeerSyncEvent::GetHeaders {
-                peer_id: None,
-                locator,
-            }))
+            Ok(PeerEvent::Syncing(SyncEvent::GetHeaders { locator }))
         );
 
         drop(rx);
@@ -243,10 +234,7 @@ mod tests {
         assert_eq!(peer.send_headers(headers.clone()).await, Ok(()));
         assert_eq!(
             rx.try_recv(),
-            Ok(PeerEvent::Syncing(PeerSyncEvent::Headers {
-                peer_id: None,
-                headers,
-            }))
+            Ok(PeerEvent::Syncing(SyncEvent::Headers { headers }))
         );
 
         drop(rx);
@@ -265,10 +253,7 @@ mod tests {
         assert_eq!(peer.get_blocks(headers.clone()).await, Ok(()));
         assert_eq!(
             rx.try_recv(),
-            Ok(PeerEvent::Syncing(PeerSyncEvent::GetBlocks {
-                peer_id: None,
-                headers,
-            }))
+            Ok(PeerEvent::Syncing(SyncEvent::GetBlocks { headers }))
         );
 
         // no block headers
@@ -294,10 +279,7 @@ mod tests {
         assert_eq!(peer.send_blocks(blocks.clone()).await, Ok(()));
         assert_eq!(
             rx.try_recv(),
-            Ok(PeerEvent::Syncing(PeerSyncEvent::Blocks {
-                peer_id: None,
-                blocks,
-            }))
+            Ok(PeerEvent::Syncing(SyncEvent::Blocks { blocks }))
         );
 
         drop(rx);

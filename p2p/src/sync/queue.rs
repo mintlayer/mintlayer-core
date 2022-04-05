@@ -16,39 +16,10 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-//! Import queue
-//!
-//! Import queue is used by Mintlayer's syncing implementation to download blocks from
-//! remote peers and buffer them them until the node is fully synced and then drain and
-//! feed the queue to the chainstate. It's also used to the keep the peer intermediary
-//! indices up to date with network updates.
-//!
-//! The queue provides [`Orderable`] trait which caller must implement for the data type they
-//! wish to store intto the import queue. Each data item must have an ID and a unique parent.
-//!
-//! The import queue has two modes:
-//!  - normal queuing mode
-//!  - dependency resolvance mode
-//!
-//! The normal mode is used during syncing for block downloads and the [`BlockProcessor`]
-//! adds blocks to the [`ImportQueue`] by calling [`ImportQueue::queue()`]. [`ImportQueue`]
-//! then adds these blocks to the internal queue and and resolves any dependencies it can
-//! but when it detect that a missing data piece has been added to the queue, it accepts that data
-//! into the queue, marks the dependency chain as solved and returns [`ImportQueueState::Queued`].
-//!
-//! To get all queue all queued data, [`ImportQueue::drain()`] can be called which returns all data
-//! as a `Vec<QueuedData<T>>` where the first element of each [`QueuedData`] is an element the local
-//! node is assumed to have.
-//!
-//! If the the queue is used for resolving missing dependencies, as is the case for [`crate::sync::index::PeerIndex`],
-//! [`ImportQueue::try_queue()`] is used instead which accepts all data whose parent is either unknown
-//! to the queue or whose parent is also queued. When the caller calls the function with a missing
-//! dependency, the data is not accepted into to the queue but [`ImportQueueState::Resolved`] is returned.
-//!
-//! To get all queued and resolved data, [`ImportQueue::get_queued()`] can be called which returns
-//! all queued descendants of `data`.
-
-use crate::{error::P2pError, sync::mock_consensus};
+use crate::{
+    error::{self, P2pError},
+    sync::mock_consensus,
+};
 use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
@@ -138,18 +109,20 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
         self.export.len()
     }
 
+    /// Check if the queue contains an element
     pub fn contains_key(&self, key: &T::Id) -> bool {
         self.export.contains_key(key) || self.lookup.contains_key(key)
     }
 
-    fn resolve_deps(&mut self, id: &T::Id) -> Result<ImportQueueState, P2pError> {
+    /// Resolve the depenencies of a data item `id` by requeuing its elements
+    fn resolve_deps(&mut self, id: &T::Id) -> error::Result<ImportQueueState> {
         if let Some(exported) = self.export.remove(id) {
             let resolved = QueuedData(exported.0.into_iter().flatten().collect());
 
-            // import all data of the now-resolved descedant and remove all old references
-            resolved.0.iter().for_each(|descendant| {
+            // import all data of the now-resolved descendant and remove all old references
+            resolved.0.into_iter().for_each(|descendant| {
                 self.lookup.remove(descendant.get_id());
-                self.try_queue(descendant);
+                self.queue(descendant);
             });
         }
 
@@ -159,7 +132,7 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     /// Try to queue element to the import queue and if it resolves a dependency,
     /// return [`ImportQueueState::Resolved`] instead which indicates to the caller
     /// they can now try and fetch all the data from the queue.
-    pub fn try_queue(&mut self, data: &T) -> Result<ImportQueueState, P2pError> {
+    pub fn try_queue(&mut self, data: &T) -> error::Result<ImportQueueState> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
 
         // dependency has been resolved if the export table contains an entry with this
@@ -175,7 +148,7 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     }
 
     /// Add element to the import queue
-    pub fn queue(&mut self, data: T) -> Result<ImportQueueState, P2pError> {
+    pub fn queue(&mut self, data: T) -> error::Result<ImportQueueState> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
         let id = *data.get_id();
 
@@ -188,12 +161,7 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
                 Some(info) => {
                     let (ancestor, idx) = (info.0, info.1 + 1);
                     self.lookup.insert(id, (ancestor, idx));
-
-                    let descendants = self
-                        .export
-                        .get_mut(&ancestor)
-                        .ok_or(P2pError::InvalidData)?
-                        .queue(data, idx);
+                    self.export.get_mut(&ancestor).ok_or(P2pError::InvalidData)?.queue(data, idx);
                 }
                 None => {
                     self.lookup.insert(id, (prev_id, 0));
@@ -206,7 +174,7 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     }
 
     /// Get queued descendants
-    pub fn get_queued(&mut self, data: &T::Id) -> Option<QueuedData<T>> {
+    pub fn drain_with_id(&mut self, data: &T::Id) -> Option<QueuedData<T>> {
         if let Some(exported) = self.export.remove(data) {
             let resolved = QueuedData(exported.0.into_iter().flatten().collect());
 
@@ -230,7 +198,7 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
             .copied()
             .collect::<Vec<T::Id>>()
             .iter()
-            .filter_map(|key| self.get_queued(key))
+            .filter_map(|key| self.drain_with_id(key))
             .collect::<Vec<QueuedData<T>>>();
 
         self.lookup.clear();
@@ -240,11 +208,13 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     }
 }
 
+// TODO: more tests
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::sync::mock_consensus::{BlockHeader, BlockId};
     use itertools::Itertools;
+    use rand::prelude::SliceRandom;
 
     #[test]
     fn add_block() {
@@ -397,7 +367,7 @@ mod tests {
         };
         assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block.id),
+            q.drain_with_id(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr1_2, hdr1_1_1]))
         );
     }
@@ -461,7 +431,7 @@ mod tests {
         };
         assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block.id),
+            q.drain_with_id(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr1_2, hdr1_1_1])),
         );
         assert_eq!(
@@ -483,7 +453,7 @@ mod tests {
         };
         assert_eq!(q.try_queue(&block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block.id),
+            q.drain_with_id(&block.id),
             Some(QueuedData(vec![hdr5, hdr5_1, hdr5_1_1, hdr5_1_1_1])),
         );
         assert!(q.lookup.is_empty());
@@ -571,7 +541,7 @@ mod tests {
         let block = &BlockHeader::with_id(1337, Some(1336));
         assert_eq!(q.try_queue(block), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&block.id),
+            q.drain_with_id(&block.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_2])),
         );
 
@@ -580,7 +550,10 @@ mod tests {
             HashMap::from([(11, OrderedData(vec![vec![hdr1_1_1]])),])
         );
         assert_eq!(q.try_queue(&hdr1_1), Ok(ImportQueueState::Resolved));
-        assert_eq!(q.get_queued(&hdr1_1.id), Some(QueuedData(vec![hdr1_1_1])));
+        assert_eq!(
+            q.drain_with_id(&hdr1_1.id),
+            Some(QueuedData(vec![hdr1_1_1]))
+        );
     }
 
     #[test]
@@ -606,7 +579,7 @@ mod tests {
         let missing = BlockHeader::with_id(1337u64, Some(1336u64));
         assert_eq!(q.try_queue(&missing), Ok(ImportQueueState::Resolved));
         assert_eq!(
-            q.get_queued(&missing.id),
+            q.drain_with_id(&missing.id),
             Some(QueuedData(vec![hdr1, hdr2, hdr1_1, hdr2_1, hdr1_1_1]))
         );
         assert_eq!(q.num_chains(), 0);
@@ -640,5 +613,31 @@ mod tests {
                 BlockHeader::with_id(202, Some(201)),
             ]
         )
+    }
+
+    // in total there are 100 new blocks, drain the queue periodically and verify that
+    // whatever the order which the blocks came in might have been, they are exported
+    // in order (== no orphans when imported to local block index)
+    #[test]
+    fn test_periodic_draining() {
+        let mut q = ImportQueue::new();
+        let mut blocks = (2..102).map(|i| BlockHeader::with_id(i, Some(i - 1))).collect::<Vec<_>>();
+
+        // shuffle the blocks so that they are imported to the queue in completely random order
+        let orig = blocks.clone();
+        blocks.shuffle(&mut rand::thread_rng());
+        assert_ne!(orig, blocks);
+
+        // current best block in local block index
+        let mut exported = vec![BlockHeader::with_id(1, Some(0))];
+
+        for block in blocks {
+            q.queue(block);
+            if let Some(drained) = q.drain_with_id(&exported[exported.len() - 1].id) {
+                exported.append(&mut drained.to_vec());
+            }
+        }
+
+        assert_eq!(exported[1..], orig);
     }
 }

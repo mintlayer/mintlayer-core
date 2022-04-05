@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![cfg(not(loom))]
 #![allow(unused)]
+
 use crate::{
     error::{self, P2pError},
     event,
@@ -42,12 +43,6 @@ pub mod queue;
 pub enum SyncState {
     /// No activity with the peer
     Uninitialized,
-
-    /// Uploading blocks
-    UplodingBlocks,
-
-    /// Downloading headers
-    DownloadingHeaders,
 
     /// Downloading blocks
     DownloadingBlocks,
@@ -88,6 +83,9 @@ where
 
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerSyncState<T>>,
+
+    /// Block processor used for block downloads
+    processor: processor::BlockProcessor<T>,
 }
 
 impl<T> SyncManager<T>
@@ -104,12 +102,13 @@ where
     ) -> Self {
         Self {
             config,
-            state: SyncState::Uninitialized,
+            state: SyncState::Idle,
             handle,
             p2p_handle: event::P2pEventHandle::new(tx_p2p),
             rx_sync,
             rx_peer,
             peers: Default::default(),
+            processor: Default::default(),
         }
     }
 
@@ -141,14 +140,12 @@ where
                         );
                     }
 
-                    // update the intermediary peer indices and send the received block
-                    // to chainstate for validation
-                    for (id, ctx) in self.peers.iter_mut() {
-                        ctx.add_block(&block);
+                    match self.state {
+                        SyncState::Idle => self.p2p_handle.new_block(block).await?,
+                        SyncState::DownloadingBlocks | SyncState::Uninitialized => {
+                            self.processor.register_block(&peer_id, Arc::new(block));
+                        }
                     }
-
-                    // TODO: if we're still syncing, this block is not send to chainstate but queued
-                    self.p2p_handle.new_block(block).await?;
                 }
             }
         }
@@ -163,7 +160,7 @@ where
                 log::debug!("create new entry for peer {:?}", peer_id);
 
                 if let Entry::Vacant(e) = self.peers.entry(peer_id) {
-                    e.insert(peer::PeerSyncState::new(peer_id, tx.clone()))
+                    e.insert(peer::PeerSyncState::new(peer_id, tx))
                         .get_headers(self.p2p_handle.get_locator().await?)
                         .await?;
                 } else {
@@ -176,6 +173,7 @@ where
                     .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
                     .map(|_| log::debug!("remove peer {:?}", peer_id))
                     .map_err(|_| log::error!("peer {:?} not known by sync manager", peer_id));
+                self.processor.unregister_peer(&peer_id);
             }
         }
 
@@ -187,7 +185,7 @@ where
         match event {
             event::PeerSyncEvent::GetHeaders { peer_id, locator } => {
                 let headers = self.p2p_handle.get_headers(locator).await?;
-                let peer = self.peers.get_mut(&peer_id.expect("PeerId to be valid"));
+                let peer = self.peers.get_mut(&peer_id);
 
                 match peer {
                     Some(peer) => peer.send_headers(headers).await?,
@@ -195,16 +193,26 @@ where
                 }
             }
             event::PeerSyncEvent::Headers { peer_id, headers } => {
-                self.initialize_peer_state(peer_id.expect("PeerId to be valid"), &headers)
-                    .await?;
+                self.initialize_peer_state(peer_id, &headers).await?;
             }
             event::PeerSyncEvent::Blocks { peer_id, blocks } => {
-                self.process_block_response(peer_id.expect("PeerId to be valid"), &blocks)
-                    .await?;
+                let res = self.processor.register_block_response(&peer_id, blocks);
+                if let processor::ProcessorState::Done = res {
+                    for (k, chain) in self.processor.drain().iter().enumerate() {
+                        for (i, block) in chain.iter().enumerate() {
+                            self.p2p_handle.new_block((**block).clone()).await?;
+                        }
+                    }
+                    self.state = SyncState::Idle;
+                } else {
+                    for req in self.processor.get_block_request() {
+                        let peer = self.peers.get_mut(&req.peer_id).expect("peer to exist");
+                        peer.get_blocks(req.headers).await?;
+                    }
+                }
             }
             event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
-                self.process_block_request(peer_id.expect("PeerId to be valid"), &headers)
-                    .await?;
+                self.process_block_request(peer_id, &headers).await?;
             }
         }
 
@@ -219,50 +227,30 @@ where
         let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
             peer
         } else {
-            log::error!("peer {:?} not known by sync manager", peer_id);
+            log::info!("peer {:?} not known by sync manager", peer_id);
             return Ok(());
         };
 
         match self.p2p_handle.get_uniq_headers(headers.to_vec()).await? {
             Some(uniq) => {
                 peer.initialize_index(headers);
-                self.send_block_request(peer_id, &uniq).await?;
+                if let processor::ProcessorState::MoreWork =
+                    self.processor.register_peer(peer_id, &uniq)
+                {
+                    for req in self.processor.get_block_request() {
+                        let peer = self.peers.get_mut(&req.peer_id).expect("peer to exist");
+                        peer.get_blocks(req.headers).await?;
+                    }
+                }
+                self.state = SyncState::DownloadingBlocks;
             }
             None => {
                 peer.initialize_index(&[self.p2p_handle.get_best_block_header().await?]);
+                self.processor.register_peer(peer_id, &[]);
             }
         }
 
         Ok(())
-    }
-
-    fn get_providers(
-        &self,
-        headers: &[mock_consensus::BlockHeader],
-    ) -> HashMap<mock_consensus::BlockId, Vec<&T::PeerId>> {
-        let mut providers: HashMap<mock_consensus::BlockId, Vec<&T::PeerId>> = HashMap::new();
-        for (id, peer) in self.peers.iter() {
-            for header in peer.get_known_headers(headers) {
-                providers.entry(header.id).or_insert_with(Vec::new).push(id);
-            }
-        }
-
-        providers
-    }
-
-    async fn send_block_request(
-        &mut self,
-        peer_id: T::PeerId,
-        uniq: &[mock_consensus::BlockHeader],
-    ) -> error::Result<()> {
-        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer
-        } else {
-            log::error!("peer {:?} not known by sync manager", peer_id);
-            return Ok(());
-        };
-
-        peer.get_blocks(uniq.to_vec()).await
     }
 
     async fn process_block_request(
@@ -279,25 +267,6 @@ where
 
         let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
         peer.send_blocks(blocks).await
-    }
-
-    async fn process_block_response(
-        &mut self,
-        peer_id: T::PeerId,
-        blocks: &[mock_consensus::Block],
-    ) -> error::Result<()> {
-        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer
-        } else {
-            log::error!("peer {:?} not known by sync manager", peer_id);
-            return Ok(());
-        };
-
-        for block in blocks {
-            self.p2p_handle.new_block(block.clone()).await?;
-        }
-
-        Ok(())
     }
 
     /// Run SyncManager event loop
@@ -433,7 +402,6 @@ mod tests {
         assert!(mgr.peers.is_empty());
     }
 
-    // TODO: add more tests
     #[tokio::test]
     async fn new_block_from_floodsub() {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
@@ -482,108 +450,5 @@ mod tests {
         .await;
 
         handle.await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_get_providers() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
-        let (tx, rx) = mpsc::channel(1);
-
-        let peer1: SocketAddr = format!("[::1]:{}", 8888).parse().unwrap();
-        let peer2: SocketAddr = format!("[::1]:{}", 9999).parse().unwrap();
-        mgr.peers.insert(peer1, peer::PeerSyncState::new(peer1, tx.clone()));
-        mgr.peers.insert(peer2, peer::PeerSyncState::new(peer2, tx));
-
-        let headers_peer1 = &[
-            mock_consensus::BlockHeader::with_id(444, Some(333)),
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(777, Some(666)),
-            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
-            mock_consensus::BlockHeader::with_id(1338, Some(1336)),
-            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
-            mock_consensus::BlockHeader::with_id(1342, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1343, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1344, Some(1340)),
-        ];
-
-        let headers_peer2 = &[
-            mock_consensus::BlockHeader::with_id(444, Some(333)),
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(777, Some(666)),
-            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
-            mock_consensus::BlockHeader::with_id(1338, Some(1336)),
-            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
-            mock_consensus::BlockHeader::with_id(1351, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1352, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1353, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1354, Some(1340)),
-        ];
-
-        mgr.peers.get_mut(&peer1).unwrap().initialize_index(headers_peer1);
-        mgr.peers.get_mut(&peer2).unwrap().initialize_index(headers_peer2);
-
-        let providers = mgr.get_providers(&[
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(1337, Some(1336)),
-            mock_consensus::BlockHeader::with_id(1339, Some(1338)),
-        ]);
-        let mut vec = Vec::from_iter(providers.iter())
-            .into_iter()
-            .sorted()
-            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
-            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
-
-        assert_eq!(
-            vec,
-            vec![
-                (&666, vec![&peer1, &peer2]),
-                (&1337, vec![&peer1, &peer2]),
-                (&1339, vec![&peer1, &peer2]),
-            ]
-        );
-
-        let providers = mgr.get_providers(&[
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(677, Some(555)),
-            mock_consensus::BlockHeader::with_id(1340, Some(1336)),
-        ]);
-        let mut vec = Vec::from_iter(providers.iter())
-            .into_iter()
-            .sorted()
-            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
-            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
-
-        assert_eq!(vec, vec![(&666, vec![&peer1, &peer2])]);
-
-        let providers = mgr.get_providers(&[
-            mock_consensus::BlockHeader::with_id(677, Some(555)),
-            mock_consensus::BlockHeader::with_id(1340, Some(1336)),
-        ]);
-        assert_eq!(Vec::from_iter(providers.iter()), vec![]);
-
-        let providers = mgr.get_providers(&[
-            mock_consensus::BlockHeader::with_id(1343, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1344, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1352, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1353, Some(1340)),
-            mock_consensus::BlockHeader::with_id(1354, Some(1340)),
-        ]);
-        let mut vec = Vec::from_iter(providers.iter())
-            .into_iter()
-            .sorted()
-            .map(|(key, inner)| (key, inner.iter().sorted().copied().collect()))
-            .collect::<Vec<(&mock_consensus::BlockId, Vec<&SocketAddr>)>>();
-
-        assert_eq!(
-            vec,
-            vec![
-                (&1343, vec![&peer1]),
-                (&1344, vec![&peer1]),
-                (&1352, vec![&peer2]),
-                (&1353, vec![&peer2]),
-                (&1354, vec![&peer2]),
-            ]
-        );
     }
 }

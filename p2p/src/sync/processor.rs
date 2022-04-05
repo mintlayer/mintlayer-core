@@ -25,13 +25,20 @@ use crate::{
         queue::{self, ImportQueue, ImportQueueState, QueuedData},
     },
 };
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use logging::log;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-enum ProcessorState {
+pub enum ProcessorState {
     MoreWork,
     Done,
+}
+
+pub enum ProcessorEvent {
+    NewBlocks { blocks: Arc<Block> },
 }
 
 impl From<(bool, bool)> for ProcessorState {
@@ -44,7 +51,6 @@ impl From<(bool, bool)> for ProcessorState {
     }
 }
 
-// TODO: move this somewhere else?
 impl queue::Orderable for Arc<Block> {
     type Id = BlockId;
 
@@ -58,18 +64,18 @@ impl queue::Orderable for Arc<Block> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct BlockRequest<T>
+pub struct BlockRequest<T>
 where
     T: NetworkService,
 {
     /// PeerId of the node who is working on this request
-    pub peer: T::PeerId,
+    pub peer_id: T::PeerId,
 
     /// Set of headers denoting the blocks local node is requesting
     pub headers: Vec<BlockHeader>,
 }
 
-struct BlockProcessor<T>
+pub struct BlockProcessor<T>
 where
     T: NetworkService,
 {
@@ -84,6 +90,15 @@ where
 
     /// Set of blocks that still need to be downloaded
     work: HashMap<BlockHeader, HashSet<T::PeerId>>,
+}
+
+impl<T> Default for BlockProcessor<T>
+where
+    T: NetworkService,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> BlockProcessor<T>
@@ -115,6 +130,12 @@ where
     /// `peer_id` - Unique ID of the peer
     /// `headers` - Set of blocks, denoted by their headers, that must be downloaded
     pub fn register_peer(&mut self, peer_id: T::PeerId, headers: &[BlockHeader]) -> ProcessorState {
+        log::debug!(
+            "register peer {:?} to block processor, headers: {:#?}",
+            peer_id,
+            headers
+        );
+
         headers.iter().for_each(|header| {
             if !self.queue.contains_key(&header.id) {
                 match self.active.get_mut(header) {
@@ -124,6 +145,7 @@ where
             }
         });
 
+        // syncing is done if both the work and active queues are empty
         ProcessorState::from((self.work.is_empty(), true))
     }
 
@@ -140,13 +162,15 @@ where
     /// # Arguments
     /// `peer_id` - Unique ID of the peer
     pub fn unregister_peer(&mut self, peer_id: &T::PeerId) {
+        log::debug!("unregister peer {:?} from block processor", peer_id);
+
         self.work
             .iter_mut()
             .filter_map(|(header, peers)| {
                 peers.remove(peer_id);
                 peers.is_empty().then(|| *header)
             })
-            .collect::<Vec<BlockHeader>>()
+            .collect::<Vec<_>>()
             .iter()
             .for_each(|entry| {
                 self.work.remove(entry);
@@ -158,7 +182,7 @@ where
                 peers.remove(peer_id);
                 peers.is_empty().then(|| *header)
             })
-            .collect::<Vec<BlockHeader>>()
+            .collect::<Vec<_>>()
             .iter()
             .for_each(|entry| {
                 self.active.remove(entry);
@@ -182,25 +206,33 @@ where
     ///
     /// There is a lot to improve in terms of efficiency but this'll do for now.
     pub fn get_block_request(&mut self) -> Vec<BlockRequest<T>> {
+        log::debug!(
+            "get block request, work len {}, active len {}",
+            self.work.len(),
+            self.active.len()
+        );
+
         self.work
             .iter()
             .filter_map(|(header, peers)| {
                 peers.iter().find(|peer| !self.busy.contains(peer)).map(|peer| {
+                    log::trace!("request {:?} from peer {:?}", header, peer);
+
                     self.busy.insert(*peer);
-                    self.active.insert(*header, (*peer, peers.clone())); // FIXME:
+                    self.active.insert(*header, (*peer, peers.clone()));
                     (*peer, *header)
                 })
             })
-            .collect::<Vec<(T::PeerId, BlockHeader)>>()
+            .collect::<Vec<(_, _)>>()
             .iter()
             .map(|(peer, header)| {
                 self.work.remove(header);
                 BlockRequest {
-                    peer: *peer,
+                    peer_id: *peer,
                     headers: vec![*header],
                 }
             })
-            .collect::<Vec<BlockRequest<T>>>()
+            .collect::<Vec<_>>()
     }
 
     /// Register block response to the block processor
@@ -230,6 +262,7 @@ where
             self.register_block(peer_id, block);
         }
 
+        // syncing is done if both the work and active queues are empty
         ProcessorState::from((self.work.is_empty(), self.active.is_empty()))
     }
 
@@ -244,14 +277,19 @@ where
     ///
     /// The block is then added to the import queue from which it can be fetched when the node has is
     /// fully up to date with the network.
-    pub fn register_block(&mut self, peer: &T::PeerId, block: Arc<Block>) -> ProcessorState {
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the peer
+    /// `blocks` - Block received from the remote peer
+    pub fn register_block(&mut self, peer_id: &T::PeerId, block: Arc<Block>) -> ProcessorState {
         // TODO: implement request completion statistics for benchmarking peer performance
         let _ = self.work.remove(&block.header);
         let _ = self.active.remove(&block.header);
 
-        self.busy.remove(peer);
+        self.busy.remove(peer_id);
         self.queue.queue(block);
 
+        // syncing is done if both the work and active queues are empty
         ProcessorState::from((self.work.is_empty(), self.active.is_empty()))
     }
 
@@ -533,7 +571,7 @@ mod tests {
             for task in work {
                 assert_eq!(
                     processor.register_block_response(
-                        &task.peer,
+                        &task.peer_id,
                         vec![Arc::new(
                             Block::with_id(task.headers[0].id, task.headers[0].prev_id,)
                         )],
@@ -644,7 +682,7 @@ mod tests {
             for task in work {
                 assert_eq!(
                     processor.register_block_response(
-                        &task.peer,
+                        &task.peer_id,
                         vec![Arc::new(
                             Block::with_id(task.headers[0].id, task.headers[0].prev_id,)
                         )],
@@ -710,7 +748,7 @@ mod tests {
             for task in work {
                 assert_eq!(
                     processor.register_block_response(
-                        &task.peer,
+                        &task.peer_id,
                         vec![Arc::new(
                             Block::with_id(task.headers[0].id, task.headers[0].prev_id,)
                         )],
@@ -805,6 +843,129 @@ mod tests {
                 (202, Some(201)),
                 (203, Some(202)),
                 (204, Some(203)),
+            ]
+        );
+    }
+
+    // first receive two blocks from floodsub before any peer state has been initialized,
+    // then downloads missing blocks from the peer that just connected.
+    // verify that both the downloaded blocks and the blocks that were received from the
+    // floodsub are all expoted in order
+    #[test]
+    fn first_floodsub_then_syncing() {
+        let mut processor = BlockProcessor::<MockService>::new();
+
+        let (peer1, peer2, peer3) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+            test_utils::get_mock_id_with(113),
+        );
+
+        // add two blocks to the import queue before initializing the work state
+        // add a new block from the floodsub,
+        assert_eq!(
+            processor.register_block(&peer1, Arc::new(Block::with_id(203, Some(202)))),
+            ProcessorState::Done
+        );
+        assert_eq!(
+            processor.register_block(&peer3, Arc::new(Block::with_id(204, Some(203)))),
+            ProcessorState::Done
+        );
+
+        processor.work = HashMap::from([
+            (
+                BlockHeader::with_id(100, Some(1)),
+                HashSet::from([peer1, peer2]),
+            ),
+            (BlockHeader::with_id(101, Some(100)), HashSet::from([peer1])),
+            (BlockHeader::with_id(103, Some(102)), HashSet::from([peer1])),
+            (BlockHeader::with_id(201, Some(100)), HashSet::from([peer2])),
+            (BlockHeader::with_id(202, Some(201)), HashSet::from([peer2])),
+        ]);
+
+        let handle_block_response = |processor: &mut BlockProcessor<MockService>, state| {
+            let work = processor.get_block_request();
+
+            for task in work {
+                assert_eq!(
+                    processor.register_block_response(
+                        &task.peer_id,
+                        vec![Arc::new(
+                            Block::with_id(task.headers[0].id, task.headers[0].prev_id,)
+                        )],
+                    ),
+                    state,
+                );
+            }
+        };
+
+        // download some old blocks
+        handle_block_response(&mut processor, ProcessorState::MoreWork);
+
+        // add a new block from the floodsub that depends on the previously recived blocks
+        assert_eq!(
+            processor.register_block(&peer1, Arc::new(Block::with_id(205, Some(204)))),
+            ProcessorState::MoreWork
+        );
+
+        // download some old blocks
+        handle_block_response(&mut processor, ProcessorState::MoreWork);
+
+        // add a new block from the floodsub that depends on the previously recived blocks
+        assert_eq!(
+            processor.register_block(&peer3, Arc::new(Block::with_id(111, Some(102)))),
+            ProcessorState::MoreWork
+        );
+
+        handle_block_response(&mut processor, ProcessorState::Done);
+
+        assert!(processor.active.is_empty());
+        assert!(processor.work.is_empty());
+        assert_eq!(processor.queue.num_chains(), 2);
+
+        let mut entries = processor
+            .drain()
+            .iter()
+            .map(|queued| {
+                queued
+                    .iter()
+                    .map(|entry| (entry.header.id, entry.header.prev_id))
+                    .collect::<Vec<(_, Option<_>)>>()
+            })
+            .collect::<Vec<Vec<(_, Option<_>)>>>();
+
+        if entries[0].len() != 2 {
+            entries.swap(0, 1);
+        }
+
+        entries[0].sort_by(|a, b| {
+            let res = a.1.cmp(&b.1);
+            if res == std::cmp::Ordering::Equal {
+                return a.0.cmp(&b.0);
+            }
+            res
+        });
+
+        assert_eq!(entries[0], vec![(103, Some(102)), (111, Some(102))]);
+
+        entries[1].sort_by(|a, b| {
+            let res = a.0.cmp(&b.0);
+            if res == std::cmp::Ordering::Equal {
+                return a.1.cmp(&b.1);
+            }
+            res
+        });
+
+        assert_eq!(
+            entries[1],
+            vec![
+                (100, Some(1)),
+                (101, Some(100)),
+                (201, Some(100)),
+                (202, Some(201)),
+                (203, Some(202)),
+                (204, Some(203)),
+                (205, Some(204)),
             ]
         );
     }
