@@ -24,7 +24,7 @@ pub type Hash = u64;
 pub type Amount = u64;
 pub type BlockId = u64;
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Transaction {
     vin: Vec<(Hash, Amount)>,
     vout: Vec<(Hash, Amount)>,
@@ -54,7 +54,7 @@ impl Transaction {
     }
 }
 
-#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Encode, Decode, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BlockHeader {
     pub id: BlockId,
     pub prev_id: Option<BlockId>,
@@ -96,7 +96,7 @@ impl crate::sync::queue::Orderable for BlockHeader {
     }
 }
 
-#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq)]
+#[derive(Encode, Decode, Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<Transaction>,
@@ -112,6 +112,15 @@ impl Block {
         Self {
             header: BlockHeader::new(prev_id),
             transactions,
+        }
+    }
+
+    pub fn with_id(id: BlockId, prev_id: Option<BlockId>) -> Self {
+        let mut rng = rand::thread_rng();
+
+        Self {
+            header: BlockHeader::with_id(id, prev_id),
+            transactions: vec![],
         }
     }
 

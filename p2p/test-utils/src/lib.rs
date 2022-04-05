@@ -60,6 +60,17 @@ pub fn get_mock_id() -> <MockService as NetworkService>::PeerId {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
 }
 
+pub fn get_random_mock_id() -> <MockService as NetworkService>::PeerId {
+    SocketAddr::new(
+        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+        portpicker::pick_unused_port().expect("No ports free"),
+    )
+}
+
+pub fn get_mock_id_with(num: u16) -> <MockService as NetworkService>::PeerId {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), num)
+}
+
 // create two mock peers that are connected to each other
 pub async fn create_two_mock_peers(
     config: Arc<ChainConfig>,

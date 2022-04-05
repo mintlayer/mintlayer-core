@@ -114,13 +114,13 @@ pub struct ImportQueue<T: Orderable> {
     export: HashMap<T::Id, OrderedData<T>>,
 }
 
-impl<T: Orderable + Copy + Debug> Default for ImportQueue<T> {
+impl<T: Orderable + Clone + Debug> Default for ImportQueue<T> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Orderable + Copy + Debug> ImportQueue<T> {
+impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     pub fn new() -> Self {
         Self {
             lookup: HashMap::new(),
@@ -136,6 +136,10 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
     /// Return the number of individual chains that the import queue is tracking
     pub fn num_chains(&self) -> usize {
         self.export.len()
+    }
+
+    pub fn contains_key(&self, key: &T::Id) -> bool {
+        self.export.contains_key(key) || self.lookup.contains_key(key)
     }
 
     fn resolve_deps(&mut self, id: &T::Id) -> Result<ImportQueueState, P2pError> {
@@ -167,22 +171,23 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
             return Ok(ImportQueueState::Resolved);
         }
 
-        self.queue(*data)
+        self.queue(data.clone())
     }
 
     /// Add element to the import queue
     pub fn queue(&mut self, data: T) -> Result<ImportQueueState, P2pError> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
+        let id = *data.get_id();
 
         match self.export.get_mut(&prev_id) {
             Some(ancestor) => {
+                self.lookup.insert(id, (prev_id, 0));
                 ancestor.queue(data, 0);
-                self.lookup.insert(*data.get_id(), (prev_id, 0));
             }
             None => match self.lookup.get(&prev_id) {
                 Some(info) => {
                     let (ancestor, idx) = (info.0, info.1 + 1);
-                    self.lookup.insert(*data.get_id(), (ancestor, idx));
+                    self.lookup.insert(id, (ancestor, idx));
 
                     let descendants = self
                         .export
@@ -191,13 +196,13 @@ impl<T: Orderable + Copy + Debug> ImportQueue<T> {
                         .queue(data, idx);
                 }
                 None => {
+                    self.lookup.insert(id, (prev_id, 0));
                     self.export.insert(prev_id, OrderedData(vec![vec![data]]));
-                    self.lookup.insert(*data.get_id(), (prev_id, 0));
                 }
             },
         }
 
-        return self.resolve_deps(data.get_id());
+        self.resolve_deps(&id)
     }
 
     /// Get queued descendants

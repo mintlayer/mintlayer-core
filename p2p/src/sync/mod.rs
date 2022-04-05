@@ -34,6 +34,7 @@ use tokio::sync::{mpsc, oneshot};
 pub mod index;
 pub mod mock_consensus;
 pub mod peer;
+pub mod processor;
 pub mod queue;
 
 /// State of the peer
