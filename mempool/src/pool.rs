@@ -838,8 +838,7 @@ where
         Ok(replacements_with_descendants)
     }
 
-    fn finalize_tx(&mut self, tx: Transaction, conflicts: Conflicts) -> Result<(), Error> {
-        self.store.drop_conflicts(conflicts);
+    fn finalize_tx(&mut self, tx: Transaction) -> Result<(), Error> {
         let entry = self.create_entry(tx)?;
         let id = entry.tx.get_id().get();
         self.store.add_tx(entry)?;
@@ -988,7 +987,8 @@ where
 
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error> {
         let conflicts = self.validate_transaction(&tx)?;
-        self.finalize_tx(tx, conflicts)?;
+        self.store.drop_conflicts(conflicts);
+        self.finalize_tx(tx)?;
         Ok(())
     }
 
