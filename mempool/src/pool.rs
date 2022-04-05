@@ -299,9 +299,35 @@ pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
 
 #[derive(Debug)]
 struct MempoolStore {
+    // This is the "main" data structure storing Mempool entries. All other structures in the
+    // MempoolStore contain ids (hashes) of entries, sorted according to some order of interest.
     txs_by_id: HashMap<H256, TxMempoolEntry>,
+
+    // Mempool entries sorted by descendant score.
+    // We keep this index so that when the mempool grows full, we know which transactions are the
+    // most economically reasonable to evict. When an entry is removed from the mempool for
+    // fullness reasons, it must be removed together with all of its descendants (as these descendants
+    // would no longer be valid to mine). Entries with a lower descendant score will be evicted
+    // first.
+    //
+    // FIXME currently, the descendant score is the sum fee of the transaction to gether with all
+    // of its descendants. If we wish to follow Bitcoin Core, we should use:
+    // max(feerate(tx, tx_with_descendants)),
+    // Where feerate is computed as fee(tx)/size(tx)
+    // Note that if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
+    // rather a value that takes into account witdess and sigop data (see CTxMemPoolEntry::GetTxSize).
     txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<H256>>,
+
+    // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
+    // evicted. To efficiently know which entries to evict, we store the mempool entries sorted by
+    // their creation time, from earliest to latest.
     txs_by_creation_time: BTreeMap<Time, BTreeSet<H256>>,
+
+    // TODO add txs_by_ancestor_score index, which will be used by the block production subsystem
+    // to select the best transactions for the next block
+    //
+    // We keep the information of which outpoints are spent by entries currently in the mempool.
+    // This allows us to recognize conflicts (double-spends) and handle them
     spender_txs: BTreeMap<OutPoint, H256>,
 }
 
@@ -640,6 +666,46 @@ where
     }
 
     fn validate_transaction(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+        // This validation function is based on Bitcoin Core's MemPoolAccept::PreChecks.
+        // However, as of this stage it does not cover everything covered in Bitcoin Core
+        //
+        // Currently, the items we want covered which are NOT yet covered are:
+        //
+        // - Checking if a transaction is "standard" (see `IsStandardTx`, `AreInputsStandard` in Bitcoin Core). We have yet to decide on Mintlayer's
+        // definition of "standard"
+        //
+        // - Time locks:  Briefly, the corresponding functions in Bitcoin Core are `CheckFinalTx` and
+        // `CheckSequenceLocks`. See mempool/src/time_lock_notes.txt for more details on our
+        // brainstorming on this topic thus far.
+        //
+        // - Bitcoin Core does not relay transactions smaller than 82 bytes (see
+        // MIN_STANDARD_TX_NONWITNESS_SIZE in Bitcoin Core's policy.h)
+        //
+        // - Checking that coinbase inputs have matured
+        //
+        // - Checking the signature operations cost (Bitcoin Core: `GetTransactionSigOpCost`)
+        //
+        // - We have yet to understand and implement this comment pertaining to chain limits and
+        // calculation of in-mempool ancestors:
+        // https://github.com/bitcoin/bitcoin/blob/7c08d81e119570792648fe95bbacddbb1d5f9ae2/src/validation.cpp#L829
+        //
+        // - Bitcoin Core's `EntriesAndTxidsDisjoint` check
+        //
+        // - Bitcoin Core's `PolicyScriptChecks`
+        //
+        // - Bitcoin Core's `ConsensusScriptChecks`
+
+        // Deviations from Bitcoin Core
+        //
+        // - In our FeeRate calculations, we use the `encoded_size`of a transaction. In contrast,
+        // see Bitcoin Core's `CTxMemPoolEntry::GetTxSize()`, which takes into account sigops cost
+        // and witness data. This deviation is not intentional, but rather the result of wanting to
+        // get a basic implementation working. TODO: weigh what notion of size/weight we wish to
+        // use and whether to follow Bitcoin Core in this regard
+        //
+        // We don't have a notion of MAX_MONEY like Bitcoin Core does, so we also don't have a
+        // `MoneyRange` check like the one found in Bitcoin Core's `CheckTransaction`
+
         if tx.inputs().is_empty() {
             return Err(TxValidationError::NoInputs);
         }
@@ -647,9 +713,6 @@ where
         if tx.outputs().is_empty() {
             return Err(TxValidationError::NoOutputs);
         }
-
-        // TODO consier a MAX_MONEY check reminiscent of bitcoin's
-        // TODO consider rejecting non-standard transactions (for some definition of standard)
 
         let outpoints = tx.inputs().iter().map(|input| input.outpoint()).cloned();
 
@@ -1747,23 +1810,26 @@ mod tests {
             .next()
             .expect("there should be an outpoint since setup creates the genesis transaction")
             .outpoint
-            .to_owned();
+            .clone();
 
-        let outpoint_source_id = OutPointSourceId::from(
-            outpoint.get_tx_id().get_tx_id().expect("Not Coinbase").to_owned(),
+        let outpoint_source_id =
+            OutPointSourceId::from(*outpoint.tx_id().get_tx_id().expect("Not Coinbase"));
+
+        let input = TxInput::new(
+            outpoint_source_id,
+            0,
+            InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
         );
-
-        let input = TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec());
         let flags = 0;
         let locktime = 0;
-        let original_fee = Amount::from(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
+        let original_fee = Amount::from_atoms(get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE));
         let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
             .expect("should be able to spend here");
         let original_id = original.get_id();
         mempool.add_transaction(original)?;
 
         let flags = 0;
-        let replacement_fee = (original_fee + 1000.into()).unwrap();
+        let replacement_fee = (original_fee + Amount::from_atoms(1000)).unwrap();
         let replacement = tx_spend_input(&mempool, input, replacement_fee, flags, locktime)
             .expect("should be able to spend here");
         assert!(matches!(
@@ -2560,12 +2626,16 @@ mod tests {
         let flags = 0;
         let locktime = 0;
 
-        let tx_b_fee = Amount::from(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
-        let tx_a_fee = (tx_b_fee + Amount::from(1000)).unwrap();
-        let tx_c_fee = (tx_a_fee + Amount::from(1000)).unwrap();
+        let tx_b_fee = Amount::from_atoms(get_relay_fee_from_tx_size(estimate_tx_size(1, 2)));
+        let tx_a_fee = (tx_b_fee + Amount::from_atoms(1000)).unwrap();
+        let tx_c_fee = (tx_a_fee + Amount::from_atoms(1000)).unwrap();
         let tx_a = tx_spend_input(
             &mempool,
-            TxInput::new(outpoint_source_id.clone(), 0, DUMMY_WITNESS_MSG.to_vec()),
+            TxInput::new(
+                outpoint_source_id.clone(),
+                0,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
             tx_a_fee,
             flags,
             locktime,
@@ -2577,7 +2647,11 @@ mod tests {
 
         let tx_b = tx_spend_input(
             &mempool,
-            TxInput::new(outpoint_source_id, 1, DUMMY_WITNESS_MSG.to_vec()),
+            TxInput::new(
+                outpoint_source_id,
+                1,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
             tx_b_fee,
             flags,
             locktime,
@@ -2590,9 +2664,9 @@ mod tests {
         let tx_c = tx_spend_input(
             &mempool,
             TxInput::new(
-                OutPointSourceId::Transaction(tx_b_id.clone()),
+                OutPointSourceId::Transaction(tx_b_id),
                 0,
-                DUMMY_WITNESS_MSG.to_vec(),
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             ),
             tx_c_fee,
             flags,
@@ -2666,23 +2740,27 @@ mod tests {
         let parent = TxGenerator::new()
             .with_num_inputs(num_inputs)
             .with_num_outputs(num_outputs)
-            .with_fee(fee.into())
+            .with_fee(Amount::from_atoms(fee))
             .generate_tx(&mempool)?;
         let parent_id = parent.get_id();
         mempool.add_transaction(parent)?;
 
         let flags = 0;
         let locktime = 0;
-        let outpoint_source_id = OutPointSourceId::Transaction(parent_id.clone());
+        let outpoint_source_id = OutPointSourceId::Transaction(parent_id);
         let child = tx_spend_input(
             &mempool,
-            TxInput::new(outpoint_source_id, 0, DUMMY_WITNESS_MSG.to_vec()),
+            TxInput::new(
+                outpoint_source_id,
+                0,
+                InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
+            ),
             None,
             flags,
             locktime,
         )?;
         let child_id = child.get_id();
-        mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + 1);
+        mock_clock.set(DEFAULT_MEMPOOL_EXPIRY + Duration::new(1, 0));
 
         assert!(matches!(
             mempool.add_transaction(child),
@@ -2727,7 +2805,7 @@ mod tests {
         let parent = TxGenerator::new()
             .with_num_inputs(num_inputs)
             .with_num_outputs(num_outputs)
-            .with_fee(fee.into())
+            .with_fee(Amount::from_atoms(fee))
             .generate_tx(&mempool)?;
         let parent_id = parent.get_id();
 
@@ -2744,9 +2822,9 @@ mod tests {
                     TxInput::new(
                         outpoint_source_id.clone(),
                         u32::try_from(i).unwrap(),
-                        DUMMY_WITNESS_MSG.to_vec(),
+                        InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
                     ),
-                    Amount::from(fee + u128::try_from(i).unwrap()),
+                    Amount::from_atoms(fee + u128::try_from(i).unwrap()),
                     flags,
                     locktime,
                 )
