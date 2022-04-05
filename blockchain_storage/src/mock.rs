@@ -279,7 +279,7 @@ mod tests {
             12,
             ConsensusData::None,
         )
-            .unwrap();
+        .unwrap();
         let block1 = Block::new(vec![tx1], block0.get_id(), 34, ConsensusData::None).unwrap();
         (block0, block1)
     }

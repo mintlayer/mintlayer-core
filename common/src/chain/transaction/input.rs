@@ -1,5 +1,5 @@
 use crate::chain::{block::Block, transaction::Transaction};
-use crate::primitives::{Id, H256};
+use crate::primitives::Id;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -42,13 +42,6 @@ impl OutPoint {
 
     pub fn get_output_index(&self) -> u32 {
         self.index
-    }
-
-    pub fn hash(&self) -> H256 {
-        match &self.id {
-            OutPointSourceId::Transaction(inner) => inner.get(),
-            OutPointSourceId::BlockReward(inner) => inner.get(),
-        }
     }
 }
 

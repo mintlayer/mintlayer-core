@@ -32,8 +32,13 @@ impl From<&OutPoint> for OutPointKey {
             OutPointSourceId::BlockReward(_) => true,
         };
 
+        let outpoint_hash =  match &outpoint.get_tx_id() {
+            OutPointSourceId::Transaction(inner) => inner.get(),
+            OutPointSourceId::BlockReward(inner) => inner.get(),
+        };
+
         Self {
-            outpoint_hash: outpoint.hash(),
+            outpoint_hash,
             is_block_reward,
             index: outpoint.get_output_index(),
         }
