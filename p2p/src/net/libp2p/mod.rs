@@ -163,16 +163,14 @@ where
 }
 
 /// Parse all discovered addresses and group them by PeerId
-fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+fn parse_peers<T>(peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
 where
     T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
 {
-    peers.sort_by(|a, b| a.0.cmp(&b.0));
     peers
         .into_iter()
-        .map(|(id, addr)| (id, parse_discovered_addr(id, addr)))
-        .filter(|(_id, addr)| addr.is_some())
-        .map(|(id, addr)| (id, addr.unwrap()))
+        .sorted()
+        .filter_map(|(id, addr)| parse_discovered_addr(id, addr).map(|addr| (id, addr)))
         .group_by(|info| info.0)
         .into_iter()
         .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))
