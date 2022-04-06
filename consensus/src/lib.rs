@@ -956,6 +956,76 @@ mod tests {
         });
     }
 
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn test_spend_inputs_simple() {
+        common::concurrency::model(|| {
+            let config = create_mainnet();
+            let storage = Store::new_empty().unwrap();
+            let mut consensus = Consensus::new(config.clone(), storage);
+
+            // process the genesis block
+            let result =
+                consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
+            assert!(result.is_ok());
+            assert_eq!(
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect("Best block didn't found"),
+                Some(config.genesis_block().get_id())
+            );
+
+            // Create a new block
+            let block = produce_test_block(&config, config.genesis_block(), false);
+
+            // Check that all tx not in the main chain
+            for tx in block.transactions() {
+                assert!(
+                    consensus
+                        .blockchain_storage
+                        .get_mainchain_tx_index(&tx.get_id())
+                        .expect("DB corrupted")
+                        == None
+                );
+            }
+
+            // Process the second block
+            let new_id = Some(block.get_id());
+            assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+            assert_eq!(
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect("Best block didn't found"),
+                new_id
+            );
+
+            // Check that tx inputs in the main chain and has already spent
+            let mut cached_inputs = CachedInputs::new();
+            for tx in block.transactions() {
+                let tx_index = match cached_inputs.entry(tx.get_id()) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => entry.insert(
+                        consensus
+                            .blockchain_storage
+                            .get_mainchain_tx_index(&tx.get_id())
+                            .expect("DB corrupted")
+                            .expect("Not found mainchain tx index"),
+                    ),
+                };
+
+                for input in tx.get_inputs() {
+                    if tx_index.get_spent_state(input.get_outpoint().get_output_index()).unwrap()
+                        == OutputSpentState::Unspent
+                    {
+                        panic!("Tx input can't be unspent");
+                    }
+                }
+            }
+        });
+    }
+
     // TODO: Not ready tests for this PR:
     // * Empty block checks
     // * Check chains with skips and forks
