@@ -32,18 +32,9 @@ impl Add<BlockDistance> for BlockHeight {
 
     fn add(self, other: BlockDistance) -> Option<BlockHeight> {
         let height: i64 = self.0.try_into().ok()?;
-        if height < 0 {
-            // we can't do arithmetic on this height anymore. Unless it's a bug, we won't face this in a million years
-            return None;
-        }
-
         let result = height
             .checked_add(other.0)
             .expect("overflow when adding BlockHeight to instant");
-        if result < 0 {
-            return None;
-        }
-
         let result: u64 = result.try_into().ok()?;
         Some(Self(result))
     }
@@ -53,13 +44,13 @@ impl Sub<BlockDistance> for BlockHeight {
     type Output = Option<BlockHeight>;
 
     fn sub(self, other: BlockDistance) -> Option<BlockHeight> {
-        let h1: i64 = self.0.try_into().ok()?;
+        let height: i64 = self.0.try_into().ok()?;
 
-        if h1 < 0 {
+        if height < 0 {
             return None;
         }
 
-        let raw_result: i64 = h1.checked_sub(other.0)?;
+        let raw_result: i64 = height.checked_sub(other.0)?;
         if raw_result < 0 {
             return None;
         }
@@ -93,33 +84,29 @@ impl Sub<BlockHeight> for BlockHeight {
         let h1: i64 = self.0.try_into().ok()?;
         let h2: i64 = other.0.try_into().ok()?;
 
-        if h1 < 0 || h2 < 0 {
-            return None;
-        }
-
         Some(BlockDistance(h1.checked_sub(h2)?))
     }
 }
 
-const ZERO: BlockHeight = BlockHeight(0);
-const ONE: BlockHeight = BlockHeight(1);
-const MAX: BlockHeight = BlockHeight(HeightIntType::MAX);
-
 impl BlockHeight {
+    const ZERO: BlockHeight = BlockHeight(0);
+    const ONE: BlockHeight = BlockHeight(1);
+    const MAX: BlockHeight = BlockHeight(HeightIntType::MAX);
+
     pub fn new(height: HeightIntType) -> Self {
         Self(height)
     }
 
     pub fn zero() -> BlockHeight {
-        ZERO
+        BlockHeight::ZERO
     }
 
     pub fn one() -> BlockHeight {
-        ONE
+        BlockHeight::ONE
     }
 
     pub fn max() -> BlockHeight {
-        MAX
+        BlockHeight::MAX
     }
 
     pub fn checked_add(&self, rhs: HeightIntType) -> Option<Self> {
@@ -166,14 +153,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic_arithmetic() {
-        let h1 = BlockHeight::new(5);
+    fn basic_arithmetic_low() {
+        let h_5 = BlockHeight::new(5);
         let d_4 = BlockDistance::new(4);
         let d_5 = BlockDistance::new(5);
         let d_6 = BlockDistance::new(6);
-        assert_eq!((h1 - d_4).unwrap(), BlockHeight::new(1));
-        assert_eq!((h1 - d_5).unwrap(), BlockHeight::new(0));
-        assert!((h1 - d_6).is_none());
+        assert_eq!((h_5 - d_4).unwrap(), BlockHeight::new(1));
+        assert_eq!((h_5 - d_5).unwrap(), BlockHeight::new(0));
+        assert!((h_5 - d_6).is_none());
 
         assert_eq!((d_5 - d_4).unwrap(), BlockDistance::new(1));
         assert_eq!((d_5 - d_5).unwrap(), BlockDistance::new(0));
@@ -186,5 +173,39 @@ mod tests {
         assert_eq!(BlockHeight::max() - BlockDistance::new(1), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(0), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(1), None);
+    }
+
+    #[test]
+    fn basic_arithmetic_high() {
+        let h_halfmax = BlockHeight::new(HeightIntType::MAX / 2);
+        let d_max = BlockDistance::new(DistanceIntType::MAX);
+        let d_m1 = BlockDistance::new(-1);
+        let d_0 = BlockDistance::new(0);
+        let d_p1 = BlockDistance::new(1);
+        assert_eq!(
+            (h_halfmax + d_m1).unwrap(),
+            BlockHeight::new(HeightIntType::MAX / 2 - 1)
+        );
+        assert_eq!(
+            (h_halfmax + d_0).unwrap(),
+            BlockHeight::new(HeightIntType::MAX / 2)
+        );
+        assert_eq!(
+            (d_max + d_m1).unwrap(),
+            BlockDistance::new(DistanceIntType::MAX - 1)
+        );
+        assert_eq!(
+            (d_max + d_0).unwrap(),
+            BlockDistance::new(DistanceIntType::MAX)
+        );
+        assert!((d_max + d_p1).is_none());
+    }
+
+    #[test]
+    #[should_panic]
+    fn basic_arithmetic_hit_max() {
+        let h_halfmax = BlockHeight::new(HeightIntType::MAX / 2);
+        let d_p1 = BlockDistance::new(1);
+        let _ = h_halfmax + d_p1;
     }
 }
