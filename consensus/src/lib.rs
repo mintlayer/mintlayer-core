@@ -188,18 +188,16 @@ impl<'a> ConsensusRef<'a> {
 
         // Disconnect the current chain if it is not a genesis
         {
-            let mut current_block_to_disconnect = self
+            let mut mainchain_tip = self
                 .db_tx
                 .get_block_index(best_block_id)?
                 .expect("Can't get block index. Inconsistent DB");
 
             // Disconnect blocks
-            while self.is_block_in_main_chain(&current_block_to_disconnect)
-                && current_block_to_disconnect.get_block_id() != *common_ancestor_id
-            {
-                self.disconnect_tip(&mut current_block_to_disconnect)?;
-                current_block_to_disconnect =
-                    self.get_previous_block_index(&current_block_to_disconnect)?;
+            while mainchain_tip.get_block_id() != *common_ancestor_id {
+                debug_assert!(self.is_block_in_main_chain(&mainchain_tip));
+
+                mainchain_tip = self.disconnect_tip(&mut mainchain_tip)?;
             }
         }
 
@@ -450,7 +448,10 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn disconnect_tip(&mut self, block_index: &mut BlockIndex) -> Result<(), BlockError> {
+    /// Does a read-modify-write operation on the database and disconnects a block
+    /// by unsetting the `next` pointer.
+    /// Returns the previous block (the last block in the main-chain)
+    fn disconnect_tip(&mut self, block_index: &mut BlockIndex) -> Result<BlockIndex, BlockError> {
         assert_eq!(
             &self.db_tx.get_best_block_id().ok().flatten().expect("Only fails at genesis"),
             block_index.get_block_id()
@@ -462,10 +463,10 @@ impl<'a> ConsensusRef<'a> {
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
         // Disconnect block
-        let mut ancestor = self.get_previous_block_index(block_index)?;
-        ancestor.unset_next_block_id();
-        self.db_tx.set_block_index(&ancestor)?;
-        Ok(())
+        let mut prev_block_index = self.get_previous_block_index(block_index)?;
+        prev_block_index.unset_next_block_id();
+        self.db_tx.set_block_index(&prev_block_index)?;
+        Ok(prev_block_index)
     }
 
     fn try_connect_genesis_block(
