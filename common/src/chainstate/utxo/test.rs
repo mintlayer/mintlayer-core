@@ -192,7 +192,6 @@ fn check_get_mut_utxo(
             }
 
             // let's try to update the utxo.
-            utxo.set_block_reward(!utxo.is_block_reward());
             let new_height = utxo.height().checked_add(1).expect("should be able to increment");
             utxo.set_height(new_height);
             expected_utxo = Some(utxo.clone());

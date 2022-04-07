@@ -89,10 +89,6 @@ impl Utxo {
         &self.output
     }
 
-    pub fn set_block_reward(&mut self, value: bool) {
-        self.is_block_reward = value;
-    }
-
     pub fn set_height(&mut self, value: BlockHeight) {
         self.height = value;
     }
@@ -108,7 +104,7 @@ pub trait UtxosView {
     /// Retrieves the block hash of the best block in this view
     fn get_best_block_hash(&self) -> Option<H256>;
 
-    /// Estimated size of the whole view (0 if not implemented)
+    /// Estimated size of the whole view (should be 0 if empty.)
     fn estimated_size(&self) -> usize;
 
     /// Performs bulk modification
