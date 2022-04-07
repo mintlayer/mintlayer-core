@@ -493,20 +493,20 @@ impl<'a> ConsensusRef<'a> {
         if connected_genesis.is_some() {
             return Ok(connected_genesis);
         }
-        let best_block_id = best_block_id.expect("Best block must be set");
+
+        let best_block_id = best_block_id.expect("Best block must be set at this point");
         // Chain trust is higher than the best block
         let current_best_block_index = self
             .db_tx
             .get_block_index(&best_block_id)
             .map_err(BlockError::from)?
             .expect("Inconsistent DB");
+
         if new_block_index.get_chain_trust() > current_best_block_index.get_chain_trust() {
             self.reorganize(&best_block_id, &new_block_index)?;
             return Ok(Some(new_block_index));
-        } else {
-            // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
-            self.db_tx.set_block_index(&new_block_index)?;
         }
+
         Ok(None)
     }
 
