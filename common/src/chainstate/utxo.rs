@@ -143,10 +143,13 @@ pub enum UtxoStatus {
     Entry(Utxo)
 }
 
+/// Just the Utxo with additional information.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct UtxoEntry {
     status:UtxoStatus,
+    /// The utxo entry is dirty when this version is different from the parent.
     is_dirty: bool,
+    /// The utxo entry is fresh when the parent does not have this utxo
     is_fresh: bool
 }
 
@@ -238,8 +241,6 @@ impl<'a> UtxosCache<'a> {
                 self.has_utxo(&outpoint)
             } else {
                 // TODO: a temporary return of false.
-                // utxobase transactions can always be overwritten, in order to correctly
-                // deal with the pre-BIP30 occurrences of duplicate utxobase transactions.
                 false
             };
 
@@ -345,7 +346,6 @@ impl<'a> UtxosCache<'a> {
                 UtxoStatus::Spent => {  None }
                 UtxoStatus::Entry(utxo) => {
                     let key = OutPointKey::from(outpoint);
-
                     self.utxos.insert(key, UtxoEntry::new(utxo, status.is_fresh,status.is_dirty));
                     //TODO: update the memory storage here
                     self.utxos.get_mut(&key).and_then(|entry| entry.utxo_mut())
