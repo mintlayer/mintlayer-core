@@ -154,7 +154,7 @@ impl<'a> ConsensusRef<'a> {
     /// Allow to read from storage the previous block and return itself BlockIndex
     fn get_previous_block_index(&self, block_index: &BlockIndex) -> Result<BlockIndex, BlockError> {
         let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
-        self.db_tx.get_block_index(&prev_block_id)?.ok_or(BlockError::NotFound)
+        self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
     }
 
     // Get indexes for a new longest chain
@@ -169,7 +169,7 @@ impl<'a> ConsensusRef<'a> {
             block_index = self.get_previous_block_index(&block_index)?;
         }
         result.reverse();
-        debug_assert!(result.len() >= 1); // there has to always be at least one new block
+        debug_assert!(!result.is_empty()); // there has to always be at least one new block
         Ok(result)
     }
 
