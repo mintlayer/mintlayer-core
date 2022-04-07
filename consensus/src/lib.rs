@@ -173,6 +173,19 @@ impl<'a> ConsensusRef<'a> {
         Ok(result)
     }
 
+    fn disconnect_until(
+        &mut self,
+        to_disconnect: &BlockIndex,
+        last_to_remain_connected: &Id<Block>,
+    ) -> Result<(), BlockError> {
+        let current_mainchain_tip = self.disconnect_tip(Some(to_disconnect.get_block_id()))?;
+        if current_mainchain_tip.get_block_id() == last_to_remain_connected {
+            Ok(())
+        } else {
+            self.disconnect_until(&current_mainchain_tip, last_to_remain_connected)
+        }
+    }
+
     fn reorganize(
         &mut self,
         best_block_id: &Id<Block>,
@@ -180,31 +193,29 @@ impl<'a> ConsensusRef<'a> {
     ) -> Result<(), BlockError> {
         let new_chain = self.get_new_chain(new_block_index)?;
 
-        let first_block = &new_chain
-            .get(0)
-            .expect("This vector cannot be empty since there is at least one block to connect");
-        let common_ancestor_id =
-            &first_block.get_prev_block_id().as_ref().expect("This can never be genesis");
+        let common_ancestor_id = {
+            let first_block = &new_chain
+                .get(0)
+                .expect("This vector cannot be empty since there is at least one block to connect");
+            &first_block.get_prev_block_id().as_ref().expect("This can never be genesis")
+        };
 
         // Disconnect the current chain if it is not a genesis
         {
-            let mut mainchain_tip = self
+            let mainchain_tip = self
                 .db_tx
                 .get_block_index(best_block_id)?
                 .expect("Can't get block index. Inconsistent DB");
 
             // Disconnect blocks
-            while mainchain_tip.get_block_id() != *common_ancestor_id {
-                debug_assert!(self.is_block_in_main_chain(&mainchain_tip));
-
-                mainchain_tip = self.disconnect_tip(&mut mainchain_tip)?;
-            }
+            self.disconnect_until(&mainchain_tip, common_ancestor_id)?;
         }
 
         // Connect the new chain
         for block_index in new_chain {
             self.connect_tip(&block_index)?;
         }
+
         Ok(())
     }
 
@@ -451,19 +462,32 @@ impl<'a> ConsensusRef<'a> {
     /// Does a read-modify-write operation on the database and disconnects a block
     /// by unsetting the `next` pointer.
     /// Returns the previous block (the last block in the main-chain)
-    fn disconnect_tip(&mut self, block_index: &mut BlockIndex) -> Result<BlockIndex, BlockError> {
-        assert_eq!(
-            &self.db_tx.get_best_block_id().ok().flatten().expect("Only fails at genesis"),
-            block_index.get_block_id()
-        );
-        let block = self.get_block_from_index(block_index)?.expect("Inconsistent DB");
+    fn disconnect_tip(
+        &mut self,
+        expected_tip_block_id: Option<&Id<Block>>,
+    ) -> Result<BlockIndex, BlockError> {
+        let best_block_id =
+            self.db_tx.get_best_block_id().ok().flatten().expect("Only fails at genesis");
+
+        // Optionally, we can double-check that the tip is what we're discconnecting
+        match expected_tip_block_id {
+            None => {}
+            Some(expected_tip_block_id) => debug_assert!(expected_tip_block_id == &best_block_id),
+        }
+
+        let block_index = self
+            .db_tx
+            .get_block_index(&best_block_id)
+            .expect("Database error on retrieving current best block index")
+            .expect("Also only genesis fails at this");
+        let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
         self.disconnect_transactions(block.transactions())?;
         self.db_tx.set_best_block_id(
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
         // Disconnect block
-        let mut prev_block_index = self.get_previous_block_index(block_index)?;
+        let mut prev_block_index = self.get_previous_block_index(&block_index)?;
         prev_block_index.unset_next_block_id();
         self.db_tx.set_block_index(&prev_block_index)?;
         Ok(prev_block_index)
