@@ -152,14 +152,9 @@ impl<'a> ConsensusRef<'a> {
     }
 
     /// Allow to read from storage the previous block and return itself BlockIndex
-    fn get_previous_block_index(&self, block_id: &Id<Block>) -> Result<BlockIndex, BlockError> {
-        let block_index = self
-            .db_tx
-            .get_block_index(block_id)
-            .map_err(BlockError::from)?
-            .ok_or(BlockError::NotFound)?;
+    fn get_previous_block_index(&self, block_index: &BlockIndex) -> Result<BlockIndex, BlockError> {
         let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
-        self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
+        self.db_tx.get_block_index(&prev_block_id)?.ok_or(BlockError::NotFound)
     }
 
     // Get indexes for a new longest chain
@@ -171,36 +166,40 @@ impl<'a> ConsensusRef<'a> {
         let mut block_index = new_tip_block_index.clone();
         while !self.is_block_in_main_chain(&block_index) {
             result.push(block_index.clone());
-            block_index = self.get_previous_block_index(block_index.get_block_id())?;
+            block_index = self.get_previous_block_index(&block_index)?;
         }
         result.reverse();
+        debug_assert!(result.len() >= 1); // there has to always be at least one new block
         Ok(result)
     }
 
     fn reorganize(
         &mut self,
-        best_block_id: Option<Id<Block>>,
+        best_block_id: &Id<Block>,
         new_block_index: &BlockIndex,
     ) -> Result<(), BlockError> {
         let new_chain = self.get_new_chain(new_block_index)?;
 
+        let first_block = &new_chain
+            .get(0)
+            .expect("This vector cannot be empty since there is at least one block to connect");
+        let common_ancestor_id =
+            &first_block.get_prev_block_id().as_ref().expect("This can never be genesis");
+
         // Disconnect the current chain if it is not a genesis
-        if let Some(ref best_block_id) = best_block_id {
-            let common_ancestor = self.get_previous_block_index(
-                new_chain.get(0).ok_or(BlockError::Unknown)?.get_block_id(),
-            )?;
-            let mut current_ancestor = self
+        {
+            let mut current_block_to_disconnect = self
                 .db_tx
                 .get_block_index(best_block_id)?
                 .expect("Can't get block index. Inconsistent DB");
 
             // Disconnect blocks
-            while self.is_block_in_main_chain(&current_ancestor)
-                && current_ancestor.get_block_id() != common_ancestor.get_block_id()
+            while self.is_block_in_main_chain(&current_block_to_disconnect)
+                && current_block_to_disconnect.get_block_id() != *common_ancestor_id
             {
-                self.disconnect_tip(&mut current_ancestor)?;
-                current_ancestor =
-                    self.get_previous_block_index(current_ancestor.get_block_id())?;
+                self.disconnect_tip(&mut current_block_to_disconnect)?;
+                current_block_to_disconnect =
+                    self.get_previous_block_index(&current_block_to_disconnect)?;
             }
         }
 
@@ -463,7 +462,7 @@ impl<'a> ConsensusRef<'a> {
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
         // Disconnect block
-        let mut ancestor = self.get_previous_block_index(block_index.get_block_id())?;
+        let mut ancestor = self.get_previous_block_index(block_index)?;
         ancestor.unset_next_block_id();
         self.db_tx.set_block_index(&ancestor)?;
         Ok(())
@@ -501,7 +500,7 @@ impl<'a> ConsensusRef<'a> {
             .map_err(BlockError::from)?
             .expect("Inconsistent DB");
         if new_block_index.get_chain_trust() > current_best_block_index.get_chain_trust() {
-            self.reorganize(Some(best_block_id), &new_block_index)?;
+            self.reorganize(&best_block_id, &new_block_index)?;
             return Ok(Some(new_block_index));
         } else {
             // TODO: we don't store block indexes for blocks we don't accept, because this is PoS
