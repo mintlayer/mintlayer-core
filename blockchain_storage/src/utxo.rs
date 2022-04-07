@@ -34,7 +34,7 @@ impl UtxosView for UtxoDB {
         }
     }
 
-    fn have_utxo(&self, outpoint: &OutPoint) -> bool {
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
         self.get_utxo(outpoint).is_some()
     }
 
@@ -137,8 +137,8 @@ mod test {
             let utxo_entry = utxos.get(&outpoint_key).expect("an entry should be found");
             assert_eq!(utxo_entry.utxo(), utxo_opt);
 
-            // check have_utxo
-            assert!(utxo_db.have_utxo(&outpoint));
+            // check has_utxo
+            assert!(utxo_db.has_utxo(&outpoint));
 
             //check the best block hash
             assert_eq!(utxo_db.get_best_block_hash(), Some(new_best_block_hash));
@@ -153,7 +153,7 @@ mod test {
                 let new_hash = H256::random();
                 utxo_db.batch_write(map, new_hash).expect("batch write should work");
 
-                assert!(!utxo_db.have_utxo(&outpoint));
+                assert!(!utxo_db.has_utxo(&outpoint));
             }
 
             // write down a spent utxo.
@@ -180,7 +180,7 @@ mod test {
                 let res = flush_to_base(child, new_block_hash, &mut utxo_db);
                 assert!(res.is_ok());
 
-                assert!(!utxo_db.have_utxo(&outpoint));
+                assert!(!utxo_db.has_utxo(&outpoint));
             }
         });
     }

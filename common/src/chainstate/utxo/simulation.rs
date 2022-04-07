@@ -1,10 +1,10 @@
 //TODO: need a better way than this.
 
 use crate::chain::OutPoint;
-use crate::chainstate::test::{create_utxo, DIRTY, FRESH};
+use crate::chainstate::utxo::test_helper::{create_utxo, DIRTY, FRESH};
 use crate::chainstate::utxo::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
 use crate::primitives::H256;
-use crate::utxo::UtxoEntry;
+use crate::utxo::{UtxoEntry, UtxoStatus};
 use rand::Rng;
 
 fn random_bool() -> bool {
@@ -83,10 +83,34 @@ fn populate_cache<'a>(
             let flags = rand::thread_rng().gen_range(0..4u8);
 
             let new_entry = match flags {
-                FRESH => UtxoEntry::new_spent(true, false),
-                DIRTY => UtxoEntry::new_spent(false, true),
-                x if x == (FRESH + DIRTY) => UtxoEntry::new_spent(true, true),
-                _ => UtxoEntry::new_spent(false, false),
+                FRESH => {
+                    UtxoEntry {
+                        status: UtxoStatus::Spent,
+                        is_dirty: false,
+                        is_fresh: true,
+                    }
+                },
+                DIRTY => {
+                    UtxoEntry {
+                        status: UtxoStatus::Spent,
+                        is_dirty: true,
+                        is_fresh: false,
+                    }
+                },
+                flag if flag == (FRESH + DIRTY) => {
+                    UtxoEntry {
+                        status: UtxoStatus::Spent,
+                        is_dirty: true,
+                        is_fresh: true,
+                    }
+                },
+                _ => {
+                    UtxoEntry {
+                        status: UtxoStatus::Spent,
+                        is_dirty: false,
+                        is_fresh: false,
+                    }
+                },
             };
             cache.utxos.insert(key, new_entry);
 
@@ -97,7 +121,7 @@ fn populate_cache<'a>(
     (cache, outps)
 }
 
-#[test]
+// #[test]
 fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 

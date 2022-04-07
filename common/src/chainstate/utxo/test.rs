@@ -4,10 +4,9 @@ use Presence::Absent;
 use Presence::Present;
 use Presence::Spent;
 
-use crate::chainstate::test::{
-    check_flags, create_utxo, insert_single_entry, Presence, DIRTY, FRESH,
-};
 use std::collections::HashMap;
+use crate::utxo::test_helper::{check_flags, create_utxo, insert_single_entry, Presence, DIRTY, FRESH};
+use crate::utxo::UtxoStatus;
 
 /// Checks `add_utxo` method behaviour.
 /// # Arguments
@@ -121,7 +120,11 @@ fn check_write_utxo(
                 single_entry_map.insert(key, entry);
             }
             Spent => {
-                let entry = UtxoEntry::new_spent(is_fresh, is_dirty);
+                let entry = UtxoEntry{
+                    status: UtxoStatus::Spent,
+                    is_dirty,
+                    is_fresh
+                };
                 single_entry_map.insert(key, entry);
             }
         }
@@ -189,7 +192,7 @@ fn check_get_mut_utxo(
             }
 
             // let's try to update the utxo.
-            utxo.block_reward(!utxo.is_block_reward());
+            utxo.set_block_reward(!utxo.is_block_reward());
             let new_height = utxo.height().checked_add(1).expect("should be able to increment");
             utxo.set_height(new_height);
             expected_utxo = Some(utxo.clone());
@@ -264,9 +267,13 @@ fn spend_utxo_test() {
     assert!(check_spend_utxo(Absent,  Present,  Some(FRESH),         None));
     assert!(check_spend_utxo(Absent,  Present,  Some(DIRTY),         Some(DIRTY)));
     assert!(check_spend_utxo(Absent,  Present,  Some(FRESH | DIRTY), None));
-    assert!(check_spend_utxo(Spent,   Absent,   None,                None));
+
+    // this should fail, since there's nothing to remove.
+    assert!(!check_spend_utxo(Spent,   Absent,   None,                None));
     assert!(check_spend_utxo(Spent,   Spent,    Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Spent,   Absent,   Some(FRESH),         None));
+
+    // this should fail, as there's nothing to remove.
+    assert!(!check_spend_utxo(Spent,   Absent,   Some(FRESH),         None));
     assert!(check_spend_utxo(Spent,   Spent,    Some(DIRTY),         Some(DIRTY)));
     assert!(check_spend_utxo(Spent,   Spent,    Some(FRESH | DIRTY), None));
     assert!(check_spend_utxo(Spent,   Present,  Some(0),             Some(DIRTY)));
@@ -378,18 +385,20 @@ fn access_utxo_test() {
 fn derive_cache_test() {
     let mut cache = UtxosCache::default();
 
-    let (utxo, outpoint) = create_utxo(10);
-    assert!(cache.add_utxo(utxo, &outpoint, false).is_ok());
+    let (utxo, outpoint_1) = create_utxo(10);
+    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
 
-    let (utxo, outpoint) = create_utxo(20);
-    assert!(cache.add_utxo(utxo, &outpoint, false).is_ok());
+    let (utxo, outpoint_2) = create_utxo(20);
+    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
 
     let mut extra_cache = cache.derive_cache();
+    assert!(extra_cache.utxos.is_empty());
 
-    assert_eq!(&cache.utxos, &extra_cache.utxos);
+    assert!(extra_cache.has_utxo(&outpoint_1));
+    assert!(extra_cache.has_utxo(&outpoint_2));
 
     let (utxo, outpoint) = create_utxo(30);
     assert!(extra_cache.add_utxo(utxo, &outpoint, true).is_ok());
 
-    assert_ne!(&cache.utxos, &extra_cache.utxos);
+    assert!(!cache.has_utxo(&outpoint));
 }

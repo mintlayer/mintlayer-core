@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod test;
 pub mod utxo;
 
 #[allow(dead_code)]

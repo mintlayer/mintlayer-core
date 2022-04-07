@@ -2,14 +2,12 @@ use crate::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutpu
 use crate::chainstate::utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache};
 use crate::primitives::{Amount, BlockHeight, Id, H256};
 use rand::Rng;
-mod simulation;
-mod tests;
 
-const FRESH: u8 = 1;
-const DIRTY: u8 = 2;
+pub const FRESH: u8 = 1;
+pub const DIRTY: u8 = 2;
 
 #[derive(Clone, Eq, PartialEq)]
-enum Presence {
+pub enum Presence {
     Absent,
     Present,
     Spent,
@@ -17,8 +15,9 @@ enum Presence {
 
 use crate::chain::block::Block;
 use Presence::{Absent, Present, Spent};
+use crate::utxo::UtxoStatus;
 
-fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
+pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
     let rng = rand::thread_rng().gen_range(0..u128::MAX);
     let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
     let is_block_reward = rng % 3 == 0;
@@ -45,7 +44,7 @@ fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
 /// `cache_presence` - sets the initial state of the cache.
 /// `cache_flags` - sets the entry of the utxo (fresh/not, dirty/not)
 /// `outpoint` - optional key to be used, rather than a randomly generated one.
-fn insert_single_entry(
+pub fn insert_single_entry(
     cache: &mut UtxosCache,
     cache_presence: &Presence,
     cache_flags: Option<u8>,
@@ -67,7 +66,11 @@ fn insert_single_entry(
 
             let entry = match other {
                 Present => UtxoEntry::new(utxo.clone(), is_fresh, is_dirty),
-                Spent => UtxoEntry::new_spent(is_fresh, is_dirty),
+                Spent => UtxoEntry {
+                    status: UtxoStatus::Spent,
+                    is_dirty,
+                    is_fresh
+                },
                 _ => {
                     panic!("something wrong in the code.")
                 }
@@ -82,7 +85,7 @@ fn insert_single_entry(
 }
 
 /// checks the dirty, fresh, and spent flags.
-fn check_flags(result_entry: Option<&UtxoEntry>, expected_flags: Option<u8>, is_spent: bool) {
+pub fn check_flags(result_entry: Option<&UtxoEntry>, expected_flags: Option<u8>, is_spent: bool) {
     if let Some(flags) = expected_flags {
         let result_entry = result_entry.expect("this should have an entry inside");
 
