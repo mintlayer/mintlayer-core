@@ -94,11 +94,15 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 }
 
 /// Queries to get the Utxo
+// this is not exposed outside the crate, because we only want this to be accessible
+// using the UtxoDB.
 pub(crate) trait UtxoRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
 }
 
 /// Queries to update the Utxo
+// this is not exposed outside the crate, because we only want this to be accessible
+// using the UtxoDB.
 pub(crate) trait UtxoWrite: UtxoRead {
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
 

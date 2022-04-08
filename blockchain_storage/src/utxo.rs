@@ -9,6 +9,7 @@ use common::primitives::{Id, H256};
 use common::utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 use common::ChainStateError;
 
+
 pub struct UtxoDB(pub(crate) Store);
 
 impl From<Error> for ChainStateError {

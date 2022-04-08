@@ -12,6 +12,10 @@ use parity_scale_codec::{Decode, Encode};
 //todo: proper placement and derivation of this max
 const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
 
+/// OutpointKey serves as a "key" equivalent of Outpoint.
+// This is because the Outpoint does not implement `Hash`.
+// Most of the fields of Outpoint do not implement `Hash` as well.
+// To avoid adding #[derive(Hash)] on all sub structs of Outpoint, this OutpointKey was created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct OutPointKey {
     outpoint_hash: H256,
@@ -25,6 +29,9 @@ impl OutPointKey {
     }
 }
 
+// Because the outpoint is mostly being passed around as reference, it only makes sense that
+// only a reference of outpoint is used to create an OutPointKey.
+// The outpoint is widely used as it is, so it's better not to consume it.
 impl From<&OutPoint> for OutPointKey {
     fn from(outpoint: &OutPoint) -> Self {
         let is_block_reward = match outpoint.get_tx_id() {
@@ -45,6 +52,7 @@ impl From<&OutPoint> for OutPointKey {
     }
 }
 
+// In the process of creating an Outpoint from the OutpointKey.
 impl From<&OutPointKey> for OutPoint {
     fn from(key: &OutPointKey) -> Self {
         let id = if key.is_block_reward {
@@ -59,6 +67,7 @@ impl From<&OutPointKey> for OutPoint {
     }
 }
 
+// Determines whether the utxo is for the blockchain of for mempool
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub enum UtxoSource {
     /// At which height this containing tx was included in the active block chain
@@ -84,6 +93,7 @@ impl Utxo {
         }
     }
 
+    /// a utxo for mempool, that does not need the block height.
     pub fn new_for_mempool(output: TxOutput, is_block_reward: bool) -> Self {
         Self {
             output,
@@ -142,6 +152,8 @@ pub trait UtxosView {
     fn derive_cache(&self) -> UtxosCache;
 }
 
+// flush the cache into the provided base. This will consume the cache and throw it away.
+// It uses the batch_write function since it's available in different kinds of views.
 pub fn flush_to_base<T: UtxosView>(
     cache: UtxosCache,
     block_hash: H256,
@@ -150,14 +162,17 @@ pub fn flush_to_base<T: UtxosView>(
     base.batch_write(cache.utxos, block_hash)
 }
 
+
 #[derive(Clone, Default)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
     current_block_hash: Option<H256>,
     utxos: HashMap<OutPointKey, UtxoEntry>,
+    //TODO: do we need this?
     memory_usage: usize,
 }
 
+/// Tells the state of the utxo
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub enum UtxoStatus {
     Spent,
@@ -170,7 +185,8 @@ pub struct UtxoEntry {
     status: UtxoStatus,
     /// The utxo entry is dirty when this version is different from the parent.
     is_dirty: bool,
-    /// The utxo entry is fresh when the parent does not have this utxo
+    /// The utxo entry is fresh when the parent does not have this utxo or
+    /// if it exists in parent but not in current cache.
     is_fresh: bool,
 }
 
@@ -211,7 +227,9 @@ impl UtxoEntry {
 }
 
 impl<'a> UtxosCache<'a> {
-    /// returns a copy of the UtxoEntry, given the outpoint.
+    /// returns a UtxoEntry, given the outpoint.
+    // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
+    // when the utxo was actually retrieved from the parent.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = OutPointKey::from(outpoint);
 
@@ -219,8 +237,12 @@ impl<'a> UtxosCache<'a> {
             return Some(res.clone());
         }
 
+        // since the utxo does not exist in this view, try to check from parent.
         self.parent.and_then(|parent| {
             parent.get_utxo(outpoint).map(|utxo| UtxoEntry {
+                // if the utxo exists in parent:
+                // dirty is FALSE because this view does not have the utxo, therefore is different from parent
+                // fresh is FALSE because this view does not have the utxo but the parent has.
                 status: UtxoStatus::Entry(utxo),
                 is_dirty: false,
                 is_fresh: false,
@@ -241,6 +263,7 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = Some(block_hash);
     }
 
+    //TODO: haven't tested this yet.
     pub fn add_utxos(
         &mut self,
         tx: &Transaction,
@@ -373,9 +396,11 @@ impl<'a> UtxosCache<'a> {
         })
     }
 
+    //TODO: this needs to be tested.
     pub fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = OutPointKey::from(outpoint);
         if let Some(entry) = self.utxos.get(&key) {
+            // see bitcoin's Uncache.
             if !entry.is_fresh && !entry.is_dirty {
                 //todo: decrement the memory usage
                 return self.utxos.remove(&key);
@@ -385,9 +410,12 @@ impl<'a> UtxosCache<'a> {
     }
 }
 
+
 impl<'a> Debug for UtxosCache<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+
         f.debug_struct("UtxosCache")
+            // we wouldn't want to display the parent's children; only to check whether it has a parent.
             .field("has_parent", &self.parent.is_some())
             .field("current_block_hash", &self.current_block_hash)
             .field("utxos", &self.utxos)

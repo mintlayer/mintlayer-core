@@ -25,16 +25,20 @@ pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
     inner_create_utxo(None)
 }
 
+/// returns a tuple of utxo and outpoint, for testing.
 fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
+    // just a random value generated, and also a random `is_block_reward` value.
     let rng = rand::thread_rng().gen_range(0..u128::MAX);
     let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
     let is_block_reward = rng % 3 == 0;
 
+    // generate utxo
     let utxo = match block_height {
         None => Utxo::new_for_mempool(output, is_block_reward),
         Some(height) => Utxo::new(output, is_block_reward, BlockHeight::new(height)),
     };
 
+    // create the id based on the `is_block_reward` value.
     let id = {
         if !is_block_reward {
             let utxo_id: Id<Transaction> = Id::new(&H256::random());
@@ -44,6 +48,7 @@ fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
             OutPointSourceId::BlockReward(utxo_id)
         }
     };
+
     let outpoint = OutPoint::new(id, 0);
 
     (utxo, outpoint)

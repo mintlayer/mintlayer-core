@@ -23,7 +23,7 @@ fn populate_cache<'a>(
 ) -> (UtxosCache<'a>, Vec<OutPoint>) {
     let mut cache = UtxosCache::new(parent);
 
-    // trackers:
+    // tracker
     let mut outps: Vec<OutPoint> = vec![];
 
     // let's add utxos based on `size`.
@@ -56,23 +56,23 @@ fn populate_cache<'a>(
         // println!("child, insert: {:?}, overwrite: {}", outpoint,possible_overwrite );
     }
 
-    // let's create a number of 'spent' utxos in the parent_size.
-    // To give way to other situations, the number of 'spent' utxos should be <= parent_size/2.
-    // let parent_spent_size = if random_bool() { parent_size/2 } else {
-    //     let rng = rand::thread_rng().gen_range(0..parent_size/2);
-    //     rng
-    // };
+    // let's create half of the outpoints provided, to be marked as spent.
+    // there's a possibility when randomly the same outpoint is used, so half seems okay.
     let spent_size = outps.len() / 2;
 
     for _ in 0..spent_size {
         // randomly select which outpoint should be marked as "spent"
         if random_bool() && existing_outpoints.len() > 1 {
+            // just call the `spend_utxo`. Does not matter if it removes the outpoint entirely,
+            // or just mark it as `spent`,
             let outp_idx = rand::thread_rng().gen_range(0..existing_outpoints.len());
             let to_spend = &existing_outpoints[outp_idx];
             assert!(cache.spend_utxo(to_spend));
 
             //println!("child, spend: {:?}, removed", to_spend);
         } else {
+            // just mark it as "spent"
+
             let outp_idx = rand::thread_rng().gen_range(0..outps.len());
             let to_spend = &outps[outp_idx];
 
