@@ -178,12 +178,12 @@ impl<'a> ConsensusRef<'a> {
         to_disconnect: &BlockIndex,
         last_to_remain_connected: &Id<Block>,
     ) -> Result<(), BlockError> {
-        let current_mainchain_tip = self.disconnect_tip(Some(to_disconnect.get_block_id()))?;
-        if current_mainchain_tip.get_block_id() == last_to_remain_connected {
-            Ok(())
-        } else {
-            self.disconnect_until(&current_mainchain_tip, last_to_remain_connected)
+        if to_disconnect.get_block_id() == last_to_remain_connected {
+            return Ok(());
         }
+
+        let current_mainchain_tip = self.disconnect_tip(Some(to_disconnect.get_block_id()))?;
+        self.disconnect_until(&current_mainchain_tip, last_to_remain_connected)
     }
 
     fn reorganize(
