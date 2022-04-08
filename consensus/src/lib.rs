@@ -494,15 +494,15 @@ impl<'a> ConsensusRef<'a> {
 
     fn try_connect_genesis_block(
         &mut self,
-        new_block_index: &BlockIndex,
+        genesis_block_index: &BlockIndex,
         best_block_id: &Option<Id<Block>>,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        if best_block_id.is_none() && new_block_index.is_genesis(self.chain_config) {
-            self.connect_tip(new_block_index)?;
+        if best_block_id.is_none() && genesis_block_index.is_genesis(self.chain_config) {
+            self.connect_tip(genesis_block_index)?;
             self.db_tx
-                .set_best_block_id(new_block_index.get_block_id())
+                .set_best_block_id(genesis_block_index.get_block_id())
                 .map_err(BlockError::from)?;
-            return Ok(Some(new_block_index.clone()));
+            return Ok(Some(genesis_block_index.clone()));
         }
         Ok(None)
     }
@@ -573,15 +573,9 @@ impl<'a> ConsensusRef<'a> {
         Ok(block_index)
     }
 
-    fn block_exists(&self, id: &Id<Block>) -> Result<bool, BlockError> {
-        Ok(self.db_tx.get_block_index(id)?.is_some())
-    }
-
     fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
-        if self.db_tx.get_block_index(block_index.get_block_id())?.is_some()
-            || self.block_exists(block_index.get_block_id())?
-        {
+        if self.db_tx.get_block_index(block_index.get_block_id())?.is_some() {
             return Err(BlockError::Unknown);
         }
         // TODO: Will be expanded
