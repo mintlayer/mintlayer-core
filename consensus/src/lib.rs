@@ -194,9 +194,8 @@ impl<'a> ConsensusRef<'a> {
         let new_chain = self.get_new_chain(new_block_index)?;
 
         let common_ancestor_id = {
-            let first_block = &new_chain
-                .get(0)
-                .expect("This vector cannot be empty since there is at least one block to connect");
+            let err = "This vector cannot be empty since there is at least one block to connect";
+            let first_block = &new_chain.first().expect(err);
             &first_block.get_prev_block_id().as_ref().expect("This can never be genesis")
         };
 
