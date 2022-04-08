@@ -60,7 +60,7 @@ impl From<&OutPointKey> for OutPoint {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub enum UtxoType {
+pub enum UtxoSource {
     /// At which height this containing tx was included in the active block chain
     BlockChain(BlockHeight),
     MemPool,
@@ -72,7 +72,7 @@ pub struct Utxo {
     output: TxOutput,
     is_block_reward: bool,
     /// identifies whether the utxo is for the blockchain or for mempool.
-    tx_type: UtxoType,
+    source: UtxoSource,
 }
 
 impl Utxo {
@@ -80,7 +80,7 @@ impl Utxo {
         Self {
             output,
             is_block_reward,
-            tx_type: UtxoType::BlockChain(height),
+            source: UtxoSource::BlockChain(height),
         }
     }
 
@@ -88,7 +88,7 @@ impl Utxo {
         Self {
             output,
             is_block_reward,
-            tx_type: UtxoType::MemPool,
+            source: UtxoSource::MemPool,
         }
     }
 
@@ -97,9 +97,9 @@ impl Utxo {
     }
 
     pub fn height(&self) -> Option<BlockHeight> {
-        match self.tx_type {
-            UtxoType::BlockChain(height) => Some(height),
-            UtxoType::MemPool => None,
+        match self.source {
+            UtxoSource::BlockChain(height) => Some(height),
+            UtxoSource::MemPool => None,
         }
     }
 
@@ -108,13 +108,13 @@ impl Utxo {
     }
 
     pub fn set_height(&mut self, value: BlockHeight) -> bool {
-        match self.tx_type {
-            UtxoType::BlockChain(_) => {
-                self.tx_type = UtxoType::BlockChain(value);
+        match self.source {
+            UtxoSource::BlockChain(_) => {
+                self.source = UtxoSource::BlockChain(value);
                 true
             }
             // cannot set the height if the utxo is meant for the mempool.
-            UtxoType::MemPool => false,
+            UtxoSource::MemPool => false,
         }
     }
 }
@@ -244,7 +244,7 @@ impl<'a> UtxosCache<'a> {
     pub fn add_utxos(
         &mut self,
         tx: &Transaction,
-        tx_type: UtxoType,
+        source: UtxoSource,
         check_for_overwrite: bool,
     ) -> Result<(), Error> {
         let id = OutPointSourceId::from(tx.get_id());
@@ -263,7 +263,7 @@ impl<'a> UtxosCache<'a> {
                 output: output.clone(),
                 // TODO: where do we get the block reward from the transaction?
                 is_block_reward: false,
-                tx_type: tx_type.clone(),
+                source: source.clone(),
             };
 
             self.add_utxo(utxo, &outpoint, overwrite)?;

@@ -7,7 +7,7 @@ use Presence::Spent;
 use crate::utxo::test_helper::{
     check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
 };
-use crate::utxo::{UtxoStatus, UtxoType};
+use crate::utxo::{UtxoStatus, UtxoSource};
 use std::collections::HashMap;
 
 /// Checks `add_utxo` method behaviour.
@@ -419,5 +419,5 @@ fn blockchain_or_mempool_utxo_test() {
 
     let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
     assert!(res.height().is_none());
-    assert_eq!(res.tx_type, UtxoType::MemPool);
+    assert_eq!(res.source, UtxoSource::MemPool);
 }
