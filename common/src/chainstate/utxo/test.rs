@@ -4,9 +4,11 @@ use Presence::Absent;
 use Presence::Present;
 use Presence::Spent;
 
+use crate::utxo::test_helper::{
+    check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
+};
+use crate::utxo::{UtxoStatus, UtxoType};
 use std::collections::HashMap;
-use crate::utxo::test_helper::{check_flags, create_utxo, insert_single_entry, Presence, DIRTY, FRESH};
-use crate::utxo::UtxoStatus;
 
 /// Checks `add_utxo` method behaviour.
 /// # Arguments
@@ -120,10 +122,10 @@ fn check_write_utxo(
                 single_entry_map.insert(key, entry);
             }
             Spent => {
-                let entry = UtxoEntry{
+                let entry = UtxoEntry {
                     status: UtxoStatus::Spent,
                     is_dirty,
-                    is_fresh
+                    is_fresh,
                 };
                 single_entry_map.insert(key, entry);
             }
@@ -192,8 +194,12 @@ fn check_get_mut_utxo(
             }
 
             // let's try to update the utxo.
-            let new_height = utxo.height().checked_add(1).expect("should be able to increment");
-            utxo.set_height(new_height);
+            let new_height = utxo
+                .height()
+                .expect("should return a height")
+                .checked_add(1)
+                .expect("should be able to increment");
+            assert!(utxo.set_height(new_height));
             expected_utxo = Some(utxo.clone());
         }
     }
@@ -400,4 +406,18 @@ fn derive_cache_test() {
     assert!(extra_cache.add_utxo(utxo, &outpoint, true).is_ok());
 
     assert!(!cache.has_utxo(&outpoint));
+}
+
+fn blockchain_or_mempool_utxo_test() {
+    let mut cache = UtxosCache::default();
+
+    let (utxo, outpoint_1) = create_utxo(10);
+    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
+
+    let (utxo, outpoint_2) = create_utxo_for_mempool();
+    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
+
+    let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
+    assert!(res.height().is_none());
+    assert_eq!(res.tx_type, UtxoType::MemPool);
 }

@@ -32,7 +32,7 @@ impl From<&OutPoint> for OutPointKey {
             OutPointSourceId::BlockReward(_) => true,
         };
 
-        let outpoint_hash =  match &outpoint.get_tx_id() {
+        let outpoint_hash = match &outpoint.get_tx_id() {
             OutPointSourceId::Transaction(inner) => inner.get(),
             OutPointSourceId::BlockReward(inner) => inner.get(),
         };
@@ -59,13 +59,20 @@ impl From<&OutPointKey> for OutPoint {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub enum UtxoType {
+    /// At which height this containing tx was included in the active block chain
+    BlockChain(BlockHeight),
+    MemPool,
+}
+
 /// The Unspent Transaction Output
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Utxo {
     output: TxOutput,
     is_block_reward: bool,
-    /// At which height this containing tx was included in the active block chain
-    height: BlockHeight,
+    /// identifies whether the utxo is for the blockchain or for mempool.
+    tx_type: UtxoType,
 }
 
 impl Utxo {
@@ -73,7 +80,15 @@ impl Utxo {
         Self {
             output,
             is_block_reward,
-            height,
+            tx_type: UtxoType::BlockChain(height),
+        }
+    }
+
+    pub fn new_for_mempool(output: TxOutput, is_block_reward: bool) -> Self {
+        Self {
+            output,
+            is_block_reward,
+            tx_type: UtxoType::MemPool,
         }
     }
 
@@ -81,16 +96,26 @@ impl Utxo {
         self.is_block_reward
     }
 
-    pub fn height(&self) -> BlockHeight {
-        self.height
+    pub fn height(&self) -> Option<BlockHeight> {
+        match self.tx_type {
+            UtxoType::BlockChain(height) => Some(height),
+            UtxoType::MemPool => None,
+        }
     }
 
     pub fn output(&self) -> &TxOutput {
         &self.output
     }
 
-    pub fn set_height(&mut self, value: BlockHeight) {
-        self.height = value;
+    pub fn set_height(&mut self, value: BlockHeight) -> bool {
+        match self.tx_type {
+            UtxoType::BlockChain(_) => {
+                self.tx_type = UtxoType::BlockChain(value);
+                true
+            }
+            // cannot set the height if the utxo is meant for the mempool.
+            UtxoType::MemPool => false,
+        }
     }
 }
 
@@ -136,25 +161,25 @@ pub struct UtxosCache<'a> {
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub enum UtxoStatus {
     Spent,
-    Entry(Utxo)
+    Entry(Utxo),
 }
 
 /// Just the Utxo with additional information.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct UtxoEntry {
-    status:UtxoStatus,
+    status: UtxoStatus,
     /// The utxo entry is dirty when this version is different from the parent.
     is_dirty: bool,
     /// The utxo entry is fresh when the parent does not have this utxo
-    is_fresh: bool
+    is_fresh: bool,
 }
 
 impl UtxoEntry {
-    pub fn new(utxo:Utxo, is_fresh:bool, is_dirty:bool) -> UtxoEntry {
+    pub fn new(utxo: Utxo, is_fresh: bool, is_dirty: bool) -> UtxoEntry {
         UtxoEntry {
             status: UtxoStatus::Entry(utxo),
             is_dirty,
-            is_fresh
+            is_fresh,
         }
     }
 
@@ -172,39 +197,33 @@ impl UtxoEntry {
 
     pub fn utxo(&self) -> Option<Utxo> {
         match &self.status {
-            UtxoStatus::Spent => { None }
-            UtxoStatus::Entry(utxo) => { Some(utxo.clone())}
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => Some(utxo.clone()),
         }
     }
 
     fn utxo_mut(&mut self) -> Option<&mut Utxo> {
         match &mut self.status {
-            UtxoStatus::Spent => { None }
-            UtxoStatus::Entry(utxo) => {
-              Some(utxo)
-            }
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => Some(utxo),
         }
-
     }
 }
 
 impl<'a> UtxosCache<'a> {
-
     /// returns a copy of the UtxoEntry, given the outpoint.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = OutPointKey::from(outpoint);
-        
+
         if let Some(res) = self.utxos.get(&key) {
             return Some(res.clone());
         }
-        
+
         self.parent.and_then(|parent| {
-            parent.get_utxo(outpoint).map(|utxo| {
-                UtxoEntry {
-                    status: UtxoStatus::Entry(utxo),
-                    is_dirty: false,
-                    is_fresh: false
-                }
+            parent.get_utxo(outpoint).map(|utxo| UtxoEntry {
+                status: UtxoStatus::Entry(utxo),
+                is_dirty: false,
+                is_fresh: false,
             })
         })
     }
@@ -225,7 +244,7 @@ impl<'a> UtxosCache<'a> {
     pub fn add_utxos(
         &mut self,
         tx: &Transaction,
-        height: BlockHeight,
+        tx_type: UtxoType,
         check_for_overwrite: bool,
     ) -> Result<(), Error> {
         let id = OutPointSourceId::from(tx.get_id());
@@ -240,8 +259,12 @@ impl<'a> UtxosCache<'a> {
                 false
             };
 
-            // TODO: where do we get the block reward from the transaction?
-            let utxo = Utxo::new(output.clone(), false, height);
+            let utxo = Utxo {
+                output: output.clone(),
+                // TODO: where do we get the block reward from the transaction?
+                is_block_reward: false,
+                tx_type: tx_type.clone(),
+            };
 
             self.add_utxo(utxo, &outpoint, overwrite)?;
         }
@@ -290,7 +313,7 @@ impl<'a> UtxosCache<'a> {
         };
 
         // create a new entry
-        let new_entry = UtxoEntry::new(utxo,is_fresh,true);
+        let new_entry = UtxoEntry::new(utxo, is_fresh, true);
 
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
@@ -304,7 +327,7 @@ impl<'a> UtxosCache<'a> {
     /// Returns true if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> bool {
         match self.get_utxo_entry(outpoint) {
-            None => { false }
+            None => false,
             Some(entry) => {
                 let key = OutPointKey::from(outpoint);
 
@@ -320,11 +343,11 @@ impl<'a> UtxosCache<'a> {
                     let entry = UtxoEntry {
                         status: UtxoStatus::Spent,
                         is_dirty: true,
-                        is_fresh: false
+                        is_fresh: false,
                     };
                     self.utxos.insert(key, entry);
                 }
-               true
+                true
             }
         }
     }
@@ -339,10 +362,10 @@ impl<'a> UtxosCache<'a> {
     pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Option<&mut Utxo> {
         self.get_utxo_entry(outpoint).and_then(|status| {
             match status.status {
-                UtxoStatus::Spent => {  None }
+                UtxoStatus::Spent => None,
                 UtxoStatus::Entry(utxo) => {
                     let key = OutPointKey::from(outpoint);
-                    self.utxos.insert(key, UtxoEntry::new(utxo, status.is_fresh,status.is_dirty));
+                    self.utxos.insert(key, UtxoEntry::new(utxo, status.is_fresh, status.is_dirty));
                     //TODO: update the memory storage here
                     self.utxos.get_mut(&key).and_then(|entry| entry.utxo_mut())
                 }

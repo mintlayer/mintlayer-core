@@ -14,14 +14,26 @@ pub enum Presence {
 }
 
 use crate::chain::block::Block;
-use Presence::{Absent, Present, Spent};
 use crate::utxo::UtxoStatus;
+use Presence::{Absent, Present, Spent};
 
 pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
+    inner_create_utxo(Some(block_height))
+}
+
+pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
+    inner_create_utxo(None)
+}
+
+fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
     let rng = rand::thread_rng().gen_range(0..u128::MAX);
     let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
     let is_block_reward = rng % 3 == 0;
-    let utxo = Utxo::new(output, is_block_reward, BlockHeight::new(block_height));
+
+    let utxo = match block_height {
+        None => Utxo::new_for_mempool(output, is_block_reward),
+        Some(height) => Utxo::new(output, is_block_reward, BlockHeight::new(height)),
+    };
 
     let id = {
         if !is_block_reward {
@@ -69,7 +81,7 @@ pub fn insert_single_entry(
                 Spent => UtxoEntry {
                     status: UtxoStatus::Spent,
                     is_dirty,
-                    is_fresh
+                    is_fresh,
                 },
                 _ => {
                     panic!("something wrong in the code.")

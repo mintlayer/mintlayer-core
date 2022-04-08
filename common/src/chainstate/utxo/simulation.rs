@@ -83,33 +83,25 @@ fn populate_cache<'a>(
             let flags = rand::thread_rng().gen_range(0..4u8);
 
             let new_entry = match flags {
-                FRESH => {
-                    UtxoEntry {
-                        status: UtxoStatus::Spent,
-                        is_dirty: false,
-                        is_fresh: true,
-                    }
+                FRESH => UtxoEntry {
+                    status: UtxoStatus::Spent,
+                    is_dirty: false,
+                    is_fresh: true,
                 },
-                DIRTY => {
-                    UtxoEntry {
-                        status: UtxoStatus::Spent,
-                        is_dirty: true,
-                        is_fresh: false,
-                    }
+                DIRTY => UtxoEntry {
+                    status: UtxoStatus::Spent,
+                    is_dirty: true,
+                    is_fresh: false,
                 },
-                flag if flag == (FRESH + DIRTY) => {
-                    UtxoEntry {
-                        status: UtxoStatus::Spent,
-                        is_dirty: true,
-                        is_fresh: true,
-                    }
+                flag if flag == (FRESH + DIRTY) => UtxoEntry {
+                    status: UtxoStatus::Spent,
+                    is_dirty: true,
+                    is_fresh: true,
                 },
-                _ => {
-                    UtxoEntry {
-                        status: UtxoStatus::Spent,
-                        is_dirty: false,
-                        is_fresh: false,
-                    }
+                _ => UtxoEntry {
+                    status: UtxoStatus::Spent,
+                    is_dirty: false,
+                    is_fresh: false,
                 },
             };
             cache.utxos.insert(key, new_entry);
