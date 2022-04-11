@@ -1,13 +1,11 @@
-use crate::chainstate::utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
-use crate::chainstate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
-use Presence::Absent;
-use Presence::Present;
-use Presence::Spent;
+use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
+use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
+use crate::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
-use crate::utxo::test_helper::{
+use crate::utxo_impl::test_helper::{
     check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
 };
-use crate::utxo::{UtxoStatus, UtxoSource};
+use crate::utxo_impl::{UtxoSource, UtxoStatus};
 use std::collections::HashMap;
 
 /// Checks `add_utxo` method behaviour.

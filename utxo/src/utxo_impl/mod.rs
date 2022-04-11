@@ -1,12 +1,12 @@
 //TODO: remove once the functions are used.
 #![allow(dead_code)]
-use crate::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
-use crate::chainstate::Error;
-use crate::primitives::{BlockHeight, Id, Idable, H256};
+use crate::Error;
+use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
+use common::primitives::{BlockHeight, Id, Idable, H256};
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 
-use crate::chain::block::Block;
+use common::chain::block::Block;
 use parity_scale_codec::{Decode, Encode};
 
 //todo: proper placement and derivation of this max

@@ -1,6 +1,6 @@
-use crate::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
-use crate::chainstate::utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache};
-use crate::primitives::{Amount, BlockHeight, Id, H256};
+use crate::{OutPointKey, Utxo, UtxoEntry, UtxosCache};
+use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
+use common::primitives::{Amount, BlockHeight, Id, H256};
 use rand::Rng;
 
 pub const FRESH: u8 = 1;
@@ -13,8 +13,8 @@ pub enum Presence {
     Spent,
 }
 
-use crate::chain::block::Block;
-use crate::utxo::UtxoStatus;
+use crate::UtxoStatus;
+use common::chain::block::Block;
 use Presence::{Absent, Present, Spent};
 
 pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {

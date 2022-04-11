@@ -4,16 +4,16 @@ use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id};
-use common::utxo::Utxo;
 use storage::traits;
+use utxo::Utxo;
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 mod store;
-mod utxo;
+mod utxo_db;
 
 pub use store::Store;
-pub use utxo::UtxoDB;
+pub use utxo_db::UtxoDB;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]

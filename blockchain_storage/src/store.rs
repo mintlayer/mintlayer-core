@@ -2,9 +2,9 @@ use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id, Idable};
-use common::utxo::Utxo;
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
+use utxo::Utxo;
 
 use crate::{
     BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UtxoRead,

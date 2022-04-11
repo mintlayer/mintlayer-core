@@ -6,15 +6,13 @@ use crate::{BlockchainStorageRead, BlockchainStorageWrite, Error, Store, UtxoRea
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
-use common::utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
-use common::ChainStateError;
-
+use utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
 pub struct UtxoDB(pub(crate) Store);
 
-impl From<Error> for ChainStateError {
+impl From<Error> for utxo::Error {
     fn from(e: Error) -> Self {
-        ChainStateError::DBError(format!("{:?}", e))
+        utxo::Error::DBError(format!("{:?}", e))
     }
 }
 
@@ -57,7 +55,7 @@ impl UtxosView for UtxoDB {
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
         block_hash: H256,
-    ) -> Result<(), common::ChainStateError> {
+    ) -> Result<(), utxo::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos {
             let outpoint: OutPoint = (&key).into();
@@ -88,9 +86,9 @@ mod test {
     use super::*;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxOutput};
     use common::primitives::{Amount, BlockHeight};
-    use common::utxo::flush_to_base;
     use iter_tools::Itertools;
     use rand::Rng;
+    use utxo::flush_to_base;
 
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         let output = TxOutput::new(Amount::new(10), Destination::PublicKey);

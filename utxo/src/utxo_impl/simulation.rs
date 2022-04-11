@@ -1,10 +1,10 @@
 //TODO: need a better way than this.
 
-use crate::chain::OutPoint;
-use crate::chainstate::utxo::test_helper::{create_utxo, DIRTY, FRESH};
-use crate::chainstate::utxo::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
-use crate::primitives::H256;
-use crate::utxo::{UtxoEntry, UtxoStatus};
+use crate::utxo_impl::test_helper::{create_utxo, DIRTY, FRESH};
+use crate::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
+use crate::{UtxoEntry, UtxoStatus};
+use common::chain::OutPoint;
+use common::primitives::H256;
 use rand::Rng;
 
 fn random_bool() -> bool {

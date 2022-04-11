@@ -362,6 +362,7 @@ dependencies = [
  "rand 0.8.4",
  "storage",
  "thiserror",
+ "utxo",
 ]
 
 [[package]]
@@ -1793,6 +1794,7 @@ dependencies = [
  "script",
  "serialization",
  "storage",
+ "utxo",
 ]
 
 [[package]]
@@ -3554,6 +3556,15 @@ dependencies = [
 [[package]]
 name = "utils"
 version = "0.1.0"
+
+[[package]]
+name = "utxo"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "parity-scale-codec",
+ "rand 0.8.4",
+]
 
 [[package]]
 name = "valuable"
