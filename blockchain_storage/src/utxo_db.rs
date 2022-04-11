@@ -8,7 +8,7 @@ use common::chain::OutPoint;
 use common::primitives::{Id, H256};
 use utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
-pub struct UtxoDB(pub(crate) Store);
+pub struct UtxoDB(Store);
 
 impl From<Error> for utxo::Error {
     fn from(e: Error) -> Self {
