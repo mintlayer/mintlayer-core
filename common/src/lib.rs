@@ -24,7 +24,6 @@ mod concurrency_impl;
 
 #[macro_use]
 mod fixed_hash;
-mod chainstate;
 
 pub use concurrency_impl::*;
 pub use uint::{Uint128, Uint256};
