@@ -193,10 +193,7 @@ impl TxMempoolEntry {
 
     fn unconfirmed_ancestors_inner(&self, visited: &mut Ancestors, store: &MempoolStore) {
         for parent in self.parents.iter() {
-            if visited.0.contains(parent) {
-                continue;
-            } else {
-                visited.0.insert(*parent);
+            if visited.insert(*parent) {
                 store
                     .get_entry(parent)
                     .expect("entry")
@@ -213,10 +210,7 @@ impl TxMempoolEntry {
 
     fn unconfirmed_descendants_inner(&self, visited: &mut Descendants, store: &MempoolStore) {
         for child in self.children.iter() {
-            if visited.0.contains(child) {
-                continue;
-            } else {
-                visited.0.insert(*child);
+            if visited.insert(*child) {
                 store
                     .get_entry(child)
                     .expect("entry")
