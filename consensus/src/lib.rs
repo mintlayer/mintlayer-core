@@ -23,9 +23,10 @@ use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
+use common::chain::TxOutput;
 use common::chain::{
-    OutPoint, OutPointSourceId, OutputSpentState, SpendablePosition, Spender, Transaction,
-    TxMainChainIndex, TxMainChainPosition,
+    OutPoint, OutPointSourceId, SpendablePosition, Spender, Transaction, TxMainChainIndex,
+    TxMainChainPosition,
 };
 use common::chain::{SpendError, TxMainChainIndexError};
 use common::primitives::{time, Amount, BlockHeight, Id, Idable};
@@ -263,29 +264,66 @@ impl<'a> ConsensusRef<'a> {
         .map_err(BlockError::from)
     }
 
-    fn check_tx_inputs(&self, transaction: &Transaction) -> Result<(), BlockError> {
-        Ok(())
-    }
-
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
+        let mut total_value = Amount::new(0);
         for tx in block.transactions() {
-            self.check_tx_inputs(tx)?;
+            // Create a new indices for tx
+            if let Entry::Vacant(entry) = cached_inputs.entry(tx.get_id()) {
+                entry.insert(self.calculate_indices(block, tx)?);
+            }
 
-            let tx_index = match cached_inputs.entry(tx.get_id()) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => entry.insert(self.calculate_indices(block, tx)?),
-            };
+            // Spend inputs
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
+                let mut prev_tx_index;
+                match input.get_outpoint().get_tx_id() {
+                    OutPointSourceId::Transaction(prev_tx_id) => {
+                        match cached_inputs.entry(prev_tx_id.clone()) {
+                            Entry::Occupied(entry) => {
+                                // If tx index was loaded
+                                let prev_tx_index = entry.into_mut();
+                                prev_tx_index
+                                    .spend(input_index, Spender::from(tx.get_id()))
+                                    .map_err(BlockError::from)?;
+                            }
+                            Entry::Vacant(entry) => {
+                                // Probably utxo in the previous block?
+                                match self.db_tx.get_mainchain_tx_index(&prev_tx_id)? {
+                                    Some(tx_index) => {
+                                        // Yep, that was in the previous block. So, spend it.
+                                        prev_tx_index = tx_index;
+                                        prev_tx_index
+                                            .spend(input_index, Spender::from(tx.get_id()))
+                                            .map_err(BlockError::from)?;
+                                        entry.insert(prev_tx_index.clone());
+                                    }
+                                    None => {
+                                        // Should be a panic? Or search in the same block?
+                                        unreachable!()
+                                    }
+                                }
+                            }
+                        }
 
-                if input_index >= tx_index.get_output_count() {
-                    return Err(BlockError::Unknown);
+                        // if input_index >= tx_index.get_output_count() {
+                        //     return Err(BlockError::Unknown);
+                        // }
+                    }
+                    OutPointSourceId::BlockReward(_block_id) => unimplemented!(),
                 }
-                // Set each input as spent
-                tx_index
-                    .spend(input_index, Spender::from(tx.get_id()))
-                    .map_err(BlockError::from)?;
+                // Check overflow
+                total_value = (total_value
+                    + Self::get_input_value(&self.db_tx, input).map_or_else(
+                        |_err| {
+                            // Is tx in the same block?
+                            Self::find_output_in_transactions(input, block.transactions())
+                                .expect("Couldn't get input")
+                                .get_value()
+                        },
+                        |v| v,
+                    ))
+                .ok_or(BlockError::Unknown)?;
             }
         }
         self.store_cached_inputs(&cached_inputs)?;
@@ -295,38 +333,35 @@ impl<'a> ConsensusRef<'a> {
     fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in transactions.iter().rev() {
-            let tx_index = match cached_inputs.entry(tx.get_id()) {
-                Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => entry.insert(
-                    self.db_tx.get_mainchain_tx_index(&tx.get_id())?.ok_or(BlockError::Unknown)?,
-                ),
-            };
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
+                let input_tx_id = match input.get_outpoint().get_tx_id() {
+                    OutPointSourceId::Transaction(tx_id) => tx_id,
+                    OutPointSourceId::BlockReward(_) => {
+                        unimplemented!()
+                    }
+                };
+
+                let tx_index = match cached_inputs.entry(input_tx_id.clone()) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => entry.insert(
+                        self.db_tx
+                            .get_mainchain_tx_index(&input_tx_id.into())?
+                            .ok_or(BlockError::Unknown)?,
+                    ),
+                };
 
                 if input_index >= tx_index.get_output_count() {
                     return Err(BlockError::Unknown);
                 }
+                // Mark input as unspend
                 tx_index.unspend(input_index).map_err(BlockError::from)?;
             }
-            // TODO: Seems, would be better to remove TxMainChainIndex for disconnected block.
-            // self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
+            // Delete TxMainChainIndex for the current tx
+            self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
         }
         self.store_cached_inputs(&cached_inputs)?;
         Ok(())
-    }
-
-    fn get_mainchain_index_by_outpoint<TxRo: BlockchainStorageRead>(
-        tx_db: &TxRo,
-        outpoint: &OutPoint,
-    ) -> Result<TxMainChainIndex, BlockError> {
-        let tx_id = match outpoint.get_tx_id() {
-            OutPointSourceId::Transaction(tx_id) => tx_id,
-            OutPointSourceId::BlockReward(_) => {
-                unimplemented!()
-            }
-        };
-        tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)
     }
 
     fn get_tx_by_outpoint<TxRo: BlockchainStorageRead>(
@@ -348,17 +383,6 @@ impl<'a> ConsensusRef<'a> {
         }
     }
 
-    fn get_output_by_outpoint<TxRo: BlockchainStorageRead>(
-        tx_db: &TxRo,
-        outpoint: &OutPoint,
-    ) -> Result<common::chain::TxOutput, BlockError> {
-        let tx = Self::get_tx_by_outpoint(tx_db, outpoint)?;
-        let output_index: usize =
-            outpoint.get_output_index().try_into().map_err(|_| BlockError::Unknown)?;
-        assert!(output_index < tx.get_outputs().len());
-        tx.get_outputs().get(output_index).ok_or(BlockError::Unknown).cloned()
-    }
-
     fn get_input_value<TxRo: BlockchainStorageRead>(
         tx_db: &TxRo,
         input: &common::chain::TxInput,
@@ -376,6 +400,26 @@ impl<'a> ConsensusRef<'a> {
             .ok_or(BlockError::Unknown)
     }
 
+    fn find_output_in_transactions<'b>(
+        input: &'b common::chain::TxInput,
+        transactions: &'b [Transaction],
+    ) -> Result<&'b TxOutput, BlockError> {
+        let tx_id = input.get_outpoint().get_tx_id();
+        let output_index: usize = input
+            .get_outpoint()
+            .get_output_index()
+            .try_into()
+            .map_err(|_| BlockError::Unknown)?;
+        let tx = transactions
+            .iter()
+            .find(|&tx| match &tx_id {
+                OutPointSourceId::Transaction(inner_tx_id) => &tx.get_id() == inner_tx_id,
+                OutPointSourceId::BlockReward(_) => unimplemented!(),
+            })
+            .ok_or(BlockError::Unknown)?;
+        tx.get_outputs().get(output_index).ok_or(BlockError::Unknown)
+    }
+
     fn check_block_fee(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
         let input_mlt = transactions
             .iter()
@@ -383,7 +427,15 @@ impl<'a> ConsensusRef<'a> {
                 x.get_inputs()
                     .iter()
                     .map(|input| {
-                        Self::get_input_value(&self.db_tx, input).expect("Couldn't get input")
+                        Self::get_input_value(&self.db_tx, input).map_or_else(
+                            |_err| {
+                                // Is tx in the same block?
+                                Self::find_output_in_transactions(input, transactions)
+                                    .expect("Couldn't get input")
+                                    .get_value()
+                            },
+                            |v| v,
+                        )
                     })
                     .sum::<Amount>()
             })
@@ -400,35 +452,19 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn check_tx_inputs_unspent(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        let mut total_value = Amount::new(0);
-        for tx in transactions {
-            for input in tx.get_inputs() {
-                let tx_index = dbg!(self.db_tx.get_mainchain_tx_index(&tx.get_id()))?
-                    .ok_or(BlockError::Unknown)?;
-                //  Self::get_mainchain_index_by_outpoint(&self.db_tx, input.get_outpoint())?;
-                // If there is a wrong input index then it's cause a BlockError
-                let output = Self::get_output_by_outpoint(&self.db_tx, input.get_outpoint())?;
-
-                // Check is input has already spent
-                if dbg!(tx_index.get_spent_state(input.get_outpoint().get_output_index()))
-                    .map_err(BlockError::from)?
-                    != OutputSpentState::Unspent
-                {
-                    return Err(BlockError::Unknown);
-                }
-                // Check overflow
-                total_value = (total_value + output.get_value()).ok_or(BlockError::Unknown)?;
-            }
-        }
-        Ok(())
-    }
-
     fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
         for tx in transactions {
             for _output in tx.get_outputs() {
                 // TODO: Check tx outputs to prevent the overwriting of the transaction
             }
+        }
+        Ok(())
+    }
+
+    fn connect_genesis_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+        for tx in block.transactions() {
+            self.db_tx
+                .set_mainchain_tx_index(&tx.get_id(), &self.calculate_indices(&block, tx)?)?;
         }
         Ok(())
     }
@@ -439,14 +475,14 @@ impl<'a> ConsensusRef<'a> {
             return Err(BlockError::Unknown);
         }
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
-        let transactions = block.transactions();
+        self.check_tx_outputs(block.transactions())?;
 
-        if !block.is_genesis(self.chain_config) {
-            self.check_block_fee(transactions)?;
-            // self.check_tx_inputs_unspent(transactions)?;
+        if block.is_genesis(self.chain_config) {
+            self.connect_genesis_transactions(&block)?
+        } else {
+            self.check_block_fee(block.transactions())?;
+            self.connect_transactions(&block)?;
         }
-        self.check_tx_outputs(transactions)?;
-        self.connect_transactions(&block)?;
 
         if let Some(prev_block_id) = &new_tip_block_index.get_prev_block_id() {
             // To connect a new block we should set-up the next_block_id field of the previous block index
@@ -505,9 +541,6 @@ impl<'a> ConsensusRef<'a> {
     ) -> Result<Option<BlockIndex>, BlockError> {
         if best_block_id.is_none() && genesis_block_index.is_genesis(self.chain_config) {
             self.connect_tip(genesis_block_index)?;
-            self.db_tx
-                .set_best_block_id(genesis_block_index.get_block_id())
-                .map_err(BlockError::from)?;
             return Ok(Some(genesis_block_index.clone()));
         }
         Ok(None)
@@ -718,6 +751,7 @@ mod tests {
     use common::address::Address;
     use common::chain::block::{Block, ConsensusData};
     use common::chain::config::create_mainnet;
+    use common::chain::OutputSpentState;
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
@@ -995,7 +1029,7 @@ mod tests {
                 new_id
             );
 
-            // Check that tx inputs in the main chain and has already spent
+            // Check that tx inputs in the main chain and not spend
             let mut cached_inputs = CachedInputs::new();
             for tx in block.transactions() {
                 let tx_index = match cached_inputs.entry(tx.get_id()) {
@@ -1011,9 +1045,9 @@ mod tests {
 
                 for input in tx.get_inputs() {
                     if tx_index.get_spent_state(input.get_outpoint().get_output_index()).unwrap()
-                        == OutputSpentState::Unspent
+                        != OutputSpentState::Unspent
                     {
-                        panic!("Tx input can't be unspent");
+                        panic!("Tx input can't be spent");
                     }
                 }
             }
@@ -1048,23 +1082,27 @@ mod tests {
             witness.shuffle(&mut rng);
             let mut address: Vec<u8> = (1..22).collect();
             address.shuffle(&mut rng);
-            let receiver = Address::new(config, address).expect("Failed to create address");
+            let receiver = Address::new(&consensus.chain_config, address.clone())
+                .expect("Failed to create address");
 
-            let input = TxInput::new(
-                OutPointSourceId::Transaction(tx_id.clone()),
-                index as u32,
-                witness,
-            );
+            let prev_block_tx_id =
+                consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+
+            let input = TxInput::new(OutPointSourceId::Transaction(prev_block_tx_id), 0, witness);
             let output = TxOutput::new(
-                (output.get_value() - Amount::from(1)).unwrap(),
-                Destination::Address(receiver),
+                Amount::from(12345678900000),
+                Destination::Address(receiver.clone()),
             );
 
-            let input = TxInput::new(Id::<Transaction>::new(&H256::zero()).into(), 0, vec![]);
-            let output = TxOutput::new(Amount::new(100000000000000), address);
-            transactions.push(Transaction::new(0, vec![input], vec![output], 0).unwrap());
-            // Create tx that pointing to the previous tx
+            let first_tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();
+            let first_tx_id = first_tx.get_id();
+            transactions.push(first_tx);
 
+            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+            let output = TxOutput::new(Amount::new(987654321), Destination::Address(receiver));
+            let child_tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();
+            transactions.push(child_tx);
+            // Create tx that pointing to the previous tx
             let block = Block::new(
                 transactions,
                 Some(Id::new(
@@ -1074,6 +1112,13 @@ mod tests {
                 ConsensusData::None,
             )
             .unwrap();
+            let block_id = block.get_id();
+
+            assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+            assert_eq!(
+                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                Some(block_id)
+            );
         });
     }
 
