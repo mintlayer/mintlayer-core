@@ -268,7 +268,7 @@ impl<'a> ConsensusRef<'a> {
         let mut cached_inputs = CachedInputs::new();
         let mut total_value = Amount::new(0);
         for tx in block.transactions() {
-            // Create a new indices for tx
+            // Create a new indices for every tx
             if let Entry::Vacant(entry) = cached_inputs.entry(tx.get_id()) {
                 entry.insert(self.calculate_indices(block, tx)?);
             }
@@ -276,39 +276,31 @@ impl<'a> ConsensusRef<'a> {
             // Spend inputs
             for input in tx.get_inputs() {
                 let input_index = input.get_outpoint().get_output_index();
-                let mut prev_tx_index;
-                match input.get_outpoint().get_tx_id() {
+                let input_tx_id = input.get_outpoint().get_tx_id();
+                match input_tx_id {
                     OutPointSourceId::Transaction(prev_tx_id) => {
-                        match cached_inputs.entry(prev_tx_id.clone()) {
+                        let prev_tx_index = match cached_inputs.entry(prev_tx_id.clone()) {
                             Entry::Occupied(entry) => {
                                 // If tx index was loaded
-                                let prev_tx_index = entry.into_mut();
-                                prev_tx_index
-                                    .spend(input_index, Spender::from(tx.get_id()))
-                                    .map_err(BlockError::from)?;
+                                entry.into_mut()
                             }
                             Entry::Vacant(entry) => {
                                 // Probably utxo in the previous block?
-                                match self.db_tx.get_mainchain_tx_index(&prev_tx_id)? {
-                                    Some(tx_index) => {
-                                        // Yep, that was in the previous block. So, spend it.
-                                        prev_tx_index = tx_index;
-                                        prev_tx_index
-                                            .spend(input_index, Spender::from(tx.get_id()))
-                                            .map_err(BlockError::from)?;
-                                        entry.insert(prev_tx_index.clone());
-                                    }
-                                    None => {
-                                        // Should be a panic? Or search in the same block?
-                                        unreachable!()
-                                    }
-                                }
+                                entry.insert(
+                                    self.db_tx
+                                        .get_mainchain_tx_index(&prev_tx_id)?
+                                        .ok_or(/*Invalid outpoint*/ BlockError::Unknown)?,
+                                )
                             }
+                        };
+
+                        if input_index >= prev_tx_index.get_output_count() {
+                            return Err(BlockError::Unknown);
                         }
 
-                        // if input_index >= tx_index.get_output_count() {
-                        //     return Err(BlockError::Unknown);
-                        // }
+                        prev_tx_index
+                            .spend(input_index, Spender::from(tx.get_id()))
+                            .map_err(BlockError::from)?;
                     }
                     OutPointSourceId::BlockReward(_block_id) => unimplemented!(),
                 }
