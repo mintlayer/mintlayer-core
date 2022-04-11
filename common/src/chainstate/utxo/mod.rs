@@ -162,7 +162,6 @@ pub fn flush_to_base<T: UtxosView>(
     base.batch_write(cache.utxos, block_hash)
 }
 
-
 #[derive(Clone, Default)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
@@ -410,10 +409,8 @@ impl<'a> UtxosCache<'a> {
     }
 }
 
-
 impl<'a> Debug for UtxosCache<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-
         f.debug_struct("UtxosCache")
             // we wouldn't want to display the parent's children; only to check whether it has a parent.
             .field("has_parent", &self.parent.is_some())
