@@ -2620,8 +2620,6 @@ mod tests {
 
     #[test]
     fn different_size_txs() -> anyhow::Result<()> {
-        use std::time::Duration;
-        use std::time::Instant;
         let mut mempool = setup();
         let initial_tx = TxGenerator::new()
             .with_num_inputs(1)
@@ -2630,24 +2628,16 @@ mod tests {
         mempool.add_transaction(initial_tx)?;
 
         let target_txs = 100;
-        let mut time_processing_txs = Duration::from_millis(0);
-        let mut time_creating_txs = Duration::from_millis(0);
         for i in 0..target_txs {
             let num_inputs = i + 1;
             let num_outputs = i + 1;
-            let before_creating = Instant::now();
             let tx = TxGenerator::new()
                 .with_num_inputs(num_inputs)
                 .with_num_outputs(num_outputs)
                 .generate_tx(&mempool)?;
-            time_creating_txs += before_creating.elapsed();
-            let before_processing = Instant::now();
             mempool.add_transaction(tx)?;
-            time_processing_txs += before_processing.elapsed()
         }
 
-        log::info!("Total time spent processing: {:?}", time_processing_txs);
-        log::info!("Total time spent creating: {:?}", time_creating_txs);
         Ok(())
     }
 
