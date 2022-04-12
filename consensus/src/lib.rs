@@ -749,6 +749,82 @@ mod tests {
     use common::primitives::{Amount, Id};
     use rand::prelude::*;
 
+    fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
+        let mut bytes = [0u8; 32];
+        g.fill_bytes(&mut bytes);
+        H256::from(bytes)
+    }
+
+    fn generate_random_bytes(g: &mut impl rand::Rng, length: usize) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.resize(length, 0);
+        g.fill_bytes(&mut bytes);
+        bytes
+    }
+
+    fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
+        let witness_size = g.next_u32();
+        let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
+        let outpoint = if g.next_u32() % 2 == 0 {
+            OutPointSourceId::Transaction(Id::new(&generate_random_h256(g)))
+        } else {
+            OutPointSourceId::BlockReward(Id::new(&generate_random_h256(g)))
+        };
+
+        TxInput::new(outpoint, g.next_u32(), witness)
+    }
+
+    fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
+        let config = create_mainnet();
+
+        let addr =
+            Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
+
+        TxOutput::new(
+            Amount::from(g.next_u64() as u128),
+            Destination::Address(addr),
+        )
+    }
+
+    fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction {
+        let inputs = {
+            let input_count = 1 + (rng.next_u32() as usize) % 10;
+            (0..input_count)
+                .into_iter()
+                .map(|_| generate_random_invalid_input(rng))
+                .collect::<Vec<_>>()
+        };
+
+        let outputs = {
+            let output_count = 1 + (rng.next_u32() as usize) % 10;
+            (0..output_count)
+                .into_iter()
+                .map(|_| generate_random_invalid_output(rng))
+                .collect::<Vec<_>>()
+        };
+
+        let flags = rng.next_u32();
+        let lock_time = rng.next_u32();
+
+        Transaction::new(flags, inputs, outputs, lock_time).unwrap()
+    }
+
+    fn generate_random_invalid_block() -> Block {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+
+        let transactions = {
+            let transaction_count = rng.next_u32() % 20;
+            (0..transaction_count)
+                .into_iter()
+                .map(|_| generate_random_invalid_transaction(&mut rng))
+                .collect::<Vec<_>>()
+        };
+        let time = rng.next_u32();
+        let prev_id = Some(Id::new(&generate_random_h256(&mut rng)));
+
+        Block::new(transactions, prev_id, time, ConsensusData::None).unwrap()
+    }
+
     fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
         // For each output we create a new input and output that will placed into a new block.
         // If value of original output is less than 1 then output will disappear in a new block.
@@ -801,6 +877,20 @@ mod tests {
             ConsensusData::None,
         )
         .expect("Error creating block")
+    }
+
+    #[test]
+    fn test_indices_calculations() {
+        let block = generate_random_invalid_block();
+        let serialized_block = block.encode();
+        let serialized_header = block.header().encode();
+        let serialized_transactions = block.transactions().encode();
+        assert_eq!(
+            // +1 for the enum arm byte
+            1 + serialized_header.len() + serialized_transactions.len(),
+            serialized_block.len(),
+        );
+        // TODO: serialize all transactions and ensure they all are at the correct positions in serialized_block
     }
 
     #[test]
