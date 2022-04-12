@@ -89,7 +89,7 @@ impl From<Id<BlockV1>> for Id<Block> {
 impl Block {
     pub fn new(
         transactions: Vec<Transaction>,
-        hash_prev_block: Option<Id<BlockV1>>,
+        hash_prev_block: Option<Id<Block>>,
         time: u32,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
@@ -156,9 +156,7 @@ impl Block {
 
     pub fn prev_block_id(&self) -> Option<Id<Block>> {
         match &self {
-            Block::V1(blk) => {
-                blk.get_prev_block_id().as_ref().map(|prev_block_id| prev_block_id.into())
-            }
+            Block::V1(blk) => blk.get_prev_block_id().clone(),
         }
     }
 

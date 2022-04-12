@@ -1,3 +1,4 @@
+use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::primitives::{id, Id, Idable, H256};
@@ -5,7 +6,7 @@ use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
-    pub(super) prev_block_hash: Option<Id<BlockV1>>,
+    pub(super) prev_block_hash: Option<Id<Block>>,
     pub(super) tx_merkle_root: H256,
     pub(super) witness_merkle_root: H256,
     pub(super) time: u32,
@@ -50,7 +51,7 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<BlockV1>> {
+    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
         &self.header.prev_block_hash
     }
 }
