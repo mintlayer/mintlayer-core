@@ -338,7 +338,7 @@ impl<'a> ConsensusRef<'a> {
                     Entry::Occupied(entry) => entry.into_mut(),
                     Entry::Vacant(entry) => entry.insert(
                         self.db_tx
-                            .get_mainchain_tx_index(&input_tx_id.into())?
+                            .get_mainchain_tx_index(&input_tx_id)?
                             .ok_or(BlockError::Unknown)?,
                     ),
                 };
@@ -456,7 +456,7 @@ impl<'a> ConsensusRef<'a> {
     fn connect_genesis_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         for tx in block.transactions() {
             self.db_tx
-                .set_mainchain_tx_index(&tx.get_id(), &self.calculate_indices(&block, tx)?)?;
+                .set_mainchain_tx_index(&tx.get_id(), &self.calculate_indices(block, tx)?)?;
         }
         Ok(())
     }
@@ -1196,12 +1196,24 @@ mod tests {
             .unwrap();
             let block_id = block.get_id();
 
-            assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+            assert!(consensus.process_block(block, BlockSource::Local).is_ok());
             assert_eq!(
                 consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
                 Some(block_id)
             );
         });
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn double_spend_tx_in_the_same_block() {
+        common::concurrency::model(|| {});
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn double_spend_tx_in_another_block() {
+        common::concurrency::model(|| {});
     }
 
     // TODO: Not ready tests for this PR:
