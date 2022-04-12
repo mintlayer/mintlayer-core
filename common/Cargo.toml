@@ -23,7 +23,6 @@ sscanf = "0.2"
 static_assertions = "1.1"
 thiserror = "1.0"
 hex = "0.4"
-rand = "0.8.5"
 
 # for fixed_hash
 arbitrary = "1.1"

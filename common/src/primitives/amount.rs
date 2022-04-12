@@ -15,7 +15,6 @@
 
 #![allow(clippy::eq_op)]
 
-use rand::Rng;
 use serialization::{Decode, Encode};
 use std::iter::Sum;
 
@@ -129,10 +128,6 @@ impl Amount {
 
             atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         }
-    }
-
-    pub fn random(range: std::ops::RangeInclusive<Amount>) -> Amount {
-        Amount::from_atoms(rand::thread_rng().gen_range(range.start().val..=range.end().val))
     }
 
     // TODO this looks risky, consult Ben/Sam

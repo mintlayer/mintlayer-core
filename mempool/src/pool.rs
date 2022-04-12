@@ -2766,7 +2766,7 @@ mod tests {
     #[test]
     fn descendant_of_expired_entry() -> anyhow::Result<()> {
         let mock_clock = MockClock::new();
-        logging::try_init_logging::<&str>(None);
+        logging::init_logging::<&str>(None);
 
         let mut mempool = MempoolImpl::create(
             ChainStateMock::new(),
@@ -2816,7 +2816,7 @@ mod tests {
 
     #[test]
     fn mempool_full() -> anyhow::Result<()> {
-        logging::try_init_logging::<&str>(None);
+        logging::init_logging::<&str>(None);
         let mut mock_usage = MockGetMemoryUsage::new();
         mock_usage
             .expect_get_memory_usage()
