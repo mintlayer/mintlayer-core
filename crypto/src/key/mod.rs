@@ -1,8 +1,8 @@
 pub mod rschnorr;
 pub mod signature;
 
+use crate::random::make_true_rng;
 use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
-use rand::SeedableRng;
 pub use signature::Signature;
 
 use self::rschnorr::RistrittoSignatureError;
@@ -12,10 +12,6 @@ pub enum SignatureError {
     Unknown,
     DataConversionError(String),
     SignatureConstructionError,
-}
-
-fn make_rng() -> rand::rngs::StdRng {
-    rand::rngs::StdRng::from_entropy()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
@@ -55,7 +51,7 @@ impl From<RistrittoSignatureError> for SignatureError {
 
 impl PrivateKey {
     pub fn new(key_kind: KeyKind) -> (PrivateKey, PublicKey) {
-        let mut rng = make_rng();
+        let mut rng = make_true_rng();
         match key_kind {
             KeyKind::RistrettoSchnorr => {
                 let k = rschnorr::MLRistrettoPrivateKey::new(&mut rng);
@@ -82,7 +78,7 @@ impl PrivateKey {
     }
 
     pub fn sign_message(&self, msg: &[u8]) -> Result<Signature, SignatureError> {
-        let mut rng = make_rng();
+        let mut rng = make_true_rng();
         let PrivateKeyHolder::RistrettoSchnorr(k) = &self.key;
         let sig = k.sign_message(&mut rng, msg)?;
         Ok(Signature::RistrettoSchnorr(sig))
