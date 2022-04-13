@@ -1,6 +1,6 @@
-use subsystem::{CallRequest, ShutdownRequest};
-use std::time::{Instant, Duration};
 use logging::log;
+use std::time::{Duration, Instant};
+use subsystem::{CallRequest, ShutdownRequest};
 
 struct Stopwatch(Instant);
 
@@ -36,7 +36,7 @@ async fn main() {
     logging::init_logging::<&std::path::Path>(None);
 
     let app = subsystem::Manager::new("toplevel");
+    app.install_signal_handlers();
     app.start("watch", Stopwatch::start);
     app.main().await
 }
-

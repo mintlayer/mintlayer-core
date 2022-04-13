@@ -16,6 +16,24 @@
 // Author(s): L. Kuklinek
 
 //! General framework for working with subsystems
+//!
+//! The [Manager] type handles a collection of [Subsystem]s. The framework also takes care of
+//! inter-subsystem calls and clean shutdown.
+//!
+//! ## Calls
+//!
+//! Calls are dispatched by sending a closure over a channel to the subsystem. The subsystem then
+//! sends the result back using a oneshot channel. The channel is awaited to emulate synchronous
+//! calls. Fully asynchronous interface may be provided in the future.
+//!
+//! ## Shutdown sequence
+//!
+//! The shutdown proceeds in three phases:
+//!
+//! 1. As soon as any subsystem terminates, the main task is notified.
+//! 2. The main task broadcasts the shutdown request to all subsystems. The subsystems react to the
+//!    request by shutting themselves down.
+//! 3. The main task waits for all subsystems to terminate.
 
 use std::future::Future;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -32,12 +50,12 @@ pub struct Manager {
     // Manager name
     name: &'static str,
 
-    // Order all subsystems to shutdown
+    // Used by the manager to order all subsystems to shut down.
     shutdown_request_tx: broadcast::Sender<()>,
-    shutdown_request_rx: broadcast::Receiver<()>,
 
-    // Signal a subsystem is shutting down. This is taken as an instruction for all subsystems to
-    // shut down. Shutdown completion is detected by all senders having closed this channel.
+    // Used by a subsystem to notify the manager it is shutting down. This is taken as a command
+    // for all subsystems to shut down. Shutdown completion is detected by all senders having closed
+    // this channel.
     shutting_down_tx: mpsc::Sender<()>,
     shutting_down_rx: mpsc::Receiver<()>,
 }
@@ -47,13 +65,12 @@ impl Manager {
     pub fn new(name: &'static str) -> Self {
         log::info!("Initialising subsystem manager {}", name);
 
-        let (shutdown_request_tx, shutdown_request_rx) = broadcast::channel(1);
+        let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
 
         Self {
             name,
             shutdown_request_tx,
-            shutdown_request_rx,
             shutting_down_tx,
             shutting_down_rx,
         }
@@ -81,6 +98,33 @@ impl Manager {
         self.builder().with_name(name).start_passive(obj)
     }
 
+    /// Install termination signal handlers.
+    ///
+    /// This adds a subsystem that listens for the Ctrl-C signal and exits once it is received,
+    /// signalling all other subsystems and the whole manager to shut down.
+    #[cfg(not(loom))]
+    pub fn install_signal_handlers(&self) {
+        self.start(
+            "ctrl-c",
+            |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
+                tokio::select! {
+                    ctrl_c_signal = tokio::signal::ctrl_c() => {
+                        if ctrl_c_signal.is_err() {
+                            log::info!("Ctrl-C signal handler failed");
+                        }
+                    }
+                    () = shutdown_rq.recv() => {},
+                    call = call_rq.recv() => { call(&mut ()); }
+                };
+            },
+        );
+    }
+
+    /// Issue an asynchronous shutdown request
+    pub async fn shutdown(&self) {
+        self.shutting_down_tx.send(()).await.expect("Shutdown receiver not existing")
+    }
+
     async fn wait_for_subsystems_to_shut_down(mut shutting_down_rx: mpsc::Receiver<()>) {
         // Wait for the subsystems to go down, signalled by closing the shutting_down channel.
         while let Some(()) = shutting_down_rx.recv().await {}
@@ -93,31 +137,18 @@ impl Manager {
         // The main task just waits for the shutdown signal and coordinates the cleanup at the end.
         // All other functionality is performed by subsystems.
 
-        // Install the Ctrl-C handler as a subsystem.
-        self.start("ctrl-c", |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
-            #[cfg(not(loom))]
-            tokio::select! {
-                ctrl_c_signal = tokio::signal::ctrl_c() => {
-                    if ctrl_c_signal.is_err() {
-                        log::info!("Ctrl-C signal handler failed");
-                    }
-                }
-                () = shutdown_rq.recv() => {},
-                call = call_rq.recv() => { call(&mut ()); }
-            };
-        });
+        log::info!("Manager {} running", self.name);
 
-        log::info!("Subsystem manager {} running", self.name);
-
-        // Wait for a subsystem to shut down.
-        self.shutting_down_rx.recv().await.expect("All subsystems already dead");
-
-        // Drop the unused shutdown request end
-        std::mem::drop(self.shutdown_request_rx);
         // Signal the manager is shut down so it does not wait for itself
         std::mem::drop(self.shutting_down_tx);
 
-        log::info!("Subsytem manager {} shutting down", self.name);
+        // Wait for a subsystem to shut down.
+        self.shutting_down_rx
+            .recv()
+            .await
+            .unwrap_or_else(|| log::info!("Manager {}: all subsystems already down", self.name));
+
+        log::info!("Manager {} shutting down", self.name);
 
         // Order all the remaining subsystems to shut down.
         let _ = self.shutdown_request_tx.send(());
@@ -126,7 +157,7 @@ impl Manager {
         // TODO add shutdown timeout here
         Self::wait_for_subsystems_to_shut_down(self.shutting_down_rx).await;
 
-        log::info!("Subsystem manager {} terminated", self.name);
+        log::info!("Manager {} terminated", self.name);
     }
 }
 
@@ -204,12 +235,12 @@ impl<'a> Builder<'a> {
             subsystem(call_rq, shutdown_rq).await;
 
             // Signal the intent to shut down to the other parts of the application.
-            let _ = shutting_down_tx.send(()).await;
+            shutting_down_tx.send(()).await.expect("Subsystem outlived the manager!?");
+
+            log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
 
             // Close the channel to signal the completion of the shutdown.
             std::mem::drop(shutting_down_tx);
-
-            log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
         });
 
         Subsystem::new(action_tx)
