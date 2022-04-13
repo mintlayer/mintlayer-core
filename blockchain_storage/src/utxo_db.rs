@@ -6,9 +6,41 @@ use crate::{BlockchainStorageRead, BlockchainStorageWrite, Error, Store, UtxoRea
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
-use utxo::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
+use utxo::{
+    FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosPersistentStorage, UtxosView,
+};
 
-pub struct UtxoDB(Store);
+pub struct UtxoDBInterface {
+    store: Store,
+}
+
+impl UtxoDBInterface {
+    pub fn new(store: Store) -> Self {
+        Self { store }
+    }
+}
+
+impl UtxosPersistentStorage for UtxoDBInterface {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), utxo::Error> {
+        self.store.add_utxo(outpoint, entry).map_err(|e| e.into())
+    }
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), utxo::Error> {
+        self.store.del_utxo(outpoint).map_err(|e| e.into())
+    }
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error> {
+        self.store.get_utxo(outpoint).map_err(|e| e.into())
+    }
+    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), utxo::Error> {
+        // TODO: fix; don't store in general block id
+        self.store.set_best_block_id(block_id).map_err(|e| e.into())
+    }
+    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, utxo::Error> {
+        // TODO: fix; don't get general block id
+        self.store.get_best_block_id().map_err(|e| e.into())
+    }
+}
+
+pub struct UtxoDB<'a, S: UtxosPersistentStorage>(&'a mut S);
 
 impl From<Error> for utxo::Error {
     fn from(e: Error) -> Self {
@@ -16,13 +48,13 @@ impl From<Error> for utxo::Error {
     }
 }
 
-impl UtxoDB {
-    pub fn new(store: Store) -> Self {
+impl<'a, S: UtxosPersistentStorage> UtxoDB<'a, S> {
+    pub fn new(store: &'a mut S) -> Self {
         Self(store)
     }
 }
 
-impl UtxosView for UtxoDB {
+impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         match self.0.get_utxo(outpoint) {
             Ok(res) => res,
@@ -60,7 +92,7 @@ impl UtxosView for UtxoDB {
     }
 }
 
-impl FlushableUtxoView for UtxoDB {
+impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
     fn batch_write(
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
@@ -71,7 +103,7 @@ impl FlushableUtxoView for UtxoDB {
             let outpoint: OutPoint = (&key).into();
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
-                    self.0.add_utxo(&outpoint, utxo)?;
+                    self.0.set_utxo(&outpoint, utxo)?;
                 } else {
                     // entry is spent
                     self.0.del_utxo(&outpoint)?;
@@ -119,7 +151,8 @@ mod test {
             let utxos = create_utxos(10);
 
             let store = Store::new_empty().unwrap();
-            let mut utxo_db = UtxoDB::new(store);
+            let mut db_interface = UtxoDBInterface::new(store);
+            let mut utxo_db = UtxoDB::new(&mut db_interface);
 
             // test batch_write
             let new_best_block_hash = H256::random();

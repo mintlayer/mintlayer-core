@@ -514,6 +514,14 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
     }
 }
 
+pub trait UtxosPersistentStorage {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
+    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::Error>;
+    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, crate::Error>;
+}
+
 #[cfg(test)]
 mod test;
 
