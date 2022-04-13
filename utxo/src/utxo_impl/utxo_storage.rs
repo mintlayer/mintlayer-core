@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::utxo_impl::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 use common::chain::block::Block;
-use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
-use common::primitives::{BlockHeight, Id, Idable, H256};
+use common::chain::OutPoint;
+use common::primitives::{Id, H256};
 
 pub trait UtxosPersistentStorage {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
@@ -82,7 +82,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
     }
 }
 
-pub struct UtxoInMemoryDBInterface {
+struct UtxoInMemoryDBInterface {
     store: BTreeMap<OutPoint, Utxo>,
     best_block_id: Option<Id<Block>>,
 }
