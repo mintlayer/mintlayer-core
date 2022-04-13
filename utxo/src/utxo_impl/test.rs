@@ -1,6 +1,6 @@
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
 use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
-use crate::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
+use crate::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
 use crate::utxo_impl::test_helper::{
     check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,

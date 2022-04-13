@@ -6,7 +6,7 @@ use crate::{BlockchainStorageRead, BlockchainStorageWrite, Error, Store, UtxoRea
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
-use utxo::{OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
+use utxo::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
 pub struct UtxoDB(Store);
 
@@ -47,10 +47,20 @@ impl UtxosView for UtxoDB {
         }
     }
 
+    fn derive_cache(&self) -> UtxosCache {
+        let mut cache = UtxosCache::new(self);
+        if let Some(hash) = self.get_best_block_hash() {
+            cache.set_best_block(hash);
+        }
+        cache
+    }
+
     fn estimated_size(&self) -> usize {
         todo!()
     }
+}
 
+impl FlushableUtxoView for UtxoDB {
     fn batch_write(
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
@@ -70,14 +80,6 @@ impl UtxosView for UtxoDB {
         }
         self.0.set_best_block_id(&Id::<Block>::new(&block_hash))?;
         Ok(())
-    }
-
-    fn derive_cache(&self) -> UtxosCache {
-        let mut cache = UtxosCache::new(self);
-        if let Some(hash) = self.get_best_block_hash() {
-            cache.set_best_block(hash);
-        }
-        cache
     }
 }
 

@@ -142,19 +142,21 @@ pub trait UtxosView {
     /// Estimated size of the whole view (should be 0 if empty.)
     fn estimated_size(&self) -> usize;
 
+    fn derive_cache(&self) -> UtxosCache;
+}
+
+pub trait FlushableUtxoView {
     /// Performs bulk modification
     fn batch_write(
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
         block_hash: H256,
     ) -> Result<(), Error>;
-
-    fn derive_cache(&self) -> UtxosCache;
 }
 
 // flush the cache into the provided base. This will consume the cache and throw it away.
 // It uses the batch_write function since it's available in different kinds of views.
-pub fn flush_to_base<T: UtxosView>(
+pub fn flush_to_base<T: FlushableUtxoView>(
     cache: UtxosCache,
     block_hash: H256,
     base: &mut T,
@@ -445,6 +447,12 @@ impl<'a> UtxosView for UtxosCache<'a> {
         todo!()
     }
 
+    fn derive_cache(&self) -> UtxosCache {
+        UtxosCache::new(self)
+    }
+}
+
+impl<'a> FlushableUtxoView for UtxosCache<'a> {
     fn batch_write(
         &mut self,
         utxo_entries: HashMap<OutPointKey, UtxoEntry>,
@@ -503,10 +511,6 @@ impl<'a> UtxosView for UtxosCache<'a> {
 
         self.current_block_hash = Some(block_hash);
         Ok(())
-    }
-
-    fn derive_cache(&self) -> UtxosCache {
-        UtxosCache::new(self)
     }
 }
 
