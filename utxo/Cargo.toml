@@ -9,5 +9,5 @@ license = "MIT"
 [dependencies]
 common = { path = '../common' }
 parity-scale-codec = { version = "2.3.1", features = ["chain-error"] }
-rand = "0.8.4"
 iter_tools = "0.1.0"
+crypto = { path = '../crypto' }

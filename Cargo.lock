@@ -3561,9 +3561,9 @@ name = "utxo"
 version = "0.1.0"
 dependencies = [
  "common",
+ "crypto",
  "iter_tools",
  "parity-scale-codec",
- "rand 0.8.4",
 ]
 
 [[package]]

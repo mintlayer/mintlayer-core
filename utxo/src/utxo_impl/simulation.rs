@@ -5,15 +5,15 @@ use crate::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
 use crate::{UtxoEntry, UtxoStatus};
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
-use rand::Rng;
+use crypto::random::{make_pseudo_rng, Rng};
 
 fn random_bool() -> bool {
-    let rng = rand::thread_rng().gen_range(0..2);
+    let rng = make_pseudo_rng().gen_range(0..2);
     rng == 0
 }
 
 fn random_u64() -> u64 {
-    rand::thread_rng().gen_range(0..50u64)
+    make_pseudo_rng().gen_range(0..50u64)
 }
 
 fn populate_cache<'a>(
@@ -32,14 +32,15 @@ fn populate_cache<'a>(
             i
         } else {
             // setting a random height based on the `size`.
-            rand::thread_rng().gen_range(0..size)
+            // let rng = thread_rng();
+            make_pseudo_rng().gen_range(0..size)
         };
 
         let (utxo, outpoint) = create_utxo(block_height);
 
         let outpoint = if random_bool() && existing_outpoints.len() > 1 {
             // setting a random existing 'spent' outpoint
-            let rng = rand::thread_rng().gen_range(0..existing_outpoints.len());
+            let rng = make_pseudo_rng().gen_range(0..existing_outpoints.len());
             let outpoint = &existing_outpoints[rng];
 
             outpoint.clone()
@@ -65,7 +66,7 @@ fn populate_cache<'a>(
         if random_bool() && existing_outpoints.len() > 1 {
             // just call the `spend_utxo`. Does not matter if it removes the outpoint entirely,
             // or just mark it as `spent`,
-            let outp_idx = rand::thread_rng().gen_range(0..existing_outpoints.len());
+            let outp_idx = make_pseudo_rng().gen_range(0..existing_outpoints.len());
             let to_spend = &existing_outpoints[outp_idx];
             assert!(cache.spend_utxo(to_spend));
 
@@ -73,14 +74,14 @@ fn populate_cache<'a>(
         } else {
             // just mark it as "spent"
 
-            let outp_idx = rand::thread_rng().gen_range(0..outps.len());
+            let outp_idx = make_pseudo_rng().gen_range(0..outps.len());
             let to_spend = &outps[outp_idx];
 
             let key = OutPointKey::from(to_spend);
 
             // randomly select which flags should the spent utxo have.
             // 0 - NOT FRESH, NOT DIRTY, 1 - FRESH, 2 - DIRTY, 3 - FRESH AND DIRTY
-            let flags = rand::thread_rng().gen_range(0..4u8);
+            let flags = make_pseudo_rng().gen_range(0..4u8);
 
             let new_entry = match flags {
                 FRESH => UtxoEntry {

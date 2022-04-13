@@ -1,7 +1,7 @@
 use crate::{OutPointKey, Utxo, UtxoEntry, UtxosCache};
 use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};
-use rand::Rng;
+use crypto::random::{make_pseudo_rng, Rng};
 
 pub const FRESH: u8 = 1;
 pub const DIRTY: u8 = 2;
@@ -28,7 +28,7 @@ pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
 /// returns a tuple of utxo and outpoint, for testing.
 fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
-    let rng = rand::thread_rng().gen_range(0..u128::MAX);
+    let rng = make_pseudo_rng().gen_range(0..u128::MAX);
     let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
     let is_block_reward = rng % 3 == 0;
 
@@ -67,7 +67,7 @@ pub fn insert_single_entry(
     cache_flags: Option<u8>,
     outpoint: Option<OutPoint>,
 ) -> (Utxo, OutPoint) {
-    let rng_height = rand::thread_rng().gen_range(0..(u64::MAX - 1));
+    let rng_height = make_pseudo_rng().gen_range(0..(u64::MAX - 1));
     let (utxo, outpoint_x) = create_utxo(rng_height);
     let outpoint = outpoint.unwrap_or(outpoint_x);
     let key = OutPointKey::from(&outpoint);

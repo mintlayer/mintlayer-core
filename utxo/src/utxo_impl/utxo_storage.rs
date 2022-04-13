@@ -134,9 +134,10 @@ mod test {
     use common::chain::{Destination, OutPointSourceId, Transaction, TxOutput};
     use common::primitives::{Amount, BlockHeight};
     use common::primitives::{Id, H256};
+    use crypto::random::{make_pseudo_rng, Rng};
     use iter_tools::Itertools;
-    use rand::Rng;
     use std::collections::HashMap;
+
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         let output = TxOutput::new(Amount::new(10), Destination::PublicKey);
         let utxo = Utxo::new(output, false, BlockHeight::new(block_height));
@@ -173,7 +174,7 @@ mod test {
 
             // randomly get a key for checking
             let keys = &utxos.keys().collect_vec();
-            let rng = rand::thread_rng().gen_range(0..keys.len());
+            let rng = make_pseudo_rng().gen_range(0..keys.len());
             let outpoint = OutPoint::from(keys[rng]);
 
             // test the get_utxo
@@ -204,7 +205,7 @@ mod test {
 
             // write down a spent utxo.
             {
-                let rng = rand::thread_rng().gen_range(0..keys.len());
+                let rng = make_pseudo_rng().gen_range(0..keys.len());
                 let outpoint_key = keys[rng];
                 let outpoint = OutPoint::from(outpoint_key);
                 let utxo = utxos
