@@ -97,6 +97,7 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 // using the UtxoDB.
 pub(crate) trait UtxoRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
 }
 
 /// Queries to update the Utxo
@@ -104,8 +105,8 @@ pub(crate) trait UtxoRead {
 // using the UtxoDB.
 pub(crate) trait UtxoWrite: UtxoRead {
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage

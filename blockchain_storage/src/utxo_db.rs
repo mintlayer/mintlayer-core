@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{BlockchainStorageRead, BlockchainStorageWrite, Error, Store, UtxoRead, UtxoWrite};
+use crate::{Error, Store, UtxoRead, UtxoWrite};
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::Id;
@@ -28,11 +28,11 @@ impl UtxosPersistentStorage for UtxoDBInterface {
     }
     fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), utxo::Error> {
         // TODO: fix; don't store in general block id
-        self.store.set_best_block_id(block_id).map_err(|e| e.into())
+        self.store.set_best_block_for_utxos(block_id).map_err(|e| e.into())
     }
     fn get_best_block_id(&self) -> Result<Option<Id<Block>>, utxo::Error> {
         // TODO: fix; don't get general block id
-        self.store.get_best_block_id().map_err(|e| e.into())
+        self.store.get_best_block_for_utxos().map_err(|e| e.into())
     }
 }
 
@@ -41,3 +41,5 @@ impl From<Error> for utxo::Error {
         utxo::Error::DBError(format!("{:?}", e))
     }
 }
+
+// TODO: write basic tests for reads/writes in db for UtxoDBInterface

@@ -34,6 +34,7 @@ mod well_known {
 
     declare_entry!(StoreVersion: u32);
     declare_entry!(BestBlockId: Id<Block>);
+    declare_entry!(UtxosBestBlockId: Id<Block>);
 }
 
 storage::decl_schema! {
@@ -136,6 +137,7 @@ impl BlockchainStorageRead for Store {
 impl UtxoRead for Store {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
     }
 }
 
@@ -168,6 +170,7 @@ impl UtxoWrite for Store {
     delegate_to_transaction! {
         fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -223,6 +226,10 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
         self.read::<DBUtxo, _, _>(&outpoint.encode())
     }
+
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>> {
+        self.read_value::<well_known::UtxosBestBlockId>()
+    }
 }
 
 impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for StoreTx<Tx> {
@@ -276,6 +283,10 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
         let key = outpoint.encode();
         self.0.get_mut::<DBUtxo, _>().del(&key).map_err(Into::into)
+    }
+
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
+        self.write_value::<well_known::UtxosBestBlockId>(block_id)
     }
 }
 
