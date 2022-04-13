@@ -9,6 +9,8 @@ use std::fmt::{Debug, Formatter};
 use common::chain::block::Block;
 use parity_scale_codec::{Decode, Encode};
 
+pub mod utxo_storage;
+
 //todo: proper placement and derivation of this max
 const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
 
@@ -512,14 +514,6 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
         self.current_block_hash = Some(block_hash);
         Ok(())
     }
-}
-
-pub trait UtxosPersistentStorage {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
-    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::Error>;
-    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, crate::Error>;
 }
 
 #[cfg(test)]

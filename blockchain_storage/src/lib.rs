@@ -13,7 +13,6 @@ mod store;
 mod utxo_db;
 
 pub use store::Store;
-pub use utxo_db::UtxoDB;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
