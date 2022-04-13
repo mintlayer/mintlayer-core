@@ -16,9 +16,9 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
-use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
+use crate::primitives::{id, merkle};
 use crate::primitives::{Id, Idable};
 pub mod block_index;
 pub use block_index::*;
@@ -167,9 +167,9 @@ impl Block {
 
 impl Idable<Block> for Block {
     fn get_id(&self) -> Id<Self> {
-        match self {
-            Self::V1(block) => Id::new(&block.get_id().get()),
-        }
+        // Block ID is just the hash of its header. The transaction list is committed to by the
+        // inclusion of transaction Merkle root in the header. We also include the version number.
+        Id::new(&id::hash_encoded(self.header()))
     }
 }
 
