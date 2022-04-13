@@ -1,5 +1,6 @@
+pub use rand::{Rng, RngCore, SeedableRng};
+
 pub fn make_true_rng() -> impl rand::Rng + rand::CryptoRng {
-    use rand::SeedableRng;
     rand::rngs::StdRng::from_entropy()
 }
 
