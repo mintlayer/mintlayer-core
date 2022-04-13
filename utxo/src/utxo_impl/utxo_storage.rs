@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap};
 use crate::utxo_impl::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
 use common::chain::block::Block;
 use common::chain::OutPoint;
-use common::primitives::{Id, H256};
+use common::primitives::Id;
 
 pub trait UtxosPersistentStorage {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
@@ -36,9 +36,9 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
         self.get_utxo(outpoint).is_some()
     }
 
-    fn get_best_block_hash(&self) -> Option<H256> {
+    fn get_best_block_hash(&self) -> Option<Id<Block>> {
         match self.0.get_best_block_id() {
-            Ok(opt_id) => opt_id.map(|id| id.get()),
+            Ok(opt_id) => opt_id,
             Err(_) => {
                 // TODO: handle errors
                 None
@@ -63,7 +63,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
     fn batch_write(
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: H256,
+        block_hash: Id<Block>,
     ) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos {
@@ -77,7 +77,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
                 }
             }
         }
-        self.0.set_best_block_id(&Id::<Block>::new(&block_hash))?;
+        self.0.set_best_block_id(&block_hash)?;
         Ok(())
     }
 }
@@ -167,8 +167,8 @@ mod test {
             let mut utxo_db = UtxoDB::new(&mut db_interface);
 
             // test batch_write
-            let new_best_block_hash = H256::random();
-            let res = utxo_db.batch_write(utxos.clone(), new_best_block_hash);
+            let new_best_block_hash = Id::new(&H256::random());
+            let res = utxo_db.batch_write(utxos.clone(), new_best_block_hash.clone());
             assert!(res.is_ok());
 
             // randomly get a key for checking
@@ -196,7 +196,7 @@ mod test {
                 let entry = UtxoEntry::new(utxo, true, false);
                 map.insert(OutPointKey::from(&outpoint), entry);
 
-                let new_hash = H256::random();
+                let new_hash = Id::new(&H256::random());
                 utxo_db.batch_write(map, new_hash).expect("batch write should work");
 
                 assert!(!utxo_db.has_utxo(&outpoint));
@@ -222,7 +222,7 @@ mod test {
                 let mut child = UtxosCache::new(&parent);
                 assert!(child.spend_utxo(&outpoint));
 
-                let new_block_hash = H256::random();
+                let new_block_hash = Id::new(&H256::random());
                 let res = flush_to_base(child, new_block_hash, &mut utxo_db);
                 assert!(res.is_ok());
 

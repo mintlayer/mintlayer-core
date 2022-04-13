@@ -139,7 +139,7 @@ pub trait UtxosView {
     fn has_utxo(&self, outpoint: &OutPoint) -> bool;
 
     /// Retrieves the block hash of the best block in this view
-    fn get_best_block_hash(&self) -> Option<H256>;
+    fn get_best_block_hash(&self) -> Option<Id<Block>>;
 
     /// Estimated size of the whole view (should be 0 if empty.)
     fn estimated_size(&self) -> usize;
@@ -152,7 +152,7 @@ pub trait FlushableUtxoView {
     fn batch_write(
         &mut self,
         utxos: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: H256,
+        block_hash: Id<Block>,
     ) -> Result<(), Error>;
 }
 
@@ -160,7 +160,7 @@ pub trait FlushableUtxoView {
 // It uses the batch_write function since it's available in different kinds of views.
 pub fn flush_to_base<T: FlushableUtxoView>(
     cache: UtxosCache,
-    block_hash: H256,
+    block_hash: Id<Block>,
     base: &mut T,
 ) -> Result<(), Error> {
     base.batch_write(cache.utxos, block_hash)
@@ -169,7 +169,7 @@ pub fn flush_to_base<T: FlushableUtxoView>(
 #[derive(Clone, Default)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
-    current_block_hash: Option<H256>,
+    current_block_hash: Option<Id<Block>>,
     utxos: HashMap<OutPointKey, UtxoEntry>,
     //TODO: do we need this?
     memory_usage: usize,
@@ -262,7 +262,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    pub fn set_best_block(&mut self, block_hash: H256) {
+    pub fn set_best_block(&mut self, block_hash: Id<Block>) {
         self.current_block_hash = Some(block_hash);
     }
 
@@ -439,8 +439,8 @@ impl<'a> UtxosView for UtxosCache<'a> {
         self.get_utxo(outpoint).is_some()
     }
 
-    fn get_best_block_hash(&self) -> Option<H256> {
-        self.current_block_hash.or_else(||
+    fn get_best_block_hash(&self) -> Option<Id<Block>> {
+        self.current_block_hash.clone().or_else(||
             // if the block_hash is empty in this view, use parent's `get_best_block_hash`.
             self.parent.and_then(|parent| parent.get_best_block_hash()))
     }
@@ -458,7 +458,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
     fn batch_write(
         &mut self,
         utxo_entries: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: H256,
+        block_hash: Id<Block>,
     ) -> Result<(), Error> {
         for (key, entry) in utxo_entries {
             let parent_entry = self.utxos.get(&key);

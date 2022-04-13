@@ -4,7 +4,7 @@ use crate::utxo_impl::test_helper::{create_utxo, DIRTY, FRESH};
 use crate::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
 use crate::{UtxoEntry, UtxoStatus};
 use common::chain::OutPoint;
-use common::primitives::H256;
+use common::primitives::{Id, H256};
 use rand::Rng;
 
 fn random_bool() -> bool {
@@ -117,7 +117,7 @@ fn populate_cache<'a>(
 fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 
-    let block_hash = H256::random();
+    let block_hash = Id::new(&H256::random());
     let mut parent = UtxosCache::default();
     parent.set_best_block(block_hash);
 
@@ -133,7 +133,7 @@ fn stack_flush_test() {
     let (cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(), &outps);
     outps.append(&mut cache3_outps);
 
-    let new_block_hash = H256::random();
+    let new_block_hash = Id::new(&H256::random());
     let cache3_clone = cache3.clone();
     assert!(flush_to_base(cache3_clone, new_block_hash, &mut parent).is_ok());
 

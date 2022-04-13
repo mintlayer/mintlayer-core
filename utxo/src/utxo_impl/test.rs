@@ -1,3 +1,5 @@
+use common::primitives::{Id, H256};
+
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
 use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
 use crate::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
@@ -131,7 +133,8 @@ fn check_write_utxo(
     }
 
     // perform batch write
-    let res = parent.batch_write(single_entry_map, *key.outpoint_hash());
+    let block_id = Id::new(&H256::random());
+    let res = parent.batch_write(single_entry_map, block_id);
     let entry = parent.utxos.get(&key);
 
     match result {
