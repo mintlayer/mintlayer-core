@@ -42,7 +42,7 @@ impl PartialOrd for OutPoint {
         let id = outpoint_source_id_as_monolithic_tuple(&self.id);
         let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
 
-        ((id, self.index)).partial_cmp(&(other_id, other.index))
+        (id, self.index).partial_cmp(&(other_id, other.index))
     }
 }
 
