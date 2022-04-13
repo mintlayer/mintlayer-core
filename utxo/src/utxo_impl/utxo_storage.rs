@@ -111,7 +111,7 @@ impl UtxosPersistentStorage for UtxoInMemoryDBInterface {
     }
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::utxo_impl::Error> {
         let res = self.store.get(outpoint);
-        Ok(res.map(|v| v.clone()))
+        Ok(res.cloned())
     }
     fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::utxo_impl::Error> {
         // TODO: fix; don't store in general block id
