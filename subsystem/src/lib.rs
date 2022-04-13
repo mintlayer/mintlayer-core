@@ -24,7 +24,7 @@
 //!
 //! Calls are dispatched by sending a closure over a channel to the subsystem. The subsystem then
 //! sends the result back using a oneshot channel. The channel is awaited to emulate synchronous
-//! calls. Fully asynchronous interface may be provided in the future.
+//! calls.
 //!
 //! ## Shutdown sequence
 //!
@@ -255,22 +255,24 @@ impl<'a> Builder<'a> {
             loop {
                 tokio::select! {
                     () = shutdown_rq.recv() => { break; }
-                    call = call_rq.recv() => { call(&mut obj); }
+                    call = call_rq.recv() => { call(&mut obj).await; }
                 }
             }
         })
     }
 }
 
-/// Internal action type sent in the channel.
-type Action<T> = Box<dyn FnOnce(&mut T) + Send>;
+type FutureBox<'a, R> = core::pin::Pin<Box<dyn 'a + Send + Future<Output = R>>>;
+
+// Internal action type sent in the channel.
+type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> FutureBox<'a, R>>;
 
 /// Call request
-pub struct CallRequest<T>(mpsc::Receiver<Action<T>>);
+pub struct CallRequest<T>(mpsc::Receiver<Action<T, ()>>);
 
 impl<T: 'static + Send> CallRequest<T> {
     /// Receive an external call to this subsystem.
-    pub async fn recv(&mut self) -> Action<T> {
+    pub async fn recv(&mut self) -> Action<T, ()> {
         match self.0.recv().await {
             // We have a call, return it
             Some(action) => action,
@@ -304,7 +306,7 @@ impl ShutdownRequest {
 /// supports calling functions on the subsystem.
 pub struct Subsystem<T> {
     // Send the subsystem stuff to do.
-    action_tx: mpsc::Sender<Action<T>>,
+    action_tx: mpsc::Sender<Action<T, ()>>,
 }
 
 impl<T> Clone for Subsystem<T> {
@@ -317,31 +319,52 @@ impl<T> Clone for Subsystem<T> {
 
 impl<T: Send + 'static> Subsystem<T> {
     /// Crate a new subsystem handle.
-    fn new(action_tx: mpsc::Sender<Action<T>>) -> Self {
+    fn new(action_tx: mpsc::Sender<Action<T, ()>>) -> Self {
         Self { action_tx }
     }
 
-    /// Dispatch a function call to the subsystem
-    pub async fn call_mut<R: Send + 'static>(
+    /// Dispatch an async function call to the subsystem
+    pub async fn call_async_mut<R: Send + 'static>(
         &self,
-        func: impl FnOnce(&mut T) -> R + Send + 'static,
+        func: impl for<'a> FnOnce(&'a mut T) -> FutureBox<'a, R> + Send + 'static,
     ) -> R {
         let (rtx, rrx) = oneshot::channel::<R>();
 
         self.action_tx
             .send(Box::new(move |subsys| {
-                let result = func(subsys);
-                rtx.send(result).ok().expect("Value return channel closed");
+                Box::pin(async move {
+                    let result = func(subsys).await;
+                    rtx.send(result).ok().expect("Value return channel closed");
+                })
             }))
             .await
             .ok()
-            .expect("Target subsystem down");
+            .expect("Target subsystem down upon call");
 
-        rrx.await.expect("Target subsystem down")
+        rrx.await.expect("Target subsystem down upon result receive")
     }
 
-    /// Dispatch a function call to the subsystem (convenience method if subsystem is not mutated)
-    pub async fn call<R: Send + 'static>(&self, func: impl FnOnce(&T) -> R + Send + 'static) -> R {
+    /// Dispatch an async function call to the subsystem (immutable)
+    pub async fn call_async<R: Send + 'static>(
+        &self,
+        func: impl for<'a> FnOnce(&'a T) -> FutureBox<'a, R> + Send + 'static,
+    ) -> R {
+        self.call_async_mut(|this| func(this)).await
+    }
+
+    /// Dispatch a function call to the subsystem
+    pub async fn call_mut<R: Send + 'static>(
+        &self,
+        func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
+    ) -> R {
+        self.call_async_mut(|this| Box::pin(core::future::ready(func(this)))).await
+    }
+
+    /// Dispatch a function call to the subsystem (immutable)
+    pub async fn call<R: Send + 'static>(
+        &self,
+        func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
+    ) -> R {
         self.call_mut(|this| func(this)).await
     }
 }

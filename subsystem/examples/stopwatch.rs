@@ -11,7 +11,7 @@ impl Stopwatch {
         loop {
             tokio::select! {
                 () = shutdown_rq.recv() => break,
-                call = call_rq.recv() => call(&mut stopwatch),
+                call = call_rq.recv() => call(&mut stopwatch).await,
                 _ = interval.tick() => stopwatch.report("Running"),
             }
         }
