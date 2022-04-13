@@ -129,13 +129,6 @@ impl Amount {
             atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         }
     }
-
-    // TODO this looks risky, consult Ben/Sam
-    pub fn div_by_float(self, divisor: f64) -> Self {
-        Self {
-            val: (self.val as f64 / divisor) as u128,
-        }
-    }
 }
 
 impl From<Amount> for u128 {

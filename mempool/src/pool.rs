@@ -246,7 +246,7 @@ struct RollingFeeRate {
 }
 
 impl RollingFeeRate {
-    fn decay_fee(mut self, halflife: Time, current_time: Time) -> Result<Self, TxValidationError> {
+    fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
         log::trace!(
             "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
             self.rolling_minimum_fee_rate,
@@ -260,14 +260,14 @@ impl RollingFeeRate {
                 / (halflife.as_secs() as f64),
         );
         self.rolling_minimum_fee_rate =
-            FeeRate::new(self.rolling_minimum_fee_rate.tokens_per_kb().div_by_float(divisor));
+            FeeRate::new((self.rolling_minimum_fee_rate.tokens_per_kb() as f64 / divisor) as u128);
 
         log::trace!(
             "decay_fee: new fee rate:  {:?}",
             self.rolling_minimum_fee_rate
         );
         self.last_rolling_fee_update = current_time;
-        Ok(self)
+        self
     }
 }
 
@@ -275,7 +275,7 @@ impl RollingFeeRate {
     pub(crate) fn new(creation_time: Time) -> Self {
         Self {
             block_since_last_rolling_fee_bump: false,
-            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
+            rolling_minimum_fee_rate: FeeRate::new(0),
             last_rolling_fee_update: creation_time,
         }
     }
@@ -570,17 +570,17 @@ where
         self.rolling_fee_rate.set(rolling_fee_rate)
     }
 
-    pub(crate) fn get_update_min_fee_rate(&self) -> Result<FeeRate, TxValidationError> {
+    pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
         let rolling_fee_rate = self.rolling_fee_rate.get();
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
-            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
+            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(0)
         {
-            return Ok(rolling_fee_rate.rolling_minimum_fee_rate);
+            return rolling_fee_rate.rolling_minimum_fee_rate;
         } else if self.clock.get_time()
             > rolling_fee_rate.last_rolling_fee_update + ROLLING_FEE_DECAY_INTERVAL
         {
             // Decay the rolling fee
-            self.decay_rolling_fee_rate()?;
+            self.decay_rolling_fee_rate();
             log::debug!(
                 "rolling fee rate after decay_rolling_fee_rate {:?}",
                 self.rolling_fee_rate
@@ -589,28 +589,26 @@ where
             if self.rolling_fee_rate.get().rolling_minimum_fee_rate < *INCREMENTAL_RELAY_THRESHOLD {
                 log::trace!("rolling fee rate {:?} less than half of the incremental fee rate, dropping the fee", self.rolling_fee_rate.get().rolling_minimum_fee_rate);
                 self.drop_rolling_fee();
-                return Ok(self.rolling_fee_rate.get().rolling_minimum_fee_rate);
+                return self.rolling_fee_rate.get().rolling_minimum_fee_rate;
             }
         }
 
-        Ok(std::cmp::max(
+        std::cmp::max(
             self.rolling_fee_rate.get().rolling_minimum_fee_rate,
             *INCREMENTAL_RELAY_FEE_RATE,
-        ))
+        )
     }
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.get();
-        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
+        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(0);
         self.rolling_fee_rate.set(rolling_fee_rate)
     }
 
-    fn decay_rolling_fee_rate(&self) -> Result<(), TxValidationError> {
+    fn decay_rolling_fee_rate(&self) {
         let halflife = self.rolling_fee_halflife();
         let time = self.clock.get_time();
-        self.rolling_fee_rate
-            .set(self.rolling_fee_rate.get().decay_fee(halflife, time)?);
-        Ok(())
+        self.rolling_fee_rate.set(self.rolling_fee_rate.get().decay_fee(halflife, time));
     }
 
     fn verify_inputs_available(&self, tx: &Transaction) -> Result<(), TxValidationError> {
@@ -646,17 +644,15 @@ where
         Ok(TxMempoolEntry::new(tx, fee, parents, time))
     }
 
-    fn get_update_minimum_mempool_fee(
-        &self,
-        tx: &Transaction,
-    ) -> Result<Amount, TxValidationError> {
-        let minimum_fee_rate = self.get_update_min_fee_rate()?;
+    fn get_update_minimum_mempool_fee(&self, tx: &Transaction) -> Amount {
+        let minimum_fee_rate = self.get_update_min_fee_rate();
         log::debug!("minimum fee rate {:?}", minimum_fee_rate);
-        log::debug!(
+        /*log::debug!(
             "tx_size: {:?}, tx_fee {:?}",
             tx.encoded_size(),
             self.try_get_fee(tx)?
         );
+        */
         let res = minimum_fee_rate.compute_fee(tx.encoded_size());
         log::debug!("minimum_mempool_fee for tx: {:?}", res);
         res
@@ -738,7 +734,7 @@ where
 
     fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx)?;
-        let minimum_fee = self.get_update_minimum_mempool_fee(tx)?;
+        let minimum_fee = self.get_update_minimum_mempool_fee(tx);
         (tx_fee >= minimum_fee)
             .then(|| ())
             .ok_or(TxValidationError::RollingFeeThresholdNotMet {
@@ -914,12 +910,11 @@ where
     }
 
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
-        let removed_fees = self.trim()?;
+        let removed_fees = self.trim();
         if !removed_fees.is_empty() {
             let new_minimum_fee_rate =
-                (*removed_fees.iter().max().expect("removed_fees should not be empty")
-                    + *INCREMENTAL_RELAY_FEE_RATE)
-                    .ok_or(TxValidationError::FeeRateError)?;
+                *removed_fees.iter().max().expect("removed_fees should not be empty")
+                    + *INCREMENTAL_RELAY_FEE_RATE;
             if new_minimum_fee_rate > self.rolling_fee_rate.get().rolling_minimum_fee_rate {
                 self.update_min_fee_rate(new_minimum_fee_rate)
             }
@@ -957,7 +952,7 @@ where
         }
     }
 
-    fn trim(&mut self) -> Result<Vec<FeeRate>, Error> {
+    fn trim(&mut self) -> Vec<FeeRate> {
         let mut removed_fees = Vec::new();
         while !self.store.is_empty() && self.get_memory_usage() > self.max_size {
             // TODO sort by descendant score, not by fee
@@ -977,10 +972,10 @@ where
                 removed.fees_with_descendants,
                 removed.tx.encoded_size()
             );
-            removed_fees.push(FeeRate::of_tx(removed.fee, removed.tx.encoded_size())?);
+            removed_fees.push(FeeRate::of_tx(removed.fee, removed.tx.encoded_size()));
             self.store.drop_tx_and_descendants(removed.tx.get_id());
         }
-        Ok(removed_fees)
+        removed_fees
     }
 }
 
@@ -2504,9 +2499,8 @@ mod tests {
         );
         assert_eq!(
             rolling_fee,
-            (FeeRate::of_tx(mempool.try_get_fee(&child_0)?, child_0.encoded_size())?
-                + *INCREMENTAL_RELAY_FEE_RATE)
-                .ok_or(TxValidationError::FeeRateError)?
+            FeeRate::of_tx(mempool.try_get_fee(&child_0)?, child_0.encoded_size())
+                + *INCREMENTAL_RELAY_FEE_RATE
         );
 
         // Now that the minimum rolling fee has been bumped up, a low-fee tx will not pass
@@ -2545,7 +2539,7 @@ mod tests {
                 2,
                 InputWitness::NoSignature(Some(DUMMY_WITNESS_MSG.to_vec())),
             ),
-            mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1))?,
+            mempool.get_minimum_rolling_fee().compute_fee(estimate_tx_size(1, 1)),
             flags,
             locktime,
         )?;
@@ -2580,18 +2574,12 @@ mod tests {
                 TxValidationError::RollingFeeThresholdNotMet { .. }
             ))
         ));
-        assert_eq!(
-            mempool.get_minimum_rolling_fee(),
-            (rolling_fee / FeeRate::new(Amount::from_atoms(2))).unwrap()
-        );
+        assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 2);
 
         mock_clock.increment(halflife);
         log::debug!("Second attempt to add dummy");
         mempool.add_transaction(dummy_tx)?;
-        assert_eq!(
-            mempool.get_minimum_rolling_fee(),
-            (rolling_fee / FeeRate::new(Amount::from_atoms(4))).unwrap()
-        );
+        assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 4);
         log::debug!(
             "After successful addition of dummy, rolling fee rate is {:?}",
             mempool.get_minimum_rolling_fee()
@@ -2602,19 +2590,13 @@ mod tests {
         let another_dummy =
             TxGenerator::new().with_fee(Amount::from_atoms(100)).generate_tx(&mempool)?;
         mempool.add_transaction(another_dummy)?;
-        assert_eq!(
-            mempool.get_minimum_rolling_fee(),
-            (rolling_fee / FeeRate::new(Amount::from_atoms(8))).unwrap()
-        );
+        assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 8);
 
         mock_clock.increment(halflife);
         let final_dummy =
             TxGenerator::new().with_fee(Amount::from_atoms(100)).generate_tx(&mempool)?;
         mempool.add_transaction(final_dummy)?;
-        assert_eq!(
-            mempool.get_minimum_rolling_fee(),
-            FeeRate::new(Amount::from_atoms(0))
-        );
+        assert_eq!(mempool.get_minimum_rolling_fee(), FeeRate::new(0));
         Ok(())
     }
 
