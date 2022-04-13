@@ -1,5 +1,5 @@
 use crate::chain::{block::Block, transaction::Transaction};
-use crate::primitives::Id;
+use crate::primitives::{Id, H256};
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -26,6 +26,33 @@ impl From<Id<Block>> for OutPointSourceId {
 pub struct OutPoint {
     id: OutPointSourceId,
     index: u32,
+}
+
+fn outpoint_source_id_as_monolithic_tuple(v: &OutPointSourceId) -> (u8, H256) {
+    let tx_out_index = 0;
+    let blk_reward_index = 1;
+    match v {
+        OutPointSourceId::Transaction(h) => (tx_out_index, h.get()),
+        OutPointSourceId::BlockReward(h) => (blk_reward_index, h.get()),
+    }
+}
+
+impl PartialOrd for OutPoint {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let id = outpoint_source_id_as_monolithic_tuple(&self.id);
+        let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
+
+        ((id, self.index)).partial_cmp(&(other_id, other.index))
+    }
+}
+
+impl Ord for OutPoint {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let id = outpoint_source_id_as_monolithic_tuple(&self.id);
+        let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
+
+        ((id, self.index)).cmp(&(other_id, other.index))
+    }
 }
 
 impl OutPoint {
