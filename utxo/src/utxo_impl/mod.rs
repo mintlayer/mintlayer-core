@@ -19,16 +19,10 @@ const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
 // Most of the fields of Outpoint do not implement `Hash` as well.
 // To avoid adding #[derive(Hash)] on all sub structs of Outpoint, this OutpointKey was created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct OutPointKey {
-    outpoint_hash: H256,
+pub(crate) struct OutPointKey {
+    outpoint_output_hash: H256,
+    outpoint_output_index: u32,
     is_block_reward: bool,
-    index: u32,
-}
-
-impl OutPointKey {
-    pub fn outpoint_hash(&self) -> &H256 {
-        &self.outpoint_hash
-    }
 }
 
 // Because the outpoint is mostly being passed around as reference, it only makes sense that
@@ -47,9 +41,9 @@ impl From<&OutPoint> for OutPointKey {
         };
 
         Self {
-            outpoint_hash,
+            outpoint_output_hash: outpoint_hash,
             is_block_reward,
-            index: outpoint.get_output_index(),
+            outpoint_output_index: outpoint.get_output_index(),
         }
     }
 }
@@ -58,14 +52,14 @@ impl From<&OutPoint> for OutPointKey {
 impl From<&OutPointKey> for OutPoint {
     fn from(key: &OutPointKey) -> Self {
         let id = if key.is_block_reward {
-            let utxo_id: Id<Block> = Id::new(&key.outpoint_hash);
+            let utxo_id: Id<Block> = Id::new(&key.outpoint_output_hash);
             OutPointSourceId::BlockReward(utxo_id)
         } else {
-            let utxo_id: Id<Transaction> = Id::new(&key.outpoint_hash);
+            let utxo_id: Id<Transaction> = Id::new(&key.outpoint_output_hash);
             OutPointSourceId::Transaction(utxo_id)
         };
 
-        OutPoint::new(id, key.index)
+        OutPoint::new(id, key.outpoint_output_index)
     }
 }
 
