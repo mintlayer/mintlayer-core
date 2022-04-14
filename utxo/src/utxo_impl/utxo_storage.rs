@@ -1,6 +1,6 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
-use crate::utxo_impl::{FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView};
+use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::Id;
