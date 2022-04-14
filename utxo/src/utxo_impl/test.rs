@@ -198,12 +198,20 @@ fn check_get_mut_utxo(
             }
 
             // let's try to update the utxo.
-            let new_height = utxo
-                .height()
-                .expect("should return a height")
-                .checked_add(1)
-                .expect("should be able to increment");
-            assert!(utxo.set_height(new_height));
+            let old_height_num = match utxo.height() {
+                UtxoSource::BlockChain(h) => h,
+                UtxoSource::MemPool => panic!("Unexpected arm"),
+            };
+            let new_height_num =
+                old_height_num.checked_add(1).expect("should be able to increment");
+            let new_height = UtxoSource::BlockChain(new_height_num);
+
+            utxo.set_height(new_height.clone());
+            assert_eq!(new_height, *utxo.height());
+            assert_eq!(
+                new_height_num,
+                utxo.height().blockchain_height().expect("Must be a height")
+            );
             expected_utxo = Some(utxo.clone());
         }
     }
@@ -422,6 +430,6 @@ fn blockchain_or_mempool_utxo_test() {
     assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
 
     let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
-    assert!(res.height().is_none());
+    assert!(res.height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
 }

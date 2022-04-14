@@ -22,6 +22,22 @@ pub enum UtxoSource {
     MemPool,
 }
 
+impl UtxoSource {
+    fn is_mempool(&self) -> bool {
+        match self {
+            UtxoSource::BlockChain(_) => false,
+            UtxoSource::MemPool => true,
+        }
+    }
+
+    fn blockchain_height(&self) -> Result<BlockHeight, Error> {
+        match self {
+            UtxoSource::BlockChain(h) => Ok(*h),
+            UtxoSource::MemPool => Err(crate::Error::NoBlockchainHeightFound),
+        }
+    }
+}
+
 /// The Unspent Transaction Output
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct Utxo {
@@ -53,26 +69,16 @@ impl Utxo {
         self.is_block_reward
     }
 
-    pub fn height(&self) -> Option<BlockHeight> {
-        match self.source {
-            UtxoSource::BlockChain(height) => Some(height),
-            UtxoSource::MemPool => None,
-        }
+    pub fn height(&self) -> &UtxoSource {
+        &self.source
     }
 
     pub fn output(&self) -> &TxOutput {
         &self.output
     }
 
-    pub fn set_height(&mut self, value: BlockHeight) -> bool {
-        match self.source {
-            UtxoSource::BlockChain(_) => {
-                self.source = UtxoSource::BlockChain(value);
-                true
-            }
-            // cannot set the height if the utxo is meant for the mempool.
-            UtxoSource::MemPool => false,
-        }
+    pub fn set_height(&mut self, value: UtxoSource) {
+        self.source = value
     }
 }
 

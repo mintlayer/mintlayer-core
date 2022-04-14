@@ -87,7 +87,7 @@ struct UtxoInMemoryDBInterface {
 }
 
 impl UtxoInMemoryDBInterface {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             store: BTreeMap::new(),
             best_block_id: None,

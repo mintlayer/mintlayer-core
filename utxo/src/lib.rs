@@ -8,5 +8,6 @@ pub enum Error {
     OverwritingUtxo,
     UtxoAlreadyExists,
     CacheWithoutBestBlock,
+    NoBlockchainHeightFound,
     DBError(String),
 }
