@@ -69,10 +69,10 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
             let outpoint = &key;
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
-                    self.0.set_utxo(&outpoint, utxo)?;
+                    self.0.set_utxo(outpoint, utxo)?;
                 } else {
                     // entry is spent
-                    self.0.del_utxo(&outpoint)?;
+                    self.0.del_utxo(outpoint)?;
                 }
             }
         }
@@ -178,16 +178,16 @@ mod test {
             assert!(res.is_ok());
 
             // randomly get a key for checking
-            let keys = (&utxos).container.keys().collect_vec();
+            let keys = utxos.container.keys().collect_vec();
             let rng = make_pseudo_rng().gen_range(0..keys.len());
-            let outpoint = OutPoint::from(keys[rng].clone());
+            let outpoint = keys[rng].clone();
 
             // test the get_utxo
             let utxo_opt = utxo_db.get_utxo(&outpoint);
 
             let outpoint_key = &outpoint;
             let utxo_entry =
-                (&utxos).container.get(&outpoint_key).expect("an entry should be found");
+                utxos.container.get(outpoint_key).expect("an entry should be found");
             assert_eq!(utxo_entry.utxo(), utxo_opt);
 
             // check has_utxo
@@ -219,7 +219,7 @@ mod test {
                 let rng = make_pseudo_rng().gen_range(0..keys.len());
                 let outpoint_key = keys[rng];
                 let outpoint = outpoint_key;
-                let utxo = (&utxos)
+                let utxo = utxos
                     .container
                     .get(outpoint_key)
                     .expect("entry should exist")
@@ -227,18 +227,18 @@ mod test {
                     .expect("utxo should exist");
 
                 let mut parent = UtxosCache::default();
-                assert!(parent.add_utxo(utxo, &outpoint, false).is_ok());
+                assert!(parent.add_utxo(utxo, outpoint, false).is_ok());
                 parent.set_best_block(
                     utxo_db.get_best_block_hash().expect("best block should be there"),
                 );
 
                 let mut child = UtxosCache::new(&parent);
-                assert!(child.spend_utxo(&outpoint));
+                assert!(child.spend_utxo(outpoint));
 
                 let res = flush_to_base(child, &mut utxo_db);
                 assert!(res.is_ok());
 
-                assert!(!utxo_db.has_utxo(&outpoint));
+                assert!(!utxo_db.has_utxo(outpoint));
             }
         });
     }

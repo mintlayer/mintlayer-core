@@ -35,7 +35,7 @@ fn check_add_utxo(
 
     if add_result.is_ok() {
         let key = &outpoint;
-        let ret_value = cache.utxos.get(&key);
+        let ret_value = cache.utxos.get(key);
 
         check_flags(ret_value, result_flags, false);
     }
@@ -76,7 +76,7 @@ fn check_spend_utxo(
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
     let key = &child_outpoint;
-    let ret_value = child.utxos.get(&key);
+    let ret_value = child.utxos.get(key);
 
     check_flags(ret_value, result_flags, true);
 
@@ -138,7 +138,7 @@ fn check_write_utxo(
         best_block: Id::new(&H256::random()),
     };
     let res = parent.batch_write(sinlge_entry_cache);
-    let entry = parent.utxos.get(&key);
+    let entry = parent.utxos.get(key);
 
     match result {
         Ok(result_presence) => {
@@ -216,7 +216,7 @@ fn check_get_mut_utxo(
         }
     }
 
-    let entry = child.utxos.get(&key);
+    let entry = child.utxos.get(key);
     match result_presence {
         Absent => {
             assert!(entry.is_none());

@@ -107,12 +107,12 @@ mod test {
         let br = OutPointSourceId::BlockReward(Id::new(&hash_br));
         let bro0 = OutPoint::new(br.clone(), 0);
         let bro1 = OutPoint::new(br.clone(), 1);
-        let bro2 = OutPoint::new(br.clone(), 2);
+        let bro2 = OutPoint::new(br, 2);
 
         let tx = OutPointSourceId::BlockReward(Id::new(&hash_tx));
         let txo0 = OutPoint::new(tx.clone(), 0);
         let txo1 = OutPoint::new(tx.clone(), 1);
-        let txo2 = OutPoint::new(tx.clone(), 2);
+        let txo2 = OutPoint::new(tx, 2);
 
         assert_eq!(bro0.cmp(&bro1), std::cmp::Ordering::Less);
         assert_eq!(bro0.cmp(&bro2), std::cmp::Ordering::Less);

@@ -140,7 +140,7 @@ fn stack_flush_test() {
 
     for (key, utxo_entry) in &parent.utxos {
         let outpoint = key;
-        let utxo = cache3.get_utxo(&outpoint);
+        let utxo = cache3.get_utxo(outpoint);
 
         assert_eq!(utxo_entry.utxo(), utxo);
     }

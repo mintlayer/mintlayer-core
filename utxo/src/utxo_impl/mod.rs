@@ -185,7 +185,7 @@ impl<'a> UtxosCache<'a> {
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = outpoint;
 
-        if let Some(res) = self.utxos.get(&key) {
+        if let Some(res) = self.utxos.get(key) {
             return Some(res.clone());
         }
 
@@ -254,7 +254,7 @@ impl<'a> UtxosCache<'a> {
         possible_overwrite: bool,
     ) -> Result<(), Error> {
         let key = outpoint;
-        let is_fresh = match self.utxos.get(&key) {
+        let is_fresh = match self.utxos.get(key) {
             None => {
                 // An insert can be done. This utxo doesn't exist yet, so it's fresh.
                 !possible_overwrite
@@ -312,7 +312,7 @@ impl<'a> UtxosCache<'a> {
                 // check whether this entry is fresh
                 if entry.is_fresh {
                     // This is only available in this view. Remove immediately.
-                    self.utxos.remove(&key);
+                    self.utxos.remove(key);
                 } else {
                     // mark this as 'spent'
                     let entry = UtxoEntry {
@@ -330,7 +330,7 @@ impl<'a> UtxosCache<'a> {
     /// Checks whether utxo exists in the cache
     pub fn has_utxo_in_cache(&self, outpoint: &OutPoint) -> bool {
         let key = outpoint;
-        self.utxos.contains_key(&key)
+        self.utxos.contains_key(key)
     }
 
     /// Returns a mutable reference of the utxo, given the outpoint.
@@ -345,7 +345,7 @@ impl<'a> UtxosCache<'a> {
                         UtxoEntry::new(utxo, status.is_fresh, status.is_dirty),
                     );
                     //TODO: update the memory storage here
-                    self.utxos.get_mut(&key).and_then(|entry| entry.utxo_mut())
+                    self.utxos.get_mut(key).and_then(|entry| entry.utxo_mut())
                 }
             }
         })
@@ -354,11 +354,11 @@ impl<'a> UtxosCache<'a> {
     //TODO: this needs to be tested.
     pub(crate) fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = outpoint;
-        if let Some(entry) = self.utxos.get(&key) {
+        if let Some(entry) = self.utxos.get(key) {
             // see bitcoin's Uncache.
             if !entry.is_fresh && !entry.is_dirty {
                 //todo: decrement the memory usage
-                return self.utxos.remove(&key);
+                return self.utxos.remove(key);
             }
         }
         None
@@ -386,7 +386,7 @@ impl<'a> Debug for UtxosCache<'a> {
 impl<'a> UtxosView for UtxosCache<'a> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         let key = outpoint;
-        if let Some(res) = self.utxos.get(&key) {
+        if let Some(res) = self.utxos.get(key) {
             return res.utxo();
         }
 
