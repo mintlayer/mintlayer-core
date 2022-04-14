@@ -22,7 +22,10 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 use util::Handle;
 
+// TODO: unify naming of events
+// TODO: make return value channel option with an attribute
 // TODO: remove peerswarmevent and replace it with swarmevent that controls the connected peer!
+
 #[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub enum PeerEvent<T>
 where
@@ -178,4 +181,8 @@ pub enum P2pEvent {
         headers: Vec<sync::mock_consensus::BlockHeader>,
         response: oneshot::Sender<Option<Vec<sync::mock_consensus::BlockHeader>>>,
     },
+}
+
+pub enum BlockFloodEvent {
+    Block(Arc<sync::mock_consensus::Block>),
 }

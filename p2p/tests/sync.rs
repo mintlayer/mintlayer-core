@@ -134,13 +134,14 @@ where
     T::FloodsubHandle: FloodsubService<T>,
 {
     let config = Arc::new(config::create_mainnet());
-    let (_, flood) = T::start(addr, &[], &[FloodsubTopic::Blocks]).await.unwrap();
     let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
     let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
     let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
+    let (tx_sf, rx_sf) = tokio::sync::mpsc::channel(16);
+    let (tx_fs, rx_fs) = tokio::sync::mpsc::channel(16);
 
     (
-        SyncManager::<T>::new(Arc::clone(&config), flood, tx_p2p, rx_sync, rx_peer),
+        SyncManager::<T>::new(Arc::clone(&config), tx_sf, rx_fs, tx_p2p, rx_sync, rx_peer),
         tx_sync,
         tx_peer,
         rx_p2p,

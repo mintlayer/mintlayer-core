@@ -24,6 +24,7 @@ use tokio::sync::mpsc;
 
 pub mod error;
 pub mod event;
+pub mod floodsub;
 pub mod message;
 pub mod net;
 pub mod peer;
@@ -83,12 +84,24 @@ where
             let _ = swarm.run().await;
         });
 
+        // TODO: rename
+        let (tx1, rx1) = mpsc::channel(16);
+        let (tx2, rx2) = mpsc::channel(16);
+
         let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
             let mut sync_mgr =
-                sync::SyncManager::<T>::new(sync_config, flood, tx_p2p, rx_sync, rx_peer);
-            let _ = sync_mgr.run().await;
+                sync::SyncManager::<T>::new(sync_config, tx1, rx2, tx_p2p, rx_sync, rx_peer);
+
+            if let Err(e) = sync_mgr.run().await {
+                log::error!("SyncManager failed: {:?}", e);
+            }
         });
+
+        // tokio::spawn(async move {
+        //     let mut floodsub_mgr =
+        //         FloodsubManager::<T>::new(flood, );
+        // });
 
         Ok(Self {
             config,
