@@ -102,7 +102,11 @@ pub fn insert_single_entry(
 }
 
 /// checks the dirty, fresh, and spent flags.
-pub fn check_flags(result_entry: Option<&UtxoEntry>, expected_flags: Option<u8>, is_spent: bool) {
+pub(crate) fn check_flags(
+    result_entry: Option<&UtxoEntry>,
+    expected_flags: Option<u8>,
+    is_spent: bool,
+) {
     if let Some(flags) = expected_flags {
         let result_entry = result_entry.expect("this should have an entry inside");
 

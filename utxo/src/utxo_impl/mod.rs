@@ -182,7 +182,7 @@ pub enum UtxoStatus {
 
 /// Just the Utxo with additional information.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct UtxoEntry {
+pub(crate) struct UtxoEntry {
     status: UtxoStatus,
     /// The utxo entry is dirty when this version is different from the parent.
     is_dirty: bool,
@@ -398,7 +398,7 @@ impl<'a> UtxosCache<'a> {
     }
 
     //TODO: this needs to be tested.
-    pub fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
+    pub(crate) fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
         let key = OutPointKey::from(outpoint);
         if let Some(entry) = self.utxos.get(&key) {
             // see bitcoin's Uncache.
