@@ -66,7 +66,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
     ) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {
-            let outpoint: OutPoint = (&key).into();
+            let outpoint = &key;
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
                     self.0.set_utxo(&outpoint, utxo)?;
@@ -127,8 +127,8 @@ impl UtxosPersistentStorage for UtxoInMemoryDBInterface {
 mod test {
     use super::*;
     use crate::utxo_impl::{
-        flush_to_base, utxo_storage::UtxoDB, FlushableUtxoView, OutPointKey, Utxo, UtxoEntry,
-        UtxosCache, UtxosView,
+        flush_to_base, utxo_storage::UtxoDB, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache,
+        UtxosView,
     };
     use crate::ConsumedUtxoCache;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxOutput};
@@ -136,7 +136,7 @@ mod test {
     use common::primitives::{Id, H256};
     use crypto::random::{make_pseudo_rng, Rng};
     use iter_tools::Itertools;
-    use std::collections::HashMap;
+    use std::collections::BTreeMap;
 
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         let output = TxOutput::new(Amount::new(10), Destination::PublicKey);
@@ -148,12 +148,12 @@ mod test {
         (utxo, outpoint)
     }
 
-    fn create_utxos(num_of_utxos: u8) -> HashMap<OutPointKey, UtxoEntry> {
-        let mut map = HashMap::new();
+    fn create_utxos(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
+        let mut map = BTreeMap::new();
         for _ in 0..num_of_utxos {
             let (utxo, outpoint) = create_utxo(0);
             let entry = UtxoEntry::new(utxo.clone(), true, true);
-            map.insert(OutPointKey::from(&outpoint), entry);
+            map.insert(outpoint, entry);
         }
 
         map
@@ -180,12 +180,12 @@ mod test {
             // randomly get a key for checking
             let keys = (&utxos).container.keys().collect_vec();
             let rng = make_pseudo_rng().gen_range(0..keys.len());
-            let outpoint = OutPoint::from(keys[rng]);
+            let outpoint = OutPoint::from(keys[rng].clone());
 
             // test the get_utxo
             let utxo_opt = utxo_db.get_utxo(&outpoint);
 
-            let outpoint_key = OutPointKey::from(&outpoint);
+            let outpoint_key = &outpoint;
             let utxo_entry =
                 (&utxos).container.get(&outpoint_key).expect("an entry should be found");
             assert_eq!(utxo_entry.utxo(), utxo_opt);
@@ -199,9 +199,9 @@ mod test {
             // try to write a non-dirty utxo
             {
                 let (utxo, outpoint) = create_utxo(1);
-                let mut map = HashMap::new();
+                let mut map = BTreeMap::new();
                 let entry = UtxoEntry::new(utxo, true, false);
-                map.insert(OutPointKey::from(&outpoint), entry);
+                map.insert(outpoint.clone(), entry);
 
                 let new_hash = Id::new(&H256::random());
                 let another_cache = ConsumedUtxoCache {
@@ -218,7 +218,7 @@ mod test {
             {
                 let rng = make_pseudo_rng().gen_range(0..keys.len());
                 let outpoint_key = keys[rng];
-                let outpoint = OutPoint::from(outpoint_key);
+                let outpoint = outpoint_key;
                 let utxo = (&utxos)
                     .container
                     .get(outpoint_key)

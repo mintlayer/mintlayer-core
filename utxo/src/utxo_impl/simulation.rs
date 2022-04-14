@@ -1,7 +1,7 @@
 //TODO: need a better way than this.
 
 use crate::utxo_impl::test_helper::{create_utxo, DIRTY, FRESH};
-use crate::{flush_to_base, OutPointKey, UtxosCache, UtxosView};
+use crate::{flush_to_base, UtxosCache, UtxosView};
 use crate::{UtxoEntry, UtxoStatus};
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
@@ -76,7 +76,7 @@ fn populate_cache<'a>(
             let outp_idx = make_pseudo_rng().gen_range(0..outps.len());
             let to_spend = &outps[outp_idx];
 
-            let key = OutPointKey::from(to_spend);
+            let key = to_spend;
 
             // randomly select which flags should the spent utxo have.
             // 0 - NOT FRESH, NOT DIRTY, 1 - FRESH, 2 - DIRTY, 3 - FRESH AND DIRTY
@@ -104,7 +104,7 @@ fn populate_cache<'a>(
                     is_fresh: false,
                 },
             };
-            cache.utxos.insert(key, new_entry);
+            cache.utxos.insert(key.clone(), new_entry);
 
             //println!("child, spend: {:?}, flags: {}", to_spend,flags );
         };
@@ -139,7 +139,7 @@ fn stack_flush_test() {
     assert!(flush_to_base(cache3_clone, &mut parent).is_ok());
 
     for (key, utxo_entry) in &parent.utxos {
-        let outpoint = OutPoint::from(key);
+        let outpoint = key;
         let utxo = cache3.get_utxo(&outpoint);
 
         assert_eq!(utxo_entry.utxo(), utxo);

@@ -2,15 +2,13 @@ use common::primitives::{Id, H256};
 
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
 use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
-use crate::{
-    ConsumedUtxoCache, FlushableUtxoView, OutPointKey, Utxo, UtxoEntry, UtxosCache, UtxosView,
-};
+use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
 use crate::utxo_impl::test_helper::{
     check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
 };
 use crate::utxo_impl::{UtxoSource, UtxoStatus};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Checks `add_utxo` method behaviour.
 /// # Arguments
@@ -36,7 +34,7 @@ fn check_add_utxo(
     assert_eq!(add_result, op_result);
 
     if add_result.is_ok() {
-        let key = OutPointKey::from(&outpoint);
+        let key = &outpoint;
         let ret_value = cache.utxos.get(&key);
 
         check_flags(ret_value, result_flags, false);
@@ -77,7 +75,7 @@ fn check_spend_utxo(
 
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
-    let key = OutPointKey::from(&child_outpoint);
+    let key = &child_outpoint;
     let ret_value = child.utxos.get(&key);
 
     check_flags(ret_value, result_flags, true);
@@ -104,10 +102,10 @@ fn check_write_utxo(
     //initialize the parent cache
     let mut parent = UtxosCache::default();
     let (_, outpoint) = insert_single_entry(&mut parent, &parent_presence, parent_flags, None);
-    let key = OutPointKey::from(&outpoint);
+    let key = &outpoint;
 
     // prepare the map for batch write.
-    let mut single_entry_map = HashMap::new();
+    let mut single_entry_map = BTreeMap::new();
 
     // inserts utxo in the map
     if let Some(child_flags) = child_flags {
@@ -121,7 +119,7 @@ fn check_write_utxo(
             Present => {
                 let (utxo, _) = create_utxo(0);
                 let entry = UtxoEntry::new(utxo, is_fresh, is_dirty);
-                single_entry_map.insert(key, entry);
+                single_entry_map.insert(key.clone(), entry);
             }
             Spent => {
                 let entry = UtxoEntry {
@@ -129,7 +127,7 @@ fn check_write_utxo(
                     is_dirty,
                     is_fresh,
                 };
-                single_entry_map.insert(key, entry);
+                single_entry_map.insert(key.clone(), entry);
             }
         }
     }
@@ -180,7 +178,7 @@ fn check_get_mut_utxo(
         cache_flags,
         Some(parent_outpoint),
     );
-    let key = OutPointKey::from(&child_outpoint);
+    let key = &child_outpoint;
 
     let mut expected_utxo: Option<Utxo> = None;
     {

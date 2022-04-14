@@ -1,4 +1,4 @@
-use crate::{OutPointKey, Utxo, UtxoEntry, UtxosCache};
+use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::random::{make_pseudo_rng, Rng};
@@ -70,7 +70,7 @@ pub fn insert_single_entry(
     let rng_height = make_pseudo_rng().gen_range(0..(u64::MAX - 1));
     let (utxo, outpoint_x) = create_utxo(rng_height);
     let outpoint = outpoint.unwrap_or(outpoint_x);
-    let key = OutPointKey::from(&outpoint);
+    let key = &outpoint;
 
     match cache_presence {
         Absent => {
@@ -94,7 +94,7 @@ pub fn insert_single_entry(
             };
 
             // let's insert an entry.
-            cache.utxos.insert(key, entry);
+            cache.utxos.insert(key.clone(), entry);
         }
     }
 

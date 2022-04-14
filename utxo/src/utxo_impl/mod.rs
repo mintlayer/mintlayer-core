@@ -2,8 +2,8 @@
 #![allow(dead_code)]
 use crate::Error;
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
-use common::primitives::{BlockHeight, Id, Idable, H256};
-use std::collections::HashMap;
+use common::primitives::{BlockHeight, Id, Idable};
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 
 use common::chain::block::Block;
@@ -13,55 +13,6 @@ pub mod utxo_storage;
 
 //todo: proper placement and derivation of this max
 const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
-
-/// OutpointKey serves as a "key" equivalent of Outpoint.
-// This is because the Outpoint does not implement `Hash`.
-// Most of the fields of Outpoint do not implement `Hash` as well.
-// To avoid adding #[derive(Hash)] on all sub structs of Outpoint, this OutpointKey was created.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct OutPointKey {
-    outpoint_output_hash: H256,
-    outpoint_output_index: u32,
-    is_block_reward: bool,
-}
-
-// Because the outpoint is mostly being passed around as reference, it only makes sense that
-// only a reference of outpoint is used to create an OutPointKey.
-// The outpoint is widely used as it is, so it's better not to consume it.
-impl From<&OutPoint> for OutPointKey {
-    fn from(outpoint: &OutPoint) -> Self {
-        let is_block_reward = match outpoint.get_tx_id() {
-            OutPointSourceId::Transaction(_) => false,
-            OutPointSourceId::BlockReward(_) => true,
-        };
-
-        let outpoint_hash = match &outpoint.get_tx_id() {
-            OutPointSourceId::Transaction(inner) => inner.get(),
-            OutPointSourceId::BlockReward(inner) => inner.get(),
-        };
-
-        Self {
-            outpoint_output_hash: outpoint_hash,
-            is_block_reward,
-            outpoint_output_index: outpoint.get_output_index(),
-        }
-    }
-}
-
-// In the process of creating an Outpoint from the OutpointKey.
-impl From<&OutPointKey> for OutPoint {
-    fn from(key: &OutPointKey) -> Self {
-        let id = if key.is_block_reward {
-            let utxo_id: Id<Block> = Id::new(&key.outpoint_output_hash);
-            OutPointSourceId::BlockReward(utxo_id)
-        } else {
-            let utxo_id: Id<Transaction> = Id::new(&key.outpoint_output_hash);
-            OutPointSourceId::Transaction(utxo_id)
-        };
-
-        OutPoint::new(id, key.outpoint_output_index)
-    }
-}
 
 // Determines whether the utxo is for the blockchain of for mempool
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
@@ -143,7 +94,7 @@ pub trait UtxosView {
 
 #[derive(Clone)]
 pub struct ConsumedUtxoCache {
-    container: HashMap<OutPointKey, UtxoEntry>,
+    container: BTreeMap<OutPoint, UtxoEntry>,
     best_block: Id<Block>,
 }
 
@@ -162,7 +113,7 @@ pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> R
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
     current_block_hash: Option<Id<Block>>,
-    utxos: HashMap<OutPointKey, UtxoEntry>,
+    utxos: BTreeMap<OutPoint, UtxoEntry>,
     //TODO: do we need this?
     memory_usage: usize,
 }
@@ -226,7 +177,7 @@ impl<'a> UtxosCache<'a> {
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
-        let key = OutPointKey::from(outpoint);
+        let key = outpoint;
 
         if let Some(res) = self.utxos.get(&key) {
             return Some(res.clone());
@@ -249,7 +200,7 @@ impl<'a> UtxosCache<'a> {
         UtxosCache {
             parent: Some(parent),
             current_block_hash: parent.get_best_block_hash(),
-            utxos: HashMap::new(),
+            utxos: BTreeMap::new(),
             memory_usage: 0,
         }
     }
@@ -296,7 +247,7 @@ impl<'a> UtxosCache<'a> {
         outpoint: &OutPoint,
         possible_overwrite: bool,
     ) -> Result<(), Error> {
-        let key = OutPointKey::from(outpoint);
+        let key = outpoint;
         let is_fresh = match self.utxos.get(&key) {
             None => {
                 // An insert can be done. This utxo doesn't exist yet, so it's fresh.
@@ -336,7 +287,7 @@ impl<'a> UtxosCache<'a> {
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
 
-        self.utxos.insert(key, new_entry);
+        self.utxos.insert(key.clone(), new_entry);
 
         Ok(())
     }
@@ -347,7 +298,7 @@ impl<'a> UtxosCache<'a> {
         match self.get_utxo_entry(outpoint) {
             None => false,
             Some(entry) => {
-                let key = OutPointKey::from(outpoint);
+                let key = outpoint;
 
                 // TODO: update the memory usage
                 // self.memory_usage must be deducted from this entry's size
@@ -363,7 +314,7 @@ impl<'a> UtxosCache<'a> {
                         is_dirty: true,
                         is_fresh: false,
                     };
-                    self.utxos.insert(key, entry);
+                    self.utxos.insert(key.clone(), entry);
                 }
                 true
             }
@@ -372,7 +323,7 @@ impl<'a> UtxosCache<'a> {
 
     /// Checks whether utxo exists in the cache
     pub fn has_utxo_in_cache(&self, outpoint: &OutPoint) -> bool {
-        let key = OutPointKey::from(outpoint);
+        let key = outpoint;
         self.utxos.contains_key(&key)
     }
 
@@ -382,8 +333,11 @@ impl<'a> UtxosCache<'a> {
             match status.status {
                 UtxoStatus::Spent => None,
                 UtxoStatus::Entry(utxo) => {
-                    let key = OutPointKey::from(outpoint);
-                    self.utxos.insert(key, UtxoEntry::new(utxo, status.is_fresh, status.is_dirty));
+                    let key = outpoint;
+                    self.utxos.insert(
+                        key.clone(),
+                        UtxoEntry::new(utxo, status.is_fresh, status.is_dirty),
+                    );
                     //TODO: update the memory storage here
                     self.utxos.get_mut(&key).and_then(|entry| entry.utxo_mut())
                 }
@@ -393,7 +347,7 @@ impl<'a> UtxosCache<'a> {
 
     //TODO: this needs to be tested.
     pub(crate) fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
-        let key = OutPointKey::from(outpoint);
+        let key = outpoint;
         if let Some(entry) = self.utxos.get(&key) {
             // see bitcoin's Uncache.
             if !entry.is_fresh && !entry.is_dirty {
@@ -425,7 +379,7 @@ impl<'a> Debug for UtxosCache<'a> {
 
 impl<'a> UtxosView for UtxosCache<'a> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        let key = OutPointKey::from(outpoint);
+        let key = outpoint;
         if let Some(res) = self.utxos.get(&key) {
             return res.utxo();
         }

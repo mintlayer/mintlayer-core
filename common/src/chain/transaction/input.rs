@@ -94,3 +94,66 @@ impl TxInput {
         &self.witness
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn ord_and_equality() {
+        let hash_br = H256::random();
+        let hash_tx = H256::random();
+
+        let br = OutPointSourceId::BlockReward(Id::new(&hash_br));
+        let bro0 = OutPoint::new(br.clone(), 0);
+        let bro1 = OutPoint::new(br.clone(), 1);
+        let bro2 = OutPoint::new(br.clone(), 2);
+
+        let tx = OutPointSourceId::BlockReward(Id::new(&hash_tx));
+        let txo0 = OutPoint::new(tx.clone(), 0);
+        let txo1 = OutPoint::new(tx.clone(), 1);
+        let txo2 = OutPoint::new(tx.clone(), 2);
+
+        assert_eq!(bro0.cmp(&bro1), std::cmp::Ordering::Less);
+        assert_eq!(bro0.cmp(&bro2), std::cmp::Ordering::Less);
+        assert_eq!(bro1.cmp(&bro2), std::cmp::Ordering::Less);
+        assert_eq!(bro0.cmp(&bro0), std::cmp::Ordering::Equal);
+        assert_eq!(bro1.cmp(&bro1), std::cmp::Ordering::Equal);
+        assert_eq!(bro2.cmp(&bro2), std::cmp::Ordering::Equal);
+        assert_eq!(bro1.cmp(&bro0), std::cmp::Ordering::Greater);
+        assert_eq!(bro2.cmp(&bro1), std::cmp::Ordering::Greater);
+        assert_eq!(bro2.cmp(&bro0), std::cmp::Ordering::Greater);
+
+        assert_eq!(txo0.cmp(&txo1), std::cmp::Ordering::Less);
+        assert_eq!(txo0.cmp(&txo2), std::cmp::Ordering::Less);
+        assert_eq!(txo1.cmp(&txo2), std::cmp::Ordering::Less);
+        assert_eq!(txo0.cmp(&txo0), std::cmp::Ordering::Equal);
+        assert_eq!(txo1.cmp(&txo1), std::cmp::Ordering::Equal);
+        assert_eq!(txo2.cmp(&txo2), std::cmp::Ordering::Equal);
+        assert_eq!(txo1.cmp(&txo0), std::cmp::Ordering::Greater);
+        assert_eq!(txo2.cmp(&txo1), std::cmp::Ordering::Greater);
+        assert_eq!(txo2.cmp(&txo0), std::cmp::Ordering::Greater);
+
+        assert_eq!(bro0.cmp(&txo0), std::cmp::Ordering::Less);
+        assert_eq!(bro0.cmp(&txo1), std::cmp::Ordering::Less);
+        assert_eq!(bro0.cmp(&txo2), std::cmp::Ordering::Less);
+
+        assert_eq!(txo0.cmp(&bro0), std::cmp::Ordering::Greater);
+        assert_eq!(txo1.cmp(&bro0), std::cmp::Ordering::Greater);
+        assert_eq!(txo2.cmp(&bro0), std::cmp::Ordering::Greater);
+
+        assert_eq!(txo0.cmp(&bro1), std::cmp::Ordering::Greater);
+        assert_eq!(txo1.cmp(&bro1), std::cmp::Ordering::Greater);
+        assert_eq!(txo2.cmp(&bro1), std::cmp::Ordering::Greater);
+
+        assert_eq!(txo0.cmp(&bro2), std::cmp::Ordering::Greater);
+        assert_eq!(txo1.cmp(&bro2), std::cmp::Ordering::Greater);
+        assert_eq!(txo2.cmp(&bro2), std::cmp::Ordering::Greater);
+
+        assert_eq!(bro1.cmp(&txo1), std::cmp::Ordering::Less);
+        assert_eq!(txo1.cmp(&bro1), std::cmp::Ordering::Greater);
+
+        assert_eq!(bro2.cmp(&txo2), std::cmp::Ordering::Less);
+        assert_eq!(txo2.cmp(&bro2), std::cmp::Ordering::Greater);
+    }
+}
