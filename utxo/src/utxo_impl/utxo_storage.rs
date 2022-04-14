@@ -62,11 +62,10 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
 impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
     fn batch_write(
         &mut self,
-        utxos: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: Id<Block>,
+        utxos: crate::utxo_impl::ConsumedUtxoCache,
     ) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
-        for (key, entry) in utxos {
+        for (key, entry) in utxos.container {
             let outpoint: OutPoint = (&key).into();
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
@@ -77,7 +76,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
                 }
             }
         }
-        self.0.set_best_block_id(&block_hash)?;
+        self.0.set_best_block_id(&utxos.best_block)?;
         Ok(())
     }
 }
@@ -131,6 +130,7 @@ mod test {
         flush_to_base, utxo_storage::UtxoDB, FlushableUtxoView, OutPointKey, Utxo, UtxoEntry,
         UtxosCache, UtxosView,
     };
+    use crate::ConsumedUtxoCache;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxOutput};
     use common::primitives::{Amount, BlockHeight};
     use common::primitives::{Id, H256};
@@ -163,17 +163,22 @@ mod test {
     fn test_utxo() {
         common::concurrency::model(move || {
             let utxos = create_utxos(10);
+            let new_best_block_hash = Id::new(&H256::random());
+
+            let utxos = ConsumedUtxoCache {
+                container: utxos,
+                best_block: new_best_block_hash.clone(),
+            };
 
             let mut db_interface = UtxoInMemoryDBInterface::new();
             let mut utxo_db = UtxoDB::new(&mut db_interface);
 
             // test batch_write
-            let new_best_block_hash = Id::new(&H256::random());
-            let res = utxo_db.batch_write(utxos.clone(), new_best_block_hash.clone());
+            let res = utxo_db.batch_write(utxos.clone());
             assert!(res.is_ok());
 
             // randomly get a key for checking
-            let keys = &utxos.keys().collect_vec();
+            let keys = (&utxos).container.keys().collect_vec();
             let rng = make_pseudo_rng().gen_range(0..keys.len());
             let outpoint = OutPoint::from(keys[rng]);
 
@@ -181,7 +186,8 @@ mod test {
             let utxo_opt = utxo_db.get_utxo(&outpoint);
 
             let outpoint_key = OutPointKey::from(&outpoint);
-            let utxo_entry = utxos.get(&outpoint_key).expect("an entry should be found");
+            let utxo_entry =
+                (&utxos).container.get(&outpoint_key).expect("an entry should be found");
             assert_eq!(utxo_entry.utxo(), utxo_opt);
 
             // check has_utxo
@@ -198,7 +204,12 @@ mod test {
                 map.insert(OutPointKey::from(&outpoint), entry);
 
                 let new_hash = Id::new(&H256::random());
-                utxo_db.batch_write(map, new_hash).expect("batch write should work");
+                let another_cache = ConsumedUtxoCache {
+                    container: map,
+                    best_block: new_hash,
+                };
+
+                utxo_db.batch_write(another_cache).expect("batch write should work");
 
                 assert!(!utxo_db.has_utxo(&outpoint));
             }
@@ -208,7 +219,8 @@ mod test {
                 let rng = make_pseudo_rng().gen_range(0..keys.len());
                 let outpoint_key = keys[rng];
                 let outpoint = OutPoint::from(outpoint_key);
-                let utxo = utxos
+                let utxo = (&utxos)
+                    .container
                     .get(outpoint_key)
                     .expect("entry should exist")
                     .utxo()
@@ -223,8 +235,7 @@ mod test {
                 let mut child = UtxosCache::new(&parent);
                 assert!(child.spend_utxo(&outpoint));
 
-                let new_block_hash = Id::new(&H256::random());
-                let res = flush_to_base(child, new_block_hash, &mut utxo_db);
+                let res = flush_to_base(child, &mut utxo_db);
                 assert!(res.is_ok());
 
                 assert!(!utxo_db.has_utxo(&outpoint));

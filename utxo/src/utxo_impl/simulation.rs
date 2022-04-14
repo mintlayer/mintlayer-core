@@ -32,7 +32,6 @@ fn populate_cache<'a>(
             i
         } else {
             // setting a random height based on the `size`.
-            // let rng = thread_rng();
             make_pseudo_rng().gen_range(0..size)
         };
 
@@ -131,12 +130,13 @@ fn stack_flush_test() {
     outps.append(&mut cache2_outps);
 
     let cache2_clone = cache2.clone();
-    let (cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(), &outps);
+    let (mut cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(), &outps);
     outps.append(&mut cache3_outps);
 
     let new_block_hash = Id::new(&H256::random());
+    cache3.set_best_block(new_block_hash);
     let cache3_clone = cache3.clone();
-    assert!(flush_to_base(cache3_clone, new_block_hash, &mut parent).is_ok());
+    assert!(flush_to_base(cache3_clone, &mut parent).is_ok());
 
     for (key, utxo_entry) in &parent.utxos {
         let outpoint = OutPoint::from(key);

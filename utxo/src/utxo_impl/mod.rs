@@ -147,37 +147,21 @@ pub trait UtxosView {
     fn derive_cache(&self) -> UtxosCache;
 }
 
-struct ConsumedUtxoCache {
+#[derive(Clone)]
+pub struct ConsumedUtxoCache {
     container: HashMap<OutPointKey, UtxoEntry>,
     best_block: Id<Block>,
 }
 
-impl ConsumedUtxoCache {
-    fn new(container: HashMap<OutPointKey, UtxoEntry>, best_block: Id<Block>) -> Self {
-        ConsumedUtxoCache {
-            container,
-            best_block,
-        }
-    }
-}
-
 pub trait FlushableUtxoView {
     /// Performs bulk modification
-    fn batch_write(
-        &mut self,
-        utxos: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: Id<Block>,
-    ) -> Result<(), Error>;
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error>;
 }
 
 // flush the cache into the provided base. This will consume the cache and throw it away.
 // It uses the batch_write function since it's available in different kinds of views.
-pub fn flush_to_base<T: FlushableUtxoView>(
-    cache: UtxosCache,
-    block_hash: Id<Block>,
-    base: &mut T,
-) -> Result<(), Error> {
-    base.batch_write(cache.utxos, block_hash)
+pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> Result<(), Error> {
+    base.batch_write(cache.consume()?)
 }
 
 #[derive(Clone, Default)]
@@ -270,7 +254,7 @@ impl<'a> UtxosCache<'a> {
     pub fn new(parent: &'a dyn UtxosView) -> Self {
         UtxosCache {
             parent: Some(parent),
-            current_block_hash: None,
+            current_block_hash: parent.get_best_block_hash(),
             utxos: HashMap::new(),
             memory_usage: 0,
         }
@@ -476,12 +460,8 @@ impl<'a> UtxosView for UtxosCache<'a> {
 }
 
 impl<'a> FlushableUtxoView for UtxosCache<'a> {
-    fn batch_write(
-        &mut self,
-        utxo_entries: HashMap<OutPointKey, UtxoEntry>,
-        block_hash: Id<Block>,
-    ) -> Result<(), Error> {
-        for (key, entry) in utxo_entries {
+    fn batch_write(&mut self, utxo_entries: ConsumedUtxoCache) -> Result<(), Error> {
+        for (key, entry) in utxo_entries.container {
             let parent_entry = self.utxos.get(&key);
 
             // Ignore non-dirty entries (optimization).
@@ -532,7 +512,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
             }
         }
 
-        self.current_block_hash = Some(block_hash);
+        self.current_block_hash = Some(utxo_entries.best_block);
         Ok(())
     }
 }
