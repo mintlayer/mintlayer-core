@@ -147,6 +147,20 @@ pub trait UtxosView {
     fn derive_cache(&self) -> UtxosCache;
 }
 
+struct ConsumedUtxoCache {
+    container: HashMap<OutPointKey, UtxoEntry>,
+    best_block: Id<Block>,
+}
+
+impl ConsumedUtxoCache {
+    fn new(container: HashMap<OutPointKey, UtxoEntry>, best_block: Id<Block>) -> Self {
+        ConsumedUtxoCache {
+            container,
+            best_block,
+        }
+    }
+}
+
 pub trait FlushableUtxoView {
     /// Performs bulk modification
     fn batch_write(
@@ -410,6 +424,13 @@ impl<'a> UtxosCache<'a> {
             }
         }
         None
+    }
+
+    fn consume(self) -> Result<ConsumedUtxoCache, Error> {
+        Ok(ConsumedUtxoCache {
+            container: self.utxos,
+            best_block: self.current_block_hash.ok_or(Error::CacheWithoutBestBlock)?,
+        })
     }
 }
 

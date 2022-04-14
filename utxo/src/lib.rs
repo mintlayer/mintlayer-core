@@ -7,5 +7,6 @@ pub use utxo_impl::*;
 pub enum Error {
     OverwritingUtxo,
     UtxoAlreadyExists,
+    CacheWithoutBestBlock,
     DBError(String),
 }
