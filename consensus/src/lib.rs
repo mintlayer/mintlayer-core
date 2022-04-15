@@ -57,6 +57,10 @@ pub enum BlockError {
     NotFound,
     #[error("Invalid block source")]
     InvalidBlockSource,
+    #[error("Duplicate transaction found in block")]
+    DuplicatedTransactionInBlock,
+    #[error("Previously indexed transaction not found")]
+    PreviouslyIndexedTxNotFound,
     // To be expanded
 }
 
@@ -219,18 +223,14 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn store_cached_inputs(&mut self, cached_inputs: &CachedInputs) -> Result<(), BlockError> {
+    fn store_cached_inputs(&mut self, cached_inputs: CachedInputs) -> Result<(), BlockError> {
         for (tx_id, tx_index) in cached_inputs {
-            self.db_tx.set_mainchain_tx_index(tx_id, tx_index)?;
+            self.db_tx.set_mainchain_tx_index(&tx_id, &tx_index)?;
         }
         Ok(())
     }
 
-    fn calculate_indices(
-        &self,
-        block: &Block,
-        tx: &Transaction,
-    ) -> Result<TxMainChainIndex, BlockError> {
+    fn calculate_indices(block: &Block, tx: &Transaction) -> Result<TxMainChainIndex, BlockError> {
         let enc_block = block.encode();
         let enc_tx = tx.encode();
         let offset_tx = enc_block
@@ -247,16 +247,6 @@ impl<'a> ConsensusRef<'a> {
             enc_tx.len().try_into().map_err(|_| BlockError::Unknown)?,
         );
 
-        assert_eq!(
-            &self
-                .db_tx
-                .get_mainchain_tx_by_position(&tx_position)
-                .ok()
-                .flatten()
-                .expect("Database corrupted! "),
-            tx
-        );
-
         TxMainChainIndex::new(
             SpendablePosition::from(tx_position),
             tx.get_outputs().len().try_into().map_err(|_| BlockError::Unknown)?,
@@ -264,49 +254,44 @@ impl<'a> ConsensusRef<'a> {
         .map_err(BlockError::from)
     }
 
-    fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
+    fn make_cache_with_transactions(block: &Block) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new();
         for tx in block.transactions() {
             // Create a new indices for every tx
-            if let Entry::Vacant(entry) = cached_inputs.entry(tx.get_id()) {
-                entry.insert(self.calculate_indices(block, tx)?);
-            }
+            match cached_inputs.entry(tx.get_id()) {
+                Entry::Vacant(entry) => entry.insert(Self::calculate_indices(block, tx)?),
+                Entry::Occupied(_) => return Err(BlockError::DuplicatedTransactionInBlock),
+            };
+        }
+        Ok(cached_inputs)
+    }
 
+    fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+        self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
+        let mut cached_inputs = Self::make_cache_with_transactions(&block)?;
+        for tx in block.transactions() {
             // Spend inputs
             for input in tx.get_inputs() {
-                let input_index = input.get_outpoint().get_output_index();
-                let input_tx_id = input.get_outpoint().get_tx_id();
-                match input_tx_id {
+                let outpoint = input.get_outpoint();
+                match outpoint.get_tx_id() {
                     OutPointSourceId::Transaction(prev_tx_id) => {
-                        let prev_tx_index = match cached_inputs.entry(prev_tx_id.clone()) {
-                            Entry::Occupied(entry) => {
-                                // If tx index was loaded
-                                entry.into_mut()
-                            }
-                            Entry::Vacant(entry) => {
-                                // Probably utxo in the previous block?
-                                entry.insert(
-                                    self.db_tx
-                                        .get_mainchain_tx_index(&prev_tx_id)?
-                                        .ok_or(/*Invalid outpoint*/ BlockError::Unknown)?,
-                                )
-                            }
-                        };
+                        let prev_tx_index = cached_inputs
+                            .get_mut(&prev_tx_id)
+                            .ok_or(BlockError::PreviouslyIndexedTxNotFound)?;
 
-                        if input_index >= prev_tx_index.get_output_count() {
+                        if outpoint.get_output_index() >= prev_tx_index.get_output_count() {
                             return Err(BlockError::Unknown);
                         }
 
                         prev_tx_index
-                            .spend(input_index, Spender::from(tx.get_id()))
+                            .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
                             .map_err(BlockError::from)?;
                     }
                     OutPointSourceId::BlockReward(_block_id) => unimplemented!(),
                 }
             }
         }
-        self.store_cached_inputs(&cached_inputs)?;
+        self.store_cached_inputs(cached_inputs)?;
         Ok(())
     }
 
@@ -340,7 +325,7 @@ impl<'a> ConsensusRef<'a> {
             // Delete TxMainChainIndex for the current tx
             self.db_tx.del_mainchain_tx_index(&tx.get_id())?;
         }
-        self.store_cached_inputs(&cached_inputs)?;
+        self.store_cached_inputs(cached_inputs)?;
         Ok(())
     }
 
@@ -444,7 +429,7 @@ impl<'a> ConsensusRef<'a> {
     fn connect_genesis_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         for tx in block.transactions() {
             self.db_tx
-                .set_mainchain_tx_index(&tx.get_id(), &self.calculate_indices(block, tx)?)?;
+                .set_mainchain_tx_index(&tx.get_id(), &Self::calculate_indices(block, tx)?)?;
         }
         Ok(())
     }
@@ -779,7 +764,7 @@ mod tests {
             Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
 
         TxOutput::new(
-            Amount::from(g.next_u64() as u128),
+            Amount::from_atoms(g.next_u64() as u128),
             Destination::Address(addr),
         )
     }
@@ -854,7 +839,7 @@ mod tests {
                     .iter()
                     .enumerate()
                     .filter_map(move |(index, output)| {
-                        if output.get_value() > Amount::from(1) {
+                        if output.get_value() > Amount::from_atoms(1) {
                             // Random address receiver
                             let mut rng = rand::thread_rng();
                             let mut witness: Vec<u8> = (1..100).collect();
@@ -870,7 +855,7 @@ mod tests {
                                     witness,
                                 ),
                                 TxOutput::new(
-                                    (output.get_value() - Amount::from(1)).unwrap(),
+                                    (output.get_value() - Amount::from_atoms(1)).unwrap(),
                                     Destination::Address(receiver),
                                 ),
                             ))
@@ -1239,14 +1224,14 @@ mod tests {
                     0,
                     random_witness(),
                 );
-                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
+                let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
                 let first_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 let first_tx_id = first_tx.get_id();
 
                 let input = TxInput::new(first_tx_id.into(), 0, vec![]);
-                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
                 let second_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 // Create tx that pointing to the previous tx
@@ -1294,14 +1279,14 @@ mod tests {
                     0,
                     random_witness(),
                 );
-                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
+                let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
                 let first_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 let first_tx_id = first_tx.get_id();
 
                 let input = TxInput::new(first_tx_id.into(), 0, vec![]);
-                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
                 let second_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 // Create tx that pointing to the previous tx
@@ -1362,7 +1347,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1372,7 +1357,7 @@ mod tests {
             let second_tx = Transaction::new(
                 0,
                 vec![TxInput::new(first_tx_id.clone().into(), 0, vec![])],
-                vec![TxOutput::new(Amount::new(987654321), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(987654321), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1381,7 +1366,7 @@ mod tests {
             let third_tx = Transaction::new(
                 123456789,
                 vec![TxInput::new(first_tx_id.into(), 0, vec![])],
-                vec![TxOutput::new(Amount::new(987654321), receiver)],
+                vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1444,7 +1429,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1476,7 +1461,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver)],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver)],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);

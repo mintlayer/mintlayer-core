@@ -229,7 +229,9 @@ impl std::ops::Shr<u32> for Amount {
 
 impl Sum for Amount {
     fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Amount::zero(), |a, b| (a + b).expect("Overflow operation"))
+        iter.fold(Amount::from_atoms(0), |a, b| {
+            (a + b).expect("Overflow operation")
+        })
     }
 }
 
