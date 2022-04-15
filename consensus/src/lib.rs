@@ -269,7 +269,7 @@ impl<'a> ConsensusRef<'a> {
 
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
-        let mut cached_inputs = Self::make_cache_with_transactions(&block)?;
+        let mut cached_inputs = Self::make_cache_with_transactions(block)?;
         for tx in block.transactions() {
             // Spend inputs
             for input in tx.get_inputs() {
