@@ -17,8 +17,8 @@
 
 //! General framework for working with subsystems
 //!
-//! The [Manager] type handles a collection of [Subsystem]s. The framework also takes care of
-//! inter-subsystem calls and clean shutdown.
+//! The [Manager] type handles a collection of subsystems. The framework also takes care of
+//! inter-subsystem calls and clean shutdown. Subsystems communicate using [Handle]s.
 //!
 //! ## Calls
 //!
@@ -89,12 +89,12 @@ impl Manager {
         &self,
         name: &'static str,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Subsystem<T> {
+    ) -> Handle<T> {
         self.builder().with_name(name).start(subsystem)
     }
 
     /// Start a passive subsystem. See [Builder::start_passive].
-    pub fn start_passive<T: 'static + Send>(&self, name: &'static str, obj: T) -> Subsystem<T> {
+    pub fn start_passive<T: 'static + Send>(&self, name: &'static str, obj: T) -> Handle<T> {
         self.builder().with_name(name).start_passive(obj)
     }
 
@@ -217,7 +217,7 @@ impl<'a> Builder<'a> {
     pub fn start<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         self,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Subsystem<T> {
+    ) -> Handle<T> {
         // Name strings
         let manager_name = self.manager.name;
         let subsys_name = self.subsystem_name;
@@ -243,14 +243,14 @@ impl<'a> Builder<'a> {
             std::mem::drop(shutting_down_tx);
         });
 
-        Subsystem::new(action_tx)
+        Handle::new(action_tx)
     }
 
     /// Start a passive subsystem.
     ///
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
     /// from other subsystems.
-    pub fn start_passive<T: 'static + Send>(self, mut obj: T) -> Subsystem<T> {
+    pub fn start_passive<T: 'static + Send>(self, mut obj: T) -> Handle<T> {
         self.start(|mut call_rq, mut shutdown_rq| async move {
             loop {
                 tokio::select! {
@@ -304,12 +304,12 @@ impl ShutdownRequest {
 ///
 /// This allows the user to interact with the subsystem from the outside. Currently, it only
 /// supports calling functions on the subsystem.
-pub struct Subsystem<T> {
+pub struct Handle<T> {
     // Send the subsystem stuff to do.
     action_tx: mpsc::Sender<Action<T, ()>>,
 }
 
-impl<T> Clone for Subsystem<T> {
+impl<T> Clone for Handle<T> {
     fn clone(&self) -> Self {
         Self {
             action_tx: self.action_tx.clone(),
@@ -323,7 +323,7 @@ pub enum CallError {
     SubsystemDead,
 }
 
-impl<T: Send + 'static> Subsystem<T> {
+impl<T: Send + 'static> Handle<T> {
     /// Crate a new subsystem handle.
     fn new(action_tx: mpsc::Sender<Action<T, ()>>) -> Self {
         Self { action_tx }

@@ -17,8 +17,6 @@
 
 #![allow(clippy::new_without_default)]
 
-use subsystem::*;
-
 mod helpers;
 
 // The substringer passive subsystem (for testing)
@@ -67,19 +65,22 @@ impl Counter {
 
 // The subsystem testing the other two subsystems
 pub struct Tester {
-    substringer: Subsystem<Substringer>,
-    counter: Subsystem<Counter>,
+    substringer: subsystem::Handle<Substringer>,
+    counter: subsystem::Handle<Counter>,
 }
 
 impl Tester {
-    fn new(substringer: Subsystem<Substringer>, counter: Subsystem<Counter>) -> Self {
+    fn new(
+        substringer: subsystem::Handle<Substringer>,
+        counter: subsystem::Handle<Counter>,
+    ) -> Self {
         Self {
             substringer,
             counter,
         }
     }
 
-    async fn run(&self, _: CallRequest<()>, _: ShutdownRequest) {
+    async fn run(&self, _: subsystem::CallRequest<()>, _: subsystem::ShutdownRequest) {
         let res0 = self.substringer.call_mut(|this| this.append_get("xyz"));
         assert_eq!(res0.await, Ok("abcxyz".to_string()));
         assert_eq!(self.substringer.call(Substringer::size).await, Ok(6));
@@ -100,7 +101,7 @@ fn basic_passive_subsystem() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = Manager::new("app");
+            let app = subsystem::Manager::new("app");
 
             let substr = app.start_passive("substr", Substringer::new("abc".into()));
             let counter = app.start_passive("counter", Counter::new());
@@ -120,14 +121,14 @@ fn basic_passive_shutdown() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = Manager::new("app");
+            let app = subsystem::Manager::new("app");
 
             let _substr = app.start_passive("substr", Substringer::new("abc".into()));
             let _counter = app.start_passive("counter", Counter::new());
 
             // Start a subsystem that immediately terminates, instructing the remaining subsystems
             // to terminate too.
-            app.start("terminator", |_call_rq: CallRequest<()>, _shut_rq| async {});
+            let _shut: subsystem::Handle<()> = app.start("terminator", |_, _| async {});
 
             app.main().await
         })

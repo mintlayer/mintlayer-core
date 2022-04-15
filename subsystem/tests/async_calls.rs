@@ -15,8 +15,6 @@
 //
 // Author(s): L. Kuklinek
 
-use subsystem::*;
-
 mod helpers;
 
 // Logger (as a subsystem)
@@ -37,11 +35,11 @@ impl Logger {
 // Logging counter
 pub struct Counter {
     count: u64,
-    logger: Subsystem<Logger>,
+    logger: subsystem::Handle<Logger>,
 }
 
 impl Counter {
-    fn new(logger: Subsystem<Logger>) -> Self {
+    fn new(logger: subsystem::Handle<Logger>) -> Self {
         let count = 0u64;
         Self { count, logger }
     }
@@ -61,21 +59,24 @@ fn async_calls() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = Manager::new("app");
+            let app = subsystem::Manager::new("app");
             let logger = app.start_passive("logger", Logger::new("logging".to_string()));
             let counter = app.start_passive("counter", Counter::new(logger.clone()));
 
-            app.start("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
-                logger.call(|l| l.write("starting")).await.unwrap();
+            app.start(
+                "test",
+                |_call_rq: subsystem::CallRequest<()>, _shut_rq| async move {
+                    logger.call(|l| l.write("starting")).await.unwrap();
 
-                // Bump the counter twice
-                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                assert_eq!(res, Ok(Ok(1)));
-                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                assert_eq!(res, Ok(Ok(2)));
+                    // Bump the counter twice
+                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                    assert_eq!(res, Ok(Ok(1)));
+                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                    assert_eq!(res, Ok(Ok(2)));
 
-                logger.call(|l| l.write("done")).await.unwrap();
-            });
+                    logger.call(|l| l.write("done")).await.unwrap();
+                },
+            );
 
             app.main().await
         })
