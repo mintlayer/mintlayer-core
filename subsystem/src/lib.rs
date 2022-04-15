@@ -76,26 +76,92 @@ impl Manager {
         }
     }
 
-    /// Build a new subsystem
+    /// Start the subsystem.
     ///
-    /// This gives more control over starting subsystems than [Manager::start] or
-    /// [Manager::start_passive]. Use if extra parameter tuning is required.
-    pub fn builder(&self) -> Builder<'_> {
-        Builder::new(self)
+    /// A subsystem has to handle shutdown and call requests. It can also react to external IO
+    /// events. If the subsystem handles *only* calls and shutdown requests without interaction
+    /// with any additional IO, use the [Manager::start_passive] convenience method.
+    ///
+    /// A typical skeleton of a subsystem looks like this:
+    /// ```no_run
+    /// # let manager = subsystem::Manager::new("app");
+    /// let subsystem = manager.start("my-subsystem", |mut call, mut shutdown| async move {
+    ///     loop {
+    ///         tokio::select! {
+    ///             // Shutdown received, break out of the loop.
+    ///             () = shutdown.recv() => { break; }
+    ///             // Handle calls. An object representing the subsystem is passed in.
+    ///             func = call.recv() => { func(todo!("put an argument here")); }
+    ///             // Handle any other IO events here
+    ///         };
+    ///     }
+    /// });
+    /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid amnbiguity.
+    /// ```
+    pub fn start_with_config<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+        &self,
+        config: SubsystemConfig,
+        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
+    ) -> Handle<T> {
+        // Name strings
+        let manager_name = self.name;
+        let subsys_name = config.subsystem_name;
+        // Shutdown-related channels
+        let shutting_down_tx = self.shutting_down_tx.clone();
+        let shutdown_rq = ShutdownRequest(self.shutdown_request_tx.subscribe());
+        // Call related channels
+        let (action_tx, action_rx) = mpsc::channel(config.call_queue_capacity);
+        let call_rq = CallRequest(action_rx);
+
+        task::spawn(async move {
+            log::info!("Subsystem {}/{} started", manager_name, subsys_name);
+
+            // Perform the subsystem task.
+            subsystem(call_rq, shutdown_rq).await;
+
+            // Signal the intent to shut down to the other parts of the application.
+            shutting_down_tx.send(()).await.expect("Subsystem outlived the manager!?");
+
+            log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
+
+            // Close the channel to signal the completion of the shutdown.
+            std::mem::drop(shutting_down_tx);
+        });
+
+        Handle::new(action_tx)
     }
 
-    /// Start a subsystem. See [Builder::start].
+    /// Start a passive subsystem.
+    ///
+    /// A passive subsystem does not interact with the environment on its own. It only serves calls
+    /// from other subsystems.
+    pub fn start_passive_with_config<T: 'static + Send>(
+        &self,
+        config: SubsystemConfig,
+        mut obj: T,
+    ) -> Handle<T> {
+        self.start_with_config(config, |mut call_rq, mut shutdown_rq| async move {
+            loop {
+                tokio::select! {
+                    () = shutdown_rq.recv() => { break; }
+                    call = call_rq.recv() => { call(&mut obj).await; }
+                }
+            }
+        })
+    }
+
+    /// Start a subsystem. See [Manager::start_with_config].
     pub fn start<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &self,
         name: &'static str,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     ) -> Handle<T> {
-        self.builder().with_name(name).start(subsystem)
+        self.start_with_config(SubsystemConfig::named(name), subsystem)
     }
 
-    /// Start a passive subsystem. See [Builder::start_passive].
+    /// Start a passive subsystem. See [Manager::start_passive_with_config].
     pub fn start_passive<T: 'static + Send>(&self, name: &'static str, obj: T) -> Handle<T> {
-        self.builder().with_name(name).start_passive(obj)
+        self.start_passive_with_config(SubsystemConfig::named(name), obj)
     }
 
     /// Install termination signal handlers.
@@ -161,104 +227,33 @@ impl Manager {
     }
 }
 
-/// Subsystem builder
-pub struct Builder<'a> {
-    manager: &'a Manager,
-    subsystem_name: &'static str,
-    call_queue_capacity: usize,
+/// Subsystem configuration
+pub struct SubsystemConfig {
+    /// Subsystem name
+    pub subsystem_name: &'static str,
+    /// Capacity of the call request channel
+    pub call_queue_capacity: usize,
 }
 
-impl<'a> Builder<'a> {
+impl SubsystemConfig {
     const DEFAULT_CALL_QUEUE_CAPACITY: usize = 64;
     const DEFAULT_SUBSYSTEM_NAME: &'static str = "<unnamed>";
 
-    fn new(manager: &'a Manager) -> Self {
+    /// New configuration with given name, all other options are defaults.
+    fn named(subsystem_name: &'static str) -> Self {
         Self {
-            manager,
+            subsystem_name,
+            ..Default::default()
+        }
+    }
+}
+
+impl Default for SubsystemConfig {
+    fn default() -> Self {
+        Self {
             subsystem_name: Self::DEFAULT_SUBSYSTEM_NAME,
             call_queue_capacity: Self::DEFAULT_CALL_QUEUE_CAPACITY,
         }
-    }
-
-    /// Set call queue capacity
-    pub fn with_call_queue_capacity(mut self, new_cap: usize) -> Self {
-        self.call_queue_capacity = new_cap;
-        self
-    }
-
-    /// Set subsystem name
-    pub fn with_name(mut self, new_name: &'static str) -> Self {
-        self.subsystem_name = new_name;
-        self
-    }
-
-    /// Start the subsystem.
-    ///
-    /// A subsystem has to handle shutdown and call requests. It can also react to external IO
-    /// events. If the subsystem handles *only* calls and shutdown requests without interaction
-    /// with any additional IO, use the [Manager::start_passive] convenience method.
-    ///
-    /// A typical skeleton of a subsystem looks like this:
-    /// ```no_run
-    /// # let manager = subsystem::Manager::new("app");
-    /// let subsystem = manager.start("my-subsystem", |mut call, mut shutdown| async move {
-    ///     loop {
-    ///         tokio::select! {
-    ///             // Shutdown received, break out of the loop.
-    ///             () = shutdown.recv() => { break; }
-    ///             // Handle calls. An object representing the subsystem is passed in.
-    ///             func = call.recv() => { func(todo!("put an argument here")); }
-    ///             // Handle any other IO events here
-    ///         };
-    ///     }
-    /// });
-    /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid amnbiguity.
-    /// ```
-    pub fn start<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
-        self,
-        subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
-    ) -> Handle<T> {
-        // Name strings
-        let manager_name = self.manager.name;
-        let subsys_name = self.subsystem_name;
-        // Shutdown-related channels
-        let shutting_down_tx = self.manager.shutting_down_tx.clone();
-        let shutdown_rq = ShutdownRequest(self.manager.shutdown_request_tx.subscribe());
-        // Call related channels
-        let (action_tx, action_rx) = mpsc::channel(self.call_queue_capacity);
-        let call_rq = CallRequest(action_rx);
-
-        task::spawn(async move {
-            log::info!("Subsystem {}/{} started", manager_name, subsys_name);
-
-            // Perform the subsystem task.
-            subsystem(call_rq, shutdown_rq).await;
-
-            // Signal the intent to shut down to the other parts of the application.
-            shutting_down_tx.send(()).await.expect("Subsystem outlived the manager!?");
-
-            log::info!("Subsystem {}/{} terminated", manager_name, subsys_name);
-
-            // Close the channel to signal the completion of the shutdown.
-            std::mem::drop(shutting_down_tx);
-        });
-
-        Handle::new(action_tx)
-    }
-
-    /// Start a passive subsystem.
-    ///
-    /// A passive subsystem does not interact with the environment on its own. It only serves calls
-    /// from other subsystems.
-    pub fn start_passive<T: 'static + Send>(self, mut obj: T) -> Handle<T> {
-        self.start(|mut call_rq, mut shutdown_rq| async move {
-            loop {
-                tokio::select! {
-                    () = shutdown_rq.recv() => { break; }
-                    call = call_rq.recv() => { call(&mut obj).await; }
-                }
-            }
-        })
     }
 }
 
@@ -371,5 +366,20 @@ impl<T: Send + 'static> Handle<T> {
         func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
     ) -> Result<R, CallError> {
         self.call_mut(|this| func(this)).await
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn default_queue_size_with_named_config() {
+        let config = SubsystemConfig::named("foo");
+        assert_eq!(config.subsystem_name, "foo");
+        assert_eq!(
+            config.call_queue_capacity,
+            SubsystemConfig::DEFAULT_CALL_QUEUE_CAPACITY
+        );
     }
 }
