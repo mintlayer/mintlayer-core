@@ -265,8 +265,8 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+        self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
         let mut cached_inputs = CachedInputs::new();
-        let mut total_value = Amount::new(0);
         for tx in block.transactions() {
             // Create a new indices for every tx
             if let Entry::Vacant(entry) = cached_inputs.entry(tx.get_id()) {
@@ -304,18 +304,6 @@ impl<'a> ConsensusRef<'a> {
                     }
                     OutPointSourceId::BlockReward(_block_id) => unimplemented!(),
                 }
-                // Check overflow
-                total_value = (total_value
-                    + Self::get_input_value(&self.db_tx, input).map_or_else(
-                        |_err| {
-                            // Is tx in the same block?
-                            Self::find_output_in_transactions(input, block.transactions())
-                                .expect("Couldn't get input")
-                                .get_value()
-                        },
-                        |v| v,
-                    ))
-                .ok_or(BlockError::Unknown)?;
             }
         }
         self.store_cached_inputs(&cached_inputs)?;
@@ -472,7 +460,6 @@ impl<'a> ConsensusRef<'a> {
         if block.is_genesis(self.chain_config) {
             self.connect_genesis_transactions(&block)?
         } else {
-            self.check_block_fee(block.transactions())?;
             self.connect_transactions(&block)?;
         }
 
