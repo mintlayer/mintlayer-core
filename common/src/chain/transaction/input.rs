@@ -39,31 +39,30 @@ fn outpoint_source_id_as_monolithic_tuple(v: &OutPointSourceId) -> (u8, H256) {
 
 impl PartialOrd for OutPointSourceId {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let id = outpoint_source_id_as_monolithic_tuple(self);
-        let other_id = outpoint_source_id_as_monolithic_tuple(other);
-        println!("Comparing {:?} to {:?}", id, other_id);
-        Some(id.cmp(&other_id))
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for OutPointSourceId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).expect("Comparison should never fail")
+        let id = outpoint_source_id_as_monolithic_tuple(self);
+        let other_id = outpoint_source_id_as_monolithic_tuple(other);
+        id.cmp(&other_id)
     }
 }
 
 impl PartialOrd for OutPoint {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let id = outpoint_source_id_as_monolithic_tuple(&self.id);
-        let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
-
-        (id, self.index).partial_cmp(&(other_id, other.index))
+        Some(self.cmp(other))
     }
 }
 
 impl Ord for OutPoint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        (self).partial_cmp(other).expect("Comparison should never fail")
+        let id = outpoint_source_id_as_monolithic_tuple(&self.id);
+        let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
+
+        (id, self.index).cmp(&(other_id, other.index))
     }
 }
 
