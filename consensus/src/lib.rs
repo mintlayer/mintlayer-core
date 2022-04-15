@@ -31,6 +31,7 @@ use common::chain::{
 use common::chain::{SpendError, TxMainChainIndexError};
 use common::primitives::{time, Amount, BlockHeight, Id, Idable};
 use std::collections::btree_map::Entry;
+use std::collections::BTreeSet;
 use thiserror::Error;
 mod orphan_blocks;
 use parity_scale_codec::Encode;
@@ -674,6 +675,19 @@ impl<'a> ConsensusRef<'a> {
         //         keyed.insert(input.get_outpoint());
         //     }
         // }
+
+        {
+            // check duplicate transactions
+            let mut txs_ids = BTreeSet::new();
+            for tx in block.transactions() {
+                let tx_id = tx.get_id();
+                let already_in_tx_id = txs_ids.get(&tx_id);
+                match already_in_tx_id {
+                    Some(_) => return Err(BlockError::DuplicatedTransactionInBlock),
+                    None => txs_ids.insert(tx_id),
+                };
+            }
+        }
 
         //TODO: Size limits
         if block.encoded_size() > MAX_BLOCK_WEIGHT {
