@@ -59,7 +59,8 @@ impl Amount {
 
             remove_right_most_zeros_and_decimal_point(result)
         } else {
-            let unit = 10_u128.pow(decimals as u32);
+            let ten: IntType = 10;
+            let unit = ten.pow(decimals as u32);
             let whole = self.val / unit;
             let fraction = self.val % unit;
             let result = format!("{whole}.{fraction:00$}", decimals as usize);
