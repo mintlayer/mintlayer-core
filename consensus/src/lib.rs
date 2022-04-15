@@ -487,6 +487,10 @@ impl<'a> ConsensusRef<'a> {
                 .set_block_index(&prev_block)
                 .expect("Can't set block index. Inconsistent DB");
         }
+        self.db_tx.set_block_id_at_height(
+            &new_tip_block_index.get_block_height(),
+            new_tip_block_index.get_block_id(),
+        )?;
         self.db_tx.set_block_index(new_tip_block_index)?;
         self.db_tx.set_best_block_id(new_tip_block_index.get_block_id())?;
         Ok(())
@@ -522,6 +526,8 @@ impl<'a> ConsensusRef<'a> {
         // Disconnect block
         let mut prev_block_index = self.get_previous_block_index(&block_index)?;
         prev_block_index.unset_next_block_id();
+
+        self.db_tx.del_block_id_at_height(&block_index.get_block_height())?;
         self.db_tx.set_block_index(&prev_block_index)?;
         Ok(prev_block_index)
     }
@@ -749,6 +755,11 @@ mod tests {
     use common::primitives::{Amount, Id};
     use rand::prelude::*;
 
+    pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
+    pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
+    pub(crate) const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
+    pub(crate) const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
+
     fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
         let mut bytes = [0u8; 32];
         g.fill_bytes(&mut bytes);
@@ -806,7 +817,7 @@ mod tests {
         let flags = rng.next_u32();
         let lock_time = rng.next_u32();
 
-        Transaction::new(flags, inputs, outputs, lock_time).unwrap()
+        Transaction::new(flags, inputs, outputs, lock_time).expect(ERR_CREATE_TX_FAIL)
     }
 
     fn generate_random_invalid_block() -> Block {
@@ -822,7 +833,25 @@ mod tests {
         let time = rng.next_u32();
         let prev_id = Some(Id::new(&generate_random_h256(&mut rng)));
 
-        Block::new(transactions, prev_id, time, ConsensusData::None).unwrap()
+        Block::new(transactions, prev_id, time, ConsensusData::None).expect(ERR_CREATE_BLOCK_FAIL)
+    }
+
+    fn setup_consensus() -> Consensus {
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage);
+
+        // Process genesis
+        let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
+        assert!(result.is_ok());
+        assert_eq!(
+            consensus
+                .blockchain_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            Some(config.genesis_block().get_id())
+        );
+        consensus
     }
 
     fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
@@ -867,7 +896,7 @@ mod tests {
             .unzip();
 
         Block::new(
-            vec![Transaction::new(0, inputs, outputs, 0).expect("Failed to create transaction")],
+            vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
             if orphan {
                 Some(Id::new(&H256::random()))
             } else {
@@ -876,7 +905,7 @@ mod tests {
             time::get() as u32,
             ConsensusData::None,
         )
-        .expect("Error creating block")
+        .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
     #[test]
@@ -926,7 +955,10 @@ mod tests {
                 .flatten()
                 .unwrap();
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(config.genesis_block().get_id())
             );
             assert_eq!(block_index.get_prev_block_id(), &None);
@@ -951,9 +983,12 @@ mod tests {
                 .process_block(config.genesis_block().clone(), block_source)
                 .ok()
                 .flatten()
-                .unwrap();
+                .expect("Unable to process genesis block");
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(config.genesis_block().get_id())
             );
             assert_eq!(block_index.get_block_id(), &config.genesis_block().get_id());
@@ -965,15 +1000,20 @@ mod tests {
             let mut prev_block = config.genesis_block().clone();
             for _ in 0..255 {
                 let prev_block_id = block_index.get_block_id();
-                let best_block_id =
-                    consensus.blockchain_storage.get_best_block_id().ok().flatten().unwrap();
+                let best_block_id = consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .ok()
+                    .flatten()
+                    .expect("Unable to get best block ID");
                 assert_eq!(&best_block_id, block_index.get_block_id());
                 let block_source = BlockSource::Peer(1);
                 let new_block = produce_test_block(&config, &prev_block, false);
                 let new_block_index =
                     dbg!(consensus.process_block(new_block.clone(), block_source))
-                        .unwrap()
-                        .unwrap();
+                        .ok()
+                        .flatten()
+                        .expect("Unable to process block");
 
                 assert_eq!(new_block_index.get_next_block_id(), &None);
                 assert_eq!(
@@ -988,13 +1028,18 @@ mod tests {
 
                 let next_block_id = consensus
                     .blockchain_storage
-                    .get_block_index(&new_block_index.get_prev_block_id().clone().unwrap())
+                    .get_block_index(
+                        &new_block_index
+                            .get_prev_block_id()
+                            .clone()
+                            .expect("Prev block ID not found"),
+                    )
                     .ok()
                     .flatten()
-                    .unwrap()
+                    .expect("Unable to get the previous block index")
                     .get_next_block_id()
                     .clone()
-                    .unwrap();
+                    .expect("Next block not found");
                 assert_eq!(&next_block_id, new_block_index.get_block_id());
                 block_index = new_block_index;
                 prev_block = new_block;
@@ -1015,7 +1060,10 @@ mod tests {
                 consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
             assert!(result.is_ok());
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(config.genesis_block().get_id())
             );
 
@@ -1024,7 +1072,10 @@ mod tests {
             let new_id = Some(block.get_id());
             assert!(consensus.process_block(block, BlockSource::Local).is_ok());
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 new_id
             );
 
@@ -1033,11 +1084,17 @@ mod tests {
             // let new_id = Some(block.get_id());
             assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
             assert_ne!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(config.genesis_block().get_id())
             );
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 new_id
             );
 
@@ -1046,7 +1103,10 @@ mod tests {
             let new_id = Some(new_block.get_id());
             assert!(consensus.process_block(new_block, BlockSource::Local).is_ok());
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 new_id
             );
         });
@@ -1085,7 +1145,10 @@ mod tests {
                 consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
             assert!(result.is_ok());
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(config.genesis_block().get_id())
             );
 
@@ -1098,7 +1161,7 @@ mod tests {
                     consensus
                         .blockchain_storage
                         .get_mainchain_tx_index(&tx.get_id())
-                        .expect("DB corrupted")
+                        .expect(ERR_STORAGE_FAIL)
                         == None
                 );
             }
@@ -1107,7 +1170,10 @@ mod tests {
             let new_id = Some(block.get_id());
             assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
             assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 new_id
             );
 
@@ -1120,13 +1186,15 @@ mod tests {
                         consensus
                             .blockchain_storage
                             .get_mainchain_tx_index(&tx.get_id())
-                            .expect("DB corrupted")
-                            .expect("Not found mainchain tx index"),
+                            .expect("Not found mainchain tx index")
+                            .expect(ERR_STORAGE_FAIL),
                     ),
                 };
 
                 for input in tx.get_inputs() {
-                    if tx_index.get_spent_state(input.get_outpoint().get_output_index()).unwrap()
+                    if tx_index
+                        .get_spent_state(input.get_outpoint().get_output_index())
+                        .expect("Unable to get spent state")
                         != OutputSpentState::Unspent
                     {
                         panic!("Tx input can't be spent");
@@ -1136,84 +1204,314 @@ mod tests {
         });
     }
 
-    fn setup_consensus() -> Consensus {
-        let config = create_mainnet();
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+    fn random_witness() -> Vec<u8> {
+        let mut rng = rand::thread_rng();
+        let mut witness: Vec<u8> = (1..100).collect();
+        witness.shuffle(&mut rng);
+        witness
+    }
 
-        // Process genesis
-        let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
-        assert!(result.is_ok());
-        assert_eq!(
-            consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
-            Some(config.genesis_block().get_id())
-        );
-        consensus
+    fn random_address(chain_config: &ChainConfig) -> Destination {
+        let mut rng = rand::thread_rng();
+        let mut address: Vec<u8> = (1..22).collect();
+        address.shuffle(&mut rng);
+        let receiver = Address::new(chain_config, address).expect("Failed to create address");
+        Destination::Address(receiver)
     }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn spend_tx_in_the_same_block() {
         common::concurrency::model(|| {
-            let mut consensus = setup_consensus();
+            // Check is it correctly spend when the second tx pointing on the first tx
+            // +--Block----------------+
+            // |                       |
+            // | +-------tx-1--------+ |
+            // | |input = prev_block | |
+            // | +-------------------+ |
+            // |                       |
+            // | +-------tx-2--------+ |
+            // | |input = tx1        | |
+            // | +-------------------+ |
+            // +-----------------------+
+            {
+                let mut consensus = setup_consensus();
+                // Create base tx
+                let receiver = random_address(&consensus.chain_config);
 
-            let mut transactions = Vec::new();
-            // Create base tx
-            let mut rng = rand::thread_rng();
-            let mut witness: Vec<u8> = (1..100).collect();
-            witness.shuffle(&mut rng);
-            let mut address: Vec<u8> = (1..22).collect();
-            address.shuffle(&mut rng);
-            let receiver = Address::new(&consensus.chain_config, address.clone())
-                .expect("Failed to create address");
+                let prev_block_tx_id = consensus
+                    .chain_config
+                    .genesis_block()
+                    .transactions()
+                    .get(0)
+                    .expect("Transaction not found")
+                    .get_id();
 
-            let prev_block_tx_id =
-                consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+                let input = TxInput::new(
+                    OutPointSourceId::Transaction(prev_block_tx_id),
+                    0,
+                    random_witness(),
+                );
+                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
 
-            let input = TxInput::new(OutPointSourceId::Transaction(prev_block_tx_id), 0, witness);
-            let output = TxOutput::new(
-                Amount::from(12345678900000),
-                Destination::Address(receiver.clone()),
-            );
+                let first_tx =
+                    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
+                let first_tx_id = first_tx.get_id();
 
-            let first_tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();
-            let first_tx_id = first_tx.get_id();
-            transactions.push(first_tx);
+                let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let second_tx =
+                    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
+                // Create tx that pointing to the previous tx
+                let block = Block::new(
+                    vec![first_tx, second_tx],
+                    Some(Id::new(
+                        &consensus.chain_config.genesis_block().get_id().get(),
+                    )),
+                    time::get() as u32,
+                    ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
+                let block_id = block.get_id();
 
-            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
-            let output = TxOutput::new(Amount::new(987654321), Destination::Address(receiver));
-            let child_tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();
-            transactions.push(child_tx);
-            // Create tx that pointing to the previous tx
-            let block = Block::new(
-                transactions,
-                Some(Id::new(
-                    &consensus.chain_config.genesis_block().get_id().get(),
-                )),
-                time::get() as u32,
-                ConsensusData::None,
-            )
-            .unwrap();
-            let block_id = block.get_id();
+                assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+                assert_eq!(
+                    consensus
+                        .blockchain_storage
+                        .get_best_block_id()
+                        .expect(ERR_BEST_BLOCK_NOT_FOUND),
+                    Some(block_id)
+                );
+            }
+            // The case is invalid. Transsactions should be in order
+            // +--Block----------------+
+            // |                       |
+            // | +-------tx-1--------+ |
+            // | |input = tx2        | |
+            // | +-------------------+ |
+            // |                       |
+            // | +-------tx-2--------+ |
+            // | |input = prev_block | |
+            // | +-------------------+ |
+            // +-----------------------+
+            {
+                let mut consensus = setup_consensus();
+                // Create base tx
+                let receiver = random_address(&consensus.chain_config);
 
-            assert!(consensus.process_block(block, BlockSource::Local).is_ok());
-            assert_eq!(
-                consensus.blockchain_storage.get_best_block_id().expect("Best block not found"),
-                Some(block_id)
-            );
+                let prev_block_tx_id =
+                    consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+
+                let input = TxInput::new(
+                    OutPointSourceId::Transaction(prev_block_tx_id),
+                    0,
+                    random_witness(),
+                );
+                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
+
+                let first_tx =
+                    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
+                let first_tx_id = first_tx.get_id();
+
+                let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let second_tx =
+                    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
+                // Create tx that pointing to the previous tx
+                let block = Block::new(
+                    vec![second_tx, first_tx],
+                    Some(Id::new(
+                        &consensus.chain_config.genesis_block().get_id().get(),
+                    )),
+                    time::get() as u32,
+                    ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
+
+                assert!(consensus.process_block(block, BlockSource::Local).is_err());
+                assert_eq!(
+                    consensus
+                        .blockchain_storage
+                        .get_best_block_id()
+                        .expect(ERR_BEST_BLOCK_NOT_FOUND)
+                        .expect(ERR_STORAGE_FAIL),
+                    consensus.chain_config.genesis_block().get_id()
+                );
+            }
         });
     }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn double_spend_tx_in_the_same_block() {
-        common::concurrency::model(|| {});
+        common::concurrency::model(|| {
+            // Check is it correctly spend when a couple of transactions pointing on one output
+            // +--Block----------------+
+            // |                       |
+            // | +-------tx-1--------+ |
+            // | |input = prev_block | |
+            // | +-------------------+ |
+            // |                       |
+            // | +-------tx-2--------+ |
+            // | |input = tx1        | |
+            // | +-------------------+ |
+            // |                       |
+            // | +-------tx-3--------+ |
+            // | |input = tx1        | |
+            // | +-------------------+ |
+            // +-----------------------+
+
+            let mut consensus = setup_consensus();
+            let receiver = random_address(&consensus.chain_config);
+
+            let prev_block_tx_id =
+                consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+
+            // Create first tx
+            let first_tx = Transaction::new(
+                0,
+                vec![TxInput::new(
+                    OutPointSourceId::Transaction(prev_block_tx_id),
+                    0,
+                    random_witness(),
+                )],
+                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                0,
+            )
+            .expect(ERR_CREATE_TX_FAIL);
+            let first_tx_id = first_tx.get_id();
+
+            // Create second tx
+            let second_tx = Transaction::new(
+                0,
+                vec![TxInput::new(first_tx_id.clone().into(), 0, vec![])],
+                vec![TxOutput::new(Amount::new(987654321), receiver.clone())],
+                0,
+            )
+            .expect(ERR_CREATE_TX_FAIL);
+
+            // Create third tx
+            let third_tx = Transaction::new(
+                123456789,
+                vec![TxInput::new(first_tx_id.into(), 0, vec![])],
+                vec![TxOutput::new(Amount::new(987654321), receiver)],
+                0,
+            )
+            .expect(ERR_CREATE_TX_FAIL);
+
+            // Create tx that pointing to the previous tx
+            let block = Block::new(
+                vec![first_tx, second_tx, third_tx],
+                Some(Id::new(
+                    &consensus.chain_config.genesis_block().get_id().get(),
+                )),
+                time::get() as u32,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+            assert!(consensus.process_block(block, BlockSource::Local).is_err());
+            assert_eq!(
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND)
+                    .expect(ERR_STORAGE_FAIL),
+                consensus.chain_config.genesis_block().get_id()
+            );
+        });
     }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn double_spend_tx_in_another_block() {
-        common::concurrency::model(|| {});
+        common::concurrency::model(|| {
+            // Check is it correctly spend when a couple of transactions in a different blocks pointing on one output
+            //
+            // Genesis -> b1 -> b2 where
+            //
+            // +--Block-1--------------+
+            // |                       |
+            // | +-------tx-1--------+ |
+            // | |input = genesis    | |
+            // | +-------------------+ |
+            // +-----------------------+
+            //
+            // +--Block-2--------------+
+            // |                       |
+            // | +-------tx-1--------+ |
+            // | |input = genesis    | |
+            // | +-------------------+ |
+            // +-----------------------+
+
+            let mut consensus = setup_consensus();
+            let receiver = random_address(&consensus.chain_config);
+
+            let prev_block_tx_id =
+                consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+
+            // Create first tx
+            let first_tx = Transaction::new(
+                0,
+                vec![TxInput::new(
+                    OutPointSourceId::Transaction(prev_block_tx_id.clone()),
+                    0,
+                    random_witness(),
+                )],
+                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                0,
+            )
+            .expect(ERR_CREATE_TX_FAIL);
+
+            // Create tx that pointing to the previous tx
+            let first_block = Block::new(
+                vec![first_tx],
+                Some(Id::new(
+                    &consensus.chain_config.genesis_block().get_id().get(),
+                )),
+                time::get() as u32,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+            let first_block_id = first_block.get_id();
+            assert!(consensus.process_block(first_block, BlockSource::Local).is_ok());
+            assert_eq!(
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
+                Some(first_block_id.clone())
+            );
+            // Create second tx
+            let second_tx = Transaction::new(
+                12345,
+                vec![TxInput::new(
+                    OutPointSourceId::Transaction(prev_block_tx_id),
+                    0,
+                    random_witness(),
+                )],
+                vec![TxOutput::new(Amount::from(12345678912345), receiver)],
+                0,
+            )
+            .expect(ERR_CREATE_TX_FAIL);
+
+            // Create tx that pointing to the previous tx
+            let second_block = Block::new(
+                vec![second_tx],
+                Some(first_block_id.clone()),
+                time::get() as u32,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+            assert!(consensus.process_block(second_block, BlockSource::Local).is_err());
+            assert_eq!(
+                consensus
+                    .blockchain_storage
+                    .get_best_block_id()
+                    .expect(ERR_BEST_BLOCK_NOT_FOUND)
+                    .expect(ERR_STORAGE_FAIL),
+                first_block_id
+            );
+        });
     }
 
     // TODO: Not ready tests for this PR:
