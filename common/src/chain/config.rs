@@ -80,7 +80,7 @@ fn create_mainnet_genesis() -> Block {
         genesis_message,
     );
     let output = TxOutput::new(
-        Amount::new(100000000000000),
+        Amount::from_atoms(100000000000000),
         Destination::Address(genesis_mint_receiver),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)

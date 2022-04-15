@@ -1,5 +1,5 @@
 use common::chain::transaction::*;
-use common::primitives::{Id, Idable, H256};
+use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
 
 #[test]
@@ -8,8 +8,11 @@ fn transaction_id_snapshots() {
     let hash1 = H256([0x51; 32]);
     let hash2 = H256([0x52; 32]);
 
-    let outs0: Vec<TxOutput> =
-        [TxOutput::new(25.into(), Destination::ScriptHash(Id::new(&hash0)))].to_vec();
+    let outs0: Vec<TxOutput> = [TxOutput::new(
+        Amount::from_atoms(25),
+        Destination::ScriptHash(Id::new(&hash0)),
+    )]
+    .to_vec();
     let ins0: Vec<TxInput> =
         [TxInput::new(Id::<Transaction>::new(&hash0).into(), 5, vec![])].to_vec();
     let ins1: Vec<TxInput> = [
