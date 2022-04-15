@@ -1514,6 +1514,138 @@ mod tests {
         });
     }
 
+    #[derive(Debug)]
+    struct ChainItem {
+        id: Id<Block>,
+        prev_block_id: Id<Block>,
+        height: usize,
+        index: usize,
+    }
+
+    impl ChainItem {
+        pub fn new(block: &Block, height: usize, index: usize) -> Self {
+            Self {
+                id: block.get_id(),
+                prev_block_id: block.prev_block_id().unwrap(),
+                height,
+                index,
+            }
+        }
+
+        pub fn print(&self) {
+            print!(" -> b{}({})", self.index, self.height);
+        }
+    }
+
+    struct BlockTestFrameWork {
+        consensus: Consensus,
+        blocks: Vec<Block>,
+        chains: Vec<Vec<ChainItem>>,
+    }
+
+    #[test]
+    fn test_block_test_framework() {
+        let mut btf = BlockTestFrameWork::new();
+        btf.create_chain(10);
+        btf.add_fork(1, 2);
+        btf.process_blocks().expect("Test fail");
+        btf.print_chain();
+    }
+
+    impl BlockTestFrameWork {
+        pub fn new() -> Self {
+            Self {
+                consensus: setup_consensus(),
+                blocks: Vec::new(),
+                chains: Vec::new(),
+            }
+        }
+
+        fn print_gap(&self, block: &ChainItem) {
+            if block.prev_block_id == self.consensus.chain_config.genesis_block().get_id() {
+                print!("genesis");
+            } else {
+                for chain in &self.chains {
+                    for (index, ancestor_block) in chain.iter().enumerate() {
+                        if ancestor_block.id == block.prev_block_id {
+                            print!("{text:>width$}", text = "\\-> ", width = (7 + index * 9));
+                        }
+                    }
+                }
+            }
+        }
+
+        pub fn print_chain(&self) {
+            let mut first_block_in_chain = true;
+            for chain in &self.chains {
+                for block in chain {
+                    if first_block_in_chain {
+                        self.print_gap(block);
+                        first_block_in_chain = false;
+                    }
+                    block.print();
+                }
+                first_block_in_chain = true;
+                println!();
+            }
+            println!();
+        }
+
+        pub fn create_chain(&mut self, height: usize) {
+            let mut block = self.consensus.chain_config.genesis_block().clone();
+            let mut chain = Vec::new();
+            for i in 0..height + 1 {
+                block = produce_test_block(&self.consensus.chain_config, &block, false);
+                chain.push(ChainItem::new(&block, i, self.blocks.len() + 1));
+                self.blocks.push(block.clone());
+            }
+            self.chains.push(chain);
+        }
+
+        pub fn add_fork(&mut self, spend_out: usize, new_height: usize) {
+            let mut block = self.blocks.get(spend_out).unwrap().clone();
+            let mut chain = Vec::new();
+            for i in spend_out..new_height - 1 {
+                block = produce_test_block(&self.consensus.chain_config, &block, false);
+                chain.push(ChainItem::new(&block, i, self.blocks.len() + 1));
+                self.blocks.push(block.clone());
+            }
+            self.chains.push(chain);
+        }
+
+        pub fn process_blocks(&mut self) -> Result<(), BlockError> {
+            let block_source = BlockSource::Local;
+            for block in &self.blocks {
+                self.consensus.process_block(block.clone(), block_source)?;
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn test_very_long_reorgs() {
+        common::concurrency::model(|| {
+            // # Fork like this:
+            // #
+            // #     genesis -> b1 (0) -> b2 (1)
+            // #                      \-> b3 (1)
+            // #
+            // # Nothing should happen at this point. We saw b2 first so it takes priority.
+            let mut btf = BlockTestFrameWork::new();
+            btf.create_chain(1);
+            btf.add_fork(1, 3);
+            btf.process_blocks().expect("Test fail");
+            btf.print_chain();
+            // # Now we add another block to make the alternative chain longer.
+            // #
+            // #     genesis -> b1 (0) -> b2 (1)
+            // #                      \-> b3 (1) -> b4 (2)
+            btf.add_fork(2, 4);
+            btf.process_blocks().expect("Test fail");
+            btf.print_chain();
+        });
+    }
+
     // TODO: Not ready tests for this PR:
     // * Empty block checks
     // * Check chains with skips and forks
