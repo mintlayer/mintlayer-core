@@ -23,6 +23,8 @@ use parity_scale_codec::{Decode, Encode};
 // if you need a signed amount, we should create a separate type for it and implement proper conversion
 pub type IntType = u128;
 
+/// An unsigned fixed-point type for amounts
+/// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Amount {
     #[codec(compact)]
@@ -40,9 +42,12 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 }
 
 impl Amount {
-    #[allow(dead_code)]
-    pub fn new(v: u128) -> Self {
+    pub fn from_atoms(v: IntType) -> Self {
         Amount { val: v }
+    }
+
+    pub fn into_atoms(&self) -> IntType {
+        self.val
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
@@ -103,12 +108,6 @@ impl Amount {
 
             atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         }
-    }
-}
-
-impl From<u128> for Amount {
-    fn from(v: u128) -> Self {
-        Amount { val: v }
     }
 }
 
@@ -232,10 +231,10 @@ mod tests {
 
     #[test]
     fn creation() {
-        let x = Amount::new(555);
+        let x = Amount::from_atoms(555);
         assert_eq!(x, Amount { val: 555 });
 
-        let y = Amount::from(123);
+        let y = Amount::from_atoms(123);
         assert_eq!(y, Amount { val: 123 });
     }
 
