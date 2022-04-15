@@ -10,6 +10,9 @@ time = [ "tokio/time" ]
 
 [dependencies]
 
+# External dependencies
+thiserror = "1.0"
+
 # Local dependencies
 logging = { path = "../logging" }
 

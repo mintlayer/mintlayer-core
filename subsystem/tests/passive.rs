@@ -81,17 +81,17 @@ impl Tester {
 
     async fn run(&self, _: CallRequest<()>, _: ShutdownRequest) {
         let res0 = self.substringer.call_mut(|this| this.append_get("xyz"));
-        assert_eq!(res0.await, "abcxyz");
-        assert_eq!(self.substringer.call(Substringer::size).await, 6);
+        assert_eq!(res0.await, Ok("abcxyz".to_string()));
+        assert_eq!(self.substringer.call(Substringer::size).await, Ok(6));
 
         let res1 = self.substringer.call(|this| this.substr(2, 5));
-        assert_eq!(res1.await, "cxy");
+        assert_eq!(res1.await, Ok("cxy".to_string()));
 
         let res2 = self.counter.call(Counter::get);
-        assert_eq!(res2.await, 13);
+        assert_eq!(res2.await, Ok(13));
 
         let res3 = self.counter.call_mut(|this| this.add_and_get(3));
-        assert_eq!(res3.await, 16);
+        assert_eq!(res3.await, Ok(16));
     }
 }
 

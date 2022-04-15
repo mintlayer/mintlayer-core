@@ -46,10 +46,13 @@ impl Counter {
         Self { count, logger }
     }
 
-    async fn bump(&mut self) {
+    async fn bump(&mut self) -> Result<u64, subsystem::CallError> {
         self.count += 1;
         let message = format!("Bumped counter to {}", self.count);
-        self.logger.call(move |logger| logger.write(&message)).await;
+        self.logger
+            .call(move |logger| logger.write(&message))
+            .await
+            .map(|()| self.count)
     }
 }
 
@@ -63,11 +66,15 @@ fn async_calls() {
             let counter = app.start_passive("counter", Counter::new(logger.clone()));
 
             app.start("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
-                logger.call(|l| l.write("starting")).await;
+                logger.call(|l| l.write("starting")).await.unwrap();
+
                 // Bump the counter twice
-                counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                logger.call(|l| l.write("done")).await;
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(1)));
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(2)));
+
+                logger.call(|l| l.write("done")).await.unwrap();
             });
 
             app.main().await

@@ -317,6 +317,12 @@ impl<T> Clone for Subsystem<T> {
     }
 }
 
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+pub enum CallError {
+    #[error("Callee subsysytem has terminated")]
+    SubsystemDead,
+}
+
 impl<T: Send + 'static> Subsystem<T> {
     /// Crate a new subsystem handle.
     fn new(action_tx: mpsc::Sender<Action<T, ()>>) -> Self {
@@ -327,7 +333,7 @@ impl<T: Send + 'static> Subsystem<T> {
     pub async fn call_async_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> FutureBox<'a, R> + Send + 'static,
-    ) -> R {
+    ) -> Result<R, CallError> {
         let (rtx, rrx) = oneshot::channel::<R>();
 
         self.action_tx
@@ -338,17 +344,16 @@ impl<T: Send + 'static> Subsystem<T> {
                 })
             }))
             .await
-            .ok()
-            .expect("Target subsystem down upon call");
+            .map_err(|_| CallError::SubsystemDead)?;
 
-        rrx.await.expect("Target subsystem down upon result receive")
+        rrx.await.map_err(|_| CallError::SubsystemDead)
     }
 
     /// Dispatch an async function call to the subsystem (immutable)
     pub async fn call_async<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> FutureBox<'a, R> + Send + 'static,
-    ) -> R {
+    ) -> Result<R, CallError> {
         self.call_async_mut(|this| func(this)).await
     }
 
@@ -356,7 +361,7 @@ impl<T: Send + 'static> Subsystem<T> {
     pub async fn call_mut<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a mut T) -> R + Send + 'static,
-    ) -> R {
+    ) -> Result<R, CallError> {
         self.call_async_mut(|this| Box::pin(core::future::ready(func(this)))).await
     }
 
@@ -364,7 +369,7 @@ impl<T: Send + 'static> Subsystem<T> {
     pub async fn call<R: Send + 'static>(
         &self,
         func: impl for<'a> FnOnce(&'a T) -> R + Send + 'static,
-    ) -> R {
+    ) -> Result<R, CallError> {
         self.call_mut(|this| func(this)).await
     }
 }
