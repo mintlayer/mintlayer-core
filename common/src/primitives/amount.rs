@@ -128,27 +128,27 @@ impl std::ops::Sub for Amount {
     }
 }
 
-impl std::ops::Mul for Amount {
+impl std::ops::Mul<IntType> for Amount {
     type Output = Option<Self>;
 
-    fn mul(self, other: Self) -> Option<Self> {
-        self.val.checked_mul(other.val).map(|n| Amount { val: n })
+    fn mul(self, other: IntType) -> Option<Self> {
+        self.val.checked_mul(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Div for Amount {
-    type Output = Option<Self>;
+impl std::ops::Div<IntType> for Amount {
+    type Output = Option<Amount>;
 
-    fn div(self, other: Self) -> Option<Self> {
-        self.val.checked_div(other.val).map(|n| Amount { val: n })
+    fn div(self, other: IntType) -> Option<Amount> {
+        self.val.checked_div(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Rem for Amount {
+impl std::ops::Rem<IntType> for Amount {
     type Output = Option<Self>;
 
-    fn rem(self, other: Self) -> Option<Self> {
-        self.val.checked_rem(other.val).map(|n| Amount { val: n })
+    fn rem(self, other: IntType) -> Option<Self> {
+        self.val.checked_rem(other).map(|n| Amount { val: n })
     }
 }
 
@@ -257,26 +257,17 @@ mod tests {
 
     #[test]
     fn mul_some() {
-        assert_eq!(
-            Amount { val: 3 } * Amount { val: 3 },
-            Some(Amount { val: 9 })
-        );
+        assert_eq!(Amount { val: 3 } * 3, Some(Amount { val: 9 }));
     }
 
     #[test]
     fn div_some() {
-        assert_eq!(
-            Amount { val: 9 } / Amount { val: 3 },
-            Some(Amount { val: 3 })
-        );
+        assert_eq!(Amount { val: 9 } / 3, Some(Amount { val: 3 }));
     }
 
     #[test]
     fn rem_some() {
-        assert_eq!(
-            Amount { val: 9 } % Amount { val: 4 },
-            Some(Amount { val: 1 })
-        );
+        assert_eq!(Amount { val: 9 } % 4, Some(Amount { val: 1 }));
     }
 
     #[test]
@@ -294,7 +285,7 @@ mod tests {
         assert_eq!(
             Amount {
                 val: IntType::MAX / 2 + 1
-            } * Amount { val: 2 },
+            } * 2,
             None
         );
     }
