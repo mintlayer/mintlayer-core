@@ -24,7 +24,6 @@ use crate::{
 use logging::log;
 use std::collections::HashMap;
 
-// TODO: rename 'add_block()' to `register_block()`
 // TODO: use LRU cache for the import queue
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -113,7 +112,7 @@ impl PeerIndex {
             .for_each(|headers| self.import_queued_blocks(headers));
     }
 
-    pub fn add_block(&mut self, header: BlockHeader) -> Result<PeerIndexState, P2pError> {
+    pub fn register_block(&mut self, header: BlockHeader) -> Result<PeerIndexState, P2pError> {
         // return early if the block doesn't have an ancestor
         let prev_id = header.prev_id.ok_or(P2pError::InvalidData)?;
 
@@ -179,9 +178,9 @@ mod tests {
         assert_eq!(block_res.prev_id, Some(parent_id));
     }
 
-    fn add_block(peer: &mut PeerIndex, parent_id: BlockId, assumed_size: usize) -> BlockId {
+    fn register_block(peer: &mut PeerIndex, parent_id: BlockId, assumed_size: usize) -> BlockId {
         let block = BlockHeader::new(Some(parent_id));
-        assert_eq!(peer.add_block(block), Ok(PeerIndexState::Accepted));
+        assert_eq!(peer.register_block(block), Ok(PeerIndexState::Accepted));
         verify_state(peer, block.id, parent_id, assumed_size);
 
         block.id
@@ -198,15 +197,15 @@ mod tests {
         assert_eq!(peer.index.get(&genesis.id).unwrap().id, genesis.id);
 
         // add two blocks that both have genesis as the parent
-        let block1_id = add_block(&mut peer, genesis.id, 2);
-        let block2_id = add_block(&mut peer, genesis.id, 3);
+        let block1_id = register_block(&mut peer, genesis.id, 2);
+        let block2_id = register_block(&mut peer, genesis.id, 3);
 
         // add two more blocks for block1
-        let block3_id = add_block(&mut peer, block1_id, 4);
-        let block4_id = add_block(&mut peer, block1_id, 5);
+        let block3_id = register_block(&mut peer, block1_id, 4);
+        let block4_id = register_block(&mut peer, block1_id, 5);
 
         // add one more block for block4
-        let block5 = add_block(&mut peer, block4_id, 6);
+        let block5 = register_block(&mut peer, block4_id, 6);
     }
 
     // receive block announcements from other peers but as they update the chain
@@ -221,15 +220,15 @@ mod tests {
         assert_eq!(peer.index.get(&genesis.id).unwrap().id, genesis.id);
 
         // add two blocks that both have genesis as the parent
-        let block1_id = add_block(&mut peer, genesis.id, 2);
-        let block2_id = add_block(&mut peer, genesis.id, 3);
+        let block1_id = register_block(&mut peer, genesis.id, 2);
+        let block2_id = register_block(&mut peer, genesis.id, 3);
 
         // add two more blocks for block1
-        let block3_id = add_block(&mut peer, block1_id, 4);
-        let block4_id = add_block(&mut peer, block1_id, 5);
+        let block3_id = register_block(&mut peer, block1_id, 4);
+        let block4_id = register_block(&mut peer, block1_id, 5);
 
         // add one more block for block4
-        let block5 = add_block(&mut peer, block4_id, 6);
+        let block5 = register_block(&mut peer, block4_id, 6);
     }
 
     // first two blocks are added on top of genesis block,
@@ -241,8 +240,8 @@ mod tests {
         peer.initialize(&[genesis]);
 
         // add two blocks that both have genesis as the parent
-        let block1_id = add_block(&mut peer, genesis.id, 2);
-        let block2_id = add_block(&mut peer, block1_id, 3);
+        let block1_id = register_block(&mut peer, genesis.id, 2);
+        let block2_id = register_block(&mut peer, block1_id, 3);
 
         assert_eq!(peer.queue.num_chains(), 0);
         assert_eq!(peer.queue.num_queued(), 0);
@@ -255,17 +254,17 @@ mod tests {
 
         // add two blocks that depend on the missing block and verify that they are queued
         let block4 = BlockHeader::new(Some(block3.id));
-        assert_eq!(peer.add_block(block4), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block4), Ok(PeerIndexState::Queued));
 
         let block5 = BlockHeader::new(Some(block4.id));
-        assert_eq!(peer.add_block(block5), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block5), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.index.len(), 3);
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 2);
 
         // then add the missing block and verify that the queued blocks are added to the block index
-        assert_eq!(peer.add_block(block3), Ok(PeerIndexState::Accepted));
+        assert_eq!(peer.register_block(block3), Ok(PeerIndexState::Accepted));
         assert_eq!(peer.index.len(), 6);
         assert_eq!(peer.queue.num_chains(), 0);
         assert_eq!(peer.queue.num_queued(), 0);
@@ -284,8 +283,8 @@ mod tests {
         peer.initialize(&[genesis]);
 
         // add two blocks that both have genesis as the parent
-        let block1_id = add_block(&mut peer, genesis.id, 2);
-        let block2_id = add_block(&mut peer, block1_id, 3);
+        let block1_id = register_block(&mut peer, genesis.id, 2);
+        let block2_id = register_block(&mut peer, block1_id, 3);
 
         assert_eq!(peer.queue.num_chains(), 0);
         assert_eq!(peer.queue.num_queued(), 0);
@@ -298,17 +297,17 @@ mod tests {
 
         // add two blocks that depend on the missing block and verify that they are queued
         let block4 = BlockHeader::new(Some(block3.id));
-        assert_eq!(peer.add_block(block4), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block4), Ok(PeerIndexState::Queued));
 
         let block5 = BlockHeader::new(Some(block4.id));
-        assert_eq!(peer.add_block(block5), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block5), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.index.len(), 3);
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 2);
 
         // then add the missing block and verify that the queued blocks are added to the block index
-        assert_eq!(peer.add_block(block3), Ok(PeerIndexState::Accepted));
+        assert_eq!(peer.register_block(block3), Ok(PeerIndexState::Accepted));
         assert_eq!(peer.index.len(), 6);
         assert_eq!(peer.queue.num_chains(), 0);
         assert_eq!(peer.queue.num_queued(), 0);
@@ -328,19 +327,19 @@ mod tests {
         let block1_1_1 = BlockHeader::with_id(111, Some(block1_1.id));
 
         // blocks may come in any order
-        assert_eq!(peer.add_block(block1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 5);
 
         // try to reinsert some of the headers
-        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 5);
@@ -368,11 +367,11 @@ mod tests {
         let block2_1 = BlockHeader::with_id(21, Some(block2.id));
         let block1_1_1 = BlockHeader::with_id(111, Some(block1_1.id));
 
-        assert_eq!(peer.add_block(block1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1_1), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 5);
@@ -383,15 +382,15 @@ mod tests {
         let block3_1 = BlockHeader::with_id(31, Some(block3.id));
         let block3_1_1 = BlockHeader::with_id(311, Some(block3_1.id));
 
-        assert_eq!(peer.add_block(block3), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block4), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block3_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block3_1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block3), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block4), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block3_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block3_1_1), Ok(PeerIndexState::Queued));
 
         // try to reinsert previous entries again
-        assert_eq!(peer.add_block(block1_1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
-        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.register_block(block2_1), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.queue.num_chains(), 2);
         assert_eq!(peer.queue.num_queued(), 9);

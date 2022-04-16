@@ -92,10 +92,8 @@ where
         self.index.initialize(headers);
     }
 
-    // TODO: rename `add_block()` -> `register_block()`
-
     /// Register block to the intermediary index of the peer
-    pub fn add_block(
+    pub fn register_block(
         &mut self,
         block: &mock_consensus::Block,
     ) -> error::Result<index::PeerIndexState> {
@@ -105,7 +103,7 @@ where
             self.peer_id
         );
 
-        self.index.add_block(block.header).map_err(|e| {
+        self.index.register_block(block.header).map_err(|e| {
             log::error!(
                 "failed to add block to peer's ({:#?}) intermediary index",
                 self.peer_id
@@ -327,10 +325,10 @@ mod tests {
         let block1_1 = mock_consensus::Block::new(Some(block1.header.id));
         let block1_1_1 = mock_consensus::Block::new(Some(block1_1.header.id));
 
-        assert_eq!(peer.add_block(&block1), Ok(index::PeerIndexState::Queued));
-        assert_eq!(peer.add_block(&block1_1), Ok(index::PeerIndexState::Queued));
+        assert_eq!(peer.register_block(&block1), Ok(index::PeerIndexState::Queued));
+        assert_eq!(peer.register_block(&block1_1), Ok(index::PeerIndexState::Queued));
         assert_eq!(
-            peer.add_block(&block1_1_1),
+            peer.register_block(&block1_1_1),
             Ok(index::PeerIndexState::Queued)
         );
 

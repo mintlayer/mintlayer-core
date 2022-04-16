@@ -352,7 +352,12 @@ where
         );
 
         match self.state {
-            SyncState::Idle => self.p2p_handle.new_block((*block).clone()).await,
+            SyncState::Idle => {
+                self.peers.iter_mut().for_each(|(_, peer)| {
+                    peer.register_block(&block);
+                });
+                self.p2p_handle.new_block((*block).clone()).await
+            }
             _ => self.process_sync_block(peer_id, block),
         }
     }
