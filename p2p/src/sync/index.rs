@@ -21,6 +21,7 @@ use crate::{
         queue::{ImportQueue, ImportQueueState, QueuedData},
     },
 };
+use logging::log;
 use std::collections::HashMap;
 
 // TODO: rename 'add_block()' to `register_block()`
@@ -139,6 +140,10 @@ impl PeerIndex {
         // block's ancestor is not known by this peer's block index
         match self.queue.try_queue(&header)? {
             ImportQueueState::Queued => Ok(PeerIndexState::Queued),
+            ImportQueueState::Duplicate => {
+                log::debug!("queue already contains {:#?}", header);
+                Ok(PeerIndexState::Queued)
+            }
             ImportQueueState::Resolved => self
                 .queue
                 .drain_with_id(&header.id)
@@ -332,6 +337,14 @@ mod tests {
         assert_eq!(peer.queue.num_chains(), 1);
         assert_eq!(peer.queue.num_queued(), 5);
 
+        // try to reinsert some of the headers
+        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.add_block(block2), Ok(PeerIndexState::Queued));
+
+        assert_eq!(peer.queue.num_chains(), 1);
+        assert_eq!(peer.queue.num_queued(), 5);
+
         let missing = BlockHeader::with_id(1337u64, Some(1336u64));
         let other_chain1 = BlockHeader::with_id(4444u64, Some(1337u64));
         let other_chain2 = BlockHeader::with_id(5555u64, Some(4444u64));
@@ -374,6 +387,11 @@ mod tests {
         assert_eq!(peer.add_block(block4), Ok(PeerIndexState::Queued));
         assert_eq!(peer.add_block(block3_1), Ok(PeerIndexState::Queued));
         assert_eq!(peer.add_block(block3_1_1), Ok(PeerIndexState::Queued));
+
+        // try to reinsert previous entries again
+        assert_eq!(peer.add_block(block1_1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.add_block(block1_1), Ok(PeerIndexState::Queued));
+        assert_eq!(peer.add_block(block2_1), Ok(PeerIndexState::Queued));
 
         assert_eq!(peer.queue.num_chains(), 2);
         assert_eq!(peer.queue.num_queued(), 9);

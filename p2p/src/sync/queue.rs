@@ -77,10 +77,11 @@ pub enum ImportQueueState {
 
     /// Element resolves a dependency and all elements can be queried
     Resolved,
+
+    /// Element was attempted to be reinserted
+    Duplicate,
 }
 
-// TODO: implement `Indexable` trait for LRU cache and a hashmap
-// TODO: verify that the import queue handles correctly the case where an entry expires
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct ImportQueue<T>
 where
@@ -165,12 +166,14 @@ where
         self.queue(data.clone())
     }
 
-    // TODO: verify that recursion is not possible, write a test case for it?
-
     /// Add element to the import queue
     pub fn queue(&mut self, data: T) -> error::Result<ImportQueueState> {
         let prev_id = data.get_prev_id().ok_or(P2pError::InvalidData)?;
         let id = *data.get_id();
+
+        if self.lookup.contains_key(data.get_id()) {
+            return Ok(ImportQueueState::Duplicate);
+        }
 
         match self.export.get_mut(&prev_id) {
             Some(ancestor) => {
@@ -660,5 +663,40 @@ mod tests {
         assert_eq!(exported[1..], orig);
     }
 
-    // TODO: add more tests
+    #[test]
+    fn test_duplicate_entries() {
+        let mut q = ImportQueue::new();
+
+        let hdr1 = BlockHeader::with_id(100, Some(1));
+        let hdr1_1 = BlockHeader::with_id(101, Some(100));
+        let hdr1_1_1 = BlockHeader::with_id(103, Some(102));
+        let hdr2 = BlockHeader::with_id(201, Some(100));
+        let hdr1_2 = BlockHeader::with_id(202, Some(201));
+
+        assert_eq!(q.queue(hdr1_1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1_2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr2), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1_1), Ok(ImportQueueState::Queued));
+        assert_eq!(q.queue(hdr1), Ok(ImportQueueState::Queued));
+
+        // try to insert them again
+        assert_eq!(q.queue(hdr1_2), Ok(ImportQueueState::Duplicate));
+        assert_eq!(q.queue(hdr1_1_1), Ok(ImportQueueState::Duplicate));
+        assert_eq!(q.queue(hdr2), Ok(ImportQueueState::Duplicate));
+        assert_eq!(q.queue(hdr1), Ok(ImportQueueState::Duplicate));
+        assert_eq!(q.queue(hdr1_1), Ok(ImportQueueState::Duplicate));
+
+        assert_eq!(q.num_chains(), 2);
+
+        assert_eq!(
+            q.drain().iter().flat_map(|x| x.to_vec()).sorted().collect::<Vec<BlockHeader>>(),
+            [
+                BlockHeader::with_id(100, Some(1)),
+                BlockHeader::with_id(101, Some(100)),
+                BlockHeader::with_id(103, Some(102)),
+                BlockHeader::with_id(201, Some(100)),
+                BlockHeader::with_id(202, Some(201)),
+            ]
+        )
+    }
 }
