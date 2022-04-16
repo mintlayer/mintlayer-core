@@ -159,7 +159,7 @@ where
         rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
     ) -> Self {
         Self {
-            state: SyncState::Idle,
+            state: SyncState::Uninitialized,
             tx_floodsub,
             rx_floodsub,
             p2p_handle: event::P2pEventHandle::new(tx_p2p),
@@ -290,7 +290,6 @@ where
             .collect::<Vec<_>>()
             .iter()
             .for_each(|entry| {
-                println!("remove work {:?}", entry);
                 self.work.remove(entry);
             });
 
@@ -303,9 +302,9 @@ where
             .map(|(header, (active, peers))| {
                 peers.remove(&peer_id);
                 if peers.is_empty() {
-                    (Some(header.clone()), None)
+                    (Some(*header), None)
                 } else if active == &peer_id {
-                    (None, Some(header.clone()))
+                    (None, Some(*header))
                 } else {
                     (None, None)
                 }
@@ -508,12 +507,10 @@ where
                     self.p2p_handle.new_block((**block).clone()).await?;
                 }
             }
-
-            self.state = SyncState::Idle;
-            return Ok(());
         }
 
-        // TODO: this may not be correct
+        // TODO: set idle only if there are peers and their state is not UploadingHeaders
+        self.state = SyncState::Idle;
         Ok(())
     }
 
@@ -910,9 +907,9 @@ mod tests {
         // verify providers and that if a new provider is added while a block request is already in
         // progress, the new provider is added to the list of providers in case the request fails
         for header in &headers {
-            let peers = if let Some(info) = mgr.work.get(&header) {
+            let peers = if let Some(info) = mgr.work.get(header) {
                 info
-            } else if let Some((_, info)) = mgr.active.get(&header) {
+            } else if let Some((_, info)) = mgr.active.get(header) {
                 info
             } else {
                 panic!("invalid etry");
@@ -937,9 +934,9 @@ mod tests {
         assert_eq!(mgr.work.len(), 3);
 
         for header in &headers {
-            let peers = if let Some(info) = mgr.work.get(&header) {
+            let peers = if let Some(info) = mgr.work.get(header) {
                 info
-            } else if let Some((_, info)) = mgr.active.get(&header) {
+            } else if let Some((_, info)) = mgr.active.get(header) {
                 info
             } else {
                 panic!("invalid etry");
@@ -955,5 +952,1139 @@ mod tests {
 
             assert_eq!(&expected, peers);
         }
+    }
+
+    // Register peer who doesn't have any unknown blocks or only knows
+    // of blocks that have already been downloaded/are being downloaded
+    #[tokio::test]
+    async fn register_peer_no_work() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        let peer1 = test_utils::get_random_mock_id();
+        let (tx, rx) = mpsc::channel(16);
+        assert!(mgr.work.is_empty());
+
+        let handle = tokio::spawn(async move {
+            let cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..6 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        // add some blocks to the import queue to act as already downloaded blocks
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(101, Some(100))));
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(102, Some(100))));
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(103, Some(101))));
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(104, Some(102))));
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(105, Some(101))));
+
+        // verify that as the blocks have already been downloaded,
+        // they are not registered as new work
+        assert_eq!(mgr.register_peer(peer1, tx).await, Ok(()));
+        assert!(mgr.work.is_empty());
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                    mock_consensus::BlockHeader::with_id(104, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert!(mgr.work.is_empty());
+
+        let (peer2, peer3, peer4) = (
+            test_utils::get_random_mock_id(),
+            test_utils::get_random_mock_id(),
+            test_utils::get_random_mock_id(),
+        );
+
+        // add some ongoing block downloads
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(222, Some(220)),
+            (peer2, HashSet::from([peer3, peer4])),
+        );
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(223, Some(222)),
+            (peer3, HashSet::from([peer2, peer4])),
+        );
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(224, Some(223)),
+            (peer4, HashSet::from([peer2, peer3])),
+        );
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(222, Some(220)),
+                    mock_consensus::BlockHeader::with_id(223, Some(222)),
+                    mock_consensus::BlockHeader::with_id(224, Some(223)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert!(mgr.work.is_empty());
+    }
+
+    #[tokio::test]
+    async fn register_peer_some_work() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        let peer1 = test_utils::get_random_mock_id();
+        let (tx, rx) = mpsc::channel(16);
+        assert!(mgr.work.is_empty());
+
+        let handle = tokio::spawn(async move {
+            let cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..5 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        assert_eq!(mgr.register_peer(peer1, tx).await, Ok(()));
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(51, Some(50)),
+                    mock_consensus::BlockHeader::with_id(52, Some(51)),
+                    mock_consensus::BlockHeader::with_id(53, Some(51)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.work,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(51, Some(50)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(52, Some(51)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(53, Some(51)),
+                    HashSet::from([peer1])
+                ),
+            ])
+        );
+
+        // add some blocks to the import queue to act as already downloaded blocks
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(101, Some(100))));
+        mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(102, Some(100))));
+
+        // verify that as the blocks have already been downloaded,
+        // they are not registered as new work
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(102, Some(101)),
+                    mock_consensus::BlockHeader::with_id(71, Some(70)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.work,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(51, Some(50)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(52, Some(51)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(53, Some(51)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(71, Some(70)),
+                    HashSet::from([peer1])
+                ),
+            ])
+        );
+
+        let (peer2, peer3, peer4) = (
+            test_utils::get_mock_id_with(112),
+            test_utils::get_mock_id_with(113),
+            test_utils::get_mock_id_with(114),
+        );
+
+        // add some ongoing block downloads
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(222, Some(220)),
+            (peer2, HashSet::from([peer3, peer4])),
+        );
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(223, Some(222)),
+            (peer3, HashSet::from([peer2, peer4])),
+        );
+        mgr.active.insert(
+            mock_consensus::BlockHeader::with_id(224, Some(223)),
+            (peer4, HashSet::from([peer2, peer3])),
+        );
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(222, Some(220)),
+                    mock_consensus::BlockHeader::with_id(223, Some(222)),
+                    // new work
+                    mock_consensus::BlockHeader::with_id(171, Some(170)),
+                    mock_consensus::BlockHeader::with_id(172, Some(171)),
+                ]
+            )
+            .await,
+            Ok(()),
+        );
+        assert_eq!(
+            mgr.work,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(51, Some(50)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(52, Some(51)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(53, Some(51)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(71, Some(70)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(171, Some(170)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(172, Some(171)),
+                    HashSet::from([peer1])
+                ),
+            ])
+        );
+        assert_eq!(
+            mgr.active,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(222, Some(220)),
+                    (peer2, HashSet::from([peer1, peer3, peer4])),
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(223, Some(222)),
+                    (peer3, HashSet::from([peer1, peer2, peer4])),
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(224, Some(223)),
+                    (peer4, HashSet::from([peer2, peer3])),
+                ),
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn get_block_request() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..5 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx).await, Ok(()));
+
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert!(mgr.work.is_empty());
+        assert!(mgr.active.is_empty());
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(102, Some(101)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                    mock_consensus::BlockHeader::with_id(203, Some(202)),
+                ]
+            )
+            .await,
+            Ok(()),
+        );
+        assert_eq!(
+            mgr.work,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    HashSet::from([peer1, peer2])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(102, Some(101)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    HashSet::from([peer2])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                    HashSet::from([peer2])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(203, Some(202)),
+                    HashSet::from([peer2])
+                ),
+            ])
+        );
+
+        // schedule block requests by calling `advance_state()`
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 5);
+
+        mgr.busy.drain();
+        mgr.active.drain();
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 3);
+
+        mgr.busy.drain();
+        mgr.active.drain();
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 1);
+
+        mgr.busy.drain();
+        mgr.active.drain();
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.active.len(), 1);
+        assert_eq!(mgr.work.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn register_block_response() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        mgr.advance_state().await.unwrap();
+
+        for i in 0..3 {
+            let work = mgr
+                .active
+                .iter()
+                .map(|(key, values)| (*key, values.clone()))
+                .collect::<HashMap<_, _>>();
+
+            for (header, (active, _)) in work {
+                assert_eq!(
+                    mgr.process_block_response(
+                        active,
+                        vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+                    )
+                    .await,
+                    Ok(())
+                );
+                mgr.advance_state().await.unwrap();
+            }
+        }
+
+        assert!(mgr.active.is_empty());
+        assert!(mgr.work.is_empty());
+    }
+
+    #[tokio::test]
+    async fn unregister_peer() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2, peer3) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+            test_utils::get_mock_id_with(113),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer3, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer3,
+                &[
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                    mock_consensus::BlockHeader::with_id(206, Some(207)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        // remove peer 123 from `mgr.work`
+        mgr.unregister_peer(peer2).await;
+        assert_eq!(
+            mgr.work,
+            HashMap::from([
+                (
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    HashSet::from([peer1])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                    HashSet::from([peer3])
+                ),
+                (
+                    mock_consensus::BlockHeader::with_id(206, Some(207)),
+                    HashSet::from([peer3])
+                ),
+            ])
+        );
+
+        // create active block request process and then remove peer 123
+        assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.active.len(), 2);
+
+        // remove peer 123 from both `mgr.active` and `mgr.work`
+        mgr.unregister_peer(peer1).await;
+
+        if mgr.work
+            == HashMap::from([(
+                mock_consensus::BlockHeader::with_id(103, Some(102)),
+                HashSet::from([peer3]),
+            )])
+        {
+            assert_eq!(
+                mgr.active,
+                HashMap::from([(
+                    mock_consensus::BlockHeader::with_id(206, Some(207)),
+                    (peer3, HashSet::from([peer3])),
+                )])
+            );
+        } else {
+            assert_eq!(
+                mgr.work,
+                HashMap::from([(
+                    mock_consensus::BlockHeader::with_id(206, Some(207)),
+                    HashSet::from([peer3])
+                )])
+            );
+            assert_eq!(
+                mgr.active,
+                HashMap::from([(
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                    (peer3, HashSet::from([peer3])),
+                )])
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn drain() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        mgr.work.iter().for_each(|(header, _)| {
+            mgr.queue.queue(Arc::new(mock_consensus::Block::with_id(
+                header.id,
+                header.prev_id,
+            )));
+        });
+
+        let chains = mgr
+            .queue
+            .drain()
+            .iter()
+            .flat_map(|x| x.to_vec())
+            .sorted()
+            .collect::<Vec<Arc<mock_consensus::Block>>>();
+
+        assert_eq!(
+            chains,
+            [
+                Arc::new(mock_consensus::Block::with_id(100, Some(1))),
+                Arc::new(mock_consensus::Block::with_id(101, Some(100))),
+                Arc::new(mock_consensus::Block::with_id(103, Some(102))),
+                Arc::new(mock_consensus::Block::with_id(201, Some(100))),
+                Arc::new(mock_consensus::Block::with_id(202, Some(201))),
+            ]
+        );
+    }
+
+    // sync up to date with a remote node while adding blocks from the floodsub to the queue
+    // when syncing is completed, verify that all blocks are in order can be imported to chainstate
+    #[tokio::test]
+    async fn block_response_and_new_blocks() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2, peer3) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+            test_utils::get_mock_id_with(113),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer3, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        // schedule first two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 3);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        for (header, peer) in work {
+            mgr.process_block_response(
+                peer,
+                vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+            )
+            .await;
+        }
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 3);
+
+        // add a new block from the floodsub,
+        //
+        // one that add to the longer chain (100) and one that add new block on top of 103
+        assert_eq!(
+            mgr.process_block(
+                peer1,
+                Arc::new(mock_consensus::Block::with_id(203, Some(202)))
+            )
+            .await,
+            Ok(()),
+        );
+        assert_eq!(
+            mgr.process_block(
+                peer3,
+                Arc::new(mock_consensus::Block::with_id(104, Some(103)))
+            )
+            .await,
+            Ok(()),
+        );
+
+        // schedule second two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 1);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        for (header, peer) in work {
+            mgr.process_block_response(
+                peer,
+                vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+            )
+            .await;
+        }
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 1);
+
+        // add a new block from the floodsub
+        //
+        // add two more blocks on top of the longest chain (100) and a new branch starting from 102
+        assert_eq!(
+            mgr.process_block(
+                peer1,
+                Arc::new(mock_consensus::Block::with_id(204, Some(203)))
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.process_block(
+                peer2,
+                Arc::new(mock_consensus::Block::with_id(205, Some(104)))
+            )
+            .await,
+            Ok(()),
+        );
+        assert_eq!(
+            mgr.process_block(
+                peer3,
+                Arc::new(mock_consensus::Block::with_id(111, Some(102)))
+            )
+            .await,
+            Ok(())
+        );
+
+        // schedule the last block download
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 1);
+        assert_eq!(mgr.work.len(), 0);
+
+        let (header, peer) = {
+            let (header, (peer, _)) = mgr.active.iter().next().unwrap();
+            (*header, *peer)
+        };
+        mgr.process_block_response(
+            peer,
+            vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+        )
+        .await;
+
+        assert!(mgr.active.is_empty());
+        assert!(mgr.work.is_empty());
+        assert_eq!(mgr.queue.num_chains(), 2);
+
+        let mut entries = mgr
+            .queue
+            .drain()
+            .iter()
+            .map(|queued| {
+                queued
+                    .iter()
+                    .map(|entry| (entry.header.id, entry.header.prev_id))
+                    .collect::<Vec<(mock_consensus::BlockId, Option<mock_consensus::BlockId>)>>()
+            })
+            .collect::<Vec<Vec<(mock_consensus::BlockId, Option<mock_consensus::BlockId>)>>>();
+
+        if entries[0].len() != 4 {
+            entries.swap(0, 1);
+        }
+
+        entries[0].sort_by(|a, b| {
+            let res = a.1.cmp(&b.1);
+            if res == std::cmp::Ordering::Equal {
+                return a.0.cmp(&b.0);
+            }
+            res
+        });
+
+        assert_eq!(
+            entries[0],
+            vec![(103, Some(102)), (111, Some(102)), (104, Some(103)), (205, Some(104))]
+        );
+
+        entries[1].sort_by(|a, b| {
+            let res = a.0.cmp(&b.0);
+            if res == std::cmp::Ordering::Equal {
+                return a.1.cmp(&b.1);
+            }
+            res
+        });
+
+        assert_eq!(
+            entries[1],
+            vec![
+                (100, Some(1)),
+                (101, Some(100)),
+                (201, Some(100)),
+                (202, Some(201)),
+                (203, Some(202)),
+                (204, Some(203)),
+            ]
+        );
+    }
+
+    // first receive two blocks from floodsub before any peer state has been initialized,
+    // then downloads missing blocks from the peer that just connected.
+    // verify that both the downloaded blocks and the blocks that were received from the
+    // floodsub are all expoted in order
+    #[tokio::test]
+    async fn first_floodsub_then_syncing() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2, peer3) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+            test_utils::get_mock_id_with(113),
+        );
+
+        // add two blocks to the import queue before initializing the work state
+        assert_eq!(
+            mgr.process_block(
+                peer1,
+                Arc::new(mock_consensus::Block::with_id(203, Some(202)))
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.process_block(
+                peer3,
+                Arc::new(mock_consensus::Block::with_id(204, Some(203)))
+            )
+            .await,
+            Ok(())
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer3, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        // schedule first two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 3);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        for (header, peer) in work {
+            mgr.process_block_response(
+                peer,
+                vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+            )
+            .await;
+        }
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 3);
+
+        // add a new block from the floodsub that depends on the previously recived blocks
+        assert_eq!(
+            mgr.process_block(
+                peer1,
+                Arc::new(mock_consensus::Block::with_id(205, Some(204)))
+            )
+            .await,
+            Ok(()),
+        );
+
+        // schedule second two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 1);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        for (header, peer) in work {
+            mgr.process_block_response(
+                peer,
+                vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+            )
+            .await;
+        }
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 1);
+
+        // add a new block from the floodsub that depends on the previously recived blocks
+        assert_eq!(
+            mgr.process_block(
+                peer3,
+                Arc::new(mock_consensus::Block::with_id(111, Some(102)))
+            )
+            .await,
+            Ok(()),
+        );
+
+        // schedule the last block download
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 1);
+        assert_eq!(mgr.work.len(), 0);
+
+        let (header, peer) = {
+            let (header, (peer, _)) = mgr.active.iter().next().unwrap();
+            (*header, *peer)
+        };
+        mgr.process_block_response(
+            peer,
+            vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+        )
+        .await;
+
+        assert!(mgr.active.is_empty());
+        assert!(mgr.work.is_empty());
+        assert_eq!(mgr.queue.num_chains(), 2);
+
+        let mut entries = mgr
+            .queue
+            .drain()
+            .iter()
+            .map(|queued| {
+                queued
+                    .iter()
+                    .map(|entry| (entry.header.id, entry.header.prev_id))
+                    .collect::<Vec<(_, Option<_>)>>()
+            })
+            .collect::<Vec<Vec<(_, Option<_>)>>>();
+
+        if entries[0].len() != 2 {
+            entries.swap(0, 1);
+        }
+
+        entries[0].sort_by(|a, b| {
+            let res = a.1.cmp(&b.1);
+            if res == std::cmp::Ordering::Equal {
+                return a.0.cmp(&b.0);
+            }
+            res
+        });
+
+        assert_eq!(entries[0], vec![(103, Some(102)), (111, Some(102))]);
+
+        entries[1].sort_by(|a, b| {
+            let res = a.0.cmp(&b.0);
+            if res == std::cmp::Ordering::Equal {
+                return a.1.cmp(&b.1);
+            }
+            res
+        });
+
+        assert_eq!(
+            entries[1],
+            vec![
+                (100, Some(1)),
+                (101, Some(100)),
+                (201, Some(100)),
+                (202, Some(201)),
+                (203, Some(202)),
+                (204, Some(203)),
+                (205, Some(204)),
+            ]
+        );
     }
 }

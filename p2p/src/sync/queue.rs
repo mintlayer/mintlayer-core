@@ -128,7 +128,7 @@ where
 
     /// Check if the queue contains an element
     pub fn contains_key(&self, key: &T::Id) -> bool {
-        self.export.contains_key(key) || self.lookup.contains_key(key)
+        self.lookup.contains_key(key)
     }
 
     /// Resolve the depenencies of a data item `id` by requeuing its elements
