@@ -120,7 +120,7 @@ where
         self.export.len()
     }
 
-	/// Return whether the queue is empty or not
+    /// Return whether the queue is empty or not
     pub fn is_empty(&self) -> bool {
         self.num_chains() == 0 && self.num_queued() == 0
     }

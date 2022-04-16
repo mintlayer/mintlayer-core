@@ -77,6 +77,11 @@ where
         self.state = state;
     }
 
+    /// Get peer state
+    pub fn state(&self) -> &PeerSyncState {
+        &self.state
+    }
+
     /// Get the intermediary index of the peer
     pub fn index(&self) -> &index::PeerIndex {
         &self.index
@@ -140,7 +145,7 @@ where
             self.peer_id
         );
 
-		// TODO: race condition here?
+        // TODO: race condition here?
         self.state = PeerSyncState::Idle;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::Headers {
@@ -203,27 +208,27 @@ mod tests {
     use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> (
-        PeerSyncState<MockService>,
+        PeerContext<MockService>,
         mpsc::Receiver<event::PeerEvent<MockService>>,
     ) {
         let (tx, rx) = mpsc::channel(1);
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        (PeerSyncState::<MockService>::new(addr, tx), rx)
+        (PeerContext::<MockService>::new(addr, tx), rx)
     }
 
     #[test]
     fn create_new_peersyncstate() {
         let (peer, rx) = new_mock_peersyncstate();
-        assert_eq!(peer.state, sync::SyncState::Uninitialized);
+        assert_eq!(peer.state, PeerSyncState::Unknown);
     }
 
     #[test]
     fn test_set_state() {
         let (mut peer, rx) = new_mock_peersyncstate();
 
-        assert_eq!(peer.state, sync::SyncState::Uninitialized);
-        peer.set_state(sync::SyncState::DownloadingBlocks);
-        assert_eq!(peer.state, sync::SyncState::DownloadingBlocks);
+        assert_eq!(peer.state, PeerSyncState::Unknown);
+        peer.set_state(PeerSyncState::UploadingBlocks);
+        assert_eq!(peer.state, PeerSyncState::UploadingBlocks);
     }
 
     impl PartialEq for MockService {

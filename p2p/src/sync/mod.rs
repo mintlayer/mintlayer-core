@@ -307,6 +307,7 @@ where
                 self.active.remove(entry);
             });
 
+        self.peers.remove(&peer_id);
         Ok(())
     }
 
@@ -442,7 +443,7 @@ where
     ///
     /// The combination of the states of `self.work`, `self.active` and `self.queue` define what
     /// the current state of syncing is.
-    async fn advance_state(&mut self) -> error::Result<()> {
+    pub async fn advance_state(&mut self) -> error::Result<()> {
         if !self.work.is_empty() {
             log::debug!(
                 "try to schedule block requests, work len {}, active len {}",
@@ -450,7 +451,7 @@ where
                 self.active.len()
             );
 
-			// TODO: download more than one block from node using one request
+            // TODO: download more than one block from node using one request
             let requests = self
                 .work
                 .iter()
@@ -458,7 +459,7 @@ where
                     peers.iter().find(|peer_id| !self.busy.contains(peer_id)).map(|peer_id| {
                         log::trace!("request {:?} from peer {:?}", header, peer_id);
 
-						// TODO: remove clone
+                        // TODO: remove clone
                         self.busy.insert(*peer_id);
                         self.active.insert(*header, (*peer_id, peers.clone()));
                         (*peer_id, *header)
@@ -468,6 +469,7 @@ where
 
             for (peer_id, header) in requests {
                 let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+                self.work.remove(&header);
                 peer.get_blocks(vec![header]).await?;
             }
 
@@ -483,8 +485,8 @@ where
             return Ok(());
         }
 
-		// try to drain the queue if there are any blocks
-		if !self.queue.is_empty() {
+        // try to drain the queue if there are any blocks
+        if !self.queue.is_empty() {
             for chain in self.queue.drain().iter() {
                 for block in chain.iter() {
                     self.p2p_handle.new_block((**block).clone()).await?;
@@ -493,10 +495,10 @@ where
 
             self.state = SyncState::Idle;
             return Ok(());
-		}
+        }
 
-		// we reach this if
-		Ok(())
+        // TODO: this may not be correct
+        Ok(())
     }
 
     /// Run [SyncManager] event loop
@@ -534,7 +536,7 @@ where
             }
 
             // advance the state of the manager after each event has been handled
-            self.advance_state().await;
+            self.advance_state().await.into_fatal()?;
         }
     }
 }
@@ -604,11 +606,12 @@ mod tests {
             );
         });
 
-        assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-            Ok(())
-        );
+        assert_eq!(mgr.register_peer(peer_id, tx).await, Ok(()));
         assert_eq!(mgr.peers.len(), 1);
+        assert_eq!(
+            mgr.peers.iter().next().unwrap().1.state(),
+            &peer::PeerSyncState::UploadingHeaders,
+        );
     }
 
     // handle peer disconnection event
@@ -631,59 +634,26 @@ mod tests {
             );
         });
 
-        assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-            Ok(())
-        );
+        assert_eq!(mgr.register_peer(peer_id, tx).await, Ok(()));
         assert_eq!(mgr.peers.len(), 1);
+        assert_eq!(
+            mgr.peers.iter().next().unwrap().1.state(),
+            &peer::PeerSyncState::UploadingHeaders,
+        );
 
         // no peer with this id exist, nothing happens
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: addr }).await,
-            Ok(())
+            mgr.unregister_peer(addr).await,
+            Err(P2pError::PeerDoesntExist)
         );
         assert_eq!(mgr.peers.len(), 1);
 
-        assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id }).await,
-            Ok(())
-        );
+        assert_eq!(mgr.unregister_peer(peer_id).await, Ok(()));
         assert!(mgr.peers.is_empty());
     }
 
-    #[tokio::test]
-    async fn new_block_from_floodsub() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
-
-        // send Connected event to SyncManager
-        let (tx, rx) = mpsc::channel(1);
-        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
-        let announced_block = mock_consensus::Block::new(Some(1337));
-        let block_copy = announced_block.clone();
-
-        let handle = tokio::spawn(async move {
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::GetLocator { response },
-                {
-                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
-                }
-            );
-
-            get_message!(
-                rx_p2p.recv().await.unwrap(),
-                event::P2pEvent::NewBlock { block, .. },
-                {
-                    assert_eq!(block_copy, block);
-                }
-            );
-        });
-
-        assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-            Ok(())
-        );
-        assert_eq!(mgr.peers.len(), 1);
-    }
+    // TODO: unregister peer with active block request
+    // TODO: unregister peer with unscheduled block requests where it's the only provider
+    // TODO: unregister peer with unscheduled block requests where it's one of the providers
+    // TODO: add tests where a new block is received from the floodsub (what????)
 }
