@@ -290,22 +290,38 @@ where
             .collect::<Vec<_>>()
             .iter()
             .for_each(|entry| {
+                println!("remove work {:?}", entry);
                 self.work.remove(entry);
             });
 
-        self.active
+        // if peer is the only provider of the block, the request is deleted
+        // if there are multiple providers and peer is the active provider, the request is rescheduled
+        // if there are multiple providers and some other peer is active provider, nothing is done
+        let (remove, reschedule): (Vec<_>, Vec<_>) = self
+            .active
             .iter_mut()
-            .filter_map(|(header, (_, peers))| {
-                // TODO: fix this, if peer is part of the hashmap
-                // and after removal it's not empty -> reschedule the work
+            .map(|(header, (active, peers))| {
                 peers.remove(&peer_id);
-                peers.is_empty().then(|| *header)
+                if peers.is_empty() {
+                    (Some(header.clone()), None)
+                } else if active == &peer_id {
+                    (None, Some(header.clone()))
+                } else {
+                    (None, None)
+                }
             })
-            .collect::<Vec<_>>()
-            .iter()
-            .for_each(|entry| {
-                self.active.remove(entry);
+            .unzip();
+
+        remove.iter().for_each(|header| {
+            header.map(|header| self.active.remove(&header));
+        });
+
+        reschedule.iter().for_each(|header| {
+            header.map(|header| {
+                let (_, peers) = self.active.remove(&header).expect("entry to exist");
+                self.work.insert(header, peers);
             });
+        });
 
         self.peers.remove(&peer_id);
         Ok(())
@@ -459,8 +475,8 @@ where
                     peers.iter().find(|peer_id| !self.busy.contains(peer_id)).map(|peer_id| {
                         log::trace!("request {:?} from peer {:?}", header, peer_id);
 
-                        // TODO: remove clone
                         self.busy.insert(*peer_id);
+                        // TODO: don't insert to active yet!
                         self.active.insert(*header, (*peer_id, peers.clone()));
                         (*peer_id, *header)
                     })
@@ -652,8 +668,292 @@ mod tests {
         assert!(mgr.peers.is_empty());
     }
 
-    // TODO: unregister peer with active block request
-    // TODO: unregister peer with unscheduled block requests where it's the only provider
-    // TODO: unregister peer with unscheduled block requests where it's one of the providers
-    // TODO: add tests where a new block is received from the floodsub (what????)
+    // unregister peer with unscheduled block requests where it's the only provider
+    #[tokio::test]
+    async fn unregister_peer_unscheduled_work_only_provider() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(16);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+
+        tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
+
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetUniqHeaders { headers, response },
+                {
+                    response.send(Some(headers));
+                }
+            )
+        });
+
+        assert_eq!(mgr.register_peer(peer_id, tx).await, Ok(()));
+        assert_eq!(mgr.peers.len(), 1);
+        assert_eq!(
+            mgr.peers.iter().next().unwrap().1.state(),
+            &peer::PeerSyncState::UploadingHeaders,
+        );
+        assert!(mgr.work.is_empty());
+
+        // register work for the peer and verify the work is unscheduled
+        assert_eq!(
+            mgr.initialize_peer(
+                peer_id,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                    mock_consensus::BlockHeader::with_id(104, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(mgr.work.len(), 3);
+        assert!(mgr.active.is_empty());
+
+        // unregister peer and verify that all work has been removed
+        assert_eq!(mgr.unregister_peer(peer_id).await, Ok(()));
+        assert!(mgr.work.is_empty());
+        assert!(mgr.active.is_empty());
+    }
+
+    // unregister peer with active block request
+    #[tokio::test]
+    async fn unregister_peer_active_work_only_provider() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(16);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+
+        tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
+
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetUniqHeaders { headers, response },
+                {
+                    response.send(Some(headers));
+                }
+            )
+        });
+
+        assert_eq!(mgr.register_peer(peer_id, tx).await, Ok(()));
+        assert_eq!(mgr.peers.len(), 1);
+        assert_eq!(
+            mgr.peers.iter().next().unwrap().1.state(),
+            &peer::PeerSyncState::UploadingHeaders,
+        );
+        assert!(mgr.work.is_empty());
+
+        // register work for the peer and verify the work is unscheduled
+        assert_eq!(
+            mgr.initialize_peer(
+                peer_id,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                    mock_consensus::BlockHeader::with_id(104, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(mgr.work.len(), 3);
+        assert!(mgr.active.is_empty());
+
+        // schedule work for the peer
+        mgr.advance_state().await;
+        assert_eq!(mgr.work.len(), 2);
+        assert_eq!(mgr.active.len(), 1);
+
+        // unregister peer and verify that all work has been removed
+        assert_eq!(mgr.unregister_peer(peer_id).await, Ok(()));
+        assert!(mgr.work.is_empty());
+        assert!(mgr.active.is_empty());
+    }
+
+    // register 3 peers which all are individual providers for some blocks
+    // and for some blocks they are all providers
+    // then unregister one peer with an active block request and verify
+    // that while the peer is removed, the work it was doing is assigned
+    // (or rather rescheduled) to someone else
+    #[tokio::test]
+    async fn unregister_peer_active_work_one_of_providers() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+
+        let (tx, rx) = mpsc::channel(16);
+        let peer_id1 = test_utils::get_random_mock_id();
+        let peer_id2 = test_utils::get_random_mock_id();
+        let peer_id3 = test_utils::get_random_mock_id();
+
+        let handle = tokio::spawn(async move {
+            let cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..6 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        // first register 2 peers
+        assert_eq!(mgr.register_peer(peer_id1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer_id2, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.peers.len(), 2);
+        for (id, peer) in mgr.peers.iter() {
+            assert_eq!(peer.state(), &peer::PeerSyncState::UploadingHeaders);
+        }
+        assert!(mgr.work.is_empty());
+
+        // register work for the both of them where some of the headers
+        // are shared and some are unique
+        assert_eq!(
+            mgr.initialize_peer(
+                peer_id1,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                    mock_consensus::BlockHeader::with_id(105, Some(104)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer_id2,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(mgr.work.len(), 3);
+        assert!(mgr.active.is_empty());
+
+        // verify providers
+        assert_eq!(
+            mgr.work.get(&mock_consensus::BlockHeader::with_id(102, Some(100))).unwrap(),
+            &HashSet::from([peer_id1, peer_id2])
+        );
+        assert_eq!(
+            mgr.work.get(&mock_consensus::BlockHeader::with_id(103, Some(101))).unwrap(),
+            &HashSet::from([peer_id1, peer_id2])
+        );
+        assert_eq!(
+            mgr.work.get(&mock_consensus::BlockHeader::with_id(105, Some(104))).unwrap(),
+            &HashSet::from([peer_id1])
+        );
+
+        // schedule work for the peer
+        mgr.advance_state().await;
+        assert_eq!(mgr.work.len(), 1);
+        assert_eq!(mgr.active.len(), 2);
+
+        // register the third and verify that as it also was provider
+        // for both of the scheduled blocks, the active entries are
+        // modified accordingly
+        assert_eq!(mgr.register_peer(peer_id3, tx).await, Ok(()));
+        assert_eq!(mgr.peers.len(), 3);
+        assert_eq!(
+            mgr.peers.get(&peer_id3).unwrap().state(),
+            &peer::PeerSyncState::UploadingHeaders
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer_id3,
+                &[
+                    mock_consensus::BlockHeader::with_id(102, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(101)),
+                    mock_consensus::BlockHeader::with_id(999, Some(888)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        let headers = vec![
+            mock_consensus::BlockHeader::with_id(102, Some(100)),
+            mock_consensus::BlockHeader::with_id(103, Some(101)),
+            mock_consensus::BlockHeader::with_id(105, Some(104)),
+            mock_consensus::BlockHeader::with_id(999, Some(888)),
+        ];
+
+        // verify providers and that if a new provider is added while a block request is already in
+        // progress, the new provider is added to the list of providers in case the request fails
+        for header in &headers {
+            let peers = if let Some(info) = mgr.work.get(&header) {
+                info
+            } else if let Some((_, info)) = mgr.active.get(&header) {
+                info
+            } else {
+                panic!("invalid etry");
+            };
+
+            let expected = if header == &headers[0] || header == &headers[1] {
+                HashSet::from([peer_id1, peer_id2, peer_id3])
+            } else if header == &headers[2] {
+                HashSet::from([peer_id1])
+            } else {
+                HashSet::from([peer_id3])
+            };
+
+            assert_eq!(&expected, peers);
+        }
+
+        // unregister peer2 and verify that as its work also had other providers,
+        // the work has been reassigned to peers 1 and 3
+        assert_eq!(mgr.unregister_peer(peer_id2).await, Ok(()));
+
+        assert_eq!(mgr.active.len(), 1);
+        assert_eq!(mgr.work.len(), 3);
+
+        for header in &headers {
+            let peers = if let Some(info) = mgr.work.get(&header) {
+                info
+            } else if let Some((_, info)) = mgr.active.get(&header) {
+                info
+            } else {
+                panic!("invalid etry");
+            };
+
+            let expected = if header == &headers[0] || header == &headers[1] {
+                HashSet::from([peer_id1, peer_id3])
+            } else if header == &headers[2] {
+                HashSet::from([peer_id1])
+            } else {
+                HashSet::from([peer_id3])
+            };
+
+            assert_eq!(&expected, peers);
+        }
+    }
 }
