@@ -186,3 +186,13 @@ pub enum P2pEvent {
 pub enum BlockFloodEvent {
     Block(Arc<sync::mock_consensus::Block>),
 }
+
+pub enum SyncFloodEvent<T>
+where
+    T: NetworkService,
+{
+    Block {
+        peer_id: T::PeerId,
+        block: sync::mock_consensus::Block,
+    },
+}

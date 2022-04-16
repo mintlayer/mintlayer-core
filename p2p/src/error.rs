@@ -45,9 +45,16 @@ pub enum P2pError {
     NoPeers,
     InvalidData,
     PeerDoesntExist,
+    PeerExists,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
+
+/// Consume the `Result` and convert any non-fatal error to `Ok(())`
+/// and return fatal errors as `Err(e)`
+pub trait FatalError {
+    fn into_fatal(self) -> core::result::Result<(), P2pError>;
+}
 
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {

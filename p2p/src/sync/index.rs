@@ -23,6 +23,9 @@ use crate::{
 };
 use std::collections::HashMap;
 
+// TODO: rename 'add_block()' to `register_block()`
+// TODO: use LRU cache for the import queue
+
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum PeerIndexState {
     /// Block has been accepted to peer's block index

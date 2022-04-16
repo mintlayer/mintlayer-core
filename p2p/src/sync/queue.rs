@@ -79,19 +79,30 @@ pub enum ImportQueueState {
     Resolved,
 }
 
+// TODO: implement `Indexable` trait for LRU cache and a hashmap
+// TODO: verify that the import queue handles correctly the case where an entry expires
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct ImportQueue<T: Orderable> {
+pub struct ImportQueue<T>
+where
+    T: Orderable,
+{
     lookup: HashMap<T::Id, (T::Id, usize)>,
     export: HashMap<T::Id, OrderedData<T>>,
 }
 
-impl<T: Orderable + Clone + Debug> Default for ImportQueue<T> {
+impl<T> Default for ImportQueue<T>
+where
+    T: Orderable + Clone + Debug,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T: Orderable + Clone + Debug> ImportQueue<T> {
+impl<T> ImportQueue<T>
+where
+    T: Orderable + Clone + Debug,
+{
     pub fn new() -> Self {
         Self {
             lookup: HashMap::new(),
@@ -107,6 +118,11 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     /// Return the number of individual chains that the import queue is tracking
     pub fn num_chains(&self) -> usize {
         self.export.len()
+    }
+
+	/// Return whether the queue is empty or not
+    pub fn is_empty(&self) -> bool {
+        self.num_chains() == 0 && self.num_queued() == 0
     }
 
     /// Check if the queue contains an element
@@ -129,6 +145,8 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
         Ok(ImportQueueState::Queued)
     }
 
+    // TODO: verify that duplicate entries are handled correctly
+
     /// Try to queue element to the import queue and if it resolves a dependency,
     /// return [`ImportQueueState::Resolved`] instead which indicates to the caller
     /// they can now try and fetch all the data from the queue.
@@ -146,6 +164,8 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
 
         self.queue(data.clone())
     }
+
+    // TODO: verify that recursion is not possible, write a test case for it?
 
     /// Add element to the import queue
     pub fn queue(&mut self, data: T) -> error::Result<ImportQueueState> {
@@ -208,7 +228,6 @@ impl<T: Orderable + Clone + Debug> ImportQueue<T> {
     }
 }
 
-// TODO: more tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -640,4 +659,6 @@ mod tests {
 
         assert_eq!(exported[1..], orig);
     }
+
+    // TODO: add more tests
 }

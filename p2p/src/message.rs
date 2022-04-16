@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021-2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -14,25 +14,30 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use common::primitives::version::SemVer;
 use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
-#[allow(unused)]
 pub enum HandshakeMessage {
     Hello {
         /// Software version of local node
         version: SemVer,
+
         /// Services that the local node supports
         services: u32,
+
         /// Unix timestamp
         timestamp: i64,
     },
     HelloAck {
         /// Software version of local node
         version: SemVer,
+
         /// Services that the local node supports
         services: u32,
+
         /// Unix timestamp
         timestamp: i64,
     },
@@ -64,7 +69,6 @@ pub enum SyncingMessage {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-#[allow(unused)]
 pub enum MessageType {
     Handshake(HandshakeMessage),
     Connectivity(ConnectivityMessage),
@@ -72,11 +76,11 @@ pub enum MessageType {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-#[allow(unused)]
 pub struct Message {
     /// Magic number identifying mainnet, testnet
     pub magic: [u8; 4],
-    /// Message (Hello, GetHeaders)
+
+    /// Message (Hello, GetHeaders, etc.)
     pub msg: MessageType,
 }
 

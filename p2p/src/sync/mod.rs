@@ -18,7 +18,7 @@
 #![allow(unused)]
 
 use crate::{
-    error::{self, P2pError},
+    error::{self, FatalError, P2pError},
     event,
     message::{MessageType, SyncingMessage},
     net::{self, FloodsubService, NetworkService},
@@ -27,7 +27,7 @@ use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
 use std::{
-    collections::{hash_map::Entry, HashMap},
+    collections::{hash_map::Entry, HashMap, HashSet},
     sync::Arc,
 };
 use tokio::sync::{mpsc, oneshot};
@@ -35,20 +35,68 @@ use tokio::sync::{mpsc, oneshot};
 pub mod index;
 pub mod mock_consensus;
 pub mod peer;
-pub mod processor;
 pub mod queue;
 
-/// State of the peer
+// Define which errors are fatal for the sync manager as the error is bubbled
+// up to the main event loop which then decides how to act on errors.
+// Peer not existing is not a fatal error for SyncManager but it is fatal error
+// for the function that tries to update peer state.
+//
+// This is just a convenience method to have access to nicer error handling
+impl<T> FatalError for error::Result<T> {
+    fn into_fatal(self) -> core::result::Result<(), P2pError> {
+        if let Err(err) = self {
+            log::error!("call failed: {:#?}", err);
+
+            if err == P2pError::ChannelClosed {
+                return Err(err);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl queue::Orderable for Arc<mock_consensus::Block> {
+    type Id = mock_consensus::BlockId;
+
+    fn get_id(&self) -> &Self::Id {
+        &self.header.id
+    }
+
+    fn get_prev_id(&self) -> &Option<Self::Id> {
+        &self.header.prev_id
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+pub enum ProcessorState {
+    MoreWork,
+    Done,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SyncState {
-    /// No activity with the peer
+    /// Local node's state is uninitialized
     Uninitialized,
 
-    /// Downloading blocks
+    /// Downloading blocks from remote node(s)
     DownloadingBlocks,
 
-    /// Peer is up to date and idling
+    /// Local block index is fully synced
     Idle,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct BlockRequest<T>
+where
+    T: NetworkService,
+{
+    /// PeerId of the node who is working on this request
+    pub peer_id: T::PeerId,
+
+    /// Set of headers denoting the blocks local node is requesting
+    pub headers: Vec<mock_consensus::BlockHeader>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -63,9 +111,6 @@ pub struct SyncManager<T>
 where
     T: NetworkService,
 {
-    /// Chain config
-    config: Arc<ChainConfig>,
-
     /// Syncing state of the local node
     state: SyncState,
 
@@ -79,33 +124,41 @@ where
     rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
 
     /// Hashmap of connected peers
-    peers: HashMap<T::PeerId, peer::PeerSyncState<T>>,
-
-    /// Block processor used for block downloads
-    processor: processor::BlockProcessor<T>,
-
-    /// RX handle for receiving blocks from the floodsub
-    rx_floodsub: mpsc::Receiver<event::BlockFloodEvent>,
+    peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
     /// TX handle for sending blocks to the floodsub
     tx_floodsub: mpsc::Sender<event::BlockFloodEvent>,
+
+    /// RX handle for receiving blocks from the floodsub
+    rx_floodsub: mpsc::Receiver<event::SyncFloodEvent<T>>,
+
+    /// Import queue to reorder out-of-order blocks
+    queue: queue::ImportQueue<Arc<mock_consensus::Block>>,
+
+    // TODO: merge this with `peers`
+    /// Set of peers that are currently busy, used for scheduling
+    busy: HashSet<T::PeerId>,
+
+    /// Set of block requests that are currently under execution
+    active: HashMap<mock_consensus::BlockHeader, (T::PeerId, HashSet<T::PeerId>)>,
+
+    /// Set of blocks that still need to be downloaded
+    work: HashMap<mock_consensus::BlockHeader, HashSet<T::PeerId>>,
+    // TODO: keep track of our current best block so we can drain the queue periodically
 }
 
 impl<T> SyncManager<T>
 where
     T: NetworkService,
-    T::FloodsubHandle: FloodsubService<T>,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
         tx_floodsub: mpsc::Sender<event::BlockFloodEvent>,
-        rx_floodsub: mpsc::Receiver<event::BlockFloodEvent>,
+        rx_floodsub: mpsc::Receiver<event::SyncFloodEvent<T>>,
         tx_p2p: mpsc::Sender<event::P2pEvent>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
     ) -> Self {
         Self {
-            config,
             state: SyncState::Idle,
             tx_floodsub,
             rx_floodsub,
@@ -113,347 +166,524 @@ where
             rx_sync,
             rx_peer,
             peers: Default::default(),
-            processor: Default::default(),
+            queue: queue::ImportQueue::new(),
+            busy: HashSet::new(),
+            active: HashMap::new(),
+            work: HashMap::new(),
         }
     }
 
-    /// Handle floodsub event
-    pub async fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
-        let net::FloodsubEvent::MessageReceived {
+    /// Register peer to the sync manager
+    ///
+    /// After the remote peer has successfully finished handshaking with local node,
+    /// it is reported by [SwarmManager] to [SyncManager] so that it can try and establish
+    /// the sync state with the remote peer. This is done by creating an "uninitialized"
+    /// entry for the peer and sending a `GetHeaders` request with local node's current
+    /// locator object. The remote peer is activated for block requests only after it
+    /// has responded to local node's query about its current best headers.
+    ///
+    /// TODO: if remote doesn't respond within some time limit, remove it from the peer set?
+    /// TODO: what if the peer already exists, how would we even get a re-registration?
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote remote peer
+    /// `tx` - Channel for sending direct messages to the remote peer
+    pub async fn register_peer(
+        &mut self,
+        peer_id: T::PeerId,
+        tx: mpsc::Sender<event::PeerEvent<T>>,
+    ) -> error::Result<()> {
+        if self.peers.contains_key(&peer_id) {
+            log::error!("peer {:?} already known by sync manager", peer_id);
+            return Err(P2pError::PeerExists);
+        }
+
+        // TODO: rewrite this into something nicer
+        let locator = self.p2p_handle.get_locator().await?;
+        let mut peer = peer::PeerContext::new(peer_id, tx);
+
+        peer.get_headers(locator).await?;
+        self.peers.insert(peer_id, peer);
+
+        Ok(())
+    }
+
+    /// Initialize the peer state
+    ///
+    /// After remote node has received local node's header request, it responds
+    /// to it with a set of headers from its best chain that it is tracking.
+    ///
+    /// These headers are used to initialize the peer index and to add a participant
+    /// to any active block request entry that the remote node might complete.
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote remote peer
+    /// `headers` - Headers of the remote peer's best chain
+    pub async fn initialize_peer(
+        &mut self,
+        peer_id: T::PeerId,
+        headers: &[mock_consensus::BlockHeader],
+    ) -> error::Result<()> {
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+
+        log::debug!(
+            "initialize peer {:?} state, headers: {:#?}",
             peer_id,
-            topic,
-            message,
-        } = event;
+            headers
+        );
 
-        match topic {
-            net::FloodsubTopic::Transactions => {
-                log::warn!("received new transaction: {:#?}", message);
-            }
-            net::FloodsubTopic::Blocks => {
-                log::debug!(
-                    "received new block ({:#?}) from peer {:?}",
-                    message,
-                    peer_id
-                );
-
-                if let MessageType::Syncing(SyncingMessage::Block { block }) = message.msg {
-                    if !self.peers.contains_key(&peer_id) {
-                        log::debug!(
-                            "received a block ({:?}) from an unknown source: {:?}",
-                            block,
-                            peer_id
-                        );
-                    }
-
-                    match self.state {
-                        SyncState::Idle => self.p2p_handle.new_block(block).await?,
-                        SyncState::DownloadingBlocks | SyncState::Uninitialized => {
-                            self.processor.register_block(&peer_id, Arc::new(block));
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Handle control-related sync event from P2P/SwarmManager
-    pub async fn on_sync_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
-        match event {
-            event::SyncControlEvent::Connected { peer_id, tx } => {
-                log::debug!("create new entry for peer {:?}", peer_id);
-
-                if let Entry::Vacant(e) = self.peers.entry(peer_id) {
-                    e.insert(peer::PeerSyncState::new(peer_id, tx))
-                        .get_headers(self.p2p_handle.get_locator().await?)
-                        .await?;
-                } else {
-                    log::error!("peer {:?} already known by sync manager", peer_id);
-                }
-            }
-            event::SyncControlEvent::Disconnected { peer_id } => {
-                self.peers
-                    .remove(&peer_id)
-                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
-                    .map(|_| log::debug!("remove peer {:?}", peer_id))
-                    .map_err(|_| log::error!("peer {:?} not known by sync manager", peer_id));
-                self.processor.unregister_peer(&peer_id);
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Handle syncing-related event received from a remote peer
-    pub async fn on_peer_event(&mut self, event: event::PeerSyncEvent<T>) -> error::Result<()> {
-        match event {
-            event::PeerSyncEvent::GetHeaders { peer_id, locator } => {
-                let headers = self.p2p_handle.get_headers(locator).await?;
-                let peer = self.peers.get_mut(&peer_id);
-
-                match peer {
-                    Some(peer) => peer.send_headers(headers).await?,
-                    None => log::error!("peer {:?} not known by sync manager", peer_id),
-                }
-            }
-            event::PeerSyncEvent::Headers { peer_id, headers } => {
-                self.initialize_peer_state(peer_id, &headers).await?;
-            }
-            event::PeerSyncEvent::Blocks { peer_id, blocks } => {
-                let res = self.processor.register_block_response(&peer_id, blocks);
-                if let processor::ProcessorState::Done = res {
-                    for (k, chain) in self.processor.drain().iter().enumerate() {
-                        for (i, block) in chain.iter().enumerate() {
-                            self.p2p_handle.new_block((**block).clone()).await?;
-                        }
-                    }
-                    self.state = SyncState::Idle;
-                } else {
-                    for req in self.processor.get_block_request() {
-                        let peer = self.peers.get_mut(&req.peer_id).expect("peer to exist");
-                        peer.get_blocks(req.headers).await?;
-                    }
-                }
-            }
-            event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
-                self.process_block_request(peer_id, &headers).await?;
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn initialize_peer_state(
-        &mut self,
-        peer_id: T::PeerId,
-        headers: &[mock_consensus::BlockHeader],
-    ) -> error::Result<()> {
-        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer
-        } else {
-            log::info!("peer {:?} not known by sync manager", peer_id);
-            return Ok(());
-        };
-
-        match self.p2p_handle.get_uniq_headers(headers.to_vec()).await? {
+        // perform ancestry search on the headers and find out which blocks must be downloaded
+        //
+        // if the search yields unique headers, schedule them for downloading and return them
+        // if not, return the best header currently known by the local node the response received
+        // from the remote indicates they are following the same chain and are up to date with us
+        let headers = match self.p2p_handle.get_uniq_headers(headers.to_vec()).await? {
             Some(uniq) => {
-                peer.initialize_index(headers);
-                if let processor::ProcessorState::MoreWork =
-                    self.processor.register_peer(peer_id, &uniq)
-                {
-                    for req in self.processor.get_block_request() {
-                        let peer = self.peers.get_mut(&req.peer_id).expect("peer to exist");
-                        peer.get_blocks(req.headers).await?;
+                // for each header, check if it's already in the active queue (it's being downloaded)
+                // and if so, add `peer` to that list in case the download fails and it has to be retried.
+                //
+                // otherwise create new work entry or modify an existing entry with the peer's ID
+                uniq.iter().for_each(|header| {
+                    if !self.queue.contains_key(&header.id) {
+                        match self.active.get_mut(header) {
+                            Some((_, entry)) => entry.insert(peer_id),
+                            None => self
+                                .work
+                                .entry(*header)
+                                .or_insert_with(HashSet::new)
+                                .insert(peer_id),
+                        };
                     }
-                }
-                self.state = SyncState::DownloadingBlocks;
+                });
+
+                uniq
             }
-            None => {
-                peer.initialize_index(&[self.p2p_handle.get_best_block_header().await?]);
-                self.processor.register_peer(peer_id, &[]);
-            }
-        }
+            // TODO: should syncing now this info without querying it from the chainstate?
+            None => [self.p2p_handle.get_best_block_header().await?].to_vec(),
+        };
+
+        peer.initialize_index(&headers);
+        Ok(())
+    }
+
+    /// Unregister peer from the sync manager
+    ///
+    /// The connection may have been lost or the peer provided invalid information that
+    /// warrants closing the connection all together. Remove all references to the peer,
+    /// remove it from all work-related data structures and reschedule any blocks that
+    /// were being downloaded from the removed peer and download them from other peers
+    /// if there are any providers. If not, just delete the entries.
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote peer
+    pub async fn unregister_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+
+        log::debug!("unregister peer {:?}", peer_id);
+
+        self.work
+            .iter_mut()
+            .filter_map(|(header, peers)| {
+                peers.remove(&peer_id);
+                peers.is_empty().then(|| *header)
+            })
+            .collect::<Vec<_>>()
+            .iter()
+            .for_each(|entry| {
+                self.work.remove(entry);
+            });
+
+        self.active
+            .iter_mut()
+            .filter_map(|(header, (_, peers))| {
+                // TODO: fix this, if peer is part of the hashmap
+                // and after removal it's not empty -> reschedule the work
+                peers.remove(&peer_id);
+                peers.is_empty().then(|| *header)
+            })
+            .collect::<Vec<_>>()
+            .iter()
+            .for_each(|entry| {
+                self.active.remove(entry);
+            });
 
         Ok(())
     }
 
-    async fn process_block_request(
+    /// Register block to the sync manager
+    ///
+    /// This function is called when a block is received from the floodsub.
+    /// It checks if the state of [SyncManager] is [SyncState::Idle] which means that
+    /// to the best of the node's knowledge it is up to date with the network and the block
+    /// can be directly imported into the local node's block index.
+    ///
+    /// If the state is anything else, the block is queued and when its ancestors have
+    /// been received, the block is drained from the queue along its ancestors into the
+    /// local node's block index.
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote peer
+    /// `block` - Block that was received
+    pub async fn process_block(
+        &mut self,
+        peer_id: T::PeerId,
+        block: Arc<mock_consensus::Block>,
+    ) -> error::Result<()> {
+        log::trace!(
+            "received a block from peer {:?}, block id {:#?}",
+            peer_id,
+            block.header.id
+        );
+
+        match self.state {
+            SyncState::Idle => self.p2p_handle.new_block((*block).clone()).await,
+            _ => self.process_sync_block(peer_id, block),
+        }
+    }
+
+    /// Process block when the node is still syncing
+    ///
+    /// When a node is syncing, incoming blocks are not sent to the block index
+    /// but instead stored inside the import queue from which they are periodically
+    /// drained to the block index as their depenencies are being resolved.
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote peer
+    /// `block` - Block that was received
+    fn process_sync_block(
+        &mut self,
+        peer_id: T::PeerId,
+        block: Arc<mock_consensus::Block>,
+    ) -> error::Result<()> {
+        log::trace!(
+            "node syncing, process incoming block from peer {:?}",
+            peer_id
+        );
+
+        // TODO: implement request completion statistics for benchmarking peer performance
+        // TODO: check for example if the node sent the block that we were expecting
+        //       and update its reputation accordingly
+        // TODO: it must be known here whether the block came as a block response
+        //       or as a random block from the floodsub
+        self.work.remove(&block.header);
+        self.active.remove(&block.header);
+        self.busy.remove(&peer_id);
+        self.queue.queue(block);
+
+        Ok(())
+    }
+
+    /// Process incoming block response
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote peer
+    /// `block` - Block that was received
+    pub async fn process_block_response(
+        &mut self,
+        peer_id: T::PeerId,
+        blocks: Vec<Arc<mock_consensus::Block>>,
+    ) -> error::Result<()> {
+        log::trace!(
+            "node syncing, process incoming block response from peer {:?}, {} blocks",
+            peer_id,
+            blocks.len(),
+        );
+
+        blocks.into_iter().for_each(|block| {
+            self.process_sync_block(peer_id, block);
+        });
+
+        Ok(())
+    }
+
+    /// Process incoming header request from remote peer
+    ///
+    /// TODO: is any of this information interesting enough to store somewhere
+    /// for tracking purposes?
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the remote peer
+    /// `locator` - Set of headers used for performing the ancestry search
+    pub async fn process_header_request(
+        &mut self,
+        peer_id: T::PeerId,
+        locator: Vec<mock_consensus::BlockHeader>,
+    ) -> error::Result<()> {
+        log::trace!(
+            "received a header request from peer {:?}, locator {:#?}",
+            peer_id,
+            locator
+        );
+
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let headers = self.p2p_handle.get_headers(locator).await?;
+
+        peer.send_headers(headers).await
+    }
+
+    /// Process incoming block request from remote peer
+    pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
         headers: &[mock_consensus::BlockHeader],
     ) -> error::Result<()> {
-        let peer = if let Some(peer) = self.peers.get_mut(&peer_id) {
-            peer
-        } else {
-            log::error!("peer {:?} not known by sync manager", peer_id);
-            return Ok(());
-        };
+        log::trace!(
+            "received a block request from peer {:?}, header counter {}",
+            peer_id,
+            headers.len(),
+        );
 
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
         peer.send_blocks(blocks).await
     }
 
-    /// Run SyncManager event loop
+    /// Advance the state of syncing
+    ///
+    /// The combination of the states of `self.work`, `self.active` and `self.queue` define what
+    /// the current state of syncing is.
+    async fn advance_state(&mut self) -> error::Result<()> {
+        if !self.work.is_empty() {
+            log::debug!(
+                "try to schedule block requests, work len {}, active len {}",
+                self.work.len(),
+                self.active.len()
+            );
+
+			// TODO: download more than one block from node using one request
+            let requests = self
+                .work
+                .iter()
+                .filter_map(|(header, peers)| {
+                    peers.iter().find(|peer_id| !self.busy.contains(peer_id)).map(|peer_id| {
+                        log::trace!("request {:?} from peer {:?}", header, peer_id);
+
+						// TODO: remove clone
+                        self.busy.insert(*peer_id);
+                        self.active.insert(*header, (*peer_id, peers.clone()));
+                        (*peer_id, *header)
+                    })
+                })
+                .collect::<Vec<(_, _)>>();
+
+            for (peer_id, header) in requests {
+                let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+                peer.get_blocks(vec![header]).await?;
+            }
+
+            self.state = SyncState::DownloadingBlocks;
+            return Ok(());
+        }
+
+        // work is empty, check if active has any work
+        // TODO: implement partial draining
+        // TODO: implement block request expirations
+        if !self.active.is_empty() {
+            self.state = SyncState::DownloadingBlocks;
+            return Ok(());
+        }
+
+		// try to drain the queue if there are any blocks
+		if !self.queue.is_empty() {
+            for chain in self.queue.drain().iter() {
+                for block in chain.iter() {
+                    self.p2p_handle.new_block((**block).clone()).await?;
+                }
+            }
+
+            self.state = SyncState::Idle;
+            return Ok(());
+		}
+
+		// we reach this if
+		Ok(())
+    }
+
+    /// Run [SyncManager] event loop
     pub async fn run(&mut self) -> error::Result<()> {
         log::info!("starting sync manager event loop");
 
         loop {
             tokio::select! {
                 res = self.rx_floodsub.recv().fuse() => {
-                    todo!();
-                }
-                res = self.rx_sync.recv().fuse() => {
-                    self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
-                }
-                res = self.rx_peer.recv().fuse() => {
-                    self.on_peer_event(res.ok_or(P2pError::ChannelClosed)?).await?;
+                    let event::SyncFloodEvent::Block { peer_id, block } = res.ok_or(P2pError::ChannelClosed)?;
+                    self.process_block(peer_id, Arc::new(block)).await.into_fatal()?;
+                },
+                event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    event::SyncControlEvent::Connected { peer_id, tx } => {
+                        self.register_peer(peer_id, tx).await.into_fatal()?;
+                    }
+                    event::SyncControlEvent::Disconnected { peer_id } => {
+                        self.unregister_peer(peer_id).await.into_fatal()?;
+                    }
+                },
+                event = self.rx_peer.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    event::PeerSyncEvent::Headers { peer_id, headers } => {
+                        self.initialize_peer(peer_id, &headers).await.into_fatal()?;
+                    }
+                    event::PeerSyncEvent::GetHeaders { peer_id, locator } => {
+                        self.process_header_request(peer_id, locator).await.into_fatal()?;
+                    }
+                    event::PeerSyncEvent::Blocks { peer_id, blocks } => {
+                        self.process_block_response(peer_id, blocks).await.into_fatal()?;
+                    }
+                    event::PeerSyncEvent::GetBlocks { peer_id, headers } => {
+                        self.process_block_request(peer_id, &headers).await.into_fatal()?;
+                    }
                 }
             }
+
+            // advance the state of the manager after each event has been handled
+            self.advance_state().await;
         }
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::{
-//         message::{self, MessageType, SyncingMessage},
-//         net::{mock::MockService, FloodsubService},
-//     };
-//     use common::chain::config;
-//     use itertools::*;
-//     use std::net::SocketAddr;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        message::{self, MessageType, SyncingMessage},
+        net::{mock::MockService, FloodsubService},
+    };
+    use common::chain::config;
+    use itertools::*;
+    use std::net::SocketAddr;
 
-//     macro_rules! get_message {
-//         ($expression:expr, $($pattern:pat_param)|+, $ret:expr) => {
-//             match $expression {
-//                 $($pattern)|+ => $ret,
-//                 _ => panic!("invalid message received")
-//             }
-//         }
-//     }
+    macro_rules! get_message {
+        ($expression:expr, $($pattern:pat_param)|+, $ret:expr) => {
+            match $expression {
+                $($pattern)|+ => $ret,
+                _ => panic!("invalid message received")
+            }
+        }
+    }
 
-//     async fn make_sync_manager<T>(
-//         addr: T::Address,
-//     ) -> (
-//         SyncManager<T>,
-//         mpsc::Sender<event::SyncControlEvent<T>>,
-//         mpsc::Sender<event::PeerSyncEvent<T>>,
-//         mpsc::Receiver<event::P2pEvent>,
-//     )
-//     where
-//         T: NetworkService,
-//         T::FloodsubHandle: FloodsubService<T>,
-//     {
-//         let config = Arc::new(config::create_mainnet());
-//         let (_, flood) = T::start(addr, &[], &[]).await.unwrap();
-//         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-//         let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
-//         let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
+    async fn make_sync_manager<T>(
+        addr: T::Address,
+    ) -> (
+        SyncManager<T>,
+        mpsc::Sender<event::SyncControlEvent<T>>,
+        mpsc::Sender<event::PeerSyncEvent<T>>,
+        mpsc::Receiver<event::P2pEvent>,
+    )
+    where
+        T: NetworkService,
+    {
+        let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
+        let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
+        let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
+        let (tx_sf, rx_sf) = tokio::sync::mpsc::channel(16);
+        let (tx_fs, rx_fs) = tokio::sync::mpsc::channel(16);
 
-//         (
-//             SyncManager::<T>::new(Arc::clone(&config), flood, tx_p2p, rx_sync, rx_peer),
-//             tx_sync,
-//             tx_peer,
-//             rx_p2p,
-//         )
-//     }
+        (
+            SyncManager::<T>::new(tx_sf, rx_fs, tx_p2p, rx_sync, rx_peer),
+            tx_sync,
+            tx_peer,
+            rx_p2p,
+        )
+    }
 
-//     // handle peer connection event
-//     #[tokio::test]
-//     async fn test_peer_connected() {
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    // handle peer connection event
+    #[tokio::test]
+    async fn test_peer_connected() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
 
-//         // send Connected event to SyncManager
-//         let (tx, rx) = mpsc::channel(1);
-//         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(1);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
-//         tokio::spawn(async move {
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::GetLocator { response },
-//                 {
-//                     response.send(mock_consensus::Consensus::with_height(4).get_locator());
-//                 }
-//             );
-//         });
+        tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
+        });
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
-//     }
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
+    }
 
-//     // handle peer disconnection event
-//     #[tokio::test]
-//     async fn test_peer_disconnected() {
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    // handle peer disconnection event
+    #[tokio::test]
+    async fn test_peer_disconnected() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
 
-//         // send Connected event to SyncManager
-//         let (tx, rx) = mpsc::channel(16);
-//         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(16);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
-//         tokio::spawn(async move {
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::GetLocator { response },
-//                 {
-//                     response.send(mock_consensus::Consensus::with_height(4).get_locator());
-//                 }
-//             );
-//         });
+        tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
+        });
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
 
-//         // no peer with this id exist, nothing happens
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: addr }).await,
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
+        // no peer with this id exist, nothing happens
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: addr }).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id }).await,
-//             Ok(())
-//         );
-//         assert!(mgr.peers.is_empty());
-//     }
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id }).await,
+            Ok(())
+        );
+        assert!(mgr.peers.is_empty());
+    }
 
-//     #[tokio::test]
-//     async fn new_block_from_floodsub() {
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+    #[tokio::test]
+    async fn new_block_from_floodsub() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
 
-//         // send Connected event to SyncManager
-//         let (tx, rx) = mpsc::channel(1);
-//         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
-//         let announced_block = mock_consensus::Block::new(Some(1337));
-//         let block_copy = announced_block.clone();
+        // send Connected event to SyncManager
+        let (tx, rx) = mpsc::channel(1);
+        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
+        let announced_block = mock_consensus::Block::new(Some(1337));
+        let block_copy = announced_block.clone();
 
-//         let handle = tokio::spawn(async move {
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::GetLocator { response },
-//                 {
-//                     response.send(mock_consensus::Consensus::with_height(4).get_locator());
-//                 }
-//             );
+        let handle = tokio::spawn(async move {
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::GetLocator { response },
+                {
+                    response.send(mock_consensus::Consensus::with_height(4).get_locator());
+                }
+            );
 
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::NewBlock { block, .. },
-//                 {
-//                     assert_eq!(block_copy, block);
-//                 }
-//             );
-//         });
+            get_message!(
+                rx_p2p.recv().await.unwrap(),
+                event::P2pEvent::NewBlock { block, .. },
+                {
+                    assert_eq!(block_copy, block);
+                }
+            );
+        });
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
-
-//         mgr.on_floodsub_event(net::FloodsubEvent::MessageReceived {
-//             peer_id,
-//             topic: net::FloodsubTopic::Blocks,
-//             message: message::Message {
-//                 magic: [1, 2, 3, 4],
-//                 msg: MessageType::Syncing(SyncingMessage::Block {
-//                     block: announced_block,
-//                 }),
-//             },
-//         })
-//         .await;
-
-//         handle.await.unwrap();
-//     }
-// }
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
+    }
+}

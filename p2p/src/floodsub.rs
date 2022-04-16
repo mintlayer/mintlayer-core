@@ -27,12 +27,17 @@ use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
+use tokio::sync::mpsc;
+
+// TODO: get TXs/blocks from the floodsub messages -> move error handling there
 
 pub struct FloodsubManager<T>
 where
     T: NetworkService,
 {
     handle: T::FloodsubHandle,
+    tx_sync: mpsc::Sender<event::SyncFloodEvent<T>>,
+    rx_sync: mpsc::Receiver<event::BlockFloodEvent>,
 }
 
 impl<T> FloodsubManager<T>
@@ -40,8 +45,16 @@ where
     T: NetworkService,
     T::FloodsubHandle: FloodsubService<T>,
 {
-    pub fn new(handle: T::FloodsubHandle) -> Self {
-        Self { handle }
+    pub fn new(
+        handle: T::FloodsubHandle,
+        tx_sync: mpsc::Sender<event::SyncFloodEvent<T>>,
+        rx_sync: mpsc::Receiver<event::BlockFloodEvent>,
+    ) -> Self {
+        Self {
+            handle,
+            tx_sync,
+            rx_sync,
+        }
     }
 
     pub async fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
@@ -62,24 +75,16 @@ where
                     peer_id
                 );
 
-                // TODO: fix `FloodsubTopic::Blocks` to always contain a block!
-                // TODO: add blk_handle + proc-macro2 handle type for it
-                println!("received something ({:#?}) from {:?}", message, peer_id);
-                todo!();
-
-                // match message.msg {
-                //     MessageType::Syncing(SyncingMessage::Block { block }) => {
-                //         self.blk_handle.new_block(Arc::new(block)).await?;
-                //     }
-                //     _ => log::error!("invalid message received from peer {:?}", peer_id),
-                // }
+                if let MessageType::Syncing(SyncingMessage::Block { block }) = message.msg {
+                    self.tx_sync.send(event::SyncFloodEvent::Block { peer_id, block }).await?;
+                }
             }
         }
 
         Ok(())
     }
 
-    async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> error::Result<()> {
         // TODO: poll syncmanager for blocks
         // TODO: poll rpc for transactions
 

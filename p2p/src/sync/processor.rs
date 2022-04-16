@@ -51,17 +51,17 @@ impl From<(bool, bool)> for ProcessorState {
     }
 }
 
-impl queue::Orderable for Arc<Block> {
-    type Id = BlockId;
+// impl queue::Orderable for Arc<Block> {
+//     type Id = BlockId;
 
-    fn get_id(&self) -> &Self::Id {
-        &self.header.id
-    }
+//     fn get_id(&self) -> &Self::Id {
+//         &self.header.id
+//     }
 
-    fn get_prev_id(&self) -> &Option<Self::Id> {
-        &self.header.prev_id
-    }
-}
+//     fn get_prev_id(&self) -> &Option<Self::Id> {
+//         &self.header.prev_id
+//     }
+// }
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct BlockRequest<T>

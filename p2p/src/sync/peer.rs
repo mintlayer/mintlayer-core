@@ -25,7 +25,24 @@ use crate::{
 use logging::log;
 use tokio::sync::mpsc;
 
-pub struct PeerSyncState<T>
+/// State of the peer
+#[derive(Debug, PartialEq, Eq)]
+pub enum PeerSyncState {
+    /// Peer state is unknown
+    Unknown,
+
+    /// Peer is uploading blocks to local node
+    UploadingBlocks,
+
+    /// Peer is uploading headers to local node
+    UploadingHeaders,
+
+    /// Peer is idling and can be used for block requests
+    Idle,
+}
+
+/// Syncing-related context of the peer
+pub struct PeerContext<T>
 where
     T: NetworkService,
 {
@@ -33,7 +50,7 @@ where
     peer_id: T::PeerId,
 
     /// State of the peer
-    state: sync::SyncState,
+    state: PeerSyncState,
 
     /// TX channel for sending syncing messages to remote peer
     tx: mpsc::Sender<event::PeerEvent<T>>,
@@ -42,38 +59,37 @@ where
     index: index::PeerIndex,
 }
 
-impl<T> PeerSyncState<T>
+impl<T> PeerContext<T>
 where
     T: NetworkService,
 {
     pub fn new(peer_id: T::PeerId, tx: mpsc::Sender<event::PeerEvent<T>>) -> Self {
         Self {
             peer_id,
-            state: sync::SyncState::Uninitialized,
+            state: PeerSyncState::Unknown,
             tx,
             index: index::PeerIndex::new(),
         }
     }
 
-    pub fn set_state(&mut self, state: sync::SyncState) {
+    /// Set peer state
+    pub fn set_state(&mut self, state: PeerSyncState) {
         self.state = state;
     }
 
+    /// Get the intermediary index of the peer
     pub fn index(&self) -> &index::PeerIndex {
         &self.index
     }
 
+    /// Initialize the intermediary index with headers
     pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
         self.index.initialize(headers);
     }
 
-    pub fn get_known_headers<'a>(
-        &self,
-        headers: &'a [mock_consensus::BlockHeader],
-    ) -> Vec<&'a mock_consensus::BlockHeader> {
-        headers.iter().filter(|header| self.index.contains(header)).collect()
-    }
+    // TODO: rename `add_block()` -> `register_block()`
 
+    /// Register block to the intermediary index of the peer
     pub fn add_block(
         &mut self,
         block: &mock_consensus::Block,
@@ -93,6 +109,7 @@ where
         })
     }
 
+    /// Requests headers from remote using `locator`
     pub async fn get_headers(
         &mut self,
         locator: Vec<mock_consensus::BlockHeader>,
@@ -103,6 +120,7 @@ where
             self.peer_id
         );
 
+        self.state = PeerSyncState::UploadingHeaders;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::GetHeaders {
                 locator,
@@ -111,6 +129,7 @@ where
             .map_err(|_| P2pError::ChannelClosed)
     }
 
+    /// Send `headers` to remote node
     pub async fn send_headers(
         &mut self,
         headers: Vec<mock_consensus::BlockHeader>,
@@ -121,6 +140,8 @@ where
             self.peer_id
         );
 
+		// TODO: race condition here?
+        self.state = PeerSyncState::Idle;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::Headers {
                 headers,
@@ -129,6 +150,7 @@ where
             .map_err(|_| P2pError::ChannelClosed)
     }
 
+    /// Request `blocks` from remote node
     pub async fn get_blocks(
         &mut self,
         headers: Vec<mock_consensus::BlockHeader>,
@@ -143,6 +165,7 @@ where
             self.peer_id
         );
 
+        self.state = PeerSyncState::UploadingBlocks;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::GetBlocks {
                 headers,
@@ -151,6 +174,7 @@ where
             .map_err(|_| P2pError::ChannelClosed)
     }
 
+    /// Send `blocks` to remote node
     pub async fn send_blocks(&mut self, blocks: Vec<mock_consensus::Block>) -> error::Result<()> {
         log::trace!(
             "send blocks {:#?} to remote peer {:?}",
@@ -158,6 +182,7 @@ where
             self.peer_id
         );
 
+        self.state = PeerSyncState::Idle;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::Blocks {
                 blocks,
@@ -317,58 +342,5 @@ mod tests {
         assert_eq!(peer.index.queue().num_queued(), 0);
     }
 
-    #[test]
-    fn test_get_known_headers() {
-        let (mut peer, mut rx) = new_mock_peersyncstate();
-        let headers = &[
-            mock_consensus::BlockHeader::with_id(444, Some(333)),
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(777, Some(666)),
-            mock_consensus::BlockHeader::with_id(888, Some(777)),
-            mock_consensus::BlockHeader::with_id(999, Some(888)),
-        ];
-        peer.initialize_index(headers);
-
-        assert_eq!(
-            peer.get_known_headers(&[
-                mock_consensus::BlockHeader::with_id(444, Some(333)),
-                mock_consensus::BlockHeader::with_id(666, Some(555)),
-                mock_consensus::BlockHeader::with_id(777, Some(666)),
-                mock_consensus::BlockHeader::with_id(888, Some(777)),
-                mock_consensus::BlockHeader::with_id(999, Some(888)),
-            ]),
-            vec![
-                &mock_consensus::BlockHeader::with_id(444, Some(333)),
-                &mock_consensus::BlockHeader::with_id(666, Some(555)),
-                &mock_consensus::BlockHeader::with_id(777, Some(666)),
-                &mock_consensus::BlockHeader::with_id(888, Some(777)),
-                &mock_consensus::BlockHeader::with_id(999, Some(888)),
-            ]
-        );
-
-        assert_eq!(
-            peer.get_known_headers(&[
-                mock_consensus::BlockHeader::with_id(999, Some(888)),
-                mock_consensus::BlockHeader::with_id(888, Some(777)),
-                mock_consensus::BlockHeader::with_id(444, Some(333)),
-                mock_consensus::BlockHeader::with_id(777, Some(666)),
-            ]),
-            vec![
-                &mock_consensus::BlockHeader::with_id(999, Some(888)),
-                &mock_consensus::BlockHeader::with_id(888, Some(777)),
-                &mock_consensus::BlockHeader::with_id(444, Some(333)),
-                &mock_consensus::BlockHeader::with_id(777, Some(666)),
-            ]
-        );
-
-        // unknown headers
-        assert_eq!(
-            peer.get_known_headers(&[
-                mock_consensus::BlockHeader::with_id(111, Some(1)),
-                mock_consensus::BlockHeader::with_id(222, Some(2)),
-                mock_consensus::BlockHeader::with_id(333, Some(3)),
-            ]),
-            Vec::<&mock_consensus::BlockHeader>::new()
-        );
-    }
+    // TODO: add more tests
 }
