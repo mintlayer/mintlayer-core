@@ -23,7 +23,7 @@ use crate::{
     message::{MessageType, SyncingMessage},
     net::{self, FloodsubService, NetworkService},
 };
-use common::chain::ChainConfig;
+use common::{chain::ChainConfig, primitives::time};
 use futures::FutureExt;
 use logging::log;
 use std::{
@@ -301,12 +301,15 @@ where
             .active
             .iter_mut()
             .map(|(header, (active, peers))| {
-                peers.remove(&peer_id);
-                if peers.is_empty() {
-                    (Some(*header), None)
-                } else if active == &peer_id {
-                    (None, Some(*header))
+                // TODO: ugly
+                if active == &peer_id {
+                    if peers.is_empty() {
+                        (Some(*header), None)
+                    } else {
+                        (None, Some(*header))
+                    }
                 } else {
+                    peers.remove(&peer_id);
                     (None, None)
                 }
             })
@@ -499,9 +502,10 @@ where
 
         let requests = self
             .work
-            .iter()
+            .iter_mut()
             .filter_map(|(header, peers)| {
                 available.intersection(peers).next().copied().map(|peer_id| {
+                    peers.remove(&peer_id);
                     available.remove(&peer_id);
                     (peer_id, *header)
                 })
@@ -539,8 +543,8 @@ where
 
         // work is empty, check if active has any work
         // TODO: implement partial draining
-        // TODO: implement block request expirations
         if !self.active.is_empty() {
+            // TODO: implement block request expirations
             self.state = SyncState::DownloadingBlocks;
             return Ok(());
         }
@@ -952,15 +956,7 @@ mod tests {
         // verify providers and that if a new provider is added while a block request is already in
         // progress, the new provider is added to the list of providers in case the request fails
         for header in &headers {
-            let peers = if let Some(info) = mgr.work.get(header) {
-                info
-            } else if let Some((_, info)) = mgr.active.get(header) {
-                info
-            } else {
-                panic!("invalid etry");
-            };
-
-            let expected = if header == &headers[0] || header == &headers[1] {
+            let mut expected = if header == &headers[0] || header == &headers[1] {
                 HashSet::from([peer_id1, peer_id2, peer_id3])
             } else if header == &headers[2] {
                 HashSet::from([peer_id1])
@@ -968,6 +964,14 @@ mod tests {
                 HashSet::from([peer_id3])
             };
 
+            let peers = match mgr.work.get(header) {
+                Some(info) => info,
+                None => {
+                    let (active, info) = mgr.active.get(header).unwrap();
+                    expected.remove(active);
+                    info
+                }
+            };
             assert_eq!(&expected, peers);
         }
 
@@ -979,15 +983,7 @@ mod tests {
         assert_eq!(mgr.work.len(), 3);
 
         for header in &headers {
-            let peers = if let Some(info) = mgr.work.get(header) {
-                info
-            } else if let Some((_, info)) = mgr.active.get(header) {
-                info
-            } else {
-                panic!("invalid etry");
-            };
-
-            let expected = if header == &headers[0] || header == &headers[1] {
+            let mut expected = if header == &headers[0] || header == &headers[1] {
                 HashSet::from([peer_id1, peer_id3])
             } else if header == &headers[2] {
                 HashSet::from([peer_id1])
@@ -995,6 +991,14 @@ mod tests {
                 HashSet::from([peer_id3])
             };
 
+            let peers = match mgr.work.get(header) {
+                Some(info) => info,
+                None => {
+                    let (active, info) = mgr.active.get(header).unwrap();
+                    expected.remove(active);
+                    info
+                }
+            };
             assert_eq!(&expected, peers);
         }
     }
@@ -1596,7 +1600,7 @@ mod tests {
                 mgr.active,
                 HashMap::from([(
                     mock_consensus::BlockHeader::with_id(206, Some(207)),
-                    (peer3, HashSet::from([peer3])),
+                    (peer3, HashSet::from([])),
                 )])
             );
         } else {
@@ -1611,7 +1615,7 @@ mod tests {
                 mgr.active,
                 HashMap::from([(
                     mock_consensus::BlockHeader::with_id(103, Some(102)),
-                    (peer3, HashSet::from([peer3])),
+                    (peer3, HashSet::from([])),
                 )])
             );
         }
