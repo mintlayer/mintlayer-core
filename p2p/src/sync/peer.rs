@@ -33,7 +33,7 @@ pub enum PeerSyncState {
     Unknown,
 
     /// Peer is uploading blocks to local node
-    UploadingBlocks,
+    UploadingBlocks(mock_consensus::BlockHeader),
 
     /// Peer is uploading headers to local node
     UploadingHeaders,
@@ -190,7 +190,8 @@ where
             self.peer_id
         );
 
-        self.state = PeerSyncState::UploadingBlocks;
+        debug_assert!(headers.len() == 1); // TODO:
+        self.state = PeerSyncState::UploadingBlocks(headers[0]);
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::GetBlocks {
                 headers,
@@ -245,10 +246,11 @@ mod tests {
     #[test]
     fn test_set_state() {
         let (mut peer, rx) = new_mock_peersyncstate();
+        let header = mock_consensus::BlockHeader::new(Some(123));
 
         assert_eq!(peer.state, PeerSyncState::Unknown);
-        peer.set_state(PeerSyncState::UploadingBlocks);
-        assert_eq!(peer.state, PeerSyncState::UploadingBlocks);
+        peer.set_state(PeerSyncState::UploadingBlocks(header));
+        assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header));
     }
 
     impl PartialEq for MockService {
