@@ -23,6 +23,7 @@ use crate::{
     sync::{self, index, mock_consensus},
 };
 use logging::log;
+use std::collections::HashSet;
 use tokio::sync::mpsc;
 
 /// State of the peer
@@ -55,6 +56,9 @@ where
     /// TX channel for sending syncing messages to remote peer
     tx: mpsc::Sender<event::PeerEvent<T>>,
 
+    /// Headers that the remote peer has requested from local node
+    requested: HashSet<mock_consensus::BlockHeader>,
+
     /// Peer block index
     index: index::PeerIndex,
 }
@@ -66,9 +70,10 @@ where
     pub fn new(peer_id: T::PeerId, tx: mpsc::Sender<event::PeerEvent<T>>) -> Self {
         Self {
             peer_id,
-            state: PeerSyncState::Unknown,
             tx,
+            state: PeerSyncState::Unknown,
             index: index::PeerIndex::new(),
+            requested: HashSet::new(),
         }
     }
 
@@ -91,6 +96,22 @@ where
     pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
         self.state = PeerSyncState::Idle;
         self.index.initialize(headers);
+    }
+
+    /// Register headers request
+    pub fn register_headers(&mut self, headers: &[mock_consensus::BlockHeader]) {
+        self.requested.extend(headers.iter());
+    }
+
+    /// Check which headers have actually been requested by the remote peer
+    pub fn validate_block_request(
+        &mut self,
+        headers: &[mock_consensus::BlockHeader],
+    ) -> Vec<mock_consensus::BlockHeader> {
+        headers
+            .iter()
+            .filter_map(|header| self.requested.contains(header).then(|| *header))
+            .collect()
     }
 
     /// Register block to the intermediary index of the peer
@@ -351,5 +372,31 @@ mod tests {
         assert_eq!(peer.index.queue().num_queued(), 0);
     }
 
-    // TODO: add more tests
+    #[tokio::test]
+    async fn test_block_request() {
+        let (mut peer, mut rx) = new_mock_peersyncstate();
+        let headers = &[
+            mock_consensus::BlockHeader::with_id(444, Some(333)),
+            mock_consensus::BlockHeader::with_id(666, Some(555)),
+            mock_consensus::BlockHeader::with_id(777, Some(666)),
+            mock_consensus::BlockHeader::with_id(888, Some(777)),
+            mock_consensus::BlockHeader::with_id(999, Some(888)),
+        ];
+        peer.register_headers(headers);
+        assert_eq!(
+            peer.validate_block_request(&[
+                mock_consensus::BlockHeader::with_id(111, Some(110)),
+                mock_consensus::BlockHeader::with_id(100, Some(99)),
+                mock_consensus::BlockHeader::with_id(444, Some(333)),
+                mock_consensus::BlockHeader::with_id(777, Some(666)),
+                mock_consensus::BlockHeader::with_id(999, Some(888)),
+                mock_consensus::BlockHeader::with_id(1338, Some(1337)),
+            ]),
+            &[
+                mock_consensus::BlockHeader::with_id(444, Some(333)),
+                mock_consensus::BlockHeader::with_id(777, Some(666)),
+                mock_consensus::BlockHeader::with_id(999, Some(888)),
+            ]
+        );
+    }
 }

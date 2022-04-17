@@ -443,6 +443,7 @@ where
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let headers = self.p2p_handle.get_headers(locator).await?;
 
+        peer.register_headers(&headers);
         peer.send_headers(headers).await
     }
 
@@ -459,8 +460,15 @@ where
         );
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-        let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
-        peer.send_blocks(blocks).await
+        let validated = peer.validate_block_request(headers);
+
+        if !validated.is_empty() {
+            let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
+            peer.send_blocks(blocks).await?;
+        }
+        // TODO: adjust peer reputation?
+
+        Ok(())
     }
 
     /// Advance the state of syncing
