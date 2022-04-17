@@ -89,6 +89,7 @@ where
 
     /// Initialize the intermediary index with headers
     pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
+        self.state = PeerSyncState::Idle;
         self.index.initialize(headers);
     }
 
@@ -143,7 +144,6 @@ where
             self.peer_id
         );
 
-        // TODO: race condition here?
         self.state = PeerSyncState::Idle;
         self.tx
             .send(event::PeerEvent::Syncing(event::SyncEvent::Headers {
@@ -325,8 +325,14 @@ mod tests {
         let block1_1 = mock_consensus::Block::new(Some(block1.header.id));
         let block1_1_1 = mock_consensus::Block::new(Some(block1_1.header.id));
 
-        assert_eq!(peer.register_block(&block1), Ok(index::PeerIndexState::Queued));
-        assert_eq!(peer.register_block(&block1_1), Ok(index::PeerIndexState::Queued));
+        assert_eq!(
+            peer.register_block(&block1),
+            Ok(index::PeerIndexState::Queued)
+        );
+        assert_eq!(
+            peer.register_block(&block1_1),
+            Ok(index::PeerIndexState::Queued)
+        );
         assert_eq!(
             peer.register_block(&block1_1_1),
             Ok(index::PeerIndexState::Queued)

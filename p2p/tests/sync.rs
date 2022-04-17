@@ -26,7 +26,7 @@ use p2p::{
     event,
     message::{self, MessageType, SyncingMessage},
     net::{self, mock::MockService, FloodsubService, FloodsubTopic, NetworkService},
-    sync::{mock_consensus, SyncManager},
+    sync::{mock_consensus, SyncManager, SyncState},
 };
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
@@ -155,6 +155,7 @@ async fn local_and_remote_in_sync() {
     let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
     let mut remote_cons = mock_consensus::Consensus::with_height(8);
     let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(16), test_utils::get_random_mock_id());
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     let mut local_cons = remote_cons.clone();
     let handle = tokio::spawn(async move {
@@ -191,6 +192,7 @@ async fn local_and_remote_in_sync() {
 
         assert_eq!(mgr.initialize_peer(peer_id, &headers).await, Ok(()));
         assert_eq!(mgr.advance_state().await, Ok(()));
+        assert_eq!(mgr.state(), SyncState::Idle);
     })
     .await;
 
@@ -204,13 +206,12 @@ async fn local_and_remote_in_sync() {
 // no blocks are downloaded whereas loca node downloads the 7 new blocks from remote
 #[tokio::test]
 async fn remote_ahead_by_7_blocks() {
-    logging::init_logging::<&str>(None);
-
     let addr: SocketAddr = test_utils::make_address("[::1]:");
     let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
     let mut remote_cons = mock_consensus::Consensus::with_height(8);
     let mut local_cons = remote_cons.clone();
     let mut new_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 7 more blocks to remote's chain
     for _ in 0..7 {
@@ -278,6 +279,7 @@ async fn remote_ahead_by_7_blocks() {
 
     let local_cons = handle.await.unwrap();
     assert_eq!(local_cons.mainchain, remote_cons.mainchain);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
@@ -288,6 +290,7 @@ async fn local_ahead_by_12_blocks() {
     let mut remote_cons = mock_consensus::Consensus::with_height(8);
     let mut local_cons = remote_cons.clone();
     let mut new_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 12 more blocks to local's chain
     for _ in 0..12 {
@@ -386,6 +389,7 @@ async fn local_ahead_by_12_blocks() {
 
     let local_cons = handle.await.unwrap();
     assert_eq!(local_cons.mainchain, remote_cons.mainchain);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // local and remote nodes are in different chains and remote has longer chain
@@ -398,6 +402,7 @@ async fn remote_local_diff_chains_remote_higher() {
     let mut local_cons = remote_cons.clone();
     let mut new_remote_block_hdrs = vec![];
     let mut new_local_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 8 more blocks to remote's chain
     for _ in 0..8 {
@@ -525,6 +530,7 @@ async fn remote_local_diff_chains_remote_higher() {
 
     // verify also that local did a reorg as its chain was shorter
     assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // remote and local are in different branches and local has longer chain
@@ -536,6 +542,7 @@ async fn remote_local_diff_chains_local_higher() {
     let mut local_cons = remote_cons.clone();
     let mut new_remote_block_hdrs = vec![];
     let mut new_local_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 3 more blocks to remote's chain
     for _ in 0..3 {
@@ -658,6 +665,7 @@ async fn remote_local_diff_chains_local_higher() {
 
     // verify also that local did a reorg as its chain was shorter
     assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // connect two remote nodes and as all three nodes are in different chains,
@@ -672,6 +680,7 @@ async fn two_remote_nodes_different_chains() {
     let mut local_orig_cons = remote1_cons.clone();
     let mut new_remote1_block_hdrs = vec![];
     let mut new_remote2_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 8 more blocks to remote's chain
     for _ in 0..8 {
@@ -809,6 +818,7 @@ async fn two_remote_nodes_different_chains() {
         local_orig_cons.blks.store.len() + 13,
         local_cons.blks.store.len()
     );
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // nodes are in sync and remote node publishes a new block
@@ -819,6 +829,7 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
     let mut remote_cons = mock_consensus::Consensus::with_height(16);
     let ((peer_tx, mut peer_rx), peer_id) = (mpsc::channel(1), test_utils::get_random_mock_id());
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     let mut local_cons = remote_cons.clone();
     let handle = tokio::spawn(async move {
@@ -891,6 +902,7 @@ async fn nodes_in_sync_remote_publishes_new_block() {
     // verify that the remote and local chains are the same
     // after the block announcement
     assert_eq!(remote_cons.mainchain, local_cons.mainchain);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // connect two remote nodes that are in sync and ahead of local
@@ -903,6 +915,7 @@ async fn two_remote_nodes_same_chain() {
     let mut local_cons = remote_cons.clone();
     let mut local_orig_cons = remote_cons.clone();
     let mut new_remote_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 10 more blocks to the remotes' chain
     for _ in 0..10 {
@@ -995,6 +1008,7 @@ async fn two_remote_nodes_same_chain() {
     // verify that both peers contributed to block requests
     assert_ne!(peer1_cnt, 0);
     assert_ne!(peer2_cnt, 0);
+    assert_eq!(mgr.state(), SyncState::Idle);
 }
 
 // connect two remote nodes that are in sync and ahead of local
@@ -1011,6 +1025,7 @@ async fn two_remote_nodes_local_loses_connection() {
     let mut local_cons = remote_cons.clone();
     let mut local_orig_cons = remote_cons.clone();
     let mut new_remote_block_hdrs = vec![];
+    assert_eq!(mgr.state(), SyncState::Uninitialized);
 
     // add 10 more blocks to the remotes' chain
     for _ in 0..10 {
@@ -1180,4 +1195,5 @@ async fn two_remote_nodes_local_loses_connection() {
         local_orig_cons.blks.store.len() + 13,
         local_cons.blks.store.len()
     );
+    assert_eq!(mgr.state(), SyncState::Idle);
 }

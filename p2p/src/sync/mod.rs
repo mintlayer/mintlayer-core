@@ -75,7 +75,7 @@ pub enum ProcessorState {
     Done,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SyncState {
     /// Local node's state is uninitialized
     Uninitialized,
@@ -144,7 +144,6 @@ where
 
     /// Set of blocks that still need to be downloaded
     work: HashMap<mock_consensus::BlockHeader, HashSet<T::PeerId>>,
-    // TODO: keep track of our current best block so we can drain the queue periodically
 }
 
 impl<T> SyncManager<T>
@@ -171,6 +170,13 @@ where
             active: HashMap::new(),
             work: HashMap::new(),
         }
+    }
+
+    /// Get the current state of syncing
+    ///
+    /// TODO: report progress in percentages?
+    pub fn state(&self) -> SyncState {
+        self.state
     }
 
     /// Register peer to the sync manager
@@ -386,8 +392,12 @@ where
         //       and update its reputation accordingly
         // TODO: it must be known here whether the block came as a block response
         //       or as a random block from the floodsub
-        self.work.remove(&block.header);
-        self.active.remove(&block.header);
+        let _ = self.work.remove(&block.header);
+        if let Some((active, _)) = self.active.remove(&block.header) {
+            if let Some(peer) = self.peers.get_mut(&peer_id) {
+                peer.set_state(peer::PeerSyncState::Idle)
+            }
+        }
         self.busy.remove(&peer_id);
         self.queue.queue(block);
 
@@ -514,8 +524,10 @@ where
             }
         }
 
-        // TODO: set idle only if there are peers and their state is not UploadingHeaders
-        self.state = SyncState::Idle;
+        if !self.peers.iter().any(|(_, peer)| peer.state() != &peer::PeerSyncState::Idle) {
+            self.state = SyncState::Idle;
+        }
+
         Ok(())
     }
 

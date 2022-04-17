@@ -139,14 +139,13 @@ where
             // import all data of the now-resolved descendant and remove all old references
             resolved.0.into_iter().for_each(|descendant| {
                 self.lookup.remove(descendant.get_id());
+                debug_assert!(!self.export.contains_key(descendant.get_id()));
                 self.queue(descendant);
             });
         }
 
         Ok(ImportQueueState::Queued)
     }
-
-    // TODO: verify that duplicate entries are handled correctly
 
     /// Try to queue element to the import queue and if it resolves a dependency,
     /// return [`ImportQueueState::Resolved`] instead which indicates to the caller
