@@ -2138,4 +2138,191 @@ mod tests {
             ]
         );
     }
+
+    #[tokio::test]
+    async fn duplicate_blocks_received() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, _, mut rx_p2p) = make_sync_manager::<MockService>(addr).await;
+        let (tx, rx) = mpsc::channel(16);
+
+        let handle = tokio::spawn(async move {
+            let mut cons = mock_consensus::Consensus::with_height(8);
+
+            for i in 0..24 {
+                match rx_p2p.recv().await.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        response.send(Some(headers));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        cons.accept_block(block);
+                        response.send(());
+                    }
+                    _ => panic!("invalid message"),
+                }
+            }
+
+            cons
+        });
+
+        let (peer1, peer2) = (
+            test_utils::get_mock_id_with(111),
+            test_utils::get_mock_id_with(112),
+        );
+
+        assert_eq!(mgr.register_peer(peer1, tx.clone()).await, Ok(()));
+        assert_eq!(mgr.register_peer(peer2, tx).await, Ok(()));
+
+        assert_eq!(
+            mgr.initialize_peer(
+                peer1,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(101, Some(100)),
+                    mock_consensus::BlockHeader::with_id(103, Some(102)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+        assert_eq!(
+            mgr.initialize_peer(
+                peer2,
+                &[
+                    mock_consensus::BlockHeader::with_id(100, Some(1)),
+                    mock_consensus::BlockHeader::with_id(201, Some(100)),
+                    mock_consensus::BlockHeader::with_id(202, Some(201)),
+                ]
+            )
+            .await,
+            Ok(())
+        );
+
+        // schedule first two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 3);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        // send the first block in total 3 times, twice by the peer for whom the request
+        // was assigned to and once from the peer who was not supposed to send the block
+        for peer in [0, 1, 1, 0] {
+            mgr.process_block_response(
+                work[peer].1,
+                vec![Arc::new(mock_consensus::Block::with_id(
+                    work[0].0.id,
+                    work[0].0.prev_id,
+                ))],
+            )
+            .await;
+        }
+        mgr.process_block_response(
+            work[1].1,
+            vec![Arc::new(mock_consensus::Block::with_id(
+                work[1].0.id,
+                work[1].0.prev_id,
+            ))],
+        )
+        .await;
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 3);
+
+        // schedule second two block downloads
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 2);
+        assert_eq!(mgr.work.len(), 1);
+        let work = mgr
+            .active
+            .iter()
+            .map(|(header, (active, _))| (*header, *active))
+            .collect::<Vec<_>>();
+
+        // send the next two blocks also multiple times
+        for peer in [0, 0, 1, 0] {
+            mgr.process_block_response(
+                work[peer].1,
+                vec![Arc::new(mock_consensus::Block::with_id(
+                    work[0].0.id,
+                    work[0].0.prev_id,
+                ))],
+            )
+            .await;
+        }
+        for peer in [1, 1, 0, 1] {
+            mgr.process_block_response(
+                work[peer].1,
+                vec![Arc::new(mock_consensus::Block::with_id(
+                    work[1].0.id,
+                    work[1].0.prev_id,
+                ))],
+            )
+            .await;
+        }
+        assert_eq!(mgr.active.len(), 0);
+        assert_eq!(mgr.work.len(), 1);
+
+        // schedule and execute the last block download normally
+        mgr.advance_state().await;
+        assert_eq!(mgr.active.len(), 1);
+        assert_eq!(mgr.work.len(), 0);
+
+        let (header, peer) = {
+            let (header, (peer, _)) = mgr.active.iter().next().unwrap();
+            (*header, *peer)
+        };
+        mgr.process_block_response(
+            peer,
+            vec![Arc::new(mock_consensus::Block::with_id(header.id, header.prev_id))],
+        )
+        .await;
+
+        assert!(mgr.active.is_empty());
+        assert!(mgr.work.is_empty());
+        assert_eq!(mgr.queue.num_chains(), 2);
+
+        let mut entries = mgr
+            .queue
+            .drain()
+            .iter()
+            .map(|queued| {
+                queued
+                    .iter()
+                    .map(|entry| (entry.header.id, entry.header.prev_id))
+                    .collect::<Vec<(_, Option<_>)>>()
+            })
+            .collect::<Vec<Vec<(_, Option<_>)>>>();
+
+        if entries[0].len() != 1 {
+            entries.swap(0, 1);
+        }
+
+        entries[0].sort_by(|a, b| {
+            let res = a.1.cmp(&b.1);
+            if res == std::cmp::Ordering::Equal {
+                return a.0.cmp(&b.0);
+            }
+            res
+        });
+
+        assert_eq!(entries[0], vec![(103, Some(102))]);
+
+        entries[1].sort_by(|a, b| {
+            let res = a.0.cmp(&b.0);
+            if res == std::cmp::Ordering::Equal {
+                return a.1.cmp(&b.1);
+            }
+            res
+        });
+
+        assert_eq!(
+            entries[1],
+            vec![(100, Some(1)), (101, Some(100)), (201, Some(100)), (202, Some(201)),]
+        );
+    }
 }
