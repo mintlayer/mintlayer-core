@@ -471,10 +471,61 @@ where
         Ok(())
     }
 
+    /// Schedule new block requests
+    ///
+    /// Try to schedule outgoing block requests if there are still blocks that need to
+    /// be downloaded and there are available peers who can act as providers for those
+    /// blocks.
+    ///
+    /// Current algorithm is quite simple. It gets all currently available peers and
+    /// then iterates over all undownloaded blocks and tries to assign work for each
+    /// available peer.
+    ///
+    /// The algorithm could be improved to request multiple blocks from peers or use
+    /// some statistics to select peers which are responsive/have indicated they have
+    /// available bandwidth/are in close proximity to us/etc.
+    async fn schedule_block_requests(&mut self) -> error::Result<()> {
+        if self.work.is_empty() {
+            return Ok(());
+        }
+
+        let mut available = self
+            .peers
+            .iter()
+            .filter_map(|(peer_id, context)| {
+                (context.state() == peer::PeerSyncState::Idle).then(|| *peer_id)
+            })
+            .collect::<HashSet<_>>();
+
+        let requests = self
+            .work
+            .iter()
+            .filter_map(|(header, peers)| {
+                available.intersection(peers).next().copied().map(|peer_id| {
+                    available.remove(&peer_id);
+                    (peer_id, *header)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        for (peer_id, header) in requests {
+            let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+            log::trace!("dowload block {:?} from peer {:?}", header.id, peer_id);
+
+            let peers = self.work.remove(&header).expect("inconsistent sync state");
+            self.active.insert(header, (peer_id, peers));
+            peer.get_blocks(vec![header]).await?;
+        }
+
+        self.state = SyncState::DownloadingBlocks;
+        Ok(())
+    }
+
     /// Advance the state of syncing
     ///
-    /// The combination of the states of `self.work`, `self.active` and `self.queue` define what
-    /// the current state of syncing is.
+    /// If there are still undownloaded blocks, schedule block requests if possible.
+    /// If the block downloads are still in progress, just proceed with execution.
+    /// If all blocks have been dowloaded, drain the import queue the local block index.
     pub async fn advance_state(&mut self) -> error::Result<()> {
         if !self.work.is_empty() {
             log::debug!(
@@ -483,34 +534,7 @@ where
                 self.active.len()
             );
 
-            let mut available = self
-                .peers
-                .iter()
-                .filter_map(|(peer_id, context)| {
-                    (context.state() == peer::PeerSyncState::Idle).then(|| *peer_id)
-                })
-                .collect::<HashSet<_>>();
-
-            let requests = self
-                .work
-                .iter()
-                .filter_map(|(header, peers)| {
-                    available.intersection(peers).next().copied().map(|peer_id| {
-                        available.remove(&peer_id);
-                        (peer_id, *header)
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            for (peer_id, header) in requests {
-                let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-                let peers = self.work.remove(&header).expect("inconsistent sync state");
-                self.active.insert(header, (peer_id, peers));
-                peer.get_blocks(vec![header]).await?;
-            }
-
-            self.state = SyncState::DownloadingBlocks;
-            return Ok(());
+            return self.schedule_block_requests().await;
         }
 
         // work is empty, check if active has any work
@@ -522,11 +546,9 @@ where
         }
 
         // try to drain the queue if there are any blocks
-        if !self.queue.is_empty() {
-            for chain in self.queue.drain().iter() {
-                for block in chain.iter() {
-                    self.p2p_handle.new_block((**block).clone()).await?;
-                }
+        for chain in self.queue.drain().iter() {
+            for block in chain.iter() {
+                self.p2p_handle.new_block((**block).clone()).await?;
             }
         }
 
