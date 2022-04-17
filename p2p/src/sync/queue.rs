@@ -228,6 +228,12 @@ where
 
         imported
     }
+
+    /// Destroy all data queued holds
+    pub fn clear(&mut self) {
+        self.export.clear();
+        self.lookup.clear();
+    }
 }
 
 #[cfg(test)]

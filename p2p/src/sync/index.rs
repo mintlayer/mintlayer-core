@@ -84,6 +84,13 @@ impl PeerIndex {
         self.headers.contains_key(&header.id)
     }
 
+    /// Destroy all data the index holds
+    pub fn clear(&mut self) {
+        self.index.clear();
+        self.headers.clear();
+        self.queue.clear();
+    }
+
     /// Initialize the block index from headers
     pub fn initialize(&mut self, headers: &[BlockHeader]) {
         (self.index, self.headers) = headers

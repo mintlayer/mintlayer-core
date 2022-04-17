@@ -95,6 +95,7 @@ where
     /// Initialize the intermediary index with headers
     pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
         self.state = PeerSyncState::Idle;
+        self.index.clear();
         self.index.initialize(headers);
     }
 
