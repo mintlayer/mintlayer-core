@@ -135,10 +135,6 @@ where
     /// Import queue to reorder out-of-order blocks
     queue: queue::ImportQueue<Arc<mock_consensus::Block>>,
 
-    // TODO: merge this with `peers`
-    /// Set of peers that are currently busy, used for scheduling
-    busy: HashSet<T::PeerId>,
-
     /// Set of block requests that are currently under execution
     active: HashMap<mock_consensus::BlockHeader, (T::PeerId, HashSet<T::PeerId>)>,
 
@@ -166,7 +162,6 @@ where
             rx_peer,
             peers: Default::default(),
             queue: queue::ImportQueue::new(),
-            busy: HashSet::new(),
             active: HashMap::new(),
             work: HashMap::new(),
         }
@@ -398,7 +393,6 @@ where
                 peer.set_state(peer::PeerSyncState::Idle)
             }
         }
-        self.busy.remove(&peer_id);
         self.queue.queue(block);
 
         Ok(())
@@ -481,25 +475,29 @@ where
                 self.active.len()
             );
 
-            // TODO: download more than one block from node using one request
+            let mut available = self
+                .peers
+                .iter()
+                .filter_map(|(peer_id, context)| {
+                    (context.state() == peer::PeerSyncState::Idle).then(|| *peer_id)
+                })
+                .collect::<HashSet<_>>();
+
             let requests = self
                 .work
                 .iter()
                 .filter_map(|(header, peers)| {
-                    peers.iter().find(|peer_id| !self.busy.contains(peer_id)).map(|peer_id| {
-                        log::trace!("request {:?} from peer {:?}", header, peer_id);
-
-                        self.busy.insert(*peer_id);
-                        // TODO: don't insert to active yet!
-                        self.active.insert(*header, (*peer_id, peers.clone()));
-                        (*peer_id, *header)
+                    available.intersection(peers).next().copied().map(|peer_id| {
+                        available.remove(&peer_id);
+                        (peer_id, *header)
                     })
                 })
-                .collect::<Vec<(_, _)>>();
+                .collect::<Vec<_>>();
 
             for (peer_id, header) in requests {
                 let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-                self.work.remove(&header);
+                let peers = self.work.remove(&header).expect("inconsistent sync state");
+                self.active.insert(header, (peer_id, peers));
                 peer.get_blocks(vec![header]).await?;
             }
 
@@ -524,7 +522,7 @@ where
             }
         }
 
-        if !self.peers.iter().any(|(_, peer)| peer.state() != &peer::PeerSyncState::Idle) {
+        if !self.peers.iter().any(|(_, peer)| peer.state() != peer::PeerSyncState::Idle) {
             self.state = SyncState::Idle;
         }
 
@@ -640,7 +638,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 1);
         assert_eq!(
             mgr.peers.iter().next().unwrap().1.state(),
-            &peer::PeerSyncState::UploadingHeaders,
+            peer::PeerSyncState::UploadingHeaders,
         );
     }
 
@@ -668,7 +666,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 1);
         assert_eq!(
             mgr.peers.iter().next().unwrap().1.state(),
-            &peer::PeerSyncState::UploadingHeaders,
+            peer::PeerSyncState::UploadingHeaders,
         );
 
         // no peer with this id exist, nothing happens
@@ -714,7 +712,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 1);
         assert_eq!(
             mgr.peers.iter().next().unwrap().1.state(),
-            &peer::PeerSyncState::UploadingHeaders,
+            peer::PeerSyncState::UploadingHeaders,
         );
         assert!(mgr.work.is_empty());
 
@@ -772,7 +770,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 1);
         assert_eq!(
             mgr.peers.iter().next().unwrap().1.state(),
-            &peer::PeerSyncState::UploadingHeaders,
+            peer::PeerSyncState::UploadingHeaders,
         );
         assert!(mgr.work.is_empty());
 
@@ -841,7 +839,7 @@ mod tests {
         assert_eq!(mgr.register_peer(peer_id2, tx.clone()).await, Ok(()));
         assert_eq!(mgr.peers.len(), 2);
         for (id, peer) in mgr.peers.iter() {
-            assert_eq!(peer.state(), &peer::PeerSyncState::UploadingHeaders);
+            assert_eq!(peer.state(), peer::PeerSyncState::UploadingHeaders);
         }
         assert!(mgr.work.is_empty());
 
@@ -899,7 +897,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 3);
         assert_eq!(
             mgr.peers.get(&peer_id3).unwrap().state(),
-            &peer::PeerSyncState::UploadingHeaders
+            peer::PeerSyncState::UploadingHeaders
         );
         assert_eq!(
             mgr.initialize_peer(
@@ -1342,19 +1340,25 @@ mod tests {
         assert_eq!(mgr.active.len(), 2);
         assert_eq!(mgr.work.len(), 5);
 
-        mgr.busy.drain();
+        mgr.peers
+            .iter_mut()
+            .for_each(|(_, peer)| peer.set_state(peer::PeerSyncState::Idle));
         mgr.active.drain();
         assert_eq!(mgr.advance_state().await, Ok(()));
         assert_eq!(mgr.active.len(), 2);
         assert_eq!(mgr.work.len(), 3);
 
-        mgr.busy.drain();
+        mgr.peers
+            .iter_mut()
+            .for_each(|(_, peer)| peer.set_state(peer::PeerSyncState::Idle));
         mgr.active.drain();
         assert_eq!(mgr.advance_state().await, Ok(()));
         assert_eq!(mgr.active.len(), 2);
         assert_eq!(mgr.work.len(), 1);
 
-        mgr.busy.drain();
+        mgr.peers
+            .iter_mut()
+            .for_each(|(_, peer)| peer.set_state(peer::PeerSyncState::Idle));
         mgr.active.drain();
         assert_eq!(mgr.advance_state().await, Ok(()));
         assert_eq!(mgr.active.len(), 1);

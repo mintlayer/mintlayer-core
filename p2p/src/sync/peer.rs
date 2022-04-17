@@ -26,7 +26,7 @@ use logging::log;
 use tokio::sync::mpsc;
 
 /// State of the peer
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PeerSyncState {
     /// Peer state is unknown
     Unknown,
@@ -78,8 +78,8 @@ where
     }
 
     /// Get peer state
-    pub fn state(&self) -> &PeerSyncState {
-        &self.state
+    pub fn state(&self) -> PeerSyncState {
+        self.state
     }
 
     /// Get the intermediary index of the peer
