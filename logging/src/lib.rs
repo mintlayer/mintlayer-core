@@ -11,7 +11,7 @@ pub fn is_file_output_supported() -> bool {
 static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
 
 pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
-    INITIALIZE_LOGGER_ONCE_FLAG.call_once(|| env_logger::init());
+    INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
 }
 
 #[cfg(test)]
