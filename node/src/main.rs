@@ -1,3 +1,3 @@
 fn main() {
-    println!("Hello, world!");
+    logging::log::info!("Hello, world!");
 }

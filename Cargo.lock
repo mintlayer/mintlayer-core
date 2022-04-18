@@ -537,6 +537,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "lazy_static",
+ "logging",
  "loom",
  "merkletree",
  "parity-scale-codec",
@@ -1670,6 +1671,7 @@ name = "logging"
 version = "0.1.0"
 dependencies = [
  "env_logger",
+ "lazy_static",
  "log",
 ]
 
@@ -1988,6 +1990,9 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
+dependencies = [
+ "logging",
+]
 
 [[package]]
 name = "nohash-hasher"
@@ -2867,6 +2872,7 @@ dependencies = [
  "flate2",
  "hex",
  "hex-literal",
+ "logging",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "proptest",
@@ -3077,9 +3083,9 @@ checksum = "6e63cff320ae2c57904679ba7cb63280a3dc4613885beafb148ee7bf9aa9042d"
 
 [[package]]
 name = "sscanf"
-version = "0.1.4"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "513162b19ce2aa5347d36a1d9cbc8ba2b20c63e0e82080b52d2cade9fb3a8cb7"
+checksum = "6311683a27f16025db4f8bcf0732662f5fecd1406f53f0aab9adbf6f396f1189"
 dependencies = [
  "const_format",
  "lazy_static",
@@ -3089,9 +3095,9 @@ dependencies = [
 
 [[package]]
 name = "sscanf_macro"
-version = "0.1.4"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d697834866afffd34330ee55f6dbb2cf1eedd44b33cc63b8fdfd87bc3268eeac"
+checksum = "0d1d364d856d72a52b518c7669df864bdf177de242bcb5b45369ec33190c91c3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3586,6 +3592,9 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 [[package]]
 name = "wallet"
 version = "0.1.0"
+dependencies = [
+ "logging",
+]
 
 [[package]]
 name = "wasi"

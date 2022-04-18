@@ -96,9 +96,12 @@ mod tests {
     use super::*;
     use bitcoin_bech32::WitnessProgram;
     use hex::FromHex;
+    use logging::log;
 
     #[test]
     fn check_encode() {
+        logging::init_logging::<&std::path::Path>(None);
+
         let data = vec![0x00, 0x01, 0x02];
         let hrp = "bech32";
 
@@ -106,7 +109,7 @@ mod tests {
         assert_eq!(encoded, "bech321qqqsyktsg0l".to_string());
 
         let decoded = decode(&encoded).expect("should decode okay");
-        println!("value of decoded: {:?}", decoded);
+        log::info!("value of decoded: {:?}", decoded);
 
         let base32_data: Vec<u8> = data.to_base32().into_iter().map(|x| x.to_u8()).collect();
         assert_eq!(base32_data, decoded.get_base32_data());
