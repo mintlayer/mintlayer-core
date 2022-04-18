@@ -537,6 +537,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "lazy_static",
+ "logging",
  "loom",
  "merkletree",
  "parity-scale-codec",
@@ -1988,6 +1989,9 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
+dependencies = [
+ "logging",
+]
 
 [[package]]
 name = "nohash-hasher"
@@ -2867,6 +2871,7 @@ dependencies = [
  "flate2",
  "hex",
  "hex-literal",
+ "logging",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "proptest",
@@ -3586,6 +3591,9 @@ checksum = "9d5b2c62b4012a3e1eca5a7e077d13b3bf498c4073e33ccd58626607748ceeca"
 [[package]]
 name = "wallet"
 version = "0.1.0"
+dependencies = [
+ "logging",
+]
 
 [[package]]
 name = "wasi"

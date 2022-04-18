@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![allow(unused, dead_code)]
 use lazy_static::lazy_static;
+use logging::log;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 
@@ -68,29 +69,29 @@ mod tests {
     #[test]
     fn test_time() {
         let handle = std::thread::spawn(move || {
-            println!("p2p time: {}", get());
+            log::info!("p2p time: {}", get());
             std::thread::sleep(std::time::Duration::from_secs(1));
 
-            println!("p2p time: {}", get());
+            log::info!("p2p time: {}", get());
             assert_eq!(get(), 1337);
             std::thread::sleep(std::time::Duration::from_secs(1));
 
-            println!("p2p time: {}", get());
+            log::info!("p2p time: {}", get());
             assert_ne!(get(), 1337);
         });
 
         std::thread::spawn(move || {
-            println!("rpc time: {}", get());
+            log::info!("rpc time: {}", get());
             std::thread::sleep(std::time::Duration::from_millis(500));
 
             set(1337);
             assert_eq!(get(), 1337);
-            println!("rpc time: {}", get());
+            log::info!("rpc time: {}", get());
             std::thread::sleep(std::time::Duration::from_millis(500));
 
             reset();
             assert_ne!(get(), 1337);
-            println!("rpc time: {}", get());
+            log::info!("rpc time: {}", get());
         });
 
         handle.join();
