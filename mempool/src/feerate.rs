@@ -22,7 +22,9 @@ impl FeeRate {
     }
 
     pub(crate) fn compute_fee(&self, size: usize) -> Amount {
-        Amount::from_atoms(self.tokens_per_kb * u128::try_from(size).unwrap() / 1000)
+        Amount::from_atoms(
+            self.tokens_per_kb * u128::try_from(size).expect("compute_fee conversion") / 1000,
+        )
     }
 
     pub(crate) fn tokens_per_kb(&self) -> u128 {
@@ -30,7 +32,7 @@ impl FeeRate {
     }
 
     fn div_up(fee: u128, tx_size: usize) -> u128 {
-        let tx_size = u128::try_from(tx_size).unwrap();
+        let tx_size = u128::try_from(tx_size).expect("div_up conversion");
         (fee + tx_size - 1) / tx_size
     }
 }
