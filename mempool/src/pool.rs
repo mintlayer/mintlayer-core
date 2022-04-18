@@ -2492,7 +2492,13 @@ mod tests {
         assert!(mempool.contains_transaction(&child_1_id));
         assert!(!mempool.contains_transaction(&child_0_id));
         let rolling_fee = mempool.get_minimum_rolling_fee();
-        log::debug!("FeeRate of child_0 {:?}", mempool.try_get_fee(&child_0)?);
+        let child_0_fee = mempool.try_get_fee(&child_0)?;
+        log::debug!("FeeRate of child_0 {:?}", child_0_fee);
+        assert_eq!(
+            rolling_fee,
+            *INCREMENTAL_RELAY_FEE_RATE + FeeRate::of_tx(child_0_fee, child_0.encoded_size())
+        );
+        assert_eq!(rolling_fee, FeeRate::new(3561));
         log::debug!(
             "minimum rolling fee after child_0's eviction {:?}",
             rolling_fee
@@ -2574,29 +2580,32 @@ mod tests {
                 TxValidationError::RollingFeeThresholdNotMet { .. }
             ))
         ));
+        log::debug!(
+            "minimum rolling fee after first attempt to add dummy: {:?}",
+            mempool.get_minimum_rolling_fee()
+        );
         assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 2);
 
         mock_clock.increment(halflife);
         log::debug!("Second attempt to add dummy");
         mempool.add_transaction(dummy_tx)?;
+        log::debug!(
+            "minimum rolling fee after first second to add dummy: {:?}",
+            mempool.get_minimum_rolling_fee()
+        );
         assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 4);
         log::debug!(
             "After successful addition of dummy, rolling fee rate is {:?}",
             mempool.get_minimum_rolling_fee()
         );
 
-        // Add more dummies until rolling feerate drops to zero
+        // Add another dummmy until rolling feerate drops to zero
         mock_clock.increment(halflife);
         let another_dummy =
             TxGenerator::new().with_fee(Amount::from_atoms(100)).generate_tx(&mempool)?;
         mempool.add_transaction(another_dummy)?;
-        assert_eq!(mempool.get_minimum_rolling_fee(), rolling_fee / 8);
-
-        mock_clock.increment(halflife);
-        let final_dummy =
-            TxGenerator::new().with_fee(Amount::from_atoms(100)).generate_tx(&mempool)?;
-        mempool.add_transaction(final_dummy)?;
         assert_eq!(mempool.get_minimum_rolling_fee(), FeeRate::new(0));
+
         Ok(())
     }
 

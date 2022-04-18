@@ -16,9 +16,8 @@ impl FeeRate {
     }
 
     pub(crate) fn of_tx(fee: Amount, tx_size: usize) -> Self {
-        let tokens_per_byte = Self::div_up(fee.into(), tx_size);
         Self {
-            tokens_per_kb: tokens_per_byte * 1000,
+            tokens_per_kb: Self::div_up(1000 * u128::try_from(fee).expect("of_tx"), tx_size),
         }
     }
 
