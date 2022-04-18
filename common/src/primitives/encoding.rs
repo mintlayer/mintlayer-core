@@ -100,6 +100,8 @@ mod tests {
 
     #[test]
     fn check_encode() {
+        logging::init_logging::<&std::path::Path>(None);
+
         let data = vec![0x00, 0x01, 0x02];
         let hrp = "bech32";
 

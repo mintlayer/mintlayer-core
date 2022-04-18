@@ -68,6 +68,8 @@ mod tests {
 
     #[test]
     fn test_time() {
+        logging::init_logging::<&std::path::Path>(None);
+
         let handle = std::thread::spawn(move || {
             log::info!("p2p time: {}", get());
             std::thread::sleep(std::time::Duration::from_secs(1));
