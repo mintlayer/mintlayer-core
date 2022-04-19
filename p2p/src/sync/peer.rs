@@ -20,7 +20,7 @@ use crate::{
     error::{self, P2pError},
     event,
     net::{self, FloodsubService, NetworkService},
-    sync::{self, index, mock_consensus},
+    sync::{self, mock_consensus},
 };
 use logging::log;
 use std::collections::HashSet;
@@ -58,9 +58,6 @@ where
 
     /// Headers that the remote peer has requested from local node
     requested: HashSet<mock_consensus::BlockHeader>,
-
-    /// Peer block index
-    index: index::PeerIndex,
 }
 
 impl<T> PeerContext<T>
@@ -72,7 +69,6 @@ where
             peer_id,
             tx,
             state: PeerSyncState::Unknown,
-            index: index::PeerIndex::new(),
             requested: HashSet::new(),
         }
     }
@@ -85,18 +81,6 @@ where
     /// Get peer state
     pub fn state(&self) -> PeerSyncState {
         self.state
-    }
-
-    /// Get the intermediary index of the peer
-    pub fn index(&self) -> &index::PeerIndex {
-        &self.index
-    }
-
-    /// Initialize the intermediary index with headers
-    pub fn initialize_index(&mut self, headers: &[mock_consensus::BlockHeader]) {
-        self.state = PeerSyncState::Idle;
-        self.index.clear();
-        self.index.initialize(headers);
     }
 
     /// Register headers request
@@ -113,26 +97,6 @@ where
             .iter()
             .filter_map(|header| self.requested.contains(header).then(|| *header))
             .collect()
-    }
-
-    /// Register block to the intermediary index of the peer
-    pub fn register_block(
-        &mut self,
-        block: &mock_consensus::Block,
-    ) -> error::Result<index::PeerIndexState> {
-        log::trace!(
-            "block ({:?}) accepted to peer's ({:?}) intermediary index",
-            block,
-            self.peer_id
-        );
-
-        self.index.register_block(block.header).map_err(|e| {
-            log::error!(
-                "failed to add block to peer's ({:#?}) intermediary index",
-                self.peer_id
-            );
-            e
-        })
     }
 
     /// Requests headers from remote using `locator`
@@ -340,39 +304,6 @@ mod tests {
             peer.send_blocks(blocks.clone()).await,
             Err(P2pError::ChannelClosed)
         );
-    }
-
-    #[tokio::test]
-    async fn add_blocks_before_headers() {
-        let (mut peer, mut rx) = new_mock_peersyncstate();
-        let block1 = mock_consensus::Block::new(Some(444));
-        let block1_1 = mock_consensus::Block::new(Some(block1.header.id));
-        let block1_1_1 = mock_consensus::Block::new(Some(block1_1.header.id));
-
-        assert_eq!(
-            peer.register_block(&block1),
-            Ok(index::PeerIndexState::Queued)
-        );
-        assert_eq!(
-            peer.register_block(&block1_1),
-            Ok(index::PeerIndexState::Queued)
-        );
-        assert_eq!(
-            peer.register_block(&block1_1_1),
-            Ok(index::PeerIndexState::Queued)
-        );
-
-        assert_eq!(peer.index.queue().num_chains(), 1);
-        assert_eq!(peer.index.queue().num_queued(), 3);
-
-        let headers = &[
-            mock_consensus::BlockHeader::with_id(444, Some(333)),
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(777, Some(666)),
-        ];
-        peer.initialize_index(headers);
-        assert_eq!(peer.index.queue().num_chains(), 0);
-        assert_eq!(peer.index.queue().num_queued(), 0);
     }
 
     #[tokio::test]

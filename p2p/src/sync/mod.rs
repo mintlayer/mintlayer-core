@@ -261,7 +261,7 @@ where
             None => [self.p2p_handle.get_best_block_header().await?].to_vec(),
         };
 
-        peer.initialize_index(&headers);
+        peer.set_state(peer::PeerSyncState::Idle);
         Ok(())
     }
 
@@ -348,13 +348,7 @@ where
         );
 
         match self.state {
-            SyncState::Idle => {
-                self.peers.iter_mut().for_each(|(_, peer)| {
-                    peer.register_block(&block);
-                });
-                // FIXME: zzz
-                self.p2p_handle.new_block((*block).clone()).await
-            }
+            SyncState::Idle => self.p2p_handle.new_block((*block).clone()).await,
             _ => self.process_sync_block(peer_id, block),
         }
     }

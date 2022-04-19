@@ -20,9 +20,8 @@ use common::chain::ChainConfig;
 use libp2p::Multiaddr;
 use p2p::{
     net::{
-        libp2p::Libp2pService,
-        mock::MockService,
-        ConnectivityEvent, ConnectivityService, NetworkService,
+        libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
+        NetworkService,
     },
     peer::*,
 };
