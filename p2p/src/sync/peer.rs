@@ -55,9 +55,6 @@ where
 
     /// TX channel for sending syncing messages to remote peer
     tx: mpsc::Sender<event::PeerEvent<T>>,
-
-    /// Headers that the remote peer has requested from local node
-    requested: HashSet<mock_consensus::BlockHeader>,
 }
 
 impl<T> PeerContext<T>
@@ -69,7 +66,6 @@ where
             peer_id,
             tx,
             state: PeerSyncState::Unknown,
-            requested: HashSet::new(),
         }
     }
 
@@ -81,22 +77,6 @@ where
     /// Get peer state
     pub fn state(&self) -> PeerSyncState {
         self.state
-    }
-
-    /// Register headers request
-    pub fn register_headers(&mut self, headers: &[mock_consensus::BlockHeader]) {
-        self.requested.extend(headers.iter());
-    }
-
-    /// Check which headers have actually been requested by the remote peer
-    pub fn validate_block_request(
-        &mut self,
-        headers: &[mock_consensus::BlockHeader],
-    ) -> Vec<mock_consensus::BlockHeader> {
-        headers
-            .iter()
-            .filter_map(|header| self.requested.contains(header).then(|| *header))
-            .collect()
     }
 
     /// Requests headers from remote using `locator`
@@ -303,34 +283,6 @@ mod tests {
         assert_eq!(
             peer.send_blocks(blocks.clone()).await,
             Err(P2pError::ChannelClosed)
-        );
-    }
-
-    #[tokio::test]
-    async fn test_block_request() {
-        let (mut peer, mut rx) = new_mock_peersyncstate();
-        let headers = &[
-            mock_consensus::BlockHeader::with_id(444, Some(333)),
-            mock_consensus::BlockHeader::with_id(666, Some(555)),
-            mock_consensus::BlockHeader::with_id(777, Some(666)),
-            mock_consensus::BlockHeader::with_id(888, Some(777)),
-            mock_consensus::BlockHeader::with_id(999, Some(888)),
-        ];
-        peer.register_headers(headers);
-        assert_eq!(
-            peer.validate_block_request(&[
-                mock_consensus::BlockHeader::with_id(111, Some(110)),
-                mock_consensus::BlockHeader::with_id(100, Some(99)),
-                mock_consensus::BlockHeader::with_id(444, Some(333)),
-                mock_consensus::BlockHeader::with_id(777, Some(666)),
-                mock_consensus::BlockHeader::with_id(999, Some(888)),
-                mock_consensus::BlockHeader::with_id(1338, Some(1337)),
-            ]),
-            &[
-                mock_consensus::BlockHeader::with_id(444, Some(333)),
-                mock_consensus::BlockHeader::with_id(777, Some(666)),
-                mock_consensus::BlockHeader::with_id(999, Some(888)),
-            ]
         );
     }
 }
