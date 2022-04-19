@@ -41,5 +41,3 @@ impl From<Error> for utxo::Error {
         utxo::Error::DBError(format!("{:?}", e))
     }
 }
-
-// TODO: write basic tests for reads/writes in db for UtxoDBInterface

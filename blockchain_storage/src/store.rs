@@ -4,12 +4,9 @@ use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::Utxo;
+use utxo::{BlockUndo, TxUndo, Utxo};
 
-use crate::{
-    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UtxoRead,
-    UtxoWrite,
-};
+use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -49,7 +46,9 @@ storage::decl_schema! {
         // Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Single,
         // Store for Utxo Entries
-        pub DBUtxo: Single
+        pub DBUtxo: Single,
+        // Store for BlockUndo
+        pub DBBlockUndo: Single
     }
 }
 
@@ -141,6 +140,12 @@ impl UtxoRead for Store {
     }
 }
 
+impl UndoRead for Store {
+    delegate_to_transaction! {
+        fn read_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+    }
+}
+
 impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
@@ -171,6 +176,13 @@ impl UtxoWrite for Store {
         fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+    }
+}
+
+impl UndoWrite for Store {
+    delegate_to_transaction! {
+        fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -232,6 +244,12 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
     }
 }
 
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UndoRead for StoreTx<Tx> {
+    fn read_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+        self.read::<DBBlockUndo, _, _>(id.as_ref())
+    }
+}
+
 impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for StoreTx<Tx> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
@@ -287,6 +305,16 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
+    }
+}
+
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UndoWrite for StoreTx<Tx> {
+    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
+        self.write::<DBBlockUndo, _, _>(id.encode(), undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<DBBlockUndo, _>().del(id.as_ref()).map_err(Into::into)
     }
 }
 

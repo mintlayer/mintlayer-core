@@ -5,7 +5,7 @@ use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosit
 use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id};
 use storage::traits;
-use utxo::Utxo;
+use utxo::{BlockUndo, Utxo};
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
@@ -108,6 +108,15 @@ pub(crate) trait UtxoWrite: UtxoRead {
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
     fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
 }
+
+pub trait UndoRead {
+    fn read_undo_data(&mut self, id:Id<Block>) -> crate::Result<Option<BlockUndo>>;
+}
+pub trait UndoWrite:UndoRead{
+    fn add_undo_data(&mut self, id:Id<Block>, undo:&BlockUndo) -> crate::Result<()>;
+    fn del_undo_data(&mut self, id:Id<Block>) -> crate::Result<()>;
+}
+
 
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {
