@@ -136,7 +136,7 @@ impl<'a> CachedInputs<'a> {
         for (tx_id, tx_index_op) in input_data.data {
             match tx_index_op {
                 CachedInputsOperation::Write(ref tx_index) => {
-                    db_tx.set_mainchain_tx_index(&tx_id, &tx_index)?
+                    db_tx.set_mainchain_tx_index(&tx_id, tx_index)?
                 }
                 CachedInputsOperation::Erase => db_tx.del_mainchain_tx_index(&tx_id)?,
             }

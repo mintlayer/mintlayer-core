@@ -302,7 +302,7 @@ impl<'a> ConsensusRef<'a> {
         for tx in transactions.iter().rev() {
             cached_inputs.unspend(tx)?;
         }
-        return Ok(cached_inputs);
+        Ok(cached_inputs)
     }
 
     fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
@@ -720,7 +720,7 @@ mod tests {
     use common::address::Address;
     use common::chain::block::{Block, ConsensusData};
     use common::chain::config::create_mainnet;
-    use common::chain::OutputSpentState;
+    
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
@@ -1533,7 +1533,7 @@ mod tests {
 
         #[allow(dead_code)]
         pub fn random_block(&self, parent_block: &Block, _params: Option<&[BlockParams]>) -> Block {
-            produce_test_block(&self.consensus.chain_config.clone(), &parent_block, false)
+            produce_test_block(&self.consensus.chain_config.clone(), parent_block, false)
         }
 
         pub fn genesis(&self) -> &Block {
@@ -1603,7 +1603,7 @@ mod tests {
             self.consensus
                 .process_block(block.clone(), BlockSource::Local)
                 .expect("Err block processing");
-            self.blocks.push(block.clone());
+            self.blocks.push(block);
         }
 
         pub fn add_blocks(&mut self, parent_block_id: &Id<Block>, count_blocks: usize) {
