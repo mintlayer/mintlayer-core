@@ -266,7 +266,7 @@ impl<'a> ConsensusRef<'a> {
 
     fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         let mut cached_inputs = CachedInputs::new();
-        let mut total_value = Amount::new(0);
+        let mut total_value = Amount::from_atoms(0);
         for tx in block.transactions() {
             // Create a new indices for every tx
             if let Entry::Vacant(entry) = cached_inputs.entry(tx.get_id()) {
@@ -744,6 +744,8 @@ impl<'a> ConsensusRef<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use super::*;
     use blockchain_storage::Store;
     use common::address::Address;
@@ -753,6 +755,7 @@ mod tests {
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
+    use proptest::result;
     use rand::prelude::*;
 
     pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
@@ -792,7 +795,7 @@ mod tests {
             Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
 
         TxOutput::new(
-            Amount::from(g.next_u64() as u128),
+            Amount::from_atoms(g.next_u64() as u128),
             Destination::Address(addr),
         )
     }
@@ -867,7 +870,7 @@ mod tests {
                     .iter()
                     .enumerate()
                     .filter_map(move |(index, output)| {
-                        if output.get_value() > Amount::from(1) {
+                        if output.get_value() > Amount::from_atoms(1) {
                             // Random address receiver
                             let mut rng = rand::thread_rng();
                             let mut witness: Vec<u8> = (1..100).collect();
@@ -883,7 +886,7 @@ mod tests {
                                     witness,
                                 ),
                                 TxOutput::new(
-                                    (output.get_value() - Amount::from(1)).unwrap(),
+                                    (output.get_value() - Amount::from_atoms(1)).unwrap(),
                                     Destination::Address(receiver),
                                 ),
                             ))
@@ -1252,14 +1255,14 @@ mod tests {
                     0,
                     random_witness(),
                 );
-                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
+                let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
                 let first_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 let first_tx_id = first_tx.get_id();
 
                 let input = TxInput::new(first_tx_id.into(), 0, vec![]);
-                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
                 let second_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 // Create tx that pointing to the previous tx
@@ -1307,14 +1310,14 @@ mod tests {
                     0,
                     random_witness(),
                 );
-                let output = TxOutput::new(Amount::from(12345678912345), receiver.clone());
+                let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
                 let first_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 let first_tx_id = first_tx.get_id();
 
                 let input = TxInput::new(first_tx_id.into(), 0, vec![]);
-                let output = TxOutput::new(Amount::new(987654321), receiver);
+                let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
                 let second_tx =
                     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
                 // Create tx that pointing to the previous tx
@@ -1375,7 +1378,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1385,7 +1388,7 @@ mod tests {
             let second_tx = Transaction::new(
                 0,
                 vec![TxInput::new(first_tx_id.clone().into(), 0, vec![])],
-                vec![TxOutput::new(Amount::new(987654321), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(987654321), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1394,7 +1397,7 @@ mod tests {
             let third_tx = Transaction::new(
                 123456789,
                 vec![TxInput::new(first_tx_id.into(), 0, vec![])],
-                vec![TxOutput::new(Amount::new(987654321), receiver)],
+                vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1457,7 +1460,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver.clone())],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1489,7 +1492,7 @@ mod tests {
                     0,
                     random_witness(),
                 )],
-                vec![TxOutput::new(Amount::from(12345678912345), receiver)],
+                vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver)],
                 0,
             )
             .expect(ERR_CREATE_TX_FAIL);
@@ -1540,19 +1543,10 @@ mod tests {
     struct BlockTestFrameWork {
         consensus: Consensus,
         blocks: Vec<Block>,
-        chains: Vec<Vec<ChainItem>>,
+        chains: Vec<Vec<LinkedTree>>,
     }
 
-    #[test]
-    fn test_block_test_framework() {
-        let mut btf = BlockTestFrameWork::new();
-        btf.create_chain(10);
-        btf.add_fork(1, 2);
-        btf.process_blocks().expect("Test fail");
-        btf.print_chain();
-    }
-
-    impl BlockTestFrameWork {
+    impl<'a> BlockTestFrameWork {
         pub fn new() -> Self {
             Self {
                 consensus: setup_consensus(),
@@ -1561,29 +1555,65 @@ mod tests {
             }
         }
 
-        fn print_gap(&self, block: &ChainItem) {
-            if block.prev_block_id == self.consensus.chain_config.genesis_block().get_id() {
-                print!("genesis");
-            } else {
-                for chain in &self.chains {
-                    for (index, ancestor_block) in chain.iter().enumerate() {
-                        if ancestor_block.id == block.prev_block_id {
-                            print!("{text:>width$}", text = "\\-> ", width = (7 + index * 9));
-                        }
+        pub fn random_tx(parent_block: &Block, params: Option<&[TxParams]>) -> Option<Transaction> {
+            // match params {
+            //     Some(params) => {
+            //         let mut output_count = 1;
+            //         let mut input_count = 1;
+            //         let mut tx_fee = Amount::from_atoms(1);
+            //         let mut double_spend = false;
+            //         for param in params {
+            //             match TxParams {
+            //                 TxParams::NoErrors => continue,
+            //                 TxParams::NoInputs => input_count = 0 ,
+            //                 TxParams::NoOutputs => output_count = 0,
+            //                 TxParams::Fee(new_fee) => tx_fee = new_fee,
+            //                 TxParams::OutputsCount(count) => output_count = count,
+            //                 TxParams::InputsCount(count) => input_count = count ,
+            //                 TxParams::DoubleSpend => double_spend = true,
+            //                 TxParams::OrphanInputs => orpan_inputs = true,
+            //             }
+            //         }
+
+            //     },
+            //     None => return self::random_tx(&parent_block, Some([TxParams::NoErrors])),
+            // }
+
+            // None
+            unimplemented!()
+        }
+
+        pub fn random_block(&self, parent_block: &Block, params: Option<&[BlockParams]>) -> Block {
+            produce_test_block(&self.consensus.chain_config.clone(), &parent_block, false)
+        }
+
+        pub fn genesis(&self) -> &Block {
+            self.consensus.chain_config.genesis_block()
+        }
+
+        fn find_node(&mut self, block_id: Id<Block>) -> Option<&mut LinkedTree> {
+            for chain in &mut self.chains {
+                for (block_pos, block_index) in chain.iter().enumerate() {
+                    if block_index.inner.get_block_id() == &block_id {
+                        return chain.get_mut(block_pos);
                     }
                 }
             }
+
+            None
         }
 
-        pub fn print_chain(&self) {
+        pub fn print_chains(&self) {
             let mut first_block_in_chain = true;
+            let mut index: usize = 0;
             for chain in &self.chains {
                 for block in chain {
                     if first_block_in_chain {
                         self.print_gap(block);
                         first_block_in_chain = false;
                     }
-                    block.print();
+                    index += 1;
+                    block.print(index);
                 }
                 first_block_in_chain = true;
                 println!();
@@ -1591,35 +1621,236 @@ mod tests {
             println!();
         }
 
-        pub fn create_chain(&mut self, height: usize) {
-            let mut block = self.consensus.chain_config.genesis_block().clone();
+        fn get_children(block_id: &Id<Block>, blocks: &Vec<Block>) -> Vec<Id<Block>> {
+            let mut result = Vec::new();
+            for block in blocks {
+                if let Some(prev_block_id) = block.prev_block_id() {
+                    if &prev_block_id == block_id {
+                        result.push(block.get_id());
+                    }
+                }
+            }
+            result
+        }
+
+        fn append_to_parents(
+            &self,
+            parent_chains: &mut Vec<Vec<Id<Block>>>,
+            new_chains: &Vec<Vec<Id<Block>>>,
+        ) {
+            for chain in parent_chains {
+                if let Some(last_block_id) = chain.last() {
+                    let last_block_id = last_block_id.clone();
+                    for new_chain in new_chains {
+                        if let Some(first_block_id) = new_chain.first() {
+                            let block = self
+                                .consensus
+                                .blockchain_storage
+                                .get_block(first_block_id.clone())
+                                .unwrap()
+                                .unwrap();
+                            if let Some(prev_block_id) = block.prev_block_id() {
+                                if last_block_id == prev_block_id {
+                                    chain.append(&mut new_chain.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        pub fn print_chains2(&self, blocks: Vec<Id<Block>>) -> Vec<Vec<Id<Block>>> {
+            let mut result = Vec::new();
+            for block_id in &blocks {
+                let block_children = Self::get_children(block_id, &self.blocks);
+                let chain = self.print_chains2(block_children);
+                self.append_to_parents(&mut result, &chain);
+            }
+            result
+        }
+
+        fn print_gap(&self, block: &LinkedTree) {
+            if block.inner.get_prev_block_id().clone().unwrap()
+                == self.consensus.chain_config.genesis_block().get_id()
+            {
+                print!("genesis");
+            } else {
+                for chain in &self.chains {
+                    for (index, ancestor_block) in chain.iter().enumerate() {
+                        if ancestor_block.inner.get_block_id()
+                            == &block.inner.get_prev_block_id().clone().unwrap()
+                        {
+                            print!("{text:>width$}", text = "\\-", width = (16 + index * 9));
+                        }
+                    }
+                }
+            }
+        }
+
+        pub fn create_chain(
+            &mut self,
+            parent_block_id: &Id<Block>,
+            count_blocks: usize,
+            params: Option<ChainParams>,
+        ) {
+            let mut block = self
+                .consensus
+                .blockchain_storage
+                .get_block(parent_block_id.clone())
+                .ok()
+                .flatten()
+                .unwrap();
             let mut chain = Vec::new();
-            for i in 0..height + 1 {
-                block = produce_test_block(&self.consensus.chain_config, &block, false);
-                chain.push(ChainItem::new(&block, i, self.blocks.len() + 1));
+            let mut prev_leaf: Option<&mut LinkedTree> = None;
+            for i in 0..count_blocks {
+                dbg!(i);
+                let prev_block_id = block.get_id();
+                block = produce_test_block(&self.consensus.chain_config.clone(), &block, false);
+                self.consensus
+                    .process_block(block.clone(), BlockSource::Local)
+                    .expect("Err block processing");
+                let block_index = self
+                    .consensus
+                    .blockchain_storage
+                    .get_block_index(&block.get_id())
+                    .expect("Err DB")
+                    .expect("Block Index not found");
+                match prev_leaf {
+                    Some(prev_leaf) => prev_leaf.new_childred(block_index.get_block_id().clone()),
+                    None => {
+                        if let Some(prev_leaf) = self.find_node(prev_block_id) {
+                            prev_leaf.new_childred(block_index.get_block_id().clone())
+                        }
+                    }
+                }
+                chain.push(LinkedTree::new(block_index));
+                prev_leaf = chain.last_mut();
+
                 self.blocks.push(block.clone());
             }
             self.chains.push(chain);
         }
 
-        pub fn add_fork(&mut self, spend_out: usize, new_height: usize) {
-            let mut block = self.blocks.get(spend_out).unwrap().clone();
-            let mut chain = Vec::new();
-            for i in spend_out..new_height - 1 {
-                block = produce_test_block(&self.consensus.chain_config, &block, false);
-                chain.push(ChainItem::new(&block, i, self.blocks.len() + 1));
-                self.blocks.push(block.clone());
+        fn get_chain(&self, parent_block_id: &Id<Block>) -> usize {
+            let mut pchain = 0;
+            'outer: for (chain_pos, chain) in self.chains.iter().enumerate() {
+                for block in chain {
+                    if block.inner.get_block_id() == parent_block_id {
+                        pchain = chain_pos;
+                        break 'outer;
+                    }
+                }
             }
-            self.chains.push(chain);
+            pchain
         }
 
-        pub fn process_blocks(&mut self) -> Result<(), BlockError> {
-            let block_source = BlockSource::Local;
-            for block in &self.blocks {
-                self.consensus.process_block(block.clone(), block_source)?;
-            }
-            Ok(())
+        pub fn add_special_block(&mut self, parent_block_id: &Id<Block>, block: Block) {
+            let pchain = self.get_chain(&parent_block_id);
+            self.consensus
+                .process_block(block.clone(), BlockSource::Local)
+                .expect("Err block processing");
+            let block_index = self
+                .consensus
+                .blockchain_storage
+                .get_block_index(&block.get_id())
+                .expect("Err DB")
+                .expect("Block Index not found");
+            self.chains[pchain].push(LinkedTree::new(block_index));
+            self.blocks.push(block.clone());
         }
+
+        pub fn add_blocks(&mut self, parent_block_id: &Id<Block>, count_blocks: usize) {
+            let pchain = self.get_chain(&parent_block_id);
+            let mut block = self
+                .consensus
+                .blockchain_storage
+                .get_block(parent_block_id.clone())
+                .ok()
+                .flatten()
+                .unwrap();
+            let mut prev_leaf: Option<&mut LinkedTree> = None;
+            for i in 0..count_blocks {
+                dbg!(i);
+                let prev_block_id = block.get_id();
+                block = produce_test_block(&self.consensus.chain_config.clone(), &block, false);
+                self.consensus
+                    .process_block(block.clone(), BlockSource::Local)
+                    .expect("Err block processing");
+                let block_index = self
+                    .consensus
+                    .blockchain_storage
+                    .get_block_index(&block.get_id())
+                    .expect("Err DB")
+                    .expect("Block Index not found");
+                match prev_leaf {
+                    Some(ref mut prev_leaf) => {
+                        prev_leaf.new_childred(block_index.get_block_id().clone())
+                    }
+                    None => {
+                        if let Some(prev_leaf) = self.find_node(prev_block_id) {
+                            prev_leaf.new_childred(block_index.get_block_id().clone())
+                        }
+                    }
+                }
+                self.chains[pchain].push(LinkedTree::new(block_index));
+                prev_leaf = self.chains[pchain].last_mut();
+                self.blocks.push(block.clone());
+            }
+        }
+    }
+
+    #[derive(Debug)]
+    struct LinkedTree {
+        pub inner: BlockIndex,
+        children: Vec<Id<Block>>,
+    }
+
+    impl LinkedTree {
+        fn new(inner: BlockIndex) -> Self {
+            Self {
+                inner,
+                children: Vec::new(),
+            }
+        }
+
+        fn new_childred(&mut self, block_id: Id<Block>) {
+            self.children.push(block_id);
+        }
+
+        fn print(&self, index: usize) {
+            print!(
+                " -> b{}({})",
+                index,
+                // self.inner.get_block_id().get(),
+                &self.inner.get_block_height()
+            );
+        }
+    }
+
+    #[derive(Debug)]
+    pub enum ChainParams {
+        NoErrors,
+    }
+
+    #[derive(Debug)]
+    pub enum TxParams {
+        NoErrors,
+        NoInputs,
+        NoOutputs,
+        Fee(Amount),
+        OutputsCount(usize),
+        InputsCount(usize),
+        DoubleSpend,
+        OrphanInputs,
+    }
+
+    #[derive(Debug)]
+    pub enum BlockParams {
+        NoErrors,
+        TxCount(usize),
+        Fee(Amount),
+        Orphan,
     }
 
     #[test]
@@ -1632,17 +1863,58 @@ mod tests {
             // #
             // # Nothing should happen at this point. We saw b2 first so it takes priority.
             let mut btf = BlockTestFrameWork::new();
-            btf.create_chain(1);
-            btf.add_fork(1, 3);
-            btf.process_blocks().expect("Test fail");
-            btf.print_chain();
-            // # Now we add another block to make the alternative chain longer.
-            // #
-            // #     genesis -> b1 (0) -> b2 (1)
-            // #                      \-> b3 (1) -> b4 (2)
-            btf.add_fork(2, 4);
-            btf.process_blocks().expect("Test fail");
-            btf.print_chain();
+            println!("genesis id: {:?}", btf.genesis().get_id());
+            btf.create_chain(&btf.genesis().get_id(), 2, None);
+            btf.create_chain(&btf.chains[0][0].inner.get_block_id().clone(), 1, None);
+            // dbg!(&btf.chains);
+            btf.print_chains();
+
+            dbg!(btf.print_chains2(vec![btf.genesis().get_id()]));
+
+            // // // # Now we add another block to make the alternative chain longer.
+            // // // #
+            // // // #     genesis -> b1 (0) -> b2 (1)
+            // // // #                      \-> b3 (1) -> b4 (2)
+            // let block = match btf.blocks.last() {
+            //     Some(last_block) => btf.random_block(last_block, None),
+            //     None => panic!("Can't find block"),
+            // };
+            // let last_block_id = match btf.chains[1].last() {
+            //     Some(last_block) => last_block.inner.get_block_id().clone(),
+            //     None => panic!("Can't find block"),
+            // };
+            // btf.add_special_block(&last_block_id, block);
+            // btf.print_chains();
+
+            // // # ... and back to the first chain.
+            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            // // #                      \-> b3 (1) -> b4 (2)
+            // let block_id = match btf.chains[0].last() {
+            //     Some(last_block) => last_block.inner.get_block_id().clone(),
+            //     None => panic!("Can't find block"),
+            // };
+            // btf.add_blocks(&block_id, 2);
+            // btf.print_chains();
+
+            // // # Try to create a fork that double-spends
+            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            // // #                                          \-> b7 (2) -> b8 (4)
+            // // #                      \-> b3 (1) -> b4 (2)
+
+            // //TODO: Should be fail
+            // let block_id = btf.chains[0][9].inner.get_block_id().clone();
+            // btf.create_chain(&block_id, 2, None);
+            // btf.print_chains();
+
+            // // # Try to create a block that has too much fee
+            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            // // #                                                    \-> b9 (4)
+            // // #                      \-> b3 (1) -> b4 (2)
+
+            // // # Create a fork that ends in a block with too much fee (the one that causes the reorg)
+            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
+            // // #                                          \-> b10 (3) -> b11 (4)
+            // // #                      \-> b3 (1) -> b4 (2)
         });
     }
 
