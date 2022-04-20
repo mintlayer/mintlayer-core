@@ -640,10 +640,10 @@ mod test {
                 tx_undo.push(create_rand_utxo(counter));
             }
 
-            block_undo.push(tx_undo.into());
+            block_undo.push(TxUndo::new(tx_undo));
         }
 
-        BlockUndo::from(block_undo)
+        BlockUndo::new(block_undo)
     }
 
     #[test]
