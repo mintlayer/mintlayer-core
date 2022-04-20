@@ -15,6 +15,7 @@ parity-scale-codec = { version = "2.3.1", features = ["chain-error"] }
 thiserror = "1.0"
 
 [dev-dependencies]
+crypto = { path = '../crypto' }
 mockall = "0.11"
 rand = "0.8.4"
 

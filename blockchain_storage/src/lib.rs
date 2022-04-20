@@ -110,13 +110,12 @@ pub(crate) trait UtxoWrite: UtxoRead {
 }
 
 pub trait UndoRead {
-    fn read_undo_data(&mut self, id:Id<Block>) -> crate::Result<Option<BlockUndo>>;
+    fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
-pub trait UndoWrite:UndoRead{
-    fn add_undo_data(&mut self, id:Id<Block>, undo:&BlockUndo) -> crate::Result<()>;
-    fn del_undo_data(&mut self, id:Id<Block>) -> crate::Result<()>;
+pub trait UndoWrite: UndoRead {
+    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
-
 
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {

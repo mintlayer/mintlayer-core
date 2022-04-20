@@ -4,9 +4,12 @@ use common::chain::OutPoint;
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::{BlockUndo, TxUndo, Utxo};
+use utxo::{BlockUndo, Utxo};
 
-use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
+use crate::{
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UndoRead,
+    UndoWrite, UtxoRead, UtxoWrite,
+};
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -142,7 +145,7 @@ impl UtxoRead for Store {
 
 impl UndoRead for Store {
     delegate_to_transaction! {
-        fn read_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+        fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
     }
 }
 
@@ -245,7 +248,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
 }
 
 impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UndoRead for StoreTx<Tx> {
-    fn read_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+    fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
         self.read::<DBBlockUndo, _, _>(id.as_ref())
     }
 }
@@ -377,6 +380,10 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 #[cfg(test)]
 mod test {
     use super::*;
+    use common::chain::{Destination, TxOutput};
+    use common::primitives::{Amount, H256};
+    use crypto::random::{make_pseudo_rng, Rng};
+    use utxo::{BlockUndo, TxUndo};
 
     #[test]
     fn test_storage_get_default_version_in_tx() {
@@ -598,5 +605,88 @@ mod test {
             let _ = thr1.join();
             assert_eq!(store.get_storage_version(), Ok(10));
         })
+    }
+
+    /// returns a tuple of utxo and outpoint, for testing.
+    fn create_rand_utxo(block_height: u64) -> Utxo {
+        // just a random value generated, and also a random `is_block_reward` value.
+        let rng = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
+        let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
+        let is_block_reward = rng % 3 == 0;
+
+        // generate utxo
+        let utxo = Utxo::new(output, is_block_reward, BlockHeight::new(block_height));
+        utxo
+    }
+
+    /// returns a block undo with random utxos and TxUndos.
+    ///
+    /// # Arguments
+    /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
+    /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
+    fn create_rand_block_undo(max_lim_of_utxos: u8, max_lim_of_tx_undos: u8) -> BlockUndo {
+        let mut counter: u64 = 0;
+
+        let mut block_undo: Vec<TxUndo> = vec![];
+
+        let undo_rng = make_pseudo_rng().gen_range(1..max_lim_of_tx_undos);
+        for _ in 0..undo_rng {
+            let mut tx_undo = vec![];
+
+            let utxo_rng = make_pseudo_rng().gen_range(1..max_lim_of_utxos);
+            for i in 0..utxo_rng {
+                counter += u64::from(i);
+
+                tx_undo.push(create_rand_utxo(counter));
+            }
+
+            block_undo.push(tx_undo.into());
+        }
+
+        BlockUndo::from(block_undo)
+    }
+
+    #[test]
+    fn undo_test() {
+        let block_undo0 = create_rand_block_undo(10, 5);
+        // create id:
+        let id0: Id<Block> = Id::new(&H256::random());
+
+        // set up the store
+        let mut store = Store::new_empty().unwrap();
+
+        // store is empty, so no undo data should be found.
+        assert_eq!(store.get_undo_data(id0.clone()), Ok(None));
+
+        // add undo data and check if it is there
+        assert_eq!(store.add_undo_data(id0.clone(), &block_undo0), Ok(()));
+        assert_eq!(
+            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+
+        // insert, remove, and reinsert the next block_undo
+
+        let block_undo1 = create_rand_block_undo(5, 10);
+        // create id:
+        let id1: Id<Block> = Id::new(&H256::random());
+
+        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(
+            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.del_undo_data(id1.clone()), Ok(()));
+        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(
+            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(
+            store.get_undo_data(id1.clone()).unwrap().unwrap(),
+            block_undo1.clone()
+        );
     }
 }
