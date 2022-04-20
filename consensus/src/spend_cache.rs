@@ -31,7 +31,7 @@ impl<'a> CachedInputs<'a> {
         }
     }
 
-    pub fn add_outputs(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
+    fn add_outputs(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
         let tx_index = CachedInputsOperation::Write(ConsensusRef::calculate_indices(block, tx)?);
         let tx_id = tx.get_id();
         match self.inputs.entry(tx_id) {
