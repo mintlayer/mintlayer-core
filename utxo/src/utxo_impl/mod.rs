@@ -475,7 +475,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 mod test;
 
 #[cfg(test)]
-mod test_helper;
+pub mod test_helper;
 
 #[cfg(test)]
 mod simulation;

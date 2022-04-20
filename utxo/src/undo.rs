@@ -7,7 +7,7 @@ use parity_scale_codec::{Decode, Encode};
 pub struct TxUndo(Vec<Utxo>);
 
 impl TxUndo {
-    pub fn new(utxos:Vec<Utxo>) -> Self {
+    pub fn new(utxos: Vec<Utxo>) -> Self {
         Self(utxos)
     }
 
@@ -20,12 +20,11 @@ impl TxUndo {
     }
 }
 
-
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct BlockUndo(Vec<TxUndo>);
 
 impl BlockUndo {
-    pub fn new(tx_undos:Vec<TxUndo>) -> Self {
+    pub fn new(tx_undos: Vec<TxUndo>) -> Self {
         Self(tx_undos)
     }
 
@@ -40,14 +39,14 @@ impl BlockUndo {
 
 #[cfg(test)]
 pub mod test {
-    use crypto::random::{make_pseudo_rng, Rng};
-    use crate::test_helper::create_utxo;
     use super::*;
+    use crate::test_helper::create_utxo;
+    use crypto::random::{make_pseudo_rng, Rng};
 
     #[test]
     fn tx_undo_test() {
-        let (utxo0,_) = create_utxo(0);
-        let (utxo1,_) = create_utxo(1);
+        let (utxo0, _) = create_utxo(0);
+        let (utxo1, _) = create_utxo(1);
         let tx_undo = TxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
 
         // check `inner()`
@@ -63,25 +62,24 @@ pub mod test {
             assert_eq!(&utxo0, &undo_vec[0]);
             assert_eq!(&utxo1, &undo_vec[1]);
         }
-
     }
 
     #[test]
     fn block_undo_test() {
-        let (utxo0,_) = create_utxo(0);
-        let (utxo1,_) = create_utxo(1);
-        let tx_undo0 = TxUndo::new(vec![utxo0,utxo1]);
+        let (utxo0, _) = create_utxo(0);
+        let (utxo1, _) = create_utxo(1);
+        let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
 
-        let (utxo2,_) = create_utxo(2);
-        let (utxo3,_) = create_utxo(3);
-        let (utxo4,_) = create_utxo(4);
-        let tx_undo1 = TxUndo::new(vec![utxo2,utxo3, utxo4]);
+        let (utxo2, _) = create_utxo(2);
+        let (utxo3, _) = create_utxo(3);
+        let (utxo4, _) = create_utxo(4);
+        let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
 
-        let blockundo = BlockUndo::new( vec![tx_undo0, tx_undo1]);
+        let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()]);
 
         // check `inner()`
         {
-            let inner =  blockundo.inner();
+            let inner = blockundo.inner();
 
             assert_eq!(&tx_undo0, &inner[0]);
             assert_eq!(&tx_undo1, &inner[1]);
@@ -93,6 +91,5 @@ pub mod test {
             assert_eq!(&tx_undo0, &inner[0]);
             assert_eq!(&tx_undo1, &inner[1]);
         }
-
     }
 }
