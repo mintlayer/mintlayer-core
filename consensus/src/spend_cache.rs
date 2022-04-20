@@ -41,6 +41,11 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    fn remove_outputs(&mut self, tx: &Transaction) -> Result<(), BlockError> {
+        self.inputs.insert(tx.get_id(), CachedInputsOperation::Erase);
+        Ok(())
+    }
+
     pub fn spend(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
@@ -87,7 +92,7 @@ impl<'a> CachedInputs<'a> {
 
     pub fn unspend(&mut self, tx: &Transaction) -> Result<(), BlockError> {
         // Delete TxMainChainIndex for the current tx
-        self.inputs.insert(tx.get_id(), CachedInputsOperation::Erase);
+        self.remove_outputs(tx)?;
 
         // unspend inputs
         for input in tx.get_inputs() {
