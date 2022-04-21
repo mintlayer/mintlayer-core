@@ -63,14 +63,14 @@ pub enum BlockError {
     DuplicatedTransactionInBlock,
     #[error("Previously indexed transaction not found")]
     PreviouslyIndexedTxNotFound,
-    #[error("OutputAlreadyPresentInInputs")]
-    OutputAlreadyPresentInInputs,
-    #[error("MissingOutputOrSpent")]
+    #[error("Outputs already in the inputs cache")]
+    OutputAlreadyPresentInInputsCache,
+    #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
-    #[error("OutputIndexOutOfRange")]
+    #[error("Output index out of range")]
     OutputIndexOutOfRange,
-    #[error("UnspendInvariantErrorOutputNotPresent")]
-    UnspendInvariantErrorOutputNotPresent,
+    #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
+    MissingOutputOrSpentOutputErased,
     // To be expanded
 }
 

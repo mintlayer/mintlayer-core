@@ -35,7 +35,7 @@ impl<'a> CachedInputs<'a> {
         let tx_index = CachedInputsOperation::Write(ConsensusRef::calculate_indices(block, tx)?);
         let tx_id = tx.get_id();
         match self.inputs.entry(tx_id) {
-            Entry::Occupied(_) => return Err(BlockError::OutputAlreadyPresentInInputs),
+            Entry::Occupied(_) => return Err(BlockError::OutputAlreadyPresentInInputsCache),
             Entry::Vacant(entry) => entry.insert(tx_index),
         };
         Ok(())
@@ -47,6 +47,7 @@ impl<'a> CachedInputs<'a> {
     }
 
     pub fn spend(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
+        // spend inputs of this transaction
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
             match outpoint.get_tx_id() {
@@ -69,7 +70,7 @@ impl<'a> CachedInputs<'a> {
                     let prev_tx_index = match prev_tx_index_op {
                         CachedInputsOperation::Write(e) => e,
                         CachedInputsOperation::Erase => {
-                            return Err(BlockError::UnspendInvariantErrorOutputNotPresent)
+                            return Err(BlockError::MissingOutputOrSpentOutputErased)
                         }
                     };
 
@@ -85,6 +86,7 @@ impl<'a> CachedInputs<'a> {
             }
         }
 
+        // add the outputs of this transaction to the cache
         self.add_outputs(block, tx)?;
 
         Ok(())
