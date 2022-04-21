@@ -20,8 +20,9 @@ rand = "0.8.4"
 anyhow = "1.0.51"
 parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
 parity-scale-codec-derive = "2.3.1"
-sscanf = "0.1.4"
+sscanf = "0.2.1"
 lazy_static = "1.4.0"
+logging = { path = "../logging/" }
 
 # for fixed_hash
 arbitrary = "1.1.0"

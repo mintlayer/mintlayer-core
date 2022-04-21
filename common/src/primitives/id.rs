@@ -62,6 +62,12 @@ impl<T: Eq> PartialOrd for Id<T> {
     }
 }
 
+impl<T: Eq> From<H256> for Id<T> {
+    fn from(hash: H256) -> Self {
+        Self::new(&hash)
+    }
+}
+
 impl<T> Id<T> {
     pub fn get(&self) -> H256 {
         self.id
