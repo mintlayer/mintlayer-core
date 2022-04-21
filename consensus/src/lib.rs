@@ -233,13 +233,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    // fn store_cached_inputs(&mut self, cached_inputs: CachedInputs) -> Result<(), BlockError> {
-    //     for (tx_id, tx_index) in cached_inputs {
-    //         self.db_tx.set_mainchain_tx_index(&tx_id, &tx_index)?;
-    //     }
-    //     Ok(())
-    // }
-
     fn calculate_indices(block: &Block, tx: &Transaction) -> Result<TxMainChainIndex, BlockError> {
         let enc_block = block.encode();
         let enc_tx = tx.encode();
@@ -264,23 +257,9 @@ impl<'a> ConsensusRef<'a> {
         .map_err(BlockError::from)
     }
 
-    // fn make_cache_with_transactions(block: &Block) -> Result<CachedInputs, BlockError> {
-    //     let mut cached_inputs = CachedInputs::new();
-    //     for tx in block.transactions() {
-    //         // Create a new indices for every tx
-    //         match cached_inputs.entry(tx.get_id()) {
-    //             Entry::Vacant(entry) => entry.insert(Self::calculate_indices(block, tx)?),
-    //             Entry::Occupied(_) => return Err(BlockError::DuplicatedTransactionInBlock),
-    //         };
-    //     }
-    //     Ok(cached_inputs)
-    // }
-
     fn connect_transactions_inner(&self, block: &Block) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        for tx in block.transactions() {
-            cached_inputs.spend(block, tx)?;
-        }
+        block.transactions().iter().try_for_each(|tx| cached_inputs.spend(block, tx))?;
         Ok(cached_inputs)
     }
 
@@ -289,7 +268,6 @@ impl<'a> ConsensusRef<'a> {
         let cached_inputs = self.connect_transactions_inner(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
-        // self.store_cached_inputs(cached_inputs)?;
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
         Ok(())
     }
@@ -299,9 +277,7 @@ impl<'a> ConsensusRef<'a> {
         transactions: &[Transaction],
     ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        for tx in transactions.iter().rev() {
-            cached_inputs.unspend(tx)?;
-        }
+        transactions.iter().try_for_each(|tx| cached_inputs.unspend(tx))?;
         Ok(cached_inputs)
     }
 
@@ -720,7 +696,7 @@ mod tests {
     use common::address::Address;
     use common::chain::block::{Block, ConsensusData};
     use common::chain::config::create_mainnet;
-    
+
     use common::chain::{Destination, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
