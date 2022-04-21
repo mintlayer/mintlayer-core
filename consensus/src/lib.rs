@@ -30,6 +30,7 @@ use common::chain::{
     TxMainChainPosition,
 };
 use common::chain::{SpendError, TxMainChainIndexError};
+use common::primitives::BlockDistance;
 use common::primitives::{time, Amount, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
 use thiserror::Error;
@@ -74,6 +75,12 @@ pub enum BlockError {
     DoubleSpendAttempt(Spender),
     #[error("Block disconnect already-unspent (invaraint broken)")]
     InvariantBrokenAlreadyUnspent,
+    #[error("Source block index for block reward output not found")]
+    InvariantBrokenSourceBlockIndexNotFound,
+    #[error("Block distance calculation for maturity failed")]
+    BlockHeightArithmeticError,
+    #[error("Block reward spent immaturely")]
+    ImmatureBlockRewardSpend,
     // To be expanded
 }
 
@@ -263,15 +270,28 @@ impl<'a> ConsensusRef<'a> {
         .map_err(BlockError::from)
     }
 
-    fn connect_transactions_inner(&self, block: &Block) -> Result<CachedInputs, BlockError> {
+    fn connect_transactions_inner(
+        &self,
+        block: &Block,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        block.transactions().iter().try_for_each(|tx| cached_inputs.spend(block, tx))?;
+        block.transactions().iter().try_for_each(|tx| {
+            cached_inputs.spend(block, tx, spend_height, blockreward_maturity)
+        })?;
         Ok(cached_inputs)
     }
 
-    fn connect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+    fn connect_transactions(
+        &mut self,
+        block: &Block,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<(), BlockError> {
         self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
-        let cached_inputs = self.connect_transactions_inner(block)?;
+        let cached_inputs =
+            self.connect_transactions_inner(block, spend_height, blockreward_maturity)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
@@ -411,7 +431,11 @@ impl<'a> ConsensusRef<'a> {
         if block.is_genesis(self.chain_config) {
             self.connect_genesis_transactions(&block)?
         } else {
-            self.connect_transactions(&block)?;
+            self.connect_transactions(
+                &block,
+                &new_tip_block_index.get_block_height(),
+                self.chain_config.get_blockreward_maturity(),
+            )?;
         }
 
         if let Some(prev_block_id) = &new_tip_block_index.get_prev_block_id() {

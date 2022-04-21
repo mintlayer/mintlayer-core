@@ -3,7 +3,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::{
     chain::{block::Block, OutPointSourceId, Spender, Transaction, TxMainChainIndex},
-    primitives::{Id, Idable},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 
 use crate::{BlockError, ConsensusRef, TxRw};
@@ -84,7 +84,31 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    pub fn spend(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
+    fn check_blockreward_maturity(
+        &self,
+        spending_block_id: &Id<Block>,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<(), BlockError> {
+        let source_block_index = self.db_tx.get_block_index(&spending_block_id)?;
+        let source_block_index =
+            source_block_index.ok_or(BlockError::InvariantBrokenSourceBlockIndexNotFound)?;
+        let source_height = source_block_index.get_block_height();
+        let actual_distance =
+            (*spend_height - source_height).ok_or(BlockError::BlockHeightArithmeticError)?;
+        if actual_distance < *blockreward_maturity {
+            return Err(BlockError::ImmatureBlockRewardSpend);
+        }
+        Ok(())
+    }
+
+    pub fn spend(
+        &mut self,
+        block: &Block,
+        tx: &Transaction,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<(), BlockError> {
         // spend inputs of this transaction
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
@@ -109,7 +133,11 @@ impl<'a> CachedInputs<'a> {
                         .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
                         .map_err(BlockError::from)?;
                 }
-                OutPointSourceId::BlockReward(_block_id) => unimplemented!(),
+                OutPointSourceId::BlockReward(block_id) => {
+                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+
+                    // TODO: continue this implementation
+                }
             }
         }
 
