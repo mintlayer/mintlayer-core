@@ -152,7 +152,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_tx_position(&self) -> &SpendablePosition {
+    pub fn get_position(&self) -> &SpendablePosition {
         &self.position
     }
 
@@ -172,7 +172,7 @@ impl TxMainChainIndex {
     }
 
     pub fn new(
-        tx_position: SpendablePosition,
+        position: SpendablePosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
@@ -183,7 +183,7 @@ impl TxMainChainIndex {
             .take(output_count as usize)
             .collect();
         let res = TxMainChainIndex {
-            position: tx_position,
+            position,
             spent: spent_vec,
         };
         Ok(res)

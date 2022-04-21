@@ -401,7 +401,7 @@ mod test {
         // Retrieve transactions by ID using the index
         assert_eq!(store.get_mainchain_tx_index(&tx1.get_id()), Ok(None));
         if let Ok(Some(index)) = store.get_mainchain_tx_index(&tx0.get_id()) {
-            if let SpendablePosition::Transaction(ref p) = index.get_tx_position() {
+            if let SpendablePosition::Transaction(ref p) = index.get_position() {
                 assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
             } else {
                 unreachable!();
