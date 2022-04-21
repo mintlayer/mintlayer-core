@@ -1,7 +1,9 @@
 //! A mock version of the blockchian storage.
 
 use common::chain::block::Block;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::transaction::{
+    OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
+};
 use common::primitives::{BlockHeight, Id};
 
 mockall::mock! {
@@ -15,7 +17,7 @@ mockall::mock! {
 
         fn get_mainchain_tx_index(
             &self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
 
@@ -37,10 +39,10 @@ mockall::mock! {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
         fn set_mainchain_tx_index(
             &mut self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
-        fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+        fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
@@ -72,7 +74,7 @@ mockall::mock! {
 
         fn get_mainchain_tx_index(
             &self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
         fn get_mainchain_tx_by_position(
@@ -103,7 +105,7 @@ mockall::mock! {
 
         fn get_mainchain_tx_index(
             &self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
         fn get_mainchain_tx_by_position(
@@ -124,11 +126,11 @@ mockall::mock! {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
         fn set_mainchain_tx_index(
             &mut self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
 
-        fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+        fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
