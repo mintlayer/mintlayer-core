@@ -634,9 +634,10 @@ mod tests {
     use common::chain::block::{Block, ConsensusData};
     use common::chain::config::create_mainnet;
 
-    use common::chain::{Destination, Transaction, TxInput, TxOutput};
+    use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
+    use proptest::test_runner::TestCaseError;
     use rand::prelude::*;
 
     pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
@@ -1410,9 +1411,11 @@ mod tests {
 
     impl<'a> BlockTestFrameWork {
         pub fn new() -> Self {
+            let consensus = setup_consensus();
+            let genesis = consensus.chain_config.genesis_block().clone();
             Self {
-                consensus: setup_consensus(),
-                blocks: Vec::new(),
+                consensus,
+                blocks: vec![genesis],
             }
         }
 
@@ -1539,6 +1542,59 @@ mod tests {
                 self.blocks.push(block.clone());
             }
         }
+
+        pub fn get_spent_status(
+            &self,
+            tx_id: &Id<Transaction>,
+            output_index: u32,
+        ) -> OutputSpentState {
+            let tx_index = self
+                .consensus
+                .blockchain_storage
+                .get_mainchain_tx_index(tx_id)
+                .unwrap()
+                .unwrap();
+            tx_index.get_spent_state(output_index).unwrap()
+        }
+
+        pub fn test_block(
+            &self,
+            block_id: &Id<Block>,
+            prev_block_id: &Option<Id<Block>>,
+            next_block_id: &Option<Id<Block>>,
+            height: u64,
+            spend_status: TestSpentStatus,
+        ) {
+            // dbg!(&block_id);
+
+            if spend_status != TestSpentStatus::NotInMainchain {
+                let block = self.blocks.iter().find(|x| &x.get_id() == block_id);
+
+                match block {
+                    Some(block) => {
+                        for tx in block.transactions() {
+                            for (output_index, _) in tx.get_outputs().iter().enumerate() {
+                                assert!(if spend_status == TestSpentStatus::Spent {
+                                    self.get_spent_status(&tx.get_id(), output_index as u32)
+                                        != OutputSpentState::Unspent
+                                } else {
+                                    self.get_spent_status(&tx.get_id(), output_index as u32)
+                                        == OutputSpentState::Unspent
+                                });
+                            }
+                        }
+                    }
+                    None => {
+                        panic!("block not found")
+                    }
+                }
+            }
+
+            let block_index = self.get_block_index(block_id);
+            assert_eq!(block_index.get_prev_block_id(), prev_block_id);
+            assert_eq!(block_index.get_next_block_id(), next_block_id);
+            assert_eq!(block_index.get_block_height(), BlockHeight::new(height));
+        }
     }
 
     #[derive(Debug)]
@@ -1570,6 +1626,14 @@ mod tests {
         DoubleSpendFrom(Id<Block>),
     }
 
+    #[derive(Debug, Eq, PartialEq)]
+    #[allow(dead_code)]
+    enum TestSpentStatus {
+        Spent,
+        Unspent,
+        NotInMainchain,
+    }
+
     #[test]
     fn test_very_long_reorgs() {
         common::concurrency::model(|| {
@@ -1577,19 +1641,52 @@ mod tests {
             println!("genesis id: {:?}", btf.genesis().get_id());
             // # Fork like this:
             // #
-            // #     genesis -> b1 (0) -> b2 (1)
-            // #                      \-> b3 (1)
+            // #     genesis -> b1 (1) -> b2 (2)
+            // #                      \-> b3 (2)
             // #
             // # Nothing should happen at this point. We saw b2 first so it takes priority.
             println!("\nDon't reorg to a chain of the same length");
             btf.create_chain(&btf.genesis().get_id(), 2, None);
-            btf.create_chain(&btf.blocks[0].get_id(), 1, None);
+            btf.create_chain(&btf.blocks[1].get_id(), 1, None);
             btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+
+            // genesis
+            btf.test_block(
+                &btf.genesis().get_id(),
+                &None,
+                &Some(btf.blocks[1].get_id()),
+                0,
+                TestSpentStatus::Spent,
+            );
+            // b1
+            btf.test_block(
+                &btf.blocks[1].get_id(),
+                &Some(btf.genesis().get_id()),
+                &Some(btf.blocks[2].get_id()),
+                1,
+                TestSpentStatus::Spent,
+            );
+            // b2
+            btf.test_block(
+                &btf.blocks[2].get_id(),
+                &Some(btf.blocks[1].get_id()),
+                &None,
+                2,
+                TestSpentStatus::Unspent,
+            );
+            // b3
+            btf.test_block(
+                &btf.blocks[2].get_id(),
+                &Some(btf.blocks[1].get_id()),
+                &None,
+                2,
+                TestSpentStatus::Unspent,
+            );
 
             // # Now we add another block to make the alternative chain longer.
             // #
-            // #     genesis -> b1 (0) -> b2 (1)
-            // #                      \-> b3 (1) -> b4 (2)
+            // #     genesis -> b1 (1) -> b2 (2)
+            // #                      \-> b3 (2) -> b4 (3)
             println!("\nReorg to a longer chain");
             let block = match btf.blocks.last() {
                 Some(last_block) => btf.random_block(last_block, None),
@@ -1598,69 +1695,87 @@ mod tests {
             btf.add_special_block(block);
             btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
-            // # ... and back to the first chain.
-            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
-            // #                      \-> b3 (1) -> b4 (2)
-            let block_id = btf.blocks[btf.blocks.len() - 3].get_id();
-            btf.add_blocks(&block_id, 2);
-            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
-
-            // # Try to create a fork that double-spends
-            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
-            // #                                          \-> b7 (2) -> b8 (4)
-            // #                      \-> b3 (1) -> b4 (2)
-            println!("\nReject a chain with a double spend, even if it is longer");
-            //TODO: Should be fail
-            let block_id = btf.blocks[btf.blocks.len() - 5].get_id();
-            btf.create_chain(&block_id, 2, None);
-            let block_id = btf.blocks[btf.blocks.len() - 7].get_id();
-            //TODO: Not finished yet
-            let double_spend_block = btf.random_block(
-                btf.blocks.last().unwrap(),
-                Some(&[BlockParams::DoubleSpendFrom(block_id)]),
+            // b3
+            btf.test_block(
+                &btf.blocks[2].get_id(),
+                &Some(btf.blocks[1].get_id()),
+                &Some(btf.blocks[3].get_id()),
+                2,
+                TestSpentStatus::Spent,
             );
-            btf.add_special_block(double_spend_block);
-            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
-            // // # Try to create a block that has too much fee
-            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
-            // // #                                                    \-> b9 (4)
-            // // #                      \-> b3 (1) -> b4 (2)
-
-            println!("\nReject a block where the miner creates too much reward");
-            //TODO: Not finished yet
-            let exceed_fee_block = btf.random_block(
-                btf.blocks.last().unwrap(),
-                Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
+            // b4
+            btf.test_block(
+                &btf.blocks[3].get_id(),
+                &Some(btf.blocks[2].get_id()),
+                &None,
+                3,
+                TestSpentStatus::Unspent,
             );
-            btf.add_special_block(exceed_fee_block);
-            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
-            // // # Create a fork that ends in a block with too much fee (the one that causes the reorg)
-            // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
-            // // #                                          \-> b10 (3) -> b11 (4)
-            // // #                      \-> b3 (1) -> b4 (2)
-            let exceed_fee_block = btf.random_block(
-                btf.blocks.last().unwrap(),
-                Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
-            );
-            btf.add_special_block(exceed_fee_block);
-            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
-            // # Try again, but with a valid fork first
-            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
-            // #                                          \-> b12 (3) -> b13 (4) -> b14 (5)
-            // #                      \-> b3 (1) -> b4 (2)
-            let exceed_fee_block = btf.random_block(
-                btf.blocks.last().unwrap(),
-                Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
-            );
-            btf.add_special_block(exceed_fee_block);
-            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+            //     // # ... and back to the first chain.
+            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            //     // #                      \-> b3 (1) -> b4 (2)
+            //     let block_id = btf.blocks[btf.blocks.len() - 3].get_id();
+            //     btf.add_blocks(&block_id, 2);
+            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
-            // # Attempt to spend a transaction created on a different fork
-            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
-            // #                                          \-> b12 (3) -> b13 (4) -> b15 (5) -> b17 (b3.vtx[1])
-            // #                      \-> b3 (1) -> b4 (2)
+            //     // # Try to create a fork that double-spends
+            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            //     // #                                          \-> b7 (2) -> b8 (4)
+            //     // #                      \-> b3 (1) -> b4 (2)
+            //     println!("\nReject a chain with a double spend, even if it is longer");
+            //     //TODO: Should be fail
+            //     let block_id = btf.blocks[btf.blocks.len() - 5].get_id();
+            //     btf.create_chain(&block_id, 2, None);
+            //     let block_id = btf.blocks[btf.blocks.len() - 7].get_id();
+            //     //TODO: Not finished yet
+            //     let double_spend_block = btf.random_block(
+            //         btf.blocks.last().unwrap(),
+            //         Some(&[BlockParams::DoubleSpendFrom(block_id)]),
+            //     );
+            //     btf.add_special_block(double_spend_block);
+            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+
+            //     // // # Try to create a block that has too much fee
+            //     // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            //     // // #                                                    \-> b9 (4)
+            //     // // #                      \-> b3 (1) -> b4 (2)
+
+            //     println!("\nReject a block where the miner creates too much reward");
+            //     //TODO: Not finished yet
+            //     let exceed_fee_block = btf.random_block(
+            //         btf.blocks.last().unwrap(),
+            //         Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
+            //     );
+            //     btf.add_special_block(exceed_fee_block);
+            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+
+            //     // // # Create a fork that ends in a block with too much fee (the one that causes the reorg)
+            //     // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
+            //     // // #                                          \-> b10 (3) -> b11 (4)
+            //     // // #                      \-> b3 (1) -> b4 (2)
+            //     let exceed_fee_block = btf.random_block(
+            //         btf.blocks.last().unwrap(),
+            //         Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
+            //     );
+            //     btf.add_special_block(exceed_fee_block);
+            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+            //     // # Try again, but with a valid fork first
+            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
+            //     // #                                          \-> b12 (3) -> b13 (4) -> b14 (5)
+            //     // #                      \-> b3 (1) -> b4 (2)
+            //     let exceed_fee_block = btf.random_block(
+            //         btf.blocks.last().unwrap(),
+            //         Some(&[BlockParams::Fee(Amount::from_atoms(u128::MAX))]),
+            //     );
+            //     btf.add_special_block(exceed_fee_block);
+            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+
+            //     // # Attempt to spend a transaction created on a different fork
+            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6  (3)
+            //     // #                                          \-> b12 (3) -> b13 (4) -> b15 (5) -> b17 (b3.vtx[1])
+            //     // #                      \-> b3 (1) -> b4 (2)
         });
     }
 
