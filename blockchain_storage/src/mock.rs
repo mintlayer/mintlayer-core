@@ -39,10 +39,10 @@ mockall::mock! {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
         fn set_mainchain_tx_index(
             &mut self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
-        fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+        fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
@@ -126,11 +126,11 @@ mockall::mock! {
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
         fn set_mainchain_tx_index(
             &mut self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
 
-        fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+        fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,

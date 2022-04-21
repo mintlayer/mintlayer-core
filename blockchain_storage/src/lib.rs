@@ -72,12 +72,12 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(
         &mut self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()>;
 
     /// Delete outputs state index associated with given transaction
-    fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(
