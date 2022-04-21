@@ -5,6 +5,7 @@ use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
+use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
@@ -36,6 +37,8 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     genesis_block: Block,
     #[allow(dead_code)]
+    blockreward_maturity: BlockDistance,
+    #[allow(dead_code)]
     version: SemVer,
 }
 
@@ -63,9 +66,14 @@ impl ChainConfig {
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
+
+    pub const fn get_blockreward_maturity(&self) -> &BlockDistance {
+        &self.blockreward_maturity
+    }
 }
 
 const MAINNET_ADDRESS_PREFIX: &str = "mlt";
+const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{Destination, TxInput, TxOutput};
@@ -102,6 +110,7 @@ pub fn create_mainnet() -> ChainConfig {
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
         genesis_block: create_mainnet_genesis(),
         version: SemVer::new(0, 1, 0),
+        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
 }
 

@@ -93,7 +93,7 @@ impl BlockHeight {
     const ONE: BlockHeight = BlockHeight(1);
     const MAX: BlockHeight = BlockHeight(HeightIntType::MAX);
 
-    pub fn new(height: HeightIntType) -> Self {
+    pub const fn new(height: HeightIntType) -> Self {
         Self(height)
     }
 
@@ -124,7 +124,7 @@ impl BlockHeight {
 pub struct BlockDistance(DistanceIntType);
 
 impl BlockDistance {
-    pub fn new(distance: DistanceIntType) -> Self {
+    pub const fn new(distance: DistanceIntType) -> Self {
         Self(distance)
     }
 }
