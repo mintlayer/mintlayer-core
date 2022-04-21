@@ -24,10 +24,8 @@ use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
 use common::chain::Spender;
-use common::chain::TxOutput;
 use common::chain::{
-    OutPoint, OutPointSourceId, SpendablePosition, Transaction, TxMainChainIndex,
-    TxMainChainPosition,
+    OutPointSourceId, SpendablePosition, Transaction, TxMainChainIndex, TxMainChainPosition,
 };
 use common::chain::{SpendError, TxMainChainIndexError};
 use common::primitives::BlockDistance;
@@ -82,6 +80,18 @@ pub enum BlockError {
     ImmatureBlockRewardSpend,
     #[error("Invalid output count")]
     InvalidOutputCount,
+    #[error("Input was cached, but could not be found")]
+    PreviouslyCachedInputNotFound,
+    #[error("Input was cached, but it is erased")]
+    PreviouslyCachedInputWasErased,
+    #[error("Transaction index found but transaction not found")]
+    InvariantErrorTransactionCouldNotBeLoaded,
+    #[error("Input addition error")]
+    InputAdditionError,
+    #[error("Output addition error")]
+    OutputAdditionError,
+    #[error("Attempt to print money")]
+    AttemptToPrintMoney(Amount, Amount),
     // To be expanded
 }
 
@@ -291,7 +301,6 @@ impl<'a> ConsensusRef<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        self.check_block_fee(block.transactions())?; // TODO: change to use only one transaction per call and use cached_inputs as source of truth instead of db
         let cached_inputs =
             self.connect_transactions_inner(block, spend_height, blockreward_maturity)?;
         let cached_inputs = cached_inputs.consume()?;
@@ -314,96 +323,6 @@ impl<'a> ConsensusRef<'a> {
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
-        Ok(())
-    }
-
-    fn get_tx_by_outpoint<TxRo: BlockchainStorageRead>(
-        tx_db: &TxRo,
-        outpoint: &OutPoint,
-    ) -> Result<Transaction, BlockError> {
-        let tx_id = match outpoint.get_tx_id() {
-            OutPointSourceId::Transaction(tx_id) => tx_id,
-            OutPointSourceId::BlockReward(_) => {
-                unimplemented!()
-            }
-        };
-        let tx_index = tx_db
-            .get_mainchain_tx_index(&OutPointSourceId::from(tx_id))?
-            .ok_or(BlockError::Unknown)?;
-        match tx_index.get_position() {
-            SpendablePosition::Transaction(position) => {
-                tx_db.get_mainchain_tx_by_position(position)?.ok_or(BlockError::Unknown)
-            }
-            SpendablePosition::BlockReward(_) => unimplemented!(),
-        }
-    }
-
-    fn get_input_value<TxRo: BlockchainStorageRead>(
-        tx_db: &TxRo,
-        input: &common::chain::TxInput,
-    ) -> Result<Amount, BlockError> {
-        let tx = Self::get_tx_by_outpoint(tx_db, input.get_outpoint())?;
-        let output_index: usize = input
-            .get_outpoint()
-            .get_output_index()
-            .try_into()
-            .map_err(|_| BlockError::Unknown)?;
-        assert!(output_index < tx.get_outputs().len());
-        tx.get_outputs()
-            .get(output_index)
-            .map(|output| output.get_value())
-            .ok_or(BlockError::Unknown)
-    }
-
-    fn find_output_in_transactions<'b>(
-        input: &'b common::chain::TxInput,
-        transactions: &'b [Transaction],
-    ) -> Result<&'b TxOutput, BlockError> {
-        let tx_id = input.get_outpoint().get_tx_id();
-        let output_index: usize = input
-            .get_outpoint()
-            .get_output_index()
-            .try_into()
-            .map_err(|_| BlockError::Unknown)?;
-        let tx = transactions
-            .iter()
-            .find(|&tx| match &tx_id {
-                OutPointSourceId::Transaction(inner_tx_id) => &tx.get_id() == inner_tx_id,
-                OutPointSourceId::BlockReward(_) => unimplemented!(),
-            })
-            .ok_or(BlockError::Unknown)?;
-        tx.get_outputs().get(output_index).ok_or(BlockError::Unknown)
-    }
-
-    fn check_block_fee(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        let input_mlt = transactions
-            .iter()
-            .map(|x| {
-                x.get_inputs()
-                    .iter()
-                    .map(|input| {
-                        Self::get_input_value(&self.db_tx, input).map_or_else(
-                            |_err| {
-                                // Is tx in the same block?
-                                Self::find_output_in_transactions(input, transactions)
-                                    .expect("Couldn't get input")
-                                    .get_value()
-                            },
-                            |v| v,
-                        )
-                    })
-                    .sum::<Amount>()
-            })
-            .sum();
-        let output_mlt: Amount = transactions
-            .iter()
-            .map(|x| x.get_outputs().iter().map(|output| output.get_value()).sum::<Amount>())
-            .sum();
-
-        // Check that fee is not negative
-        if output_mlt > input_mlt {
-            return Err(BlockError::Unknown);
-        }
         Ok(())
     }
 

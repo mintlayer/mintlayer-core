@@ -3,7 +3,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::{
     chain::{block::Block, OutPoint, OutPointSourceId, Spender, Transaction, TxMainChainIndex},
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
 use crate::{BlockError, ConsensusRef, TxRw};
@@ -107,11 +107,19 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn fetch_and_cache(
+    fn fetch_from_cached(
         &mut self,
         outpoint: &OutPoint,
     ) -> Result<&mut CachedInputsOperation, BlockError> {
-        let result = match self.inputs.entry(outpoint.get_tx_id()) {
+        let result = match self.inputs.get_mut(&outpoint.get_tx_id()) {
+            Some(tx_index) => tx_index,
+            None => return Err(BlockError::PreviouslyCachedInputNotFound),
+        };
+        Ok(result)
+    }
+
+    fn fetch_and_cache(&mut self, outpoint: &OutPoint) -> Result<(), BlockError> {
+        let _tx_index_op = match self.inputs.entry(outpoint.get_tx_id()) {
             Entry::Occupied(entry) => {
                 // If tx index was loaded
                 entry.into_mut()
@@ -125,7 +133,53 @@ impl<'a> CachedInputs<'a> {
                 entry.insert(CachedInputsOperation::Read(tx_index))
             }
         };
-        Ok(result)
+        Ok(())
+    }
+
+    fn calculate_total_inputs(&self, tx: &Transaction) -> Result<Amount, BlockError> {
+        let mut total = Amount::from_atoms(0);
+        for input in tx.get_inputs() {
+            let outpoint = input.get_outpoint();
+            let tx_index = match self.inputs.get(&outpoint.get_tx_id()) {
+                Some(tx_index_op) => match tx_index_op {
+                    CachedInputsOperation::Write(tx_index) => tx_index,
+                    CachedInputsOperation::Read(tx_index) => tx_index,
+                    CachedInputsOperation::Erase => {
+                        return Err(BlockError::PreviouslyCachedInputWasErased)
+                    }
+                },
+                None => return Err(BlockError::PreviouslyCachedInputNotFound),
+            };
+            let output_amount = match tx_index.get_position() {
+                common::chain::SpendablePosition::Transaction(tx_pos) => {
+                    match self.db_tx.get_mainchain_tx_by_position(tx_pos)? {
+                        Some(tx) => tx
+                            .get_outputs()
+                            .get(outpoint.get_output_index() as usize)
+                            .ok_or(BlockError::OutputIndexOutOfRange)?
+                            .get_value(),
+                        None => return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded),
+                    }
+                }
+                common::chain::SpendablePosition::BlockReward(_) => unimplemented!(),
+            };
+            total = (total + output_amount).ok_or(BlockError::InputAdditionError)?;
+        }
+        Ok(total)
+    }
+
+    fn check_inputs_amounts(&self, tx: &Transaction) -> Result<(), BlockError> {
+        let inputs_total = self.calculate_total_inputs(tx)?;
+        let outputs_total = tx
+            .get_outputs()
+            .iter()
+            .try_fold(Amount::from_atoms(0), |accum, out| accum + out.get_value())
+            .ok_or(BlockError::OutputAdditionError)?;
+
+        if outputs_total > inputs_total {
+            return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
+        }
+        Ok(())
     }
 
     pub fn spend(
@@ -135,6 +189,14 @@ impl<'a> CachedInputs<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
+        // pre-cache all inputs
+        tx.get_inputs()
+            .iter()
+            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+
+        // check for attempted money printing
+        self.check_inputs_amounts(tx)?;
+
         // spend inputs of this transaction
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
@@ -143,7 +205,7 @@ impl<'a> CachedInputs<'a> {
                 self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
             }
 
-            let prev_tx_index_op = self.fetch_and_cache(outpoint)?;
+            let prev_tx_index_op = self.fetch_from_cached(outpoint)?;
             prev_tx_index_op
                 .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
                 .map_err(BlockError::from)?;
@@ -159,11 +221,16 @@ impl<'a> CachedInputs<'a> {
         // Delete TxMainChainIndex for the current tx
         self.remove_outputs(tx)?;
 
+        // pre-cache all inputs
+        tx.get_inputs()
+            .iter()
+            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+
         // unspend inputs
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let input_tx_id_op = self.fetch_and_cache(outpoint)?;
+            let input_tx_id_op = self.fetch_from_cached(outpoint)?;
 
             // Mark input as unspend
             input_tx_id_op.unspend(outpoint.get_output_index()).map_err(BlockError::from)?;
