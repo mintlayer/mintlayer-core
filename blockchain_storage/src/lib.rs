@@ -2,6 +2,7 @@
 
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id};
 use storage::traits;
 
@@ -41,7 +42,7 @@ pub trait BlockchainStorageRead {
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
         &self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
     ) -> crate::Result<Option<TxMainChainIndex>>;
 
     /// Get transaction by block ID and position

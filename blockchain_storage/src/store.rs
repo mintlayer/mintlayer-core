@@ -1,5 +1,6 @@
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
@@ -111,7 +112,7 @@ impl BlockchainStorageRead for Store {
 
         fn get_mainchain_tx_index(
             &self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
         fn get_mainchain_tx_by_position(
@@ -170,9 +171,9 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
 
     fn get_mainchain_tx_index(
         &self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
     ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<DBTxIndices, _, _>(tx_id.as_ref())
+        self.read::<DBTxIndices, _, _>(&tx_id.encode())
     }
 
     fn get_mainchain_tx_by_position(
@@ -382,25 +383,35 @@ mod test {
 
         // Chain index operations
         let idx_tx0 = TxMainChainIndex::new(pos_tx0.into(), 1).expect("Tx index creation failed");
-        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
+        assert_eq!(
+            store.get_mainchain_tx_index(&OutPointSourceId::from(tx0.get_id())),
+            Ok(None)
+        );
         assert_eq!(
             store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0),
             Ok(())
         );
         assert_eq!(
-            store.get_mainchain_tx_index(&tx0.get_id()),
+            store.get_mainchain_tx_index(&OutPointSourceId::from(tx0.get_id())),
             Ok(Some(idx_tx0.clone()))
         );
         assert_eq!(store.del_mainchain_tx_index(&tx0.get_id()), Ok(()));
-        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
+        assert_eq!(
+            store.get_mainchain_tx_index(&OutPointSourceId::from(tx0.get_id())),
+            Ok(None)
+        );
         assert_eq!(
             store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0),
             Ok(())
         );
 
         // Retrieve transactions by ID using the index
-        assert_eq!(store.get_mainchain_tx_index(&tx1.get_id()), Ok(None));
-        if let Ok(Some(index)) = store.get_mainchain_tx_index(&tx0.get_id()) {
+        assert_eq!(
+            store.get_mainchain_tx_index(&OutPointSourceId::from(tx1.get_id())),
+            Ok(None)
+        );
+        if let Ok(Some(index)) = store.get_mainchain_tx_index(&OutPointSourceId::from(tx0.get_id()))
+        {
             if let SpendablePosition::Transaction(ref p) = index.get_position() {
                 assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
             } else {
