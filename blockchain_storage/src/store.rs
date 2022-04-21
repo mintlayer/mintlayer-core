@@ -366,11 +366,8 @@ mod test {
             &enc_block0[offset_tx0..].starts_with(&enc_tx0),
             "Transaction format has changed, adjust the offset in this test",
         );
-        let pos_tx0 = TxMainChainPosition::new(
-            &block0.get_id().get(),
-            offset_tx0 as u32,
-            enc_tx0.len() as u32,
-        );
+        let pos_tx0 =
+            TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32, enc_tx0.len() as u32);
         assert_eq!(
             &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
             &tx0
@@ -404,7 +401,7 @@ mod test {
         // Retrieve transactions by ID using the index
         assert_eq!(store.get_mainchain_tx_index(&tx1.get_id()), Ok(None));
         if let Ok(Some(index)) = store.get_mainchain_tx_index(&tx0.get_id()) {
-            if let SpendablePosition::Transaction(ref p) = index.get_tx_position() {
+            if let SpendablePosition::Transaction(ref p) = index.get_position() {
                 assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
             } else {
                 unreachable!();
