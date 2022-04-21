@@ -367,7 +367,7 @@ mod test {
             "Transaction format has changed, adjust the offset in this test",
         );
         let pos_tx0 = TxMainChainPosition::new(
-            &block0.get_id().get(),
+            block0.get_id().into(),
             offset_tx0 as u32,
             enc_tx0.len() as u32,
         );

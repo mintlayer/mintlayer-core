@@ -1,10 +1,6 @@
-use crate::{
-    chain::block::Block,
-    primitives::{Id, H256},
-};
-use parity_scale_codec_derive::{Decode, Encode};
-
 use super::Transaction;
+use crate::{chain::block::Block, primitives::Id};
+use parity_scale_codec_derive::{Decode, Encode};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum Spender {
@@ -40,21 +36,21 @@ pub enum OutputSpentState {
 /// This struct represents the position of a transaction in the database
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainPosition {
-    block_id: H256,
+    block_id: Id<Block>,
     byte_offset_in_block: u32,
     serialized_size: u32,
 }
 
 impl TxMainChainPosition {
-    pub fn new(block_id: &H256, byte_offset_in_block: u32, serialized_size: u32) -> Self {
+    pub fn new(block_id: Id<Block>, byte_offset_in_block: u32, serialized_size: u32) -> Self {
         TxMainChainPosition {
-            block_id: *block_id,
+            block_id,
             byte_offset_in_block,
             serialized_size,
         }
     }
 
-    pub fn get_block_id(&self) -> &H256 {
+    pub fn get_block_id(&self) -> &Id<Block> {
         &self.block_id
     }
 
@@ -197,13 +193,15 @@ impl TxMainChainIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::primitives::H256;
     use std::str::FromStr;
 
     #[test]
     fn invalid_output_count() {
         let block_id =
-            H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
+            H256::from_str("000000000000000000000000000000000000000000000000000000000000007b")
+                .unwrap();
+        let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
         let tx_index = TxMainChainIndex::new(pos, 0);
         assert_eq!(
             tx_index.unwrap_err(),
@@ -214,8 +212,9 @@ mod tests {
     #[test]
     fn basic_spending() {
         let block_id =
-            H256::from_str("000000000000000000000000000000000000000000000000000000000000007b");
-        let pos = TxMainChainPosition::new(&block_id.unwrap(), 1, 2).into();
+            H256::from_str("000000000000000000000000000000000000000000000000000000000000007b")
+                .unwrap();
+        let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
         let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
         // ensure index accesses are correct
@@ -240,7 +239,7 @@ mod tests {
         };
 
         // check that all are unspent
-        assert_eq!(p.block_id, H256::from_low_u64_be(123));
+        assert_eq!(p.block_id, H256::from_low_u64_be(123).into());
         for output in &tx_index.spent {
             assert_eq!(*output, OutputSpentState::Unspent);
         }
