@@ -23,6 +23,7 @@ use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::config::ChainConfig;
+use common::chain::Spender;
 use common::chain::TxOutput;
 use common::chain::{
     OutPoint, OutPointSourceId, SpendablePosition, Transaction, TxMainChainIndex,
@@ -61,8 +62,6 @@ pub enum BlockError {
     InvalidBlockSource,
     #[error("Duplicate transaction found in block")]
     DuplicatedTransactionInBlock,
-    #[error("Previously indexed transaction not found")]
-    PreviouslyIndexedTxNotFound,
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
     #[error("Output is not found in the cache or database")]
@@ -71,6 +70,10 @@ pub enum BlockError {
     OutputIndexOutOfRange,
     #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErased,
+    #[error("Double-spend attempt")]
+    DoubleSpendAttempt(Spender),
+    #[error("Block disconnect already-unspent (invaraint broken)")]
+    InvariantBrokenAlreadyUnspent,
     // To be expanded
 }
 
@@ -83,9 +86,12 @@ impl From<blockchain_storage::Error> for BlockError {
 }
 
 impl From<SpendError> for BlockError {
-    fn from(_: SpendError) -> Self {
-        // To be expanded
-        BlockError::Unknown
+    fn from(err: SpendError) -> Self {
+        match err {
+            SpendError::AlreadySpent(spender) => BlockError::DoubleSpendAttempt(spender),
+            SpendError::AlreadyUnspent => BlockError::InvariantBrokenAlreadyUnspent,
+            SpendError::OutOfRange => BlockError::OutputIndexOutOfRange,
+        }
     }
 }
 
