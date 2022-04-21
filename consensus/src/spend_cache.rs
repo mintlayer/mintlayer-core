@@ -139,7 +139,7 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let prev_tx_index_op = self.fetch_and_cache(&outpoint)?;
+            let prev_tx_index_op = self.fetch_and_cache(outpoint)?;
 
             match outpoint.get_tx_id() {
                 OutPointSourceId::Transaction(prev_tx_id) => {
@@ -169,7 +169,7 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let input_tx_id_op = self.fetch_and_cache(&outpoint)?;
+            let input_tx_id_op = self.fetch_and_cache(outpoint)?;
 
             // Mark input as unspend
             input_tx_id_op.unspend(outpoint.get_output_index()).map_err(BlockError::from)?;
