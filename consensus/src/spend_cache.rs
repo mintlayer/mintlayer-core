@@ -139,20 +139,14 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let prev_tx_index_op = self.fetch_and_cache(outpoint)?;
-
-            match outpoint.get_tx_id() {
-                OutPointSourceId::Transaction(prev_tx_id) => {
-                    prev_tx_index_op
-                        .spend(outpoint.get_output_index(), Spender::from(prev_tx_id))
-                        .map_err(BlockError::from)?;
-                }
-                OutPointSourceId::BlockReward(block_id) => {
-                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
-
-                    // TODO: continue this implementation
-                }
+            if let OutPointSourceId::BlockReward(block_id) = outpoint.get_tx_id() {
+                self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
             }
+
+            let prev_tx_index_op = self.fetch_and_cache(outpoint)?;
+            prev_tx_index_op
+                .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
+                .map_err(BlockError::from)?;
         }
 
         // add the outputs of this transaction to the cache
