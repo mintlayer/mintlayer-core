@@ -10,14 +10,52 @@ use crate::{BlockError, ConsensusRef, TxRw};
 
 enum CachedInputsOperation {
     Write(TxMainChainIndex),
+    Read(TxMainChainIndex),
     Erase,
+}
+
+impl CachedInputsOperation {
+    fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), BlockError> {
+        let result = match self {
+            CachedInputsOperation::Write(tx_index) => CachedInputsOperation::Write({
+                tx_index.spend(output_index, spender).map_err(BlockError::from)?;
+                tx_index.clone() // TODO: improve by moving out of the enum and consuming it
+            }),
+            CachedInputsOperation::Read(tx_index) => CachedInputsOperation::Write({
+                tx_index.spend(output_index, spender).map_err(BlockError::from)?;
+                tx_index.clone() // TODO: improve by moving out of the enum and consuming it
+            }),
+            CachedInputsOperation::Erase => {
+                return Err(BlockError::MissingOutputOrSpentOutputErased)
+            }
+        };
+        let _ = std::mem::replace(self, result);
+        Ok(())
+    }
+
+    fn unspend(&mut self, output_index: u32) -> Result<(), BlockError> {
+        let result = match self {
+            CachedInputsOperation::Write(tx_index) => CachedInputsOperation::Write({
+                tx_index.unspend(output_index).map_err(BlockError::from)?;
+                tx_index.clone() // TODO: improve by moving out of the enum and consuming it
+            }),
+            CachedInputsOperation::Read(tx_index) => CachedInputsOperation::Write({
+                tx_index.unspend(output_index).map_err(BlockError::from)?;
+                tx_index.clone() // TODO: improve by moving out of the enum and consuming it
+            }),
+            CachedInputsOperation::Erase => {
+                return Err(BlockError::MissingOutputOrSpentOutputErased)
+            }
+        };
+        let _ = std::mem::replace(self, result);
+        Ok(())
+    }
 }
 
 pub struct ConsumedCachedInputs {
     data: BTreeMap<Id<Transaction>, CachedInputsOperation>,
 }
 
-#[derive()]
 pub struct CachedInputs<'a> {
     db_tx: &'a TxRw<'a>,
     inputs: BTreeMap<Id<Transaction>, CachedInputsOperation>,
@@ -63,22 +101,11 @@ impl<'a> CachedInputs<'a> {
                                 .db_tx
                                 .get_mainchain_tx_index(&prev_tx_id)?
                                 .ok_or(BlockError::MissingOutputOrSpent)?;
-                            entry.insert(CachedInputsOperation::Write(tx_index))
+                            entry.insert(CachedInputsOperation::Read(tx_index))
                         }
                     };
 
-                    let prev_tx_index = match prev_tx_index_op {
-                        CachedInputsOperation::Write(e) => e,
-                        CachedInputsOperation::Erase => {
-                            return Err(BlockError::MissingOutputOrSpentOutputErased)
-                        }
-                    };
-
-                    if outpoint.get_output_index() >= prev_tx_index.get_output_count() {
-                        return Err(BlockError::OutputIndexOutOfRange);
-                    }
-
-                    prev_tx_index
+                    prev_tx_index_op
                         .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
                         .map_err(BlockError::from)?;
                 }
@@ -108,21 +135,13 @@ impl<'a> CachedInputs<'a> {
 
             let tx_index_op = match self.inputs.entry(input_tx_id.clone()) {
                 Entry::Occupied(entry) => entry.into_mut(),
-                Entry::Vacant(entry) => entry.insert(CachedInputsOperation::Write(
+                Entry::Vacant(entry) => entry.insert(CachedInputsOperation::Read(
                     self.db_tx.get_mainchain_tx_index(&input_tx_id)?.ok_or(BlockError::Unknown)?,
                 )),
             };
 
-            let tx_index = match tx_index_op {
-                CachedInputsOperation::Write(e) => e,
-                CachedInputsOperation::Erase => return Err(BlockError::MissingOutputOrSpent),
-            };
-
-            if input_index >= tx_index.get_output_count() {
-                return Err(BlockError::OutputIndexOutOfRange);
-            }
             // Mark input as unspend
-            tx_index.unspend(input_index).map_err(BlockError::from)?;
+            tx_index_op.unspend(input_index).map_err(BlockError::from)?;
         }
         Ok(())
     }
@@ -140,9 +159,12 @@ impl<'a> CachedInputs<'a> {
                 CachedInputsOperation::Write(ref tx_index) => {
                     db_tx.set_mainchain_tx_index(&tx_id, tx_index)?
                 }
+                CachedInputsOperation::Read(_) => (),
                 CachedInputsOperation::Erase => db_tx.del_mainchain_tx_index(&tx_id)?,
             }
         }
         Ok(())
     }
 }
+
+// TODO: write tests for CachedInputs that covers all possible mutations
