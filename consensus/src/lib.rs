@@ -81,6 +81,8 @@ pub enum BlockError {
     BlockHeightArithmeticError,
     #[error("Block reward spent immaturely")]
     ImmatureBlockRewardSpend,
+    #[error("Invalid output count")]
+    InvalidOutputCount,
     // To be expanded
 }
 
@@ -103,9 +105,10 @@ impl From<SpendError> for BlockError {
 }
 
 impl From<TxMainChainIndexError> for BlockError {
-    fn from(_: TxMainChainIndexError) -> Self {
-        // To be expanded
-        BlockError::Unknown
+    fn from(err: TxMainChainIndexError) -> Self {
+        match err {
+            TxMainChainIndexError::InvalidOutputCount => BlockError::InvalidOutputCount,
+        }
     }
 }
 
