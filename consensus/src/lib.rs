@@ -48,7 +48,6 @@ use spend_cache::CachedInputs;
 pub enum BlockError {
     #[error("Unknown error")]
     Unknown,
-    // Orphan block
     #[error("Orphan")]
     Orphan,
     #[error("Invalid block height `{0}`")]
