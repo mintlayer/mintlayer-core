@@ -90,7 +90,7 @@ impl<'a> CachedInputs<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        let source_block_index = self.db_tx.get_block_index(&spending_block_id)?;
+        let source_block_index = self.db_tx.get_block_index(spending_block_id)?;
         let source_block_index =
             source_block_index.ok_or(BlockError::InvariantBrokenSourceBlockIndexNotFound)?;
         let source_height = source_block_index.get_block_height();
