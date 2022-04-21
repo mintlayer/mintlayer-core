@@ -325,7 +325,9 @@ impl<'a> ConsensusRef<'a> {
                 unimplemented!()
             }
         };
-        let tx_index = tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)?;
+        let tx_index = tx_db
+            .get_mainchain_tx_index(&OutPointSourceId::from(tx_id))?
+            .ok_or(BlockError::Unknown)?;
         match tx_index.get_position() {
             SpendablePosition::Transaction(position) => {
                 tx_db.get_mainchain_tx_by_position(position)?.ok_or(BlockError::Unknown)
@@ -414,8 +416,10 @@ impl<'a> ConsensusRef<'a> {
 
     fn connect_genesis_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
         for tx in block.transactions() {
-            self.db_tx
-                .set_mainchain_tx_index(&tx.get_id(), &Self::calculate_indices(block, tx)?)?;
+            self.db_tx.set_mainchain_tx_index(
+                &OutPointSourceId::from(tx.get_id()),
+                &Self::calculate_indices(block, tx)?,
+            )?;
         }
         Ok(())
     }
