@@ -245,7 +245,7 @@ impl<'a> ConsensusRef<'a> {
             .map_err(|_| BlockError::Unknown)?;
 
         let tx_position = TxMainChainPosition::new(
-            &block.get_id().get(),
+            block.get_id(),
             offset_tx,
             enc_tx.len().try_into().map_err(|_| BlockError::Unknown)?,
         );
@@ -300,7 +300,7 @@ impl<'a> ConsensusRef<'a> {
             }
         };
         let tx_index = tx_db.get_mainchain_tx_index(&tx_id)?.ok_or(BlockError::Unknown)?;
-        match tx_index.get_tx_position() {
+        match tx_index.get_position() {
             SpendablePosition::Transaction(position) => {
                 tx_db.get_mainchain_tx_by_position(position)?.ok_or(BlockError::Unknown)
             }
