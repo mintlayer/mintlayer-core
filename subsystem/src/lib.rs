@@ -37,6 +37,7 @@
 
 use core::future::Future;
 use core::time::Duration;
+use futures::future::BoxFuture;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task;
 
@@ -61,7 +62,7 @@ impl ManagerConfig {
     fn named(name: &'static str) -> Self {
         Self {
             name,
-            ..Self::default()
+            shutdown_timeout: Self::DEFAULT_SHUTDOWN_TIMEOUT,
         }
     }
 }
@@ -234,7 +235,7 @@ impl Manager {
     }
 
     /// Issue an asynchronous shutdown request
-    pub async fn shutdown(&self) {
+    pub async fn initiate_shutdown(&self) {
         self.shutting_down_tx.send(()).await.expect("Shutdown receiver not existing")
     }
 
@@ -324,7 +325,7 @@ impl SubsystemConfig {
     fn named(subsystem_name: &'static str) -> Self {
         Self {
             subsystem_name,
-            ..Default::default()
+            call_queue_capacity: Self::DEFAULT_CALL_QUEUE_CAPACITY,
         }
     }
 }
@@ -338,10 +339,8 @@ impl Default for SubsystemConfig {
     }
 }
 
-type FutureBox<'a, R> = core::pin::Pin<Box<dyn 'a + Send + Future<Output = R>>>;
-
 // Internal action type sent in the channel.
-type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> FutureBox<'a, R>>;
+type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>>;
 
 /// Call request
 pub struct CallRequest<T>(mpsc::Receiver<Action<T, ()>>);
@@ -408,7 +407,7 @@ impl<T: Send + 'static> Handle<T> {
     /// Dispatch an async function call to the subsystem
     pub async fn call_async_mut<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a mut T) -> FutureBox<'a, R> + Send + 'static,
+        func: impl for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<R, CallError> {
         let (rtx, rrx) = oneshot::channel::<R>();
 
@@ -428,7 +427,7 @@ impl<T: Send + 'static> Handle<T> {
     /// Dispatch an async function call to the subsystem (immutable)
     pub async fn call_async<R: Send + 'static>(
         &self,
-        func: impl for<'a> FnOnce(&'a T) -> FutureBox<'a, R> + Send + 'static,
+        func: impl for<'a> FnOnce(&'a T) -> BoxFuture<'a, R> + Send + 'static,
     ) -> Result<R, CallError> {
         self.call_async_mut(|this| func(this)).await
     }
@@ -468,7 +467,7 @@ mod test {
             "does_not_want_to_exit",
             |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
         );
-        man.shutdown().await;
+        man.initiate_shutdown().await;
         man.main().await;
 
         testing_logger::validate(|logs| {

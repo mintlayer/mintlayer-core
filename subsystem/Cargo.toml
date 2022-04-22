@@ -17,6 +17,11 @@ thiserror = "1.0"
 # Local dependencies
 logging = { path = "../logging" }
 
+[dependencies.futures]
+version = "0.3"
+default-features = false
+features = [ "alloc" ]
+
 [dependencies.tokio]
 version = "1"
 default-features = false
