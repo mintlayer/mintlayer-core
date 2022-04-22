@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![cfg(not(loom))]
 
 use crate::net::{ConnectivityService, FloodsubService, NetworkService};
 use common::chain::ChainConfig;

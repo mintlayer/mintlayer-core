@@ -15,7 +15,6 @@
 //
 // Author(s): A. Altonen
 #![allow(unused, dead_code)]
-#![cfg(not(loom))]
 
 ///! Swarm manager
 ///!

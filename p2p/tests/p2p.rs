@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![cfg(not(loom))]
 extern crate test_utils;
 
 use common::{chain::config, sync::Arc};
