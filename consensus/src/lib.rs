@@ -637,7 +637,6 @@ mod tests {
     use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
     use common::primitives::H256;
     use common::primitives::{Amount, Id};
-    use proptest::test_runner::TestCaseError;
     use rand::prelude::*;
 
     pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
@@ -739,6 +738,36 @@ mod tests {
         consensus
     }
 
+    fn create_utxo_data(
+        config: &ChainConfig,
+        tx_id: &Id<Transaction>,
+        index: usize,
+        output: &TxOutput,
+    ) -> Option<(TxInput, TxOutput)> {
+        if output.get_value() > Amount::from_atoms(1) {
+            // Random address receiver
+            let mut rng = rand::thread_rng();
+            let mut witness: Vec<u8> = (1..100).collect();
+            witness.shuffle(&mut rng);
+            let mut address: Vec<u8> = (1..22).collect();
+            address.shuffle(&mut rng);
+            let receiver = Address::new(config, address).expect("Failed to create address");
+            Some((
+                TxInput::new(
+                    OutPointSourceId::Transaction(tx_id.clone()),
+                    index as u32,
+                    witness,
+                ),
+                TxOutput::new(
+                    (output.get_value() - Amount::from_atoms(1)).unwrap(),
+                    Destination::Address(receiver),
+                ),
+            ))
+        } else {
+            None
+        }
+    }
+
     fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
         // For each output we create a new input and output that will placed into a new block.
         // If value of original output is less than 1 then output will disappear in a new block.
@@ -746,38 +775,7 @@ mod tests {
         let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
             .transactions()
             .iter()
-            .flat_map(|tx| {
-                let tx_id = tx.get_id();
-                tx.get_outputs()
-                    .iter()
-                    .enumerate()
-                    .filter_map(move |(index, output)| {
-                        if output.get_value() > Amount::from_atoms(1) {
-                            // Random address receiver
-                            let mut rng = rand::thread_rng();
-                            let mut witness: Vec<u8> = (1..100).collect();
-                            witness.shuffle(&mut rng);
-                            let mut address: Vec<u8> = (1..22).collect();
-                            address.shuffle(&mut rng);
-                            let receiver =
-                                Address::new(config, address).expect("Failed to create address");
-                            Some((
-                                TxInput::new(
-                                    OutPointSourceId::Transaction(tx_id.clone()),
-                                    index as u32,
-                                    witness,
-                                ),
-                                TxOutput::new(
-                                    (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                                    Destination::Address(receiver),
-                                ),
-                            ))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<(TxInput, TxOutput)>>()
-            })
+            .flat_map(|tx| create_new_outputs(config, tx))
             .unzip();
 
         Block::new(
@@ -791,6 +789,16 @@ mod tests {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)
+    }
+
+    fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
+        tx.get_outputs()
+            .iter()
+            .enumerate()
+            .filter_map(move |(index, output)| {
+                create_utxo_data(config, &tx.get_id(), index, output)
+            })
+            .collect::<Vec<(TxInput, TxOutput)>>()
     }
 
     #[test]
@@ -1452,8 +1460,53 @@ mod tests {
         }
 
         #[allow(dead_code)]
-        pub fn random_block(&self, parent_block: &Block, _params: Option<&[BlockParams]>) -> Block {
-            produce_test_block(&self.consensus.chain_config.clone(), parent_block, false)
+        pub fn random_block(&self, parent_block: &Block, params: Option<&[BlockParams]>) -> Block {
+            let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_block
+                .transactions()
+                .iter()
+                .flat_map(|tx| create_new_outputs(&self.consensus.chain_config, tx))
+                .unzip();
+
+            let mut hash_prev_block = Some(parent_block.get_id());
+            if let Some(params) = params {
+                for param in params {
+                    match param {
+                        BlockParams::DoubleSpendFrom(block_id) => {
+                            let block = self
+                                .consensus
+                                .blockchain_storage
+                                .get_block(block_id.clone())
+                                .unwrap()
+                                .unwrap();
+
+                            let double_spend_input = TxInput::new(
+                                OutPointSourceId::Transaction(block.transactions()[0].get_id()),
+                                0,
+                                vec![],
+                            );
+                            inputs.push(double_spend_input)
+                        }
+                        BlockParams::Fee(_fee_amount) => {
+                            unimplemented!()
+                        }
+                        BlockParams::NoErrors => {
+                            unimplemented!()
+                        }
+                        BlockParams::Orphan => hash_prev_block = Some(Id::new(&H256::random())),
+                        BlockParams::TxCount(_tx_count) => {
+                            unimplemented!()
+                        }
+                    }
+                }
+            }
+
+            Block::new(
+                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
+                hash_prev_block,
+                time::get() as u32,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL)
         }
 
         pub fn genesis(&self) -> &Block {
@@ -1481,16 +1534,41 @@ mod tests {
                 println!("{}X", "--".repeat(depth));
             } else {
                 for block_id in blocks {
+                    let block_index = self.get_block_index(&block_id);
+                    let mut main_chain = "";
+                    if self.is_block_in_main_chain(&block_id) {
+                        main_chain = ", M";
+                    }
                     println!(
-                        "{}+{} {} (H:{})",
+                        "{}+{} {} (H:{}{})",
                         "\t".repeat(depth),
                         "-".repeat(2),
                         &block_id.get(),
-                        self.get_block_index(&block_id).get_block_height()
+                        block_index.get_block_height(),
+                        main_chain
                     );
                     let block_children = Self::get_children(&block_id, &self.blocks);
                     if !block_children.is_empty() {
                         self.debug_print_chains(block_children, depth + 1);
+                    }
+                }
+            }
+        }
+
+        pub fn debug_print_tx(&self, block_id: Id<Block>, transactions: &Vec<Transaction>) {
+            println!();
+            for tx in transactions {
+                println!("+ BLOCK: {} => TX: {}", block_id.get(), tx.get_id().get());
+                for (output_index, output) in tx.get_outputs().iter().enumerate() {
+                    let spent_status = self.get_spent_status(&tx.get_id(), output_index as u32);
+                    println!("\t+Output: {}", output_index);
+                    println!("\t\t+Value: {}", output.get_value().into_atoms());
+                    match spent_status {
+                        Some(OutputSpentState::Unspent) => println!("\t\t+Spend: Unspent"),
+                        Some(OutputSpentState::SpentBy(spender)) => {
+                            println!("\t\t+Spend: {:?}", spender)
+                        }
+                        None => println!("\t\t+Spend: Not in mainchain"),
                     }
                 }
             }
@@ -1547,14 +1625,10 @@ mod tests {
             &self,
             tx_id: &Id<Transaction>,
             output_index: u32,
-        ) -> OutputSpentState {
-            let tx_index = self
-                .consensus
-                .blockchain_storage
-                .get_mainchain_tx_index(tx_id)
-                .unwrap()
-                .unwrap();
-            tx_index.get_spent_state(output_index).unwrap()
+        ) -> Option<OutputSpentState> {
+            let tx_index =
+                self.consensus.blockchain_storage.get_mainchain_tx_index(tx_id).unwrap()?;
+            tx_index.get_spent_state(output_index).ok()
         }
 
         pub fn test_block(
@@ -1565,8 +1639,6 @@ mod tests {
             height: u64,
             spend_status: TestSpentStatus,
         ) {
-            // dbg!(&block_id);
-
             if spend_status != TestSpentStatus::NotInMainchain {
                 let block = self.blocks.iter().find(|x| &x.get_id() == block_id);
 
@@ -1576,10 +1648,10 @@ mod tests {
                             for (output_index, _) in tx.get_outputs().iter().enumerate() {
                                 assert!(if spend_status == TestSpentStatus::Spent {
                                     self.get_spent_status(&tx.get_id(), output_index as u32)
-                                        != OutputSpentState::Unspent
+                                        != Some(OutputSpentState::Unspent)
                                 } else {
                                     self.get_spent_status(&tx.get_id(), output_index as u32)
-                                        == OutputSpentState::Unspent
+                                        == Some(OutputSpentState::Unspent)
                                 });
                             }
                         }
@@ -1594,6 +1666,19 @@ mod tests {
             assert_eq!(block_index.get_prev_block_id(), prev_block_id);
             assert_eq!(block_index.get_next_block_id(), next_block_id);
             assert_eq!(block_index.get_block_height(), BlockHeight::new(height));
+        }
+
+        pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
+            let block_index = self.get_block_index(block_id);
+            let mut main_chain = false;
+            if let Some(prev_block_id) = block_index.get_prev_block_id() {
+                if self.get_block_index(prev_block_id).get_next_block_id()
+                    == &Some(block_id.clone())
+                {
+                    main_chain = true;
+                }
+            }
+            main_chain
         }
     }
 
@@ -1652,7 +1737,7 @@ mod tests {
 
             // genesis
             btf.test_block(
-                &btf.genesis().get_id(),
+                &btf.blocks[0].get_id(),
                 &None,
                 &Some(btf.blocks[1].get_id()),
                 0,
@@ -1666,6 +1751,7 @@ mod tests {
                 1,
                 TestSpentStatus::Spent,
             );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[1].get_id()));
             // b2
             btf.test_block(
                 &btf.blocks[2].get_id(),
@@ -1674,14 +1760,17 @@ mod tests {
                 2,
                 TestSpentStatus::Unspent,
             );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[2].get_id()));
             // b3
             btf.test_block(
-                &btf.blocks[2].get_id(),
+                &btf.blocks[3].get_id(),
                 &Some(btf.blocks[1].get_id()),
                 &None,
                 2,
-                TestSpentStatus::Unspent,
+                TestSpentStatus::NotInMainchain,
             );
+            assert!(!btf.is_block_in_main_chain(&btf.blocks[3].get_id()));
+            btf.debug_print_tx(btf.blocks[3].get_id(), btf.blocks[3].transactions());
 
             // # Now we add another block to make the alternative chain longer.
             // #
@@ -1697,45 +1786,85 @@ mod tests {
 
             // b3
             btf.test_block(
-                &btf.blocks[2].get_id(),
+                &btf.blocks[3].get_id(),
                 &Some(btf.blocks[1].get_id()),
-                &Some(btf.blocks[3].get_id()),
+                &Some(btf.blocks[4].get_id()),
                 2,
                 TestSpentStatus::Spent,
             );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[3].get_id()));
 
             // b4
             btf.test_block(
-                &btf.blocks[3].get_id(),
-                &Some(btf.blocks[2].get_id()),
+                &btf.blocks[4].get_id(),
+                &Some(btf.blocks[3].get_id()),
                 &None,
                 3,
                 TestSpentStatus::Unspent,
             );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[4].get_id()));
 
-            //     // # ... and back to the first chain.
-            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
-            //     // #                      \-> b3 (1) -> b4 (2)
-            //     let block_id = btf.blocks[btf.blocks.len() - 3].get_id();
-            //     btf.add_blocks(&block_id, 2);
-            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+            // # ... and back to the first chain.
+            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            // #                      \-> b3 (1) -> b4 (2)
+            let block_id = btf.blocks[btf.blocks.len() - 3].get_id();
+            btf.add_blocks(&block_id, 2);
+            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
-            //     // # Try to create a fork that double-spends
-            //     // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
-            //     // #                                          \-> b7 (2) -> b8 (4)
-            //     // #                      \-> b3 (1) -> b4 (2)
-            //     println!("\nReject a chain with a double spend, even if it is longer");
-            //     //TODO: Should be fail
-            //     let block_id = btf.blocks[btf.blocks.len() - 5].get_id();
-            //     btf.create_chain(&block_id, 2, None);
-            //     let block_id = btf.blocks[btf.blocks.len() - 7].get_id();
-            //     //TODO: Not finished yet
-            //     let double_spend_block = btf.random_block(
-            //         btf.blocks.last().unwrap(),
-            //         Some(&[BlockParams::DoubleSpendFrom(block_id)]),
-            //     );
-            //     btf.add_special_block(double_spend_block);
-            //     btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
+            // b3
+            btf.test_block(
+                &btf.blocks[3].get_id(),
+                &Some(btf.blocks[1].get_id()),
+                &None,
+                2,
+                TestSpentStatus::NotInMainchain,
+            );
+            assert!(!btf.is_block_in_main_chain(&btf.blocks[3].get_id()));
+            // b4
+            btf.test_block(
+                &btf.blocks[4].get_id(),
+                &Some(btf.blocks[3].get_id()),
+                &None,
+                3,
+                TestSpentStatus::NotInMainchain,
+            );
+            assert!(!btf.is_block_in_main_chain(&btf.blocks[4].get_id()));
+
+            // b5
+            btf.test_block(
+                &btf.blocks[5].get_id(),
+                &Some(btf.blocks[2].get_id()),
+                &Some(btf.blocks[6].get_id()),
+                3,
+                TestSpentStatus::Spent,
+            );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[5].get_id()));
+            // b6
+            btf.test_block(
+                &btf.blocks[6].get_id(),
+                &Some(btf.blocks[5].get_id()),
+                &None,
+                4,
+                TestSpentStatus::Unspent,
+            );
+            assert!(btf.is_block_in_main_chain(&btf.blocks[6].get_id()));
+
+            // # Try to create a fork that double-spends
+            // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
+            // #                                          \-> b7 (2) -> b8 (4)
+            // #                      \-> b3 (1) -> b4 (2)
+            println!("\nReject a chain with a double spend, even if it is longer");
+            //TODO: Should be fail
+            let block_id = btf.blocks[btf.blocks.len() - 5].get_id();
+            btf.create_chain(&block_id, 2, None);
+            let block_id = btf.blocks[btf.blocks.len() - 7].get_id();
+            //TODO: Not finished yet
+            let double_spend_block = btf.random_block(
+                btf.blocks.last().unwrap(),
+                Some(&[BlockParams::DoubleSpendFrom(block_id)]),
+            );
+            // btf.add_special_block(double_spend_block);
+            btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
             //     // // # Try to create a block that has too much fee
             //     // // #     genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
