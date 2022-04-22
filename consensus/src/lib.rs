@@ -34,6 +34,8 @@ use thiserror::Error;
 mod orphan_blocks;
 use parity_scale_codec::Encode;
 
+mod pow;
+
 type PeerId = u32;
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 

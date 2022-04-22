@@ -131,7 +131,7 @@ pub fn mine(
 
 #[cfg(test)]
 mod tests {
-    use crate::check_proof_of_work;
+    use crate::pow::work::check_proof_of_work;
     use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
     use std::str::FromStr;

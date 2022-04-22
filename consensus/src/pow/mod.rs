@@ -8,9 +8,7 @@ pub mod work;
 
 #[derive(Debug)]
 pub enum Error {
-    BlockToMineError(String),
     ConversionError(String),
-    OutofBounds(String),
 }
 
 pub struct PoW(PoWChainConfig);

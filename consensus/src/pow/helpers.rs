@@ -5,7 +5,8 @@ use common::Uint256;
 
 /// checks if retargeting is due for the provided block_height
 pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockHeight) -> bool {
-    block_height.inner() % difficulty_adjustment_interval == 0
+    let height: u64 = block_height.into();
+    height % difficulty_adjustment_interval == 0
 }
 
 /// The block time of the first block, based on the difficulty adjustment interval,
@@ -15,8 +16,9 @@ pub fn get_starting_block_time(
     block_index: &BlockIndex,
 ) -> u32 {
     let retarget_height = {
+        let height: u64 = block_index.height.into();
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
-        let old_block_height = block_index.height.inner() - (difficulty_adjustment_interval - 1);
+        let old_block_height = height - (difficulty_adjustment_interval - 1);
         BlockHeight::new(old_block_height)
     };
 
