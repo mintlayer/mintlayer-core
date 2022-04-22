@@ -96,6 +96,8 @@ pub enum BlockError {
     DuplicateInputInTransaction(Id<Transaction>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
+    #[error("Transaction number `{0}` does not exist in block `{1:?}`")]
+    TxNumWrongInBlock(usize, Id<Block>),
     // To be expanded
 }
 
@@ -262,7 +264,11 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn calculate_indices(block: &Block, tx: &Transaction) -> Result<TxMainChainIndex, BlockError> {
+    fn calculate_indices(block: &Block, tx_num: usize) -> Result<TxMainChainIndex, BlockError> {
+        let tx = block
+            .transactions()
+            .get(tx_num)
+            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
         let enc_block = block.encode();
         let enc_tx = tx.encode();
         let offset_tx = enc_block
@@ -293,9 +299,9 @@ impl<'a> ConsensusRef<'a> {
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        block.transactions().iter().try_for_each(|tx| {
-            cached_inputs.spend(block, tx, spend_height, blockreward_maturity)
-        })?;
+        for (tx_num, _tx) in block.transactions().iter().enumerate() {
+            cached_inputs.spend(block, tx_num, spend_height, blockreward_maturity)?;
+        }
         Ok(cached_inputs)
     }
 
@@ -340,10 +346,10 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn connect_genesis_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        for tx in block.transactions() {
+        for (num, tx) in block.transactions().iter().enumerate() {
             self.db_tx.set_mainchain_tx_index(
                 &OutPointSourceId::from(tx.get_id()),
-                &Self::calculate_indices(block, tx)?,
+                &Self::calculate_indices(block, num)?,
             )?;
         }
         Ok(())

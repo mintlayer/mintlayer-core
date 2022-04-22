@@ -71,8 +71,13 @@ impl<'a> CachedInputs<'a> {
 
     // TODO: add block reward outputs
 
-    fn add_outputs(&mut self, block: &Block, tx: &Transaction) -> Result<(), BlockError> {
-        let tx_index = CachedInputsOperation::Write(ConsensusRef::calculate_indices(block, tx)?);
+    fn add_outputs(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
+        let tx_index =
+            CachedInputsOperation::Write(ConsensusRef::calculate_indices(block, tx_num)?);
+        let tx = block
+            .transactions()
+            .get(tx_num)
+            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
         let tx_id = tx.get_id();
         match self.inputs.entry(OutPointSourceId::from(tx_id)) {
             Entry::Occupied(_) => return Err(BlockError::OutputAlreadyPresentInInputsCache),
@@ -185,10 +190,15 @@ impl<'a> CachedInputs<'a> {
     pub fn spend(
         &mut self,
         block: &Block,
-        tx: &Transaction,
+        tx_num: usize,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
+        let tx = block
+            .transactions()
+            .get(tx_num)
+            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+
         // pre-cache all inputs
         tx.get_inputs()
             .iter()
@@ -212,7 +222,7 @@ impl<'a> CachedInputs<'a> {
         }
 
         // add the outputs of this transaction to the cache
-        self.add_outputs(block, tx)?;
+        self.add_outputs(block, tx_num)?;
 
         Ok(())
     }
