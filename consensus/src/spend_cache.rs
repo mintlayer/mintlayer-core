@@ -2,11 +2,14 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::{
-    chain::{block::Block, OutPoint, OutPointSourceId, Spender, Transaction, TxMainChainIndex},
+    chain::{
+        block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, Spender,
+        Transaction, TxMainChainIndex,
+    },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
-use crate::{BlockError, ConsensusRef, TxRw};
+use crate::{BlockError, TxRw};
 
 enum CachedInputsOperation {
     Write(TxMainChainIndex),
@@ -72,8 +75,7 @@ impl<'a> CachedInputs<'a> {
     // TODO: add block reward outputs
 
     fn add_outputs(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
-        let tx_index =
-            CachedInputsOperation::Write(ConsensusRef::calculate_indices(block, tx_num)?);
+        let tx_index = CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?);
         let tx = block
             .transactions()
             .get(tx_num)

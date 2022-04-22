@@ -22,11 +22,10 @@ use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
+use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::Spender;
-use common::chain::{
-    OutPointSourceId, SpendablePosition, Transaction, TxMainChainIndex, TxMainChainPosition,
-};
+use common::chain::{OutPointSourceId, Transaction};
 use common::chain::{SpendError, TxMainChainIndexError};
 use common::primitives::BlockDistance;
 use common::primitives::{time, Amount, BlockHeight, Id, Idable};
@@ -98,6 +97,10 @@ pub enum BlockError {
     DuplicateInputInBlock(Id<Block>),
     #[error("Transaction number `{0}` does not exist in block `{1:?}`")]
     TxNumWrongInBlock(usize, Id<Block>),
+    #[error("Serialization invariant failed for block `{0:?}`")]
+    SerializationInvariantError(Id<Block>),
+    #[error("Unexpected numeric type conversion error `{0:?}`")]
+    InternalNumTypeConversionError(Id<Block>),
     // To be expanded
 }
 
@@ -123,6 +126,15 @@ impl From<TxMainChainIndexError> for BlockError {
     fn from(err: TxMainChainIndexError) -> Self {
         match err {
             TxMainChainIndexError::InvalidOutputCount => BlockError::InvalidOutputCount,
+            TxMainChainIndexError::SerializationInvariantError(block_id) => {
+                BlockError::SerializationInvariantError(block_id)
+            }
+            TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
+                BlockError::TxNumWrongInBlock(tx_num, block_id)
+            }
+            TxMainChainIndexError::InternalNumTypeConversionError(block_id) => {
+                BlockError::InternalNumTypeConversionError(block_id)
+            }
         }
     }
 }
@@ -264,34 +276,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn calculate_indices(block: &Block, tx_num: usize) -> Result<TxMainChainIndex, BlockError> {
-        let tx = block
-            .transactions()
-            .get(tx_num)
-            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
-        let enc_block = block.encode();
-        let enc_tx = tx.encode();
-        let offset_tx = enc_block
-            .windows(enc_tx.len())
-            .enumerate()
-            .find_map(|(i, d)| (d == enc_tx).then(|| i))
-            .ok_or(BlockError::Unknown)?
-            .try_into()
-            .map_err(|_| BlockError::Unknown)?;
-
-        let tx_position = TxMainChainPosition::new(
-            block.get_id(),
-            offset_tx,
-            enc_tx.len().try_into().map_err(|_| BlockError::Unknown)?,
-        );
-
-        TxMainChainIndex::new(
-            SpendablePosition::from(tx_position),
-            tx.get_outputs().len().try_into().map_err(|_| BlockError::Unknown)?,
-        )
-        .map_err(BlockError::from)
-    }
-
     fn connect_transactions_inner(
         &self,
         block: &Block,
@@ -349,7 +333,7 @@ impl<'a> ConsensusRef<'a> {
         for (num, tx) in block.transactions().iter().enumerate() {
             self.db_tx.set_mainchain_tx_index(
                 &OutPointSourceId::from(tx.get_id()),
-                &Self::calculate_indices(block, num)?,
+                &calculate_tx_index_from_block(block, num)?,
             )?;
         }
         Ok(())
