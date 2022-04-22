@@ -2148,6 +2148,7 @@ dependencies = [
  "libp2p",
  "logging",
  "parity-scale-codec",
+ "portpicker",
  "rand 0.8.4",
  "test-utils",
  "tokio",

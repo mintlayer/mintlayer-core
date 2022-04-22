@@ -192,6 +192,7 @@ impl NetworkService for Libp2pService {
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[FloodsubTopic],
+        timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -203,6 +204,7 @@ impl NetworkService for Libp2pService {
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
+            .outbound_timeout(timeout)
             .boxed();
 
         let swarm = {
@@ -464,6 +466,8 @@ impl SocketService for Libp2pSocket {
 mod tests {
     use super::*;
     use crate::net;
+    use std::time::Duration;
+    use tokio::net::TcpListener;
 
     #[derive(Debug, Encode, Decode, PartialEq, Eq, Copy, Clone)]
     struct Transaction {
@@ -473,7 +477,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect_new() {
-        let service = Libp2pService::start("/ip6/::1/tcp/8900".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start(
+            "/ip6/::1/tcp/8900".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
         assert!(service.is_ok());
     }
 
@@ -481,10 +491,22 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_connect_new_addrinuse() {
-        let service = Libp2pService::start("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start(
+            "/ip6/::1/tcp/8901".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
         assert!(service.is_ok());
 
-        let service = Libp2pService::start("/ip6/::1/tcp/8901".parse().unwrap(), &[], &[]).await;
+        let service = Libp2pService::start(
+            "/ip6/::1/tcp/8901".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
 
         match service {
             Err(e) => {
@@ -498,8 +520,20 @@ mod tests {
     // and having `service2` trying to connect to `service1`
     #[tokio::test]
     async fn test_connect_accept() {
-        let service1 = Libp2pService::start("/ip6/::1/tcp/8902".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::start("/ip6/::1/tcp/8903".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start(
+            "/ip6/::1/tcp/8902".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
+        let service2 = Libp2pService::start(
+            "/ip6/::1/tcp/8903".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
         assert!(service1.is_ok());
         assert!(service2.is_ok());
 
@@ -519,9 +553,14 @@ mod tests {
     #[tokio::test]
     async fn test_connect_peer_id_missing() {
         let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
-        let (mut service, _) = Libp2pService::start("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[])
-            .await
-            .unwrap();
+        let (mut service, _) = Libp2pService::start(
+            "/ip6/::1/tcp/8905".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
         match service.connect(addr).await {
             Ok(_) => panic!("connect succeeded without peer id"),
             Err(e) => {
@@ -540,8 +579,20 @@ mod tests {
     // it decodes to the same transaction that was sent.
     #[tokio::test]
     async fn test_peer_send() {
-        let service1 = Libp2pService::start("/ip6/::1/tcp/8905".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::start("/ip6/::1/tcp/8906".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start(
+            "/ip6/::1/tcp/8905".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
+        let service2 = Libp2pService::start(
+            "/ip6/::1/tcp/8906".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
 
         let (mut service1, _) = service1.unwrap();
         let (mut service2, _) = service2.unwrap();
@@ -583,8 +634,20 @@ mod tests {
     // it decodes to the same transaction that was sent.
     #[tokio::test]
     async fn test_peer_recv() {
-        let service1 = Libp2pService::start("/ip6/::1/tcp/8907".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::start("/ip6/::1/tcp/8908".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start(
+            "/ip6/::1/tcp/8907".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
+        let service2 = Libp2pService::start(
+            "/ip6/::1/tcp/8908".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
 
         let (mut service1, _) = service1.unwrap();
         let (mut service2, _) = service2.unwrap();
@@ -618,8 +681,20 @@ mod tests {
     // end and decoded as three separate transactions
     #[tokio::test]
     async fn test_peer_buffered_recv() {
-        let service1 = Libp2pService::start("/ip6/::1/tcp/8909".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::start("/ip6/::1/tcp/8910".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start(
+            "/ip6/::1/tcp/8909".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
+        let service2 = Libp2pService::start(
+            "/ip6/::1/tcp/8910".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
 
         let (mut service1, _) = service1.unwrap();
         let (mut service2, _) = service2.unwrap();
@@ -655,8 +730,20 @@ mod tests {
     // that is too big and verify that it is rejected
     #[tokio::test]
     async fn test_too_large_message_size() {
-        let service1 = Libp2pService::start("/ip6/::1/tcp/8911".parse().unwrap(), &[], &[]).await;
-        let service2 = Libp2pService::start("/ip6/::1/tcp/8912".parse().unwrap(), &[], &[]).await;
+        let service1 = Libp2pService::start(
+            "/ip6/::1/tcp/8911".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
+        let service2 = Libp2pService::start(
+            "/ip6/::1/tcp/8912".parse().unwrap(),
+            &[],
+            &[],
+            Duration::from_secs(10),
+        )
+        .await;
 
         let (mut service1, _) = service1.unwrap();
         let (mut service2, _) = service2.unwrap();
@@ -834,5 +921,53 @@ mod tests {
                 ip6: vec![],
             }]
         );
+    }
+
+    impl PartialEq for Libp2pSocket {
+        fn eq(&self, _other: &Libp2pSocket) -> bool {
+            true
+        }
+    }
+
+    // try to connect to a service that is not listening with a small timeout and verify that the connection fails
+    // TODO: verify on windows/mac
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn test_connect_with_timeout() {
+        let (mut service, _) = Libp2pService::start(
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+            &[],
+            Duration::from_secs(2),
+        )
+        .await
+        .unwrap();
+
+        let port = portpicker::pick_unused_port().unwrap();
+        let id: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let mut addr: Multiaddr = format!("/ip6/::1/tcp/{}", port).parse().unwrap();
+        addr.push(Protocol::P2p(id.into()));
+
+        // first try to connect to address nobody is listening to
+        // and verify that the connection is refused immediately
+        let start = std::time::SystemTime::now();
+        assert_eq!(
+            service.connect(addr.clone()).await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+        assert_eq!(
+            std::time::SystemTime::now().duration_since(start).unwrap().as_secs(),
+            0
+        );
+
+        // then create a socket that listens to the address and verify that it takes
+        // 2 seconds to get the `ConnectionRefused` error, as expected
+        let _service = TcpListener::bind(format!("[::1]:{}", port)).await.unwrap();
+        let start = std::time::SystemTime::now();
+        assert_eq!(
+            service.connect(addr).await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+        assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }

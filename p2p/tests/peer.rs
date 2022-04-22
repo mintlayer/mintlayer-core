@@ -32,7 +32,9 @@ use tokio::net::TcpStream;
 async fn test_peer_new_mock() {
     let config = Arc::new(config::create_mainnet());
     let addr: SocketAddr = test_utils::make_address("[::1]:");
-    let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
+    let (mut server, _) = MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
+        .await
+        .unwrap();
     let peer_fut = TcpStream::connect(addr);
 
     let (server_res, peer_res) = tokio::join!(server.poll_next(), peer_fut);
@@ -64,11 +66,17 @@ async fn test_peer_new_mock() {
 async fn test_peer_new_libp2p() {
     let config = Arc::new(config::create_mainnet());
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut server1, _) = Libp2pService::start(addr1.clone(), &[], &[]).await.unwrap();
+    let (mut server1, _) =
+        Libp2pService::start(addr1.clone(), &[], &[], std::time::Duration::from_secs(10))
+            .await
+            .unwrap();
 
     let conn_addr = server1.local_addr().clone();
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut server2, _) = Libp2pService::start(addr2, &[], &[]).await.unwrap();
+    let (mut server2, _) =
+        Libp2pService::start(addr2, &[], &[], std::time::Duration::from_secs(10))
+            .await
+            .unwrap();
 
     let (server1_res, server2_res) = tokio::join!(server1.poll_next(), server2.connect(conn_addr));
     assert!(server1_res.is_ok());
