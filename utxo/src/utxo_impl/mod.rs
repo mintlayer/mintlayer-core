@@ -170,6 +170,13 @@ impl UtxoEntry {
         }
     }
 
+    pub fn take_utxo(self) -> Option<Utxo> {
+        match self.status {
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => Some(utxo),
+        }
+    }
+
     fn utxo_mut(&mut self) -> Option<&mut Utxo> {
         match &mut self.status {
             UtxoStatus::Spent => None,
@@ -314,7 +321,7 @@ impl<'a> UtxosCache<'a> {
     }
 
     /// Flags the utxo as "spent", given an outpoint.
-    /// Returns true if an update was performed.
+    /// Returns the Utxo if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
         match self.get_utxo_entry(outpoint) {
             None => Err(Error::NoUtxoFound),
@@ -330,15 +337,15 @@ impl<'a> UtxosCache<'a> {
                     self.utxos.remove(key);
                 } else {
                     // mark this as 'spent'
-                    let entry = UtxoEntry {
+                    let new_entry = UtxoEntry {
                         status: UtxoStatus::Spent,
                         is_dirty: true,
                         is_fresh: false,
                     };
-                    self.utxos.insert(key.clone(), entry);
+                    self.utxos.insert(key.clone(), new_entry);
                 }
 
-                entry.utxo().ok_or(Error::UtxoAlreadySpent)
+                entry.take_utxo().ok_or(Error::UtxoAlreadySpent)
             }
         }
     }
