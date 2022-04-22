@@ -92,6 +92,10 @@ pub enum BlockError {
     OutputAdditionError,
     #[error("Attempt to print money")]
     AttemptToPrintMoney(Amount, Amount),
+    #[error("Duplicate input in transaction")]
+    DuplicateInputInTransaction(Id<Transaction>),
+    #[error("Duplicate input in block")]
+    DuplicateInputInBlock(Id<Block>),
     // To be expanded
 }
 
@@ -576,19 +580,21 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
-        // TODO: Must check for duplicate inputs (see CVE-2018-17144)
-        //      We should discuss - can we add Hash trait to Transaction?
-        //      We will have plenty more checks with inputs\outputs and HashSet\BTreeMap might be more efficient
-        //
-        // let mut keyed = HashSet::new();
-        // for tx in block.get_transactions() {
-        //     for input in tx.get_inputs() {
-        //         if keyed.contains(input.get_outpoint()) {
-        //             return Err(BlockError::Unknown);
-        //         }
-        //         keyed.insert(input.get_outpoint());
-        //     }
-        // }
+        // check for duplicate inputs (see CVE-2018-17144)
+        {
+            let mut block_inputs = BTreeSet::new();
+            for tx in block.transactions() {
+                let mut tx_inputs = BTreeSet::new();
+                for input in tx.get_inputs() {
+                    if !block_inputs.insert(input.get_outpoint()) {
+                        return Err(BlockError::DuplicateInputInBlock(block.get_id()));
+                    }
+                    if !tx_inputs.insert(input.get_outpoint()) {
+                        return Err(BlockError::DuplicateInputInTransaction(tx.get_id()));
+                    }
+                }
+            }
+        }
 
         {
             // check duplicate transactions
@@ -607,7 +613,7 @@ impl<'a> ConsensusRef<'a> {
         if block.encoded_size() > MAX_BLOCK_WEIGHT {
             return Err(BlockError::Unknown);
         }
-        //TODO: Check signatures will be added when will ready BLS
+        //TODO: Check signatures will be added when BLS is ready
         Ok(())
     }
 
