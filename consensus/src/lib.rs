@@ -268,7 +268,7 @@ impl<'a> ConsensusRef<'a> {
         let tx = block
             .transactions()
             .get(tx_num)
-            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
         let enc_block = block.encode();
         let enc_tx = tx.encode();
         let offset_tx = enc_block

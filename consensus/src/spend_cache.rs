@@ -77,7 +77,7 @@ impl<'a> CachedInputs<'a> {
         let tx = block
             .transactions()
             .get(tx_num)
-            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
         let tx_id = tx.get_id();
         match self.inputs.entry(OutPointSourceId::from(tx_id)) {
             Entry::Occupied(_) => return Err(BlockError::OutputAlreadyPresentInInputsCache),
@@ -197,7 +197,7 @@ impl<'a> CachedInputs<'a> {
         let tx = block
             .transactions()
             .get(tx_num)
-            .ok_or(BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
 
         // pre-cache all inputs
         tx.get_inputs()
