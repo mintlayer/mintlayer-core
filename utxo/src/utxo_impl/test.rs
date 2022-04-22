@@ -289,23 +289,23 @@ fn add_utxo_test() {
 #[rustfmt::skip]
 fn spend_utxo_test() {
     /*
-                            PARENT     CACHE
-                            PRESENCE   PRESENCE  CACHE Flags          RESULT Flags
+                    PARENT     CACHE
+                    PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
-    check_spend_utxo(Absent, Absent,   None,                Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Absent,  Absent,   None,                Err(Error::NoUtxoFound),      None);
     check_spend_utxo(Absent,  Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Absent,  Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent),None);
-    check_spend_utxo(Absent,  Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent),Some(DIRTY));
+    check_spend_utxo(Absent,  Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(Absent,  Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
     check_spend_utxo(Absent,  Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Absent,  Present,  Some(0),              Ok(()),Some(DIRTY));
-    check_spend_utxo(Absent,  Present,  Some(FRESH),         Ok(()),None);
+    check_spend_utxo(Absent,  Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(Absent,  Present,  Some(FRESH),         Ok(()), None);
     check_spend_utxo(Absent,  Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
     check_spend_utxo(Absent,  Present,  Some(FRESH | DIRTY), Ok(()), None);
     // this should fail, since there's nothing to remove.
-    check_spend_utxo(Spent,   Absent,   None,                Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Spent,   Absent,   None,                Err(Error::NoUtxoFound),      None);
     check_spend_utxo(Spent,   Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
     // this should fail, as there's nothing to remove.
-    check_spend_utxo(Spent,   Absent,   Some(FRESH),         Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Spent,   Absent,   Some(FRESH),         Err(Error::NoUtxoFound),      None);
     check_spend_utxo(Spent,   Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
     check_spend_utxo(Spent,   Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(Spent,   Present,  Some(0),             Ok(()), Some(DIRTY));
@@ -318,7 +318,7 @@ fn spend_utxo_test() {
     check_spend_utxo(Present, Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
     check_spend_utxo(Present, Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(Present, Present,  Some(0),             Ok(()), Some(DIRTY));
-    check_spend_utxo(Present, Present,  Some(FRESH),         Ok(()),None);
+    check_spend_utxo(Present, Present,  Some(FRESH),         Ok(()), None);
     check_spend_utxo(Present, Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
     check_spend_utxo(Present, Present,  Some(FRESH | DIRTY), Ok(()), None);
 }
