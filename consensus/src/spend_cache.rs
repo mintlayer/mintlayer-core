@@ -112,7 +112,7 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn fetch_from_cached(
+    fn get_from_cached(
         &mut self,
         outpoint: &OutPoint,
     ) -> Result<&mut CachedInputsOperation, BlockError> {
@@ -215,7 +215,7 @@ impl<'a> CachedInputs<'a> {
                 self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
             }
 
-            let prev_tx_index_op = self.fetch_from_cached(outpoint)?;
+            let prev_tx_index_op = self.get_from_cached(outpoint)?;
             prev_tx_index_op
                 .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
                 .map_err(BlockError::from)?;
@@ -240,7 +240,7 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let input_tx_id_op = self.fetch_from_cached(outpoint)?;
+            let input_tx_id_op = self.get_from_cached(outpoint)?;
 
             // Mark input as unspend
             input_tx_id_op.unspend(outpoint.get_output_index()).map_err(BlockError::from)?;
