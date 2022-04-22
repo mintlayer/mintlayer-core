@@ -11,6 +11,7 @@ time = [ "tokio/time" ]
 [dependencies]
 
 # External dependencies
+cfg-if = "1.0"
 thiserror = "1.0"
 
 # Local dependencies
@@ -23,3 +24,4 @@ features = [ "macros", "rt", "rt-multi-thread", "signal", "sync" ]
 
 [dev-dependencies]
 common = { path = "../common" }
+testing_logger = "0.1"

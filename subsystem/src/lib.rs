@@ -35,11 +35,45 @@
 //!    request by shutting themselves down.
 //! 3. The main task waits for all subsystems to terminate.
 
-use std::future::Future;
+use core::future::Future;
+use core::time::Duration;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task;
 
 use logging::log;
+
+/// Manager configuration options.
+pub struct ManagerConfig {
+    /// Subsystem manager name
+    name: &'static str,
+    /// Shutdown timeout. Set to `None` for no (i.e. unlimited) timeout.
+    shutdown_timeout: Option<Duration>,
+}
+
+impl ManagerConfig {
+    /// Default shutdown timeout.
+    const DEFAULT_SHUTDOWN_TIMEOUT: Option<Duration> = if cfg!(all(feature = "time", not(loom))) {
+        Some(Duration::from_secs(20))
+    } else {
+        None
+    };
+
+    fn named(name: &'static str) -> Self {
+        Self {
+            name,
+            ..Self::default()
+        }
+    }
+}
+
+impl Default for ManagerConfig {
+    fn default() -> Self {
+        Self {
+            name: "<manager>",
+            shutdown_timeout: Self::DEFAULT_SHUTDOWN_TIMEOUT,
+        }
+    }
+}
 
 /// Top-level subsystem manager.
 ///
@@ -58,11 +92,23 @@ pub struct Manager {
     // this channel.
     shutting_down_tx: mpsc::Sender<()>,
     shutting_down_rx: mpsc::Receiver<()>,
+
+    // Shutdown timeout settings
+    shutdown_timeout: Option<Duration>,
 }
 
 impl Manager {
     /// Initialise a new subsystem manager.
     pub fn new(name: &'static str) -> Self {
+        Self::new_with_config(ManagerConfig::named(name))
+    }
+
+    /// Initialise a new subsystem manager.
+    pub fn new_with_config(config: ManagerConfig) -> Self {
+        let ManagerConfig {
+            name,
+            shutdown_timeout,
+        } = config;
         log::info!("Initialising subsystem manager {}", name);
 
         let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
@@ -73,6 +119,7 @@ impl Manager {
             shutdown_request_tx,
             shutting_down_tx,
             shutting_down_rx,
+            shutdown_timeout,
         }
     }
 
@@ -191,9 +238,39 @@ impl Manager {
         self.shutting_down_tx.send(()).await.expect("Shutdown receiver not existing")
     }
 
-    async fn wait_for_subsystems_to_shut_down(mut shutting_down_rx: mpsc::Receiver<()>) {
+    async fn wait_for_shutdown(mut shutting_down_rx: mpsc::Receiver<()>) {
         // Wait for the subsystems to go down, signalled by closing the shutting_down channel.
         while let Some(()) = shutting_down_rx.recv().await {}
+    }
+
+    #[allow(unused)]
+    async fn wait_for_shutdown_with_timeout(
+        name: &'static str,
+        shutting_down_rx: mpsc::Receiver<()>,
+        timeout: Option<Duration>,
+    ) {
+        let shutdown_future = Self::wait_for_shutdown(shutting_down_rx);
+        if let Some(timeout) = timeout {
+            cfg_if::cfg_if! {
+                if #[cfg(all(feature = "time", not(loom)))] {
+                    // Wait for shutdown under a timeout
+                    if let Err(elapsed) = tokio::time::timeout(timeout, shutdown_future).await {
+                        log::error!("Manager {} shutdown timed out", name);
+                    }
+                } else {
+                    // Timeout was requested but is not supported
+                    if cfg!(not(feature = "time")) {
+                        log::error!("Shutdown timeout support not compiled in");
+                    } else if cfg!(loom) {
+                        log::warn!("Shutdown timeout disabled under loom");
+                    }
+                    shutdown_future.await
+                }
+            }
+        } else {
+            // No timeout requested, just wait for shutdown
+            shutdown_future.await
+        }
     }
 
     /// Run the application main task.
@@ -220,8 +297,12 @@ impl Manager {
         let _ = self.shutdown_request_tx.send(());
 
         // Wait for the subsystems to go down.
-        // TODO add shutdown timeout here
-        Self::wait_for_subsystems_to_shut_down(self.shutting_down_rx).await;
+        Self::wait_for_shutdown_with_timeout(
+            self.name,
+            self.shutting_down_rx,
+            self.shutdown_timeout,
+        )
+        .await;
 
         log::info!("Manager {} terminated", self.name);
     }
@@ -372,6 +453,28 @@ impl<T: Send + 'static> Handle<T> {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[cfg(all(feature = "time", not(loom)))]
+    #[tokio::test]
+    async fn shutdown_timeout() {
+        testing_logger::setup();
+
+        let man = Manager::new_with_config(ManagerConfig {
+            name: "timeout_test",
+            shutdown_timeout: Some(Duration::from_secs(1)),
+        });
+
+        man.start(
+            "does_not_want_to_exit",
+            |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
+        );
+        man.shutdown().await;
+        man.main().await;
+
+        testing_logger::validate(|logs| {
+            assert!(logs.iter().any(|entry| entry.body.contains("shutdown timed out")));
+        });
+    }
 
     #[test]
     fn default_queue_size_with_named_config() {

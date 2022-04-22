@@ -22,6 +22,6 @@ pub fn init_test_runtime() -> tokio::runtime::Runtime {
 
     let mut runtime = tokio::runtime::Builder::new_multi_thread();
     #[cfg(not(loom))]
-    runtime.enable_io();
+    runtime.enable_all();
     runtime.worker_threads(4).build().unwrap()
 }
