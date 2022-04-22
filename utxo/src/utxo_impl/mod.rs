@@ -1,6 +1,6 @@
 //TODO: remove once the functions are used.
 #![allow(dead_code)]
-use crate::Error;
+use crate::{Error, TxUndo};
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{BlockHeight, Id, Idable};
 use std::collections::BTreeMap;
@@ -246,6 +246,21 @@ impl<'a> UtxosCache<'a> {
         Ok(())
     }
 
+    /// Mark the inputs of tx as 'spent'.
+    /// returns a TxUndo if function is a success;
+    /// or an error if  of the tx's input cannot be spent.
+    pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
+        let tx_undo: Result<Vec<Utxo>, Error> = tx
+            .get_inputs()
+            .iter()
+            .map(|tx_in| self.spend_utxo(tx_in.get_outpoint()))
+            .collect();
+
+        self.add_utxos(tx, UtxoSource::BlockChain(height), false)?;
+
+        tx_undo.map(TxUndo::new)
+    }
+
     /// Adds a utxo entry in the cache.
     pub fn add_utxo(
         &mut self,
@@ -300,9 +315,9 @@ impl<'a> UtxosCache<'a> {
 
     /// Flags the utxo as "spent", given an outpoint.
     /// Returns true if an update was performed.
-    pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> bool {
+    pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
         match self.get_utxo_entry(outpoint) {
-            None => false,
+            None => Err(Error::NoUtxoFound),
             Some(entry) => {
                 let key = outpoint;
 
@@ -322,7 +337,8 @@ impl<'a> UtxosCache<'a> {
                     };
                     self.utxos.insert(key.clone(), entry);
                 }
-                true
+
+                entry.utxo().ok_or(Error::UtxoAlreadySpent)
             }
         }
     }

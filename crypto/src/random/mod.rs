@@ -1,4 +1,4 @@
-pub use rand::{Rng, RngCore, SeedableRng};
+pub use rand::{Rng, RngCore, SeedableRng, seq };
 
 pub fn make_true_rng() -> impl rand::Rng + rand::CryptoRng {
     rand::rngs::StdRng::from_entropy()

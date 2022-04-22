@@ -67,7 +67,7 @@ fn populate_cache<'a>(
             // or just mark it as `spent`,
             let outp_idx = make_pseudo_rng().gen_range(0..existing_outpoints.len());
             let to_spend = &existing_outpoints[outp_idx];
-            assert!(cache.spend_utxo(to_spend));
+            assert!(cache.spend_utxo(to_spend).is_ok());
 
             //println!("child, spend: {:?}, removed", to_spend);
         } else {

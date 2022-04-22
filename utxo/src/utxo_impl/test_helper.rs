@@ -17,6 +17,19 @@ use crate::UtxoStatus;
 use common::chain::block::Block;
 use Presence::{Absent, Present, Spent};
 
+pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
+    let mut tx_outputs = vec![];
+    for _ in 0..size {
+        let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
+        tx_outputs.push(TxOutput::new(
+            Amount::new(random_amt),
+            Destination::PublicKey,
+        ));
+    }
+
+    tx_outputs
+}
+
 pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
     inner_create_utxo(Some(block_height))
 }

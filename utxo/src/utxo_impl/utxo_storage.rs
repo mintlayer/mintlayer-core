@@ -233,7 +233,7 @@ mod test {
                 );
 
                 let mut child = UtxosCache::new(&parent);
-                assert!(child.spend_utxo(outpoint));
+                assert!(child.spend_utxo(outpoint).is_ok());
 
                 let res = flush_to_base(child, &mut utxo_db);
                 assert!(res.is_ok());

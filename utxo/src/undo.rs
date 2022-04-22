@@ -7,8 +7,20 @@ use parity_scale_codec::{Decode, Encode};
 pub struct TxUndo(Vec<Utxo>);
 
 impl TxUndo {
+    pub fn new_empty() -> Self {
+        Self(vec![])
+    }
+
     pub fn new(utxos: Vec<Utxo>) -> Self {
         Self(utxos)
+    }
+
+    pub fn push(&mut self, utxo: Utxo) {
+        self.0.push(utxo)
+    }
+
+    pub fn append(&mut self, other: &mut TxUndo) {
+        self.0.append(&mut other.0)
     }
 
     pub fn inner(&self) -> &[Utxo] {
@@ -47,7 +59,11 @@ pub mod test {
     fn tx_undo_test() {
         let (utxo0, _) = create_utxo(0);
         let (utxo1, _) = create_utxo(1);
-        let tx_undo = TxUndo::new(vec![utxo0.clone(), utxo1.clone()]);
+        let mut tx_undo = TxUndo::new(vec![utxo0.clone()]);
+
+        // check push
+        tx_undo.push(utxo1.clone());
+        assert_eq!(tx_undo.0.len(), 2);
 
         // check `inner()`
         {

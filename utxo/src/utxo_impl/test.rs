@@ -1,13 +1,17 @@
-use common::primitives::{Id, H256};
+use common::primitives::{BlockHeight, Id, Idable, H256};
 
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
 use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
+use crate::test_helper::create_tx_outputs;
 use crate::utxo_impl::test_helper::{
     check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
 };
 use crate::utxo_impl::{UtxoSource, UtxoStatus};
+use common::chain::{OutPoint, OutPointSourceId, Transaction, TxInput};
+use crypto::random::{make_pseudo_rng, seq};
+use iter_tools::Itertools;
 use std::collections::BTreeMap;
 
 /// Checks `add_utxo` method behaviour.
@@ -53,8 +57,9 @@ fn check_spend_utxo(
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<u8>,
+    spend_result: Result<(), Error>,
     result_flags: Option<u8>,
-) -> bool {
+) {
     // initialize the parent cache.
     let mut parent = UtxosCache::default();
     let (_, parent_outpoint) =
@@ -75,12 +80,24 @@ fn check_spend_utxo(
 
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
+
+    match spend_result {
+        Ok(_) => {
+            assert!(res.is_ok());
+        }
+        Err(expected_e) => {
+            if let Err(actual_e) = res {
+                assert_eq!(expected_e, actual_e);
+            } else {
+                assert!(false);
+            }
+        }
+    }
+
     let key = &child_outpoint;
     let ret_value = child.utxos.get(key);
 
     check_flags(ret_value, result_flags, true);
-
-    res
 }
 
 /// Checks `batch_write` method behaviour.
@@ -275,37 +292,35 @@ fn spend_utxo_test() {
                             PARENT     CACHE
                             PRESENCE   PRESENCE  CACHE Flags          RESULT Flags
     */
-    assert!(!check_spend_utxo(Absent, Absent,   None,                None));
-    assert!(check_spend_utxo(Absent,  Spent,    Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Absent,  Spent,    Some(FRESH),         None));
-    assert!(check_spend_utxo(Absent,  Spent,    Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Absent,  Spent,    Some(FRESH | DIRTY), None));
-    assert!(check_spend_utxo(Absent,  Present,  Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Absent,  Present,  Some(FRESH),         None));
-    assert!(check_spend_utxo(Absent,  Present,  Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Absent,  Present,  Some(FRESH | DIRTY), None));
-
+    check_spend_utxo(Absent, Absent,   None,                Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Absent,  Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(Absent,  Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent),None);
+    check_spend_utxo(Absent,  Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent),Some(DIRTY));
+    check_spend_utxo(Absent,  Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(Absent,  Present,  Some(0),              Ok(()),Some(DIRTY));
+    check_spend_utxo(Absent,  Present,  Some(FRESH),         Ok(()),None);
+    check_spend_utxo(Absent,  Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(Absent,  Present,  Some(FRESH | DIRTY), Ok(()), None);
     // this should fail, since there's nothing to remove.
-    assert!(!check_spend_utxo(Spent,   Absent,   None,                None));
-    assert!(check_spend_utxo(Spent,   Spent,    Some(0),             Some(DIRTY)));
-
+    check_spend_utxo(Spent,   Absent,   None,                Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Spent,   Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
     // this should fail, as there's nothing to remove.
-    assert!(!check_spend_utxo(Spent,   Absent,   Some(FRESH),         None));
-    assert!(check_spend_utxo(Spent,   Spent,    Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Spent,   Spent,    Some(FRESH | DIRTY), None));
-    assert!(check_spend_utxo(Spent,   Present,  Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Spent,   Present,  Some(FRESH),         None));
-    assert!(check_spend_utxo(Spent,   Present,  Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Spent,   Present,  Some(FRESH | DIRTY), None));
-    assert!(check_spend_utxo(Present, Absent,   None,                Some(DIRTY)));
-    assert!(check_spend_utxo(Present, Spent,    Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Present, Spent,    Some(FRESH),         None));
-    assert!(check_spend_utxo(Present, Spent,    Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Present, Spent,    Some(FRESH | DIRTY), None));
-    assert!(check_spend_utxo(Present, Present,  Some(0),             Some(DIRTY)));
-    assert!(check_spend_utxo(Present, Present,  Some(FRESH),         None));
-    assert!(check_spend_utxo(Present, Present,  Some(DIRTY),         Some(DIRTY)));
-    assert!(check_spend_utxo(Present, Present,  Some(FRESH | DIRTY), None));
+    check_spend_utxo(Spent,   Absent,   Some(FRESH),         Err(Error::NoUtxoFound), None);
+    check_spend_utxo(Spent,   Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(Spent,   Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(Spent,   Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(Spent,   Present,  Some(FRESH),         Ok(()), None);
+    check_spend_utxo(Spent,   Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(Spent,   Present,  Some(FRESH | DIRTY), Ok(()), None);
+    check_spend_utxo(Present, Absent,   None,                Ok(()), Some(DIRTY));
+    check_spend_utxo(Present, Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(Present, Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(Present, Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(Present, Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(Present, Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(Present, Present,  Some(FRESH),         Ok(()),None);
+    check_spend_utxo(Present, Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(Present, Present,  Some(FRESH | DIRTY), Ok(()), None);
 }
 
 #[test]
@@ -420,6 +435,7 @@ fn derive_cache_test() {
     assert!(!cache.has_utxo(&outpoint));
 }
 
+#[test]
 fn blockchain_or_mempool_utxo_test() {
     let mut cache = UtxosCache::default();
 
@@ -432,4 +448,50 @@ fn blockchain_or_mempool_utxo_test() {
     let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
     assert!(res.height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
+}
+
+#[test]
+fn test_multiple_update_utxos() {
+    let mut cache = UtxosCache::default();
+
+    // let's test `add_utxos`
+    let tx = Transaction::new(0x00, vec![], create_tx_outputs(10), 0x01).unwrap();
+    assert!(cache.add_utxos(&tx, UtxoSource::BlockChain(BlockHeight::new(2)), false).is_ok());
+
+    // check that the outputs of tx are added in the cache.
+    tx.get_outputs().iter().enumerate().for_each(|(i, x)| {
+        let id = OutPointSourceId::from(tx.get_id());
+        let outpoint = OutPoint::new(id, i as u32);
+
+        let utxo = cache.get_utxo(&outpoint).expect("utxo should exist");
+        assert_eq!(utxo.output(), x);
+    });
+
+    // let's spend some outputs.;
+    let mut rng = make_pseudo_rng();
+    // randomly take half of the outputs to spend.
+    let results =
+        seq::index::sample(&mut rng, tx.get_outputs().len(), tx.get_outputs().len() / 2).into_vec();
+    let to_spend = results
+        .into_iter()
+        .map(|idx| {
+            let id = OutPointSourceId::from(tx.get_id());
+            TxInput::new(id, idx as u32, vec![])
+        })
+        .collect_vec();
+
+    // create a new transaction
+    let new_tx = Transaction::new(0x00, to_spend.clone(), vec![], 0).expect("should succeed");
+    // let's test `spend_utxos`
+    let tx_undo = cache.spend_utxos(&new_tx, BlockHeight::new(2)).expect("should return txundo");
+
+    // check that these utxos came from the tx's output
+    tx_undo.inner().iter().for_each(|x| {
+        assert!(tx.get_outputs().contains(x.output()));
+    });
+
+    // check that the spent utxos should not exist in the cache anymore.
+    to_spend.iter().for_each(|input| {
+        assert!(cache.get_utxo(input.get_outpoint()).is_none());
+    });
 }

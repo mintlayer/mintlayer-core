@@ -9,6 +9,8 @@ pub use utxo_impl::*;
 pub enum Error {
     OverwritingUtxo,
     UtxoAlreadyExists,
+    UtxoAlreadySpent,
+    NoUtxoFound,
     CacheWithoutBestBlock,
     NoBlockchainHeightFound,
     DBError(String),
