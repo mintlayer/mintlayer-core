@@ -12,7 +12,7 @@ use common::{
 use crate::{BlockError, TxRw};
 
 mod cached_operation;
-use cached_operation::*;
+use cached_operation::CachedInputsOperation;
 
 pub struct ConsumedCachedInputs {
     data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
