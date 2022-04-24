@@ -26,7 +26,7 @@ pub async fn start(addr: &SocketAddr) -> anyhow::Result<(SocketAddr, HttpServerH
     start_with_methods(addr, methods).await
 }
 
-async fn start_with_methods(
+pub async fn start_with_methods(
     addr: &SocketAddr,
     methods: Methods,
 ) -> anyhow::Result<(SocketAddr, HttpServerHandle)> {
