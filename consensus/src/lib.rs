@@ -833,7 +833,7 @@ mod tests {
 
             // to ensure Vec comparison is correct since I'm a paranoid C++ dude, let's mess things up
             let tx_messed = tx_serialized.iter().map(|c| c.wrapping_add(1)).collect::<Vec<u8>>();
-            assert!(!(tx_serialized_in_block == tx_messed));
+            assert!(tx_serialized_in_block != tx_messed);
         }
     }
 
