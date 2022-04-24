@@ -224,7 +224,7 @@ impl<'a> ConsensusRef<'a> {
     ) -> Result<Vec<BlockIndex>, BlockError> {
         let mut result = Vec::new();
         let mut block_index = new_tip_block_index.clone();
-        while !self.is_block_in_main_chain(&block_index) {
+        while !self.is_block_in_main_chain(&block_index)? {
             result.push(block_index.clone());
             block_index = self.get_previous_block_index(&block_index)?;
         }
@@ -359,17 +359,6 @@ impl<'a> ConsensusRef<'a> {
             )?;
         }
 
-        if let Some(prev_block_id) = &new_tip_block_index.get_prev_block_id() {
-            // To connect a new block we should set-up the next_block_id field of the previous block index
-            let mut prev_block = self
-                .db_tx
-                .get_block_index(prev_block_id)?
-                .expect("Can't get block index. Inconsistent DB");
-            prev_block.set_next_block_id(block.get_id());
-            self.db_tx
-                .set_block_index(&prev_block)
-                .expect("Can't set block index. Inconsistent DB");
-        }
         self.db_tx.set_block_id_at_height(
             &new_tip_block_index.get_block_height(),
             new_tip_block_index.get_block_id(),
@@ -407,11 +396,9 @@ impl<'a> ConsensusRef<'a> {
             block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
         )?;
         // Disconnect block
-        let mut prev_block_index = self.get_previous_block_index(&block_index)?;
-        prev_block_index.unset_next_block_id();
-
         self.db_tx.del_block_id_at_height(&block_index.get_block_height())?;
-        self.db_tx.set_block_index(&prev_block_index)?;
+
+        let prev_block_index = self.get_previous_block_index(&block_index)?;
         Ok(prev_block_index)
     }
 
@@ -615,14 +602,13 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> bool {
-        block_index.get_next_block_id().is_some()
-            || self
-                .db_tx
-                .get_best_block_id()
-                .ok()
-                .flatten()
-                .map_or(false, |ref block_id| block_index.get_block_id() == block_id)
+    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
+        let height = block_index.get_block_height();
+        let id_at_height = self.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+        match id_at_height {
+            Some(id) => Ok(id == *block_index.get_block_id()),
+            None => Ok(false),
+        }
     }
 
     /// Mark new block as an orphan
@@ -880,7 +866,6 @@ mod tests {
                 Some(config.genesis_block().get_id())
             );
             assert_eq!(block_index.get_prev_block_id(), &None);
-            assert_eq!(block_index.get_next_block_id(), &None);
             assert_eq!(block_index.get_chain_trust(), 1);
             assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
         });
@@ -911,7 +896,7 @@ mod tests {
             );
             assert_eq!(block_index.get_block_id(), &config.genesis_block().get_id());
             assert_eq!(block_index.get_prev_block_id(), &None);
-            assert_eq!(block_index.get_next_block_id(), &None);
+            // TODO: ensure that block at height is tested after removing the next
             assert_eq!(block_index.get_chain_trust(), 1);
             assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
@@ -933,7 +918,7 @@ mod tests {
                         .flatten()
                         .expect("Unable to process block");
 
-                assert_eq!(new_block_index.get_next_block_id(), &None);
+                // TODO: ensure that block at height is tested after removing the next
                 assert_eq!(
                     new_block_index.get_prev_block_id().as_ref(),
                     Some(prev_block_id)
@@ -944,21 +929,6 @@ mod tests {
                     block_index.get_block_height().next_height()
                 );
 
-                let next_block_id = consensus
-                    .blockchain_storage
-                    .get_block_index(
-                        &new_block_index
-                            .get_prev_block_id()
-                            .clone()
-                            .expect("Prev block ID not found"),
-                    )
-                    .ok()
-                    .flatten()
-                    .expect("Unable to get the previous block index")
-                    .get_next_block_id()
-                    .clone()
-                    .expect("Next block not found");
-                assert_eq!(&next_block_id, new_block_index.get_block_id());
                 block_index = new_block_index;
                 prev_block = new_block;
             }

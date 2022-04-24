@@ -9,7 +9,6 @@ use parity_scale_codec::{Decode, Encode};
 pub struct BlockIndex {
     block_id: Id<Block>,
     prev_block_id: Option<Id<Block>>,
-    next_block_id: Option<Id<Block>>,
     // TODO: When Carla finish her code, we should use Uint256 at the moment it's unable to store to DB
     //  pub chain_trust: Uint256,
     chain_trust: u128,
@@ -25,7 +24,6 @@ impl BlockIndex {
         Self {
             block_id: block.get_id(),
             prev_block_id: block.prev_block_id(),
-            next_block_id: None,
             chain_trust,
             height,
             time: block.block_time(),
@@ -39,18 +37,6 @@ impl BlockIndex {
 
     pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
         &self.prev_block_id
-    }
-
-    pub fn get_next_block_id(&self) -> &Option<Id<Block>> {
-        &self.next_block_id
-    }
-
-    pub fn set_next_block_id(&mut self, id_block: Id<Block>) {
-        self.next_block_id = Some(id_block);
-    }
-
-    pub fn unset_next_block_id(&mut self) {
-        self.next_block_id = None;
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
