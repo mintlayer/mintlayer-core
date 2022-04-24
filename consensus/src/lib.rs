@@ -642,8 +642,6 @@ impl<'a> ConsensusRef<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::vec;
-
     use super::*;
     use blockchain_storage::Store;
     use common::address::Address;
@@ -724,7 +722,7 @@ mod tests {
         let mut rng = rand::rngs::StdRng::from_entropy();
 
         let transactions = {
-            let transaction_count = rng.next_u32() % 20;
+            let transaction_count = rng.next_u32() % 2000;
             (0..transaction_count)
                 .into_iter()
                 .map(|_| generate_random_invalid_transaction(&mut rng))
@@ -819,7 +817,24 @@ mod tests {
             1 + serialized_header.len() + serialized_transactions.len(),
             serialized_block.len(),
         );
-        // TODO: serialize all transactions and ensure they all are at the correct positions in serialized_block
+        // TODO: calculate block reward position
+        for (tx_num, tx) in block.transactions().iter().enumerate() {
+            let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
+            let pos = match tx_index.get_position() {
+                common::chain::SpendablePosition::Transaction(pos) => pos,
+                common::chain::SpendablePosition::BlockReward(_) => unreachable!(),
+            };
+            let tx_start_pos = pos.get_byte_offset_in_block() as usize;
+            let tx_end_pos =
+                pos.get_byte_offset_in_block() as usize + pos.get_serialized_size() as usize;
+            let tx_serialized_in_block = &serialized_block[tx_start_pos..tx_end_pos];
+            let tx_serialized = tx.encode();
+            assert_eq!(tx_serialized_in_block, tx_serialized);
+
+            // to ensure Vec comparison is correct since I'm a paranoid C++ dude, let's mess things up
+            let tx_messed = tx_serialized.iter().map(|c| c.wrapping_add(1)).collect::<Vec<u8>>();
+            assert!(!(tx_serialized_in_block == tx_messed));
+        }
     }
 
     #[test]
