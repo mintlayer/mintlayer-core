@@ -6,8 +6,8 @@ use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 #[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct BlockHeader {
     pub(super) hash_prev_block: Id<BlockV1>,
-    pub(super) tx_merkle_root: H256,
-    pub(super) witness_merkle_root: H256,
+    pub(super) tx_merkle_root: Option<H256>,
+    pub(super) witness_merkle_root: Option<H256>,
     pub(super) time: u32,
     pub(super) consensus_data: ConsensusData,
 }
@@ -22,11 +22,11 @@ impl BlockV1 {
     // This has to be the same its index in the Block enum
     pub const VERSION_BYTE: u8 = 0x01;
 
-    pub fn get_tx_merkle_root(&self) -> H256 {
+    pub fn get_tx_merkle_root(&self) -> Option<H256> {
         self.header.tx_merkle_root
     }
 
-    pub fn get_witness_merkle_root(&self) -> H256 {
+    pub fn get_witness_merkle_root(&self) -> Option<H256> {
         self.header.witness_merkle_root
     }
 
