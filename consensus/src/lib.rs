@@ -820,7 +820,7 @@ mod tests {
         // TODO: calculate block reward position
         for (tx_num, tx) in block.transactions().iter().enumerate() {
             let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
-            assert_eq!(tx_index.all_outputs_spent(), false);
+            assert!(!tx_index.all_outputs_spent());
             assert_eq!(tx_index.get_output_count(), tx.get_outputs().len() as u32);
 
             let pos = match tx_index.get_position() {
