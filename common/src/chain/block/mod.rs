@@ -29,27 +29,33 @@ use parity_scale_codec::{Decode, Encode};
 
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
-) -> Result<H256, merkle::MerkleTreeFormError> {
+) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
+    if transactions.is_empty() {
+        return Ok(None);
+    }
     if transactions.len() == 1 {
         // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-        return Ok(transactions[0].get_id().get());
+        return Ok(Some(transactions[0].get_id().get()));
     }
     let hashes: Vec<H256> = transactions.iter().map(|tx| tx.get_id().get()).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
-    Ok(t.root())
+    Ok(Some(t.root()))
 }
 
 pub fn calculate_witness_merkle_root(
     transactions: &[Transaction],
-) -> Result<H256, merkle::MerkleTreeFormError> {
+) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
+    if transactions.is_empty() {
+        return Ok(None);
+    }
     // TODO: provide implementation based on real serialization instead of get_id()
     if transactions.len() == 1 {
         // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-        return Ok(transactions[0].get_id().get());
+        return Ok(Some(transactions[0].get_id().get()));
     }
     let hashes: Vec<H256> = transactions.iter().map(|tx| tx.get_id().get()).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
-    Ok(t.root())
+    Ok(Some(t.root()))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,13 +119,13 @@ impl Block {
         }
     }
 
-    pub fn get_merkle_root(&self) -> H256 {
+    pub fn get_merkle_root(&self) -> Option<H256> {
         match &self {
             Block::V1(blk) => blk.get_tx_merkle_root(),
         }
     }
 
-    pub fn get_witness_merkle_root(&self) -> H256 {
+    pub fn get_witness_merkle_root(&self) -> Option<H256> {
         match &self {
             Block::V1(blk) => blk.get_witness_merkle_root(),
         }
@@ -160,7 +166,7 @@ impl Idable<Block> for Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::{chain::transaction::Transaction, primitives::merkle::MerkleTreeFormError};
+    use crate::chain::transaction::Transaction;
 
     use super::*;
     use rand::Rng;
@@ -171,8 +177,8 @@ mod tests {
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
+            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
+            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             hash_prev_block: Id::new(&H256::zero()),
             time: rng.gen(),
         };
@@ -182,28 +188,29 @@ mod tests {
             transactions: Vec::new(),
         });
         let _res = calculate_tx_merkle_root(block.get_transactions());
-        assert_eq!(_res.unwrap_err(), MerkleTreeFormError::TooSmall(0));
+        assert_eq!(_res.unwrap(), None);
     }
 
     #[test]
-    fn block_merkleroot_only_coinbase() {
+    fn block_merkleroot_only_one_transaction() {
         let mut rng = rand::thread_rng();
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
-            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
-            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
+            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
+            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             hash_prev_block: Id::new(&H256::zero()),
             time: rng.gen(),
         };
 
-        let coinbase = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
+        let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
         let block = Block::V1(BlockV1 {
             header,
-            transactions: vec![coinbase.clone()],
+            transactions: vec![one_transaction.clone()],
         });
         let res = calculate_tx_merkle_root(block.get_transactions()).unwrap();
-        assert_eq!(res, coinbase.get_id().get());
+        let res = res.unwrap();
+        assert_eq!(res, one_transaction.get_id().get());
     }
 }
