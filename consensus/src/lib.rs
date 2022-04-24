@@ -91,7 +91,7 @@ pub enum BlockError {
     InputAdditionError,
     #[error("Output addition error")]
     OutputAdditionError,
-    #[error("Attempt to print money")]
+    #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Duplicate input in transaction")]
     DuplicateInputInTransaction(Id<Transaction>),
