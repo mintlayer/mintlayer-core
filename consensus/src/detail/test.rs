@@ -384,79 +384,6 @@ fn test_orphans_chains() {
     });
 }
 
-// TODO: reenable this test
-// #[test]
-// #[allow(clippy::eq_op)]
-// fn test_spend_inputs_simple() {
-//     common::concurrency::model(|| {
-//         let config = create_mainnet();
-//         let storage = Store::new_empty().unwrap();
-//         let mut consensus = Consensus::new(config.clone(), storage).unwrap();
-
-//         // process the genesis block
-//         let result =
-//             consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
-//         assert!(result.is_ok());
-//         assert_eq!(
-//             consensus
-//                 .blockchain_storage
-//                 .get_best_block_id()
-//                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-//             Some(config.genesis_block().get_id())
-//         );
-
-//         // Create a new block
-//         let block = produce_test_block(&config, config.genesis_block(), false);
-
-//         // Check that all tx not in the main chain
-//         for tx in block.transactions() {
-//             assert!(
-//                 consensus
-//                     .blockchain_storage
-//                     .get_mainchain_tx_index(&tx.get_id())
-//                     .expect(ERR_STORAGE_FAIL)
-//                     == None
-//             );
-//         }
-
-//         // Process the second block
-//         let new_id = Some(block.get_id());
-//         assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
-//         assert_eq!(
-//             consensus
-//                 .blockchain_storage
-//                 .get_best_block_id()
-//                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-//             new_id
-//         );
-
-//         // Check that tx inputs in the main chain and not spend
-//         let mut cached_inputs = CachedInputs::new();
-//         for tx in block.transactions() {
-//             let tx_index = match cached_inputs.entry(tx.get_id()) {
-//                 Entry::Occupied(entry) => entry.into_mut(),
-//                 Entry::Vacant(entry) => entry.insert(
-//                     consensus
-//                         .blockchain_storage
-//                         .get_mainchain_tx_index(&tx.get_id())
-//                         .expect("Not found mainchain tx index")
-//                         .expect(ERR_STORAGE_FAIL),
-//                 ),
-//             };
-
-//             for input in tx.get_inputs() {
-//                 if tx_index
-//                     .get_spent_state(input.get_outpoint().get_output_index())
-//                     .expect("Unable to get spent state")
-//                     != OutputSpentState::Unspent
-//                 {
-//                     panic!("Tx input can't be spent");
-//                 }
-//             }
-//         }
-//     });
-// }
-
 fn random_witness() -> Vec<u8> {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
@@ -1231,11 +1158,95 @@ fn test_very_long_reorgs() {
     });
 }
 
-// TODO: Not ready tests for this PR:
-// * Empty block checks
-// * Check chains with skips and forks
-// * Check blocks at heights
-// * Fail cases for block processing
-// * Tests multichains reorgs
-// * Tests different sorts of attacks - double spend \ Sybil \ etc
-// To be expanded
+#[test]
+fn test_empty_consensus() {
+    common::concurrency::model(|| {
+        // No genesis
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let consensus = Consensus::new_no_genesis(config, storage).unwrap();
+        assert!(consensus.get_best_block_id().unwrap().is_none());
+        assert!(consensus
+            .blockchain_storage
+            .get_block(consensus.chain_config.genesis_block().get_id())
+            .unwrap()
+            .is_none());
+        // Let's add genesis
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let consensus = Consensus::new(config, storage).unwrap();
+        assert!(consensus.get_best_block_id().unwrap().is_some());
+        assert!(
+            consensus.get_best_block_id().unwrap().unwrap()
+                == consensus.chain_config.genesis_block().get_id()
+        );
+        assert!(consensus
+            .blockchain_storage
+            .get_block(consensus.chain_config.genesis_block().get_id())
+            .unwrap()
+            .is_some());
+        assert!(
+            consensus
+                .blockchain_storage
+                .get_block(consensus.chain_config.genesis_block().get_id())
+                .unwrap()
+                .unwrap()
+                .get_id()
+                == consensus.chain_config.genesis_block().get_id()
+        );
+    });
+}
+
+#[test]
+#[allow(clippy::eq_op)]
+fn test_spend_inputs_simple() {
+    common::concurrency::model(|| {
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
+
+        // Create a new block
+        let block = produce_test_block(&config, config.genesis_block(), false);
+
+        // Check that all tx not in the main chain
+        for tx in block.transactions() {
+            assert!(
+                consensus
+                    .blockchain_storage
+                    .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
+                    .expect(ERR_STORAGE_FAIL)
+                    == None
+            );
+        }
+
+        // Process the second block
+        let new_id = Some(block.get_id());
+        assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+        assert_eq!(
+            consensus
+                .blockchain_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            new_id
+        );
+
+        // Check that tx inputs in the main chain and not spend
+        for tx in block.transactions() {
+            let tx_index = consensus
+                .blockchain_storage
+                .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
+                .expect("Not found mainchain tx index")
+                .expect(ERR_STORAGE_FAIL);
+
+            for input in tx.get_inputs() {
+                if tx_index
+                    .get_spent_state(input.get_outpoint().get_output_index())
+                    .expect("Unable to get spent state")
+                    != OutputSpentState::Unspent
+                {
+                    panic!("Tx input can't be spent");
+                }
+            }
+        }
+    });
+}
