@@ -615,8 +615,8 @@ mod tests {
         };
         let encoded_size: u32 = tx.encode().len() as u32;
 
-        let mut buf = vec![0u8; 64];
-        let (server_res, peer_res) = tokio::join!(socket2.stream.read(&mut buf), socket1.send(&tx));
+        let mut buf = vec![0u8; encoded_size.encoded_size()];
+        let (server_res, peer_res) = tokio::join!(socket2.stream.read_exact(&mut buf), socket1.send(&tx));
 
         assert!(peer_res.is_ok());
         assert!(server_res.is_ok());
