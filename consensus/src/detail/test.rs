@@ -94,7 +94,7 @@ fn generate_random_invalid_block() -> Block {
 fn setup_consensus() -> Consensus {
     let config = create_mainnet();
     let storage = Store::new_empty().unwrap();
-    Consensus::new(config.clone(), storage).unwrap()
+    Consensus::new(config, storage).unwrap()
 }
 
 fn create_utxo_data(
