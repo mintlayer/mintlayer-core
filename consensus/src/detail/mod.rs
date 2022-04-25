@@ -176,8 +176,7 @@ impl Consensus {
         let consensus_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
         let block = consensus_ref.db_tx.get_block(id).map_err(BlockError::from)?;
-        let block = block.ok_or(BlockError::NotFound)?;
-        Ok(Some(block))
+        Ok(block)
     }
 }
 
