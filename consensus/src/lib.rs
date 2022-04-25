@@ -2,7 +2,7 @@ mod detail;
 
 use common::{
     chain::{block::Block, ChainConfig},
-    primitives::Id,
+    primitives::{BlockHeight, Id},
 };
 pub use detail::BlockError;
 use detail::{BlockSource, Consensus};
@@ -40,6 +40,23 @@ impl ConsensusInterface {
             .map_err(ConsensusError::FailedToReadProperty)?
             .expect("There always must be a best block"))
     }
+
+    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ConsensusError> {
+        Ok(self
+            .consensus
+            .get_block_height_in_main_chain(block_id)
+            .map_err(ConsensusError::FailedToReadProperty)?
+            .is_some())
+    }
+
+    pub fn get_block_height_in_main_chain(
+        &self,
+        block_id: &Id<Block>,
+    ) -> Result<Option<BlockHeight>, ConsensusError> {
+        self.consensus
+            .get_block_height_in_main_chain(block_id)
+            .map_err(ConsensusError::FailedToReadProperty)
+    }
 }
 
 pub fn make_consensus(
@@ -50,3 +67,6 @@ pub fn make_consensus(
     let cons_interface = ConsensusInterface { consensus: cons };
     Ok(cons_interface)
 }
+
+#[cfg(test)]
+mod test;

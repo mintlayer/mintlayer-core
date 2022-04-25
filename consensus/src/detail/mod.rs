@@ -145,6 +145,21 @@ impl Consensus {
         let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
         Ok(best_block_id)
     }
+
+    pub fn get_block_height_in_main_chain(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockHeight>, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        // Reasonable reduce amount of calls to DB
+        let block_index = consensus_ref.db_tx.get_block_index(id).map_err(BlockError::from)?;
+        let block_index = block_index.ok_or(BlockError::NotFound)?;
+        if block_index.get_block_id() == id {
+            Ok(Some(block_index.get_block_height()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 struct ConsensusRef<'a> {
