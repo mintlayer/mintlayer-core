@@ -1,5 +1,7 @@
 mod detail;
 
+pub mod rpc;
+
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
