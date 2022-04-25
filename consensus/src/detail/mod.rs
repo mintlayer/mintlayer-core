@@ -82,14 +82,24 @@ impl Consensus {
     pub fn new(
         chain_config: ChainConfig,
         blockchain_storage: blockchain_storage::Store,
-    ) -> Result<Self, BlockError> {
+    ) -> Result<Self, crate::ConsensusError> {
+        use crate::ConsensusError;
+
         let mut cons = Self::new_no_genesis(chain_config, blockchain_storage)?;
-        let best_block_id = cons.get_best_block_id()?;
+        let best_block_id = cons.get_best_block_id().map_err(|e| {
+            ConsensusError::FailedToInitializeConsensus(format!("Database read error: {:?}", e))
+        })?;
         if best_block_id.is_none() {
             cons.process_block(
                 cons.chain_config.genesis_block().clone(),
                 BlockSource::Local,
-            )?;
+            )
+            .map_err(|e| {
+                ConsensusError::FailedToInitializeConsensus(format!(
+                    "Genesis block processing error: {:?}",
+                    e
+                ))
+            })?;
         }
         Ok(cons)
     }
@@ -97,7 +107,7 @@ impl Consensus {
     fn new_no_genesis(
         chain_config: ChainConfig,
         blockchain_storage: blockchain_storage::Store,
-    ) -> Result<Self, BlockError> {
+    ) -> Result<Self, crate::ConsensusError> {
         let cons = Self {
             chain_config,
             blockchain_storage,

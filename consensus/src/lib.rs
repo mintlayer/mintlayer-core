@@ -11,9 +11,23 @@ pub struct ConsensusInterface {
     consensus: detail::Consensus,
 }
 
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+pub enum ConsensusError {
+    #[error("Initialization error")]
+    FailedToInitializeConsensus(String),
+    #[error("Block processing failed: `{0}`")]
+    ProcessBlockError(BlockError),
+}
+
 impl ConsensusInterface {
-    pub fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), BlockError> {
-        self.consensus.process_block(block, source)?;
+    pub fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<(), ConsensusError> {
+        self.consensus
+            .process_block(block, source)
+            .map_err(|e| ConsensusError::ProcessBlockError(e))?;
         Ok(())
     }
 
@@ -25,7 +39,7 @@ impl ConsensusInterface {
 pub fn make_consensus(
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store,
-) -> Result<ConsensusInterface, Box<dyn std::error::Error>> {
+) -> Result<ConsensusInterface, ConsensusError> {
     let cons = Consensus::new(chain_config, blockchain_storage)?;
     let cons_interface = ConsensusInterface { consensus: cons };
     Ok(cons_interface)
