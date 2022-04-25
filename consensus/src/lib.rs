@@ -1545,11 +1545,7 @@ mod tests {
             }
         }
 
-        pub fn create_chain(
-            &mut self,
-            parent_block_id: &Id<Block>,
-            count_blocks: usize,
-        ) {
+        pub fn create_chain(&mut self, parent_block_id: &Id<Block>, count_blocks: usize) {
             let mut block = self
                 .consensus
                 .blockchain_storage
@@ -1605,6 +1601,21 @@ mod tests {
             }
         }
 
+        fn check_block_at_height(
+            &self,
+            block_height: BlockHeight,
+            expected_block_id: &Option<Id<Block>>,
+        ) {
+            if expected_block_id.is_some() {
+                let real_next_block_id = self
+                    .consensus
+                    .blockchain_storage
+                    .get_block_id_by_height(&block_height)
+                    .unwrap();
+                assert_eq!(&real_next_block_id, expected_block_id);
+            }
+        }
+
         pub fn test_block(
             &self,
             block_id: &Id<Block>,
@@ -1628,20 +1639,20 @@ mod tests {
 
             let block_index = self.get_block_index(block_id);
             assert_eq!(block_index.get_prev_block_id(), prev_block_id);
-            assert_eq!(block_index.get_next_block_id(), next_block_id);
             assert_eq!(block_index.get_block_height(), BlockHeight::new(height));
+            self.check_block_at_height(block_index.get_block_height().next_height(), next_block_id);
         }
 
         pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
-            let block_index = self.get_block_index(block_id);
-            if let Some(prev_block_id) = block_index.get_prev_block_id() {
-                if self.get_block_index(prev_block_id).get_next_block_id()
-                    == &Some(block_id.clone())
-                {
-                    return true;
-                }
+            let block_index =
+                self.consensus.blockchain_storage.get_block_index(block_id).unwrap().unwrap();
+            let height = block_index.get_block_height();
+            let id_at_height =
+                self.consensus.blockchain_storage.get_block_id_by_height(&height).unwrap();
+            match id_at_height {
+                Some(id) => id == *block_index.get_block_id(),
+                None => false,
             }
-            false
         }
     }
 
