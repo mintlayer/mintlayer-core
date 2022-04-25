@@ -94,7 +94,7 @@ fn generate_random_invalid_block() -> Block {
 fn setup_consensus() -> Consensus {
     let config = create_mainnet();
     let storage = Store::new_empty().unwrap();
-    let mut consensus = Consensus::new(config.clone(), storage);
+    let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
     // Process genesis
     let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
@@ -211,7 +211,7 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer(0);
@@ -227,7 +227,7 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -256,7 +256,7 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -318,7 +318,7 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
         // process the genesis block
         let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
@@ -382,7 +382,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config.clone(), storage);
+        let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
         // Process the orphan block
         let new_block = config.genesis_block().clone();
@@ -403,7 +403,7 @@ fn test_orphans_chains() {
 //     common::concurrency::model(|| {
 //         let config = create_mainnet();
 //         let storage = Store::new_empty().unwrap();
-//         let mut consensus = Consensus::new(config.clone(), storage);
+//         let mut consensus = Consensus::new(config.clone(), storage).unwrap();
 
 //         // process the genesis block
 //         let result =

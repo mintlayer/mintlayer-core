@@ -79,12 +79,31 @@ impl Consensus {
         }
     }
 
-    pub fn new(chain_config: ChainConfig, blockchain_storage: blockchain_storage::Store) -> Self {
-        Self {
+    pub fn new(
+        chain_config: ChainConfig,
+        blockchain_storage: blockchain_storage::Store,
+    ) -> Result<Self, BlockError> {
+        let mut cons = Self::new_no_genesis(chain_config, blockchain_storage)?;
+        let best_block_id = cons.get_best_block_id()?;
+        if best_block_id.is_none() {
+            cons.process_block(
+                cons.chain_config.genesis_block().clone(),
+                BlockSource::Local,
+            )?;
+        }
+        Ok(cons)
+    }
+
+    fn new_no_genesis(
+        chain_config: ChainConfig,
+        blockchain_storage: blockchain_storage::Store,
+    ) -> Result<Self, BlockError> {
+        let cons = Self {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
-        }
+        };
+        Ok(cons)
     }
 
     pub fn process_block(
@@ -110,11 +129,11 @@ impl Consensus {
         Ok(result)
     }
 
-    pub fn get_best_block_id(&self) -> Result<Id<Block>, BlockError> {
+    pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
         let consensus_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
         let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
-        Ok(best_block_id.expect("There always must be a best block"))
+        Ok(best_block_id)
     }
 }
 
