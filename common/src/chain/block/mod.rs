@@ -16,9 +16,9 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
-use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::H256;
+use crate::primitives::{id, merkle};
 use crate::primitives::{Id, Idable};
 mod block_v1;
 
@@ -100,7 +100,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block: hash_prev_block.into(),
+            hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -151,16 +151,16 @@ impl Block {
 
     pub fn get_prev_block_id(&self) -> Id<Block> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().clone().into(),
+            Block::V1(blk) => blk.get_prev_block_id().clone(),
         }
     }
 }
 
 impl Idable<Block> for Block {
     fn get_id(&self) -> Id<Self> {
-        match self {
-            Self::V1(block) => Id::new(&block.get_id().get()),
-        }
+        // Block ID is just the hash of its header. The transaction list is committed to by the
+        // inclusion of transaction Merkle root in the header. We also include the version number.
+        Id::new(&id::hash_encoded(self.get_header()))
     }
 }
 
@@ -169,11 +169,11 @@ mod tests {
     use crate::chain::transaction::Transaction;
 
     use super::*;
-    use rand::Rng;
+    use crypto::random::{make_pseudo_rng, Rng};
 
     #[test]
     fn empty_block_merkleroot() {
-        let mut rng = rand::thread_rng();
+        let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn block_merkleroot_only_one_transaction() {
-        let mut rng = rand::thread_rng();
+        let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
