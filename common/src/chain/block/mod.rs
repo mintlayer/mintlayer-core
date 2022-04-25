@@ -169,11 +169,11 @@ mod tests {
     use crate::chain::transaction::Transaction;
 
     use super::*;
-    use rand::Rng;
+    use crypto::random::{make_pseudo_rng, Rng};
 
     #[test]
     fn empty_block_merkleroot() {
-        let mut rng = rand::thread_rng();
+        let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn block_merkleroot_only_one_transaction() {
-        let mut rng = rand::thread_rng();
+        let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
             consensus_data: ConsensusData::None,
