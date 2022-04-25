@@ -37,7 +37,7 @@ impl ConsensusInterface {
         Ok(self
             .consensus
             .get_best_block_id()
-            .map_err(|e| ConsensusError::FailedToReadProperty(e))?
+            .map_err(ConsensusError::FailedToReadProperty)?
             .expect("There always must be a best block"))
     }
 }
