@@ -1882,7 +1882,7 @@ mod tests {
                 double_spend_block.get_id(),
                 double_spend_block.transactions(),
             );
-            assert!(!btf.add_special_block(double_spend_block).is_err());
+            assert!(btf.add_special_block(double_spend_block).is_ok());
             btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
             btf.debug_print_tx(btf.blocks[12].get_id(), btf.blocks[12].transactions());
         });
