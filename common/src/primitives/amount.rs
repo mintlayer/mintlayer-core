@@ -227,11 +227,12 @@ impl std::ops::Shr<u32> for Amount {
     }
 }
 
-impl Sum for Amount {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Amount::from_atoms(0), |a, b| {
-            (a + b).expect("Overflow operation")
-        })
+impl Sum<Amount> for Option<Amount> {
+    fn sum<I>(mut iter: I) -> Self
+    where
+        I: Iterator<Item = Amount>,
+    {
+        iter.try_fold(Amount::from_atoms(0), std::ops::Add::add)
     }
 }
 
