@@ -27,7 +27,7 @@ impl ConsensusInterface {
     ) -> Result<(), ConsensusError> {
         self.consensus
             .process_block(block, source)
-            .map_err(|e| ConsensusError::ProcessBlockError(e))?;
+            .map_err(ConsensusError::ProcessBlockError)?;
         Ok(())
     }
 

@@ -94,19 +94,7 @@ fn generate_random_invalid_block() -> Block {
 fn setup_consensus() -> Consensus {
     let config = create_mainnet();
     let storage = Store::new_empty().unwrap();
-    let mut consensus = Consensus::new(config.clone(), storage).unwrap();
-
-    // Process genesis
-    let result = consensus.process_block(config.genesis_block().clone(), BlockSource::Local);
-    assert!(result.is_ok());
-    assert_eq!(
-        consensus
-            .blockchain_storage
-            .get_best_block_id()
-            .expect(ERR_BEST_BLOCK_NOT_FOUND),
-        Some(config.genesis_block().get_id())
-    );
-    consensus
+    Consensus::new(config.clone(), storage).unwrap()
 }
 
 fn create_utxo_data(
