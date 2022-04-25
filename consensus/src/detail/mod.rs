@@ -160,6 +160,25 @@ impl Consensus {
             Ok(None)
         }
     }
+
+    pub fn get_block_id_from_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<Id<Block>>, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        // Reasonable reduce amount of calls to DB
+        let block_id =
+            consensus_ref.db_tx.get_block_id_by_height(height).map_err(BlockError::from)?;
+        Ok(block_id)
+    }
+
+    pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        // Reasonable reduce amount of calls to DB
+        let block = consensus_ref.db_tx.get_block(id).map_err(BlockError::from)?;
+        let block = block.ok_or(BlockError::NotFound)?;
+        Ok(Some(block))
+    }
 }
 
 struct ConsensusRef<'a> {

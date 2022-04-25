@@ -57,6 +57,19 @@ impl ConsensusInterface {
             .get_block_height_in_main_chain(block_id)
             .map_err(ConsensusError::FailedToReadProperty)
     }
+
+    pub fn get_block_id_from_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<Id<Block>>, ConsensusError> {
+        self.consensus
+            .get_block_id_from_height(height)
+            .map_err(ConsensusError::FailedToReadProperty)
+    }
+
+    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError> {
+        self.consensus.get_block(block_id).map_err(ConsensusError::FailedToReadProperty)
+    }
 }
 
 pub fn make_consensus(
