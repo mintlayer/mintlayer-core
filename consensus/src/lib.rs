@@ -17,7 +17,7 @@ pub enum ConsensusError {
     FailedToInitializeConsensus(String),
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(BlockError),
-    #[error("Property read error")]
+    #[error("Property read error: `{0}`")]
     FailedToReadProperty(BlockError),
 }
 
