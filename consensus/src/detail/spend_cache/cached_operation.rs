@@ -1,6 +1,6 @@
 use common::chain::{Spender, TxMainChainIndex};
 
-use crate::BlockError;
+use crate::detail::BlockError;
 
 pub enum CachedInputsOperation {
     Write(TxMainChainIndex),

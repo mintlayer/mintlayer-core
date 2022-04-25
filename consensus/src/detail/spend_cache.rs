@@ -9,7 +9,7 @@ use common::{
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
-use crate::{BlockError, TxRw};
+use crate::detail::{BlockError, TxRw};
 
 mod cached_operation;
 use cached_operation::CachedInputsOperation;

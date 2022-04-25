@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use crate::pow::helpers::{
+use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
-use crate::pow::temp::BlockIndex;
-use crate::pow::{Error, PoW};
+use crate::detail::pow::temp::BlockIndex;
+use crate::detail::pow::{Error, PoW};
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::TxOutput;
@@ -131,7 +131,7 @@ pub fn mine(
 
 #[cfg(test)]
 mod tests {
-    use crate::pow::work::check_proof_of_work;
+    use crate::detail::pow::work::check_proof_of_work;
     use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
     use std::str::FromStr;

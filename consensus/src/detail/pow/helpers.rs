@@ -1,5 +1,5 @@
-use crate::pow::temp::BlockIndex;
-use crate::pow::Error;
+use crate::detail::pow::temp::BlockIndex;
+use crate::detail::pow::Error;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
 
@@ -110,7 +110,7 @@ pub mod special_rules {
 
 #[cfg(test)]
 mod tests {
-    use crate::pow::helpers::due_for_retarget;
+    use crate::detail::pow::helpers::due_for_retarget;
     use common::primitives::BlockHeight;
 
     #[test]
