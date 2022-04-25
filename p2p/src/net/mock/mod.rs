@@ -236,43 +236,23 @@ mod tests {
 
     #[tokio::test]
     async fn test_new() {
-        let srv_ipv4 = MockService::start(
-            "127.0.0.1:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
+        let addr1 = test_utils::make_address("127.0.0.1:");
+        let srv_ipv4 =
+            MockService::start(addr1, &[], &[], std::time::Duration::from_secs(10)).await;
         assert!(srv_ipv4.is_ok());
 
         // address already in use
-        let err = MockService::start(
-            "127.0.0.1:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
+        let err = MockService::start(addr1, &[], &[], std::time::Duration::from_secs(10)).await;
         assert!(err.is_err());
 
         // bind to IPv6 localhost
-        let srv_ipv6 = MockService::start(
-            "[::1]:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
+        let addr2 = test_utils::make_address("[::1]:");
+        let srv_ipv6 =
+            MockService::start(addr2, &[], &[], std::time::Duration::from_secs(10)).await;
         assert!(srv_ipv6.is_ok());
 
         // address already in use
-        let s_ipv6 = MockService::start(
-            "[::1]:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
+        let s_ipv6 = MockService::start(addr2, &[], &[], std::time::Duration::from_secs(10)).await;
         assert!(s_ipv6.is_err());
     }
 
@@ -281,7 +261,7 @@ mod tests {
         use tokio::net::TcpListener;
 
         // create `TcpListener`, spawn a task, and start accepting connections
-        let addr: SocketAddr = "127.0.0.1:6666".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let server = TcpListener::bind(addr).await.unwrap();
 
         tokio::spawn(async move {
@@ -291,18 +271,13 @@ mod tests {
         });
 
         // create service that is used for testing `connect()`
-        let srv = MockService::start(
-            "127.0.0.1:7777".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
+        let addr2: SocketAddr = test_utils::make_address("[::1]:");
+        let srv = MockService::start(addr2, &[], &[], std::time::Duration::from_secs(10)).await;
         assert!(srv.is_ok());
         let (mut srv, _) = srv.unwrap();
 
         // try to connect to self, should fail
-        let res = srv.connect("127.0.0.1:7777".parse().unwrap()).await;
+        let res = srv.connect(addr2).await;
         println!("{:?}", res);
         assert!(res.is_err());
 
@@ -312,22 +287,17 @@ mod tests {
         assert!(res.is_err());
 
         // try to connect to the `TcpListener` that was spawned above, should succeeed
-        let res = srv.connect("127.0.0.1:6666".parse().unwrap()).await;
+        let res = srv.connect(addr).await;
         assert!(res.is_ok());
     }
 
     #[tokio::test]
     async fn test_accept() {
         // create service that is used for testing `accept()`
-        let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let (mut srv, _) = MockService::start(
-            "[::1]:9999".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await
-        .unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut srv, _) = MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
+            .await
+            .unwrap();
 
         let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
         assert!(acc.is_ok());
@@ -339,7 +309,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_send() {
-        let addr: SocketAddr = "[::1]:11112".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let (mut server, _) =
             MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
                 .await
@@ -389,7 +359,7 @@ mod tests {
     #[tokio::test]
     async fn test_peer_recv() {
         // create a `MockService`, connect to it with a `TcpStream` and exchange data
-        let addr: SocketAddr = "[::1]:11113".parse().unwrap();
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
         let (mut server, _) =
             MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
                 .await

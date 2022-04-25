@@ -478,7 +478,7 @@ mod tests {
     #[tokio::test]
     async fn test_connect_new() {
         let service = Libp2pService::start(
-            "/ip6/::1/tcp/8900".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
@@ -491,22 +491,11 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_connect_new_addrinuse() {
-        let service = Libp2pService::start(
-            "/ip6/::1/tcp/8901".parse().unwrap(),
-            &[],
-            &[],
-            Duration::from_secs(10),
-        )
-        .await;
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let service = Libp2pService::start(addr.clone(), &[], &[], Duration::from_secs(10)).await;
         assert!(service.is_ok());
 
-        let service = Libp2pService::start(
-            "/ip6/::1/tcp/8901".parse().unwrap(),
-            &[],
-            &[],
-            Duration::from_secs(10),
-        )
-        .await;
+        let service = Libp2pService::start(addr, &[], &[], Duration::from_secs(10)).await;
 
         match service {
             Err(e) => {
@@ -521,14 +510,14 @@ mod tests {
     #[tokio::test]
     async fn test_connect_accept() {
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8902".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8903".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
@@ -552,15 +541,16 @@ mod tests {
     // and verify that the connection fails
     #[tokio::test]
     async fn test_connect_peer_id_missing() {
-        let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (mut service, _) = Libp2pService::start(
-            "/ip6/::1/tcp/8905".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await
         .unwrap();
+
         match service.connect(addr).await {
             Ok(_) => panic!("connect succeeded without peer id"),
             Err(e) => {
@@ -580,14 +570,14 @@ mod tests {
     #[tokio::test]
     async fn test_peer_send() {
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8905".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8906".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
@@ -616,7 +606,8 @@ mod tests {
         let encoded_size: u32 = tx.encode().len() as u32;
 
         let mut buf = vec![0u8; encoded_size.encoded_size()];
-        let (server_res, peer_res) = tokio::join!(socket2.stream.read_exact(&mut buf), socket1.send(&tx));
+        let (server_res, peer_res) =
+            tokio::join!(socket2.stream.read_exact(&mut buf), socket1.send(&tx));
 
         assert!(peer_res.is_ok());
         assert!(server_res.is_ok());
@@ -635,14 +626,14 @@ mod tests {
     #[tokio::test]
     async fn test_peer_recv() {
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8907".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8908".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
@@ -682,14 +673,14 @@ mod tests {
     #[tokio::test]
     async fn test_peer_buffered_recv() {
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8909".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8910".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
@@ -731,14 +722,14 @@ mod tests {
     #[tokio::test]
     async fn test_too_large_message_size() {
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8911".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8912".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Duration::from_secs(10),
