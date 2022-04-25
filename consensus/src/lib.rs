@@ -17,6 +17,8 @@ pub enum ConsensusError {
     FailedToInitializeConsensus(String),
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(BlockError),
+    #[error("Property read error")]
+    FailedToReadProperty(BlockError),
 }
 
 impl ConsensusInterface {
@@ -31,8 +33,12 @@ impl ConsensusInterface {
         Ok(())
     }
 
-    pub fn get_best_block_id(&self) -> Result<Id<Block>, BlockError> {
-        Ok(self.consensus.get_best_block_id()?.expect("There always must be a best block"))
+    pub fn get_best_block_id(&self) -> Result<Id<Block>, ConsensusError> {
+        Ok(self
+            .consensus
+            .get_best_block_id()
+            .map_err(|e| ConsensusError::FailedToReadProperty(e))?
+            .expect("There always must be a best block"))
     }
 }
 
