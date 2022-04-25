@@ -100,7 +100,7 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data,
-            hash_prev_block: hash_prev_block.into(),
+            hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -151,7 +151,7 @@ impl Block {
 
     pub fn get_prev_block_id(&self) -> Id<Block> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().clone().into(),
+            Block::V1(blk) => blk.get_prev_block_id().clone(),
         }
     }
 }
