@@ -26,7 +26,7 @@ impl CachedInputsOperation {
     }
 
     pub fn unspend(&mut self, output_index: u32) -> Result<(), BlockError> {
-        // spend the output
+        // unspend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
                 tx_index.unspend(output_index).map_err(BlockError::from)?
