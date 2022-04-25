@@ -98,7 +98,6 @@ pub enum TxMainChainIndexError {
     InvalidOutputCount,
     SerializationInvariantError(Id<Block>),
     InvalidTxNumberForBlock(usize, Id<Block>),
-    InternalNumTypeConversionError(Id<Block>),
 }
 
 /// Assuming a transaction is in the mainchain, its index contains two things:
@@ -127,7 +126,7 @@ pub fn calculate_tx_index_from_block(
         .find_map(|(window_num, enc_data)| (enc_data == enc_tx).then(|| window_num))
         .ok_or_else(|| TxMainChainIndexError::SerializationInvariantError(block.get_id()))?
         .try_into()
-        .map_err(|_| TxMainChainIndexError::InternalNumTypeConversionError(block.get_id()))?;
+        .expect("Number conversion from usize to u32 should not fail here (1)");
 
     let tx_position = TxMainChainPosition::new(
         block.get_id(),
@@ -135,7 +134,7 @@ pub fn calculate_tx_index_from_block(
         enc_tx
             .len()
             .try_into()
-            .map_err(|_| TxMainChainIndexError::InternalNumTypeConversionError(block.get_id()))?,
+            .expect("Number conversion from usize to u32 should not fail here (2)"),
     );
 
     TxMainChainIndex::new(
@@ -143,7 +142,7 @@ pub fn calculate_tx_index_from_block(
         tx.get_outputs()
             .len()
             .try_into()
-            .map_err(|_| TxMainChainIndexError::InternalNumTypeConversionError(block.get_id()))?,
+            .expect("Number conversion from usize to u32 should not fail here (3)"),
     )
 }
 

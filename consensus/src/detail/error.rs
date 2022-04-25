@@ -95,9 +95,6 @@ impl From<TxMainChainIndexError> for BlockError {
             TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
                 BlockError::TxNumWrongInBlock(tx_num, block_id)
             }
-            TxMainChainIndexError::InternalNumTypeConversionError(block_id) => {
-                BlockError::InternalNumTypeConversionError(block_id)
-            }
         }
     }
 }
