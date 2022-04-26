@@ -191,6 +191,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,3 +314,4 @@ mod tests {
         // TODO: is there any sensible way to make `accept()` fail?
     }
 }
+*/

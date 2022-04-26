@@ -60,6 +60,7 @@ pub struct Message {
     pub msg: MessageType,
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,3 +159,4 @@ mod tests {
         }
     }
 }
+*/

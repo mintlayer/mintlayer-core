@@ -462,6 +462,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -775,3 +776,4 @@ mod tests {
         assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }
+*/
