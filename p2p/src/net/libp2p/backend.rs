@@ -29,6 +29,7 @@ use libp2p::{
         error::GossipsubHandlerError, Gossipsub, GossipsubEvent, GossipsubMessage,
         IdentTopic as Topic, MessageAuthenticity, MessageId, ValidationMode,
     },
+    identify::{IdentifyEvent, IdentifyInfo},
     mdns::MdnsEvent,
     ping,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
@@ -39,6 +40,22 @@ use logging::log;
 use serialization::Decode;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot};
+
+#[derive(Debug)]
+enum PendingState {
+    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
+    Dialed {
+        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+    },
+
+    /// Connection established for outbound connection
+    OutboundAccepted {
+        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+    },
+
+    /// Connection established for inbound connection
+    InboundAccepted { addr: Multiaddr },
+}
 
 pub struct Backend {
     /// Created libp2p swarm object
@@ -55,6 +72,9 @@ pub struct Backend {
 
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
+
+    // TODO:
+    pending: HashMap<PeerId, PendingState>,
 
     /// Hashmap of pending inbound connections
     conns: HashMap<PeerId, Multiaddr>,
@@ -87,6 +107,7 @@ impl Backend {
             conn_tx,
             gossip_tx,
             dials: HashMap::new(),
+            pending: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
             active_gossipsubs: HashMap::new(),
@@ -94,6 +115,7 @@ impl Backend {
         }
     }
 
+    // TODO: into_fatal()???
     pub async fn run(&mut self) -> error::Result<()> {
         log::debug!("starting event loop");
 
@@ -124,6 +146,7 @@ impl Backend {
         self.conn_tx.send(event_fn(peers)).await.map_err(|_| P2pError::ChannelClosed)
     }
 
+    // TODO: return errors from here so all state transitions can be tested
     /// Handle event received from the swarm object
     #[allow(clippy::type_complexity)]
     async fn on_event(
@@ -132,47 +155,55 @@ impl Backend {
             types::ComposedEvent,
             EitherError<
                 EitherError<
-                    EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
-                    GossipsubHandlerError,
+                    EitherError<
+                        EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+                        GossipsubHandlerError,
+                    >,
+                    ping::Failure,
                 >,
-                ping::Failure,
+                std::io::Error,
             >,
         >,
     ) -> error::Result<()> {
         // TODO: separate this code into protocol-specific handlers!
+        // TODO: error codes?
         match event {
-            SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
-                StreamingEvent::StreamOpened {
-                    id,
-                    peer_id,
-                    stream,
-                },
-            )) => {
-                log::trace!(
-                    "stream opened with remote, id {:?}, peer id {:?}",
-                    id,
-                    peer_id
-                );
-
-                self.streams
-                    .remove(&id)
-                    .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
-                    .send(Ok(stream))
-                    .map_err(|_| P2pError::ChannelClosed)
-            }
+            // SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
+            //     StreamingEvent::StreamOpened {
+            //         id,
+            //         peer_id,
+            //         stream,
+            //     },
+            // )) => {
+            //     log::trace!(
+            //         "stream opened with remote, id {:?}, peer id {:?}",
+            //         id,
+            //         peer_id
+            //     );
+            //     self.streams
+            //         .remove(&id)
+            //         .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
+            //         .send(Ok(stream))
+            //         .map_err(|_| P2pError::ChannelClosed)
+            // }
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => match endpoint {
                 ConnectedPoint::Dialer { .. } => {
                     log::trace!("connection established (dialer), peer id {:?}", peer_id);
 
-                    self.dials
-                        .remove(&peer_id)
-                        .ok_or_else(|| {
-                            P2pError::Unknown("Pending connection does not exist".to_string())
-                        })?
-                        .send(Ok(()))
-                        .map_err(|_| P2pError::ChannelClosed)
+                    match self.pending.remove(&peer_id) {
+                        Some(PendingState::Dialed { tx }) => {
+                            self.pending.insert(peer_id, PendingState::OutboundAccepted { tx });
+                        }
+                        Some(state) => log::error!(
+                            "connection state is invalid. Expected `Dialed`, got {:?}",
+                            state
+                        ),
+                        None => log::error!("peer {:?} does not exist", peer_id),
+                    }
+
+                    Ok(())
                 }
                 ConnectedPoint::Listener {
                     local_addr: _,
@@ -180,12 +211,26 @@ impl Backend {
                 } => {
                     log::trace!("connection established (listener), peer id {:?}", peer_id);
 
-                    self.conns.insert(peer_id, send_back_addr);
+                    match self.pending.remove(&peer_id) {
+                        Some(state) => {
+                            // TODO: is this an actual error?
+                            log::error!("peer {:?} already has active connection!", peer_id);
+                        }
+                        None => {
+                            self.pending.insert(
+                                peer_id,
+                                PendingState::InboundAccepted {
+                                    addr: send_back_addr,
+                                },
+                            );
+                        }
+                    }
                     Ok(())
                 }
             },
             SwarmEvent::OutgoingConnectionError { peer_id, error } => {
                 if let Some(peer_id) = peer_id {
+                    // TODO: fix this
                     self.dials
                         .remove(&peer_id)
                         .ok_or_else(|| {
@@ -200,27 +245,26 @@ impl Backend {
                     Ok(())
                 }
             }
-            SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
-                StreamingEvent::NewIncoming {
-                    peer_id, stream, ..
-                },
-            )) => {
-                log::trace!("incoming stream, peer id {:?}", peer_id);
-
-                let addr = self.conns.remove(&peer_id).ok_or_else(|| {
-                    P2pError::Unknown("Pending connection does not exist".to_string())
-                })?;
-                self.conn_tx
-                    .send(types::ConnectivityEvent::ConnectionAccepted {
-                        socket: Box::new(net::libp2p::Libp2pSocket {
-                            id: peer_id,
-                            addr,
-                            stream,
-                        }),
-                    })
-                    .await
-                    .map_err(|_| P2pError::ChannelClosed)
-            }
+            // SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
+            //     StreamingEvent::NewIncoming {
+            //         peer_id, stream, ..
+            //     },
+            // )) => {
+            //     log::trace!("incoming stream, peer id {:?}", peer_id);
+            //     let addr = self.conns.remove(&peer_id).ok_or_else(|| {
+            //         P2pError::Unknown("Pending connection does not exist".to_string())
+            //     })?;
+            //     self.conn_tx
+            //         .send(types::ConnectivityEvent::ConnectionAccepted {
+            //             socket: Box::new(net::libp2p::Libp2pSocket {
+            //                 id: peer_id,
+            //                 addr,
+            //                 stream,
+            //             }),
+            //         })
+            //         .await
+            //         .map_err(|_| P2pError::ChannelClosed)
+            // }
             SwarmEvent::NewListenAddr { address, .. } => {
                 log::trace!("new listen address {:?}", address);
                 Ok(())
@@ -318,6 +362,32 @@ impl Backend {
                 // println!("ping: ping::Failure with {}: {}", peer.to_base58(), error);
                 Ok(())
             }
+            SwarmEvent::Behaviour(types::ComposedEvent::IdentifyEvent(
+                IdentifyEvent::Received { peer_id, info },
+            )) => match self.pending.remove(&peer_id) {
+                None => {
+                    log::error!("pending connection for peer {:?} does not exist", peer_id);
+                    Ok(())
+                }
+                Some(PendingState::Dialed { tx }) => {
+                    log::error!("received peer info before connection was established");
+                    Ok(())
+                }
+                Some(PendingState::OutboundAccepted { tx }) => {
+                    tx.send(Ok(info)).map_err(|_| P2pError::ChannelClosed)
+                }
+                Some(PendingState::InboundAccepted { addr }) => self
+                    .conn_tx
+                    .send(types::ConnectivityEvent::ConnectionAccepted { peer_info: info })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed),
+            },
+            SwarmEvent::Behaviour(types::ComposedEvent::IdentifyEvent(IdentifyEvent::Error {
+                peer_id,
+                error,
+            })) => {
+                todo!();
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -334,13 +404,14 @@ impl Backend {
                 let res = self.swarm.listen_on(addr).map(|_| ()).map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
-            types::Command::Dial {
+            types::Command::Connect {
                 peer_id,
                 peer_addr,
                 response,
             } => match self.swarm.dial(peer_addr) {
                 Ok(_) => {
-                    self.dials.insert(peer_id, response);
+                    self.pending.insert(peer_id, PendingState::Dialed { tx: response });
+                    // self.dials.insert(peer_id, response);
                     Ok(())
                 }
                 Err(e) => Err(e.into()),
@@ -350,6 +421,7 @@ impl Backend {
                 self.streams.insert(stream_id, response);
                 Ok(())
             }
+            // TODO: rename this
             types::Command::SendMessage {
                 topic,
                 message,
@@ -366,14 +438,17 @@ impl Backend {
                     .map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
+            // TODO: remove
             types::Command::Register { peer, response } => {
                 log::info!("register peer {:?}, NOP", peer);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
+            // TODO: remove
             types::Command::Unregister { peer, response } => {
                 log::info!("unregister peer {:?}, NOP", peer);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
+            // TODO: rename
             types::Command::ReportValidationResult {
                 message_id,
                 source,

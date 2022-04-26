@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 use crate::{error, message};
 use async_trait::async_trait;
+use common::{chain, primitives};
 use serialization::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
@@ -35,6 +36,27 @@ where
 
     /// List of discovered IPv6 addresses
     pub ip6: Vec<Arc<T::Address>>,
+}
+
+#[derive(Debug)]
+pub struct PeerInfo<T>
+where
+    T: NetworkService,
+{
+    /// Unique ID of the peer
+    pub peer_id: T::PeerId,
+
+    /// Peer network
+    pub net: chain::config::ChainType,
+
+    /// Peer software version
+    pub version: primitives::version::SemVer,
+
+    /// User agent of the peer
+    pub agent: Option<String>,
+
+    /// List of supported protocols
+    pub protocols: Vec<T::ProtocolId>,
 }
 
 #[derive(Debug)]
@@ -112,6 +134,9 @@ pub trait NetworkService {
     /// Enum of different peer discovery strategies that the implementation provides
     type Strategy;
 
+    /// Id that identifies a protocol
+    type ProtocolId: Send + Clone;
+
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
 
@@ -133,6 +158,7 @@ pub trait NetworkService {
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[PubSubTopic],
+        config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)>;
 }
@@ -151,7 +177,7 @@ where
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, address: T::Address) -> error::Result<(T::PeerId, T::Socket)>;
+    async fn connect(&mut self, address: T::Address) -> error::Result<PeerInfo<T>>;
 
     /// Return the socket address of the network service provider
     fn local_addr(&self) -> &T::Address;
