@@ -253,16 +253,17 @@ where
                     addr
                 );
 
-                match self.handle.connect(addr).await {
-                    Ok((peer_id, socket)) => {
-                        self.create_peer(peer_id, socket, PeerRole::Outbound);
-                        Ok(())
-                    }
-                    Err(e) => {
-                        log::error!("failed to establish outbound connection: {:?}", e);
-                        Err(e)
-                    }
-                }
+                todo!();
+                // match self.handle.connect(addr).await {
+                //     Ok((peer_id, socket)) => {
+                //         self.create_peer(peer_id, socket, PeerRole::Outbound);
+                //         Ok(())
+                //     }
+                //     Err(e) => {
+                //         log::error!("failed to establish outbound connection: {:?}", e);
+                //         Err(e)
+                //     }
+                // }
             }
         }
     }
@@ -321,9 +322,10 @@ where
             log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
 
             self.discovered.remove(&id);
-            if let Ok((peer_id, socket)) = self.handle.connect((*addr).clone()).await {
-                self.create_peer(peer_id, socket, PeerRole::Outbound)
-            }
+            todo!();
+            // if let Ok((peer_id, socket)) = self.handle.connect((*addr).clone()).await {
+            //     self.create_peer(peer_id, socket, PeerRole::Outbound)
+            // }
         }
 
         Ok(())

@@ -19,7 +19,7 @@
 #![allow(unused)]
 
 use crate::{
-    error::{self, Libp2pError, P2pError},
+    error::{self, Libp2pError, P2pError, ProtocolError},
     net::{
         self, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
         PubSubTopic, SocketService,
@@ -34,6 +34,7 @@ use libp2p::{
         Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
         MessageAuthenticity, MessageId, ValidationMode,
     },
+    identify::{Identify, IdentifyConfig},
     identity,
     mdns::Mdns,
     mplex,
@@ -158,6 +159,7 @@ where
                 _ => panic!("parse_discovered_addr() failed!"),
             }
         });
+
         log::trace!(
             "id {:?}, ipv4 {:#?}, ipv6 {:#?}",
             entry.id,
@@ -192,6 +194,7 @@ impl NetworkService for Libp2pService {
     type Socket = Libp2pSocket;
     type Strategy = Libp2pStrategy;
     type PeerId = PeerId;
+    type ProtocolId = String;
     type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
@@ -200,6 +203,7 @@ impl NetworkService for Libp2pService {
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[PubSubTopic],
+        config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
         let id_keys = identity::Keypair::generate_ed25519();
@@ -231,16 +235,42 @@ impl NetworkService for Libp2pService {
                 .build()
                 .expect("configuration to be valid");
 
-            let mut gossipsub: Gossipsub =
-                Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
-                    .expect("configuration to be valid");
+            let mut gossipsub: Gossipsub = Gossipsub::new(
+                MessageAuthenticity::Signed(id_keys.clone()),
+                gossipsub_config,
+            )
+            .expect("configuration to be valid");
 
-			// TODO: configure ping
+            // TODO: implement `std::fmt::Display` for SemVer and magic bytes
+            let version = config.version();
+            let magic = config.magic_bytes();
+            let mut identify = Identify::new(IdentifyConfig::new(
+                "/mintlayer/0.1.0-deadbeef".into(),
+                id_keys.public(),
+            ));
+            // TODO: fix this
+            // let mut identify = Identify::new(IdentifyConfig::new(
+            //     format!(
+            //         "/mintlayer/{}.{}.{}-{}",
+            //         version.major,
+            //         version.minor,
+            //         version.patch,
+            //         ((magic[3] << 24) as u32)
+            //             | ((magic[2] << 16) as u32)
+            //             | ((magic[1] << 8) as u32)
+            //             | ((magic[0] << 0) as u32)
+            //     )
+            //     .into(),
+            //     id_keys.public(),
+            // ));
+
+            // TODO: configure ping
             let mut behaviour = types::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
                 ping: ping::Behaviour::new(ping::Config::new()),
                 gossipsub,
+                identify,
             };
 
             for topic in topics.iter() {
@@ -301,7 +331,7 @@ impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
     T: NetworkService<Address = Multiaddr, PeerId = PeerId, Socket = Libp2pSocket> + Send,
 {
-    async fn connect(&mut self, addr: T::Address) -> error::Result<(T::PeerId, T::Socket)> {
+    async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
         log::trace!("try to establish outbound connection, address {:?}", addr);
 
         let peer_id = match addr.iter().last() {
@@ -317,43 +347,50 @@ where
             }
         };
 
-        // dial the remote peer
+        // try to connect to remote peer
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(types::Command::Dial {
+            .send(types::Command::Connect {
                 peer_id,
                 peer_addr: addr.clone(),
                 response: tx,
             })
             .await?;
 
-        // wait for command response
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e)?; // command failure
+        // // wait for command response
+        // rx.await
+        //     .map_err(|e| e)? // channel closed
+        //     .map_err(|e| e)?; // command failure
+        // // if dial succeeded, wait for the peer info
+        // let (tx, rx) = oneshot::channel();
+        // self.cmd_tx
+        //     .send(types::Command::WaitForPeerInfo {
+        //         peer_id,
+        //         response: tx,
+        //     })
+        //     .await?;
 
-        // if dial succeeded, open a generic stream
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::OpenStream {
-                peer_id,
-                response: tx,
-            })
-            .await?;
-
-        let stream = rx
+        let info = rx
             .await
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        Ok((
+        // TODO: zzz
+        let (net, version) = match info.protocol_version.as_str() {
+            "/mintlayer/0.1.0-deadbeef" => (
+                common::chain::config::ChainType::Mainnet,
+                common::primitives::version::SemVer::new(0, 1, 0),
+            ),
+            _ => return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork)),
+        };
+
+        Ok(net::PeerInfo {
             peer_id,
-            Libp2pSocket {
-                id: peer_id,
-                addr,
-                stream,
-            },
-        ))
+            net,
+            version,
+            agent: None,
+            protocols: vec![],
+        })
     }
 
     fn local_addr(&self) -> &T::Address {
@@ -384,11 +421,13 @@ where
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::ConnectionAccepted { socket } => {
-                Ok(ConnectivityEvent::IncomingConnection {
-                    peer_id: socket.id,
-                    socket: *socket,
-                })
+            types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
+                // peer_info: net::PeerInfo<Libp2pService>,
+                todo!();
+                // Ok(ConnectivityEvent::IncomingConnection {
+                //     peer_id: socket.id,
+                //     socket: *socket,
+                // })
             }
             types::ConnectivityEvent::PeerDiscovered { peers } => {
                 Ok(ConnectivityEvent::PeerDiscovered {
