@@ -65,7 +65,7 @@ where
     T: NetworkService,
 {
     /// Incoming connection from remote peer
-    IncomingConnection { peer_info: PeerInfo<T> },
+    PeerConnected { peer_info: PeerInfo<T> },
 
     /// One or more peers discovered
     PeerDiscovered { peers: Vec<AddrInfo<T>> },

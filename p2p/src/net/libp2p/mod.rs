@@ -343,19 +343,6 @@ where
             })
             .await?;
 
-        // // wait for command response
-        // rx.await
-        //     .map_err(|e| e)? // channel closed
-        //     .map_err(|e| e)?; // command failure
-        // // if dial succeeded, wait for the peer info
-        // let (tx, rx) = oneshot::channel();
-        // self.cmd_tx
-        //     .send(types::Command::WaitForPeerInfo {
-        //         peer_id,
-        //         response: tx,
-        //     })
-        //     .await?;
-
         let info = rx
             .await
             .map_err(|e| e)? // channel closed
@@ -386,8 +373,10 @@ where
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
-                // peer_info: net::PeerInfo<Libp2pService>,
                 todo!();
+                // Ok(ConnectivityEvent::PeerConnected {
+                //     peer_info: peer_info.try_into()?
+                // })
             }
             types::ConnectivityEvent::PeerDiscovered { peers } => {
                 Ok(ConnectivityEvent::PeerDiscovered {
