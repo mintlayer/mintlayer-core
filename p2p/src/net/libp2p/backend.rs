@@ -440,16 +440,6 @@ impl Backend {
                     .map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
-            // TODO: remove
-            types::Command::Register { peer, response } => {
-                log::info!("register peer {:?}, NOP", peer);
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-            }
-            // TODO: remove
-            types::Command::Unregister { peer, response } => {
-                log::info!("unregister peer {:?}, NOP", peer);
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-            }
             // TODO: rename
             types::Command::ReportValidationResult {
                 message_id,
