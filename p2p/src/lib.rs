@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-
 use crate::net::{ConnectivityService, FloodsubService, NetworkService};
 use common::chain::ChainConfig;
 use logging::log;

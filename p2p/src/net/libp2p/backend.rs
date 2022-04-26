@@ -18,7 +18,7 @@
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
-    net::{self, libp2p::common},
+    net::{self, libp2p::types},
 };
 use futures::StreamExt;
 use libp2p::{
@@ -36,16 +36,16 @@ use tokio::sync::{mpsc, oneshot};
 
 pub struct Backend {
     /// Created libp2p swarm object
-    swarm: Swarm<common::ComposedBehaviour>,
+    swarm: Swarm<types::ComposedBehaviour>,
 
     /// Receiver for incoming commands
-    cmd_rx: mpsc::Receiver<common::Command>,
+    cmd_rx: mpsc::Receiver<types::Command>,
 
     /// Sender for outgoing connectivity events
-    conn_tx: mpsc::Sender<common::ConnectivityEvent>,
+    conn_tx: mpsc::Sender<types::ConnectivityEvent>,
 
     /// Sender for outgoing floodsub events
-    flood_tx: mpsc::Sender<common::FloodsubEvent>,
+    flood_tx: mpsc::Sender<types::FloodsubEvent>,
 
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
@@ -68,10 +68,10 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(
-        swarm: Swarm<common::ComposedBehaviour>,
-        cmd_rx: mpsc::Receiver<common::Command>,
-        conn_tx: mpsc::Sender<common::ConnectivityEvent>,
-        flood_tx: mpsc::Sender<common::FloodsubEvent>,
+        swarm: Swarm<types::ComposedBehaviour>,
+        cmd_rx: mpsc::Receiver<types::Command>,
+        conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+        flood_tx: mpsc::Sender<types::FloodsubEvent>,
         relay_mdns: bool,
     ) -> Self {
         Self {
@@ -108,7 +108,7 @@ impl Backend {
     async fn send_discovery_event(
         &mut self,
         peers: Vec<(PeerId, Multiaddr)>,
-        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> common::ConnectivityEvent,
+        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> types::ConnectivityEvent,
     ) -> error::Result<()> {
         if !self.relay_mdns || peers.is_empty() {
             return Ok(());
@@ -122,7 +122,7 @@ impl Backend {
     async fn on_event(
         &mut self,
         event: SwarmEvent<
-            common::ComposedEvent,
+            types::ComposedEvent,
             EitherError<
                 EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
                 ProtocolsHandlerUpgrErr<std::io::Error>,
@@ -130,7 +130,7 @@ impl Backend {
         >,
     ) -> error::Result<()> {
         match event {
-            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+            SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
                 StreamingEvent::StreamOpened {
                     id,
                     peer_id,
@@ -189,7 +189,7 @@ impl Backend {
                     Ok(())
                 }
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::StreamingEvent(
+            SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
                 StreamingEvent::NewIncoming {
                     peer_id, stream, ..
                 },
@@ -200,7 +200,7 @@ impl Backend {
                     P2pError::Unknown("Pending connection does not exist".to_string())
                 })?;
                 self.conn_tx
-                    .send(common::ConnectivityEvent::ConnectionAccepted {
+                    .send(types::ConnectivityEvent::ConnectionAccepted {
                         socket: Box::new(net::libp2p::Libp2pSocket {
                             id: peer_id,
                             addr,
@@ -214,23 +214,23 @@ impl Backend {
                 log::trace!("new listen address {:?}", address);
                 Ok(())
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
+            SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(
                 peers,
             ))) => {
                 self.send_discovery_event(peers.collect(), |peers| {
-                    common::ConnectivityEvent::PeerDiscovered { peers }
+                    types::ConnectivityEvent::PeerDiscovered { peers }
                 })
                 .await
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
+            SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
                 expired,
             ))) => {
                 self.send_discovery_event(expired.collect(), |peers| {
-                    common::ConnectivityEvent::PeerExpired { peers }
+                    types::ConnectivityEvent::PeerExpired { peers }
                 })
                 .await
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
+            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Subscribed { peer_id, topic },
             )) => {
                 log::debug!(
@@ -242,7 +242,7 @@ impl Backend {
                 self.active_floodsubs.entry(topic).or_insert_with(HashSet::new).insert(peer_id);
                 Ok(())
             }
-            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
+            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Unsubscribed { peer_id, topic },
             )) => match self.active_floodsubs.get_mut(&topic) {
                 Some(peers) => {
@@ -264,7 +264,7 @@ impl Backend {
                     Ok(())
                 }
             },
-            SwarmEvent::Behaviour(common::ComposedEvent::Libp2pFloodsubEvent(
+            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
                 FloodsubEvent::Message(message),
             )) => {
                 // for mintlayer there should only ever be one topic per message
@@ -308,7 +308,7 @@ impl Backend {
                 );
 
                 self.flood_tx
-                    .send(common::FloodsubEvent::MessageReceived {
+                    .send(types::FloodsubEvent::MessageReceived {
                         peer_id,
                         topic,
                         message,
@@ -324,15 +324,15 @@ impl Backend {
     }
 
     /// Handle command received from the libp2p front-end
-    async fn on_command(&mut self, cmd: common::Command) -> error::Result<()> {
+    async fn on_command(&mut self, cmd: types::Command) -> error::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
 
         match cmd {
-            common::Command::Listen { addr, response } => {
+            types::Command::Listen { addr, response } => {
                 let res = self.swarm.listen_on(addr).map(|_| ()).map_err(|e| e.into());
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
-            common::Command::Dial {
+            types::Command::Dial {
                 peer_id,
                 peer_addr,
                 response,
@@ -343,12 +343,12 @@ impl Backend {
                 }
                 Err(e) => Err(e.into()),
             },
-            common::Command::OpenStream { peer_id, response } => {
+            types::Command::OpenStream { peer_id, response } => {
                 let stream_id = self.swarm.behaviour_mut().streaming.open_stream(peer_id);
                 self.streams.insert(stream_id, response);
                 Ok(())
             }
-            common::Command::SendMessage {
+            types::Command::SendMessage {
                 topic,
                 message,
                 response,
@@ -377,11 +377,11 @@ impl Backend {
                 self.swarm.behaviour_mut().floodsub.publish(topic, message);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
-            common::Command::Register { peer, response } => {
+            types::Command::Register { peer, response } => {
                 self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
-            common::Command::Unregister { peer, response } => {
+            types::Command::Unregister { peer, response } => {
                 self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
@@ -409,7 +409,7 @@ mod tests {
     //
     // it contains the selected transport for the swarm (in this case TCP + Noise)
     // and any custom network behaviour such as streaming or mDNS support
-    async fn make_swarm() -> Swarm<common::ComposedBehaviour> {
+    async fn make_swarm() -> Swarm<types::ComposedBehaviour> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys =
@@ -423,7 +423,7 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
-        let behaviour = common::ComposedBehaviour {
+        let behaviour = types::ComposedBehaviour {
             streaming: Streaming::<IdentityCodec>::default(),
             mdns: Mdns::new(Default::default()).await.unwrap(),
             floodsub: Floodsub::new(peer_id),
@@ -445,7 +445,7 @@ mod tests {
 
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
-            .send(common::Command::Listen {
+            .send(types::Command::Listen {
                 addr: "/ip6/::1/tcp/8890".parse().unwrap(),
                 response: tx,
             })
@@ -472,7 +472,7 @@ mod tests {
         // start listening to [::1]:8890
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
-            .send(common::Command::Listen {
+            .send(types::Command::Listen {
                 addr: "/ip6/::1/tcp/8891".parse().unwrap(),
                 response: tx,
             })
@@ -486,7 +486,7 @@ mod tests {
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
-            .send(common::Command::Listen {
+            .send(types::Command::Listen {
                 addr: "/ip6/::1/tcp/8891".parse().unwrap(),
                 response: tx,
             })
