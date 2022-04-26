@@ -20,7 +20,7 @@ extern crate test_utils;
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
     error::{Libp2pError, P2pError},
-    message::{self, ConnectivityMessage, MessageType},
+    message::{self, MessageType},
     net::{
         self,
         libp2p::{Libp2pConnectivityHandle, Libp2pService, Libp2pStrategy},
