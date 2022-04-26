@@ -124,16 +124,18 @@ impl Manager {
         }
     }
 
-    /// Start the subsystem.
+    /// Start a raw subsystem.
     ///
-    /// A subsystem has to handle shutdown and call requests. It can also react to external IO
-    /// events. If the subsystem handles *only* calls and shutdown requests without interaction
-    /// with any additional IO, use the [Manager::start_passive] convenience method.
+    /// Gives full control over how shutdown and call requests are handled. If this is not
+    /// required, use [Manager::start] instead. A subsystem has to handle shutdown and call
+    /// requests. It can also react to external IO events. If the subsystem handles *only* calls
+    /// and shutdown requests without interaction with any additional IO and does not need custom
+    /// shutdown logic, use [Manager::start].
     ///
     /// A typical skeleton of a subsystem looks like this:
     /// ```no_run
     /// # let manager = subsystem::Manager::new("app");
-    /// let subsystem = manager.start("my-subsystem", |mut call, mut shutdown| async move {
+    /// let subsystem = manager.start_raw("my-subsystem", |mut call, mut shutdown| async move {
     ///     loop {
     ///         tokio::select! {
     ///             // Shutdown received, break out of the loop.
@@ -146,7 +148,7 @@ impl Manager {
     /// });
     /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid amnbiguity.
     /// ```
-    pub fn start_with_config<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+    pub fn start_raw_with_config<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &self,
         config: SubsystemConfig,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
@@ -183,12 +185,12 @@ impl Manager {
     ///
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
     /// from other subsystems.
-    pub fn start_passive_with_config<T: 'static + Send>(
+    pub fn start_with_config<T: 'static + Send>(
         &self,
         config: SubsystemConfig,
         mut obj: T,
     ) -> Handle<T> {
-        self.start_with_config(config, |mut call_rq, mut shutdown_rq| async move {
+        self.start_raw_with_config(config, |mut call_rq, mut shutdown_rq| async move {
             loop {
                 tokio::select! {
                     () = shutdown_rq.recv() => { break; }
@@ -198,18 +200,18 @@ impl Manager {
         })
     }
 
-    /// Start a subsystem. See [Manager::start_with_config].
-    pub fn start<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+    /// Start a raw subsystem. See [Manager::start_with_config].
+    pub fn start_raw<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &self,
         name: &'static str,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     ) -> Handle<T> {
-        self.start_with_config(SubsystemConfig::named(name), subsystem)
+        self.start_raw_with_config(SubsystemConfig::named(name), subsystem)
     }
 
-    /// Start a passive subsystem. See [Manager::start_passive_with_config].
-    pub fn start_passive<T: 'static + Send>(&self, name: &'static str, obj: T) -> Handle<T> {
-        self.start_passive_with_config(SubsystemConfig::named(name), obj)
+    /// Start a passive subsystem. See [Manager::start_with_config].
+    pub fn start<T: 'static + Send>(&self, name: &'static str, obj: T) -> Handle<T> {
+        self.start_with_config(SubsystemConfig::named(name), obj)
     }
 
     /// Install termination signal handlers.
@@ -218,7 +220,7 @@ impl Manager {
     /// signalling all other subsystems and the whole manager to shut down.
     #[cfg(not(loom))]
     pub fn install_signal_handlers(&self) {
-        self.start(
+        self.start_raw(
             "ctrl-c",
             |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
                 tokio::select! {
@@ -463,7 +465,7 @@ mod test {
             shutdown_timeout: Some(Duration::from_secs(1)),
         });
 
-        man.start(
+        man.start_raw(
             "does_not_want_to_exit",
             |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
         );

@@ -60,10 +60,10 @@ fn async_calls() {
     common::concurrency::model(move || {
         runtime.block_on(async {
             let app = subsystem::Manager::new("app");
-            let logger = app.start_passive("logger", Logger::new("logging".to_string()));
-            let counter = app.start_passive("counter", Counter::new(logger.clone()));
+            let logger = app.start("logger", Logger::new("logging".to_string()));
+            let counter = app.start("counter", Counter::new(logger.clone()));
 
-            app.start(
+            app.start_raw(
                 "test",
                 |_call_rq: subsystem::CallRequest<()>, _shut_rq| async move {
                     logger.call(|l| l.write("starting")).await.unwrap();
