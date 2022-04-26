@@ -38,7 +38,7 @@ use libp2p::{
     mdns::Mdns,
     mplex,
     multiaddr::Protocol,
-    noise,
+    noise, ping,
     streaming::{IdentityCodec, StreamHandle, Streaming},
     swarm::{NegotiatedSubstream, SwarmBuilder},
     tcp::TcpConfig,
@@ -235,9 +235,11 @@ impl NetworkService for Libp2pService {
                 Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
                     .expect("configuration to be valid");
 
+			// TODO: configure ping
             let mut behaviour = types::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
+                ping: ping::Behaviour::new(ping::Config::new()),
                 gossipsub,
             };
 

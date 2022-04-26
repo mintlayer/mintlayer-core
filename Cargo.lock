@@ -1795,6 +1795,7 @@ dependencies = [
  "libp2p-metrics",
  "libp2p-mplex",
  "libp2p-noise",
+ "libp2p-ping",
  "libp2p-streaming",
  "libp2p-swarm",
  "libp2p-swarm-derive",
@@ -1913,6 +1914,7 @@ source = "git+https://github.com/mintlayer/rust-libp2p?branch=streaming-protocol
 dependencies = [
  "libp2p-core",
  "libp2p-gossipsub",
+ "libp2p-ping",
  "libp2p-swarm",
  "open-metrics-client",
 ]
@@ -1953,6 +1955,21 @@ dependencies = [
  "static_assertions",
  "x25519-dalek",
  "zeroize",
+]
+
+[[package]]
+name = "libp2p-ping"
+version = "0.33.0"
+source = "git+https://github.com/mintlayer/rust-libp2p?branch=streaming-protocol-v0.42.2#2cb216fa2e6f723b30b96022713c7d0dcff7b199"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "instant",
+ "libp2p-core",
+ "libp2p-swarm",
+ "log",
+ "rand 0.7.3",
+ "void",
 ]
 
 [[package]]
