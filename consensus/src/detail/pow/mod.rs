@@ -15,17 +15,35 @@
 //
 // Author(s): C. Yap
 
+use common::chain::block::BlockIndexError;
 use common::chain::PoWChainConfig;
 use common::Uint256;
 use std::time::Duration;
 
 mod helpers;
-mod temp;
 pub mod work;
 
 #[derive(Debug)]
 pub enum Error {
     Conversion(String),
+    InvalidHeightForAncestor,
+    BlockNotFound,
+    DatabaseReadError,
+    BlockIndexNotFound,
+    NoPowData,
+}
+
+// TODO rethink what errors Consensus, should really expose, right now I'm not sure so adding
+// direct counterparts to BlockIndex errors
+impl From<BlockIndexError> for Error {
+    fn from(block_index_error: BlockIndexError) -> Self {
+        match block_index_error {
+            BlockIndexError::InvalidHeightForAncestor => Error::InvalidHeightForAncestor,
+            BlockIndexError::BlockNotFound => Error::BlockNotFound,
+            BlockIndexError::DatabaseReadError => Error::DatabaseReadError,
+            BlockIndexError::BlockIndexNotFound => Error::BlockIndexNotFound,
+        }
+    }
 }
 
 pub struct PoW(PoWChainConfig);

@@ -558,6 +558,7 @@ dependencies = [
  "logging",
  "loom",
  "merkletree",
+ "mockall",
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "rand 0.8.4",

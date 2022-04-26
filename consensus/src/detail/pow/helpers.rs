@@ -15,8 +15,8 @@
 //
 // Author(s): C. Yap
 
-use crate::detail::pow::temp::BlockIndex;
 use crate::detail::pow::Error;
+use common::chain::block::{BlockIndex, BlockIndexDBAccessor};
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
 
@@ -31,17 +31,18 @@ pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: Block
 pub fn get_starting_block_time(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
-) -> u32 {
+    db_accessor: &dyn BlockIndexDBAccessor,
+) -> Result<u32, Error> {
     let retarget_height = {
-        let height: u64 = block_index.height.into();
+        let height: u64 = block_index.get_block_height().into();
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
         let old_block_height = height - (difficulty_adjustment_interval - 1);
         BlockHeight::new(old_block_height)
     };
 
-    let retarget_block_index = block_index.get_ancestor(retarget_height);
+    let retarget_block_index = block_index.get_ancestor(retarget_height, db_accessor)?;
 
-    retarget_block_index.get_block_time()
+    Ok(retarget_block_index.get_block_time())
 }
 
 /// Returns a calculated new target as Compact datatype.
