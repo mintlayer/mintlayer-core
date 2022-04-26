@@ -176,6 +176,8 @@ mod tests {
         assert_eq!(BlockHeight::max() - BlockDistance::new(1), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(0), None);
         assert_eq!(BlockHeight::max() + BlockDistance::new(1), None);
+        //TODO: Add similiar asserts but with BlockHeight::new(DistanceIntType::MAX as HeightIntType) in place of BlockHeight::max().
+        //      It's the boundary at which the block height arithmetic breaks down.
     }
 
     #[test]

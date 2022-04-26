@@ -25,6 +25,7 @@ use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
 use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
+use common::chain::config::MAX_BLOCK_WEIGHT;
 use common::chain::{OutPointSourceId, Transaction};
 use common::primitives::BlockDistance;
 use common::primitives::{time, BlockHeight, Id, Idable};
@@ -45,9 +46,6 @@ type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 mod spend_cache;
 
 use spend_cache::CachedInputs;
-
-// DSA allows us to have blocks up to 1mb
-const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
