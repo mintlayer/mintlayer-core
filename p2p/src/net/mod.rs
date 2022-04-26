@@ -75,6 +75,9 @@ where
 
     /// One one more peers have expired
     PeerExpired { peers: Vec<AddrInfo<T>> },
+
+    /// Peer disconnected
+    PeerDisconnected { peer_id: T::PeerId },
 }
 
 // TODO: separate events for blocks and transactions?

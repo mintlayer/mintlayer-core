@@ -40,11 +40,8 @@ where
     /// Unique peer ID
     peer_id: T::PeerId,
 
-    // State of the peer
+    /// State of the peer
     state: PeerState,
-
-    /// TX channel for sending syncing messages to remote peer
-    tx: mpsc::Sender<event::PeerEvent<T>>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -68,9 +65,6 @@ where
     /// RX channel for receiving syncing-related control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
 
-    /// RX channel for receiving syncing events from peers
-    rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
-
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, PeerSyncState<T>>,
 }
@@ -84,13 +78,11 @@ where
         config: Arc<ChainConfig>,
         handle: T::PubSubHandle,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
-        rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
     ) -> Self {
         Self {
             config,
             handle,
             rx_sync,
-            rx_peer,
             peers: Default::default(),
         }
     }
@@ -119,14 +111,13 @@ where
     /// Handle control-related sync event from P2P/SwarmManager
     async fn on_sync_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
         match event {
-            event::SyncControlEvent::Connected { peer_id, tx } => {
+            event::SyncControlEvent::Connected { peer_id } => {
                 log::debug!("create new entry for peer {:?}", peer_id);
 
                 if let std::collections::hash_map::Entry::Vacant(e) = self.peers.entry(peer_id) {
                     e.insert(PeerSyncState {
                         peer_id,
                         state: PeerState::Idle,
-                        tx,
                     });
                 } else {
                     log::error!("peer {:?} already known by sync manager", peer_id);
@@ -144,17 +135,6 @@ where
         Ok(())
     }
 
-    /// Handle syncing-related event received from a remote peer
-    async fn on_peer_event(&mut self, event: event::PeerSyncEvent<T>) -> error::Result<()> {
-        match event {
-            event::PeerSyncEvent::Dummy { peer_id } => {
-                dbg!(peer_id);
-            }
-        }
-
-        Ok(())
-    }
-
     /// Run SyncManager event loop
     pub async fn run(&mut self) -> error::Result<()> {
         log::info!("starting sync manager event loop");
@@ -166,9 +146,6 @@ where
                 }
                 res = self.rx_sync.recv().fuse() => {
                     self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
-                }
-                res = self.rx_peer.recv().fuse() => {
-                    self.on_peer_event(res.ok_or(P2pError::ChannelClosed)?).await?;
                 }
             }
         }

@@ -378,7 +378,9 @@ impl Backend {
                 }
                 Some(PendingState::InboundAccepted { addr }) => self
                     .conn_tx
-                    .send(types::ConnectivityEvent::ConnectionAccepted { peer_info: info })
+                    .send(types::ConnectivityEvent::ConnectionAccepted {
+                        peer_info: Box::new(info),
+                    })
                     .await
                     .map_err(|_| P2pError::ChannelClosed),
             },

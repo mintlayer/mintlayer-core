@@ -24,8 +24,6 @@ pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
-pub mod peer;
-pub mod proto;
 pub mod swarm;
 pub mod sync;
 
@@ -48,6 +46,7 @@ where
     T::ConnectivityHandle: ConnectivityService<T>,
     T::PubSubHandle: PubSubService<T>,
 {
+    // TODO: think about channel sizes
     /// Create new P2P
     ///
     /// # Arguments
@@ -68,25 +67,16 @@ where
         .await?;
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let (tx_sync, rx_sync) = mpsc::channel(16);
-        let (tx_peer, rx_peer) = mpsc::channel(16);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut swarm = swarm::SwarmManager::<T>::new(
-                swarm_config,
-                conn,
-                rx_swarm,
-                tx_sync,
-                tx_peer,
-                mgr_backlog,
-                peer_backlock,
-            );
+            let mut swarm = swarm::SwarmManager::<T>::new(swarm_config, conn, rx_swarm, tx_sync);
             let _ = swarm.run().await;
         });
 
         let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync, rx_peer);
+            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync);
             let _ = sync_mgr.run().await;
         });
 

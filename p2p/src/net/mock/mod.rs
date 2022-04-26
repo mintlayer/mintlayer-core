@@ -21,7 +21,6 @@ use crate::{
         ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
         PubSubService, PubSubTopic, SocketService, ValidationResult,
     },
-    peer::Peer,
 };
 use async_trait::async_trait;
 use futures::FutureExt;
