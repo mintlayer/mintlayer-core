@@ -12,24 +12,18 @@ parity-scale-codec = "3.1.2"
 rand = "0.8.4"
 void = "1.0.2"
 itertools = "0.10.3"
-
-[dependencies.common]
-path = "../common/"
-
-[dependencies.logging]
-path = "../logging/"
-
-[dependencies.serialization]
-path = "../serialization/"
+common = { path = "../common/" }
+logging = { path = "../logging/" }
+serialization = { path = "../serialization/" }
 
 [dependencies.libp2p]
-git = "https://github.com/mintlayer/rust-libp2p"
-branch = "streaming-protocol-v0.42.2"
+version = "0.44.0"
 default-features = false
-features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "streaming", "tcp-async-io"]
+features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
 
 [dependencies.tokio]
 version = "1"
+default-features = false
 features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]

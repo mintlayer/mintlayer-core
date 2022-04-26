@@ -29,7 +29,6 @@ use libp2p::{
     identify::{Identify, IdentifyEvent, IdentifyInfo},
     mdns::{Mdns, MdnsEvent},
     ping::{self, PingEvent},
-    streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
     Multiaddr, NetworkBehaviour, PeerId,
 };
@@ -50,15 +49,7 @@ pub enum Command {
         response: oneshot::Sender<error::Result<IdentifyInfo>>,
     },
 
-    /// Open a bidirectional data stream to a remote peer
-    ///
-    /// Before opening a stream, connection must've been established with the peer
-    /// and the peer's identity is signaled using `peer_id` argument
-    OpenStream {
-        peer_id: PeerId,
-        response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
-    },
-
+    // TODO: rethink this message
     /// Publish a message on the designated GossipSub topic
     SendMessage {
         topic: net::PubSubTopic,
@@ -88,6 +79,7 @@ pub enum ConnectivityEvent {
 
 #[derive(Clone)]
 pub enum PubSubEvent {
+    // TODO: rethink this event
     // Message received from one of the PubSub topics
     MessageReceived {
         peer_id: PeerId,
@@ -131,7 +123,6 @@ impl From<net::ValidationResult> for MessageAcceptance {
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "ComposedEvent")]
 pub struct ComposedBehaviour {
-    pub streaming: Streaming<IdentityCodec>,
     pub mdns: Mdns,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
@@ -141,17 +132,10 @@ pub struct ComposedBehaviour {
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum ComposedEvent {
-    StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
     IdentifyEvent(IdentifyEvent),
-}
-
-impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
-    fn from(event: StreamingEvent<IdentityCodec>) -> Self {
-        ComposedEvent::StreamingEvent(event)
-    }
 }
 
 impl From<MdnsEvent> for ComposedEvent {

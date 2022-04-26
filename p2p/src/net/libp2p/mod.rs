@@ -40,7 +40,6 @@ use libp2p::{
     mplex,
     multiaddr::Protocol,
     noise, ping,
-    streaming::{IdentityCodec, StreamHandle, Streaming},
     swarm::{NegotiatedSubstream, SwarmBuilder},
     tcp::TcpConfig,
     Multiaddr, Transport,
@@ -278,7 +277,6 @@ impl NetworkService for Libp2pService {
 
             // TODO: configure ping
             let mut behaviour = types::ComposedBehaviour {
-                streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
                 ping: ping::Behaviour::new(ping::Config::new()),
                 gossipsub,

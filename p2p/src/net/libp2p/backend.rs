@@ -32,8 +32,7 @@ use libp2p::{
     identify::{IdentifyEvent, IdentifyInfo},
     mdns::MdnsEvent,
     ping,
-    streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
-    swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
+    swarm::{NegotiatedSubstream, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
@@ -79,12 +78,6 @@ pub struct Backend {
     /// Hashmap of pending inbound connections
     conns: HashMap<PeerId, Multiaddr>,
 
-    /// Hashmap of pending outbound streams
-    streams: HashMap<
-        OutboundStreamId,
-        oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
-    >,
-
     // TODO: remove this?
     /// Hashmap of topics and their participants
     active_gossipsubs: HashMap<Topic, HashSet<PeerId>>,
@@ -109,7 +102,6 @@ impl Backend {
             dials: HashMap::new(),
             pending: HashMap::new(),
             conns: HashMap::new(),
-            streams: HashMap::new(),
             active_gossipsubs: HashMap::new(),
             relay_mdns,
         }
@@ -154,13 +146,7 @@ impl Backend {
         event: SwarmEvent<
             types::ComposedEvent,
             EitherError<
-                EitherError<
-                    EitherError<
-                        EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
-                        GossipsubHandlerError,
-                    >,
-                    ping::Failure,
-                >,
+                EitherError<EitherError<void::Void, GossipsubHandlerError>, ping::Failure>,
                 std::io::Error,
             >,
         >,
@@ -168,24 +154,6 @@ impl Backend {
         // TODO: separate this code into protocol-specific handlers!
         // TODO: error codes?
         match event {
-            // SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
-            //     StreamingEvent::StreamOpened {
-            //         id,
-            //         peer_id,
-            //         stream,
-            //     },
-            // )) => {
-            //     log::trace!(
-            //         "stream opened with remote, id {:?}, peer id {:?}",
-            //         id,
-            //         peer_id
-            //     );
-            //     self.streams
-            //         .remove(&id)
-            //         .ok_or_else(|| P2pError::Unknown("Pending stream does not exist".to_string()))?
-            //         .send(Ok(stream))
-            //         .map_err(|_| P2pError::ChannelClosed)
-            // }
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
             } => match endpoint {
@@ -247,26 +215,6 @@ impl Backend {
                     Ok(())
                 }
             }
-            // SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
-            //     StreamingEvent::NewIncoming {
-            //         peer_id, stream, ..
-            //     },
-            // )) => {
-            //     log::trace!("incoming stream, peer id {:?}", peer_id);
-            //     let addr = self.conns.remove(&peer_id).ok_or_else(|| {
-            //         P2pError::Unknown("Pending connection does not exist".to_string())
-            //     })?;
-            //     self.conn_tx
-            //         .send(types::ConnectivityEvent::ConnectionAccepted {
-            //             socket: Box::new(net::libp2p::Libp2pSocket {
-            //                 id: peer_id,
-            //                 addr,
-            //                 stream,
-            //             }),
-            //         })
-            //         .await
-            //         .map_err(|_| P2pError::ChannelClosed)
-            // }
             SwarmEvent::NewListenAddr { address, .. } => {
                 log::trace!("new listen address {:?}", address);
                 Ok(())
@@ -415,16 +363,10 @@ impl Backend {
             } => match self.swarm.dial(peer_addr) {
                 Ok(_) => {
                     self.pending.insert(peer_id, PendingState::Dialed { tx: response });
-                    // self.dials.insert(peer_id, response);
                     Ok(())
                 }
                 Err(e) => Err(e.into()),
             },
-            types::Command::OpenStream { peer_id, response } => {
-                let stream_id = self.swarm.behaviour_mut().streaming.open_stream(peer_id);
-                self.streams.insert(stream_id, response);
-                Ok(())
-            }
             // TODO: rename this
             types::Command::SendMessage {
                 topic,
@@ -468,17 +410,16 @@ impl Backend {
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
         gossipsub::GossipsubConfigBuilder,
+        identify::{Identify, IdentifyConfig},
         identity,
         mdns::Mdns,
         mplex, noise,
-        streaming::{IdentityCodec, Streaming},
         swarm::SwarmBuilder,
         tcp::TcpConfig,
         Transport,
@@ -508,14 +449,22 @@ mod tests {
             .build()
             .expect("configuration to be valid");
 
-        let gossipsub: Gossipsub =
-            Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
-                .expect("configuration to be valid");
+        let gossipsub: Gossipsub = Gossipsub::new(
+            MessageAuthenticity::Signed(id_keys.clone()),
+            gossipsub_config,
+        )
+        .expect("configuration to be valid");
+
+        let identify = Identify::new(IdentifyConfig::new(
+            "/mintlayer/0.1.0-13371338".into(),
+            id_keys.public(),
+        ));
+
         let behaviour = types::ComposedBehaviour {
-            streaming: Streaming::<IdentityCodec>::default(),
             mdns: Mdns::new(Default::default()).await.unwrap(),
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
+            identify,
         };
 
         SwarmBuilder::new(transport, behaviour, peer_id).build()
@@ -601,4 +550,3 @@ mod tests {
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));
     }
 }
-*/
