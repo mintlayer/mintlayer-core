@@ -18,7 +18,7 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{FloodsubTopic, NetworkService, SocketService},
+    net::{NetworkService, PubSubTopic, SocketService},
     peer::Peer,
 };
 use async_trait::async_trait;

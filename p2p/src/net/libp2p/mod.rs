@@ -16,11 +16,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use crate::{
     error::{self, Libp2pError, P2pError},
     net::{
-        self, ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService,
-        FloodsubTopic, NetworkService, SocketService,
+        self, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
+        PubSubTopic, SocketService,
     },
 };
 use async_trait::async_trait;
@@ -28,7 +30,10 @@ use futures::prelude::*;
 use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
-    floodsub::Floodsub,
+    gossipsub::{
+        Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
+        MessageAuthenticity, MessageId, ValidationMode,
+    },
     identity,
     mdns::Mdns,
     mplex,
@@ -40,7 +45,9 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use logging::log;
+use std::collections::hash_map::DefaultHasher;
 use serialization::{Decode, Encode};
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
@@ -88,15 +95,15 @@ where
     _marker: std::marker::PhantomData<T>,
 }
 
-pub struct Libp2pFloodsubHandle<T>
+pub struct Libp2pPubSubHandle<T>
 where
     T: NetworkService,
 {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
 
-    /// Channel for receiving floodsub events from libp2p backend
-    flood_rx: mpsc::Receiver<types::FloodsubEvent>,
+    /// Channel for receiving pubsub events from libp2p backend
+    flood_rx: mpsc::Receiver<types::PubSubEvent>,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -185,15 +192,16 @@ impl NetworkService for Libp2pService {
     type Socket = Libp2pSocket;
     type Strategy = Libp2pStrategy;
     type PeerId = PeerId;
+    type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
-    type FloodsubHandle = Libp2pFloodsubHandle<Self>;
+    type PubSubHandle = Libp2pPubSubHandle<Self>;
 
     async fn start(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        topics: &[FloodsubTopic],
+        topics: &[PubSubTopic],
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
+    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys)?;
@@ -208,17 +216,37 @@ impl NetworkService for Libp2pService {
             .boxed();
 
         let swarm = {
+            // TODO: double check gossipsub configuration
+            let message_id_fn = |message: &GossipsubMessage| {
+                let mut s = DefaultHasher::new();
+                message.data.hash(&mut s);
+                MessageId::from(s.finish().to_string())
+            };
+
+            let gossipsub_config = GossipsubConfigBuilder::default()
+                .heartbeat_interval(std::time::Duration::from_secs(10))
+                .validation_mode(ValidationMode::Strict)
+                .message_id_fn(message_id_fn)
+                .validate_messages()
+                .build()
+                .expect("configuration to be valid");
+
+            let mut gossipsub: Gossipsub =
+                Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
+                    .expect("configuration to be valid");
+
             let mut behaviour = types::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
-                floodsub: Floodsub::new(peer_id),
+                gossipsub,
             };
 
             for topic in topics.iter() {
-                log::debug!("subscribing to floodsub topic {:?}", topic);
-                behaviour.floodsub.subscribe(topic.into());
+                log::debug!("subscribing to gossipsub topic {:?}", topic);
+                behaviour.gossipsub.subscribe(&topic.into()).unwrap(); // TODO: remove unwrap
             }
 
+            // subscribes to our topic
             SwarmBuilder::new(transport, behaviour, peer_id).build()
         };
 
@@ -257,7 +285,7 @@ impl NetworkService for Libp2pService {
                 conn_rx,
                 _marker: Default::default(),
             },
-            Self::FloodsubHandle {
+            Self::PubSubHandle {
                 cmd_tx,
                 flood_rx,
                 _marker: Default::default(),
@@ -365,21 +393,19 @@ where
                     peers: parse_peers(peers),
                 })
             }
-            types::ConnectivityEvent::PeerExpired { peers } => {
-                Ok(ConnectivityEvent::PeerExpired {
-                    peers: parse_peers(peers),
-                })
-            }
+            types::ConnectivityEvent::PeerExpired { peers } => Ok(ConnectivityEvent::PeerExpired {
+                peers: parse_peers(peers),
+            }),
         }
     }
 }
 
 #[async_trait]
-impl<T> FloodsubService<T> for Libp2pFloodsubHandle<T>
+impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
-    T: NetworkService<PeerId = PeerId> + Send,
+    T: NetworkService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
-    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
+    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
     where
         U: Sync + Send + Encode,
     {
@@ -397,16 +423,39 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>> {
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        message_id: T::MessageId,
+        result: net::ValidationResult,
+    ) -> error::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::ReportValidationResult {
+                message_id,
+                source,
+                result: result.into(),
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
+    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
         match self.flood_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::FloodsubEvent::MessageReceived {
+            types::PubSubEvent::MessageReceived {
                 peer_id,
                 topic,
                 message,
-            } => Ok(FloodsubEvent::MessageReceived {
+                message_id,
+            } => Ok(PubSubEvent::MessageReceived {
                 peer_id,
                 topic,
                 message,
+                message_id,
             }),
         }
     }
