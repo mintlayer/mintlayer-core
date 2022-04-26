@@ -466,6 +466,7 @@ impl Backend {
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,3 +599,4 @@ mod tests {
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));
     }
 }
+*/

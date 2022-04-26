@@ -73,23 +73,6 @@ pub enum Command {
         result: MessageAcceptance,
         response: oneshot::Sender<error::Result<()>>,
     },
-
-    // /// Wait for identifying information of the peer
-    // WaitForPeerInfo {
-    //     peer_id: PeerId,
-    //     response: oneshot::Sender<error::Result<IdentifyInfo>>,
-    // },
-    /// Register peer to libp2p
-    Register {
-        peer: PeerId,
-        response: oneshot::Sender<error::Result<()>>,
-    },
-
-    /// Unregister peer from libp2p
-    Unregister {
-        peer: PeerId,
-        response: oneshot::Sender<error::Result<()>>,
-    },
 }
 
 pub enum ConnectivityEvent {
