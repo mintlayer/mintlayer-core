@@ -19,7 +19,7 @@
 use crate::{
     error::{self, P2pError},
     event,
-    net::{self, FloodsubService, NetworkService},
+    net::{self, NetworkService, PubSubService},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
@@ -63,7 +63,7 @@ where
     config: Arc<ChainConfig>,
 
     /// Handle for sending/receiving connectivity events
-    handle: T::FloodsubHandle,
+    handle: T::PubSubHandle,
 
     /// RX channel for receiving syncing-related control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -78,11 +78,11 @@ where
 impl<T> SyncManager<T>
 where
     T: NetworkService,
-    T::FloodsubHandle: FloodsubService<T>,
+    T::PubSubHandle: PubSubService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
-        handle: T::FloodsubHandle,
+        handle: T::PubSubHandle,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
     ) -> Self {
@@ -95,19 +95,20 @@ where
         }
     }
 
-    /// Handle floodsub event
-    fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
-        let net::FloodsubEvent::MessageReceived {
+    /// Handle pubsub event
+    fn on_pubsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
+        let net::PubSubEvent::MessageReceived {
             peer_id: _,
             topic,
             message,
+            ..
         } = event;
 
         match topic {
-            net::FloodsubTopic::Transactions => {
+            net::PubSubTopic::Transactions => {
                 log::debug!("received new transaction: {:#?}", message);
             }
-            net::FloodsubTopic::Blocks => {
+            net::PubSubTopic::Blocks => {
                 log::debug!("received new block: {:#?}", message);
             }
         }
@@ -161,7 +162,7 @@ where
         loop {
             tokio::select! {
                 res = self.handle.poll_next() => {
-                    self.on_floodsub_event(res?)?;
+                    self.on_pubsub_event(res?)?;
                 }
                 res = self.rx_sync.recv().fuse() => {
                     self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
@@ -177,7 +178,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{mock::MockService, FloodsubService};
+    use crate::net::{mock::MockService, PubSubService};
     use common::chain::config;
     use std::net::SocketAddr;
 
@@ -190,7 +191,7 @@ mod tests {
     )
     where
         T: NetworkService,
-        T::FloodsubHandle: FloodsubService<T>,
+        T::PubSubHandle: PubSubService<T>,
     {
         let config = Arc::new(config::create_mainnet());
         let (_, flood) =

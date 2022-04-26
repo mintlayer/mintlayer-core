@@ -57,22 +57,36 @@ where
 
 // TODO: separate events for blocks and transactions?
 #[derive(Debug)]
-pub enum FloodsubEvent<T>
+pub enum PubSubEvent<T>
 where
     T: NetworkService,
 {
-    /// Message received from a Floodsub topic
+    /// Message received from a PubSub topic
     MessageReceived {
         peer_id: T::PeerId,
-        topic: FloodsubTopic,
+        topic: PubSubTopic,
+        message_id: T::MessageId,
+        // TODO: what should the type be here?
         message: message::Message,
     },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FloodsubTopic {
+pub enum PubSubTopic {
     Transactions,
     Blocks,
+}
+
+#[derive(Debug)]
+pub enum ValidationResult {
+    /// Message was valid and can be forwarded to other peers
+    Accept,
+
+    /// Message was invalid and mustn't be forwarded to other peers
+    Reject,
+
+    /// Message is not invalid but it shouldn't be forwarded to other peers
+    Ignore,
 }
 
 /// `NetworkService` provides the low-level network interface
@@ -95,14 +109,18 @@ pub trait NetworkService {
     /// Generic socket object that the underlying implementation uses
     type Socket: SocketService + Send;
 
-    // Enum of different peer discovery strategies that the implementation provides
+    /// Enum of different peer discovery strategies that the implementation provides
     type Strategy;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
 
     /// Handle for sending/receiving floodsub-related events
-    type FloodsubHandle: Send;
+    type PubSubHandle: Send;
+
+    // TODO: move to pubsubservice??
+    /// Unique ID assigned to each pubsub message
+    type MessageId: Send + Clone;
 
     /// Initialize the network service provider
     ///
@@ -114,9 +132,9 @@ pub trait NetworkService {
     async fn start(
         addr: Self::Address,
         strategies: &[Self::Strategy],
-        topics: &[FloodsubTopic],
+        topics: &[PubSubTopic],
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)>;
+    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)>;
 }
 
 /// ConnectivityService provides an interface through which objects can send
@@ -153,24 +171,33 @@ where
     async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()>;
 }
 
-/// FloodsubService provides an interface through which objects can send
+/// PubSubService provides an interface through which objects can send
 /// and receive floodsub-related events to/from the network service provider
 #[async_trait]
-pub trait FloodsubService<T>
+pub trait PubSubService<T>
 where
     T: NetworkService,
 {
+    // TODO: redesign this!!
     /// Publish data in a given floodsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
+    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
     where
         U: Sync + Send + Encode;
 
-    /// Poll floodsub-related events from the network service provider
-    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>>;
+    /// Report message validation result back to the backend
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        msg_id: T::MessageId,
+        result: ValidationResult,
+    ) -> error::Result<()>;
+
+    /// Poll unvalidated gossipsub messages
+    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>>;
 }
 
 /// `SocketService` provides the low-level socket interface that

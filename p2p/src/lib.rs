@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::net::{ConnectivityService, FloodsubService, NetworkService};
+use crate::net::{ConnectivityService, NetworkService, PubSubService};
 use common::chain::ChainConfig;
 use logging::log;
 use std::sync::Arc;
@@ -46,7 +46,7 @@ impl<T> P2P<T>
 where
     T: 'static + NetworkService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::FloodsubHandle: FloodsubService<T>,
+    T::PubSubHandle: PubSubService<T>,
 {
     /// Create new P2P
     ///
