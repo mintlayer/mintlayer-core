@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
-use crate::primitives::BlockHeight;
+use crate::primitives::{BlockDistance, BlockHeight};
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
@@ -86,7 +86,9 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
                 if idx == (self.0.len() - 1) {
                     BlockHeight::max()
                 } else {
-                    BlockHeight::new(self.0[idx + 1].0.inner() - 1)
+                    (self.0[idx + 1].0 - BlockDistance::new(1)).expect(
+                        "Upgrade heights should never overflow/underflow as they're chosen by us",
+                    )
                 },
             )
         })
@@ -95,6 +97,7 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::Activate;
     use crate::primitives::BlockHeight;
@@ -138,7 +141,8 @@ mod tests {
         assert!(MockVersion::Two.is_activated(two_height, &upgrades));
         assert!(MockVersion::Two.is_activated(three_height, &upgrades));
         assert!(!MockVersion::Two.is_activated(BlockHeight::one(), &upgrades));
-        assert!(!MockVersion::Two.is_activated(BlockHeight::new(two_height.inner() - 1), &upgrades));
+        assert!(!MockVersion::Two
+            .is_activated((two_height - BlockDistance::new(1)).unwrap(), &upgrades));
 
         assert!(!MockVersion::Three.is_activated(two_height, &upgrades));
         assert!(!MockVersion::Three.is_activated(
@@ -160,13 +164,19 @@ mod tests {
         check(MockVersion::Zero, BlockHeight::zero());
         check(MockVersion::One, BlockHeight::one());
         check(MockVersion::One, BlockHeight::new(26));
-        check(MockVersion::One, BlockHeight::new(two_height.inner() - 1));
+        check(
+            MockVersion::One,
+            (two_height - BlockDistance::new(1)).unwrap(),
+        );
         check(MockVersion::Two, two_height);
         check(
             MockVersion::Two,
             two_height.checked_add(1).expect("should be fine"),
         );
-        check(MockVersion::Two, BlockHeight::new(three_height.inner() - 1));
+        check(
+            MockVersion::Two,
+            (three_height - BlockDistance::new(1)).unwrap(),
+        );
         check(MockVersion::Three, three_height);
         check(
             MockVersion::Three,
@@ -206,12 +216,12 @@ mod tests {
         check(
             MockVersion::One,
             BlockHeight::one(),
-            BlockHeight::new(two_height.inner() - 1),
+            (two_height - BlockDistance::new(1)).unwrap(),
         );
         check(
             MockVersion::Two,
             two_height,
-            BlockHeight::new(three_height.inner() - 1),
+            (three_height - BlockDistance::new(1)).unwrap(),
         );
         check(MockVersion::Three, three_height, BlockHeight::max());
     }

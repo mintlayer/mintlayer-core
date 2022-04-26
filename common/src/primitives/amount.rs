@@ -1,6 +1,7 @@
 #![allow(clippy::eq_op)]
 
 use parity_scale_codec::{Decode, Encode};
+use std::iter::Sum;
 
 // Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
@@ -223,6 +224,15 @@ impl std::ops::Shr<u32> for Amount {
 
     fn shr(self, other: u32) -> Option<Self> {
         self.val.checked_shr(other).map(|v| Amount { val: v })
+    }
+}
+
+impl Sum<Amount> for Option<Amount> {
+    fn sum<I>(mut iter: I) -> Self
+    where
+        I: Iterator<Item = Amount>,
+    {
+        iter.try_fold(Amount::from_atoms(0), std::ops::Add::add)
     }
 }
 

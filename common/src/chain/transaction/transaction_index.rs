@@ -1,8 +1,12 @@
 use super::Transaction;
-use crate::{chain::block::Block, primitives::Id};
-use parity_scale_codec_derive::{Decode, Encode};
+use crate::{
+    chain::block::Block,
+    primitives::{Id, Idable},
+};
+use parity_scale_codec::Encode;
+use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub enum Spender {
     #[codec(index = 0)]
     RegularInput(Id<Transaction>),
@@ -22,7 +26,7 @@ impl From<Id<Block>> for Spender {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub enum OutputSpentState {
     Unspent,
     SpentBy(Spender),
@@ -34,7 +38,7 @@ pub enum OutputSpentState {
 /// and we then read the binary data at a specific offset and size, which we deserialize
 /// to get the transaction.
 /// This struct represents the position of a transaction in the database
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, DecodeDer)]
 pub struct TxMainChainPosition {
     block_id: Id<Block>,
     byte_offset_in_block: u32,
@@ -71,7 +75,7 @@ pub enum SpendError {
 }
 
 /// This enum represents that we can either spend from a block reward or a regular transaction
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub enum SpendablePosition {
     Transaction(TxMainChainPosition),
     BlockReward(Id<Block>),
@@ -92,16 +96,61 @@ impl From<Id<Block>> for SpendablePosition {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TxMainChainIndexError {
     InvalidOutputCount,
+    SerializationInvariantError(Id<Block>),
+    InvalidTxNumberForBlock(usize, Id<Block>),
 }
 
 /// Assuming a transaction is in the mainchain, its index contains two things:
 /// 1. The state on whether its outputs are spent
-/// 2. The position on where to find that transaction in the mainchain (block + bianry position)#[derive(Clone, Debug, PartialEq, Eq)]
+/// 2. The position on where to find that transaction in the mainchain (block + binary position)
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
-#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
+#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
 pub struct TxMainChainIndex {
     position: SpendablePosition,
     spent: Vec<OutputSpentState>,
+}
+
+// TODO: This function should probably operate on the whole block at once.
+//  I.e. take a block in and return a sequence of transaction positions.
+//  This way, we have to ask for each transaction separately and every time
+//  the whole block is encoded, giving O(N^2) complexity in number of transactions
+//  which rather unpleasant. Also the implementation could be improved by
+//  only asking about offsets, leveraging Encode::encoded_size method, since
+//  we are only interested in offsets in the encoded stream, not the contents.
+pub fn calculate_tx_index_from_block(
+    block: &Block,
+    tx_num: usize,
+) -> Result<TxMainChainIndex, TxMainChainIndexError> {
+    let tx = block
+        .transactions()
+        .get(tx_num)
+        .ok_or_else(|| TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block.get_id()))?;
+    let enc_block = block.encode();
+    let enc_tx = tx.encode();
+    let offset_tx = enc_block
+        .windows(enc_tx.len())
+        .enumerate()
+        .find_map(|(window_num, enc_data)| (enc_data == enc_tx).then(|| window_num))
+        .ok_or_else(|| TxMainChainIndexError::SerializationInvariantError(block.get_id()))?
+        .try_into()
+        .expect("Number conversion from usize to u32 should not fail here (1)");
+
+    let tx_position = TxMainChainPosition::new(
+        block.get_id(),
+        offset_tx,
+        enc_tx
+            .len()
+            .try_into()
+            .expect("Number conversion from usize to u32 should not fail here (2)"),
+    );
+
+    TxMainChainIndex::new(
+        SpendablePosition::from(tx_position),
+        tx.get_outputs()
+            .len()
+            .try_into()
+            .expect("Number conversion from usize to u32 should not fail here (3)"),
+    )
 }
 
 impl TxMainChainIndex {
