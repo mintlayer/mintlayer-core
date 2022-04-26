@@ -280,7 +280,15 @@ mod tests {
         T::ConnectivityHandle: ConnectivityService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (conn, _) = T::start(addr, &[], &[],Arc::clone(&config), std::time::Duration::from_secs(10)).await.unwrap();
+        let (conn, _) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
         let (_, rx) = tokio::sync::mpsc::channel(16);
         let (tx_sync, mut rx_sync) = tokio::sync::mpsc::channel(16);
 
