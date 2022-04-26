@@ -58,6 +58,7 @@ allow = [
     "LicenseRef-ring",
     "LicenseRef-webpki",
     "WTFPL",
+    "BSL-1.0",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 
