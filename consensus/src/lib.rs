@@ -2,12 +2,18 @@ mod detail;
 
 pub mod rpc;
 
+use std::sync::Arc;
+
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
 pub use detail::BlockError;
 use detail::{BlockSource, Consensus};
+
+pub enum ConsensusEvent {
+    NewTip(Arc<Id<Block>>, Arc<BlockHeight>),
+}
 
 pub struct ConsensusInterface {
     consensus: detail::Consensus,
@@ -24,6 +30,10 @@ pub enum ConsensusError {
 }
 
 impl ConsensusInterface {
+    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
+        self.consensus.subscribe_to_events(handler)
+    }
+
     pub fn process_block(
         &mut self,
         block: Block,

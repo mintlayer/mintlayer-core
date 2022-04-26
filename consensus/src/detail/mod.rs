@@ -16,6 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::detail::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
+use crate::ConsensusEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
@@ -28,6 +29,7 @@ use common::chain::{OutPointSourceId, Transaction};
 use common::primitives::BlockDistance;
 use common::primitives::{time, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
+use std::sync::Arc;
 mod orphan_blocks;
 use parity_scale_codec::Encode;
 
@@ -52,6 +54,8 @@ pub struct Consensus {
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
+    event_subscribers: Vec<Arc<dyn Fn(ConsensusEvent) + Send + Sync>>,
+    events_broadcaster: slave_pool::ThreadPool,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -77,6 +81,10 @@ impl Consensus {
             db_tx,
             orphan_blocks: &self.orphan_blocks,
         }
+    }
+
+    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
+        self.event_subscribers.push(handler)
     }
 
     pub fn new(
@@ -108,12 +116,28 @@ impl Consensus {
         chain_config: ChainConfig,
         blockchain_storage: blockchain_storage::Store,
     ) -> Result<Self, crate::ConsensusError> {
+        let event_broadcaster = slave_pool::ThreadPool::new();
+        event_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
         let cons = Self {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
+            event_subscribers: Vec::new(),
+            events_broadcaster: event_broadcaster,
         };
         Ok(cons)
+    }
+
+    fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
+        match new_block_index {
+            Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
+                let new_height = Arc::new(new_block_index.get_block_height());
+                let new_id = Arc::new(new_block_index.get_block_id().clone());
+                self.events_broadcaster
+                    .spawn(move || f(ConsensusEvent::NewTip(new_id, new_height)))
+            }),
+            None => (),
+        }
     }
 
     pub fn process_block(
@@ -136,6 +160,7 @@ impl Consensus {
         }
         let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
+        self.broadcast_new_tip_event(&result);
         Ok(result)
     }
 
