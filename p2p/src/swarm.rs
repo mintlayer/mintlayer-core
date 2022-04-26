@@ -255,6 +255,7 @@ where
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     #![allow(unused)]
@@ -576,3 +577,4 @@ mod tests {
         assert_eq!(swarm.peers.len(), 1);
     }
 }
+*/
