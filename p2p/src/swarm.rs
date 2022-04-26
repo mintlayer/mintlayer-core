@@ -32,18 +32,14 @@ use tokio::sync::mpsc;
 
 const MAX_ACTIVE_CONNECTIONS: usize = 32;
 
-#[allow(unused)]
 #[derive(Debug)]
 struct PeerContext<T>
 where
     T: NetworkService,
 {
-    /// Unique peer ID
-    id: T::PeerId,
-    // TODO: store all discovered peer information here
+    info: net::PeerInfo<T>,
 }
 
-#[allow(unused)]
 enum PeerAddrInfo<T>
 where
     T: NetworkService,
@@ -131,19 +127,20 @@ where
                     addr
                 );
 
-                // TODO: report to the sync manager?
-
-                todo!();
-                // match self.handle.connect(addr).await {
-                //     Ok((peer_id, socket)) => {
-                //         self.create_peer(peer_id, socket, PeerRole::Outbound);
-                //         Ok(())
-                //     }
-                //     Err(e) => {
-                //         log::error!("failed to establish outbound connection: {:?}", e);
-                //         Err(e)
-                //     }
-                // }
+                self.handle
+                    .connect(addr)
+                    .await
+                    .map(|info| {
+                        let id = info.peer_id;
+                        match self.peers.insert(id, PeerContext { info }) {
+                            Some(_) => panic!("peer already exists"),
+                            None => {}
+                        }
+                    })
+                    .map_err(|err| {
+                        log::error!("failed to establish outbound connection: {:?}", err);
+                        err
+                    })
             }
         }
     }
@@ -201,11 +198,22 @@ where
         for (id, addr) in peers.into_iter() {
             log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
 
+            // TODO: don't remove entry but modify it
             self.discovered.remove(&id);
-            todo!();
-            // if let Ok((peer_id, socket)) = self.handle.connect((*addr).clone()).await {
-            //     self.create_peer(peer_id, socket, PeerRole::Outbound)
-            // }
+            self.handle
+                .connect((*addr).clone())
+                .await
+                .map(|info| {
+                    let id = info.peer_id;
+                    match self.peers.insert(id, PeerContext { info }) {
+                        Some(_) => panic!("peer already exists"),
+                        None => {}
+                    }
+                })
+                .map_err(|err| {
+                    log::error!("failed to establish outbound connection: {:?}", err);
+                    err
+                });
         }
 
         Ok(())
@@ -243,7 +251,7 @@ where
     /// Handle network event received from the network service provider
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
-            net::ConnectivityEvent::IncomingConnection { peer_info } => {
+            net::ConnectivityEvent::PeerConnected { peer_info } => {
                 todo!();
             }
             net::ConnectivityEvent::PeerDiscovered { peers } => self.peer_discovered(&peers),
@@ -255,16 +263,13 @@ where
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     #![allow(unused)]
     use super::*;
-    use crate::error::P2pError;
-    use crate::event;
-    use crate::peer;
+    use crate::{error::P2pError, event};
     use common::chain::config;
-    use libp2p::Multiaddr;
+    use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
     use net::{libp2p::Libp2pService, mock::MockService, ConnectivityService};
     use std::net::SocketAddr;
     use tokio::net::TcpListener;
@@ -275,10 +280,9 @@ mod tests {
         T::ConnectivityHandle: ConnectivityService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (conn, _) = T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+        let (conn, _) = T::start(addr, &[], &[],Arc::clone(&config), std::time::Duration::from_secs(10)).await.unwrap();
         let (_, rx) = tokio::sync::mpsc::channel(16);
         let (tx_sync, mut rx_sync) = tokio::sync::mpsc::channel(16);
-        let (tx_peer, _) = tokio::sync::mpsc::channel(16);
 
         tokio::spawn(async move {
             loop {
@@ -286,7 +290,7 @@ mod tests {
             }
         });
 
-        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync, tx_peer, 256, 32)
+        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
     }
 
     // try to connect to an address that no one listening on and verify it fails
@@ -295,7 +299,7 @@ mod tests {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
         let mut swarm = make_swarm_manager::<MockService>(addr).await;
 
-        let addr: SocketAddr = "[::1]:6666".parse().unwrap();
+        let addr: SocketAddr = "[::1]:1".parse().unwrap();
         assert_eq!(
             swarm
                 .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
@@ -319,93 +323,6 @@ mod tests {
                 .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
                 .await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-        );
-    }
-
-    // verify that if handshake succeeds, peer state is set to `Active`
-    #[tokio::test]
-    async fn test_on_peer_event_handshake_success() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut swarm = make_swarm_manager::<MockService>(addr).await;
-        let (tx, _) = tokio::sync::mpsc::channel(16);
-
-        swarm.peers.insert(
-            addr,
-            PeerContext {
-                id: addr,
-                state: PeerState::Handshaking,
-                tx: tx.clone(),
-            },
-        );
-
-        assert_eq!(swarm.peers.len(), 1);
-        assert_eq!(
-            swarm
-                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded {
-                    peer_id: addr
-                }))
-                .await,
-            Ok(())
-        );
-        assert_eq!(swarm.peers.len(), 1);
-        match swarm.peers.get(&addr) {
-            Some(peer) => assert_eq!(peer.state, PeerState::Active),
-            None => {
-                panic!("peer not found");
-            }
-        }
-    }
-
-    // verify that if handshake fails, peer context is destroyed
-    #[tokio::test]
-    async fn test_on_peer_event_handshake_failure() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut swarm = make_swarm_manager::<MockService>(addr).await;
-        let (tx, _) = tokio::sync::mpsc::channel(16);
-
-        swarm.peers.insert(
-            addr,
-            PeerContext {
-                id: addr,
-                state: PeerState::Handshaking,
-                tx: tx.clone(),
-            },
-        );
-
-        assert_eq!(swarm.peers.len(), 1);
-        assert_eq!(
-            swarm
-                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeFailed {
-                    peer_id: addr
-                }))
-                .await,
-            Ok(())
-        );
-        assert_eq!(swarm.peers.len(), 0);
-    }
-
-    // verify that handshake event for unknown peer results in error
-    #[tokio::test]
-    async fn test_on_peer_event_unknown_peer() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut swarm = make_swarm_manager::<MockService>(addr).await;
-
-        assert_eq!(
-            swarm
-                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeSucceeded {
-                    peer_id: addr
-                }))
-                .await,
-            Err(P2pError::Unknown("Peer does not exist".to_string())),
-        );
-
-        assert_eq!(
-            swarm
-                .on_peer_event(Some(event::PeerSwarmEvent::HandshakeFailed {
-                    peer_id: addr
-                }))
-                .await,
-            Err(P2pError::Unknown("Peer does not exist".to_string())),
         );
     }
 
@@ -516,34 +433,6 @@ mod tests {
             vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
             vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
         );
-
-        // move peer with `id_2` to active list, try to add new address to it
-        // and verify that nothing is added
-        let (tx, _) = tokio::sync::mpsc::channel(1);
-        let _ = 32;
-        swarm.peers.insert(
-            id_3,
-            PeerContext {
-                id: id_3,
-                state: PeerState::Handshaking,
-                tx,
-            },
-        );
-
-        swarm
-            .peer_discovered(&[net::AddrInfo {
-                id: id_3,
-                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9098".parse().unwrap())],
-                ip6: vec![Arc::new("/ip6/::1/tcp/9099".parse().unwrap())],
-            }])
-            .unwrap();
-
-        check_peer(
-            &swarm.discovered,
-            id_3,
-            vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
-            vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
-        );
     }
 
     // verify that if the node is aware of any peers on the network,
@@ -551,30 +440,35 @@ mod tests {
     #[tokio::test]
     async fn test_auto_connect_mock() {
         let config = Arc::new(config::create_mainnet());
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let mut swarm = make_swarm_manager::<MockService>(addr).await;
+        // let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let mut swarm = make_swarm_manager::<Libp2pService>(addr).await;
+        let mut swarm2 =
+            make_swarm_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
-        // spawn tcp server for auto-connect test
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let server = TcpListener::bind(addr).await.unwrap();
+        let addr = swarm2.handle.local_addr().clone();
+        let id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
+            PeerId::from_multihash(peer).unwrap()
+        } else {
+            panic!("invalid multiaddr");
+        };
+
         tokio::spawn(async move {
-            println!("staring tcp server...");
+            log::debug!("staring libp2p service");
             loop {
-                assert!(server.accept().await.is_ok());
+                assert!(swarm2.handle.poll_next().await.is_ok());
             }
         });
 
-        // "discover" the tcp server
+        // "discover" the other libp2p service
         swarm
             .peer_discovered(&[net::AddrInfo {
-                id: addr,
+                id,
                 ip4: vec![],
                 ip6: vec![Arc::new(addr)],
             }])
             .unwrap();
         swarm.auto_connect().await.unwrap();
-
         assert_eq!(swarm.peers.len(), 1);
     }
 }
-*/

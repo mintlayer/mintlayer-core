@@ -230,16 +230,18 @@ impl Backend {
             },
             SwarmEvent::OutgoingConnectionError { peer_id, error } => {
                 if let Some(peer_id) = peer_id {
-                    // TODO: fix this
-                    self.dials
-                        .remove(&peer_id)
-                        .ok_or_else(|| {
-                            P2pError::Unknown("Pending connection does not exist".to_string())
-                        })?
-                        .send(Err(P2pError::SocketError(
-                            std::io::ErrorKind::ConnectionRefused,
-                        )))
-                        .map_err(|_| P2pError::ChannelClosed)
+                    match self.pending.remove(&peer_id) {
+                        Some(PendingState::Dialed { tx })
+                        | Some(PendingState::OutboundAccepted { tx }) => tx
+                            .send(Err(P2pError::SocketError(
+                                std::io::ErrorKind::ConnectionRefused,
+                            )))
+                            .map_err(|_| P2pError::ChannelClosed),
+                        _ => {
+                            log::debug!("connection failed for peer {:?}: {:?}", peer_id, error);
+                            Ok(())
+                        }
+                    }
                 } else {
                     log::error!("unhandled connection error: {:#?}", error);
                     Ok(())
