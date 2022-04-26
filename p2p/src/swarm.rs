@@ -16,26 +16,10 @@
 // Author(s): A. Altonen
 #![allow(unused, dead_code)]
 
-///! Swarm manager
-///!
-///! Swarm manager is responsible for handling all peer- and connectivity-related tasks
-///! of the P2P subsystem. By swarm, we mean a collection of peers we know about or are
-///! connected to. All connectivity-related events (incoming connections, peer discovery
-///! and expiration) are received from the network service provider and the swarm manager
-///! then decided when it needs to establish new outbound connctions and who are the peers
-///! it tries to connect to. It also accepts or rejects new incoming connections based on
-///! the number of active connections it has.
-///!
-///! After a connection has been received/established, the swarm manager creates a Peer object
-///! and spawns a task for that peer. The first thing the task does is handshake with the remote
-///! peer and the result of that handshake (success/failure) is reported to the swarm manager
-///! which then either reports that information to other subsystems of P2P that need that
-///! information or considers the peer invalid and destroys any context it had.
 use crate::{
     error::{self, P2pError},
-    event::{self, PeerEvent, PeerSwarmEvent},
+    event,
     net::{self, ConnectivityService, NetworkService},
-    peer::{Peer, PeerRole},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
@@ -49,16 +33,6 @@ use tokio::sync::mpsc;
 const MAX_ACTIVE_CONNECTIONS: usize = 32;
 
 #[allow(unused)]
-#[derive(Debug, PartialEq, Eq)]
-enum PeerState {
-    /// Peer is handshaking
-    Handshaking,
-
-    /// Peer is ready for flooding/syncing
-    Active,
-}
-
-#[allow(unused)]
 #[derive(Debug)]
 struct PeerContext<T>
 where
@@ -66,12 +40,7 @@ where
 {
     /// Unique peer ID
     id: T::PeerId,
-
-    /// Peer sta
-    state: PeerState,
-
-    /// Channel for communication with the peer
-    tx: mpsc::Sender<event::PeerEvent<T>>,
+    // TODO: store all discovered peer information here
 }
 
 #[allow(unused)]
@@ -104,23 +73,11 @@ where
     /// Hashmap of discovered peers we don't have an active connection with
     discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
 
-    /// Peer backlog maximum size
-    peer_backlock: usize,
-
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
 
     /// TX channel for sending events to SyncManager
     tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
-
-    /// TX channel given to Peer objects for communication with SyncManager
-    tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
-
-    /// Channel for p2p<->peers communication
-    mgr_chan: (
-        mpsc::Sender<event::PeerSwarmEvent<T>>,
-        mpsc::Receiver<event::PeerSwarmEvent<T>>,
-    ),
 }
 
 impl<T> SwarmManager<T>
@@ -133,20 +90,14 @@ where
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
-        tx_peer_sync: mpsc::Sender<event::PeerSyncEvent<T>>,
-        mgr_backlog: usize,
-        peer_backlock: usize,
     ) -> Self {
         Self {
             config,
             handle,
-            peer_backlock,
             rx_swarm,
             tx_sync,
-            tx_peer_sync,
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             discovered: HashMap::new(),
-            mgr_chan: tokio::sync::mpsc::channel(mgr_backlog),
         }
     }
 
@@ -157,9 +108,6 @@ where
                 event = self.rx_swarm.recv().fuse() => {
                     self.on_swarm_control_event(event).await?;
                 }
-                event = self.mgr_chan.1.recv().fuse() => {
-                    self.on_peer_event(event).await?;
-                }
                 event = self.handle.poll_next() => match event {
                     Ok(event) => self.on_network_event(event).await?,
                     Err(e) => {
@@ -167,76 +115,6 @@ where
                         return Err(e);
                     }
                 }
-            }
-        }
-    }
-
-    /// Handle an event coming from peer
-    ///
-    /// This may be an incoming message from remote peer or it may be event
-    /// notifying us that the remote peer has disconnected and P2P can destroy
-    /// whatever peer context it is holding
-    ///
-    /// The event is wrapped in an `Option` because the peer might have ungracefully
-    /// failed and reading from the closed channel might gives a `None` value, indicating
-    /// a protocol error which should be handled accordingly.
-    async fn on_peer_event(
-        &mut self,
-        event: Option<event::PeerSwarmEvent<T>>,
-    ) -> error::Result<()> {
-        let event = event.ok_or(P2pError::ChannelClosed)?;
-        match event {
-            PeerSwarmEvent::HandshakeFailed { peer_id } => {
-                log::error!("handshake failed, peer id {:?}", peer_id);
-                self.peers
-                    .remove(&peer_id)
-                    .map(|_| ())
-                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
-            }
-            PeerSwarmEvent::HandshakeSucceeded { peer_id } => {
-                log::info!("new peer joined, peer id {:?}", peer_id);
-
-                let tx = self
-                    .peers
-                    .get_mut(&peer_id)
-                    .ok_or_else(|| P2pError::Unknown("Peer does not exist".to_string()))
-                    .map(|peer| {
-                        (*peer).state = PeerState::Active;
-                        peer.tx.clone()
-                    })?;
-
-                if !std::matches!(
-                    tokio::join!(
-                        self.handle.register_peer(peer_id),
-                        self.tx_sync.send(event::SyncControlEvent::Connected { peer_id, tx })
-                    ),
-                    (Ok(_), Ok(_))
-                ) {
-                    return Err(P2pError::ChannelClosed);
-                }
-
-                Ok(())
-            }
-            PeerSwarmEvent::Disconnected { peer_id } => {
-                log::debug!("peer {:?} disconnected", peer_id);
-
-                if !std::matches!(
-                    tokio::join!(
-                        self.handle.unregister_peer(peer_id),
-                        self.tx_sync.send(event::SyncControlEvent::Disconnected { peer_id })
-                    ),
-                    (Ok(_), Ok(_))
-                ) {
-                    return Err(P2pError::ChannelClosed);
-                }
-
-                Ok(())
-            }
-            PeerSwarmEvent::Message {
-                peer_id: _,
-                message: _,
-            } => {
-                todo!();
             }
         }
     }
@@ -252,6 +130,8 @@ where
                     "try to establish outbound connection to peer at address {:?}",
                     addr
                 );
+
+                // TODO: report to the sync manager?
 
                 todo!();
                 // match self.handle.connect(addr).await {
@@ -364,35 +244,14 @@ where
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
             net::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
-                log::debug!("accept incoming connection, peer id {:?}", peer_id);
-                self.create_peer(peer_id, socket, PeerRole::Inbound);
-                Ok(())
+                todo!();
             }
             net::ConnectivityEvent::PeerDiscovered { peers } => self.peer_discovered(&peers),
             net::ConnectivityEvent::PeerExpired { peers } => self.peer_expired(&peers),
+            net::ConnectivityEvent::PeerDisconnected { peer_id } => {
+                todo!();
+            }
         }
-    }
-
-    /// Create `Peer` object from a socket object and spawn task for it
-    fn create_peer(&mut self, id: T::PeerId, socket: T::Socket, role: PeerRole) {
-        let config = self.config.clone();
-        let mgr_tx = self.mgr_chan.0.clone();
-        let sync_tx = self.tx_peer_sync.clone();
-        let (tx, rx) = tokio::sync::mpsc::channel(self.peer_backlock);
-
-        self.peers.insert(
-            id,
-            PeerContext {
-                id,
-                state: PeerState::Handshaking,
-                tx,
-            },
-        );
-        log::debug!("spawning a task for peer {:?}, role {:?}", id, role);
-
-        tokio::spawn(async move {
-            Peer::<T>::new(id, role, config, socket, mgr_tx, sync_tx, rx).run().await;
-        });
     }
 }
 
