@@ -243,7 +243,7 @@ where
     /// Handle network event received from the network service provider
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
-            net::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
+            net::ConnectivityEvent::IncomingConnection { peer_info } => {
                 todo!();
             }
             net::ConnectivityEvent::PeerDiscovered { peers } => self.peer_discovered(&peers),
