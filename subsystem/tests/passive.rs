@@ -24,6 +24,8 @@ pub struct Substringer {
     value: String,
 }
 
+impl subsystem::Subsystem for Substringer {}
+
 impl Substringer {
     pub fn new(value: String) -> Self {
         Self { value }
@@ -47,6 +49,8 @@ impl Substringer {
 pub struct Counter {
     value: u64,
 }
+
+impl subsystem::Subsystem for Counter {}
 
 impl Counter {
     pub fn new() -> Self {

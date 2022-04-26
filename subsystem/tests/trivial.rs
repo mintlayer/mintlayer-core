@@ -17,6 +17,9 @@
 
 mod helpers;
 
+struct Trivial;
+impl subsystem::Subsystem for Trivial {}
+
 // Test an empty app startup/shutdown
 #[test]
 fn empty() {
@@ -44,7 +47,7 @@ fn trivial() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let app = subsystem::Manager::new("trivial");
-        app.start("trivial", ());
+        app.start("trivial", Trivial);
         app.start_raw("nop", |_: subsystem::CallRequest<()>, _| async {});
         app.main().await;
     });

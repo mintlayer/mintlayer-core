@@ -37,6 +37,6 @@ async fn main() {
 
     let app = subsystem::Manager::new("toplevel");
     app.install_signal_handlers();
-    app.start("watch", Stopwatch::start);
+    app.start_raw("watch", Stopwatch::start);
     app.main().await
 }

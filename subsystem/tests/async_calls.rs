@@ -22,6 +22,8 @@ pub struct Logger {
     prefix: String,
 }
 
+impl subsystem::Subsystem for Logger {}
+
 impl Logger {
     fn new(prefix: String) -> Self {
         Logger { prefix }
@@ -37,6 +39,8 @@ pub struct Counter {
     count: u64,
     logger: subsystem::Handle<Logger>,
 }
+
+impl subsystem::Subsystem for Counter {}
 
 impl Counter {
     fn new(logger: subsystem::Handle<Logger>) -> Self {

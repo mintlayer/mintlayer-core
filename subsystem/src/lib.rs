@@ -43,6 +43,13 @@ use tokio::task;
 
 use logging::log;
 
+/// Defines hooks into a subsystem lifecycle.
+#[async_trait::async_trait]
+pub trait Subsystem: Sized {
+    /// Custom shutdown procedure.
+    async fn shutdown(self) {}
+}
+
 /// Manager configuration options.
 pub struct ManagerConfig {
     /// Subsystem manager name
@@ -184,23 +191,25 @@ impl Manager {
     /// Start a passive subsystem.
     ///
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
-    /// from other subsystems.
-    pub fn start_with_config<T: 'static + Send>(
+    /// from other subsystems. A hook to be invoked on shutdown can be specified by means of the
+    /// [Subsystem] trait.
+    pub fn start_with_config<S: 'static + Send + Subsystem>(
         &self,
         config: SubsystemConfig,
-        mut obj: T,
-    ) -> Handle<T> {
+        mut subsys: S,
+    ) -> Handle<S> {
         self.start_raw_with_config(config, |mut call_rq, mut shutdown_rq| async move {
             loop {
                 tokio::select! {
                     () = shutdown_rq.recv() => { break; }
-                    call = call_rq.recv() => { call(&mut obj).await; }
+                    call = call_rq.recv() => { call(&mut subsys).await; }
                 }
             }
+            subsys.shutdown().await;
         })
     }
 
-    /// Start a raw subsystem. See [Manager::start_with_config].
+    /// Start a raw subsystem. See [Manager::start_raw_with_config].
     pub fn start_raw<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &self,
         name: &'static str,
@@ -210,8 +219,8 @@ impl Manager {
     }
 
     /// Start a passive subsystem. See [Manager::start_with_config].
-    pub fn start<T: 'static + Send>(&self, name: &'static str, obj: T) -> Handle<T> {
-        self.start_with_config(SubsystemConfig::named(name), obj)
+    pub fn start<S: 'static + Send + Subsystem>(&self, name: &'static str, subsys: S) -> Handle<S> {
+        self.start_with_config(SubsystemConfig::named(name), subsys)
     }
 
     /// Install termination signal handlers.
