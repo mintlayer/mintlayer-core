@@ -18,7 +18,7 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{NetworkService, PubSubTopic, SocketService},
+    net::{NetworkService, PubSubTopic},
 };
 use async_trait::async_trait;
 use futures::FutureExt;

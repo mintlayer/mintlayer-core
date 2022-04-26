@@ -19,7 +19,7 @@ use crate::{
     error::{self, P2pError},
     net::{
         ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SocketService, ValidationResult,
+        PubSubService, PubSubTopic, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -49,17 +49,6 @@ pub struct MockService;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
-
-#[derive(Debug)]
-pub struct MockSocket {
-    socket: TcpStream,
-}
-
-impl MockSocket {
-    pub fn new(socket: TcpStream) -> Self {
-        MockSocket { socket }
-    }
-}
 
 pub struct MockConnectivityHandle<T>
 where
@@ -91,7 +80,6 @@ where
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
-    type Socket = MockSocket;
     type Strategy = MockStrategy;
     type PeerId = SocketAddr;
     type ProtocolId = String;
@@ -135,7 +123,7 @@ impl NetworkService for MockService {
 #[async_trait]
 impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
-    T: NetworkService<Address = SocketAddr, PeerId = SocketAddr, Socket = MockSocket> + Send,
+    T: NetworkService<Address = SocketAddr, PeerId = SocketAddr> + Send,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -143,7 +131,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
 
-        let socket = rx
+        let _ = rx
             .await
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
@@ -165,14 +153,15 @@ where
     }
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
-        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
-                Ok(ConnectivityEvent::IncomingConnection {
-                    peer_id,
-                    socket: MockSocket { socket },
-                })
-            }
-        }
+        todo!();
+        // match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+        //     types::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
+        //         Ok(ConnectivityEvent::IncomingConnection {
+        //             peer_id,
+        //             socket: MockSocket { socket },
+        //         })
+        //     }
+        // }
     }
 
     async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
@@ -207,35 +196,6 @@ where
 
     async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
         todo!();
-    }
-}
-
-#[async_trait]
-impl SocketService for MockSocket {
-    async fn send<T>(&mut self, data: &T) -> error::Result<()>
-    where
-        T: Sync + Send + Encode,
-    {
-        let encoded = data.encode();
-
-        log::trace!("try to send message, {} bytes", encoded.len());
-
-        match self.socket.write(&encoded).await? {
-            0 => Err(P2pError::PeerDisconnected),
-            _ => Ok(()),
-        }
-    }
-
-    async fn recv<T>(&mut self) -> error::Result<T>
-    where
-        T: Decode,
-    {
-        let mut data = vec![0u8; 1024 * 1024];
-
-        match self.socket.read(&mut data).await? {
-            0 => Err(P2pError::PeerDisconnected),
-            _ => Decode::decode(&mut &data[..]).map_err(|e| e.into()),
-        }
     }
 }
 
@@ -359,143 +319,5 @@ mod tests {
         let acc: ConnectivityEvent<MockService> = acc.unwrap();
 
         // TODO: is there any sensible way to make `accept()` fail?
-    }
-
-    #[tokio::test]
-    async fn test_peer_send() {
-        let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let (mut server, _) =
-            MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
-                .await
-                .unwrap();
-        let remote_fut = TcpStream::connect(addr);
-
-        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
-        assert!(server_res.is_ok());
-        assert!(remote_res.is_ok());
-
-        let server_res: ConnectivityEvent<MockService> = server_res.unwrap();
-        let server_res = match server_res {
-            ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
-            _ => panic!("invalid event received, expected incoming connection"),
-        };
-
-        let config = Arc::new(config::create_mainnet());
-        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-        let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(
-            test_utils::get_mock_id(),
-            PeerRole::Outbound,
-            config.clone(),
-            server_res,
-            peer_tx,
-            sync_tx,
-            rx,
-        );
-        let mut socket = remote_res.unwrap();
-
-        // try to send data that implements `Encode + Decode`
-        // and verify that it was received correctly
-        let tx = Transaction {
-            hash: 12345u64,
-            value: 67890u128,
-        };
-
-        let mut buf = vec![0u8; 256];
-        let (server_res, peer_res) = tokio::join!(socket.read(&mut buf), peer.socket.send(&tx));
-
-        assert!(peer_res.is_ok());
-        assert!(server_res.is_ok());
-        assert_eq!(Decode::decode(&mut &buf[..]), Ok(tx));
-    }
-
-    #[tokio::test]
-    async fn test_peer_recv() {
-        // create a `MockService`, connect to it with a `TcpStream` and exchange data
-        let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let (mut server, _) =
-            MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
-                .await
-                .unwrap();
-        let remote_fut = TcpStream::connect(addr);
-
-        let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
-        assert!(server_res.is_ok());
-        assert!(remote_res.is_ok());
-
-        let server_res: ConnectivityEvent<MockService> = server_res.unwrap();
-        let server_res = match server_res {
-            ConnectivityEvent::IncomingConnection { peer_id: _, socket } => socket,
-            _ => panic!("invalid event received, expected incoming connection"),
-        };
-
-        let config = Arc::new(config::create_mainnet());
-        let (peer_tx, _peer_rx) = tokio::sync::mpsc::channel(1);
-        let (sync_tx, _sync_rx) = tokio::sync::mpsc::channel(1);
-        let (_tx, rx) = tokio::sync::mpsc::channel(1);
-        let mut peer = Peer::<MockService>::new(
-            test_utils::get_mock_id(),
-            PeerRole::Outbound,
-            config.clone(),
-            server_res,
-            peer_tx,
-            sync_tx,
-            rx,
-        );
-        let mut socket = remote_res.unwrap();
-
-        // send data and decode it successfully
-        let tx = Transaction {
-            hash: 12345u64,
-            value: 67890u128,
-        };
-        let encoded = tx.encode();
-
-        let (socket_res, peer_res): (_, Result<Transaction, _>) =
-            tokio::join!(socket.write(&encoded), peer.socket.recv());
-        assert!(socket_res.is_ok());
-        assert!(peer_res.is_ok());
-        assert_eq!(peer_res.unwrap(), tx);
-    }
-
-    impl PartialEq for MockSocket {
-        fn eq(&self, _other: &MockSocket) -> bool {
-            true
-        }
-    }
-
-    // try to connect to a service that is not listening with a small timeout
-    // and verify that the connection fails
-    // TODO: verify on windows/mac
-    #[cfg(target_os = "linux")]
-    #[tokio::test]
-    async fn test_connect_with_timeout() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let (mut service, _) =
-            MockService::start(addr, &[], &[], std::time::Duration::from_secs(2))
-                .await
-                .unwrap();
-
-        let port = portpicker::pick_unused_port().unwrap();
-        let conn_addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
-        let start = std::time::SystemTime::now();
-        assert_eq!(
-            service.connect(conn_addr).await,
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-        );
-        assert_eq!(
-            std::time::SystemTime::now().duration_since(start).unwrap().as_secs(),
-            0
-        );
-
-        // try to connect to a non-routable host
-        let conn_addr: SocketAddr = "10.255.255.255:8888".parse().unwrap();
-        let start = std::time::SystemTime::now();
-        assert_eq!(
-            service.connect(conn_addr).await,
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-        );
-        assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }
