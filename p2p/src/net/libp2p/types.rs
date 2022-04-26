@@ -94,7 +94,7 @@ pub enum Command {
 
 pub enum ConnectivityEvent {
     /// Connection with a data stream has been opened by a remote peer
-    ConnectionAccepted { peer_info: IdentifyInfo },
+    ConnectionAccepted { peer_info: Box<IdentifyInfo> },
 
     /// One or more peers were discovered by one of the discovery strategies
     PeerDiscovered { peers: Vec<(PeerId, Multiaddr)> },
