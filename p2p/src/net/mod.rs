@@ -17,7 +17,7 @@
 use crate::{error, message};
 use async_trait::async_trait;
 use common::{chain, primitives};
-use serialization::{Decode, Encode};
+use serialization::Encode;
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
@@ -65,10 +65,7 @@ where
     T: NetworkService,
 {
     /// Incoming connection from remote peer
-    IncomingConnection {
-        peer_id: T::PeerId,
-        socket: T::Socket,
-    },
+    IncomingConnection { peer_info: PeerInfo<T> },
 
     /// One or more peers discovered
     PeerDiscovered { peers: Vec<AddrInfo<T>> },
@@ -131,14 +128,11 @@ pub trait NetworkService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
 
-    /// Generic socket object that the underlying implementation uses
-    type Socket: SocketService + Send;
-
     /// Enum of different peer discovery strategies that the implementation provides
     type Strategy;
 
     /// Id that identifies a protocol
-    type ProtocolId: Send + Clone;
+    type ProtocolId: Debug + Send + Clone;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
@@ -227,22 +221,4 @@ where
 
     /// Poll unvalidated gossipsub messages
     async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>>;
-}
-
-/// `SocketService` provides the low-level socket interface that
-/// the `NetworkService::Socket` object must implement in order to do networking
-#[async_trait]
-pub trait SocketService {
-    /// Send data to a remote peer we're connected to
-    ///
-    /// # Arguments
-    /// `data` - generic data to send
-    async fn send<T>(&mut self, data: &T) -> error::Result<()>
-    where
-        T: Sync + Send + Encode;
-
-    /// Receive data from a remote peer we're connected to
-    async fn recv<T>(&mut self) -> error::Result<T>
-    where
-        T: Decode;
 }
