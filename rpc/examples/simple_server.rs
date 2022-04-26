@@ -1,9 +1,3 @@
-use rpc::start_with_methods;
-
-use jsonrpsee::core::server::rpc_module::Methods;
-use jsonrpsee::core::Error;
-use jsonrpsee::proc_macros::rpc;
-
 // How to run this example
 //
 // From within the rpc directory:
@@ -22,32 +16,61 @@ use jsonrpsee::proc_macros::rpc;
 // The output should be
 // {"jsonrpc":"2.0","result":46,"id":2 }
 
-#[rpc(server, namespace = "some_subsystem")]
-pub trait SubsystemRpc {
-    #[method(name = "name")]
-    fn name(&self) -> Result<String, Error>;
+struct SomeSubsystem(u64);
 
-    #[method(name = "add")]
-    fn add(&self, a: u64, b: u64) -> Result<u64, Error>;
+impl subsystem::Subsystem for SomeSubsystem {}
+
+impl SomeSubsystem {
+    fn bump(&mut self) -> u64 {
+        self.0 += 1;
+        self.0
+    }
 }
 
-pub struct SubsystemRpcImpl;
+type SomeSubsystemHandle = subsystem::Handle<SomeSubsystem>;
 
-impl SubsystemRpcServer for SubsystemRpcImpl {
-    fn name(&self) -> Result<String, Error> {
+#[rpc::rpc(server, namespace = "some_subsystem")]
+pub trait SomeSubsystemRpc {
+    #[method(name = "name")]
+    fn name(&self) -> rpc::Result<String>;
+
+    #[method(name = "add")]
+    fn add(&self, a: u64, b: u64) -> rpc::Result<u64>;
+
+    #[method(name = "bump")]
+    async fn bump(&self) -> rpc::Result<u64>;
+}
+
+#[async_trait::async_trait]
+impl SomeSubsystemRpcServer for SomeSubsystemHandle {
+    fn name(&self) -> rpc::Result<String> {
         Ok("sub1".into())
     }
 
-    fn add(&self, a: u64, b: u64) -> Result<u64, Error> {
+    fn add(&self, a: u64, b: u64) -> rpc::Result<u64> {
         Ok(a + b)
+    }
+
+    async fn bump(&self) -> rpc::Result<u64> {
+        self.call_mut(SomeSubsystem::bump).await.map_err(rpc::Error::to_call_error)
     }
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let methods = Methods::from(SubsystemRpcImpl.into_rpc());
-    let (_server_addr, handle) =
-        start_with_methods(&"127.0.0.1:3030".parse().unwrap(), methods).await.unwrap();
-    handle.await;
+    logging::init_logging::<&std::path::Path>(None);
+
+    let app = subsystem::Manager::new("rpc-example");
+    app.install_signal_handlers();
+    let some_subsystem = app.start("some_subsys", SomeSubsystem(0));
+    let _rpc_subsystem = app.start(
+        "rpc",
+        rpc::Builder::new("127.0.0.1:3030".parse().unwrap())
+            .register(some_subsystem.clone().into_rpc())
+            .start()
+            .await?,
+    );
+
+    app.main().await;
     Ok(())
 }
