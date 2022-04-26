@@ -152,7 +152,6 @@ where
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,12 +172,11 @@ mod tests {
     {
         let config = Arc::new(config::create_mainnet());
         let (_, flood) =
-            T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+            T::start(addr, &[], &[], Arc::clone(&config), std::time::Duration::from_secs(10)).await.unwrap();
         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-        let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
 
         (
-            SyncManager::<T>::new(Arc::clone(&config), flood, rx_sync, rx_peer),
+            SyncManager::<T>::new(Arc::clone(&config), flood, rx_sync),
             tx_sync,
             tx_peer,
         )
@@ -191,11 +189,10 @@ mod tests {
         let (mut mgr, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
         // send Connected event to SyncManager
-        let (tx, rx) = mpsc::channel(1);
         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -208,11 +205,10 @@ mod tests {
         let (mut mgr, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
         // send Connected event to SyncManager
-        let (tx, rx) = mpsc::channel(1);
         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -231,4 +227,3 @@ mod tests {
         assert!(mgr.peers.is_empty());
     }
 }
-*/
