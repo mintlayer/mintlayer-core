@@ -30,6 +30,7 @@ use libp2p::{
         IdentTopic as Topic, MessageAuthenticity, MessageId, ValidationMode,
     },
     mdns::MdnsEvent,
+    ping,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
@@ -130,11 +131,15 @@ impl Backend {
         event: SwarmEvent<
             types::ComposedEvent,
             EitherError<
-                EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
-                GossipsubHandlerError,
+                EitherError<
+                    EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
+                    GossipsubHandlerError,
+                >,
+                ping::Failure,
             >,
         >,
     ) -> error::Result<()> {
+        // TODO: separate this code into protocol-specific handlers!
         match event {
             SwarmEvent::Behaviour(types::ComposedEvent::StreamingEvent(
                 StreamingEvent::StreamOpened {
@@ -273,6 +278,46 @@ impl Backend {
                     .await
                     .map_err(|_| P2pError::ChannelClosed)
             }
+            // TODO: implement the ping protocol as specified in the spec
+            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(ping::Event {
+                peer,
+                result: Result::Ok(ping::Success::Ping { rtt }),
+            })) => {
+                // println!(
+                //     "ping: rtt to {} is {} ms",
+                //     peer.to_base58(),
+                //     rtt.as_millis()
+                // );
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(ping::Event {
+                peer,
+                result: Result::Ok(ping::Success::Pong),
+            })) => {
+                // println!("ping: pong from {}", peer.to_base58());
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(ping::Event {
+                peer,
+                result: Result::Err(ping::Failure::Timeout),
+            })) => {
+                // println!("ping: timeout to {}", peer.to_base58());
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(ping::Event {
+                peer,
+                result: Result::Err(ping::Failure::Unsupported),
+            })) => {
+                // println!("ping: {} does not support ping protocol", peer.to_base58());
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(ping::Event {
+                peer,
+                result: Result::Err(ping::Failure::Other { error }),
+            })) => {
+                // println!("ping: ping::Failure with {}: {}", peer.to_base58(), error);
+                Ok(())
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -399,6 +444,7 @@ mod tests {
         let behaviour = types::ComposedBehaviour {
             streaming: Streaming::<IdentityCodec>::default(),
             mdns: Mdns::new(Default::default()).await.unwrap(),
+            ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
         };
 
