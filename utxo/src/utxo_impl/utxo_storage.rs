@@ -1,9 +1,13 @@
+#![allow(dead_code, unused_variables, unused_imports)]
+// todo: remove ^ when all untested codes are tested
+
 use std::collections::BTreeMap;
 
 use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use common::chain::block::Block;
 use common::chain::OutPoint;
 use common::primitives::Id;
+use crate::{BlockUndo, Error};
 
 pub trait UtxosPersistentStorage {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
@@ -11,6 +15,10 @@ pub trait UtxosPersistentStorage {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
     fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::Error>;
     fn get_best_block_id(&self) -> Result<Option<Id<Block>>, crate::Error>;
+
+    fn set_undo_data(&mut self, id:Id<Block>, undo:&BlockUndo)-> Result<(), crate::Error>;
+    fn del_undo_data(&mut self, id:Id<Block>) -> Result<(), crate::Error>;
+    fn get_undo_data(&self, id:Id<Block>) -> Result<Option<BlockUndo>, crate::Error>;
 }
 
 pub struct UtxoDB<'a, S: UtxosPersistentStorage>(&'a mut S);
@@ -18,6 +26,18 @@ pub struct UtxoDB<'a, S: UtxosPersistentStorage>(&'a mut S);
 impl<'a, S: UtxosPersistentStorage> UtxoDB<'a, S> {
     pub fn new(store: &'a mut S) -> Self {
         Self(store)
+    }
+
+    pub fn set_undo_data(&mut self, id:Id<Block>, undo:&BlockUndo) -> Result<(), crate::Error> {
+        self.0.set_undo_data(id,undo)
+    }
+
+    pub fn del_undo_data(&mut self, id:Id<Block> )-> Result<(), crate::Error> {
+        self.0.del_undo_data(id)
+    }
+
+    pub fn get_undo_data(&self, id:Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
+        self.0.get_undo_data(id)
     }
 }
 
@@ -70,10 +90,10 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
                     self.0.set_utxo(outpoint, utxo)?;
-                } else {
+                    } else {
                     // entry is spent
                     self.0.del_utxo(outpoint)?;
-                }
+                };
             }
         }
         self.0.set_best_block_id(&utxos.best_block)?;
@@ -121,6 +141,18 @@ impl UtxosPersistentStorage for UtxoInMemoryDBInterface {
         // TODO: fix; don't get general block id
         Ok(self.best_block_id.clone())
     }
+
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
+        todo!()
+    }
+
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
+        todo!()
+    }
 }
 
 #[cfg(test)]
@@ -131,24 +163,18 @@ mod test {
         UtxosView,
     };
     use crate::ConsumedUtxoCache;
-    use common::chain::{Destination, OutPointSourceId, Transaction, TxOutput};
+    use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
     use common::primitives::{Amount, BlockHeight};
     use common::primitives::{Id, H256};
-    use crypto::random::{make_pseudo_rng, Rng};
+    use crypto::random::{make_pseudo_rng, Rng, seq};
     use iter_tools::Itertools;
     use std::collections::BTreeMap;
+    use common::chain::config::create_mainnet;
+    use common::primitives::consensus_data::ConsensusData;
+    use crate::test_helper::{create_tx_outputs, create_utxo};
 
-    fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
-        let output = TxOutput::new(Amount::new(10), Destination::PublicKey);
-        let utxo = Utxo::new(output, false, BlockHeight::new(block_height));
 
-        let utxo_id: Id<Transaction> = Id::new(&H256::random());
-        let outpoint = OutPoint::new(OutPointSourceId::Transaction(utxo_id), 0);
-
-        (utxo, outpoint)
-    }
-
-    fn create_utxos(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
+    fn create_utxo_entries(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
         let mut map = BTreeMap::new();
         for _ in 0..num_of_utxos {
             let (utxo, outpoint) = create_utxo(0);
@@ -159,10 +185,11 @@ mod test {
         map
     }
 
+
     #[test]
     fn test_utxo() {
         common::concurrency::model(move || {
-            let utxos = create_utxos(10);
+            let utxos = create_utxo_entries(10);
             let new_best_block_hash = Id::new(&H256::random());
 
             let utxos = ConsumedUtxoCache {
@@ -242,4 +269,5 @@ mod test {
             }
         });
     }
+
 }

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};
@@ -29,6 +30,8 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
 
     tx_outputs
 }
+
+
 
 pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
     inner_create_utxo(Some(block_height))

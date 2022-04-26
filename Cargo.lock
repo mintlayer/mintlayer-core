@@ -357,7 +357,9 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
+ "itertools",
  "mockall",
+ "num-traits",
  "parity-scale-codec",
  "rand 0.8.4",
  "storage",

@@ -145,7 +145,7 @@ impl UtxoRead for Store {
 
 impl UndoRead for Store {
     delegate_to_transaction! {
-        fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
     }
 }
 
@@ -248,7 +248,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
 }
 
 impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UndoRead for StoreTx<Tx> {
-    fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
         self.read::<DBBlockUndo, _, _>(id.as_ref())
     }
 }

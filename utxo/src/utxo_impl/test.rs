@@ -451,7 +451,7 @@ fn blockchain_or_mempool_utxo_test() {
 }
 
 #[test]
-fn test_multiple_update_utxos() {
+fn multiple_update_utxos_test() {
     let mut cache = UtxosCache::default();
 
     // let's test `add_utxos`

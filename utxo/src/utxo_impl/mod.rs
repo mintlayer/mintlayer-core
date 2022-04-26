@@ -222,7 +222,6 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = Some(block_hash);
     }
 
-    //TODO: haven't tested this yet.
     pub fn add_utxos(
         &mut self,
         tx: &Transaction,
@@ -255,7 +254,7 @@ impl<'a> UtxosCache<'a> {
 
     /// Mark the inputs of tx as 'spent'.
     /// returns a TxUndo if function is a success;
-    /// or an error if  of the tx's input cannot be spent.
+    /// or an error if the tx's input cannot be spent.
     pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> = tx
             .get_inputs()

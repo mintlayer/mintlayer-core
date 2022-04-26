@@ -6,6 +6,7 @@ use crate::{UtxoEntry, UtxoStatus};
 use common::chain::OutPoint;
 use common::primitives::{Id, H256};
 use crypto::random::{make_pseudo_rng, Rng};
+use crate::utxo_storage::UtxoDB;
 
 fn random_bool() -> bool {
     let rng = make_pseudo_rng().gen_range(0..2);

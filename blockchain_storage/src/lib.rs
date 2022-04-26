@@ -109,10 +109,10 @@ pub(crate) trait UtxoWrite: UtxoRead {
     fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
 }
 
-pub trait UndoRead {
-    fn get_undo_data(&mut self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+pub(crate) trait UndoRead {
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
-pub trait UndoWrite: UndoRead {
+pub(crate) trait UndoWrite: UndoRead {
     fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
