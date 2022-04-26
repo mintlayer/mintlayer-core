@@ -31,6 +31,9 @@ impl Add<BlockDistance> for BlockHeight {
     type Output = Option<BlockHeight>;
 
     fn add(self, other: BlockDistance) -> Option<BlockHeight> {
+        // TODO: The BlockHeight type can be constructed from u64 and there is no check if that does not exceed u64::MAX/2.
+        //       We should clarify where the enforcement boundary for this is. Also nothing in the API prevents from adding
+        //       a BlockDistance twice to a BlockHeight and that would trigger a panic here.
         let height: i64 = self.0.try_into().ok()?;
         let result = height
             .checked_add(other.0)

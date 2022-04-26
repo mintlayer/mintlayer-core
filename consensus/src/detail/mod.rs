@@ -612,6 +612,8 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
+        //TODO: The parts that check the block in isolation without the knowledge of the state should not take
+        //      storage as an argument (either directly or indirectly as done here through self)
         self.check_consensus(block)?;
         self.check_block_detail(block, block_source)?;
         Ok(())

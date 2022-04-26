@@ -73,6 +73,7 @@ impl ChainConfig {
 }
 
 const MAINNET_ADDRESS_PREFIX: &str = "mlt";
+// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 
 fn create_mainnet_genesis() -> Block {

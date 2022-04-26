@@ -110,6 +110,13 @@ pub struct TxMainChainIndex {
     spent: Vec<OutputSpentState>,
 }
 
+// TODO: This function should probably operate on the whole block at once.
+//  I.e. take a block in and return a sequence of transaction positions.
+//  This way, we have to ask for each transaction separately and every time
+//  the whole block is encoded, giving O(N^2) complexity in number of transactions
+//  which rather unpleasant. Also the implementation could be improved by
+//  only asking about offsets, leveraging Encode::encoded_size method, since
+//  we are only interested in offsets in the encoded stream, not the contents.
 pub fn calculate_tx_index_from_block(
     block: &Block,
     tx_num: usize,

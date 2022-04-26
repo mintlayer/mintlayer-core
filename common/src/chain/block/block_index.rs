@@ -13,6 +13,7 @@ pub struct BlockIndex {
     //  pub chain_trust: Uint256,
     chain_trust: u128,
     height: BlockHeight,
+    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
     time: u32,
     // TODO: Discuss with Sam
     time_max: u32,
@@ -43,10 +44,12 @@ impl BlockIndex {
         self.prev_block_id == None && chain_config.genesis_block().get_id() == self.block_id
     }
 
+    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
     pub fn get_block_time(&self) -> u32 {
         self.time
     }
 
+    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
     pub fn get_block_time_max(&self) -> u32 {
         self.time_max
     }
