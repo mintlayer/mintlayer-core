@@ -45,7 +45,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 mod backend;
-mod common;
+mod types;
 
 // Maximum message size of 10 MB
 const MESSAGE_MAX_SIZE: u32 = 10 * 1024 * 1024;
@@ -81,10 +81,10 @@ where
     addr: Multiaddr,
 
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::Sender<common::Command>,
+    cmd_tx: mpsc::Sender<types::Command>,
 
     /// Channel for receiving connectivity events from libp2p backend
-    conn_rx: mpsc::Receiver<common::ConnectivityEvent>,
+    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -93,10 +93,10 @@ where
     T: NetworkService,
 {
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::Sender<common::Command>,
+    cmd_tx: mpsc::Sender<types::Command>,
 
     /// Channel for receiving floodsub events from libp2p backend
-    flood_rx: mpsc::Receiver<common::FloodsubEvent>,
+    flood_rx: mpsc::Receiver<types::FloodsubEvent>,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -208,7 +208,7 @@ impl NetworkService for Libp2pService {
             .boxed();
 
         let swarm = {
-            let mut behaviour = common::ComposedBehaviour {
+            let mut behaviour = types::ComposedBehaviour {
                 streaming: Streaming::<IdentityCodec>::default(),
                 mdns: Mdns::new(Default::default()).await?,
                 floodsub: Floodsub::new(peer_id),
@@ -243,7 +243,7 @@ impl NetworkService for Libp2pService {
         // create a multiaddress for local peer and return the Libp2pService object
         let (tx, rx) = oneshot::channel();
         cmd_tx
-            .send(common::Command::Listen {
+            .send(types::Command::Listen {
                 addr: addr.clone(),
                 response: tx,
             })
@@ -290,7 +290,7 @@ where
         // dial the remote peer
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(common::Command::Dial {
+            .send(types::Command::Dial {
                 peer_id,
                 peer_addr: addr.clone(),
                 response: tx,
@@ -305,7 +305,7 @@ where
         // if dial succeeded, open a generic stream
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(common::Command::OpenStream {
+            .send(types::Command::OpenStream {
                 peer_id,
                 response: tx,
             })
@@ -334,7 +334,7 @@ where
         log::debug!("register peer {:?} to libp2p backend", peer);
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(common::Command::Register { peer, response: tx }).await?;
+        self.cmd_tx.send(types::Command::Register { peer, response: tx }).await?;
 
         rx.await
             .map_err(|e| e)? // channel closed
@@ -345,7 +345,7 @@ where
         log::debug!("unregister peer {:?} from libp2p backend", peer);
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(common::Command::Unregister { peer, response: tx }).await?;
+        self.cmd_tx.send(types::Command::Unregister { peer, response: tx }).await?;
 
         rx.await
             .map_err(|e| e)? // channel closed
@@ -354,18 +354,18 @@ where
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            common::ConnectivityEvent::ConnectionAccepted { socket } => {
+            types::ConnectivityEvent::ConnectionAccepted { socket } => {
                 Ok(ConnectivityEvent::IncomingConnection {
                     peer_id: socket.id,
                     socket: *socket,
                 })
             }
-            common::ConnectivityEvent::PeerDiscovered { peers } => {
+            types::ConnectivityEvent::PeerDiscovered { peers } => {
                 Ok(ConnectivityEvent::PeerDiscovered {
                     peers: parse_peers(peers),
                 })
             }
-            common::ConnectivityEvent::PeerExpired { peers } => {
+            types::ConnectivityEvent::PeerExpired { peers } => {
                 Ok(ConnectivityEvent::PeerExpired {
                     peers: parse_peers(peers),
                 })
@@ -385,7 +385,7 @@ where
     {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(common::Command::SendMessage {
+            .send(types::Command::SendMessage {
                 topic,
                 message: data.encode(),
                 response: tx,
@@ -399,7 +399,7 @@ where
 
     async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>> {
         match self.flood_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            common::FloodsubEvent::MessageReceived {
+            types::FloodsubEvent::MessageReceived {
                 peer_id,
                 topic,
                 message,
