@@ -383,28 +383,6 @@ where
         &self.addr
     }
 
-    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        log::debug!("register peer {:?} to libp2p backend", peer);
-
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(types::Command::Register { peer, response: tx }).await?;
-
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
-    }
-
-    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        log::debug!("unregister peer {:?} from libp2p backend", peer);
-
-        let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(types::Command::Unregister { peer, response: tx }).await?;
-
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
-    }
-
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {

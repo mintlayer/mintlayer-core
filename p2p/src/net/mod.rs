@@ -186,12 +186,6 @@ where
     /// - new discovered peers
     /// - peer expiration events
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>>;
-
-    /// Register peer to the network service provider
-    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()>;
-
-    /// Unregister peer from the network service provider
-    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()>;
 }
 
 /// PubSubService provides an interface through which objects can send

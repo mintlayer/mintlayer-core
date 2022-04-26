@@ -163,14 +163,6 @@ where
         //     }
         // }
     }
-
-    async fn register_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        Ok(())
-    }
-
-    async fn unregister_peer(&mut self, peer: T::PeerId) -> error::Result<()> {
-        Ok(())
-    }
 }
 
 #[async_trait]
