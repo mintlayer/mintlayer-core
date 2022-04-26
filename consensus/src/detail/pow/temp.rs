@@ -20,7 +20,7 @@
 
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::Block;
-use common::primitives::{BlockHeight, Id};
+use common::primitives::BlockHeight;
 
 pub struct BlockIndex {
     pub height: BlockHeight,
@@ -33,10 +33,6 @@ impl BlockIndex {
     }
 
     pub fn get_ancestor(&self, height: BlockHeight) -> BlockIndex {
-        todo!()
-    }
-
-    pub fn prev(&self) -> Option<Id<Block>> {
         todo!()
     }
 }
