@@ -18,8 +18,8 @@
 use crate::{
     error::{self, P2pError},
     net::{
-        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
-        PubSubTopic, SocketService, ValidationResult,
+        ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
+        PubSubService, PubSubTopic, SocketService, ValidationResult,
     },
     peer::Peer,
 };
@@ -31,6 +31,7 @@ use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -94,6 +95,7 @@ impl NetworkService for MockService {
     type Socket = MockSocket;
     type Strategy = MockStrategy;
     type PeerId = SocketAddr;
+    type ProtocolId = String;
     type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
@@ -102,6 +104,7 @@ impl NetworkService for MockService {
         addr: Self::Address,
         _strategies: &[Self::Strategy],
         _topics: &[PubSubTopic],
+        _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
@@ -135,7 +138,7 @@ impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
     T: NetworkService<Address = SocketAddr, PeerId = SocketAddr, Socket = MockSocket> + Send,
 {
-    async fn connect(&mut self, addr: T::Address) -> error::Result<(T::PeerId, T::Socket)> {
+    async fn connect(&mut self, addr: T::Address) -> error::Result<PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         let (tx, rx) = oneshot::channel();
@@ -146,7 +149,16 @@ where
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        Ok((addr, MockSocket::new(socket)))
+        todo!();
+        // Ok(
+        // PeerInfo {
+        // id: addr,
+        // net: chain::config::ChainType,
+        // version: primitives::version::SemVer,
+        // agent: Option<String>,
+        // protocols: Vec<String>,
+        // }
+        // )
     }
 
     fn local_addr(&self) -> &T::Address {

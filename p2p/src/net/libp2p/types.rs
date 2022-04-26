@@ -17,12 +17,16 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::{error, message, net};
+use crate::{
+    error, message,
+    net::{self, libp2p::Libp2pService},
+};
 use libp2p::{
     gossipsub::{
         Gossipsub, GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageAcceptance,
         MessageAuthenticity, MessageId, TopicHash, ValidationMode,
     },
+    identify::{Identify, IdentifyEvent, IdentifyInfo},
     mdns::{Mdns, MdnsEvent},
     ping::{self, PingEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
@@ -40,10 +44,10 @@ pub enum Command {
     },
 
     /// Connect to a remote peer at address `peer_addr` whose PeerId is `peer_id`
-    Dial {
+    Connect {
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<error::Result<IdentifyInfo>>,
     },
 
     /// Open a bidirectional data stream to a remote peer
@@ -70,6 +74,11 @@ pub enum Command {
         response: oneshot::Sender<error::Result<()>>,
     },
 
+    // /// Wait for identifying information of the peer
+    // WaitForPeerInfo {
+    //     peer_id: PeerId,
+    //     response: oneshot::Sender<error::Result<IdentifyInfo>>,
+    // },
     /// Register peer to libp2p
     Register {
         peer: PeerId,
@@ -85,9 +94,7 @@ pub enum Command {
 
 pub enum ConnectivityEvent {
     /// Connection with a data stream has been opened by a remote peer
-    ConnectionAccepted {
-        socket: Box<net::libp2p::Libp2pSocket>,
-    },
+    ConnectionAccepted { peer_info: IdentifyInfo },
 
     /// One or more peers were discovered by one of the discovery strategies
     PeerDiscovered { peers: Vec<(PeerId, Multiaddr)> },
@@ -145,6 +152,7 @@ pub struct ComposedBehaviour {
     pub mdns: Mdns,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
+    pub identify: Identify,
 }
 
 #[derive(Debug)]
@@ -154,6 +162,7 @@ pub enum ComposedEvent {
     MdnsEvent(MdnsEvent),
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
+    IdentifyEvent(IdentifyEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -177,5 +186,11 @@ impl From<GossipsubEvent> for ComposedEvent {
 impl From<PingEvent> for ComposedEvent {
     fn from(event: PingEvent) -> Self {
         ComposedEvent::PingEvent(event)
+    }
+}
+
+impl From<IdentifyEvent> for ComposedEvent {
+    fn from(event: IdentifyEvent) -> Self {
+        ComposedEvent::IdentifyEvent(event)
     }
 }

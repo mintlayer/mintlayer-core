@@ -58,7 +58,14 @@ where
         addr: T::Address,
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
-        let (conn, flood) = T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await?;
+        let (conn, flood) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await?;
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let (tx_sync, rx_sync) = mpsc::channel(16);
         let (tx_peer, rx_peer) = mpsc::channel(16);

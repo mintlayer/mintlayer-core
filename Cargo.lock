@@ -44,6 +44,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+dependencies = [
+ "getrandom 0.2.6",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1332,6 +1343,9 @@ name = "hashbrown"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "heck"
@@ -1791,6 +1805,7 @@ dependencies = [
  "libp2p-core",
  "libp2p-floodsub",
  "libp2p-gossipsub",
+ "libp2p-identify",
  "libp2p-mdns",
  "libp2p-metrics",
  "libp2p-mplex",
@@ -1888,6 +1903,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "libp2p-identify"
+version = "0.33.0"
+source = "git+https://github.com/mintlayer/rust-libp2p?branch=streaming-protocol-v0.42.2#2cb216fa2e6f723b30b96022713c7d0dcff7b199"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "libp2p-core",
+ "libp2p-swarm",
+ "log",
+ "lru",
+ "prost",
+ "prost-build",
+ "smallvec",
+]
+
+[[package]]
 name = "libp2p-mdns"
 version = "0.34.0"
 source = "git+https://github.com/mintlayer/rust-libp2p?branch=streaming-protocol-v0.42.2#2cb216fa2e6f723b30b96022713c7d0dcff7b199"
@@ -1914,6 +1945,7 @@ source = "git+https://github.com/mintlayer/rust-libp2p?branch=streaming-protocol
 dependencies = [
  "libp2p-core",
  "libp2p-gossipsub",
+ "libp2p-identify",
  "libp2p-ping",
  "libp2p-swarm",
  "open-metrics-client",
@@ -2114,6 +2146,15 @@ dependencies = [
  "scoped-tls",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "lru"
+version = "0.7.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32613e41de4c47ab04970c348ca7ae7382cf116625755af070b008a15516a889"
+dependencies = [
+ "hashbrown",
 ]
 
 [[package]]
