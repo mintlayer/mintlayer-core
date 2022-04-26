@@ -1279,3 +1279,39 @@ fn test_spend_inputs_simple() {
         }
     });
 }
+
+#[test]
+#[allow(clippy::eq_op)]
+fn test_simple_subscribe() {
+    use std::io::Write;
+    use std::sync::Arc;
+    use std::thread;
+    use std::time::Duration;
+
+    common::concurrency::model(|| {
+        let stdout_ref = std::io::stdout();
+        let config = create_mainnet();
+        let storage = Store::new_empty().unwrap();
+        let mut consensus = Consensus::new(config, storage).unwrap();
+
+        let mut expected_block_height = BlockHeight::new(100);
+        let subscribe_func = Arc::new(move |consensus_event: ConsensusEvent| {
+            let mut lck = stdout_ref.lock();
+            writeln!(&mut lck, "Hello from thread");
+            match consensus_event {
+                ConsensusEvent::NewTip(ref block_id, ref block_height) => {
+                    assert!(&*block_height == block_height)
+                }
+            }
+
+            dbg!(consensus_event);
+        });
+
+        consensus.subscribe_to_events(subscribe_func);
+        // We should have connected genesis
+        assert!(!consensus.event_subscribers.is_empty());
+        loop {
+            thread::sleep(Duration::from_millis(100));
+        }
+    });
+}
