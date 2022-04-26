@@ -108,6 +108,18 @@ impl From<&str> for P2pError {
     }
 }
 
+impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::SubscriptionError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::SubscriptionError(e.to_string()))
+    }
+}
+
+impl From<libp2p::gossipsub::error::PublishError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::PublishError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::PublishError(e.to_string()))
+    }
+}
+
 impl std::fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {

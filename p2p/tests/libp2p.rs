@@ -22,9 +22,9 @@ use p2p::{
     message::{self, ConnectivityMessage, MessageType},
     net::{
         self,
-        libp2p::{Libp2pService, Libp2pStrategy},
-        ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService, FloodsubTopic,
-        NetworkService,
+        libp2p::{Libp2pConnectivityHandle, Libp2pService, Libp2pStrategy},
+        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
+        PubSubTopic,
     },
 };
 
@@ -79,14 +79,14 @@ async fn test_libp2p_peer_discovery() {
     }
 }
 
-// verify that libp2p floodsub works
+// verify that libp2p pubsubsub works
 #[tokio::test]
-async fn test_libp2p_floodsub() {
+async fn test_libp2p_pubsubsub() {
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut conn1, mut flood1) = Libp2pService::start(
         addr1,
         &[],
-        &[FloodsubTopic::Transactions],
+        &[PubSubTopic::Transactions],
         std::time::Duration::from_secs(10),
     )
     .await
@@ -96,7 +96,7 @@ async fn test_libp2p_floodsub() {
     let (mut conn2, mut flood2) = Libp2pService::start(
         addr2,
         &[],
-        &[FloodsubTopic::Transactions],
+        &[PubSubTopic::Transactions],
         std::time::Duration::from_secs(10),
     )
     .await
@@ -113,11 +113,11 @@ async fn test_libp2p_floodsub() {
 
     let (_, _) = tokio::join!(conn1.register_peer(conn2_id), conn2.register_peer(conn1_id));
 
-    // spam the message on the floodsub until it succeeds (= until we have a peer)
+    // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
-        let res = flood1
+        let res = pubsub1
             .publish(
-                net::FloodsubTopic::Transactions,
+                net::PubSubTopic::Transactions,
                 &message::Message {
                     magic: [0u8; 4],
                     msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX }),
@@ -138,13 +138,14 @@ async fn test_libp2p_floodsub() {
     }
 
     // poll an event from the network for server2
-    let res2: Result<FloodsubEvent<Libp2pService>, _> = flood2.poll_next().await;
-    let FloodsubEvent::MessageReceived {
+    let res2: Result<PubSubEvent<Libp2pService>, _> = pubsub2.poll_next().await;
+    let PubSubEvent::MessageReceived {
         peer_id: _,
         topic,
         message: _,
+        message_id: _,
     } = res2.unwrap();
-    let flood2_send_fut = flood2.publish(
+    let pubsub2_send_fut = pubsub2.publish(
         topic,
         &message::Message {
             magic: [0u8; 4],
@@ -152,15 +153,16 @@ async fn test_libp2p_floodsub() {
         },
     );
 
-    // receive the response (pong) from server2 through floodsub
-    let (res1, res2): (Result<FloodsubEvent<Libp2pService>, _>, _) =
-        tokio::join!(flood1.poll_next(), flood2_send_fut);
+    // receive the response (pong) from server2 through pubsubsub
+    let (res1, res2): (Result<PubSubEvent<Libp2pService>, _>, _) =
+        tokio::join!(pubsub1.poll_next(), pubsub2_send_fut);
 
     assert!(res2.is_ok());
-    let FloodsubEvent::MessageReceived {
+    let PubSubEvent::MessageReceived {
         peer_id: _,
         topic: _,
         message,
+        message_id: _,
     } = res1.unwrap();
 
     assert_eq!(
@@ -170,4 +172,147 @@ async fn test_libp2p_floodsub() {
             msg: MessageType::Connectivity(ConnectivityMessage::Pong { nonce: u64::MAX }),
         }
     );
+}
+
+async fn connect_peers(
+    peer1: &mut Libp2pConnectivityHandle<Libp2pService>,
+    peer2: &mut Libp2pConnectivityHandle<Libp2pService>,
+) {
+    let (peer1_res, peer2_res) =
+        tokio::join!(peer1.connect(peer2.local_addr().clone()), peer2.poll_next());
+
+    let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
+    let peer1_id = match peer2_res {
+        ConnectivityEvent::IncomingConnection { peer_id, socket: _ } => peer_id,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
+
+    let peer2_id = peer1_res.unwrap().0;
+    let (_, _) = tokio::join!(peer1.register_peer(peer2_id), peer2.register_peer(peer1_id));
+}
+
+// test libp2p floodsub with multiple peers and verify that as our libp2p requires message
+// validation, peers don't automatically forward the messages
+#[tokio::test]
+async fn test_libp2p_floodsub_3_peers() {
+    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let (mut conn1, mut pubsub1) =
+        Libp2pService::start(addr1, &[], &[PubSubTopic::Transactions]).await.unwrap();
+
+    let (mut peer1, mut peer2, mut peer3) = {
+        let mut peers = futures::future::join_all((0..3).map(|_| async {
+            let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+            let res = Libp2pService::start(addr, &[], &[PubSubTopic::Transactions]).await.unwrap();
+            (res.0, res.1)
+        }))
+        .await;
+
+        (
+            peers.pop().unwrap(),
+            peers.pop().unwrap(),
+            peers.pop().unwrap(),
+        )
+    };
+
+    // connect peers into a partial mesh
+    connect_peers(&mut conn1, &mut peer1.0).await;
+    connect_peers(&mut peer1.0, &mut peer2.0).await;
+    connect_peers(&mut peer2.0, &mut peer3.0).await;
+
+    // spam the message on the pubsubsub until it succeeds (= until we have a peer)
+    loop {
+        let res = pubsub1
+            .publish(
+                net::PubSubTopic::Transactions,
+                &message::Message {
+                    magic: [0u8; 4],
+                    msg: MessageType::Connectivity(ConnectivityMessage::Ping { nonce: u64::MAX }),
+                },
+            )
+            .await;
+
+        if res.is_ok() {
+            break;
+        } else {
+            assert_eq!(
+                res,
+                Err(P2pError::Libp2pError(Libp2pError::PublishError(
+                    "NoPeers".to_string()
+                )))
+            );
+        }
+    }
+
+    // verify that all peers received the message even though they weren't directy connected
+    let res: Result<PubSubEvent<Libp2pService>, _> = peer1.1.poll_next().await;
+    let (peer_id, message_id) = if let Ok(PubSubEvent::MessageReceived {
+        peer_id,
+        message_id,
+        ..
+    }) = res
+    {
+        (peer_id, message_id)
+    } else {
+        panic!("invalid message received");
+    };
+
+    // try to poll the to other gossipsubs and verify that as `peer1` hasn't registered
+    // the message as valid, it is not forwarded and the code instead timeouts
+    // if the message would've been forward to `peer2` and `peer3`, the messages would
+    // be received instantaneously and the cod wouldn't timeout
+
+    tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {
+        }
+        _ = peer2.1.poll_next() => {
+            panic!("peer2 received message")
+        }
+        _ = peer3.1.poll_next() => {
+            panic!("peer3 received message")
+        }
+    }
+
+    assert_eq!(
+        peer1
+            .1
+            .report_validation_result(peer_id, message_id, net::ValidationResult::Accept)
+            .await,
+        Ok(())
+    );
+
+    // verify that the peer2 gets the message
+    let res: Result<PubSubEvent<Libp2pService>, _> = peer2.1.poll_next().await;
+    let (peer_id, message_id) = if let Ok(PubSubEvent::MessageReceived {
+        peer_id,
+        message_id,
+        ..
+    }) = res
+    {
+        (peer_id, message_id)
+    } else {
+        panic!("invalid message received");
+    };
+
+    // verify that peer3 didn't get the message until peer2 validated it
+    tokio::select! {
+        _ = tokio::time::sleep(std::time::Duration::from_millis(250)) => {
+        }
+        _ = peer3.1.poll_next() => {
+            panic!("peer3 received message")
+        }
+    }
+
+    assert_eq!(
+        peer2
+            .1
+            .report_validation_result(peer_id, message_id, net::ValidationResult::Accept)
+            .await,
+        Ok(())
+    );
+
+    let res: Result<PubSubEvent<Libp2pService>, _> = peer3.1.poll_next().await;
+    assert!(std::matches!(
+        res.unwrap(),
+        PubSubEvent::MessageReceived { .. }
+    ));
 }

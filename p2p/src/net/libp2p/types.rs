@@ -15,9 +15,14 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use crate::{error, message, net};
 use libp2p::{
-    floodsub::{Floodsub, FloodsubEvent as Libp2pFloodsubEvent, Topic},
+    gossipsub::{
+        Gossipsub, GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageAcceptance,
+        MessageAuthenticity, MessageId, TopicHash, ValidationMode,
+    },
     mdns::{Mdns, MdnsEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
@@ -49,10 +54,18 @@ pub enum Command {
         response: oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     },
 
-    /// Publish a message on the designated Floodsub topic
+    /// Publish a message on the designated GossipSub topic
     SendMessage {
-        topic: net::FloodsubTopic,
+        topic: net::PubSubTopic,
         message: Vec<u8>,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+
+    /// Report validation result of a received Gossipsub
+    ReportValidationResult {
+        message_id: MessageId,
+        source: PeerId,
+        result: MessageAcceptance,
         response: oneshot::Sender<error::Result<()>>,
     },
 
@@ -83,32 +96,43 @@ pub enum ConnectivityEvent {
 }
 
 #[derive(Clone)]
-pub enum FloodsubEvent {
-    // Message received from one of the Floodsub topics
+pub enum PubSubEvent {
+    // Message received from one of the PubSub topics
     MessageReceived {
         peer_id: PeerId,
-        topic: net::FloodsubTopic,
+        topic: net::PubSubTopic,
         message: message::Message,
+        message_id: MessageId,
     },
 }
 
-impl From<&net::FloodsubTopic> for Topic {
-    fn from(t: &net::FloodsubTopic) -> Topic {
+impl From<&net::PubSubTopic> for Topic {
+    fn from(t: &net::PubSubTopic) -> Topic {
         match t {
-            net::FloodsubTopic::Transactions => Topic::new("mintlayer-floodsub-transactions"),
-            net::FloodsubTopic::Blocks => Topic::new("mintlayer-floodsub-blocks"),
+            net::PubSubTopic::Transactions => Topic::new("mintlayer-gossipsub-transactions"),
+            net::PubSubTopic::Blocks => Topic::new("mintlayer-gossipsub-blocks"),
         }
     }
 }
 
-impl TryFrom<&Topic> for net::FloodsubTopic {
+impl TryFrom<TopicHash> for net::PubSubTopic {
     type Error = &'static str;
 
-    fn try_from(t: &Topic) -> Result<Self, Self::Error> {
-        match t.id() {
-            "mintlayer-floodsub-transactions" => Ok(net::FloodsubTopic::Transactions),
-            "mintlayer-floodsub-blocks" => Ok(net::FloodsubTopic::Blocks),
-            _ => Err("Invalid Floodsub topic"),
+    fn try_from(t: TopicHash) -> Result<Self, Self::Error> {
+        match t.as_str() {
+            "mintlayer-gossipsub-transactions" => Ok(net::PubSubTopic::Transactions),
+            "mintlayer-gossipsub-blocks" => Ok(net::PubSubTopic::Blocks),
+            _ => Err("Invalid Gossipsub topic"),
+        }
+    }
+}
+
+impl From<net::ValidationResult> for MessageAcceptance {
+    fn from(t: net::ValidationResult) -> MessageAcceptance {
+        match t {
+            net::ValidationResult::Accept => MessageAcceptance::Accept,
+            net::ValidationResult::Reject => MessageAcceptance::Reject,
+            net::ValidationResult::Ignore => MessageAcceptance::Ignore,
         }
     }
 }
@@ -118,7 +142,7 @@ impl TryFrom<&Topic> for net::FloodsubTopic {
 pub struct ComposedBehaviour {
     pub streaming: Streaming<IdentityCodec>,
     pub mdns: Mdns,
-    pub floodsub: Floodsub,
+    pub gossipsub: Gossipsub,
 }
 
 #[derive(Debug)]
@@ -126,7 +150,7 @@ pub struct ComposedBehaviour {
 pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
-    Libp2pFloodsubEvent(Libp2pFloodsubEvent),
+    GossipsubEvent(GossipsubEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -141,8 +165,8 @@ impl From<MdnsEvent> for ComposedEvent {
     }
 }
 
-impl From<Libp2pFloodsubEvent> for ComposedEvent {
-    fn from(event: Libp2pFloodsubEvent) -> Self {
-        ComposedEvent::Libp2pFloodsubEvent(event)
+impl From<GossipsubEvent> for ComposedEvent {
+    fn from(event: GossipsubEvent) -> Self {
+        ComposedEvent::GossipsubEvent(event)
     }
 }

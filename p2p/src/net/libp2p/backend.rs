@@ -15,6 +15,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
@@ -23,7 +25,10 @@ use crate::{
 use futures::StreamExt;
 use libp2p::{
     core::{connection::ConnectedPoint, either::EitherError},
-    floodsub::{FloodsubEvent, Topic},
+    gossipsub::{
+        error::GossipsubHandlerError, Gossipsub, GossipsubEvent, GossipsubMessage,
+        IdentTopic as Topic, MessageAuthenticity, MessageId, ValidationMode,
+    },
     mdns::MdnsEvent,
     streaming::{OutboundStreamId, StreamHandle, StreamingEvent},
     swarm::{NegotiatedSubstream, ProtocolsHandlerUpgrErr, Swarm, SwarmEvent},
@@ -44,8 +49,8 @@ pub struct Backend {
     /// Sender for outgoing connectivity events
     conn_tx: mpsc::Sender<types::ConnectivityEvent>,
 
-    /// Sender for outgoing floodsub events
-    flood_tx: mpsc::Sender<types::FloodsubEvent>,
+    /// Sender for outgoing gossipsub events
+    gossip_tx: mpsc::Sender<types::PubSubEvent>,
 
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
@@ -59,8 +64,9 @@ pub struct Backend {
         oneshot::Sender<error::Result<StreamHandle<NegotiatedSubstream>>>,
     >,
 
+    // TODO: remove this?
     /// Hashmap of topics and their participants
-    active_floodsubs: HashMap<Topic, HashSet<PeerId>>,
+    active_gossipsubs: HashMap<Topic, HashSet<PeerId>>,
 
     /// Whether mDNS peer events should be relayed to P2P manager
     relay_mdns: bool,
@@ -71,18 +77,18 @@ impl Backend {
         swarm: Swarm<types::ComposedBehaviour>,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
-        flood_tx: mpsc::Sender<types::FloodsubEvent>,
+        gossip_tx: mpsc::Sender<types::PubSubEvent>,
         relay_mdns: bool,
     ) -> Self {
         Self {
             swarm,
             cmd_rx,
             conn_tx,
-            flood_tx,
+            gossip_tx,
             dials: HashMap::new(),
             conns: HashMap::new(),
             streams: HashMap::new(),
-            active_floodsubs: HashMap::new(),
+            active_gossipsubs: HashMap::new(),
             relay_mdns,
         }
     }
@@ -125,7 +131,7 @@ impl Backend {
             types::ComposedEvent,
             EitherError<
                 EitherError<ProtocolsHandlerUpgrErr<std::convert::Infallible>, void::Void>,
-                ProtocolsHandlerUpgrErr<std::io::Error>,
+                GossipsubHandlerError,
             >,
         >,
     ) -> error::Result<()> {
@@ -222,96 +228,47 @@ impl Backend {
                 })
                 .await
             }
-            SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Expired(
-                expired,
-            ))) => {
+            SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Expired(expired))) => {
                 self.send_discovery_event(expired.collect(), |peers| {
                     types::ConnectivityEvent::PeerExpired { peers }
                 })
                 .await
             }
-            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
-                FloodsubEvent::Subscribed { peer_id, topic },
+            SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                GossipsubEvent::Message {
+                    propagation_source,
+                    message_id,
+                    message,
+                },
             )) => {
-                log::debug!(
-                    "add new subscriber ({:?}) to floodsub topic {:?}",
-                    peer_id,
-                    topic
-                );
-
-                self.active_floodsubs.entry(topic).or_insert_with(HashSet::new).insert(peer_id);
-                Ok(())
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
-                FloodsubEvent::Unsubscribed { peer_id, topic },
-            )) => match self.active_floodsubs.get_mut(&topic) {
-                Some(peers) => {
-                    log::debug!(
-                        "remove subscriber ({:?}) from floodsub topic {:?}",
-                        peer_id,
-                        topic
-                    );
-
-                    peers.remove(&peer_id);
-                    Ok(())
-                }
-                None => {
-                    log::warn!(
-                        "topic {:?} does not exist, cannot remove subscriber {:?}",
-                        topic,
-                        peer_id
-                    );
-                    Ok(())
-                }
-            },
-            SwarmEvent::Behaviour(types::ComposedEvent::Libp2pFloodsubEvent(
-                FloodsubEvent::Message(message),
-            )) => {
-                // for mintlayer there should only ever be one topic per message
-                // because transactions are not published in block topic and vice versa
-                //
-                // message with multiple topics is considered invalid
-                let peer_id = message.source;
-
-                let topic = if message.topics.len() == 1 {
-                    match net::FloodsubTopic::try_from(&message.topics[0]) {
-                        Ok(topic) => topic,
-                        Err(e) => {
-                            log::warn!(
-                                "failed to convert ({:#?}) to a topic: {:?}",
-                                message.topics[0],
-                                e
-                            );
-                            return Ok(());
-                        }
+                let topic = match message.topic.clone().try_into() {
+                    Ok(topic) => topic,
+                    Err(e) => {
+                        log::warn!("failed to convert topic ({:?}): {}", message.topic, e);
+                        return Ok(());
                     }
-                } else {
-                    log::warn!(
-                        "message with multiple topics ({:#?}) but only one expected",
-                        message.topics
-                    );
-                    return Ok(());
                 };
 
                 let message = match message::Message::decode(&mut &message.data[..]) {
                     Ok(data) => data,
                     Err(e) => {
-                        log::warn!("failed to decode floodsub message: {:?}", e);
+                        log::warn!("failed to decode gossipsub message: {:?}", e);
                         return Ok(());
                     }
                 };
 
                 log::trace!(
-                    "message ({:#?}) received from floodsub topic {:?}",
+                    "message ({:#?}) received from gossipsub topic {:?}",
                     message,
                     topic
                 );
 
-                self.flood_tx
-                    .send(types::FloodsubEvent::MessageReceived {
-                        peer_id,
+                self.gossip_tx
+                    .send(types::PubSubEvent::MessageReceived {
+                        peer_id: propagation_source,
                         topic,
                         message,
+                        message_id,
                     })
                     .await
                     .map_err(|_| P2pError::ChannelClosed)
@@ -353,36 +310,44 @@ impl Backend {
                 message,
                 response,
             } => {
-                let topic: Topic = (&topic).into();
-                log::trace!("publish message on floodsub topic {:?}", topic);
+                log::trace!("publish message on gossipsub topic {:?}", topic);
 
-                // check if the floodsub topic where the message is supposed to be sent
-                // exists (the hashmap entry exists) and that it contains subscribers
-                if let Err(e) = match self.active_floodsubs.get(&topic) {
-                    None => Err(Libp2pError::PublishError("NoPeers".to_string())),
-                    Some(peers) => {
-                        if peers.is_empty() {
-                            Err(Libp2pError::PublishError("NoPeers".to_string()))
-                        } else {
-                            Ok(())
-                        }
-                    }
-                } {
-                    response
-                        .send(Err(P2pError::Libp2pError(e)))
-                        .map_err(|_| P2pError::ChannelClosed)?;
-                    return Ok(());
-                }
-
-                self.swarm.behaviour_mut().floodsub.publish(topic, message);
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+                let res = self
+                    .swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish((&topic).into(), message)
+                    .map(|_| ())
+                    .map_err(|e| e.into());
+                response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
             types::Command::Register { peer, response } => {
-                self.swarm.behaviour_mut().floodsub.add_node_to_partial_view(peer);
+                log::info!("register peer {:?}, NOP", peer);
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
             types::Command::Unregister { peer, response } => {
-                self.swarm.behaviour_mut().floodsub.remove_node_from_partial_view(&peer);
+                log::info!("unregister peer {:?}, NOP", peer);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            types::Command::ReportValidationResult {
+                message_id,
+                source,
+                result,
+                response,
+            } => {
+                log::debug!(
+                    "report gossipsub message validation result: {:?} {:?} {:?}",
+                    message_id,
+                    source,
+                    result
+                );
+                self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
+                    &message_id,
+                    &source,
+                    result,
+                );
+
+                // TODO: fix this
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
         }
@@ -394,7 +359,7 @@ mod tests {
     use super::*;
     use libp2p::{
         core::upgrade,
-        floodsub::Floodsub,
+        gossipsub::GossipsubConfigBuilder,
         identity,
         mdns::Mdns,
         mplex, noise,
@@ -423,10 +388,18 @@ mod tests {
             .multiplex(mplex::MplexConfig::new())
             .boxed();
 
+        let gossipsub_config = GossipsubConfigBuilder::default()
+            .validate_messages()
+            .build()
+            .expect("configuration to be valid");
+
+        let gossipsub: Gossipsub =
+            Gossipsub::new(MessageAuthenticity::Signed(id_keys), gossipsub_config)
+                .expect("configuration to be valid");
         let behaviour = types::ComposedBehaviour {
             streaming: Streaming::<IdentityCodec>::default(),
             mdns: Mdns::new(Default::default()).await.unwrap(),
-            floodsub: Floodsub::new(peer_id),
+            gossipsub,
         };
 
         SwarmBuilder::new(transport, behaviour, peer_id).build()
@@ -437,9 +410,9 @@ mod tests {
     async fn test_command_listen_success() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (flood_tx, _) = mpsc::channel(64);
+        let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -463,9 +436,9 @@ mod tests {
     async fn test_command_listen_addrinuse() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (flood_tx, _) = mpsc::channel(64);
+        let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -504,9 +477,9 @@ mod tests {
     async fn test_drop_command_tx() {
         let swarm = make_swarm().await;
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (flood_tx, _) = mpsc::channel(64);
+        let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, flood_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

@@ -18,8 +18,8 @@
 use crate::{
     error::{self, P2pError},
     net::{
-        ConnectivityEvent, ConnectivityService, FloodsubEvent, FloodsubService, FloodsubTopic,
-        NetworkService, SocketService,
+        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
+        PubSubTopic, SocketService, ValidationResult,
     },
     peer::Peer,
 };
@@ -47,6 +47,9 @@ pub enum MockStrategy {}
 #[derive(Debug)]
 pub struct MockService;
 
+#[derive(Debug, Copy, Clone)]
+pub struct MockMessageId(u64);
+
 #[derive(Debug)]
 pub struct MockSocket {
     socket: TcpStream,
@@ -73,7 +76,7 @@ where
     _marker: std::marker::PhantomData<T>,
 }
 
-pub struct MockFloodsubHandle<T>
+pub struct MockPubSubHandle<T>
 where
     T: NetworkService,
 {
@@ -91,15 +94,16 @@ impl NetworkService for MockService {
     type Socket = MockSocket;
     type Strategy = MockStrategy;
     type PeerId = SocketAddr;
+    type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
-    type FloodsubHandle = MockFloodsubHandle<Self>;
+    type PubSubHandle = MockPubSubHandle<Self>;
 
     async fn start(
         addr: Self::Address,
         _strategies: &[Self::Strategy],
-        _topics: &[FloodsubTopic],
+        _topics: &[PubSubTopic],
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
+    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (flood_tx, _flood_rx) = mpsc::channel(16);
@@ -117,7 +121,7 @@ impl NetworkService for MockService {
                 conn_rx,
                 _marker: Default::default(),
             },
-            Self::FloodsubHandle {
+            Self::PubSubHandle {
                 cmd_tx,
                 _flood_rx,
                 _marker: Default::default(),
@@ -170,18 +174,27 @@ where
 }
 
 #[async_trait]
-impl<T> FloodsubService<T> for MockFloodsubHandle<T>
+impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkService<PeerId = SocketAddr> + Send,
 {
-    async fn publish<U>(&mut self, topic: FloodsubTopic, data: &U) -> error::Result<()>
+    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
     where
         U: Sync + Send + Encode,
     {
         todo!();
     }
 
-    async fn poll_next(&mut self) -> error::Result<FloodsubEvent<T>> {
+    async fn report_validation_result(
+        &mut self,
+        source: T::PeerId,
+        msg_id: T::MessageId,
+        result: ValidationResult,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
         todo!();
     }
 }
