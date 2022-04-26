@@ -24,6 +24,7 @@ use libp2p::{
         MessageAuthenticity, MessageId, TopicHash, ValidationMode,
     },
     mdns::{Mdns, MdnsEvent},
+    ping::{self, PingEvent},
     streaming::{IdentityCodec, StreamHandle, Streaming, StreamingEvent},
     swarm::NegotiatedSubstream,
     Multiaddr, NetworkBehaviour, PeerId,
@@ -143,6 +144,7 @@ pub struct ComposedBehaviour {
     pub streaming: Streaming<IdentityCodec>,
     pub mdns: Mdns,
     pub gossipsub: Gossipsub,
+    pub ping: ping::Behaviour,
 }
 
 #[derive(Debug)]
@@ -151,6 +153,7 @@ pub enum ComposedEvent {
     StreamingEvent(StreamingEvent<IdentityCodec>),
     MdnsEvent(MdnsEvent),
     GossipsubEvent(GossipsubEvent),
+    PingEvent(PingEvent),
 }
 
 impl From<StreamingEvent<IdentityCodec>> for ComposedEvent {
@@ -168,5 +171,11 @@ impl From<MdnsEvent> for ComposedEvent {
 impl From<GossipsubEvent> for ComposedEvent {
     fn from(event: GossipsubEvent) -> Self {
         ComposedEvent::GossipsubEvent(event)
+    }
+}
+
+impl From<PingEvent> for ComposedEvent {
+    fn from(event: PingEvent) -> Self {
+        ComposedEvent::PingEvent(event)
     }
 }
