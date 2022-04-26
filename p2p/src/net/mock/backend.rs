@@ -23,6 +23,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::FutureExt;
+// use futures_timer::Delay;
 use logging::log;
 use parity_scale_codec::{Decode, Encode};
 use std::{
@@ -51,6 +52,9 @@ pub struct Backend {
 
     /// TX channel for sending events to the frontend
     _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+
+    /// Timeout for outbound operations
+    timeout: std::time::Duration,
 }
 
 impl Backend {
@@ -60,6 +64,7 @@ impl Backend {
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+        timeout: std::time::Duration,
     ) -> Self {
         Self {
             addr,
@@ -67,6 +72,7 @@ impl Backend {
             cmd_rx,
             conn_tx,
             _flood_tx,
+            timeout,
         }
     }
 
@@ -90,10 +96,17 @@ impl Backend {
                             continue;
                         }
 
-                        let _ = match TcpStream::connect(addr).await {
-                            Ok(socket) => response.send(Ok(socket)),
-                            Err(e) => response.send(Err(e.into())),
-                        };
+                        tokio::select! {
+                            _ = tokio::time::sleep(self.timeout) => {
+                                let _ = response.send(Err(
+                                    P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+                                );
+                            }
+                            res = TcpStream::connect(addr) => match res {
+                                Ok(socket) => { let _ = response.send(Ok(socket)); },
+                                Err(e) => { let _ = response.send(Err(e.into())); },
+                            }
+                        }
                     }
                 }
             }

@@ -110,10 +110,12 @@ pub trait NetworkService {
     /// `addr` - socket address for incoming P2P traffic
     /// `strategies` - list of strategies that are used for peer discovery
     /// `topics` - list of floodsub topics that the implementation should subscribe to
+    /// `timeout` - timeout for outbound connections
     async fn start(
         addr: Self::Address,
         strategies: &[Self::Strategy],
         topics: &[FloodsubTopic],
+        timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)>;
 }
 

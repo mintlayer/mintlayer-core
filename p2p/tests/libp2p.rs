@@ -32,14 +32,24 @@ use p2p::{
 #[tokio::test]
 async fn test_libp2p_peer_discovery() {
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut serv, _) = Libp2pService::start(addr.clone(), &[Libp2pStrategy::MulticastDns], &[])
-        .await
-        .unwrap();
+    let (mut serv, _) = Libp2pService::start(
+        addr.clone(),
+        &[Libp2pStrategy::MulticastDns],
+        &[],
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
 
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut serv2, _) = Libp2pService::start(addr2.clone(), &[Libp2pStrategy::MulticastDns], &[])
-        .await
-        .unwrap();
+    let (mut serv2, _) = Libp2pService::start(
+        addr2.clone(),
+        &[Libp2pStrategy::MulticastDns],
+        &[],
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
 
     loop {
         let (serv_res, _) = tokio::join!(serv.poll_next(), serv2.poll_next());
@@ -73,12 +83,24 @@ async fn test_libp2p_peer_discovery() {
 #[tokio::test]
 async fn test_libp2p_floodsub() {
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn1, mut flood1) =
-        Libp2pService::start(addr1, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+    let (mut conn1, mut flood1) = Libp2pService::start(
+        addr1,
+        &[],
+        &[FloodsubTopic::Transactions],
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
 
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn2, mut flood2) =
-        Libp2pService::start(addr2, &[], &[FloodsubTopic::Transactions]).await.unwrap();
+    let (mut conn2, mut flood2) = Libp2pService::start(
+        addr2,
+        &[],
+        &[FloodsubTopic::Transactions],
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
 
     let (conn1_res, conn2_res) =
         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
