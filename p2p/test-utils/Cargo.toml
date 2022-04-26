@@ -6,19 +6,15 @@ license = "MIT"
 
 [dependencies]
 portpicker = "0.1.1"
-
-[dependencies.p2p]
-path = "../"
-
-[dependencies.common]
-path = "../../common/"
+p2p = { path = "../" }
+common = { path = "../../common/" }
 
 [dependencies.libp2p]
-git = "https://github.com/mintlayer/rust-libp2p"
-branch = "streaming-protocol-v0.42.2"
+version = "0.44.0"
 default-features = false
-features = ["floodsub", "mdns", "mplex", "noise", "streaming", "tcp-async-io"]
+features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
 
 [dependencies.tokio]
 version = "1"
+default-features = false
 features = ["io-util", "macros", "net", "rt", "sync"]
