@@ -34,7 +34,7 @@ use libp2p::{
         Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
         MessageAuthenticity, MessageId, ValidationMode,
     },
-    identify::{Identify, IdentifyConfig},
+    identify::{Identify, IdentifyConfig, IdentifyInfo},
     identity,
     mdns::Mdns,
     mplex,
@@ -173,6 +173,32 @@ where
         .into_iter()
         .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))
         .collect::<Vec<net::AddrInfo<T>>>()
+}
+
+impl<T> TryInto<net::PeerInfo<T>> for IdentifyInfo
+where
+    T: NetworkService<PeerId = PeerId, ProtocolId = String>,
+{
+    type Error = P2pError;
+
+    fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
+        // TODO: fix this to extract the correct information
+        let (net, version) = match self.protocol_version.as_str() {
+            "/mintlayer/0.1.0-deadbeef" => (
+                common::chain::config::ChainType::Mainnet,
+                common::primitives::version::SemVer::new(0, 1, 0),
+            ),
+            _ => return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork)),
+        };
+
+        Ok(net::PeerInfo {
+            peer_id: PeerId::from_public_key(&self.public_key),
+            net,
+            version,
+            agent: Some(self.agent_version),
+            protocols: self.protocols,
+        })
+    }
 }
 
 #[async_trait]
@@ -316,6 +342,7 @@ impl NetworkService for Libp2pService {
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
     T: NetworkService<Address = Multiaddr, PeerId = PeerId> + Send,
+    IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
         log::trace!("try to establish outbound connection, address {:?}", addr);
@@ -373,10 +400,9 @@ where
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
-                todo!();
-                // Ok(ConnectivityEvent::PeerConnected {
-                //     peer_info: peer_info.try_into()?
-                // })
+                Ok(ConnectivityEvent::PeerConnected {
+                    peer_info: (*peer_info).try_into()?,
+                })
             }
             types::ConnectivityEvent::PeerDiscovered { peers } => {
                 Ok(ConnectivityEvent::PeerDiscovered {
@@ -451,7 +477,7 @@ where
     }
 }
 
-/*
+// TODO: move these tests elsewhere
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -467,10 +493,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_connect_new() {
+        let config = Arc::new(common::chain::config::create_mainnet());
         let service = Libp2pService::start(
             "/ip6/::1/tcp/8900".parse().unwrap(),
             &[],
             &[],
+            config,
             Duration::from_secs(10),
         )
         .await;
@@ -481,10 +509,12 @@ mod tests {
     #[ignore]
     #[tokio::test]
     async fn test_connect_new_addrinuse() {
+        let config = Arc::new(common::chain::config::create_mainnet());
         let service = Libp2pService::start(
             "/ip6/::1/tcp/8901".parse().unwrap(),
             &[],
             &[],
+            Arc::clone(&config),
             Duration::from_secs(10),
         )
         .await;
@@ -494,6 +524,7 @@ mod tests {
             "/ip6/::1/tcp/8901".parse().unwrap(),
             &[],
             &[],
+            config,
             Duration::from_secs(10),
         )
         .await;
@@ -510,10 +541,12 @@ mod tests {
     // and having `service2` trying to connect to `service1`
     #[tokio::test]
     async fn test_connect_accept() {
+        let config = Arc::new(common::chain::config::create_mainnet());
         let service1 = Libp2pService::start(
             "/ip6/::1/tcp/8902".parse().unwrap(),
             &[],
             &[],
+            Arc::clone(&config),
             Duration::from_secs(10),
         )
         .await;
@@ -521,6 +554,7 @@ mod tests {
             "/ip6/::1/tcp/8903".parse().unwrap(),
             &[],
             &[],
+            Arc::clone(&config),
             Duration::from_secs(10),
         )
         .await;
@@ -542,15 +576,18 @@ mod tests {
     // and verify that the connection fails
     #[tokio::test]
     async fn test_connect_peer_id_missing() {
+        let config = Arc::new(common::chain::config::create_mainnet());
         let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
         let (mut service, _) = Libp2pService::start(
             "/ip6/::1/tcp/8905".parse().unwrap(),
             &[],
             &[],
+            config,
             Duration::from_secs(10),
         )
         .await
         .unwrap();
+
         match service.connect(addr).await {
             Ok(_) => panic!("connect succeeded without peer id"),
             Err(e) => {
@@ -632,6 +669,7 @@ mod tests {
     // verify that vector of address (that all belong to one peer) parse into one `net::Peer` entry
     #[test]
     fn test_parse_peers_valid_1_peer() {
+        let config = Arc::new(common::chain::config::create_mainnet());
         let id: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
         let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
         let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
@@ -765,4 +803,3 @@ mod tests {
         assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }
-*/

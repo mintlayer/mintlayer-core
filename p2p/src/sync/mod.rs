@@ -171,8 +171,15 @@ mod tests {
         T::PubSubHandle: PubSubService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (_, flood) =
-            T::start(addr, &[], &[], Arc::clone(&config), std::time::Duration::from_secs(10)).await.unwrap();
+        let (_, flood) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
 
         (
