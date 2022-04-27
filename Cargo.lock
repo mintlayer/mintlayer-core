@@ -3252,6 +3252,7 @@ dependencies = [
  "parity-scale-codec",
  "parity-scale-codec-derive",
  "proptest",
+ "utils",
 ]
 
 [[package]]
