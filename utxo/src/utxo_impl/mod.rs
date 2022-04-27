@@ -1,6 +1,6 @@
 //TODO: remove once the functions are used.
 #![allow(dead_code)]
-use crate::Error;
+use crate::{Error, TxUndo};
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{BlockHeight, Id, Idable};
 use std::collections::BTreeMap;
@@ -170,6 +170,13 @@ impl UtxoEntry {
         }
     }
 
+    pub fn take_utxo(self) -> Option<Utxo> {
+        match self.status {
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => Some(utxo),
+        }
+    }
+
     fn utxo_mut(&mut self) -> Option<&mut Utxo> {
         match &mut self.status {
             UtxoStatus::Spent => None,
@@ -215,7 +222,6 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = Some(block_hash);
     }
 
-    //TODO: haven't tested this yet.
     pub fn add_utxos(
         &mut self,
         tx: &Transaction,
@@ -244,6 +250,21 @@ impl<'a> UtxosCache<'a> {
             self.add_utxo(utxo, &outpoint, overwrite)?;
         }
         Ok(())
+    }
+
+    /// Mark the inputs of tx as 'spent'.
+    /// returns a TxUndo if function is a success;
+    /// or an error if the tx's input cannot be spent.
+    pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
+        let tx_undo: Result<Vec<Utxo>, Error> = tx
+            .get_inputs()
+            .iter()
+            .map(|tx_in| self.spend_utxo(tx_in.get_outpoint()))
+            .collect();
+
+        self.add_utxos(tx, UtxoSource::BlockChain(height), false)?;
+
+        tx_undo.map(TxUndo::new)
     }
 
     /// Adds a utxo entry in the cache.
@@ -299,10 +320,10 @@ impl<'a> UtxosCache<'a> {
     }
 
     /// Flags the utxo as "spent", given an outpoint.
-    /// Returns true if an update was performed.
-    pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> bool {
+    /// Returns the Utxo if an update was performed.
+    pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
         match self.get_utxo_entry(outpoint) {
-            None => false,
+            None => Err(Error::NoUtxoFound),
             Some(entry) => {
                 let key = outpoint;
 
@@ -315,14 +336,15 @@ impl<'a> UtxosCache<'a> {
                     self.utxos.remove(key);
                 } else {
                     // mark this as 'spent'
-                    let entry = UtxoEntry {
+                    let new_entry = UtxoEntry {
                         status: UtxoStatus::Spent,
                         is_dirty: true,
                         is_fresh: false,
                     };
-                    self.utxos.insert(key.clone(), entry);
+                    self.utxos.insert(key.clone(), new_entry);
                 }
-                true
+
+                entry.take_utxo().ok_or(Error::UtxoAlreadySpent)
             }
         }
     }
@@ -475,7 +497,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 mod test;
 
 #[cfg(test)]
-mod test_helper;
+pub mod test_helper;
 
 #[cfg(test)]
 mod simulation;

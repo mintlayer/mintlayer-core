@@ -1,5 +1,7 @@
+mod undo;
 mod utxo_impl;
 
+pub use undo::*;
 pub use utxo_impl::*;
 
 #[allow(dead_code)]
@@ -7,6 +9,8 @@ pub use utxo_impl::*;
 pub enum Error {
     OverwritingUtxo,
     UtxoAlreadyExists,
+    UtxoAlreadySpent,
+    NoUtxoFound,
     CacheWithoutBestBlock,
     NoBlockchainHeightFound,
     DBError(String),

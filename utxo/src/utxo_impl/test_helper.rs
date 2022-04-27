@@ -1,7 +1,8 @@
 use crate::{Utxo, UtxoEntry, UtxosCache};
-use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
+use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};
-use crypto::random::{make_pseudo_rng, Rng};
+use crypto::random::{make_pseudo_rng, seq, Rng};
+use iter_tools::Itertools;
 
 pub const FRESH: u8 = 1;
 pub const DIRTY: u8 = 2;
@@ -16,6 +17,42 @@ pub enum Presence {
 use crate::UtxoStatus;
 use common::chain::block::Block;
 use Presence::{Absent, Present, Spent};
+
+pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
+    let mut tx_outputs = vec![];
+    for _ in 0..size {
+        let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
+        tx_outputs.push(TxOutput::new(
+            Amount::new(random_amt),
+            Destination::PublicKey,
+        ));
+    }
+
+    tx_outputs
+}
+
+/// randomly select half of the provided outpoints to spend, and returns it in a vec of structure of TxInput
+pub fn create_tx_inputs(outpoints: &Vec<OutPoint>) -> Vec<TxInput> {
+    let mut rng = make_pseudo_rng();
+    let to_spend = seq::index::sample(&mut rng, outpoints.len(), outpoints.len() / 2).into_vec();
+    to_spend
+        .into_iter()
+        .map(|idx| {
+            let outpoint = outpoints.get(idx).expect("should return an outpoint");
+            TxInput::new(outpoint.get_tx_id(), outpoint.get_output_index(), vec![])
+        })
+        .collect_vec()
+}
+
+/// converts the given parameters into the tuple (Outpoint, Utxo).
+pub fn convert_to_utxo(output: TxOutput, height: u64, output_idx: usize) -> (OutPoint, Utxo) {
+    let utxo_id: Id<Block> = Id::new(&H256::random());
+    let id = OutPointSourceId::BlockReward(utxo_id);
+    let outpoint = OutPoint::new(id, output_idx as u32);
+    let utxo = Utxo::new(output, true, BlockHeight::new(height));
+
+    (outpoint, utxo)
+}
 
 pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
     inner_create_utxo(Some(block_height))
