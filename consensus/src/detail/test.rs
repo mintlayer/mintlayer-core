@@ -237,7 +237,6 @@ fn test_indices_calculations() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_process_genesis_block_wrong_block_source() {
     common::concurrency::model(|| {
         // Genesis can't be from Peer, test it
@@ -253,7 +252,6 @@ fn test_process_genesis_block_wrong_block_source() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_process_genesis_block() {
     common::concurrency::model(|| {
         // This test process only Genesis block
@@ -282,7 +280,6 @@ fn test_process_genesis_block() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_straight_chain() {
     common::concurrency::model(|| {
         // In this test, processing a few correct blocks in a single chain
@@ -348,7 +345,6 @@ fn test_straight_chain() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = create_mainnet();
@@ -423,7 +419,6 @@ fn test_reorg_simple() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = create_mainnet();
@@ -443,7 +438,6 @@ fn test_orphans_chains() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn spend_tx_in_the_same_block() {
     common::concurrency::model(|| {
         // Check is it correctly spend when the second tx pointing on the first tx
@@ -645,7 +639,6 @@ fn double_spend_tx_in_the_same_block() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
         // Check is it correctly spend when a couple of transactions in a different blocks pointing on one output
@@ -1225,7 +1218,6 @@ fn test_empty_consensus() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_spend_inputs_simple() {
     common::concurrency::model(|| {
         let mut consensus = setup_consensus();
@@ -1281,7 +1273,6 @@ fn test_spend_inputs_simple() {
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_events_simple_subscribe() {
     use std::sync::Arc;
 
@@ -1294,7 +1285,6 @@ fn test_events_simple_subscribe() {
             consensus.chain_config.genesis_block(),
             false,
         );
-
         // The event "NewTip" should return block_id and height
         let expected_block_id = block.get_id();
         let expected_block_height = BlockHeight::new(1);
@@ -1305,8 +1295,6 @@ fn test_events_simple_subscribe() {
                 ConsensusEvent::NewTip(block_id, block_height) => {
                     assert!(block_height == expected_block_height);
                     assert!(block_id == expected_block_id);
-                    // All checks went fine, let's finish the test with "no error" exit code
-                    std::process::exit(0);
                 }
             },
         );
@@ -1315,20 +1303,12 @@ fn test_events_simple_subscribe() {
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
-
-        // Wait for thread pool until event handler exit the test or cause time out
-        let handle = consensus.events_broadcaster.spawn_handle(|| {});
-        assert!(
-            handle.wait_timeout(std::time::Duration::from_secs(1)).is_err(),
-            "The event haven't received"
-        );
     });
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_events_with_a_bunch_of_subscribers() {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     const COUNT_SUBSCRIBERS: usize = 100;
 
@@ -1347,20 +1327,11 @@ fn test_events_with_a_bunch_of_subscribers() {
         let expected_block_height = BlockHeight::new(1);
 
         // Event handler
-        let event_counter = Arc::new(Mutex::new(1usize));
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    let counter = &mut *event_counter.lock().unwrap();
-                    assert!(*counter <= COUNT_SUBSCRIBERS);
                     assert!(block_height == expected_block_height);
                     assert!(block_id == expected_block_id);
-                    // All checks went fine, let's finish the test with "no error" exit code
-
-                    if *counter == COUNT_SUBSCRIBERS {
-                        std::process::exit(0);
-                    }
-                    *counter += 1;
                 }
             },
         );
@@ -1371,20 +1342,12 @@ fn test_events_with_a_bunch_of_subscribers() {
         }
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
-
-        // Wait for thread pool until event handler exit the test or cause time out
-        let handle = consensus.events_broadcaster.spawn_handle(|| {});
-        assert!(
-            handle.wait_timeout(std::time::Duration::from_secs(1)).is_err(),
-            "The event haven't received"
-        );
     });
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_events_a_bunch_of_events() {
-    use std::sync::{Arc, Mutex};
+    use std::sync::Arc;
 
     const COUNT_SUBSCRIBERS: usize = 10;
     const COUNT_EVENTS: usize = 100;
@@ -1407,19 +1370,11 @@ fn test_events_a_bunch_of_events() {
         }
 
         // Event handler
-        let event_counter = Arc::new(Mutex::new(1usize));
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    let counter = &mut *event_counter.lock().unwrap();
-                    assert!(*counter <= COUNT_SUBSCRIBERS * COUNT_EVENTS);
                     assert!(map_heights.contains_key(&block_id));
                     assert!(&block_height == map_heights.get(&block_id).unwrap());
-                    // All checks went fine, let's finish the test with "no error" exit code
-                    if *counter == COUNT_SUBSCRIBERS * COUNT_EVENTS {
-                        std::process::exit(0);
-                    }
-                    *counter += 1;
                 }
             },
         );
@@ -1434,17 +1389,10 @@ fn test_events_a_bunch_of_events() {
             // We should connect a new block
             assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
         }
-        // Wait for thread pool until event handler exit the test or cause time out
-        let handle = consensus.events_broadcaster.spawn_handle(|| {});
-        assert!(
-            handle.wait_timeout(std::time::Duration::from_secs(1)).is_err(),
-            "The event haven't received"
-        );
     });
 }
 
 #[test]
-#[allow(clippy::eq_op)]
 fn test_events_fail_block() {
     use std::sync::Arc;
 
@@ -1460,18 +1408,11 @@ fn test_events_fail_block() {
             true,
         );
 
-        // The event "NewTip" should return block_id and height
-        let expected_block_id = block.get_id();
-        let expected_block_height = BlockHeight::new(1);
-
         // Event handler
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(block_height == expected_block_height);
-                    assert!(block_id == expected_block_id);
-                    // All checks went fine, let's finish the test with "no error" exit code
-                    std::process::exit(0);
+                ConsensusEvent::NewTip(_, _) => {
+                    panic!("Never should happen")
                 }
             },
         );
@@ -1480,12 +1421,5 @@ fn test_events_fail_block() {
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_err());
-
-        // Wait for thread pool until event handler exit the test or cause time out
-        let handle = consensus.events_broadcaster.spawn_handle(|| {});
-        assert!(
-            handle.wait_timeout(std::time::Duration::from_millis(500)).is_ok(),
-            "The event shouldn't be received"
-        );
     });
 }
