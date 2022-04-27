@@ -25,7 +25,7 @@ pub use block_index::*;
 mod block_v1;
 pub mod consensus_data;
 
-use block_v1::BlockHeader;
+pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
 use serialization::{Decode, Encode};

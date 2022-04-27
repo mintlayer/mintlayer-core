@@ -180,6 +180,10 @@ where
         &self.addr
     }
 
+    fn peer_id(&self) -> &T::PeerId {
+        &self.addr
+    }
+
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         todo!();
         // match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
