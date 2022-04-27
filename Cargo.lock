@@ -2384,6 +2384,7 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rand 0.8.5",
+ "sscanf",
  "test-utils",
  "tokio",
  "void",

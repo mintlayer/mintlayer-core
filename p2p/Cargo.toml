@@ -13,6 +13,7 @@ void = "1.0.2"
 itertools = "0.10.3"
 common = { path = "../common/" }
 logging = { path = "../logging/" }
+sscanf = "0.2.1"
 
 [dependencies.libp2p]
 version = "0.44.0"
