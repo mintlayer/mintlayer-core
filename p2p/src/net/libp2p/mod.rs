@@ -22,8 +22,8 @@ use crate::{
     error::{self, Libp2pError, P2pError, ProtocolError},
     message,
     net::{
-        self, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
-        PubSubTopic, SyncingMessage, SyncingService,
+        self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent,
+        PubSubService, PubSubTopic, SyncingMessage, SyncingService,
     },
 };
 use async_trait::async_trait;
@@ -50,14 +50,19 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use logging::log;
-use std::collections::hash_map::DefaultHasher;
 use serialization::{Decode, Encode};
-use std::hash::{Hash, Hasher};
-use std::sync::Arc;
-use std::{io, iter};
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    io, iter,
+    num::NonZeroU32,
+    sync::Arc,
+};
 use tokio::sync::{mpsc, oneshot};
 
 mod backend;
+mod proto;
+mod sync;
 mod types;
 
 // Maximum message size of 10 MB
@@ -201,16 +206,25 @@ where
 {
     type Error = P2pError;
 
-    // TODO: use text-io
     fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
-        // TODO: fix this to extract the correct information
-        let (net, version) = match self.protocol_version.as_str() {
-            "/mintlayer/0.1.0-deadbeef" => (
-                common::chain::config::ChainType::Mainnet,
-                common::primitives::version::SemVer::new(0, 1, 0),
-            ),
-            _ => return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork)),
-        };
+        let proto = self.protocol_version.clone();
+        let (version, net) =
+            match sscanf::scanf!(proto, "/{}/{}.{}.{}-{}", String, u8, u8, u16, String) {
+                Err(e) => Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol)),
+                Ok((proto, maj, min, pat, magic)) => {
+                    if proto != "mintlayer" {
+                        return Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol));
+                    }
+
+                    // TODO: `impl TryInto<ChainType> for u32`?
+                    let net = match magic.as_str() {
+                        "1a64e5f1" => common::chain::config::ChainType::Mainnet,
+                        _ => return Err(P2pError::ProtocolError(ProtocolError::UnknownNetwork)),
+                    };
+
+                    Ok((common::primitives::version::SemVer::new(maj, min, pat), net))
+                }
+            }?;
 
         Ok(net::PeerInfo {
             peer_id: PeerId::from_public_key(&self.public_key),
@@ -259,7 +273,7 @@ impl NetworkService for Libp2pService {
             .boxed();
 
         let swarm = {
-            // TODO: double check gossipsub configuration
+            // TODO: is this needed?
             let message_id_fn = |message: &GossipsubMessage| {
                 let mut s = DefaultHasher::new();
                 message.data.hash(&mut s);
@@ -274,52 +288,44 @@ impl NetworkService for Libp2pService {
                 .build()
                 .expect("configuration to be valid");
 
-            // TODO: configure sync protocol
-            let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
-            let cfg = RequestResponseConfig::default();
-            let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
-
-            let mut gossipsub: Gossipsub = Gossipsub::new(
-                MessageAuthenticity::Signed(id_keys.clone()),
-                gossipsub_config,
-            )
-            .expect("configuration to be valid");
-
-            // TODO: implement `std::fmt::Display` for SemVer and magic bytes
+            // TODO: impl display for semver/magic bytes?
             let version = config.version();
             let magic = config.magic_bytes();
-            let mut identify = Identify::new(IdentifyConfig::new(
-                "/mintlayer/0.1.0-deadbeef".into(),
-                id_keys.public(),
-            ));
-            // TODO: fix this
-            // let mut identify = Identify::new(IdentifyConfig::new(
-            //     format!(
-            //         "/mintlayer/{}.{}.{}-{}",
-            //         version.major,
-            //         version.minor,
-            //         version.patch,
-            //         ((magic[3] << 24) as u32)
-            //             | ((magic[2] << 16) as u32)
-            //             | ((magic[1] << 8) as u32)
-            //             | ((magic[0] << 0) as u32)
-            //     )
-            //     .into(),
-            //     id_keys.public(),
-            // ));
+            let protocol = format!(
+                "/mintlayer/{}.{}.{}-{:x}",
+                version.major,
+                version.minor,
+                version.patch,
+                ((magic[0] as u32) << 24)
+                    | ((magic[1] as u32) << 16)
+                    | ((magic[2] as u32) << 8)
+                    | (magic[3] as u32)
+            );
 
-            // TODO: configure ping
             let mut behaviour = types::ComposedBehaviour {
                 mdns: Mdns::new(Default::default()).await?,
-                ping: ping::Behaviour::new(ping::Config::new()),
-                gossipsub,
-                identify,
-                sync,
+                ping: ping::Behaviour::new(
+                    ping::Config::new()
+                        .with_timeout(std::time::Duration::from_secs(60))
+                        .with_interval(std::time::Duration::from_secs(60))
+                        .with_max_failures(NonZeroU32::new(3).expect("max failures > 0")),
+                ),
+                identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
+                sync: RequestResponse::new(
+                    SyncingCodec(),
+                    iter::once((SyncingProtocol(), ProtocolSupport::Full)),
+                    RequestResponseConfig::default(),
+                ),
+                gossipsub: Gossipsub::new(
+                    MessageAuthenticity::Signed(id_keys.clone()),
+                    gossipsub_config,
+                )
+                .expect("configuration to be valid"),
             };
 
             for topic in topics.iter() {
                 log::debug!("subscribing to gossipsub topic {:?}", topic);
-                behaviour.gossipsub.subscribe(&topic.into()).unwrap(); // TODO: remove unwrap
+                behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
             }
 
             // subscribes to our topic
@@ -378,6 +384,7 @@ impl NetworkService for Libp2pService {
     }
 }
 
+// TODO: move services to separate files + unit tests?
 #[async_trait]
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
@@ -385,8 +392,9 @@ where
     IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
-        log::trace!("try to establish outbound connection, address {:?}", addr);
+        log::debug!("try to establish outbound connection, address {:?}", addr);
 
+        // TODO: refactor error code
         let peer_id = match addr.iter().last() {
             Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
                 P2pError::Libp2pError(Libp2pError::DialError(
@@ -410,27 +418,13 @@ where
             })
             .await?;
 
+        // read peer information
         let info = rx
             .await
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        // TODO: zzz
-        let (net, version) = match info.protocol_version.as_str() {
-            "/mintlayer/0.1.0-deadbeef" => (
-                common::chain::config::ChainType::Mainnet,
-                common::primitives::version::SemVer::new(0, 1, 0),
-            ),
-            _ => return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork)),
-        };
-
-        Ok(net::PeerInfo {
-            peer_id,
-            net,
-            version,
-            agent: None,
-            protocols: vec![],
-        })
+        Ok(info.try_into()?)
     }
 
     fn local_addr(&self) -> &T::Address {
@@ -460,6 +454,7 @@ where
     }
 }
 
+// TODO: move services to separate files + unit tests?
 #[async_trait]
 impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
@@ -521,6 +516,7 @@ where
     }
 }
 
+// TODO: move services to separate files + unit tests?
 #[async_trait]
 impl<T> SyncingService<T> for Libp2pSyncHandle<T>
 where
@@ -535,7 +531,7 @@ where
         self.cmd_tx
             .send(types::Command::SendRequest {
                 peer_id,
-                request: Box::new(SyncRequest(message.encode())),
+                request: Box::new(SyncRequest::new(message.encode())),
                 response: tx,
             })
             .await?;
@@ -554,7 +550,7 @@ where
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
-                response: Box::new(SyncResponse(message.encode())),
+                response: Box::new(SyncResponse::new(message.encode())),
                 channel: tx,
             })
             .await?;
@@ -571,7 +567,7 @@ where
                 request_id,
                 request,
             } => {
-                let request = message::Message::decode(&mut &(*request.0)[..]).map_err(|e| {
+                let request = message::Message::decode(&mut &(*request)[..]).map_err(|e| {
                     log::error!("invalid request received from peer {:?}", peer_id);
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
@@ -587,7 +583,7 @@ where
                 request_id,
                 response,
             } => {
-                let response = message::Message::decode(&mut &(*response.0)[..]).map_err(|e| {
+                let response = message::Message::decode(&mut &(*response)[..]).map_err(|e| {
                     log::error!("invalid response received from peer {:?}", peer_id);
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
@@ -599,96 +595,6 @@ where
                 })
             }
         }
-    }
-}
-
-// TODO: move this to its own file
-#[derive(Debug, Clone)]
-pub struct SyncingProtocol();
-
-#[derive(Clone)]
-pub struct SyncingCodec();
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncRequest(Vec<u8>);
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncResponse(Vec<u8>);
-
-impl ProtocolName for SyncingProtocol {
-    fn protocol_name(&self) -> &[u8] {
-        "/mintlayer/sync/0.1.0".as_bytes()
-    }
-}
-
-#[async_trait]
-impl RequestResponseCodec for SyncingCodec {
-    type Protocol = SyncingProtocol;
-    type Request = SyncRequest;
-    type Response = SyncResponse;
-
-    async fn read_request<T>(
-        &mut self,
-        _: &SyncingProtocol,
-        io: &mut T,
-    ) -> io::Result<Self::Request>
-    where
-        T: AsyncRead + Unpin + Send,
-    {
-        let vec = read_length_prefixed(io, 1024).await?;
-
-        if vec.is_empty() {
-            return Err(io::ErrorKind::UnexpectedEof.into());
-        }
-
-        Ok(SyncRequest(vec))
-    }
-
-    async fn read_response<T>(
-        &mut self,
-        _: &SyncingProtocol,
-        io: &mut T,
-    ) -> io::Result<Self::Response>
-    where
-        T: AsyncRead + Unpin + Send,
-    {
-        let vec = read_length_prefixed(io, 1024).await?;
-
-        if vec.is_empty() {
-            return Err(io::ErrorKind::UnexpectedEof.into());
-        }
-
-        Ok(SyncResponse(vec))
-    }
-
-    async fn write_request<T>(
-        &mut self,
-        _: &SyncingProtocol,
-        io: &mut T,
-        SyncRequest(data): SyncRequest,
-    ) -> io::Result<()>
-    where
-        T: AsyncWrite + Unpin + Send,
-    {
-        write_length_prefixed(io, data).await?;
-        io.close().await?;
-
-        Ok(())
-    }
-
-    async fn write_response<T>(
-        &mut self,
-        _: &SyncingProtocol,
-        io: &mut T,
-        SyncResponse(data): SyncResponse,
-    ) -> io::Result<()>
-    where
-        T: AsyncWrite + Unpin + Send,
-    {
-        write_length_prefixed(io, data).await?;
-        io.close().await?;
-
-        Ok(())
     }
 }
 

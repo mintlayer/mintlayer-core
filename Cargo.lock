@@ -2451,6 +2451,7 @@ dependencies = [
  "portpicker",
  "rand 0.8.5",
  "serialization",
+ "sscanf",
  "test-utils",
  "tokio",
  "void",

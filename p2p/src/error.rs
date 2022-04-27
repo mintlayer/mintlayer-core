@@ -21,6 +21,8 @@ pub enum ProtocolError {
     InvalidMessage,
     Incompatible,
     Unresponsive,
+    InvalidProtocol,
+    UnknownNetwork,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -137,6 +139,12 @@ impl std::fmt::Display for ProtocolError {
             }
             ProtocolError::Unresponsive => {
                 write!(f, "No response from remote peer")
+            }
+            ProtocolError::InvalidProtocol => {
+                write!(f, "Invalid protocol string")
+            }
+            ProtocolError::UnknownNetwork => {
+                write!(f, "Unknown network")
             }
         }
     }
