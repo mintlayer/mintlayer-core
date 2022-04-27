@@ -1283,35 +1283,45 @@ fn test_spend_inputs_simple() {
 #[test]
 #[allow(clippy::eq_op)]
 fn test_simple_subscribe() {
-    use std::io::Write;
     use std::sync::Arc;
-    use std::thread;
-    use std::time::Duration;
 
     common::concurrency::model(|| {
-        let stdout_ref = std::io::stdout();
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
-        let mut expected_block_height = BlockHeight::new(100);
-        let subscribe_func = Arc::new(move |consensus_event: ConsensusEvent| {
-            let mut lck = stdout_ref.lock();
-            writeln!(&mut lck, "Hello from thread");
-            match consensus_event {
-                ConsensusEvent::NewTip(ref block_id, ref block_height) => {
-                    assert!(&*block_height == block_height)
+        // We should connect a new block
+        let block = produce_test_block(
+            &consensus.chain_config,
+            consensus.chain_config.genesis_block(),
+            false,
+        );
+
+        // The event "NewTip" should return block_id and height
+        let expected_block_id = block.get_id();
+        let expected_block_height = BlockHeight::new(1);
+
+        // Event handler
+        let subscribe_func = Arc::new(
+            move |consensus_event: ConsensusEvent| match consensus_event {
+                ConsensusEvent::NewTip(block_id, block_height) => {
+                    assert!(*block_height == expected_block_height);
+                    assert!(*block_id == expected_block_id);
+                    std::process::exit(0);
                 }
-            }
+            },
+        );
 
-            dbg!(consensus_event);
-        });
-
+        // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
-        // We should have connected genesis
         assert!(!consensus.event_subscribers.is_empty());
-        loop {
-            thread::sleep(Duration::from_millis(100));
-        }
+        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+
+        // Wait for thread pool
+        let handle = consensus.events_broadcaster.spawn_handle(|| {});
+        assert!(
+            handle.wait_timeout(std::time::Duration::from_millis(500)).is_err(),
+            "The event haven't received"
+        );
     });
 }
