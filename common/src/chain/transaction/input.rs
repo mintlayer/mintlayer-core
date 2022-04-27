@@ -1,4 +1,6 @@
-use crate::chain::{block::Block, transaction::Transaction};
+use crate::chain::{
+    block::Block, transaction::signature::inputsig::InputWitness, transaction::Transaction,
+};
 use crate::primitives::Id;
 use parity_scale_codec::{Decode, Encode};
 
@@ -48,11 +50,15 @@ impl OutPoint {
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct TxInput {
     outpoint: OutPoint,
-    witness: Vec<u8>,
+    witness: InputWitness,
 }
 
 impl TxInput {
-    pub fn new(outpoint_source_id: OutPointSourceId, output_index: u32, witness: Vec<u8>) -> Self {
+    pub fn new(
+        outpoint_source_id: OutPointSourceId,
+        output_index: u32,
+        witness: InputWitness,
+    ) -> Self {
         TxInput {
             outpoint: OutPoint::new(outpoint_source_id, output_index),
             witness,
@@ -63,7 +69,7 @@ impl TxInput {
         &self.outpoint
     }
 
-    pub fn get_witness(&self) -> &Vec<u8> {
+    pub fn get_witness(&self) -> &InputWitness {
         &self.witness
     }
 }

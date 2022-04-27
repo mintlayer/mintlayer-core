@@ -26,6 +26,8 @@ pub use input::*;
 pub mod output;
 pub use output::*;
 
+pub mod signature;
+
 pub mod transaction_index;
 pub use transaction_index::*;
 

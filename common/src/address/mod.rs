@@ -53,6 +53,13 @@ impl Address {
         })
     }
 
+    pub fn from_public_key(
+        cfg: &ChainConfig,
+        public_key: &crypto::key::PublicKey,
+    ) -> Result<Self, AddressError> {
+        Address::new(cfg, public_key.encode())
+    }
+
     pub fn get(&self) -> &str {
         &self.address
     }

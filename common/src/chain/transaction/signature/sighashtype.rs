@@ -13,16 +13,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): L. Kuklinek
+// Author(s): S. Afach & L. Kuklinek
+
+use parity_scale_codec::Encode;
+
+use super::TransactionSigError;
 
 /// Specifies which parts of the transaction a signature commits to.
 ///
 /// The values of the flags are the same as in Bitcoin.
-#[derive(Eq, PartialEq, Clone, Copy)]
-pub struct SigHash(u8);
+#[derive(Eq, PartialEq, Clone, Copy, Encode, Debug, Ord, PartialOrd)]
+pub struct SigHashType(u8);
 
-impl SigHash {
-    const DEFAULT: u8 = 0x00;
+impl SigHashType {
     const ALL: u8 = 0x01;
     const NONE: u8 = 0x02;
     const SINGLE: u8 = 0x03;
@@ -31,46 +34,55 @@ impl SigHash {
     const MASK_OUT: u8 = 0x7f;
     const MASK_IN: u8 = 0x80;
 
-    pub fn from_u8(sighash_byte: u8) -> Option<SigHash> {
+    pub fn inputs_mode(&self) -> InputsMode {
+        match self.0 & Self::MASK_IN {
+            Self::ANYONECANPAY => InputsMode::AnyoneCanPay,
+            _ => InputsMode::CommitWhoPays,
+        }
+    }
+
+    pub fn outputs_mode(&self) -> OutputsMode {
+        match self.0 & Self::MASK_OUT {
+            Self::NONE => OutputsMode::None,
+            Self::SINGLE => OutputsMode::Single,
+            _ => OutputsMode::All,
+        }
+    }
+
+    pub fn get(&self) -> u8 {
+        self.0
+    }
+}
+
+impl TryFrom<u8> for SigHashType {
+    type Error = TransactionSigError;
+
+    fn try_from(sighash_byte: u8) -> Result<Self, Self::Error> {
         let ok = matches!(
             sighash_byte & Self::MASK_OUT,
             Self::ALL | Self::NONE | Self::SINGLE
         );
         ok.then(|| Self(sighash_byte))
-    }
-
-    pub fn input_mode(&self) -> InputMode {
-        match self.0 & Self::MASK_IN {
-            Self::ANYONECANPAY => InputMode::AnyoneCanPay,
-            _ => InputMode::CommitWhoPays,
-        }
-    }
-
-    pub fn output_mode(&self) -> OutputMode {
-        match self.0 & Self::MASK_OUT {
-            Self::NONE => OutputMode::None,
-            Self::SINGLE => OutputMode::Single,
-            _ => OutputMode::All,
-        }
-    }
-}
-
-impl Default for SigHash {
-    fn default() -> Self {
-        Self(Self::DEFAULT)
+            .ok_or(TransactionSigError::InvalidSigHashValue(sighash_byte))
     }
 }
 
 /// How inputs should be hashed
-pub enum InputMode {
+pub enum InputsMode {
     /// Commit to all inputs
     CommitWhoPays,
     /// Commit to the current input only
     AnyoneCanPay,
 }
 
+impl Default for SigHashType {
+    fn default() -> Self {
+        Self(SigHashType::ALL)
+    }
+}
+
 /// How outputs should be hashed
-pub enum OutputMode {
+pub enum OutputsMode {
     /// Commit to all outputs
     All,
     /// Don't commit to any outputs
@@ -78,3 +90,5 @@ pub enum OutputMode {
     /// Commit to the output corresponding to the current input
     Single,
 }
+
+// TODO: test

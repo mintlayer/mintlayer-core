@@ -23,6 +23,7 @@ use common::address::Address;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_mainnet;
 
+use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::H256;
 use common::primitives::{Amount, Id};
@@ -51,11 +52,11 @@ pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
 pub(crate) const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
 pub(crate) const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
-fn random_witness() -> Vec<u8> {
+fn random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
     witness.shuffle(&mut rng);
-    witness
+    InputWitness::NoSignature(Some(witness))
 }
 
 fn random_address(chain_config: &ChainConfig) -> Destination {
@@ -88,7 +89,11 @@ fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
         OutPointSourceId::BlockReward(Id::new(&generate_random_h256(g)))
     };
 
-    TxInput::new(outpoint, g.next_u32(), witness)
+    TxInput::new(
+        outpoint,
+        g.next_u32(),
+        InputWitness::NoSignature(Some(witness)),
+    )
 }
 
 fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
@@ -475,7 +480,11 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+            let input = TxInput::new(
+                first_tx_id.into(),
+                0,
+                InputWitness::NoSignature(None),
+            );
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -530,7 +539,11 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+            let input = TxInput::new(
+                first_tx_id.into(),
+                0,
+                InputWitness::NoSignature(None),
+            );
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -601,7 +614,11 @@ fn double_spend_tx_in_the_same_block() {
         // Create second tx
         let second_tx = Transaction::new(
             0,
-            vec![TxInput::new(first_tx_id.clone().into(), 0, vec![])],
+            vec![TxInput::new(
+                first_tx_id.clone().into(),
+                0,
+                InputWitness::NoSignature(None),
+            )],
             vec![TxOutput::new(Amount::from_atoms(987654321), receiver.clone())],
             0,
         )
@@ -610,7 +627,11 @@ fn double_spend_tx_in_the_same_block() {
         // Create third tx
         let third_tx = Transaction::new(
             123456789,
-            vec![TxInput::new(first_tx_id.into(), 0, vec![])],
+            vec![TxInput::new(
+                first_tx_id.into(),
+                0,
+                InputWitness::NoSignature(None),
+            )],
             vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
             0,
         )
@@ -768,7 +789,7 @@ impl<'a> BlockTestFrameWork {
                         let double_spend_input = TxInput::new(
                             OutPointSourceId::Transaction(block.transactions()[0].get_id()),
                             0,
-                            vec![],
+                            InputWitness::NoSignature(None),
                         );
                         inputs.push(double_spend_input)
                     }

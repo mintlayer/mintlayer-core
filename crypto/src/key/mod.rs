@@ -24,7 +24,7 @@ pub struct PrivateKey {
     key: PrivateKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer, PartialOrd, Ord)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
 }

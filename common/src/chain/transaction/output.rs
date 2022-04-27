@@ -4,8 +4,11 @@ use script::Script;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {
+    #[codec(index = 0)]
     Address(crate::address::Address), // Address type to be added
-    PublicKey,                        // Key type to be added
+    #[codec(index = 1)]
+    PublicKey(crypto::key::PublicKey), // Key type to be added
+    #[codec(index = 2)]
     ScriptHash(Id<Script>),
 }
 

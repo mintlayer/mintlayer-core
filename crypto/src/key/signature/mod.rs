@@ -56,6 +56,11 @@ impl Decode for Signature {
 }
 
 impl Signature {
+    pub fn from_data(data: &Vec<u8>) -> Result<Self, parity_scale_codec::Error> {
+        let decoded_sig = Signature::decode(&mut data.as_slice())?;
+        Ok(decoded_sig)
+    }
+
     pub fn is_aggregable(&self) -> bool {
         match self {
             Self::RistrettoSchnorr(_) => true,

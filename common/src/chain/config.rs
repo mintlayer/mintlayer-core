@@ -1,6 +1,7 @@
 use crate::address::Address;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
+use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
@@ -88,7 +89,7 @@ fn create_mainnet_genesis() -> Block {
     let input = TxInput::new(
         Id::<Transaction>::new(&H256::zero()).into(),
         0,
-        genesis_message,
+        InputWitness::NoSignature(Some(genesis_message)),
     );
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
