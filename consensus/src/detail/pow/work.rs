@@ -36,7 +36,7 @@ pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool
             hash <= target
         })
         .map_err(|e| {
-            Error::ConversionError(format!(
+            Error::Conversion(format!(
                 "conversion of {:?} to Uint256 type: {:?}",
                 block_bits, e
             ))

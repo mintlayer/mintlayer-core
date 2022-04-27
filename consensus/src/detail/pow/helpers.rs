@@ -59,21 +59,21 @@ pub fn calculate_new_target(
     difficulty_limit: Uint256,
 ) -> Result<Compact, Error> {
     let actual_timespan = Uint256::from_u64(actual_timespan_of_last_interval).ok_or_else(|| {
-        Error::ConversionError(format!(
+        Error::Conversion(format!(
             "conversion of actual timespan {:?} to Uint256 type failed.",
             actual_timespan_of_last_interval
         ))
     })?;
 
     let target_timespan = Uint256::from_u64(target_timespan).ok_or_else(|| {
-        Error::ConversionError(format!(
+        Error::Conversion(format!(
             "conversion of target timespan {:?} to Uint256 type failed.",
             target_timespan
         ))
     })?;
 
     let old_target = Uint256::try_from(old_target).map_err(|e| {
-        Error::ConversionError(format!(
+        Error::Conversion(format!(
             "conversion of bits {:?} to Uint256 type: {:?}",
             old_target, e
         ))
