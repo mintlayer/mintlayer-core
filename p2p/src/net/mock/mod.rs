@@ -66,7 +66,7 @@ where
 
     /// RX channel for receiving connectivity events from mock backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 pub struct MockPubSubHandle<T>
@@ -78,7 +78,7 @@ where
 
     /// RX channel for receiving floodsub events from mock backend
     _flood_rx: mpsc::Receiver<types::FloodsubEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 pub struct MockSyncingHandle<T>
@@ -89,7 +89,7 @@ where
     cmd_tx: mpsc::Sender<types::Command>,
 
     _sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 #[async_trait]
