@@ -154,6 +154,7 @@ mod test {
     }
 
     #[test]
+    // This tests the utxo and the undo. This does not include testing the state of the block.
     fn simulation_test() {
         let store = Store::new_empty().unwrap();
         let mut db_interface = UtxoDBInterface::new(store);
@@ -161,15 +162,22 @@ mod test {
         // initializing the db with existing utxos.
         let (best_block_id, outpoints) = initialize_db(&mut db_interface, 10);
         // create the TxInputs for spending.
-        let tx_inputs = create_tx_inputs(&outpoints);
+        let expected_tx_inputs = create_tx_inputs(&outpoints);
 
+        // create the UtxoDB.
         let mut db_interface_clone = db_interface.clone();
         let mut db = UtxoDB::new(&mut db_interface_clone);
-        // let's check that each tx_input exists in the db, using the UtxoDB
-        tx_inputs.iter().for_each(|input| {
-            let outpoint = input.get_outpoint();
-            assert!(db.has_utxo(outpoint));
-        });
+
+        // let's check that each tx_input exists in the db. Secure the spents utxos.
+        let spent_utxos = expected_tx_inputs
+            .iter()
+            .map(|input| {
+                let outpoint = input.get_outpoint();
+                assert!(db.has_utxo(outpoint));
+
+                db.get_utxo(outpoint).expect("utxo should exist.")
+            })
+            .collect_vec();
 
         // test the spend
         let (block, block_undo) = {
@@ -177,19 +185,27 @@ mod test {
             let mut view = db.derive_cache();
 
             // create a new block to spend.
-            let block = create_block(tx_inputs.clone(), best_block_id, 3);
-
+            let block = create_block(expected_tx_inputs.clone(), best_block_id, 3);
+            let block_height = BlockHeight::new(1);
             // spend the block
             let block_undo = {
                 let undos = block
                     .get_transactions()
                     .iter()
-                    .map(|tx| {
-                        view.spend_utxos(tx, BlockHeight::new(1)).expect("should spend okay.")
-                    })
+                    .map(|tx| view.spend_utxos(tx, block_height).expect("should spend okay."))
                     .collect_vec();
-                BlockUndo::new(undos)
+                BlockUndo::new(undos, block_height)
             };
+
+            // check that the block_undo contains the same utxos recorded as "spent",
+            // using the `spent_utxos`
+            {
+                block_undo.tx_undos().iter().enumerate().for_each(|(b_idx, tx_undo)| {
+                    tx_undo.inner().iter().enumerate().for_each(|(t_idx, utxo)| {
+                        assert_eq!(Some(utxo), spent_utxos.get(b_idx + t_idx));
+                    })
+                })
+            }
 
             // create the base and flush it.
             {
@@ -201,7 +217,7 @@ mod test {
         };
 
         // check that all in tx_inputs do NOT exist
-        tx_inputs.iter().for_each(|input| {
+        expected_tx_inputs.iter().for_each(|input| {
             assert_eq!(db.get_utxo(input.get_outpoint()), None);
         });
 
@@ -210,11 +226,12 @@ mod test {
             assert!(db_interface.set_best_block_id(&block.get_id()).is_ok());
             assert!(db_interface.set_undo_data(block.get_id(), &block_undo).is_ok());
 
-            let block_undo_from_db = db_interface
+            // check that the block_undo retrieved from db is the same as the one being stored.
+            let block_undo_from_db = db
                 .get_undo_data(block.get_id())
-                .expect("getting undo data should not cause any problems")
-                .expect("should have undo data.");
-            assert_eq!(&block_undo, &block_undo_from_db);
+                .expect("getting undo data should not cause any problems");
+
+            assert_eq!(block_undo_from_db.as_ref(), Some(&block_undo));
         }
 
         // check that the inputs of the block do not exist in the utxo column.
@@ -226,28 +243,43 @@ mod test {
             });
         }
 
-        // let's try to reverse it
+        // let's try to reverse the spending.
         {
             // get the best_block_id
-            let best_block_id = db.get_best_block_hash().expect("should return the best block id");
+            let current_best_block_id =
+                db.get_best_block_hash().expect("should return the best block id");
 
-            let undo_file = db
-                .get_undo_data(best_block_id.clone())
+            // the current best_block_id should be the block id..
+            assert_eq!(&current_best_block_id, &block.get_id());
+
+            // get the block_undo.
+            let block_undo = db
+                .get_undo_data(current_best_block_id)
                 .expect("query should not fail")
                 .expect("should return the undo file");
 
-            assert_eq!(undo_file.inner().len(), tx_inputs.len());
+            // check that the block_undo's size is the same as the expected tx inputs.
+            assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
+            // let's create a view.
             let mut view = UtxosCache::default();
-            // set the best block to the previous one.
-            view.set_best_block(block.get_prev_block_id());
+            // set the best block to the previous one
+            {
+                view.set_best_block(block.get_prev_block_id());
+                // the best block id should be the same as the old one.
+                assert_eq!(
+                    view.get_best_block_hash().as_ref(),
+                    Some(&block.get_prev_block_id())
+                );
+            }
 
             // get the block txinputs, and add them to the view.
             block.get_transactions().iter().enumerate().for_each(|(idx, tx)| {
                 // use the undo to get the utxos
-                let undo = undo_file.inner().get(idx).expect("it should return undo");
+                let undo = block_undo.tx_undos().get(idx).expect("it should return undo");
                 let undos = undo.inner();
 
+                // add the undo utxos back to the view.
                 tx.get_inputs().iter().enumerate().for_each(|(in_idx, input)| {
                     let utxo = undos.get(in_idx).expect("it should have utxo");
                     assert!(view.add_utxo(utxo.clone(), input.get_outpoint(), true).is_ok());
@@ -257,14 +289,18 @@ mod test {
             assert!(flush_to_base(view, &mut db).is_ok());
         }
 
-        // check that all the tx_inputs exists.
-        tx_inputs.iter().for_each(|inputs| {
-            assert!(db.get_utxo(inputs.get_outpoint()).is_some());
+        // check that all the expected_tx_inputs exists, and the same utxo is saved.
+        expected_tx_inputs.iter().enumerate().for_each(|(idx, input)| {
+            let res = db.get_utxo(input.get_outpoint());
+
+            let expected_utxo = spent_utxos.get(idx);
+            assert_eq!(res.as_ref(), expected_utxo);
         });
 
-        // create dummy tx_inputs for spending.
+        // For error testing: create dummy tx_inputs for spending.
         {
-            let rnd = make_pseudo_rng().gen_range(5..20);
+            let num_of_txs = 5;
+            let rnd = make_pseudo_rng().gen_range(num_of_txs..20);
 
             let tx_inputs: Vec<TxInput> = (0..rnd)
                 .into_iter()
@@ -276,14 +312,20 @@ mod test {
                 })
                 .collect();
 
+            let num_of_txs =
+                usize::from_u32(num_of_txs).expect("conversion to usize should not fail");
             let id = db.get_best_block_hash().expect("it should return an id");
-            let block = create_block(tx_inputs, id, 5);
 
+            // Create a dummy block.
+            let block = create_block(tx_inputs, id, num_of_txs);
+
+            // Create a view.
             let mut view = db.derive_cache();
 
             let tx = block.get_transactions().get(0).expect("should return a transaction");
+
+            // try to spend that transaction
             assert!(view.spend_utxos(tx, BlockHeight::new(2)).is_err());
-            // try to spend the transaction
         }
     }
 }

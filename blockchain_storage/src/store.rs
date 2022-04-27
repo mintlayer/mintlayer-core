@@ -624,7 +624,11 @@ mod test {
     /// # Arguments
     /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
     /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
-    fn create_rand_block_undo(max_lim_of_utxos: u8, max_lim_of_tx_undos: u8) -> BlockUndo {
+    fn create_rand_block_undo(
+        max_lim_of_utxos: u8,
+        max_lim_of_tx_undos: u8,
+        block_height: BlockHeight,
+    ) -> BlockUndo {
         let mut counter: u64 = 0;
 
         let mut block_undo: Vec<TxUndo> = vec![];
@@ -643,12 +647,12 @@ mod test {
             block_undo.push(TxUndo::new(tx_undo));
         }
 
-        BlockUndo::new(block_undo)
+        BlockUndo::new(block_undo, block_height)
     }
 
     #[test]
     fn undo_test() {
-        let block_undo0 = create_rand_block_undo(10, 5);
+        let block_undo0 = create_rand_block_undo(10, 5, BlockHeight::new(1));
         // create id:
         let id0: Id<Block> = Id::new(&H256::random());
 
@@ -667,7 +671,7 @@ mod test {
 
         // insert, remove, and reinsert the next block_undo
 
-        let block_undo1 = create_rand_block_undo(5, 10);
+        let block_undo1 = create_rand_block_undo(5, 10, BlockHeight::new(2));
         // create id:
         let id1: Id<Block> = Id::new(&H256::random());
 

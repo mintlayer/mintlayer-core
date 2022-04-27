@@ -2,6 +2,7 @@
 
 use crate::Utxo;
 use parity_scale_codec::{Decode, Encode};
+use common::primitives::BlockHeight;
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct TxUndo(Vec<Utxo>);
@@ -33,19 +34,25 @@ impl TxUndo {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct BlockUndo(Vec<TxUndo>);
+pub struct BlockUndo{
+    // determines at what height this undo file belongs to.
+    height:BlockHeight,
+    undos:Vec<TxUndo>
+}
 
 impl BlockUndo {
-    pub fn new(tx_undos: Vec<TxUndo>) -> Self {
-        Self(tx_undos)
+    pub fn new(tx_undos: Vec<TxUndo>, height:BlockHeight) -> Self {
+        Self {
+            height,
+            undos: tx_undos
+        }
+    }
+    pub fn tx_undos(&self) -> &[TxUndo] {
+        &self.undos
     }
 
-    pub fn inner(&self) -> &[TxUndo] {
-        &self.0
-    }
-
-    pub fn into_inner(self) -> Vec<TxUndo> {
-        self.0
+    pub fn height(&self) -> BlockHeight {
+        self.height
     }
 }
 
@@ -82,6 +89,7 @@ pub mod test {
 
     #[test]
     fn block_undo_test() {
+        let expected_height = BlockHeight::new(5);
         let (utxo0, _) = create_utxo(0);
         let (utxo1, _) = create_utxo(1);
         let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
@@ -91,21 +99,18 @@ pub mod test {
         let (utxo4, _) = create_utxo(4);
         let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
 
-        let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()]);
+        let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()], expected_height);
 
         // check `inner()`
         {
-            let inner = blockundo.inner();
+            let inner = blockundo.tx_undos();
 
             assert_eq!(&tx_undo0, &inner[0]);
             assert_eq!(&tx_undo1, &inner[1]);
         }
 
-        // check `into_inter`
-        {
-            let inner = blockundo.into_inner();
-            assert_eq!(&tx_undo0, &inner[0]);
-            assert_eq!(&tx_undo1, &inner[1]);
-        }
+
+        // check the height
+        assert_eq!(blockundo.height, expected_height);
     }
 }

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};

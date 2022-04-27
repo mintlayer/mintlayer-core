@@ -1,12 +1,12 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 // todo: remove ^ when all untested codes are tested
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use common::chain::block::Block;
 use common::chain::OutPoint;
-use common::primitives::Id;
+use common::primitives::{H256, Id};
 use crate::{BlockUndo, Error};
 
 pub trait UtxosPersistentStorage {
@@ -103,6 +103,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
 
 struct UtxoInMemoryDBInterface {
     store: BTreeMap<OutPoint, Utxo>,
+    undo_store: HashMap<H256,BlockUndo>,
     best_block_id: Option<Id<Block>>,
 }
 
@@ -110,6 +111,7 @@ impl UtxoInMemoryDBInterface {
     fn new() -> Self {
         Self {
             store: BTreeMap::new(),
+            undo_store: HashMap::new(),
             best_block_id: None,
         }
     }
@@ -143,15 +145,18 @@ impl UtxosPersistentStorage for UtxoInMemoryDBInterface {
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
-        todo!()
+        self.undo_store.insert(id.get(),undo.clone());
+        Ok(())
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
-        todo!()
+        self.undo_store.remove(&id.get());
+        Ok(())
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
-        todo!()
+        let res = self.undo_store.get(&id.get());
+        Ok(res.cloned())
     }
 }
 
