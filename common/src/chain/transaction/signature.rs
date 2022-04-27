@@ -74,9 +74,10 @@ pub fn signature_hash(
     // pull the inputs/outputs automatically through macros;
     // the current way is not safe and may produce issues in the future
 
-    let target_input = tx.get_inputs().get(input_num).ok_or(
-        TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()),
-    )?;
+    let target_input = tx
+        .get_inputs()
+        .get(input_num)
+        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
 
     stream.write(tx.get_flags().encode());
 
@@ -134,9 +135,10 @@ pub fn verify_signature(
     tx: &Transaction,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    let target_input = tx.get_inputs().get(input_num).ok_or(
-        TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()),
-    )?;
+    let target_input = tx
+        .get_inputs()
+        .get(input_num)
+        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
     let input_witness = target_input.get_witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => {
