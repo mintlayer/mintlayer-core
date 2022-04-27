@@ -20,7 +20,10 @@
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
-    net::{self, libp2p::types},
+    net::{
+        self,
+        libp2p::{types, BlockResponse},
+    },
 };
 use futures::StreamExt;
 use libp2p::{
@@ -32,12 +35,14 @@ use libp2p::{
     identify::{IdentifyEvent, IdentifyInfo},
     mdns::MdnsEvent,
     ping,
-    swarm::{NegotiatedSubstream, Swarm, SwarmEvent},
+    request_response::*,
+    swarm::{ConnectionHandlerUpgrErr, NegotiatedSubstream, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
 use serialization::Decode;
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
@@ -69,6 +74,9 @@ pub struct Backend {
     /// Sender for outgoing gossipsub events
     gossip_tx: mpsc::Sender<types::PubSubEvent>,
 
+    /// Sender for outgoing syncing events
+    sync_tx: mpsc::Sender<types::SyncingEvent>,
+
     /// Hashmap of pending outbound connections
     dials: HashMap<PeerId, oneshot::Sender<error::Result<()>>>,
 
@@ -77,6 +85,9 @@ pub struct Backend {
 
     /// Hashmap of pending inbound connections
     conns: HashMap<PeerId, Multiaddr>,
+
+    // TODO:
+    pending_reqs: HashMap<RequestId, ResponseChannel<BlockResponse>>,
 
     // TODO: remove this?
     /// Hashmap of topics and their participants
@@ -92,6 +103,7 @@ impl Backend {
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         gossip_tx: mpsc::Sender<types::PubSubEvent>,
+        sync_tx: mpsc::Sender<types::SyncingEvent>,
         relay_mdns: bool,
     ) -> Self {
         Self {
@@ -99,10 +111,12 @@ impl Backend {
             cmd_rx,
             conn_tx,
             gossip_tx,
+            sync_tx,
             dials: HashMap::new(),
             pending: HashMap::new(),
             conns: HashMap::new(),
             active_gossipsubs: HashMap::new(),
+            pending_reqs: HashMap::new(),
             relay_mdns,
         }
     }
@@ -146,8 +160,11 @@ impl Backend {
         event: SwarmEvent<
             types::ComposedEvent,
             EitherError<
-                EitherError<EitherError<void::Void, GossipsubHandlerError>, ping::Failure>,
-                std::io::Error,
+                EitherError<
+                    EitherError<EitherError<void::Void, GossipsubHandlerError>, ping::Failure>,
+                    std::io::Error,
+                >,
+                ConnectionHandlerUpgrErr<std::io::Error>,
             >,
         >,
     ) -> error::Result<()> {
@@ -340,6 +357,56 @@ impl Backend {
             })) => {
                 todo!();
             }
+            // TODO: move these to separate handler
+            SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(
+                RequestResponseEvent::Message { peer, message },
+            )) => match message {
+                RequestResponseMessage::Request {
+                    request_id,
+                    request,
+                    channel,
+                } => {
+                    self.pending_reqs.insert(request_id, channel);
+                    self.sync_tx
+                        .send(types::SyncingEvent::BlockRequest {
+                            peer_id: peer,
+                            request_id,
+                            request: Box::new(request),
+                        })
+                        .await
+                        .map_err(|_| P2pError::ChannelClosed)
+                }
+                RequestResponseMessage::Response {
+                    request_id,
+                    response,
+                } => self
+                    .sync_tx
+                    .send(types::SyncingEvent::BlockResponse {
+                        peer_id: peer,
+                        request_id,
+                        response: Box::new(response),
+                    })
+                    .await
+                    .map_err(|_| P2pError::ChannelClosed),
+            },
+            SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(
+                RequestResponseEvent::ResponseSent { peer, request_id },
+            )) => {
+                log::debug!("response sent, request id {:?}", request_id);
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(
+                RequestResponseEvent::OutboundFailure { peer, .. },
+            )) => {
+                log::error!("outbound failure, destroy peer info, inform front-end");
+                Ok(())
+            }
+            SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(
+                RequestResponseEvent::InboundFailure { peer, .. },
+            )) => {
+                log::error!("inbound failure, destroy peer info, inform front-end");
+                Ok(())
+            }
             _ => {
                 log::warn!("unhandled event {:?}", event);
                 Ok(())
@@ -406,6 +473,37 @@ impl Backend {
                 // TODO: fix this
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
+            types::Command::SendBlockRequest {
+                peer_id,
+                request,
+                response,
+            } => response
+                .send(Ok(self
+                    .swarm
+                    .behaviour_mut()
+                    .sync
+                    .send_request(&peer_id, *request)))
+                .map_err(|_| P2pError::ChannelClosed),
+            types::Command::SendBlockResponse {
+                peer_id,
+                request_id,
+                response,
+                channel,
+            } => match self.pending_reqs.remove(&request_id) {
+                None => {
+                    log::error!("pending request ({:?}) doesn't exist", request_id);
+                    Ok(())
+                }
+                Some(response_channel) => self
+                    .swarm
+                    .behaviour_mut()
+                    .sync
+                    .send_response(response_channel, *response)
+                    .map_err(|_| {
+                        log::error!("failed to send response, channel closed or request timed out");
+                        P2pError::Unknown("channel closed or request timed out".to_string())
+                    }),
+            },
         }
     }
 }
@@ -413,6 +511,7 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::libp2p::{BlockRequest, BlockResponse, SyncingCodec, SyncingProtocol};
     use libp2p::{
         core::upgrade,
         gossipsub::GossipsubConfigBuilder,
@@ -424,6 +523,7 @@ mod tests {
         tcp::TcpConfig,
         Transport,
     };
+    use std::{io, iter};
     use tokio::sync::oneshot;
 
     // create a swarm object which is the top-level object of libp2p
@@ -460,11 +560,17 @@ mod tests {
             id_keys.public(),
         ));
 
+        // TODO: configure sync protocol
+        let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
+        let cfg = RequestResponseConfig::default();
+        let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
+
         let behaviour = types::ComposedBehaviour {
             mdns: Mdns::new(Default::default()).await.unwrap(),
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
             identify,
+            sync,
         };
 
         SwarmBuilder::new(transport, behaviour, peer_id).build()
@@ -477,7 +583,8 @@ mod tests {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
+        let (sync_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -503,7 +610,8 @@ mod tests {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
+        let (sync_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -544,7 +652,8 @@ mod tests {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, false);
+        let (sync_tx, _) = mpsc::channel(64);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

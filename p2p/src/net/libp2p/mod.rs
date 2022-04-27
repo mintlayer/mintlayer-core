@@ -20,16 +20,20 @@
 
 use crate::{
     error::{self, Libp2pError, P2pError, ProtocolError},
+    message,
     net::{
         self, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
-        PubSubTopic,
+        PubSubTopic, SyncingMessage, SyncingService,
     },
 };
 use async_trait::async_trait;
 use futures::prelude::*;
 use itertools::*;
 use libp2p::{
-    core::{upgrade, PeerId},
+    core::{
+        upgrade::{self, read_length_prefixed, write_length_prefixed},
+        PeerId,
+    },
     gossipsub::{
         Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
         MessageAuthenticity, MessageId, ValidationMode,
@@ -40,6 +44,7 @@ use libp2p::{
     mplex,
     multiaddr::Protocol,
     noise, ping,
+    request_response::*,
     swarm::{NegotiatedSubstream, SwarmBuilder},
     tcp::TcpConfig,
     Multiaddr, Transport,
@@ -49,6 +54,7 @@ use std::collections::hash_map::DefaultHasher;
 use serialization::{Decode, Encode};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+use std::{io, iter};
 use tokio::sync::{mpsc, oneshot};
 
 mod backend;
@@ -91,6 +97,18 @@ where
 
     /// Channel for receiving pubsub events from libp2p backend
     flood_rx: mpsc::Receiver<types::PubSubEvent>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+pub struct Libp2pSyncHandle<T>
+where
+    T: NetworkService,
+{
+    /// Channel for sending commands to libp2p backend
+    cmd_tx: mpsc::Sender<types::Command>,
+
+    /// Channel for receiving pubsub events from libp2p backend
+    sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<T>,
 }
 
@@ -180,6 +198,7 @@ where
 {
     type Error = P2pError;
 
+    // TODO: use text-io
     fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
         // TODO: fix this to extract the correct information
         let (net, version) = match self.protocol_version.as_str() {
@@ -206,9 +225,11 @@ impl NetworkService for Libp2pService {
     type Strategy = Libp2pStrategy;
     type PeerId = PeerId;
     type ProtocolId = String;
+    type RequestId = RequestId;
     type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
+    type SyncingHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -216,7 +237,11 @@ impl NetworkService for Libp2pService {
         topics: &[PubSubTopic],
         config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
+    ) -> error::Result<(
+        Self::ConnectivityHandle,
+        Self::PubSubHandle,
+        Self::SyncingHandle,
+    )> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys)?;
@@ -245,6 +270,11 @@ impl NetworkService for Libp2pService {
                 .validate_messages()
                 .build()
                 .expect("configuration to be valid");
+
+            // TODO: configure sync protocol
+            let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
+            let cfg = RequestResponseConfig::default();
+            let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
 
             let mut gossipsub: Gossipsub = Gossipsub::new(
                 MessageAuthenticity::Signed(id_keys.clone()),
@@ -281,6 +311,7 @@ impl NetworkService for Libp2pService {
                 ping: ping::Behaviour::new(ping::Config::new()),
                 gossipsub,
                 identify,
+                sync,
             };
 
             for topic in topics.iter() {
@@ -295,6 +326,7 @@ impl NetworkService for Libp2pService {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (flood_tx, flood_rx) = mpsc::channel(64);
         let (conn_tx, conn_rx) = mpsc::channel(64);
+        let (sync_tx, sync_rx) = mpsc::channel(64);
 
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
@@ -305,7 +337,8 @@ impl NetworkService for Libp2pService {
         log::debug!("spawning libp2p backend to background");
 
         tokio::spawn(async move {
-            let mut backend = backend::Backend::new(swarm, cmd_rx, conn_tx, flood_tx, relay_mdns);
+            let mut backend =
+                backend::Backend::new(swarm, cmd_rx, conn_tx, flood_tx, sync_tx, relay_mdns);
             backend.run().await
         });
 
@@ -328,8 +361,13 @@ impl NetworkService for Libp2pService {
                 _marker: Default::default(),
             },
             Self::PubSubHandle {
-                cmd_tx,
+                cmd_tx: cmd_tx.clone(),
                 flood_rx,
+                _marker: Default::default(),
+            },
+            Self::SyncingHandle {
+                cmd_tx,
+                sync_rx,
                 _marker: Default::default(),
             },
         ))
@@ -475,6 +513,122 @@ where
     }
 }
 
+#[async_trait]
+impl<T> SyncingService<T> for Libp2pSyncHandle<T>
+where
+    T: NetworkService<PeerId = PeerId, MessageId = MessageId, RequestId = RequestId> + Send,
+{
+    async fn send_request(
+        &mut self,
+        peer_id: T::PeerId,
+        message: message::Message,
+    ) -> error::Result<T::RequestId> {
+        todo!();
+    }
+
+    async fn send_response(
+        &mut self,
+        request_id: T::RequestId,
+        message: message::Message,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
+        todo!();
+    }
+}
+
+// TODO: move this to its own file
+#[derive(Debug, Clone)]
+pub struct SyncingProtocol();
+
+#[derive(Clone)]
+pub struct SyncingCodec();
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockRequest(Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockResponse(Vec<u8>);
+
+impl ProtocolName for SyncingProtocol {
+    fn protocol_name(&self) -> &[u8] {
+        "/mintlayer/sync/0.1.0".as_bytes()
+    }
+}
+
+#[async_trait]
+impl RequestResponseCodec for SyncingCodec {
+    type Protocol = SyncingProtocol;
+    type Request = BlockRequest;
+    type Response = BlockResponse;
+
+    async fn read_request<T>(
+        &mut self,
+        _: &SyncingProtocol,
+        io: &mut T,
+    ) -> io::Result<Self::Request>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let vec = read_length_prefixed(io, 1024).await?;
+
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+
+        Ok(BlockRequest(vec))
+    }
+
+    async fn read_response<T>(
+        &mut self,
+        _: &SyncingProtocol,
+        io: &mut T,
+    ) -> io::Result<Self::Response>
+    where
+        T: AsyncRead + Unpin + Send,
+    {
+        let vec = read_length_prefixed(io, 1024).await?;
+
+        if vec.is_empty() {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+
+        Ok(BlockResponse(vec))
+    }
+
+    async fn write_request<T>(
+        &mut self,
+        _: &SyncingProtocol,
+        io: &mut T,
+        BlockRequest(data): BlockRequest,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        write_length_prefixed(io, data).await?;
+        io.close().await?;
+
+        Ok(())
+    }
+
+    async fn write_response<T>(
+        &mut self,
+        _: &SyncingProtocol,
+        io: &mut T,
+        BlockResponse(data): BlockResponse,
+    ) -> io::Result<()>
+    where
+        T: AsyncWrite + Unpin + Send,
+    {
+        write_length_prefixed(io, data).await?;
+        io.close().await?;
+
+        Ok(())
+    }
+}
+
 // TODO: move these tests elsewhere
 #[cfg(test)]
 mod tests {
@@ -559,8 +713,8 @@ mod tests {
         assert!(service1.is_ok());
         assert!(service2.is_ok());
 
-        let (mut service1, _) = service1.unwrap();
-        let (mut service2, _) = service2.unwrap();
+        let (mut service1, _, _) = service1.unwrap();
+        let (mut service2, _, _) = service2.unwrap();
         let conn_addr = service1.local_addr().clone();
 
         let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
@@ -576,7 +730,7 @@ mod tests {
     async fn test_connect_peer_id_missing() {
         let config = Arc::new(common::chain::config::create_mainnet());
         let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
-        let (mut service, _) = Libp2pService::start(
+        let (mut service, _, _) = Libp2pService::start(
             "/ip6/::1/tcp/8905".parse().unwrap(),
             &[],
             &[],
@@ -661,6 +815,16 @@ mod tests {
     impl PartialEq for Libp2pService {
         fn eq(&self, _: &Self) -> bool {
             true
+        }
+    }
+
+    impl<T: NetworkService> PartialEq for net::PeerInfo<T> {
+        fn eq(&self, other: &Self) -> bool {
+            self.peer_id == other.peer_id
+                && self.net == other.net
+                && self.version == other.version
+                && self.agent == other.agent
+                && self.protocols == other.protocols
         }
     }
 
@@ -753,21 +917,17 @@ mod tests {
         );
     }
 
-    impl PartialEq for Libp2pSocket {
-        fn eq(&self, _other: &Libp2pSocket) -> bool {
-            true
-        }
-    }
-
     // try to connect to a service that is not listening with a small timeout and verify that the connection fails
     // TODO: verify on windows/mac
     #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn test_connect_with_timeout() {
-        let (mut service, _) = Libp2pService::start(
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (mut service, _, _) = Libp2pService::start(
             test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
+            config,
             Duration::from_secs(2),
         )
         .await

@@ -19,7 +19,10 @@
 
 use crate::{
     error, message,
-    net::{self, libp2p::Libp2pService},
+    net::{
+        self,
+        libp2p::{BlockRequest, BlockResponse, Libp2pService, SyncingCodec},
+    },
 };
 use libp2p::{
     gossipsub::{
@@ -29,11 +32,17 @@ use libp2p::{
     identify::{Identify, IdentifyEvent, IdentifyInfo},
     mdns::{Mdns, MdnsEvent},
     ping::{self, PingEvent},
+    // TODO: do not use *
+    request_response::*,
     swarm::NegotiatedSubstream,
-    Multiaddr, NetworkBehaviour, PeerId,
+    Multiaddr,
+    NetworkBehaviour,
+    PeerId,
 };
+// use std::sync::Arc;
 use tokio::sync::oneshot;
 
+// TODO: rename `response` -> `channel`
 #[derive(Debug)]
 pub enum Command {
     /// Start listening on the network interface specified by `addr`
@@ -64,6 +73,21 @@ pub enum Command {
         result: MessageAcceptance,
         response: oneshot::Sender<error::Result<()>>,
     },
+
+    /// Send block request to remote peer
+    SendBlockRequest {
+        peer_id: PeerId,
+        request: Box<BlockRequest>,
+        response: oneshot::Sender<error::Result<RequestId>>,
+    },
+
+    /// Send block response to remote peer
+    SendBlockResponse {
+        peer_id: PeerId,
+        request_id: RequestId,
+        response: Box<BlockResponse>,
+        channel: oneshot::Sender<error::Result<()>>,
+    },
 }
 
 pub enum ConnectivityEvent {
@@ -86,6 +110,19 @@ pub enum PubSubEvent {
         topic: net::PubSubTopic,
         message: message::Message,
         message_id: MessageId,
+    },
+}
+
+pub enum SyncingEvent {
+    BlockRequest {
+        peer_id: PeerId,
+        request_id: RequestId,
+        request: Box<BlockRequest>,
+    },
+    BlockResponse {
+        peer_id: PeerId,
+        request_id: RequestId,
+        response: Box<BlockResponse>,
     },
 }
 
@@ -127,6 +164,7 @@ pub struct ComposedBehaviour {
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
     pub identify: Identify,
+    pub sync: RequestResponse<SyncingCodec>,
 }
 
 #[derive(Debug)]
@@ -136,6 +174,7 @@ pub enum ComposedEvent {
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
     IdentifyEvent(IdentifyEvent),
+    SyncingEvent(RequestResponseEvent<BlockRequest, BlockResponse>),
 }
 
 impl From<MdnsEvent> for ComposedEvent {
@@ -159,5 +198,11 @@ impl From<PingEvent> for ComposedEvent {
 impl From<IdentifyEvent> for ComposedEvent {
     fn from(event: IdentifyEvent) -> Self {
         ComposedEvent::IdentifyEvent(event)
+    }
+}
+
+impl From<RequestResponseEvent<BlockRequest, BlockResponse>> for ComposedEvent {
+    fn from(event: RequestResponseEvent<BlockRequest, BlockResponse>) -> Self {
+        ComposedEvent::SyncingEvent(event)
     }
 }

@@ -17,7 +17,7 @@
 use crate::{error, message};
 use async_trait::async_trait;
 use common::{chain, primitives};
-use serialization::Encode;
+use serialization::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
@@ -90,6 +90,28 @@ where
         message_id: T::MessageId,
         // TODO: what should the type be here?
         message: message::Message,
+        // TODO: use PubSubMessage
+    },
+    // TODO: peer subscribed/unsubscribed?
+}
+
+#[derive(Debug, Encode, Decode)]
+pub enum PubSubMessage {
+    Transaction(message::Message),
+    Block(message::Message),
+}
+
+pub enum SyncingMessage<T>
+where
+    T: NetworkService,
+{
+    Request {
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        request: message::Message,
+    },
+    Response {
+        request: message::Message,
     },
 }
 
@@ -128,11 +150,14 @@ pub trait NetworkService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
 
+    // TODO:
+    type RequestId: Debug;
+
     /// Enum of different peer discovery strategies that the implementation provides
     type Strategy;
 
     /// Id that identifies a protocol
-    type ProtocolId: Debug + Send + Clone;
+    type ProtocolId: Debug + Send + Clone + PartialEq;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
@@ -140,7 +165,9 @@ pub trait NetworkService {
     /// Handle for sending/receiving floodsub-related events
     type PubSubHandle: Send;
 
-    // TODO: move to pubsubservice??
+    // TODO:
+    type SyncingHandle: Send;
+
     /// Unique ID assigned to each pubsub message
     type MessageId: Send + Clone;
 
@@ -157,7 +184,11 @@ pub trait NetworkService {
         topics: &[PubSubTopic],
         config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)>;
+    ) -> error::Result<(
+        Self::ConnectivityHandle,
+        Self::PubSubHandle,
+        Self::SyncingHandle,
+    )>;
 }
 
 /// ConnectivityService provides an interface through which objects can send
@@ -195,13 +226,14 @@ pub trait PubSubService<T>
 where
     T: NetworkService,
 {
-    // TODO: redesign this!!
+    // TODO: use pubsubmessage
     /// Publish data in a given floodsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
     async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
+    // TODO: remove these traits bounds
     where
         U: Sync + Send + Encode;
 
@@ -215,4 +247,27 @@ where
 
     /// Poll unvalidated gossipsub messages
     async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>>;
+}
+
+#[async_trait]
+pub trait SyncingService<T>
+where
+    T: NetworkService,
+{
+    // TODO:
+    async fn send_request(
+        &mut self,
+        peer_id: T::PeerId,
+        message: message::Message,
+    ) -> error::Result<T::RequestId>;
+
+    // TODO:
+    async fn send_response(
+        &mut self,
+        request_id: T::RequestId,
+        message: message::Message,
+    ) -> error::Result<()>;
+
+    // TODO:
+    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>>;
 }

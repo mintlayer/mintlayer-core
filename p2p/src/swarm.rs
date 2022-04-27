@@ -280,7 +280,7 @@ mod tests {
         T::ConnectivityHandle: ConnectivityService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (conn, _) = T::start(
+        let (conn, _, _) = T::start(
             addr,
             &[],
             &[],

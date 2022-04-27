@@ -35,7 +35,7 @@ use std::sync::Arc;
 async fn test_libp2p_peer_discovery() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut serv, _) = Libp2pService::start(
+    let (mut serv, _, _) = Libp2pService::start(
         addr.clone(),
         &[Libp2pStrategy::MulticastDns],
         &[],
@@ -46,7 +46,7 @@ async fn test_libp2p_peer_discovery() {
     .unwrap();
 
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut serv2, _) = Libp2pService::start(
+    let (mut serv2, _, _) = Libp2pService::start(
         addr2.clone(),
         &[Libp2pStrategy::MulticastDns],
         &[],
