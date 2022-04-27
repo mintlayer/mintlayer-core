@@ -19,7 +19,7 @@
 use crate::{
     error::{self, P2pError},
     event,
-    net::{self, NetworkService, PubSubService},
+    net::{self, NetworkService, SyncingService},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
@@ -56,11 +56,8 @@ pub struct SyncManager<T>
 where
     T: NetworkService,
 {
-    /// Chain config
-    config: Arc<ChainConfig>,
-
     /// Handle for sending/receiving connectivity events
-    handle: T::PubSubHandle,
+    handle: T::SyncingHandle,
 
     /// RX channel for receiving syncing-related control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -72,40 +69,22 @@ where
 impl<T> SyncManager<T>
 where
     T: NetworkService,
-    T::PubSubHandle: PubSubService<T>,
+    T::SyncingHandle: SyncingService<T>,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
-        handle: T::PubSubHandle,
+        handle: T::SyncingHandle,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
-            config,
             handle,
             rx_sync,
             peers: Default::default(),
         }
     }
 
-    /// Handle pubsub event
-    fn on_pubsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
-        let net::PubSubEvent::MessageReceived {
-            peer_id: _,
-            topic,
-            message,
-            ..
-        } = event;
-
-        match topic {
-            net::PubSubTopic::Transactions => {
-                log::debug!("received new transaction: {:#?}", message);
-            }
-            net::PubSubTopic::Blocks => {
-                log::debug!("received new block: {:#?}", message);
-            }
-        }
-
-        Ok(())
+    /// Handle incoming block/header request/response
+    fn on_syncing_event(&mut self, event: net::SyncingMessage<T>) -> error::Result<()> {
+        todo!();
     }
 
     /// Handle control-related sync event from P2P/SwarmManager
@@ -142,7 +121,7 @@ where
         loop {
             tokio::select! {
                 res = self.handle.poll_next() => {
-                    self.on_pubsub_event(res?)?;
+                    self.on_syncing_event(res?)?;
                 }
                 res = self.rx_sync.recv().fuse() => {
                     self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
@@ -155,7 +134,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{mock::MockService, PubSubService};
+    use crate::net::{mock::MockService, SyncingService};
     use common::chain::config;
     use std::net::SocketAddr;
 
@@ -168,10 +147,10 @@ mod tests {
     )
     where
         T: NetworkService,
-        T::PubSubHandle: PubSubService<T>,
+        T::SyncingHandle: SyncingService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (_, flood, _) = T::start(
+        let (_, _, sync) = T::start(
             addr,
             &[],
             &[],
@@ -184,11 +163,7 @@ mod tests {
         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
         let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
 
-        (
-            SyncManager::<T>::new(Arc::clone(&config), flood, rx_sync),
-            tx_sync,
-            tx_peer,
-        )
+        (SyncManager::<T>::new(sync, rx_sync), tx_sync, tx_peer)
     }
 
     // handle peer connection event
