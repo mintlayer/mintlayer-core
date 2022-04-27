@@ -15,6 +15,8 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use std::collections::BTreeMap;
+
 use super::*;
 use blockchain_storage::Store;
 use common::address::Address;
@@ -1226,9 +1228,7 @@ fn test_empty_consensus() {
 #[allow(clippy::eq_op)]
 fn test_spend_inputs_simple() {
     common::concurrency::model(|| {
-        let config = create_mainnet();
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage).unwrap();
+        let mut consensus = setup_consensus();
 
         // Create a new block
         let block = produce_test_block(
@@ -1286,9 +1286,7 @@ fn test_events_simple_subscribe() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage).unwrap();
+        let mut consensus = setup_consensus();
 
         // We should connect a new block
         let block = produce_test_block(
@@ -1329,15 +1327,13 @@ fn test_events_simple_subscribe() {
 
 #[test]
 #[allow(clippy::eq_op)]
-fn test_events_with_a_bunch_of_subscribes() {
+fn test_events_with_a_bunch_of_subscribers() {
     use std::sync::{Arc, Mutex};
 
     const COUNT_SUBSCRIBERS: usize = 100;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage).unwrap();
+        let mut consensus = setup_consensus();
 
         // We should connect a new block
         let block = produce_test_block(
@@ -1370,7 +1366,7 @@ fn test_events_with_a_bunch_of_subscribes() {
         );
 
         // Subscribe and then process a new block
-        for _ in 1..=100 {
+        for _ in 1..=COUNT_SUBSCRIBERS {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
         assert!(!consensus.event_subscribers.is_empty());
@@ -1388,49 +1384,65 @@ fn test_events_with_a_bunch_of_subscribes() {
 #[test]
 #[allow(clippy::eq_op)]
 fn test_events_a_bunch_of_events() {
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
+
+    const COUNT_SUBSCRIBERS: usize = 10;
+    const COUNT_EVENTS: usize = 100;
 
     common::concurrency::model(|| {
         let config = create_mainnet();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
-        // We should connect a new block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
-
-        // The event "NewTip" should return block_id and height
-        let expected_block_id = block.get_id();
-        let expected_block_height = BlockHeight::new(1);
+        let mut map_heights: BTreeMap<Id<Block>, BlockHeight> = BTreeMap::new();
+        let mut blocks = Vec::new();
+        let mut rand_block = consensus.chain_config.genesis_block().clone();
+        for height in 1..=COUNT_EVENTS {
+            rand_block = produce_test_block(&consensus.chain_config, &rand_block, false);
+            blocks.push(rand_block.clone());
+            map_heights.insert(
+                rand_block.get_id(),
+                BlockHeight::new(height.try_into().unwrap()),
+            );
+        }
 
         // Event handler
+        let event_counter = Arc::new(Mutex::new(1usize));
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(block_height == expected_block_height);
-                    assert!(block_id == expected_block_id);
+                    let counter = &mut *event_counter.lock().unwrap();
+                    assert!(*counter <= COUNT_SUBSCRIBERS * COUNT_EVENTS);
+                    assert!(map_heights.contains_key(&block_id));
+                    assert!(&block_height == map_heights.get(&block_id).unwrap());
                     // All checks went fine, let's finish the test with "no error" exit code
-                    std::process::exit(0);
+                    if *counter == COUNT_SUBSCRIBERS * COUNT_EVENTS {
+                        std::process::exit(0);
+                    }
+                    *counter += 1;
                 }
             },
         );
 
         // Subscribe and then process a new block
-        consensus.subscribe_to_events(subscribe_func);
+        for _ in 1..=COUNT_SUBSCRIBERS {
+            consensus.subscribe_to_events(subscribe_func.clone());
+        }
         assert!(!consensus.event_subscribers.is_empty());
-        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
 
+        for block in blocks {
+            // We should connect a new block
+            assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+        }
         // Wait for thread pool until event handler exit the test or cause time out
         let handle = consensus.events_broadcaster.spawn_handle(|| {});
         assert!(
-            handle.wait_timeout(std::time::Duration::from_millis(500)).is_err(),
+            handle.wait_timeout(std::time::Duration::from_secs(1)).is_err(),
             "The event haven't received"
         );
     });
 }
+
 #[test]
 #[allow(clippy::eq_op)]
 fn test_events_fail_block() {
@@ -1441,11 +1453,11 @@ fn test_events_fail_block() {
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
-        // We should connect a new block
+        // Let's create an orphan block
         let block = produce_test_block(
             &consensus.chain_config,
             consensus.chain_config.genesis_block(),
-            false,
+            true,
         );
 
         // The event "NewTip" should return block_id and height
@@ -1467,13 +1479,13 @@ fn test_events_fail_block() {
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
-        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+        assert!(consensus.process_block(block, BlockSource::Local).is_err());
 
         // Wait for thread pool until event handler exit the test or cause time out
         let handle = consensus.events_broadcaster.spawn_handle(|| {});
         assert!(
-            handle.wait_timeout(std::time::Duration::from_millis(500)).is_err(),
-            "The event haven't received"
+            handle.wait_timeout(std::time::Duration::from_millis(500)).is_ok(),
+            "The event shouldn't be received"
         );
     });
 }
