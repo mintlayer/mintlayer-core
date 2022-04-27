@@ -17,9 +17,10 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
+    message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, ValidationResult,
+        PubSubService, PubSubTopic, SyncingMessage, SyncingService, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -214,6 +215,32 @@ where
     }
 
     async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
+        todo!();
+    }
+}
+
+#[async_trait]
+impl<T> SyncingService<T> for MockSyncingHandle<T>
+where
+    T: NetworkService<PeerId = SocketAddr, RequestId = MockRequestId> + Send,
+{
+    async fn send_request(
+        &mut self,
+        peer_id: T::PeerId,
+        message: message::Message,
+    ) -> error::Result<T::RequestId> {
+        todo!();
+    }
+
+    async fn send_response(
+        &mut self,
+        request_id: T::RequestId,
+        message: message::Message,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
         todo!();
     }
 }
