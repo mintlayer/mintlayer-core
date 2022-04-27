@@ -1307,6 +1307,7 @@ fn test_simple_subscribe() {
                 ConsensusEvent::NewTip(block_id, block_height) => {
                     assert!(*block_height == expected_block_height);
                     assert!(*block_id == expected_block_id);
+                    // All checks went fine, let's finish the test with "no error" exit code
                     std::process::exit(0);
                 }
             },
@@ -1317,7 +1318,7 @@ fn test_simple_subscribe() {
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
 
-        // Wait for thread pool
+        // Wait for thread pool until event handler exit the test or cause time out
         let handle = consensus.events_broadcaster.spawn_handle(|| {});
         assert!(
             handle.wait_timeout(std::time::Duration::from_millis(500)).is_err(),
