@@ -1393,7 +1393,7 @@ fn test_events_a_bunch_of_events() {
 }
 
 #[test]
-fn test_events_fail_block() {
+fn test_events_orphan_block() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
