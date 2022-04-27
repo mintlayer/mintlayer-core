@@ -102,9 +102,9 @@ pub fn signature_hash(
         }
         sighashtype::OutputsMode::None => (),
         sighashtype::OutputsMode::Single => {
-            let output = tx.get_outputs().get(input_num).ok_or(
-                TransactionSigError::InvalidInputIndex(input_num, tx.get_outputs().len()),
-            )?;
+            let output = tx.get_outputs().get(input_num).ok_or_else(|| {
+                TransactionSigError::InvalidInputIndex(input_num, tx.get_outputs().len())
+            })?;
             let encoded = output.encode();
             stream.write(encoded);
         }

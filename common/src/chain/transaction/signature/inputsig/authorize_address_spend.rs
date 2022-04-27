@@ -52,7 +52,7 @@ pub fn verify_address_spending(
     sighash: &H256,
 ) -> Result<(), TransactionSigError> {
     let calculated_addr = Address::from_public_key(chain_config, &sig_components.public_key)
-        .map_err(|e| TransactionSigError::PublicKeyToAddressConversionFailed(e))?;
+        .map_err(TransactionSigError::PublicKeyToAddressConversionFailed)?;
     if calculated_addr != *spendee_addr {
         return Err(TransactionSigError::PublicKeyToAddressMismatch);
     }

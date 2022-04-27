@@ -82,7 +82,7 @@ impl StandardInputSignature {
         match outpoint_destination {
             Destination::Address(addr) => {
                 let sig_components = AuthorizedAddressSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(chain_config, addr, &sig_components, &sighash)?
+                verify_address_spending(chain_config, addr, &sig_components, sighash)?
             }
             Destination::PublicKey(pubkey) => {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
