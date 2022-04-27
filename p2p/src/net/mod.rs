@@ -151,7 +151,7 @@ pub trait NetworkService {
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
 
     // TODO:
-    type RequestId: Debug;
+    type RequestId: Send + Debug;
 
     /// Enum of different peer discovery strategies that the implementation provides
     type Strategy;

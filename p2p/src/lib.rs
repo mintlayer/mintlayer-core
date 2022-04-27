@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::net::{ConnectivityService, NetworkService, PubSubService};
+use crate::net::{ConnectivityService, NetworkService, PubSubService, SyncingService};
 use common::chain::ChainConfig;
 use logging::log;
 use std::sync::Arc;
@@ -24,6 +24,7 @@ pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
+pub mod pubsub;
 pub mod swarm;
 pub mod sync;
 
@@ -44,6 +45,7 @@ impl<T> P2P<T>
 where
     T: 'static + NetworkService,
     T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingHandle: SyncingService<T>,
     T::PubSubHandle: PubSubService<T>,
 {
     // TODO: think about channel sizes
@@ -74,10 +76,17 @@ where
             let _ = swarm.run().await;
         });
 
-        let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync);
+            let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
             let _ = sync_mgr.run().await;
+        });
+
+        tokio::spawn(async move {
+            if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
+                todo!();
+            }
+            // let mut sync_mgr = ;
+            // let _ = sync_mgr.run().await;
         });
 
         Ok(Self { config, tx_swarm })
