@@ -129,8 +129,8 @@ impl Consensus {
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
-                let new_height = Arc::new(new_block_index.get_block_height());
-                let new_id = Arc::new(new_block_index.get_block_id().clone());
+                let new_height = new_block_index.get_block_height();
+                let new_id = new_block_index.get_block_id().clone();
                 self.events_broadcaster
                     .spawn(move || f(ConsensusEvent::NewTip(new_id, new_height)))
             }),

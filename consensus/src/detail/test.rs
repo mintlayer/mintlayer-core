@@ -1305,8 +1305,8 @@ fn test_simple_subscribe() {
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(*block_height == expected_block_height);
-                    assert!(*block_id == expected_block_id);
+                    assert!(block_height == expected_block_height);
+                    assert!(block_id == expected_block_id);
                     // All checks went fine, let's finish the test with "no error" exit code
                     std::process::exit(0);
                 }
