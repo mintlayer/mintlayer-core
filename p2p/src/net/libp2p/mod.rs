@@ -80,6 +80,9 @@ where
     /// Address where the network services has been bound
     addr: Multiaddr,
 
+    /// Peer Id of the local node
+    peer_id: PeerId,
+
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
 
@@ -356,6 +359,7 @@ impl NetworkService for Libp2pService {
         Ok((
             Self::ConnectivityHandle {
                 addr: addr.with(Protocol::P2p(peer_id.into())),
+                peer_id,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
                 _marker: Default::default(),
@@ -431,6 +435,10 @@ where
 
     fn local_addr(&self) -> &T::Address {
         &self.addr
+    }
+
+    fn peer_id(&self) -> &T::PeerId {
+        &self.peer_id
     }
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
@@ -523,7 +531,18 @@ where
         peer_id: T::PeerId,
         message: message::Message,
     ) -> error::Result<T::RequestId> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                request: Box::new(SyncRequest(message.encode())),
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 
     async fn send_response(
@@ -531,11 +550,55 @@ where
         request_id: T::RequestId,
         message: message::Message,
     ) -> error::Result<()> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                response: Box::new(SyncResponse(message.encode())),
+                channel: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 
     async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
-        todo!();
+        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::SyncingEvent::SyncRequest {
+                peer_id,
+                request_id,
+                request,
+            } => {
+                let request = message::Message::decode(&mut &(*request.0)[..]).map_err(|e| {
+                    log::error!("invalid request received from peer {:?}", peer_id);
+                    P2pError::ProtocolError(ProtocolError::InvalidMessage)
+                })?;
+
+                Ok(SyncingMessage::Request {
+                    peer_id,
+                    request_id,
+                    request,
+                })
+            }
+            types::SyncingEvent::SyncResponse {
+                peer_id,
+                request_id,
+                response,
+            } => {
+                let response = message::Message::decode(&mut &(*response.0)[..]).map_err(|e| {
+                    log::error!("invalid response received from peer {:?}", peer_id);
+                    P2pError::ProtocolError(ProtocolError::InvalidMessage)
+                })?;
+
+                Ok(SyncingMessage::Response {
+                    peer_id,
+                    request_id,
+                    response,
+                })
+            }
+        }
     }
 }
 
@@ -547,10 +610,10 @@ pub struct SyncingProtocol();
 pub struct SyncingCodec();
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockRequest(Vec<u8>);
+pub struct SyncRequest(Vec<u8>);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockResponse(Vec<u8>);
+pub struct SyncResponse(Vec<u8>);
 
 impl ProtocolName for SyncingProtocol {
     fn protocol_name(&self) -> &[u8] {
@@ -561,8 +624,8 @@ impl ProtocolName for SyncingProtocol {
 #[async_trait]
 impl RequestResponseCodec for SyncingCodec {
     type Protocol = SyncingProtocol;
-    type Request = BlockRequest;
-    type Response = BlockResponse;
+    type Request = SyncRequest;
+    type Response = SyncResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -578,7 +641,7 @@ impl RequestResponseCodec for SyncingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(BlockRequest(vec))
+        Ok(SyncRequest(vec))
     }
 
     async fn read_response<T>(
@@ -595,14 +658,14 @@ impl RequestResponseCodec for SyncingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(BlockResponse(vec))
+        Ok(SyncResponse(vec))
     }
 
     async fn write_request<T>(
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        BlockRequest(data): BlockRequest,
+        SyncRequest(data): SyncRequest,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
@@ -617,7 +680,7 @@ impl RequestResponseCodec for SyncingCodec {
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        BlockResponse(data): BlockResponse,
+        SyncResponse(data): SyncResponse,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
