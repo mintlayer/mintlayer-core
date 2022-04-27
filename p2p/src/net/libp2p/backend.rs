@@ -22,7 +22,7 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::{types, BlockResponse},
+        libp2p::{types, SyncResponse},
     },
 };
 use futures::StreamExt;
@@ -87,7 +87,7 @@ pub struct Backend {
     conns: HashMap<PeerId, Multiaddr>,
 
     // TODO:
-    pending_reqs: HashMap<RequestId, ResponseChannel<BlockResponse>>,
+    pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
 
     // TODO: remove this?
     /// Hashmap of topics and their participants
@@ -368,7 +368,7 @@ impl Backend {
                 } => {
                     self.pending_reqs.insert(request_id, channel);
                     self.sync_tx
-                        .send(types::SyncingEvent::BlockRequest {
+                        .send(types::SyncingEvent::SyncRequest {
                             peer_id: peer,
                             request_id,
                             request: Box::new(request),
@@ -381,7 +381,7 @@ impl Backend {
                     response,
                 } => self
                     .sync_tx
-                    .send(types::SyncingEvent::BlockResponse {
+                    .send(types::SyncingEvent::SyncResponse {
                         peer_id: peer,
                         request_id,
                         response: Box::new(response),
@@ -473,7 +473,7 @@ impl Backend {
                 // TODO: fix this
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
-            types::Command::SendBlockRequest {
+            types::Command::SendRequest {
                 peer_id,
                 request,
                 response,
@@ -484,25 +484,30 @@ impl Backend {
                     .sync
                     .send_request(&peer_id, *request)))
                 .map_err(|_| P2pError::ChannelClosed),
-            types::Command::SendBlockResponse {
-                peer_id,
+            types::Command::SendResponse {
                 request_id,
                 response,
                 channel,
             } => match self.pending_reqs.remove(&request_id) {
                 None => {
                     log::error!("pending request ({:?}) doesn't exist", request_id);
-                    Ok(())
+                    channel.send(Err(P2pError::ChannelClosed)).map_err(|_| P2pError::ChannelClosed)
                 }
-                Some(response_channel) => self
-                    .swarm
-                    .behaviour_mut()
-                    .sync
-                    .send_response(response_channel, *response)
-                    .map_err(|_| {
-                        log::error!("failed to send response, channel closed or request timed out");
-                        P2pError::Unknown("channel closed or request timed out".to_string())
-                    }),
+                Some(response_channel) => {
+                    let res = self
+                        .swarm
+                        .behaviour_mut()
+                        .sync
+                        .send_response(response_channel, *response)
+                        .map(|_| ())
+                        .map_err(|_| {
+                            log::error!(
+                                "failed to send response, channel closed or request timed out"
+                            );
+                            P2pError::Unknown("channel closed or request timed out".to_string())
+                        });
+                    channel.send(res).map_err(|_| P2pError::ChannelClosed)
+                }
             },
         }
     }
@@ -511,7 +516,7 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{BlockRequest, BlockResponse, SyncingCodec, SyncingProtocol};
+    use crate::net::libp2p::{SyncRequest, SyncResponse, SyncingCodec, SyncingProtocol};
     use libp2p::{
         core::upgrade,
         gossipsub::GossipsubConfigBuilder,

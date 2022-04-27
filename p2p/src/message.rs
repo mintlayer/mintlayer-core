@@ -14,10 +14,31 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use common::chain::block::{Block, BlockHeader};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum MessageType {}
+pub enum SyncingRequest {
+    GetHeaders { locator: Vec<BlockHeader> },
+    GetBlocks { headers: Vec<BlockHeader> },
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum SyncingResponse {
+    Headers { headers: Vec<BlockHeader> },
+    Blocks { blocks: Vec<Block> },
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum SyncingMessage {
+    Request(SyncingRequest),
+    Response(SyncingResponse),
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum MessageType {
+    Syncing(SyncingMessage),
+}
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 #[allow(unused)]

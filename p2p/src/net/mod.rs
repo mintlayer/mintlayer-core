@@ -101,6 +101,7 @@ pub enum PubSubMessage {
     Block(message::Message),
 }
 
+#[derive(Debug)]
 pub enum SyncingMessage<T>
 where
     T: NetworkService,
@@ -111,7 +112,9 @@ where
         request: message::Message,
     },
     Response {
-        request: message::Message,
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        response: message::Message,
     },
 }
 
@@ -209,6 +212,9 @@ where
 
     /// Return the socket address of the network service provider
     fn local_addr(&self) -> &T::Address;
+
+    /// Return peer id of the local node
+    fn peer_id(&self) -> &T::PeerId;
 
     /// Poll events from the network service provider
     ///

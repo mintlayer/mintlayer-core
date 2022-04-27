@@ -21,7 +21,7 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::{BlockRequest, BlockResponse, Libp2pService, SyncingCodec},
+        libp2p::{Libp2pService, SyncRequest, SyncResponse, SyncingCodec},
     },
 };
 use libp2p::{
@@ -75,17 +75,16 @@ pub enum Command {
     },
 
     /// Send block request to remote peer
-    SendBlockRequest {
+    SendRequest {
         peer_id: PeerId,
-        request: Box<BlockRequest>,
+        request: Box<SyncRequest>,
         response: oneshot::Sender<error::Result<RequestId>>,
     },
 
     /// Send block response to remote peer
-    SendBlockResponse {
-        peer_id: PeerId,
+    SendResponse {
         request_id: RequestId,
-        response: Box<BlockResponse>,
+        response: Box<SyncResponse>,
         channel: oneshot::Sender<error::Result<()>>,
     },
 }
@@ -114,15 +113,15 @@ pub enum PubSubEvent {
 }
 
 pub enum SyncingEvent {
-    BlockRequest {
+    SyncRequest {
         peer_id: PeerId,
         request_id: RequestId,
-        request: Box<BlockRequest>,
+        request: Box<SyncRequest>,
     },
-    BlockResponse {
+    SyncResponse {
         peer_id: PeerId,
         request_id: RequestId,
-        response: Box<BlockResponse>,
+        response: Box<SyncResponse>,
     },
 }
 
@@ -174,7 +173,7 @@ pub enum ComposedEvent {
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
     IdentifyEvent(IdentifyEvent),
-    SyncingEvent(RequestResponseEvent<BlockRequest, BlockResponse>),
+    SyncingEvent(RequestResponseEvent<SyncRequest, SyncResponse>),
 }
 
 impl From<MdnsEvent> for ComposedEvent {
@@ -201,8 +200,8 @@ impl From<IdentifyEvent> for ComposedEvent {
     }
 }
 
-impl From<RequestResponseEvent<BlockRequest, BlockResponse>> for ComposedEvent {
-    fn from(event: RequestResponseEvent<BlockRequest, BlockResponse>) -> Self {
+impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for ComposedEvent {
+    fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
         ComposedEvent::SyncingEvent(event)
     }
 }
