@@ -93,7 +93,7 @@ where
 
     /// Channel for receiving connectivity events from libp2p backend
     conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 pub struct Libp2pPubSubHandle<T>
@@ -105,7 +105,7 @@ where
 
     /// Channel for receiving pubsub events from libp2p backend
     flood_rx: mpsc::Receiver<types::PubSubEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 pub struct Libp2pSyncHandle<T>
@@ -117,7 +117,7 @@ where
 
     /// Channel for receiving pubsub events from libp2p backend
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
-    _marker: std::marker::PhantomData<T>,
+    _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 /// Verify that the discovered multiaddress is in a format that Mintlayer supports:
