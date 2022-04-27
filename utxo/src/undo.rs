@@ -1,8 +1,8 @@
 #![allow(unused, dead_code)]
 
 use crate::Utxo;
-use parity_scale_codec::{Decode, Encode};
 use common::primitives::BlockHeight;
+use parity_scale_codec::{Decode, Encode};
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct TxUndo(Vec<Utxo>);
@@ -34,17 +34,17 @@ impl TxUndo {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct BlockUndo{
+pub struct BlockUndo {
     // determines at what height this undo file belongs to.
-    height:BlockHeight,
-    undos:Vec<TxUndo>
+    height: BlockHeight,
+    undos: Vec<TxUndo>,
 }
 
 impl BlockUndo {
-    pub fn new(tx_undos: Vec<TxUndo>, height:BlockHeight) -> Self {
+    pub fn new(tx_undos: Vec<TxUndo>, height: BlockHeight) -> Self {
         Self {
             height,
-            undos: tx_undos
+            undos: tx_undos,
         }
     }
     pub fn tx_undos(&self) -> &[TxUndo] {
@@ -108,7 +108,6 @@ pub mod test {
             assert_eq!(&tx_undo0, &inner[0]);
             assert_eq!(&tx_undo1, &inner[1]);
         }
-
 
         // check the height
         assert_eq!(blockundo.height, expected_height);
