@@ -66,16 +66,16 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
         }
     }
 
+    fn estimated_size(&self) -> usize {
+        todo!()
+    }
+
     fn derive_cache(&self) -> UtxosCache {
         let mut cache = UtxosCache::new(self);
         if let Some(hash) = self.get_best_block_hash() {
             cache.set_best_block(hash);
         }
         cache
-    }
-
-    fn estimated_size(&self) -> usize {
-        todo!()
     }
 }
 

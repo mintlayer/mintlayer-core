@@ -55,4 +55,56 @@ impl From<Error> for utxo::Error {
     }
 }
 
-// TODO: write basic tests for reads/writes in db for UtxoDBInterface
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::store::test::create_rand_block_undo;
+    use common::chain::{Destination, OutPoint, OutPointSourceId, TxOutput};
+    use common::primitives::{Amount, BlockHeight, H256};
+    use crypto::random::{make_pseudo_rng, Rng};
+
+    fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
+        // just a random value generated, and also a random `is_block_reward` value.
+        let rng = make_pseudo_rng().gen_range(0..u128::MAX);
+        let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
+        let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
+
+        // create the id based on the `is_block_reward` value.
+        let id = {
+            let utxo_id: Id<Block> = Id::new(&H256::random());
+            OutPointSourceId::BlockReward(utxo_id)
+        };
+
+        let outpoint = OutPoint::new(id, 0);
+
+        (utxo, outpoint)
+    }
+
+    #[test]
+    fn db_interface_test() {
+        let store = Store::new_empty().expect("should create a store");
+        let mut db_interface = UtxoDBInterface::new(store);
+
+        // utxo checking
+        let (utxo, outpoint) = create_utxo(1);
+        assert!(db_interface.set_utxo(&outpoint, utxo.clone()).is_ok());
+        assert_eq!(db_interface.get_utxo(&outpoint), Ok(Some(utxo)));
+        assert!(db_interface.del_utxo(&outpoint).is_ok());
+
+        // test block id
+        let block_id: Id<Block> = Id::new(&H256::random());
+        assert!(db_interface.set_best_block_id(&block_id).is_ok());
+
+        let block_id = db_interface
+            .get_best_block_id()
+            .expect("query should not fail")
+            .expect("should return the block id");
+
+        // undo checking
+        let undo = create_rand_block_undo(10, 10, BlockHeight::new(10));
+
+        assert!(db_interface.set_undo_data(block_id.clone(), &undo).is_ok());
+        assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(Some(undo)));
+        assert!(db_interface.del_undo_data(block_id.clone()).is_ok());
+    }
+}

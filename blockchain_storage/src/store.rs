@@ -378,7 +378,7 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
     use common::chain::{Destination, TxOutput};
     use common::primitives::{Amount, H256};
@@ -624,7 +624,7 @@ mod test {
     /// # Arguments
     /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
     /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
-    fn create_rand_block_undo(
+    pub fn create_rand_block_undo(
         max_lim_of_utxos: u8,
         max_lim_of_tx_undos: u8,
         block_height: BlockHeight,
