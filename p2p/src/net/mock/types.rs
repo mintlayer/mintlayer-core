@@ -41,3 +41,5 @@ pub enum FloodsubEvent {
         message: message::Message,
     },
 }
+
+pub enum SyncingEvent {}

@@ -57,7 +57,7 @@ where
         addr: T::Address,
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
-        let (conn, flood) = T::start(
+        let (conn, flood, sync) = T::start(
             addr,
             &[],
             &[],

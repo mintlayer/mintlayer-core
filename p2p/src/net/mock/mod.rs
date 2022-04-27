@@ -50,6 +50,9 @@ pub struct MockService;
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
+#[derive(Debug, Copy, Clone)]
+pub struct MockRequestId(u64);
+
 pub struct MockConnectivityHandle<T>
 where
     T: NetworkService,
@@ -77,15 +80,28 @@ where
     _marker: std::marker::PhantomData<T>,
 }
 
+pub struct MockSyncingHandle<T>
+where
+    T: NetworkService,
+{
+    /// TX channel for sending commands to mock backend
+    cmd_tx: mpsc::Sender<types::Command>,
+
+    _sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    _marker: std::marker::PhantomData<T>,
+}
+
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
     type Strategy = MockStrategy;
     type PeerId = SocketAddr;
     type ProtocolId = String;
+    type RequestId = MockRequestId;
     type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
+    type SyncingHandle = MockSyncingHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -93,14 +109,20 @@ impl NetworkService for MockService {
         _topics: &[PubSubTopic],
         _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(Self::ConnectivityHandle, Self::PubSubHandle)> {
+    ) -> error::Result<(
+        Self::ConnectivityHandle,
+        Self::PubSubHandle,
+        Self::SyncingHandle,
+    )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (flood_tx, _flood_rx) = mpsc::channel(16);
+        let (sync_tx, _sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, timeout);
+            let mut mock =
+                backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, sync_tx, timeout);
             let _ = mock.run().await;
         });
 
@@ -112,8 +134,13 @@ impl NetworkService for MockService {
                 _marker: Default::default(),
             },
             Self::PubSubHandle {
-                cmd_tx,
+                cmd_tx: cmd_tx.clone(),
                 _flood_rx,
+                _marker: Default::default(),
+            },
+            Self::SyncingHandle {
+                cmd_tx,
+                _sync_rx,
                 _marker: Default::default(),
             },
         ))
