@@ -25,7 +25,7 @@ pub mod work;
 
 #[derive(Debug)]
 pub enum Error {
-    ConversionError(String),
+    Conversion(String),
 }
 
 pub struct PoW(PoWChainConfig);
