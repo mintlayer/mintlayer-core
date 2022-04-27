@@ -40,6 +40,7 @@ skip = [{name = "quick-error"},
         {name = "windows_i686_msvc" },
         {name = "windows_x86_64_gnu" },
         {name = "windows_x86_64_msvc" },
+        {name = "curve25519-dalek"},
         ]
 
 [licenses]
