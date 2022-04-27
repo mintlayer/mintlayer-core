@@ -141,6 +141,7 @@ pub fn create_custom(
     magic_bytes: Option<[u8; 4]>,
     genesis_block: Option<Block>,
     version: Option<SemVer>,
+    blockreward_maturity: Option<BlockDistance>,
 ) -> ChainConfig {
     ChainConfig {
         chain_type: chain_type.unwrap_or(ChainType::Mainnet),
@@ -153,6 +154,7 @@ pub fn create_custom(
         magic_bytes: magic_bytes.unwrap_or([0x1a, 0x64, 0xe5, 0xf1]),
         genesis_block: genesis_block.unwrap_or_else(create_mainnet_genesis),
         version: version.unwrap_or_else(|| SemVer::new(0, 1, 0)),
+        blockreward_maturity: blockreward_maturity.unwrap_or(MAINNET_BLOCKREWARD_MATURITY),
     }
 }
 
@@ -180,6 +182,7 @@ mod tests {
             Some([0x11, 0x22, 0x33, 0x44]),
             None,
             Some(SemVer::new(1, 2, 3)),
+            None,
         );
         let mainnet = create_mainnet();
         assert_eq!(config.address_prefix(), mainnet.address_prefix(),);
