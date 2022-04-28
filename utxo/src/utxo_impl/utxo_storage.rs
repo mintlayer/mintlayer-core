@@ -428,8 +428,6 @@ mod test {
                 })
                 .collect();
 
-            // let num_of_txs =
-            //     usize::from_u32(num_of_txs).expect("conversion to usize should not fail");
             let id = db.get_best_block_hash().expect("it should return an id");
 
             // Create a dummy block.

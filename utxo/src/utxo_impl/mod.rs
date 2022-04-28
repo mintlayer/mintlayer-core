@@ -236,7 +236,7 @@ impl<'a> UtxosCache<'a> {
             let overwrite = if check_for_overwrite {
                 self.has_utxo(&outpoint)
             } else {
-                // TODO: a temporary return of false.
+                // by default no overwrite allowed.
                 false
             };
 
