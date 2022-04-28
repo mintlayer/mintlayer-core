@@ -39,7 +39,7 @@ pub enum TransactionSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidInputIndex(usize, usize),
-    #[error("OutputsMode::Single with more inputs than outputs (`{0}` vs available: `{1}`)")]
+    #[error("Input corresponding to output number {0} does not exist (number of inputs is {1})")]
     InvalidOutputIndexForModeSingle(usize, usize),
     #[error("Decoding witness failed ")]
     DecodingWitnessFailed,
