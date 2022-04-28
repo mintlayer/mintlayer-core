@@ -7,17 +7,17 @@ use common::primitives::Id;
 use utxo::{utxo_storage::UtxosPersistentStorage, BlockUndo, Utxo};
 
 #[derive(Clone)]
-pub struct UtxoDBInterface {
+pub struct UtxoDBImpl {
     store: Store,
 }
 
-impl UtxoDBInterface {
+impl UtxoDBImpl {
     pub fn new(store: Store) -> Self {
         Self { store }
     }
 }
 
-impl UtxosPersistentStorage for UtxoDBInterface {
+impl UtxosPersistentStorage for UtxoDBImpl {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), utxo::Error> {
         self.store.add_utxo(outpoint, entry).map_err(|e| e.into())
     }
@@ -81,7 +81,7 @@ mod test {
     #[test]
     fn db_interface_test() {
         let store = Store::new_empty().expect("should create a store");
-        let mut db_interface = UtxoDBInterface::new(store);
+        let mut db_interface = UtxoDBImpl::new(store);
 
         // utxo checking
         let (utxo, outpoint) = create_utxo(1);
