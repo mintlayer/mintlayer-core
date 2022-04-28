@@ -28,8 +28,9 @@ use common::{
 pub use detail::BlockError;
 use detail::{BlockSource, Consensus};
 
+#[derive(Debug)]
 pub enum ConsensusEvent {
-    NewTip(Arc<Id<Block>>, Arc<BlockHeight>),
+    NewTip(Id<Block>, BlockHeight),
 }
 
 pub struct ConsensusInterface {

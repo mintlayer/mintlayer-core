@@ -42,6 +42,7 @@ mod pow;
 type PeerId = u32;
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
+type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
 mod spend_cache;
 
@@ -52,7 +53,7 @@ pub struct Consensus {
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
-    event_subscribers: Vec<Arc<dyn Fn(ConsensusEvent) + Send + Sync>>,
+    event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
 }
 
@@ -81,7 +82,7 @@ impl Consensus {
         }
     }
 
-    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
+    pub fn subscribe_to_events(&mut self, handler: EventHandler) {
         self.event_subscribers.push(handler)
     }
 
@@ -129,8 +130,8 @@ impl Consensus {
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
-                let new_height = Arc::new(new_block_index.get_block_height());
-                let new_id = Arc::new(new_block_index.get_block_id().clone());
+                let new_height = new_block_index.get_block_height();
+                let new_id = new_block_index.get_block_id().clone();
                 self.events_broadcaster
                     .spawn(move || f(ConsensusEvent::NewTip(new_id, new_height)))
             }),
