@@ -63,7 +63,7 @@ impl StandardInputSignature {
         }
     }
 
-    pub fn get_sighash_type(&self) -> SigHashType {
+    pub fn sighash_type(&self) -> SigHashType {
         self.sighash_type
     }
 

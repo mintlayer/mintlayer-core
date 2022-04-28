@@ -124,7 +124,7 @@ fn verify_standard_input_signature(
     tx: &Transaction,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    let sighash = signature_hash(witness.get_sighash_type(), tx, input_num)?;
+    let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
     witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
     Ok(())
 }
