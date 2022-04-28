@@ -30,6 +30,11 @@ pub enum SyncingResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum PubSubMessage {
+    Block(Block),
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum SyncingMessage {
     Request(SyncingRequest),
     Response(SyncingResponse),
@@ -38,6 +43,7 @@ pub enum SyncingMessage {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum MessageType {
     Syncing(SyncingMessage),
+    PubSub(PubSubMessage),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
