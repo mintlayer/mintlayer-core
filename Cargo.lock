@@ -547,6 +547,7 @@ dependencies = [
  "arbitrary",
  "bech32",
  "bitcoin-bech32",
+ "blockchain-storage",
  "byteorder 1.4.3",
  "crypto",
  "displaydoc",

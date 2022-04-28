@@ -108,3 +108,75 @@ impl BlockIndex {
         Ok(block_index_walk)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::chain::block::Block;
+    use crate::chain::block::ConsensusData;
+    use blockchain_storage::BlockchainStorageRead;
+    use blockchain_storage::Transactional;
+
+    struct TestBlockIndexDBAccessor {
+        blockchain_storage: blockchain_storage::Store,
+    }
+
+    impl BlockIndexDBAccessor for TestBlockIndexDBAccessor {
+        fn get_previous_block_index(
+            &self,
+            block_index: &BlockIndex,
+        ) -> Result<Option<BlockIndex>, BlockIndexError> {
+            let prev_block_id = block_index
+                .get_prev_block_id()
+                .as_ref()
+                .ok_or(BlockIndexError::BlockIndexNotFound)?;
+            let db_tx = self.blockchain_storage.transaction_ro();
+            db_tx.get_block_index(prev_block_id)?.ok_or(BlockIndex::BlockNotFound)
+        }
+    }
+
+    #[test]
+    fn test_get_ancestor() {
+        let transactions = Vec::default();
+        let hash_prev_block = None;
+        let time = 0;
+        let consensus_data = ConsensusData::None;
+        let chain_trust = 0;
+        let time_max = 0;
+
+        let block0 = Block::new(
+            transactions.clone(),
+            hash_prev_block.clone(),
+            time,
+            consensus_data.clone(),
+        )
+        .expect("block0");
+
+        let _block1 = Block::new(
+            transactions.clone(),
+            hash_prev_block.clone(),
+            time,
+            consensus_data.clone(),
+        )
+        .expect("block1");
+
+        let _block2 = Block::new(
+            transactions.clone(),
+            hash_prev_block.clone(),
+            time,
+            consensus_data.clone(),
+        )
+        .expect("block2");
+
+        let _block3 =
+            Block::new(transactions, hash_prev_block, time, consensus_data).expect("block1");
+
+        let height_block0 = 0;
+        let _block0_index = BlockIndex::new(
+            &block0,
+            chain_trust,
+            BlockHeight::from(height_block0),
+            time_max,
+        );
+    }
+}

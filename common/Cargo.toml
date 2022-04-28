@@ -34,6 +34,7 @@ rustc-hex = "2.1.0"
 bitcoin-bech32 = "0.12.1"
 hex = "0.4.3"
 expect-test = "1.2.2"
+blockchain-storage = { path = '../blockchain_storage'}
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
