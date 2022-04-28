@@ -102,13 +102,13 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
 }
 
 #[derive(Clone)]
-struct UtxoInMemoryDBInterface {
+struct UtxoInMemoryDBImpl {
     store: BTreeMap<OutPoint, Utxo>,
     undo_store: HashMap<H256, BlockUndo>,
     best_block_id: Option<Id<Block>>,
 }
 
-impl UtxoInMemoryDBInterface {
+impl UtxoInMemoryDBImpl {
     fn new() -> Self {
         Self {
             store: BTreeMap::new(),
@@ -118,7 +118,7 @@ impl UtxoInMemoryDBInterface {
     }
 }
 
-impl UtxosPersistentStorage for UtxoInMemoryDBInterface {
+impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
     fn set_utxo(
         &mut self,
         outpoint: &OutPoint,
@@ -218,7 +218,7 @@ mod test {
     /// populate the db with random values, for testing.
     /// returns a tuple of the best block id and the outpoints (for spending)
     fn initialize_db(
-        db_interface: &mut UtxoInMemoryDBInterface,
+        db_interface: &mut UtxoInMemoryDBImpl,
         tx_outputs_size: u32,
     ) -> (Id<Block>, Vec<OutPoint>) {
         let best_block_id: Id<Block> = Id::new(&H256::random());
@@ -260,7 +260,7 @@ mod test {
         let tx_outputs_size = 3;
         let num_of_txs = 1;
 
-        let mut db_interface = UtxoInMemoryDBInterface::new();
+        let mut db_interface = UtxoInMemoryDBImpl::new();
 
         // initializing the db with existing utxos.
         let (best_block_id, outpoints) = initialize_db(&mut db_interface, tx_outputs_size);
@@ -453,7 +453,7 @@ mod test {
                 best_block: new_best_block_hash.clone(),
             };
 
-            let mut db_interface = UtxoInMemoryDBInterface::new();
+            let mut db_interface = UtxoInMemoryDBImpl::new();
             let mut utxo_db = UtxoDB::new(&mut db_interface);
 
             // test batch_write
