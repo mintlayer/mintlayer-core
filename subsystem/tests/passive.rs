@@ -17,6 +17,8 @@
 
 #![allow(clippy::new_without_default)]
 
+use subsystem::subsystem::{CallRequest, ShutdownRequest};
+
 mod helpers;
 
 // The substringer passive subsystem (for testing)
@@ -84,7 +86,7 @@ impl Tester {
         }
     }
 
-    async fn run(&self, _: subsystem::CallRequest<()>, _: subsystem::ShutdownRequest) {
+    async fn run(&self, _: CallRequest<()>, _: ShutdownRequest) {
         let res0 = self.substringer.call_mut(|this| this.append_get("xyz"));
         assert_eq!(res0.await, Ok("abcxyz".to_string()));
         assert_eq!(self.substringer.call(Substringer::size).await, Ok(6));

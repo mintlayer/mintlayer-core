@@ -15,6 +15,8 @@
 //
 // Author(s): L. Kuklinek
 
+use subsystem::subsystem::CallRequest;
+
 mod helpers;
 
 struct Trivial;
@@ -36,7 +38,7 @@ fn shortlived() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let app = subsystem::Manager::new("shortlived");
-        app.start_raw("nop", |_: subsystem::CallRequest<()>, _| async {});
+        app.start_raw("nop", |_: CallRequest<()>, _| async {});
         app.main().await;
     });
 }
@@ -48,7 +50,7 @@ fn trivial() {
     rt.block_on(async {
         let app = subsystem::Manager::new("trivial");
         app.start("trivial", Trivial);
-        app.start_raw("nop", |_: subsystem::CallRequest<()>, _| async {});
+        app.start_raw("nop", |_: CallRequest<()>, _| async {});
         app.main().await;
     });
 }

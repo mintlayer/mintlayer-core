@@ -1,6 +1,7 @@
 use logging::log;
 use std::time::{Duration, Instant};
-use subsystem::{CallRequest, ShutdownRequest};
+
+use subsystem::subsystem::{CallRequest, ShutdownRequest};
 
 struct Stopwatch(Instant);
 

@@ -15,6 +15,8 @@
 //
 // Author(s): L. Kuklinek
 
+use subsystem::subsystem::{CallRequest, CallError};
+
 mod helpers;
 
 // Logger (as a subsystem)
@@ -48,7 +50,7 @@ impl Counter {
         Self { count, logger }
     }
 
-    async fn bump(&mut self) -> Result<u64, subsystem::CallError> {
+    async fn bump(&mut self) -> Result<u64, CallError> {
         self.count += 1;
         let message = format!("Bumped counter to {}", self.count);
         self.logger
@@ -69,7 +71,7 @@ fn async_calls() {
 
             app.start_raw(
                 "test",
-                |_call_rq: subsystem::CallRequest<()>, _shut_rq| async move {
+                |_call_rq: CallRequest<()>, _shut_rq| async move {
                     logger.call(|l| l.write("starting")).await.unwrap();
 
                     // Bump the counter twice
