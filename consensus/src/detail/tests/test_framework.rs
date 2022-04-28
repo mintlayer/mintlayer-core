@@ -4,13 +4,13 @@ use common::chain::{OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::Id;
 use common::primitives::H256;
 
-pub struct BlockTestFrameWork {
+pub(in crate::detail::tests) struct BlockTestFrameWork {
     pub consensus: Consensus,
     pub blocks: Vec<Block>,
 }
 
 impl<'a> BlockTestFrameWork {
-    pub fn new() -> Self {
+    pub(in crate::detail::tests) fn new() -> Self {
         let consensus = setup_consensus();
         let genesis = consensus.chain_config.genesis_block().clone();
         Self {
@@ -65,7 +65,7 @@ impl<'a> BlockTestFrameWork {
         .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
-    pub fn genesis(&self) -> &Block {
+    pub(in crate::detail::tests) fn genesis(&self) -> &Block {
         self.consensus.chain_config.genesis_block()
     }
 
@@ -85,7 +85,11 @@ impl<'a> BlockTestFrameWork {
         self.consensus.blockchain_storage.get_block_index(block_id).unwrap().unwrap()
     }
 
-    pub fn debug_print_chains(&self, blocks: Vec<Id<Block>>, depth: usize) {
+    pub(in crate::detail::tests) fn debug_print_chains(
+        &self,
+        blocks: Vec<Id<Block>>,
+        depth: usize,
+    ) {
         if blocks.is_empty() {
             println!("{}X", "--".repeat(depth));
         } else {
@@ -112,7 +116,11 @@ impl<'a> BlockTestFrameWork {
         }
     }
 
-    pub fn debug_print_tx(&self, block_id: Id<Block>, transactions: &Vec<Transaction>) {
+    pub(in crate::detail::tests) fn debug_print_tx(
+        &self,
+        block_id: Id<Block>,
+        transactions: &Vec<Transaction>,
+    ) {
         println!();
         for tx in transactions {
             println!("+ BLOCK: {} => TX: {}", block_id.get(), tx.get_id().get());
@@ -135,7 +143,11 @@ impl<'a> BlockTestFrameWork {
         }
     }
 
-    pub fn create_chain(&mut self, parent_block_id: &Id<Block>, count_blocks: usize) {
+    pub(in crate::detail::tests) fn create_chain(
+        &mut self,
+        parent_block_id: &Id<Block>,
+        count_blocks: usize,
+    ) {
         let mut block = self
             .consensus
             .blockchain_storage
@@ -153,7 +165,10 @@ impl<'a> BlockTestFrameWork {
         }
     }
 
-    pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
+    pub(in crate::detail::tests) fn add_special_block(
+        &mut self,
+        block: Block,
+    ) -> Result<Option<BlockIndex>, BlockError> {
         let result = self.consensus.process_block(block.clone(), BlockSource::Local);
         if result.is_ok() {
             self.blocks.push(block);
@@ -161,7 +176,7 @@ impl<'a> BlockTestFrameWork {
         result
     }
 
-    pub fn get_spent_status(
+    pub(in crate::detail::tests) fn get_spent_status(
         &self,
         tx_id: &Id<Transaction>,
         output_index: u32,

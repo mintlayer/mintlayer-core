@@ -11,10 +11,11 @@ use rand::prelude::*;
 mod test_framework;
 
 #[cfg(test)]
-mod reorgs_tests;
-
-#[cfg(test)]
 mod events_tests;
+#[cfg(test)]
+mod indices_tests;
+#[cfg(test)]
+mod reorgs_tests;
 
 pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
 pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
