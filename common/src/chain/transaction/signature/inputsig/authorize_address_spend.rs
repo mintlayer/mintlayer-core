@@ -16,7 +16,7 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::key::{PublicKey, Signature};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 
 use crate::{
     address::Address,
@@ -31,8 +31,8 @@ pub struct AuthorizedAddressSpend {
 }
 
 impl AuthorizedAddressSpend {
-    pub fn from_data(data: &Vec<u8>) -> Result<Self, TransactionSigError> {
-        let decoded = AuthorizedAddressSpend::decode(&mut data.as_slice())
+    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, TransactionSigError> {
+        let decoded = AuthorizedAddressSpend::decode_all(data.as_ref())
             .map_err(|e| TransactionSigError::AddressAuthDecodingFailed(e.to_string()))?;
         Ok(decoded)
     }

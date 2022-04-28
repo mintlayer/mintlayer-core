@@ -20,7 +20,7 @@ mod authorize_pubkey_spend;
 
 use std::io::BufWriter;
 
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{ChainConfig, Destination, Transaction},
@@ -67,8 +67,8 @@ impl StandardInputSignature {
         self.sighash_type
     }
 
-    pub fn from_data(raw_data: &Vec<u8>) -> Result<Self, TransactionSigError> {
-        let decoded_sig = StandardInputSignature::decode(&mut raw_data.as_slice())
+    pub fn from_data<T: AsRef<[u8]>>(raw_data: T) -> Result<Self, TransactionSigError> {
+        let decoded_sig = StandardInputSignature::decode_all(raw_data.as_ref())
             .map_err(|_| TransactionSigError::DecodingWitnessFailed)?;
         Ok(decoded_sig)
     }
