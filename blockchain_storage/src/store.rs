@@ -1,6 +1,8 @@
+use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
+use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id, Idable};
 use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
@@ -41,11 +43,13 @@ storage::decl_schema! {
     // Database schema for blockchain storage
     Schema {
         // Storage for individual values.
-        pub DBValues: Single,
+        pub DBValue: Single,
         // Storage for blocks.
-        pub DBBlocks: Single,
+        pub DBBlock: Single,
+        // Store tag for blocks indexes.
+        pub DBBlockIndex: Single,
         // Storage for transaction indices.
-        pub DBTxIndices: Single,
+        pub DBTxIndex: Single,
         // Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Single,
         // Store for Utxo Entries
@@ -117,11 +121,12 @@ impl BlockchainStorageRead for Store {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
         fn get_mainchain_tx_index(
             &self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
         ) -> crate::Result<Option<TxMainChainIndex>>;
 
         fn get_mainchain_tx_by_position(
@@ -153,16 +158,17 @@ impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
 
         fn set_mainchain_tx_index(
             &mut self,
-            tx_id: &Id<Transaction>,
+            tx_id: &OutPointSourceId,
             tx_index: &TxMainChainIndex,
         ) -> crate::Result<()>;
 
-        fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+        fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
         fn set_block_id_at_height(
             &mut self,
@@ -198,19 +204,24 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
     }
 
+    fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
+        self.read::<DBBlockIndex, _, _>(id.as_ref())
+    }
+
+    /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>> {
         self.read_value::<well_known::BestBlockId>()
     }
 
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
-        self.read::<DBBlocks, _, _>(id.as_ref())
+        self.read::<DBBlock, _, _>(id.as_ref())
     }
 
     fn get_mainchain_tx_index(
         &self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
     ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<DBTxIndices, _, _>(tx_id.as_ref())
+        self.read::<DBTxIndex, _, _>(&tx_id.encode())
     }
 
     fn get_mainchain_tx_by_position(
@@ -218,7 +229,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>> {
         let block_id = tx_index.get_block_id();
-        match self.0.get::<DBBlocks, _>().get(block_id.as_ref()) {
+        match self.0.get::<DBBlock, _>().get(block_id.as_ref()) {
             Err(e) => Err(e.into()),
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
@@ -263,23 +274,27 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 
     fn add_block(&mut self, block: &Block) -> crate::Result<()> {
-        self.write::<DBBlocks, _, _>(block.get_id().encode(), block)
+        self.write::<DBBlock, _, _>(block.get_id().encode(), block)
     }
 
     fn del_block(&mut self, id: Id<Block>) -> crate::Result<()> {
-        self.0.get_mut::<DBBlocks, _>().del(id.as_ref()).map_err(Into::into)
+        self.0.get_mut::<DBBlock, _>().del(id.as_ref()).map_err(Into::into)
+    }
+
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
+        self.write::<DBBlockIndex, _, _>(block_index.get_block_id().encode(), block_index)
     }
 
     fn set_mainchain_tx_index(
         &mut self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()> {
-        self.write::<DBTxIndices, _, _>(tx_id.encode(), tx_index)
+        self.write::<DBTxIndex, _, _>(tx_id.encode(), tx_index)
     }
 
-    fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()> {
-        self.0.get_mut::<DBTxIndices, _>().del(tx_id.as_ref()).map_err(Into::into)
+    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()> {
+        self.0.get_mut::<DBTxIndex, _>().del(&tx_id.encode()).map_err(Into::into)
     }
 
     fn set_block_id_at_height(
@@ -336,7 +351,7 @@ impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
 
     // Read a value for a well-known entry
     fn read_value<E: well_known::Entry>(&'a self) -> crate::Result<Option<E::Value>> {
-        self.read::<DBValues, _, _>(E::KEY)
+        self.read::<DBValue, _, _>(E::KEY)
     }
 }
 
@@ -353,7 +368,7 @@ impl<'a, Tx: traits::GetMapMut<'a, Schema>> StoreTx<Tx> {
 
     // Write a value for a well-known entry
     fn write_value<E: well_known::Entry>(&'a mut self, val: &E::Value) -> crate::Result<()> {
-        self.write::<DBValues, _, _>(E::KEY.to_vec(), val)
+        self.write::<DBValue, _, _>(E::KEY.to_vec(), val)
     }
 }
 
@@ -399,21 +414,28 @@ pub(crate) mod test {
     #[test]
     #[cfg(not(loom))]
     fn test_storage_manipulation() {
-        use common::primitives::consensus_data::ConsensusData;
-        use common::{chain::SpendablePosition, primitives::H256};
+        use common::{
+            chain::{block::ConsensusData, SpendablePosition},
+            primitives::H256,
+        };
 
         // Prepare some test data
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
             vec![tx0.clone()],
-            Id::new(&H256::default()),
+            Some(Id::new(&H256::default())),
             12,
             ConsensusData::None,
         )
         .unwrap();
-        let block1 =
-            Block::new(vec![tx1.clone()], block0.get_id(), 34, ConsensusData::None).unwrap();
+        let block1 = Block::new(
+            vec![tx1.clone()],
+            Some(Id::new(&block0.get_id().get())),
+            34,
+            ConsensusData::None,
+        )
+        .unwrap();
 
         // Set up the store
         let mut store = Store::new_empty().unwrap();
@@ -451,11 +473,8 @@ pub(crate) mod test {
             &enc_block0[offset_tx0..].starts_with(&enc_tx0),
             "Transaction format has changed, adjust the offset in this test",
         );
-        let pos_tx0 = TxMainChainPosition::new(
-            &block0.get_id().get(),
-            offset_tx0 as u32,
-            enc_tx0.len() as u32,
-        );
+        let pos_tx0 =
+            TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32, enc_tx0.len() as u32);
         assert_eq!(
             &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
             &tx0
@@ -470,26 +489,24 @@ pub(crate) mod test {
 
         // Chain index operations
         let idx_tx0 = TxMainChainIndex::new(pos_tx0.into(), 1).expect("Tx index creation failed");
-        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
+        let out_id_tx0 = OutPointSourceId::from(tx0.get_id());
+        assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
+        assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
         assert_eq!(
-            store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0),
-            Ok(())
-        );
-        assert_eq!(
-            store.get_mainchain_tx_index(&tx0.get_id()),
+            store.get_mainchain_tx_index(&out_id_tx0),
             Ok(Some(idx_tx0.clone()))
         );
-        assert_eq!(store.del_mainchain_tx_index(&tx0.get_id()), Ok(()));
-        assert_eq!(store.get_mainchain_tx_index(&tx0.get_id()), Ok(None));
-        assert_eq!(
-            store.set_mainchain_tx_index(&tx0.get_id(), &idx_tx0),
-            Ok(())
-        );
+        assert_eq!(store.del_mainchain_tx_index(&out_id_tx0), Ok(()));
+        assert_eq!(store.get_mainchain_tx_index(&out_id_tx0), Ok(None));
+        assert_eq!(store.set_mainchain_tx_index(&out_id_tx0, &idx_tx0), Ok(()));
 
         // Retrieve transactions by ID using the index
-        assert_eq!(store.get_mainchain_tx_index(&tx1.get_id()), Ok(None));
-        if let Ok(Some(index)) = store.get_mainchain_tx_index(&tx0.get_id()) {
-            if let SpendablePosition::Transaction(ref p) = index.get_tx_position() {
+        assert_eq!(
+            store.get_mainchain_tx_index(&OutPointSourceId::from(tx1.get_id())),
+            Ok(None)
+        );
+        if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
+            if let SpendablePosition::Transaction(ref p) = index.get_position() {
                 assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
             } else {
                 unreachable!();
@@ -610,9 +627,9 @@ pub(crate) mod test {
     /// returns a tuple of utxo and outpoint, for testing.
     fn create_rand_utxo(block_height: u64) -> Utxo {
         // just a random value generated, and also a random `is_block_reward` value.
-        let rng = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
-        let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
-        let is_block_reward = rng % 3 == 0;
+        let random_value = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
+        let output = TxOutput::new(Amount::from_atoms(random_value), Destination::PublicKey);
+        let is_block_reward = random_value % 3 == 0;
 
         // generate utxo
         let utxo = Utxo::new(output, is_block_reward, BlockHeight::new(block_height));

@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![cfg(not(loom))]
 
 use common::{
     chain::{config, ChainConfig},

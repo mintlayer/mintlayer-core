@@ -1,10 +1,11 @@
 use crate::address::Address;
 use crate::chain::block::Block;
+use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::consensus_data::ConsensusData;
 use crate::primitives::id::{Id, H256};
+use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
@@ -36,6 +37,8 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     genesis_block: Block,
     #[allow(dead_code)]
+    blockreward_maturity: BlockDistance,
+    #[allow(dead_code)]
     version: SemVer,
 }
 
@@ -63,9 +66,17 @@ impl ChainConfig {
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
+
+    pub const fn get_blockreward_maturity(&self) -> &BlockDistance {
+        &self.blockreward_maturity
+    }
 }
 
 const MAINNET_ADDRESS_PREFIX: &str = "mlt";
+// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
+const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
+// DSA allows us to have blocks up to 1mb
+pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{Destination, TxInput, TxOutput};
@@ -80,19 +91,14 @@ fn create_mainnet_genesis() -> Block {
         genesis_message,
     );
     let output = TxOutput::new(
-        Amount::new(100000000000000),
+        Amount::from_atoms(100000000000000),
         Destination::Address(genesis_mint_receiver),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(
-        vec![tx],
-        Id::new(&H256::zero()),
-        1639975460,
-        ConsensusData::None,
-    )
-    .expect("Error creating genesis block")
+    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
+        .expect("Error creating genesis block")
 }
 
 #[allow(dead_code)]
@@ -107,6 +113,7 @@ pub fn create_mainnet() -> ChainConfig {
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
         genesis_block: create_mainnet_genesis(),
         version: SemVer::new(0, 1, 0),
+        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
 }
 

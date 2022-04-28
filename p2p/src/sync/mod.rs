@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![cfg(not(loom))]
 #![allow(unused)]
 
 use crate::{
@@ -194,7 +193,8 @@ mod tests {
         T::FloodsubHandle: FloodsubService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (_, flood) = T::start(addr, &[], &[]).await.unwrap();
+        let (_, flood) =
+            T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
         let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
 

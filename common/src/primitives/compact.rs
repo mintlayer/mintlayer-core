@@ -127,5 +127,6 @@ mod tests {
 
         err_conversion(0x04923456);
         err_conversion(0x01fedcba);
+        err_conversion(!0x00800000); // overflow
     }
 }

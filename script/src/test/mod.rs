@@ -16,6 +16,7 @@
 // Author(s): L. Kuklinek
 
 use crate::*;
+use logging::log;
 
 // Test the interpreter on all 4-byte combinations of non-trivial opcodes.
 #[test]
@@ -62,7 +63,7 @@ fn test_4opc_sequences() {
         // Run the script and record mismatches between expected and actual outputs.
         let result = run_script(&TestContext::default(), &script, vec![].into()).ok();
         if expected != result {
-            eprintln!("FAIL {:?}: {:?} vs. {:?}", script, result, expected);
+            log::error!("FAIL {:?}: {:?} vs. {:?}", script, result, expected);
             fails += 1;
         }
     }

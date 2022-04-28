@@ -84,13 +84,25 @@ impl OrphanBlocksPool {
         // remove from the prevs
         let prevs = self
             .orphan_by_prev_id
-            .get_mut(&block.get_prev_block_id().get())
+            .get_mut(
+                &block
+                    .prev_block_id()
+                    .map(|block_id| block_id.get())
+                    // TODO: Check this part due to Block type now has optional hash_prev_block
+                    .expect("Corrupted orphan key"),
+            )
             .expect("This should always be there since it was added with the other map");
         assert!(!prevs.is_empty());
         if prevs.len() == 1 {
             // if this is the only element left, we remove the whole vector
             self.orphan_by_prev_id
-                .remove(&block.get_prev_block_id().get())
+                .remove(
+                    &block
+                        .prev_block_id()
+                        // TODO: Check this part due to Block type now has optional hash_prev_block
+                        .expect("Corrupted orphan key")
+                        .get(),
+                )
                 .expect("Was already found before");
         } else {
             // we find the element that matches the block id
@@ -141,7 +153,13 @@ impl OrphanBlocksPool {
         self.orphan_by_id.insert(block_id.get(), rc_block.clone());
         self.orphan_ids.push(block_id.get());
         self.orphan_by_prev_id
-            .entry(rc_block.get_prev_block_id().get())
+            .entry(
+                rc_block
+                    .prev_block_id()
+                    // TODO: Check this part due to Block type now has optional hash_prev_block
+                    .expect("Corrupted orphan key")
+                    .get(),
+            )
             .or_default()
             .push(rc_block.clone());
         Ok(())
@@ -195,8 +213,8 @@ mod tests {
 
     mod helpers {
         use super::*;
+        use common::chain::block::ConsensusData;
         use common::chain::transaction::Transaction;
-        use common::primitives::consensus_data::ConsensusData;
         use rand::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
@@ -214,7 +232,9 @@ mod tests {
 
             Block::new(
                 vec![tx],
-                Id::new(&prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()))),
+                Some(Id::new(
+                    &prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen())),
+                )),
                 rng.gen(),
                 ConsensusData::None,
             )
@@ -275,8 +295,9 @@ mod tests {
             assert!(orphans_pool.orphan_ids.contains(&block.get_id().get()));
             assert!(orphans_pool.is_already_an_orphan(&block.get_id().get()));
 
-            if let Some(blocks) =
-                orphans_pool.orphan_by_prev_id.get(&block.get_prev_block_id().get())
+            if let Some(blocks) = orphans_pool
+                .orphan_by_prev_id
+                .get(&block.prev_block_id().expect("Prev block not found").get())
             {
                 assert!(blocks.contains(&Rc::new(block.clone())))
             } else {
@@ -358,7 +379,9 @@ mod tests {
                 .expect("it should return the block specified by `rand_id`")
         };
 
-        let sim_block = gen_block_from_id(Some(rand_block.get_prev_block_id().get()));
+        let sim_block = gen_block_from_id(Some(
+            rand_block.prev_block_id().expect("Prev block not found").get(),
+        ));
         assert!(orphans_pool.add_block(sim_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &sim_block, 3);
 
@@ -421,7 +444,7 @@ mod tests {
         assert!(!orphans_pool.orphan_ids.contains(&rand_block.get_id().get()));
         assert!(!orphans_pool
             .orphan_by_prev_id
-            .contains_key(&rand_block.get_prev_block_id().get()));
+            .contains_key(&rand_block.prev_block_id().expect("Prev block not found").get()));
     }
 
     #[test]
@@ -442,15 +465,16 @@ mod tests {
             assert!(orphans_pool.is_already_an_orphan(&block.get_id().get()));
 
             // check that relationship of the prev_id and the block is 1-to-1.
-            if let Some(blocks) =
-                orphans_pool.orphan_by_prev_id.get(&block.get_prev_block_id().get())
+            if let Some(blocks) = orphans_pool
+                .orphan_by_prev_id
+                .get(&block.prev_block_id().expect("Prev block not found").get())
             {
                 assert_eq!(blocks.len(), 1);
             } else {
                 panic!(
                     "block {:?} not found for key {:?}",
                     block,
-                    block.get_prev_block_id().get()
+                    block.prev_block_id().expect("Prev block not found").get()
                 );
             }
         });
@@ -471,7 +495,7 @@ mod tests {
         assert!(!orphans_pool.orphan_by_id.contains_key(&last_block.get_id().get()));
         assert!(!orphans_pool
             .orphan_by_prev_id
-            .contains_key(&last_block.get_prev_block_id().get()));
+            .contains_key(&last_block.prev_block_id().expect("Prev block not found").get()));
         check_pool_length(&orphans_pool, blocks.len() - 1);
 
         // the first block should still exist.
@@ -493,13 +517,19 @@ mod tests {
             assert!(orphans_pool.is_already_an_orphan(&block_id.get()));
 
             // check that the number of blocks for the same key, increases too.
-            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&b.get_prev_block_id().get()) {
+            if let Some(blocks) = orphans_pool
+                .orphan_by_prev_id
+                .get(&b.prev_block_id().expect("Prev block not found").get())
+            {
                 assert_eq!(blocks.len(), idx + 1);
 
                 let block_id = &blocks[idx].get_id();
                 assert_eq!(&b.get_id(), block_id);
             } else {
-                panic!("no blocks found for key {:?}", b.get_prev_block_id().get());
+                panic!(
+                    "no blocks found for key {:?}",
+                    b.prev_block_id().expect("Prev block not found").get()
+                );
             }
         });
 
@@ -514,15 +544,16 @@ mod tests {
         assert!(!orphans_pool.orphan_by_id.contains_key(&random_block.get_id().get()));
         assert!(!orphans_pool.orphan_ids.contains(&random_block.get_id().get()));
 
-        if let Some(in_blocks) =
-            orphans_pool.orphan_by_prev_id.get(&random_block.get_prev_block_id().get())
+        if let Some(in_blocks) = orphans_pool
+            .orphan_by_prev_id
+            .get(&random_block.prev_block_id().expect("Prev block not found").get())
         {
             assert_eq!(in_blocks.len(), blocks.len() - 1);
         } else {
             panic!(
                 "there should still be {:?} elements in id: {:#?}",
                 (blocks.len() - 1),
-                random_block.get_prev_block_id().get()
+                random_block.prev_block_id().expect("Prev block not found").get()
             );
         }
     }
@@ -627,7 +658,8 @@ mod tests {
         let sim_parent_id = sim_blocks
             .first()
             .expect("this should return the first element")
-            .get_prev_block_id()
+            .prev_block_id()
+            .expect("Prev block not found")
             .get();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
@@ -698,7 +730,8 @@ mod tests {
         let sim_parent_id = sim_blocks
             .first()
             .expect("this should return the first element")
-            .get_prev_block_id()
+            .prev_block_id()
+            .expect("Prev block not found")
             .get();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());

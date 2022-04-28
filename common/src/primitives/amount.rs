@@ -1,6 +1,7 @@
 #![allow(clippy::eq_op)]
 
 use parity_scale_codec::{Decode, Encode};
+use std::iter::Sum;
 
 // Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
@@ -23,6 +24,8 @@ use parity_scale_codec::{Decode, Encode};
 // if you need a signed amount, we should create a separate type for it and implement proper conversion
 pub type IntType = u128;
 
+/// An unsigned fixed-point type for amounts
+/// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Amount {
     #[codec(compact)]
@@ -40,9 +43,12 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 }
 
 impl Amount {
-    #[allow(dead_code)]
-    pub fn new(v: u128) -> Self {
+    pub fn from_atoms(v: IntType) -> Self {
         Amount { val: v }
+    }
+
+    pub fn into_atoms(&self) -> IntType {
+        self.val
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
@@ -54,7 +60,8 @@ impl Amount {
 
             remove_right_most_zeros_and_decimal_point(result)
         } else {
-            let unit = 10_u128.pow(decimals as u32);
+            let ten: IntType = 10;
+            let unit = ten.pow(decimals as u32);
             let whole = self.val / unit;
             let fraction = self.val % unit;
             let result = format!("{whole}.{fraction:00$}", decimals as usize);
@@ -106,12 +113,6 @@ impl Amount {
     }
 }
 
-impl From<u128> for Amount {
-    fn from(v: u128) -> Self {
-        Amount { val: v }
-    }
-}
-
 impl std::ops::Add for Amount {
     type Output = Option<Self>;
 
@@ -128,27 +129,27 @@ impl std::ops::Sub for Amount {
     }
 }
 
-impl std::ops::Mul for Amount {
+impl std::ops::Mul<IntType> for Amount {
     type Output = Option<Self>;
 
-    fn mul(self, other: Self) -> Option<Self> {
-        self.val.checked_mul(other.val).map(|n| Amount { val: n })
+    fn mul(self, other: IntType) -> Option<Self> {
+        self.val.checked_mul(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Div for Amount {
-    type Output = Option<Self>;
+impl std::ops::Div<IntType> for Amount {
+    type Output = Option<Amount>;
 
-    fn div(self, other: Self) -> Option<Self> {
-        self.val.checked_div(other.val).map(|n| Amount { val: n })
+    fn div(self, other: IntType) -> Option<Amount> {
+        self.val.checked_div(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Rem for Amount {
+impl std::ops::Rem<IntType> for Amount {
     type Output = Option<Self>;
 
-    fn rem(self, other: Self) -> Option<Self> {
-        self.val.checked_rem(other.val).map(|n| Amount { val: n })
+    fn rem(self, other: IntType) -> Option<Self> {
+        self.val.checked_rem(other).map(|n| Amount { val: n })
     }
 }
 
@@ -226,16 +227,25 @@ impl std::ops::Shr<u32> for Amount {
     }
 }
 
+impl Sum<Amount> for Option<Amount> {
+    fn sum<I>(mut iter: I) -> Self
+    where
+        I: Iterator<Item = Amount>,
+    {
+        iter.try_fold(Amount::from_atoms(0), std::ops::Add::add)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn creation() {
-        let x = Amount::new(555);
+        let x = Amount::from_atoms(555);
         assert_eq!(x, Amount { val: 555 });
 
-        let y = Amount::from(123);
+        let y = Amount::from_atoms(123);
         assert_eq!(y, Amount { val: 123 });
     }
 
@@ -257,26 +267,17 @@ mod tests {
 
     #[test]
     fn mul_some() {
-        assert_eq!(
-            Amount { val: 3 } * Amount { val: 3 },
-            Some(Amount { val: 9 })
-        );
+        assert_eq!(Amount { val: 3 } * 3, Some(Amount { val: 9 }));
     }
 
     #[test]
     fn div_some() {
-        assert_eq!(
-            Amount { val: 9 } / Amount { val: 3 },
-            Some(Amount { val: 3 })
-        );
+        assert_eq!(Amount { val: 9 } / 3, Some(Amount { val: 3 }));
     }
 
     #[test]
     fn rem_some() {
-        assert_eq!(
-            Amount { val: 9 } % Amount { val: 4 },
-            Some(Amount { val: 1 })
-        );
+        assert_eq!(Amount { val: 9 } % 4, Some(Amount { val: 1 }));
     }
 
     #[test]
@@ -294,7 +295,7 @@ mod tests {
         assert_eq!(
             Amount {
                 val: IntType::MAX / 2 + 1
-            } * Amount { val: 2 },
+            } * 2,
             None
         );
     }

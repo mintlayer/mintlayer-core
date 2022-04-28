@@ -44,8 +44,8 @@ impl TryFrom<&str> for SemVer {
 
     fn try_from(v: &str) -> Result<SemVer, Self::Error> {
         match sscanf::scanf!(v, "{}.{}.{}", u8, u8, u16) {
-            None => Err("String does not contain SemVer"),
-            Some((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
+            Err(_) => Err("String does not contain SemVer"),
+            Ok((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
         }
     }
 }
@@ -55,8 +55,8 @@ impl TryFrom<String> for SemVer {
 
     fn try_from(v: String) -> Result<SemVer, Self::Error> {
         match sscanf::scanf!(v, "{}.{}.{}", u8, u8, u16) {
-            None => Err("String does not contain SemVer"),
-            Some((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
+            Err(_) => Err("String does not contain SemVer"),
+            Ok((ma, mi, pa)) => Ok(SemVer::new(ma, mi, pa)),
         }
     }
 }

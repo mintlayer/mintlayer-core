@@ -8,15 +8,20 @@ pub fn is_file_output_supported() -> bool {
     false
 }
 
+static INITIALIZE_LOGGER_ONCE_FLAG: std::sync::Once = std::sync::Once::new();
+
 pub fn init_logging<P: AsRef<std::path::Path>>(_log_file_path: Option<P>) {
-    env_logger::init();
+    INITIALIZE_LOGGER_ONCE_FLAG.call_once(env_logger::init);
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn initialize_twice() {
+        init_logging::<&std::path::Path>(None);
+        init_logging::<&std::path::Path>(None);
     }
 }

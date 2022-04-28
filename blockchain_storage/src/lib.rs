@@ -1,8 +1,10 @@
 //! Application-level interface for the persistent blockchain storage.
 
+use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
+use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id};
 use storage::traits;
 use utxo::{BlockUndo, Utxo};
@@ -12,6 +14,7 @@ pub mod mock;
 mod store;
 mod utxo_db;
 
+pub use storage::transaction::{TransactionRo, TransactionRw};
 pub use store::Store;
 
 /// Blockchain storage error
@@ -38,13 +41,15 @@ pub trait BlockchainStorageRead {
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
 
+    fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
     /// Get outputs state for given transaction in the mainchain
     fn get_mainchain_tx_index(
         &self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
     ) -> crate::Result<Option<TxMainChainIndex>>;
 
     /// Get transaction by block ID and position
@@ -65,6 +70,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
+    // Set the block index
+    fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
+
     /// Add a new block into the database
     fn add_block(&mut self, block: &Block) -> crate::Result<()>;
 
@@ -74,12 +82,12 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Set state of the outputs of given transaction
     fn set_mainchain_tx_index(
         &mut self,
-        tx_id: &Id<Transaction>,
+        tx_id: &OutPointSourceId,
         tx_index: &TxMainChainIndex,
     ) -> crate::Result<()>;
 
     /// Delete outputs state index associated with given transaction
-    fn del_mainchain_tx_index(&mut self, tx_id: &Id<Transaction>) -> crate::Result<()>;
+    fn del_mainchain_tx_index(&mut self, tx_id: &OutPointSourceId) -> crate::Result<()>;
 
     /// Set the mainchain block at given height to be given block.
     fn set_block_id_at_height(

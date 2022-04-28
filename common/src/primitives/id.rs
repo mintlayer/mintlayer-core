@@ -42,10 +42,30 @@ impl From<Uint256> for H256 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Id<T: ?Sized> {
     id: H256,
     _shadow: std::marker::PhantomData<T>,
+}
+
+// We implement Ord manually to avoid it getting inherited to T through PhantomData, because Id having Ord doesn't mean T requiring Ord
+impl<T: Eq> Ord for Id<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+// We implement PartialOrd manually to avoid it getting inherited to T through PhantomData, because Id having PartialOrd doesn't mean T requiring Ord
+impl<T: Eq> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(&other.id)
+    }
+}
+
+impl<T: Eq> From<H256> for Id<T> {
+    fn from(hash: H256) -> Self {
+        Self::new(&hash)
+    }
 }
 
 impl<T> Id<T> {
@@ -111,8 +131,8 @@ mod tests {
 
     #[test]
     fn hashes_stream_and_msg_identical() {
-        use rand::Rng;
-        let random_bytes = rand::thread_rng().gen::<[u8; H256::len_bytes()]>();
+        use crypto::random::{make_pseudo_rng, Rng};
+        let random_bytes = make_pseudo_rng().gen::<[u8; H256::len_bytes()]>();
 
         let h1 = default_hash(random_bytes);
         let mut hash_stream = DefaultHashAlgoStream::new();

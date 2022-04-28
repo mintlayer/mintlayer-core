@@ -98,6 +98,7 @@ impl NetworkService for MockService {
         addr: Self::Address,
         _strategies: &[Self::Strategy],
         _topics: &[FloodsubTopic],
+        timeout: std::time::Duration,
     ) -> error::Result<(Self::ConnectivityHandle, Self::FloodsubHandle)> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
@@ -105,7 +106,7 @@ impl NetworkService for MockService {
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx);
+            let mut mock = backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, timeout);
             let _ = mock.run().await;
         });
 
@@ -225,7 +226,7 @@ mod tests {
     use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::TcpStream;
+    use tokio::net::{TcpStream, UdpSocket};
 
     #[derive(Debug, Encode, Decode, PartialEq, Eq)]
     struct Transaction {
@@ -235,19 +236,43 @@ mod tests {
 
     #[tokio::test]
     async fn test_new() {
-        let srv_ipv4 = MockService::start("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
+        let srv_ipv4 = MockService::start(
+            "127.0.0.1:5555".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
         assert!(srv_ipv4.is_ok());
 
         // address already in use
-        let err = MockService::start("127.0.0.1:5555".parse().unwrap(), &[], &[]).await;
+        let err = MockService::start(
+            "127.0.0.1:5555".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
         assert!(err.is_err());
 
         // bind to IPv6 localhost
-        let srv_ipv6 = MockService::start("[::1]:5555".parse().unwrap(), &[], &[]).await;
+        let srv_ipv6 = MockService::start(
+            "[::1]:5555".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
         assert!(srv_ipv6.is_ok());
 
         // address already in use
-        let s_ipv6 = MockService::start("[::1]:5555".parse().unwrap(), &[], &[]).await;
+        let s_ipv6 = MockService::start(
+            "[::1]:5555".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
         assert!(s_ipv6.is_err());
     }
 
@@ -266,7 +291,13 @@ mod tests {
         });
 
         // create service that is used for testing `connect()`
-        let srv = MockService::start("127.0.0.1:7777".parse().unwrap(), &[], &[]).await;
+        let srv = MockService::start(
+            "127.0.0.1:7777".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await;
         assert!(srv.is_ok());
         let (mut srv, _) = srv.unwrap();
 
@@ -289,8 +320,14 @@ mod tests {
     async fn test_accept() {
         // create service that is used for testing `accept()`
         let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let (mut srv, _) =
-            MockService::start("[::1]:9999".parse().unwrap(), &[], &[]).await.unwrap();
+        let (mut srv, _) = MockService::start(
+            "[::1]:9999".parse().unwrap(),
+            &[],
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
 
         let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
         assert!(acc.is_ok());
@@ -303,7 +340,10 @@ mod tests {
     #[tokio::test]
     async fn test_peer_send() {
         let addr: SocketAddr = "[::1]:11112".parse().unwrap();
-        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
+        let (mut server, _) =
+            MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
+                .await
+                .unwrap();
         let remote_fut = TcpStream::connect(addr);
 
         let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
@@ -350,7 +390,10 @@ mod tests {
     async fn test_peer_recv() {
         // create a `MockService`, connect to it with a `TcpStream` and exchange data
         let addr: SocketAddr = "[::1]:11113".parse().unwrap();
-        let (mut server, _) = MockService::start(addr, &[], &[]).await.unwrap();
+        let (mut server, _) =
+            MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
+                .await
+                .unwrap();
         let remote_fut = TcpStream::connect(addr);
 
         let (server_res, remote_res) = tokio::join!(server.poll_next(), remote_fut);
@@ -390,5 +433,45 @@ mod tests {
         assert!(socket_res.is_ok());
         assert!(peer_res.is_ok());
         assert_eq!(peer_res.unwrap(), tx);
+    }
+
+    impl PartialEq for MockSocket {
+        fn eq(&self, _other: &MockSocket) -> bool {
+            true
+        }
+    }
+
+    // try to connect to a service that is not listening with a small timeout
+    // and verify that the connection fails
+    // TODO: verify on windows/mac
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn test_connect_with_timeout() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut service, _) =
+            MockService::start(addr, &[], &[], std::time::Duration::from_secs(2))
+                .await
+                .unwrap();
+
+        let port = portpicker::pick_unused_port().unwrap();
+        let conn_addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
+        let start = std::time::SystemTime::now();
+        assert_eq!(
+            service.connect(conn_addr).await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+        assert_eq!(
+            std::time::SystemTime::now().duration_since(start).unwrap().as_secs(),
+            0
+        );
+
+        // try to connect to a non-routable host
+        let conn_addr: SocketAddr = "10.255.255.255:8888".parse().unwrap();
+        let start = std::time::SystemTime::now();
+        assert_eq!(
+            service.connect(conn_addr).await,
+            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+        );
+        assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }
