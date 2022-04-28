@@ -63,8 +63,8 @@ mod test {
 
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
-        let rng = make_pseudo_rng().gen_range(0..u128::MAX);
-        let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
+        let random_value = make_pseudo_rng().gen_range(0..u128::MAX);
+        let output = TxOutput::new(Amount::from_atoms(random_value), Destination::PublicKey);
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.

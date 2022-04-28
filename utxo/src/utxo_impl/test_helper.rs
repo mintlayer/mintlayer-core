@@ -23,7 +23,7 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
     for _ in 0..size {
         let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
         tx_outputs.push(TxOutput::new(
-            Amount::new(random_amt),
+            Amount::from_atoms(random_amt),
             Destination::PublicKey,
         ));
     }
@@ -66,7 +66,7 @@ pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
 fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let rng = make_pseudo_rng().gen_range(0..u128::MAX);
-    let output = TxOutput::new(Amount::new(rng), Destination::PublicKey);
+    let output = TxOutput::new(Amount::from_atoms(rng), Destination::PublicKey);
     let is_block_reward = rng % 3 == 0;
 
     // generate utxo

@@ -172,7 +172,6 @@ mod test {
     use crate::ConsumedUtxoCache;
     use common::chain::config::create_mainnet;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
-    use common::primitives::consensus_data::ConsensusData;
     use common::primitives::{Amount, BlockHeight, Idable};
     use common::primitives::{Id, H256};
     use crypto::random::{make_pseudo_rng, seq, Rng};
@@ -212,7 +211,7 @@ mod test {
         num_of_txs: usize,
     ) -> Block {
         let txs = create_transactions(inputs, max_num_of_outputs, num_of_txs);
-        Block::new(txs, prev_block_id, 1, ConsensusData::None)
+        Block::new_with_no_consensus(txs, Some(prev_block_id), 1)
             .expect("should be able to create a block")
     }
 
@@ -302,7 +301,7 @@ mod test {
             // spend the block
             let block_undo = {
                 let undos = block
-                    .get_transactions()
+                    .transactions()
                     .iter()
                     .map(|tx| view.spend_utxos(tx, block_height).expect("should spend okay."))
                     .collect_vec();
@@ -345,7 +344,7 @@ mod test {
 
         // check that the inputs of the block do not exist in the utxo column.
         {
-            block.get_transactions().iter().for_each(|tx| {
+            block.transactions().iter().for_each(|tx| {
                 tx.get_inputs().iter().for_each(|input| {
                     assert_eq!(db.get_utxo(input.get_outpoint()), None);
                 });
@@ -376,16 +375,16 @@ mod test {
             let mut view = UtxosCache::default();
             // set the best block to the previous one
             {
-                view.set_best_block(block.get_prev_block_id());
+                view.set_best_block(block.prev_block_id().unwrap());
                 // the best block id should be the same as the old one.
                 assert_eq!(
-                    view.get_best_block_hash().as_ref(),
-                    Some(&block.get_prev_block_id())
+                    view.get_best_block_hash().unwrap(),
+                    block.prev_block_id().unwrap()
                 );
             }
 
             // get the block txinputs, and add them to the view.
-            block.get_transactions().iter().enumerate().for_each(|(idx, tx)| {
+            block.transactions().iter().enumerate().for_each(|(idx, tx)| {
                 // use the undo to get the utxos
                 let undo = block_undo.tx_undos().get(idx).expect("it should return undo");
                 let undos = undo.inner();
@@ -436,7 +435,7 @@ mod test {
             // Create a view.
             let mut view = db.derive_cache();
 
-            let tx = block.get_transactions().get(0).expect("should return a transaction");
+            let tx = block.transactions().get(0).expect("should return a transaction");
 
             // try to spend that transaction
             assert!(view.spend_utxos(tx, BlockHeight::new(2)).is_err());
