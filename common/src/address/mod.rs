@@ -1,4 +1,5 @@
 use crate::chain::ChainConfig;
+use crate::primitives::id::default_hash;
 use crate::primitives::{encoding, Bech32Error, DecodedBech32};
 use crypto::hash::hash;
 use parity_scale_codec::{Decode, Encode};
@@ -57,7 +58,8 @@ impl Address {
         cfg: &ChainConfig,
         public_key: &crypto::key::PublicKey,
     ) -> Result<Self, AddressError> {
-        Address::new(cfg, public_key.encode())
+        let hash = default_hash(public_key.encode());
+        Address::new(cfg, hash.encode())
     }
 
     pub fn get(&self) -> &str {
