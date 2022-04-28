@@ -36,7 +36,6 @@ use parity_scale_codec::Encode;
 
 mod error;
 pub use error::*;
-
 mod pow;
 
 type PeerId = u32;
@@ -45,7 +44,6 @@ type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
 mod spend_cache;
-
 use spend_cache::CachedInputs;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
@@ -643,4 +641,4 @@ impl<'a> ConsensusRef<'a> {
 }
 
 #[cfg(test)]
-mod test;
+mod tests;
