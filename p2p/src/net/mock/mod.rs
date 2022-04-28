@@ -202,10 +202,7 @@ impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkService<PeerId = SocketAddr> + Send,
 {
-    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
-    where
-        U: Sync + Send + Encode,
-    {
+    async fn publish(&mut self, message: message::Message) -> error::Result<()> {
         todo!();
     }
 

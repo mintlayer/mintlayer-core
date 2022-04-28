@@ -89,6 +89,7 @@ pub enum Command {
     },
 }
 
+#[derive(Debug)]
 pub enum ConnectivityEvent {
     /// Connection with a data stream has been opened by a remote peer
     ConnectionAccepted { peer_info: Box<IdentifyInfo> },
@@ -98,17 +99,20 @@ pub enum ConnectivityEvent {
 
     /// One or more peers that were previously discovered have expired
     PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
+
+    /// Peer misbehaved
+    PeerMisbehaved { peer_id: PeerId, behaviour: u32 },
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum PubSubEvent {
     // TODO: rethink this event
+    // TODO: box?
     // Message received from one of the PubSub topics
     MessageReceived {
         peer_id: PeerId,
-        topic: net::PubSubTopic,
-        message: message::Message,
         message_id: MessageId,
+        message: message::Message,
     },
 }
 
