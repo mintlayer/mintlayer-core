@@ -259,6 +259,7 @@ where
             net::ConnectivityEvent::PeerDisconnected { peer_id } => {
                 todo!();
             }
+            net::ConnectivityEvent::PeerMisbehaved { .. } => todo!(),
         }
     }
 }

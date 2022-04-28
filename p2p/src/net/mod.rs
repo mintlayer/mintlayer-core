@@ -17,7 +17,6 @@
 use crate::{error, message};
 use async_trait::async_trait;
 use common::{chain, primitives};
-use serialization::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
@@ -75,6 +74,9 @@ where
 
     /// Peer disconnected
     PeerDisconnected { peer_id: T::PeerId },
+
+    /// Peer misbehaved
+    PeerMisbehaved { peer_id: T::PeerId, behaviour: u32 },
 }
 
 // TODO: separate events for blocks and transactions?
@@ -86,19 +88,9 @@ where
     /// Message received from a PubSub topic
     MessageReceived {
         peer_id: T::PeerId,
-        topic: PubSubTopic,
         message_id: T::MessageId,
-        // TODO: what should the type be here?
         message: message::Message,
-        // TODO: use PubSubMessage
     },
-    // TODO: peer subscribed/unsubscribed?
-}
-
-#[derive(Debug, Encode, Decode)]
-pub enum PubSubMessage {
-    Transaction(message::Message),
-    Block(message::Message),
 }
 
 #[derive(Debug)]
@@ -194,6 +186,7 @@ pub trait NetworkService {
     )>;
 }
 
+// TODO: rename this to swarmhandle!
 /// ConnectivityService provides an interface through which objects can send
 /// and receive connectivity-related events to/from the network service provider
 #[async_trait]
@@ -232,16 +225,12 @@ pub trait PubSubService<T>
 where
     T: NetworkService,
 {
-    // TODO: use pubsubmessage
     /// Publish data in a given floodsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
-    // TODO: remove these traits bounds
-    where
-        U: Sync + Send + Encode;
+    async fn publish(&mut self, message: message::Message) -> error::Result<()>;
 
     /// Report message validation result back to the backend
     async fn report_validation_result(

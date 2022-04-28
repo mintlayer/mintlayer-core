@@ -64,7 +64,7 @@ pub(super) enum PendingState {
 
 pub struct Backend {
     /// Created libp2p swarm object
-    swarm: Swarm<types::ComposedBehaviour>,
+    pub(super) swarm: Swarm<types::ComposedBehaviour>,
 
     /// Receiver for incoming commands
     cmd_rx: mpsc::Receiver<types::Command>,
@@ -116,7 +116,13 @@ impl Backend {
         loop {
             tokio::select! {
                 event = self.swarm.next() => match event {
-                    Some(event) => self.on_event(event).await?,
+                    Some(event) => match self.on_event(event).await {
+                        Ok(_) => {}
+                        Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
+                        Err(e) => {
+                            log::error!("error occurred when processing the event: {:?}", e);
+                        }
+                    }
                     None => return Err(P2pError::ChannelClosed)
                 },
                 command = self.cmd_rx.recv() => match command {

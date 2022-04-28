@@ -65,9 +65,6 @@ mod proto;
 mod sync;
 mod types;
 
-// Maximum message size of 10 MB
-const MESSAGE_MAX_SIZE: u32 = 10 * 1024 * 1024;
-
 /// libp2p-specifc peer discovery strategies
 #[derive(Debug, PartialEq, Eq)]
 pub enum Libp2pStrategy {
@@ -104,7 +101,7 @@ where
     cmd_tx: mpsc::Sender<types::Command>,
 
     /// Channel for receiving pubsub events from libp2p backend
-    flood_rx: mpsc::Receiver<types::PubSubEvent>,
+    gossip_rx: mpsc::Receiver<types::PubSubEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -333,7 +330,7 @@ impl NetworkService for Libp2pService {
         };
 
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (flood_tx, flood_rx) = mpsc::channel(64);
+        let (gossip_tx, gossip_rx) = mpsc::channel(64);
         let (conn_tx, conn_rx) = mpsc::channel(64);
         let (sync_tx, sync_rx) = mpsc::channel(64);
 
@@ -347,7 +344,7 @@ impl NetworkService for Libp2pService {
 
         tokio::spawn(async move {
             let mut backend =
-                backend::Backend::new(swarm, cmd_rx, conn_tx, flood_tx, sync_tx, relay_mdns);
+                backend::Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, relay_mdns);
             backend.run().await
         });
 
@@ -372,7 +369,7 @@ impl NetworkService for Libp2pService {
             },
             Self::PubSubHandle {
                 cmd_tx: cmd_tx.clone(),
-                flood_rx,
+                gossip_rx,
                 _marker: Default::default(),
             },
             Self::SyncingHandle {
@@ -450,6 +447,9 @@ where
             types::ConnectivityEvent::PeerExpired { peers } => Ok(ConnectivityEvent::PeerExpired {
                 peers: parse_peers(peers),
             }),
+            types::ConnectivityEvent::PeerMisbehaved { peer_id, behaviour } => {
+                todo!();
+            }
         }
     }
 }
@@ -460,15 +460,20 @@ impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
     T: NetworkService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
-    async fn publish<U>(&mut self, topic: PubSubTopic, data: &U) -> error::Result<()>
-    where
-        U: Sync + Send + Encode,
-    {
+    async fn publish(&mut self, message: message::Message) -> error::Result<()> {
+        // TODO: add support for transactions in the future
+        let topic =
+            if let message::MessageType::PubSub(message::PubSubMessage::Block(_)) = message.msg {
+                net::PubSubTopic::Blocks
+            } else {
+                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+            };
+
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendMessage {
                 topic,
-                message: data.encode(),
+                message: message.encode(),
                 response: tx,
             })
             .await?;
@@ -500,15 +505,13 @@ where
     }
 
     async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
-        match self.flood_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+        match self.gossip_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::PubSubEvent::MessageReceived {
                 peer_id,
-                topic,
                 message,
                 message_id,
             } => Ok(PubSubEvent::MessageReceived {
                 peer_id,
-                topic,
                 message,
                 message_id,
             }),
