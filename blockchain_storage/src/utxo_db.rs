@@ -79,7 +79,7 @@ mod test {
     }
 
     #[test]
-    fn db_interface_test() {
+    fn db_impl_test() {
         let store = Store::new_empty().expect("should create a store");
         let mut db_interface = UtxoDBImpl::new(store);
 
@@ -88,6 +88,7 @@ mod test {
         assert!(db_interface.set_utxo(&outpoint, utxo.clone()).is_ok());
         assert_eq!(db_interface.get_utxo(&outpoint), Ok(Some(utxo)));
         assert!(db_interface.del_utxo(&outpoint).is_ok());
+        assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
 
         // test block id
         let block_id: Id<Block> = Id::new(&H256::random());
@@ -104,5 +105,6 @@ mod test {
         assert!(db_interface.set_undo_data(block_id.clone(), &undo).is_ok());
         assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(Some(undo)));
         assert!(db_interface.del_undo_data(block_id.clone()).is_ok());
+        assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(None));
     }
 }
