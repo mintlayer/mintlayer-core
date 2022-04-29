@@ -15,7 +15,7 @@
 //
 // Author(s): L. Kuklinek
 
-use subsystem::subsystem::{CallRequest, CallError};
+use subsystem::subsystem::{CallError, CallRequest};
 
 mod helpers;
 
@@ -69,20 +69,17 @@ fn async_calls() {
             let logger = app.start("logger", Logger::new("logging".to_string()));
             let counter = app.start("counter", Counter::new(logger.clone()));
 
-            app.start_raw(
-                "test",
-                |_call_rq: CallRequest<()>, _shut_rq| async move {
-                    logger.call(|l| l.write("starting")).await.unwrap();
+            app.start_raw("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
+                logger.call(|l| l.write("starting")).await.unwrap();
 
-                    // Bump the counter twice
-                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                    assert_eq!(res, Ok(Ok(1)));
-                    let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
-                    assert_eq!(res, Ok(Ok(2)));
+                // Bump the counter twice
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(1)));
+                let res = counter.call_async_mut(|c| Box::pin(c.bump())).await;
+                assert_eq!(res, Ok(Ok(2)));
 
-                    logger.call(|l| l.write("done")).await.unwrap();
-                },
-            );
+                logger.call(|l| l.write("done")).await.unwrap();
+            });
 
             app.main().await
         })
