@@ -270,17 +270,10 @@ impl NetworkService for Libp2pService {
             .boxed();
 
         let swarm = {
-            // TODO: is this needed?
-            let message_id_fn = |message: &GossipsubMessage| {
-                let mut s = DefaultHasher::new();
-                message.data.hash(&mut s);
-                MessageId::from(s.finish().to_string())
-            };
-
             let gossipsub_config = GossipsubConfigBuilder::default()
                 .heartbeat_interval(std::time::Duration::from_secs(10))
                 .validation_mode(ValidationMode::Strict)
-                .message_id_fn(message_id_fn)
+                .max_transmit_size(2 * 1024 * 1024)
                 .validate_messages()
                 .build()
                 .expect("configuration to be valid");

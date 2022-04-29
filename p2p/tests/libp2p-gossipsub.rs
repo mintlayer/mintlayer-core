@@ -17,7 +17,10 @@
 #![allow(unused)]
 extern crate test_utils;
 
-use common::chain::block::{consensus_data::ConsensusData, Block};
+use common::chain::{
+    block::{consensus_data::ConsensusData, Block},
+    transaction::Transaction,
+};
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::{
     error::{Libp2pError, P2pError, ProtocolError},
@@ -310,5 +313,57 @@ async fn test_libp2p_gossipsub_invalid_data() {
             })
             .await,
         Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+    );
+}
+
+#[tokio::test]
+async fn test_libp2p_gossipsub_too_big_message() {
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
+        addr1,
+        &[],
+        &[PubSubTopic::Blocks],
+        Arc::clone(&config),
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+        addr2,
+        &[],
+        &[PubSubTopic::Blocks],
+        Arc::clone(&config),
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+
+    let (conn1_res, conn2_res) =
+        tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+    let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+    let conn1_id = match conn2_res {
+        ConnectivityEvent::PeerConnected { peer_info } => peer_info.peer_id,
+        _ => panic!("invalid event received, expected incoming connection"),
+    };
+
+    let txs = (0..(200_000))
+        .map(|_| Transaction::new(0, vec![], vec![], 0).unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        pubsub1
+            .publish(message::Message {
+                magic: [0, 1, 2, 3],
+                msg: MessageType::PubSub(PubSubMessage::Block(
+                    Block::new(txs, None, 1337u32, ConsensusData::None).unwrap(),
+                )),
+            })
+            .await,
+        // TODO: refactor error code
+        Err(P2pError::Libp2pError(Libp2pError::PublishError(
+            "MessageTooLarge".to_string()
+        )))
     );
 }
