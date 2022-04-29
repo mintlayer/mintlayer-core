@@ -1,4 +1,7 @@
-use crate::address::Address;
+use crypto::key::KeyKind;
+use crypto::key::PrivateKey;
+
+use crate::address::pubkeyhash::PublicKeyHash;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
@@ -83,9 +86,11 @@ fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{Destination, TxInput, TxOutput};
     use crate::primitives::Amount;
 
+    // TODO: replace this with our mint key
+    let (_mint_priv_key, mint_pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let genesis_mint_receiver_pubkeyhash = PublicKeyHash::from(&mint_pub_key);
+
     let genesis_message = b"".to_vec();
-    let genesis_mint_receiver = Address::new_with_hrp(MAINNET_ADDRESS_PREFIX, [])
-        .expect("Failed to create genesis mint address");
     let input = TxInput::new(
         Id::<Transaction>::new(&H256::zero()).into(),
         0,
@@ -93,7 +98,7 @@ fn create_mainnet_genesis() -> Block {
     );
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
-        Destination::Address(genesis_mint_receiver),
+        Destination::Address(genesis_mint_receiver_pubkeyhash),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");

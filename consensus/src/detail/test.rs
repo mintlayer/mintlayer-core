@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 
 use super::*;
 use blockchain_storage::Store;
-use common::address::Address;
+use common::address::pubkeyhash::PublicKeyHash;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_mainnet;
 
@@ -27,6 +27,7 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::H256;
 use common::primitives::{Amount, Id};
+use crypto::key::{KeyKind, PrivateKey};
 use rand::prelude::*;
 
 #[derive(Debug)]
@@ -59,12 +60,10 @@ fn random_witness() -> InputWitness {
     InputWitness::NoSignature(Some(witness))
 }
 
-fn random_address(chain_config: &ChainConfig) -> Destination {
-    let mut rng = rand::thread_rng();
-    let mut address: Vec<u8> = (1..22).collect();
-    address.shuffle(&mut rng);
-    let receiver = Address::new(chain_config, address).expect("Failed to create address");
-    Destination::Address(receiver)
+fn random_address() -> Destination {
+    let (_privkey, pubkey) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let pubkeyhash = PublicKeyHash::from(&pubkey);
+    Destination::Address(pubkeyhash)
 }
 
 fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
@@ -97,15 +96,9 @@ fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
 }
 
 fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
-    let config = create_mainnet();
+    let addr = random_address();
 
-    let addr =
-        Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
-
-    TxOutput::new(
-        Amount::from_atoms(g.next_u64() as u128),
-        Destination::Address(addr),
-    )
+    TxOutput::new(Amount::from_atoms(g.next_u64() as u128), addr)
 }
 
 fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction {
@@ -154,7 +147,6 @@ fn setup_consensus() -> Consensus {
 }
 
 fn create_utxo_data(
-    config: &ChainConfig,
     tx_id: &Id<Transaction>,
     index: usize,
     output: &TxOutput,
@@ -168,7 +160,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(config),
+                random_address(),
             ),
         ))
     } else {
@@ -176,15 +168,12 @@ fn create_utxo_data(
     }
 }
 
-fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
+fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
-    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-        .transactions()
-        .iter()
-        .flat_map(|tx| create_new_outputs(config, tx))
-        .unzip();
+    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
+        prev_block.transactions().iter().flat_map(|tx| create_new_outputs(tx)).unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
@@ -199,11 +188,11 @@ fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) ->
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
-fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
+fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
     tx.get_outputs()
         .iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(config, &tx.get_id(), index, output))
+        .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 
@@ -326,7 +315,7 @@ fn test_straight_chain() {
                 .expect("Unable to get best block ID");
             assert_eq!(&best_block_id, block_index.get_block_id());
             let block_source = BlockSource::Peer(1);
-            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
+            let new_block = produce_test_block(&prev_block, false);
             let new_block_index = dbg!(consensus.process_block(new_block.clone(), block_source))
                 .ok()
                 .flatten()
@@ -371,11 +360,7 @@ fn test_reorg_simple() {
         );
 
         // Process the second block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
         let new_id = Some(block.get_id());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
         assert_eq!(
@@ -387,11 +372,7 @@ fn test_reorg_simple() {
         );
 
         // Process the parallel block and choose the better one
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
         // let new_id = Some(block.get_id());
         assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_ne!(
@@ -410,7 +391,7 @@ fn test_reorg_simple() {
         );
 
         // Produce another block that cause reorg
-        let new_block = produce_test_block(&consensus.chain_config, &block, false);
+        let new_block = produce_test_block(&block, false);
         let new_id = Some(new_block.get_id());
         assert!(consensus.process_block(new_block, BlockSource::Local).is_ok());
         assert_eq!(
@@ -433,7 +414,7 @@ fn test_orphans_chains() {
         // Process the orphan block
         let new_block = consensus.chain_config.genesis_block().clone();
         for _ in 0..255 {
-            let new_block = produce_test_block(&consensus.chain_config, &new_block, true);
+            let new_block = produce_test_block(&new_block, true);
             assert_eq!(
                 consensus.process_block(new_block.clone(), BlockSource::Local),
                 Err(BlockError::Orphan)
@@ -459,7 +440,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address(&consensus.chain_config);
+            let receiver = random_address();
 
             let prev_block_tx_id = consensus
                 .chain_config
@@ -480,11 +461,7 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(
-                first_tx_id.into(),
-                0,
-                InputWitness::NoSignature(None),
-            );
+            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -523,7 +500,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address(&consensus.chain_config);
+            let receiver = random_address();
 
             let prev_block_tx_id =
                 consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -539,11 +516,7 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(
-                first_tx_id.into(),
-                0,
-                InputWitness::NoSignature(None),
-            );
+            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -592,7 +565,7 @@ fn double_spend_tx_in_the_same_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address(&consensus.chain_config);
+        let receiver = random_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -627,11 +600,7 @@ fn double_spend_tx_in_the_same_block() {
         // Create third tx
         let third_tx = Transaction::new(
             123456789,
-            vec![TxInput::new(
-                first_tx_id.into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
+            vec![TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None))],
             vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
             0,
         )
@@ -681,7 +650,7 @@ fn double_spend_tx_in_another_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address(&consensus.chain_config);
+        let receiver = random_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -768,11 +737,8 @@ impl<'a> BlockTestFrameWork {
 
     #[allow(dead_code)]
     pub fn random_block(&self, parent_block: &Block, params: Option<&[TestBlockParams]>) -> Block {
-        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_block
-            .transactions()
-            .iter()
-            .flat_map(|tx| create_new_outputs(&self.consensus.chain_config, tx))
-            .unzip();
+        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
+            parent_block.transactions().iter().flat_map(|tx| create_new_outputs(tx)).unzip();
 
         let mut hash_prev_block = Some(parent_block.get_id());
         if let Some(params) = params {
@@ -888,7 +854,7 @@ impl<'a> BlockTestFrameWork {
             .unwrap();
 
         for _ in 0..count_blocks {
-            block = produce_test_block(&self.consensus.chain_config.clone(), &block, false);
+            block = produce_test_block(&block, false);
             self.consensus
                 .process_block(block.clone(), BlockSource::Local)
                 .expect("Err block processing");
@@ -1244,11 +1210,7 @@ fn test_spend_inputs_simple() {
         let mut consensus = setup_consensus();
 
         // Create a new block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {

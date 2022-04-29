@@ -1,4 +1,4 @@
-use bech32::{self, CheckBase32, Error, ToBase32, Variant};
+use bech32::{self, CheckBase32, Error, FromBase32, ToBase32, Variant};
 use core::fmt;
 use displaydoc::Display;
 use thiserror::Error;
@@ -80,7 +80,7 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
             // }
             // ------- EOL
 
-            let data = data.into_iter().map(|x| x.to_u8()).collect();
+            let data = FromBase32::from_base32(&data)?;
 
             Ok(DecodedBech32 {
                 hrp,
@@ -111,11 +111,8 @@ mod tests {
         let decoded = decode(&encoded).expect("should decode okay");
         log::info!("value of decoded: {:?}", decoded);
 
-        let base32_data: Vec<u8> = data.to_base32().into_iter().map(|x| x.to_u8()).collect();
-        assert_eq!(base32_data, decoded.get_base32_data());
         assert_eq!(hrp, decoded.get_hrp());
-
-        assert_ne!(data, decoded.get_base32_data());
+        assert_eq!(data, decoded.get_base32_data());
     }
 
     #[test]

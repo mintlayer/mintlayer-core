@@ -19,20 +19,18 @@ use crypto::key::{PublicKey, Signature};
 use parity_scale_codec::{Decode, DecodeAll, Encode};
 
 use crate::{
-    address::Address,
-    chain::{signature::TransactionSigError, ChainConfig},
-    primitives::H256,
+    address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,
 };
 
 #[derive(Debug, Encode, Decode)]
-pub struct AuthorizedAddressSpend {
+pub struct AuthorizedPublicKeyHashSpend {
     public_key: PublicKey,
     signature: Signature,
 }
 
-impl AuthorizedAddressSpend {
+impl AuthorizedPublicKeyHashSpend {
     pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, TransactionSigError> {
-        let decoded = AuthorizedAddressSpend::decode_all(data.as_ref())
+        let decoded = AuthorizedPublicKeyHashSpend::decode_all(data.as_ref())
             .map_err(|e| TransactionSigError::AddressAuthDecodingFailed(e.to_string()))?;
         Ok(decoded)
     }
@@ -46,13 +44,11 @@ impl AuthorizedAddressSpend {
 }
 
 pub fn verify_address_spending(
-    chain_config: &ChainConfig,
-    spendee_addr: &crate::address::Address,
-    sig_components: &AuthorizedAddressSpend,
+    spendee_addr: &PublicKeyHash,
+    sig_components: &AuthorizedPublicKeyHashSpend,
     sighash: &H256,
 ) -> Result<(), TransactionSigError> {
-    let calculated_addr = Address::from_public_key(chain_config, &sig_components.public_key)
-        .map_err(TransactionSigError::PublicKeyToAddressConversionFailed)?;
+    let calculated_addr = PublicKeyHash::from(&sig_components.public_key);
     if calculated_addr != *spendee_addr {
         return Err(TransactionSigError::PublicKeyToAddressMismatch);
     }
@@ -65,13 +61,11 @@ pub fn verify_address_spending(
 
 pub fn sign_address_spending(
     private_key: &crypto::key::PrivateKey,
-    chain_config: &ChainConfig,
-    spendee_addr: &crate::address::Address,
+    spendee_addr: &PublicKeyHash,
     sighash: &H256,
-) -> Result<AuthorizedAddressSpend, TransactionSigError> {
+) -> Result<AuthorizedPublicKeyHashSpend, TransactionSigError> {
     let public_key = crypto::key::PublicKey::from_private_key(private_key);
-    let calculated_addr = Address::from_public_key(chain_config, &public_key)
-        .map_err(TransactionSigError::PublicKeyToAddressConversionFailed)?;
+    let calculated_addr = PublicKeyHash::from(&public_key);
     if calculated_addr != *spendee_addr {
         return Err(TransactionSigError::PublicKeyToAddressMismatch);
     }
@@ -80,7 +74,7 @@ pub fn sign_address_spending(
         .sign_message(&msg)
         .map_err(TransactionSigError::ProducingSignatureFailed)?;
 
-    Ok(AuthorizedAddressSpend::new(public_key, signature))
+    Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
 }
 
 // TODO: tests

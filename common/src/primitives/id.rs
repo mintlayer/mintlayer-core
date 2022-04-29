@@ -92,9 +92,6 @@ pub trait Idable<T: ?Sized> {
     fn get_id(&self) -> Id<Self>;
 }
 
-#[allow(dead_code)]
-pub type DataID = H256;
-
 // we use a cropping stream (64 => 32) because
 // we want a hash result to H256 and a byte array
 // of the hash to be identical, while benefiting

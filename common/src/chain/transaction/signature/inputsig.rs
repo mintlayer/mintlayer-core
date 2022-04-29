@@ -15,24 +15,24 @@
 //
 // Author(s): S. Afach
 
-mod authorize_address_spend;
 mod authorize_pubkey_spend;
+mod authorize_pubkeyhash_spend;
 
 use std::io::BufWriter;
 
 use parity_scale_codec::{Decode, DecodeAll, Encode};
 
 use crate::{
-    chain::{ChainConfig, Destination, Transaction},
+    chain::{Destination, Transaction},
     primitives::H256,
 };
 
 use self::{
-    authorize_address_spend::{
-        sign_address_spending, verify_address_spending, AuthorizedAddressSpend,
-    },
     authorize_pubkey_spend::{
         sign_pubkey_spending, verify_public_key_spending, AuthorizedPublicKeySpend,
+    },
+    authorize_pubkeyhash_spend::{
+        sign_address_spending, verify_address_spending, AuthorizedPublicKeyHashSpend,
     },
 };
 
@@ -75,14 +75,13 @@ impl StandardInputSignature {
 
     pub fn verify_signature(
         &self,
-        chain_config: &ChainConfig,
         outpoint_destination: &Destination,
         sighash: &H256,
     ) -> Result<(), TransactionSigError> {
         match outpoint_destination {
             Destination::Address(addr) => {
-                let sig_components = AuthorizedAddressSpend::from_data(&self.raw_signature)?;
-                verify_address_spending(chain_config, addr, &sig_components, sighash)?
+                let sig_components = AuthorizedPublicKeyHashSpend::from_data(&self.raw_signature)?;
+                verify_address_spending(addr, &sig_components, sighash)?
             }
             Destination::PublicKey(pubkey) => {
                 let sig_components = AuthorizedPublicKeySpend::from_data(&self.raw_signature)?;
@@ -94,7 +93,6 @@ impl StandardInputSignature {
     }
 
     pub fn produce_signature_for_input(
-        chain_config: &ChainConfig,
         private_key: &crypto::key::PrivateKey,
         sighash_type: sighashtype::SigHashType,
         outpoint_destination: Destination,
@@ -104,7 +102,7 @@ impl StandardInputSignature {
         let sighash = signature_hash(sighash_type, tx, input_num)?;
         let serialized_sig = match outpoint_destination {
             Destination::Address(ref addr) => {
-                let sig = sign_address_spending(private_key, chain_config, addr, &sighash)?;
+                let sig = sign_address_spending(private_key, addr, &sighash)?;
                 sig.encode()
             }
             Destination::PublicKey(ref pubkey) => {

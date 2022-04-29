@@ -18,11 +18,7 @@
 use crypto::hash::StreamHasher;
 use parity_scale_codec::Encode;
 
-use crate::{
-    address::AddressError,
-    chain::ChainConfig,
-    primitives::{id::DefaultHashAlgoStream, H256},
-};
+use crate::primitives::{id::DefaultHashAlgoStream, H256};
 
 use self::inputsig::StandardInputSignature;
 
@@ -49,8 +45,6 @@ pub enum TransactionSigError {
     PublicKeyToAddressMismatch,
     #[error("Address authorization decoding failed")]
     AddressAuthDecodingFailed(String),
-    #[error("Public key to address conversion failed")]
-    PublicKeyToAddressConversionFailed(AddressError),
     #[error("Signature decoding failed")]
     InvalidSignatureEncoding,
     #[error("No signature!")]
@@ -118,19 +112,17 @@ pub fn signature_hash(
 }
 
 fn verify_standard_input_signature(
-    chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
     tx: &Transaction,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
-    witness.verify_signature(chain_config, outpoint_destination, &sighash)?;
+    witness.verify_signature(outpoint_destination, &sighash)?;
     Ok(())
 }
 
 pub fn verify_signature(
-    chain_config: &ChainConfig,
     outpoint_destination: &Destination,
     tx: &Transaction,
     input_num: usize,
@@ -144,13 +136,9 @@ pub fn verify_signature(
         inputsig::InputWitness::NoSignature(_) => {
             return Err(TransactionSigError::SignatureNotFound)
         }
-        inputsig::InputWitness::Standard(witness) => verify_standard_input_signature(
-            chain_config,
-            outpoint_destination,
-            witness,
-            tx,
-            input_num,
-        )?,
+        inputsig::InputWitness::Standard(witness) => {
+            verify_standard_input_signature(outpoint_destination, witness, tx, input_num)?
+        }
     }
     Ok(())
 }
