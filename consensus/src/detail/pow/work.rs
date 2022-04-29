@@ -28,7 +28,7 @@ use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Error> {
+fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Error> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
@@ -45,7 +45,7 @@ pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool
 
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
-    pub fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
+    fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
         let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
 
         num::clamp(
@@ -126,7 +126,7 @@ impl PoW {
     }
 }
 
-pub fn mine(
+fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
