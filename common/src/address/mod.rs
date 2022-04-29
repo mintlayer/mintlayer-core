@@ -45,7 +45,6 @@ impl Address {
         })
     }
 
-    #[allow(dead_code)]
     pub(crate) fn new_with_hrp<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<Self, AddressError> {
         let h = hash::<crypto::hash::Sha256, _>(data);
         let h = hash::<crypto::hash::Ripemd160, _>(h);
