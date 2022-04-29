@@ -872,6 +872,9 @@ impl<'a> BlockTestFrameWork {
                 .process_block(block.clone(), BlockSource::Local)
                 .expect("Err block processing");
             self.blocks.push(block.clone());
+            let best_block_id =
+                self.consensus.get_best_block_id().expect("best_block_id").expect("some_id");
+            assert_eq!(best_block_id, block.get_id());
         }
     }
 
