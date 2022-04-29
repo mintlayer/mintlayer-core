@@ -1423,3 +1423,44 @@ fn test_events_orphan_block() {
         assert!(consensus.process_block(block, BlockSource::Local).is_err());
     });
 }
+
+#[test]
+fn test_get_ancestor() {
+    let mut btf = BlockTestFrameWork::new();
+    btf.create_chain(&btf.genesis().get_id(), 3);
+    let block_2_index = btf.get_block_index(&btf.blocks[2].get_id());
+    let block_1_index = btf.get_block_index(&btf.blocks[1].get_id());
+    let block_0_index = btf.get_block_index(&btf.blocks[0].get_id());
+
+    assert_eq!(
+        block_1_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_2_index, 1.into())
+            .expect("ancestor")
+    );
+
+    assert_eq!(
+        block_0_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_2_index, 0.into())
+            .expect("ancestor")
+    );
+
+    assert_eq!(
+        block_0_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_0_index, 0.into())
+            .expect("ancestor")
+    );
+    // ERROR
+    assert_eq!(
+        Err(BlockError::InvalidAncestorHeight {
+            ancestor_height: 2.into(),
+            block_height: 1.into(),
+        }),
+        btf.consensus.make_db_tx().get_ancestor(&block_1_index, 2.into())
+    );
+}
