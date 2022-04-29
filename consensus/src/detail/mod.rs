@@ -204,7 +204,7 @@ impl Consensus {
     }
 }
 
-struct ConsensusRef<'a> {
+pub(crate) struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
     db_tx: TxRw<'a>,
@@ -231,7 +231,6 @@ impl<'a> ConsensusRef<'a> {
         self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
     }
 
-    #[allow(unused)]
     fn get_ancestor(
         &self,
         block_index: &BlockIndex,

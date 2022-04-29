@@ -14,6 +14,12 @@ pub struct BlockHeader {
     pub(super) consensus_data_inner: ConsensusData,
 }
 
+impl BlockHeader {
+    pub fn consensus_data(&self) -> &ConsensusData {
+        &self.consensus_data_inner
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
@@ -38,7 +44,7 @@ impl BlockV1 {
     }
 
     pub fn consensus_data(&self) -> &ConsensusData {
-        &self.header.consensus_data_inner
+        self.header.consensus_data()
     }
 
     pub fn block_time(&self) -> u32 {

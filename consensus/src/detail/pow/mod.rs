@@ -19,13 +19,22 @@ use common::chain::PoWChainConfig;
 use common::Uint256;
 use std::time::Duration;
 
+use crate::BlockError;
+
 mod helpers;
-mod temp;
 pub mod work;
 
 #[derive(Debug)]
 pub enum Error {
     Conversion(String),
+    BlockError(BlockError),
+    NoPowData,
+}
+
+impl From<BlockError> for Error {
+    fn from(block_error: BlockError) -> Self {
+        Error::BlockError(block_error)
+    }
 }
 
 pub struct PoW(PoWChainConfig);
