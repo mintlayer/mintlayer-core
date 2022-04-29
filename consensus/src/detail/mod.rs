@@ -229,6 +229,30 @@ impl<'a> ConsensusRef<'a> {
         self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
     }
 
+    // TODO improve using pskip
+    #[allow(unused)]
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        if ancestor_height > block_index.get_block_height() {
+            return Err(BlockError::InvalidAncestorHeight {
+                block_height: block_index.get_block_height(),
+                ancestor_height,
+            });
+        }
+
+        let mut height_walk = block_index.get_block_height();
+        let mut block_index_walk = block_index.clone();
+        while height_walk > ancestor_height {
+            block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+            height_walk =
+                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
+        }
+        Ok(block_index_walk)
+    }
+
     // Get indexes for a new longest chain
     fn get_new_chain(
         &self,

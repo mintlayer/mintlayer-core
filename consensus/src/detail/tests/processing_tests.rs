@@ -240,3 +240,45 @@ fn test_straight_chain() {
         }
     });
 }
+
+#[test]
+fn test_get_ancestor() {
+    use crate::detail::tests::test_framework::BlockTestFrameWork;
+    let mut btf = BlockTestFrameWork::new();
+    btf.create_chain(&btf.genesis().get_id(), 3).expect("Chain creation to succeed");
+    let block_2_index = btf.block_indexes[2].clone();
+    let block_1_index = btf.block_indexes[1].clone();
+    let block_0_index = btf.block_indexes[0].clone();
+
+    assert_eq!(
+        block_1_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_2_index, 1.into())
+            .expect("ancestor")
+    );
+
+    assert_eq!(
+        block_0_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_2_index, 0.into())
+            .expect("ancestor")
+    );
+
+    assert_eq!(
+        block_0_index,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(&block_0_index, 0.into())
+            .expect("ancestor")
+    );
+    // ERROR
+    assert_eq!(
+        Err(BlockError::InvalidAncestorHeight {
+            ancestor_height: 2.into(),
+            block_height: 1.into(),
+        }),
+        btf.consensus.make_db_tx().get_ancestor(&block_1_index, 2.into())
+    );
+}

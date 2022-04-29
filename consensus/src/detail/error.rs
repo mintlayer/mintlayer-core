@@ -32,6 +32,11 @@ pub enum BlockError {
     Orphan,
     #[error("Invalid block height `{0}`")]
     InvalidBlockHeight(BlockHeight),
+    #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
+    InvalidAncestorHeight {
+        block_height: BlockHeight,
+        ancestor_height: BlockHeight,
+    },
     #[error("The previous block invalid")]
     PrevBlockInvalid,
     #[error("The storage cause failure `{0}`")]
