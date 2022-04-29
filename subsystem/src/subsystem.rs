@@ -15,8 +15,8 @@
 //
 // Author(s): L. Kuklinek
 
-use tokio::sync::{broadcast, mpsc, oneshot};
 use futures::future::BoxFuture;
+use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]

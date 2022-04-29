@@ -15,14 +15,14 @@
 //
 // Author(s): L. Kuklinek
 
-use core::time::Duration;
 use core::future::Future;
+use core::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task;
 
 use logging::log;
 
-use crate::subsystem::{Subsystem, CallRequest, ShutdownRequest, Handle, SubsystemConfig};
+use crate::subsystem::{CallRequest, Handle, ShutdownRequest, Subsystem, SubsystemConfig};
 
 /// Manager configuration options.
 pub struct ManagerConfig {

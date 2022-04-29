@@ -35,8 +35,8 @@
 //!    request by shutting themselves down.
 //! 3. The main task waits for all subsystems to terminate.
 
-pub mod subsystem;
 pub mod manager;
+pub mod subsystem;
 
-pub use crate::subsystem::{Subsystem, Handle};
 pub use crate::manager::Manager;
+pub use crate::subsystem::{Handle, Subsystem};
