@@ -21,6 +21,12 @@ pub struct BlockHeader {
     pub(super) consensus_data: ConsensusData,
 }
 
+impl BlockHeader {
+    pub fn consensus_data(&self) -> &ConsensusData {
+        &self.consensus_data
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,

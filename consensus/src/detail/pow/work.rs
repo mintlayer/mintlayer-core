@@ -20,9 +20,11 @@
 use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
-use crate::detail::pow::temp::BlockIndex;
+use crate::detail::ConsensusRef;
+
 use crate::detail::pow::{Error, PoW};
 use common::chain::block::consensus_data::PoWData;
+use common::chain::block::BlockIndex;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
@@ -55,20 +57,29 @@ impl PoW {
         )
     }
 
-    pub fn get_work_required(
+    pub(crate) fn get_work_required(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
+        db_accessor: ConsensusRef,
     ) -> Result<Compact, Error> {
         //TODO: check prev_block_index exists
-        let prev_block_bits = prev_block_index.data.bits();
+        let prev_block_bits = {
+            if let ConsensusData::PoW(pow_data) =
+                prev_block_index.get_block_header().consensus_data()
+            {
+                pow_data.bits()
+            } else {
+                return Err(Error::NoPowData);
+            }
+        };
 
         if self.no_retargeting() {
             return Ok(prev_block_bits);
         }
 
         let current_height = prev_block_index
-            .height
+            .get_block_height()
             .checked_add(1)
             .expect("max block height has been reached.");
 
@@ -84,7 +95,8 @@ impl PoW {
             };
         }
 
-        let retarget_block_time = get_starting_block_time(adjustment_interval, prev_block_index);
+        let retarget_block_time =
+            get_starting_block_time(adjustment_interval, prev_block_index, db_accessor)?;
         self.next_work_required(retarget_block_time, prev_block_index)
     }
 
@@ -98,10 +110,20 @@ impl PoW {
         let actual_timespan_of_last_interval =
             self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
 
+        let prev_block_bits = {
+            if let ConsensusData::PoW(pow_data) =
+                prev_block_index.get_block_header().consensus_data()
+            {
+                pow_data.bits()
+            } else {
+                return Err(Error::NoPowData);
+            }
+        };
+
         calculate_new_target(
             actual_timespan_of_last_interval,
             self.target_timespan_in_secs(),
-            prev_block_index.data.bits(),
+            prev_block_bits,
             self.difficulty_limit(),
         )
     }

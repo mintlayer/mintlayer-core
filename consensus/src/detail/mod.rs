@@ -202,7 +202,7 @@ impl Consensus {
     }
 }
 
-struct ConsensusRef<'a> {
+pub(crate) struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
     db_tx: TxRw<'a>,
@@ -230,7 +230,6 @@ impl<'a> ConsensusRef<'a> {
     }
 
     // TODO improve using pskip
-    #[allow(unused)]
     fn get_ancestor(
         &self,
         block_index: &BlockIndex,
