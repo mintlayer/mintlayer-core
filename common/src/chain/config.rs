@@ -13,8 +13,6 @@ use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
-type HashType = Id<Block>;
-
 #[derive(Debug, Copy, Clone)]
 pub enum ChainType {
     Mainnet,
@@ -33,7 +31,7 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     p2p_port: u16,
     #[allow(dead_code)]
-    height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
+    height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     #[allow(dead_code)]
     net_upgrades: NetUpgrades<UpgradeVersion>,
     #[allow(dead_code)]
@@ -112,7 +110,7 @@ pub fn create_mainnet() -> ChainConfig {
     ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        height_checkpoint_data: BTreeMap::new(),
         net_upgrades: Default::default(),
         rpc_port: 15234,
         p2p_port: 8978,
