@@ -100,6 +100,9 @@ pub enum ConnectivityEvent {
     /// One or more peers that were previously discovered have expired
     PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
 
+    /// Peer disconnected from the swarm
+    PeerDisconnected { peer_id: PeerId },
+
     /// Peer misbehaved
     PeerMisbehaved { peer_id: PeerId, behaviour: u32 },
 }

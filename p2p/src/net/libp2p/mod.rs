@@ -440,6 +440,9 @@ where
             types::ConnectivityEvent::PeerExpired { peers } => Ok(ConnectivityEvent::PeerExpired {
                 peers: parse_peers(peers),
             }),
+            types::ConnectivityEvent::PeerDisconnected { peer_id } => {
+                todo!();
+            }
             types::ConnectivityEvent::PeerMisbehaved { peer_id, behaviour } => {
                 todo!();
             }
