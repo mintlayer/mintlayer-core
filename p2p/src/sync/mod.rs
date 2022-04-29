@@ -427,6 +427,8 @@ mod tests {
             panic!("invalid data received");
         };
 
+        // TODO: force order?
+
         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
             peer_id: _,
             request_id,
