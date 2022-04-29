@@ -173,7 +173,7 @@ fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
     let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
-        prev_block.transactions().iter().flat_map(|tx| create_new_outputs(tx)).unzip();
+        prev_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
@@ -738,7 +738,7 @@ impl<'a> BlockTestFrameWork {
     #[allow(dead_code)]
     pub fn random_block(&self, parent_block: &Block, params: Option<&[TestBlockParams]>) -> Block {
         let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
-            parent_block.transactions().iter().flat_map(|tx| create_new_outputs(tx)).unzip();
+            parent_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
         let mut hash_prev_block = Some(parent_block.get_id());
         if let Some(params) = params {
