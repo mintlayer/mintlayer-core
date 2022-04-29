@@ -22,10 +22,9 @@ use crate::{
     },
 };
 use libp2p::{mdns::MdnsEvent, Multiaddr, PeerId};
-use logging::log;
 
 impl Backend {
-    async fn send_discovery_event(
+    async fn send_mdns_event(
         &mut self,
         peers: Vec<(PeerId, Multiaddr)>,
         event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> types::ConnectivityEvent,
@@ -34,19 +33,19 @@ impl Backend {
             return Ok(());
         }
 
-        self.conn_tx.send(event_fn(peers)).await.map_err(|_| P2pError::ChannelClosed)
+        self.conn_tx.send(event_fn(peers)).await.map_err(P2pError::from)
     }
 
     pub async fn on_mdns_event(&mut self, event: MdnsEvent) -> error::Result<()> {
         match event {
             MdnsEvent::Discovered(peers) => {
-                self.send_discovery_event(peers.collect(), |peers| {
+                self.send_mdns_event(peers.collect(), |peers| {
                     types::ConnectivityEvent::PeerDiscovered { peers }
                 })
                 .await
             }
             MdnsEvent::Expired(expired) => {
-                self.send_discovery_event(expired.collect(), |peers| {
+                self.send_mdns_event(expired.collect(), |peers| {
                     types::ConnectivityEvent::PeerExpired { peers }
                 })
                 .await
@@ -58,7 +57,243 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::{
+        self,
+        libp2p::{proto::util, Libp2pService},
+        NetworkService,
+    };
+    use futures::{FutureExt, StreamExt};
+    use libp2p::{
+        identify::Identify,
+        swarm::{SwarmBuilder, SwarmEvent},
+    };
+    use std::collections::HashMap;
 
     #[tokio::test]
-    async fn it_works() {}
+    async fn test_on_discovered() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+            util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
+
+        let (mut backend2, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+            addr,
+            &mut backend1.swarm,
+            &mut backend2.swarm,
+        )
+        .await;
+
+        loop {
+            tokio::select! {
+                event = backend1.swarm.next() => match event {
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event))) => {
+                        assert!(std::matches!(event, MdnsEvent::Discovered(_)));
+                        assert_eq!(
+                            backend1.on_mdns_event(event).await,
+                            Ok(())
+                        );
+                        assert!(std::matches!(
+                            conn_rx.try_recv(),
+                            Ok(types::ConnectivityEvent::PeerDiscovered { .. })
+                        ));
+                        break;
+                    }
+                    Some(_) => {},
+                    None => panic!("got None"),
+                },
+                event = backend2.swarm.next() => {}
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_on_discovered_no_relay() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+            util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
+
+        let (mut backend2, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        backend1.relay_mdns = false;
+        backend2.relay_mdns = false;
+
+        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+            addr,
+            &mut backend1.swarm,
+            &mut backend2.swarm,
+        )
+        .await;
+
+        loop {
+            tokio::select! {
+                event = backend1.swarm.next() => match event {
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event))) => {
+                        assert!(std::matches!(event, MdnsEvent::Discovered(_)));
+                        assert_eq!(
+                            backend1.on_mdns_event(event).await,
+                            Ok(())
+                        );
+                        assert!(std::matches!(
+                            conn_rx.try_recv(),
+                            Err(tokio::sync::mpsc::error::TryRecvError::Empty),
+                        ));
+                        break;
+                    }
+                    Some(_) => {},
+                    None => panic!("got None"),
+                },
+                event = backend2.swarm.next() => {}
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_on_expired() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+            util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
+
+        let (mut backend2, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+            addr,
+            &mut backend1.swarm,
+            &mut backend2.swarm,
+        )
+        .await;
+
+        loop {
+            tokio::select! {
+                event = backend1.swarm.next() => match event {
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event))) => {
+                        assert_eq!(
+                            backend1.on_mdns_event(event).await,
+                            Ok(())
+                        );
+
+                        match conn_rx.try_recv() {
+                            Ok(types::ConnectivityEvent::PeerDiscovered { peers }) => {
+                                if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
+                                    backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id());
+                                }
+                            }
+                            Ok(types::ConnectivityEvent::PeerExpired { peers }) => {
+                                if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
+                                    break;
+                                }
+                            }
+                            _ => {
+                                panic!("channel empty or invalid event received");
+                            }
+                        }
+                    }
+                    Some(_) => {}
+                    None => panic!("got None"),
+                },
+                event = backend2.swarm.next() => {}
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_on_expired_no_relay() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+            util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
+
+        let (mut backend2, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        backend1.relay_mdns = false;
+        backend2.relay_mdns = false;
+
+        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+            addr,
+            &mut backend1.swarm,
+            &mut backend2.swarm,
+        )
+        .await;
+
+        loop {
+            tokio::select! {
+                event = backend1.swarm.next() => match event {
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event))) => {
+                        assert_eq!(
+                            backend1.on_mdns_event(event).await,
+                            Ok(())
+                        );
+
+                        if let Err(tokio::sync::mpsc::error::TryRecvError::Empty) = conn_rx.try_recv() {
+                            break;
+                        }
+                    }
+                    Some(_) => {},
+                    None => panic!("got None"),
+                },
+                event = backend2.swarm.next() => {}
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_mdns_not_supported() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let config = common::chain::config::create_mainnet();
+        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+            util::make_libp2p(config.clone(), addr.clone(), &[net::PubSubTopic::Blocks]).await;
+
+        let (transport, peer_id, id_keys) = util::make_transport_and_keys();
+        let mut swarm =
+            SwarmBuilder::new(transport, util::make_identify(config, id_keys), peer_id).build();
+
+        util::connect_swarms::<types::ComposedBehaviour, Identify>(
+            addr,
+            &mut backend1.swarm,
+            &mut swarm,
+        )
+        .await;
+
+        loop {
+            tokio::select! {
+                event = backend1.swarm.next() => match event {
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(peers)))) => {
+                        for (peer, addr) in peers {
+                            assert_ne!(peer, *swarm.local_peer_id());
+                        }
+                    }
+                    Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Expired(peers)))) => {
+                        for (peer, addr) in peers {
+                            assert_ne!(peer, *swarm.local_peer_id());
+                        }
+                    }
+                    Some(_) => {},
+                    None => panic!("got None"),
+                },
+                event = swarm.next() => {},
+                _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                    break;
+                }
+            }
+        }
+    }
 }

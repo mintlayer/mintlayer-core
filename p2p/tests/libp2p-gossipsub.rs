@@ -81,6 +81,7 @@ async fn test_libp2p_gossipsub() {
         if res.is_ok() {
             break;
         } else {
+            // TODO: refactor error code
             assert_eq!(
                 res,
                 Err(P2pError::Libp2pError(Libp2pError::PublishError(
