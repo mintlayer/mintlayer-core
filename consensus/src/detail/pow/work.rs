@@ -20,10 +20,12 @@
 use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
+use crate::detail::ConsensusRef;
+
 use crate::detail::pow::{Error, PoW};
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::BlockIndex;
-use common::chain::block::{Block, BlockIndexDBAccessor, ConsensusData};
+use common::chain::block::{Block, ConsensusData};
 use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
@@ -55,11 +57,11 @@ impl PoW {
         )
     }
 
-    pub fn get_work_required(
+    pub(crate) fn get_work_required(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
-        db_accessor: &dyn BlockIndexDBAccessor,
+        db_accessor: ConsensusRef,
     ) -> Result<Compact, Error> {
         //TODO: check prev_block_index exists
         let prev_block_bits = {

@@ -1,28 +1,19 @@
 use crate::chain::block::block_v1::BlockHeader;
 use crate::chain::block::Block;
 use crate::chain::ChainConfig;
-use crate::primitives::{BlockDistance, BlockHeight, Id, Idable};
+use crate::primitives::{BlockHeight, Id, Idable};
 // use crate::Uint256;
 use parity_scale_codec::{Decode, Encode};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum BlockIndexError {
-    #[error("Desired ancestor height greater that block height")]
-    InvalidHeightForAncestor,
     #[error("Block not found")]
     BlockNotFound,
     #[error("BlockIndex not found")]
     BlockIndexNotFound,
     #[error("DB read error")]
     DatabaseReadError,
-}
-
-pub trait BlockIndexDBAccessor {
-    fn get_previous_block_index(
-        &self,
-        block_index: &BlockIndex,
-    ) -> Result<Option<BlockIndex>, BlockIndexError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -85,32 +76,11 @@ impl BlockIndex {
     pub fn get_block_header(&self) -> &BlockHeader {
         &self.block_header
     }
-
-    pub fn get_ancestor(
-        &self,
-        height: BlockHeight,
-        db_accessor: &dyn BlockIndexDBAccessor,
-    ) -> Result<BlockIndex, BlockIndexError> {
-        if height > self.height {
-            return Err(BlockIndexError::InvalidHeightForAncestor);
-        }
-
-        let mut height_walk = self.height;
-        let mut block_index_walk = self.to_owned();
-        while height_walk > height {
-            block_index_walk = db_accessor
-                .get_previous_block_index(&block_index_walk)?
-                .ok_or(BlockIndexError::BlockIndexNotFound)?
-                .to_owned();
-            height_walk =
-                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
-        }
-        Ok(block_index_walk)
-    }
 }
 
 #[cfg(test)]
 mod tests {
+    /*
     use super::*;
     use crate::chain::block::Block;
     use crate::chain::block::ConsensusData;
@@ -134,7 +104,9 @@ mod tests {
             db_tx.get_block_index(prev_block_id)?.ok_or(BlockIndex::BlockNotFound)
         }
     }
+    */
 
+    /*
     #[test]
     fn test_get_ancestor() {
         let transactions = Vec::default();
@@ -179,4 +151,5 @@ mod tests {
             time_max,
         );
     }
+    */
 }

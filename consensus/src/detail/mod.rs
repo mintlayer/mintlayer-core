@@ -204,7 +204,7 @@ impl Consensus {
     }
 }
 
-struct ConsensusRef<'a> {
+pub(crate) struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
     db_tx: TxRw<'a>,
@@ -229,6 +229,28 @@ impl<'a> ConsensusRef<'a> {
     fn get_previous_block_index(&self, block_index: &BlockIndex) -> Result<BlockIndex, BlockError> {
         let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
         self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
+    }
+
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        if ancestor_height > block_index.get_block_height() {
+            return Err(BlockError::InvalidAncestorHeight {
+                block_height: block_index.get_block_height(),
+                ancestor_height,
+            });
+        }
+
+        let mut height_walk = block_index.get_block_height();
+        let mut block_index_walk = block_index.to_owned();
+        while height_walk > ancestor_height {
+            block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+            height_walk =
+                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
+        }
+        Ok(block_index_walk)
     }
 
     // Get indexes for a new longest chain
