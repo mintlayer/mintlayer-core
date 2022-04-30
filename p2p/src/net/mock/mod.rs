@@ -26,7 +26,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::FutureExt;
 use logging::log;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
@@ -222,7 +222,7 @@ mod tests {
     use crate::net::ConnectivityEvent;
     use crate::peer::{Peer, PeerRole};
     use common::chain::config;
-    use parity_scale_codec::{Decode, Encode};
+    use serialization::{Decode, Encode};
     use std::net::SocketAddr;
     use std::sync::Arc;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};

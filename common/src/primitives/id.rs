@@ -17,7 +17,7 @@
 
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]

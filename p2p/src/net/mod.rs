@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::{error, message};
 use async_trait::async_trait;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;

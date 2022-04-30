@@ -367,6 +367,7 @@ dependencies = [
  "common",
  "mockall",
  "parity-scale-codec",
+ "serialization",
  "storage",
  "thiserror",
 ]
@@ -559,10 +560,10 @@ dependencies = [
  "loom",
  "merkletree",
  "parity-scale-codec",
- "parity-scale-codec-derive",
  "rand 0.8.4",
  "rustc-hex",
  "script",
+ "serialization",
  "sscanf",
  "static_assertions",
  "thiserror",
@@ -586,11 +587,10 @@ dependencies = [
  "crypto",
  "logging",
  "num",
- "parity-scale-codec",
- "parity-scale-codec-derive",
  "proptest",
  "rand 0.8.4",
  "replace_with",
+ "serialization",
  "slave-pool",
  "static_assertions",
  "thiserror",
@@ -717,9 +717,9 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parity-scale-codec",
- "parity-scale-codec-derive",
  "rand 0.8.4",
  "ripemd",
+ "serialization",
  "sha-1 0.10.0",
  "sha2 0.10.1",
  "sha3 0.10.0",
@@ -2444,6 +2444,7 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rand 0.8.4",
+ "serialization",
  "test-utils",
  "tokio",
  "void",
@@ -3255,8 +3256,8 @@ dependencies = [
  "hex-literal",
  "logging",
  "parity-scale-codec",
- "parity-scale-codec-derive",
  "proptest",
+ "serialization",
  "utils",
 ]
 
@@ -3361,7 +3362,6 @@ dependencies = [
  "arraytools",
  "hex-literal",
  "parity-scale-codec",
- "parity-scale-codec-derive",
  "rand 0.8.4",
  "serialization-utils",
 ]
@@ -3371,7 +3371,6 @@ name = "serialization-utils"
 version = "0.1.0"
 dependencies = [
  "parity-scale-codec",
- "parity-scale-codec-derive",
 ]
 
 [[package]]

@@ -25,7 +25,7 @@ use async_trait::async_trait;
 use futures::FutureExt;
 // use futures_timer::Delay;
 use logging::log;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::{
     collections::HashMap,
     io::{Error, ErrorKind},

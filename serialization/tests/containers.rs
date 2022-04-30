@@ -1,5 +1,5 @@
-use parity_scale_codec::{Decode, Encode};
 use rand::Rng;
+use serialization::{Decode, Encode};
 use serialization_utils::SimpleWrapper;
 use std::collections::BTreeMap;
 // use std::collections::HashMap;

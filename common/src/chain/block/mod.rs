@@ -28,7 +28,7 @@ pub mod consensus_data;
 use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use super::ChainConfig;
 

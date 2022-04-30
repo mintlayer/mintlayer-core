@@ -1,4 +1,4 @@
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use serialization_utils::CompactWrapper;
 
 #[test]

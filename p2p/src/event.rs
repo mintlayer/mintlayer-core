@@ -18,7 +18,7 @@
 
 use crate::message;
 use crate::net::NetworkService;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Encode, Decode)]

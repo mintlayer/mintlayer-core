@@ -5,12 +5,12 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-displaydoc = { default-features = false, version = "0.2" }
 crypto = { path = '../crypto' }
+serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 
-parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
-parity-scale-codec-derive = "2.3.1"
+displaydoc = { default-features = false, version = "0.2" }
+parity-scale-codec = "2.3.1"
 
 [dev-dependencies]
 flate2 = "1.0.22"
