@@ -6,7 +6,19 @@ use serialization::{Decode, Encode};
 type HeightIntType = u64;
 type DistanceIntType = i64;
 
-#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialOrd,
+    Ord,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct BlockHeight(HeightIntType);
 
 // Display should be defined for thiserr crate
@@ -213,5 +225,32 @@ mod tests {
         let h_halfmax = BlockHeight::new(HeightIntType::MAX / 2);
         let d_p1 = BlockDistance::new(1);
         let _ = h_halfmax + d_p1;
+    }
+
+    #[test]
+    fn blockheight_json() {
+        fn check(height: BlockHeight) {
+            use serde_test::{assert_tokens, Token::{NewtypeStruct, U64}};
+            // Block height serializes to just a number, represented by a newtype struct
+            assert_tokens(
+                &height,
+                &[
+                    NewtypeStruct {
+                        name: "BlockHeight",
+                    },
+                    U64(height.0),
+                ],
+            );
+            assert_eq!(serde_json::to_value(height).ok(), Some(height.0.into()));
+            assert_eq!(serde_json::to_string(&height).ok(), Some(height.0.to_string()));
+        }
+        check(BlockHeight::new(0));
+        check(BlockHeight::new(1));
+        check(BlockHeight::new(2));
+        check(BlockHeight::new(544221));
+        check(BlockHeight::new(u32::MAX as u64));
+        check(BlockHeight::new(u32::MAX as u64 + 1));
+        check(BlockHeight::new(u64::MAX - 1));
+        check(BlockHeight::new(u64::MAX));
     }
 }

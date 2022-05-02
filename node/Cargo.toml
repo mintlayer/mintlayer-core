@@ -7,4 +7,15 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Local dependencies
+blockchain-storage = { path = "../blockchain_storage/" }
+common = { path = "../common/" }
+consensus = { path = "../consensus/" }
 logging = { path = "../logging/" }
+rpc = { path = "../rpc/" }
+subsystem = { path = "../subsystem/" }
+
+# External dependencies
+anyhow = "1.0"
+clap = { version = "3.1", features = [ "derive" ] }
+tokio = { version = "1.17", default-features = false }

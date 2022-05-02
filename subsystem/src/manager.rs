@@ -84,18 +84,18 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Initialise a new subsystem manager.
+    /// Initialize a new subsystem manager.
     pub fn new(name: &'static str) -> Self {
         Self::new_with_config(ManagerConfig::named(name))
     }
 
-    /// Initialise a new subsystem manager.
+    /// Initialize a new subsystem manager.
     pub fn new_with_config(config: ManagerConfig) -> Self {
         let ManagerConfig {
             name,
             shutdown_timeout,
         } = config;
-        log::info!("Initialising subsystem manager {}", name);
+        log::info!("Initializing subsystem manager {}", name);
 
         let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
@@ -168,7 +168,7 @@ impl Manager {
             std::mem::drop(shutting_down_tx);
         }));
 
-        log::info!("Subsystem {}/{} initialised", manager_name, subsys_name);
+        log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
 
         Handle::new(action_tx)
     }
