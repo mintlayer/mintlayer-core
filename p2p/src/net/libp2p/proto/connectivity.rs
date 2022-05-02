@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::{self, Libp2pError, P2pError, ProtocolError},
     net::libp2p::backend::{Backend, PendingState},
 };
 use futures::StreamExt;
@@ -35,15 +35,21 @@ impl Backend {
                 match self.pending_conns.remove(&peer_id) {
                     Some(PendingState::Dialed { tx }) => {
                         self.pending_conns.insert(peer_id, PendingState::OutboundAccepted { tx });
+                        Ok(())
                     }
-                    Some(state) => log::error!(
-                        "connection state is invalid. Expected `Dialed`, got {:?}",
-                        state
-                    ),
-                    None => log::error!("peer {:?} does not exist", peer_id),
+                    Some(state) => {
+                        // TODO: ban peer?
+                        log::error!(
+                            "connection state is invalid. Expected `Dialed`, got {:?}",
+                            state
+                        );
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState))
+                    }
+                    None => {
+                        log::error!("peer {:?} does not exist", peer_id);
+                        Err(P2pError::PeerDoesntExist)
+                    }
                 }
-
-                Ok(())
             }
             ConnectedPoint::Listener {
                 local_addr: _,
@@ -54,7 +60,12 @@ impl Backend {
                 match self.pending_conns.remove(&peer_id) {
                     Some(state) => {
                         // TODO: is this an actual error?
-                        log::error!("peer {:?} already has active connection!", peer_id);
+                        log::error!(
+                            "peer {:?} already has active connection, state: {:?}!",
+                            peer_id,
+                            state
+                        );
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState))
                     }
                     None => {
                         self.pending_conns.insert(
@@ -63,9 +74,9 @@ impl Backend {
                                 addr: send_back_addr,
                             },
                         );
+                        Ok(())
                     }
                 }
-                Ok(())
             }
         }
     }
@@ -84,8 +95,11 @@ impl Backend {
                     .map_err(|_| P2pError::ChannelClosed)
                 }
                 _ => {
+                    // TODO: report to swarm manager?
                     log::debug!("connection failed for peer {:?}: {:?}", peer_id, error);
-                    Ok(())
+                    Err(P2pError::Libp2pError(Libp2pError::DialError(
+                        error.to_string(),
+                    )))
                 }
             }
         } else {
@@ -98,7 +112,260 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::net::libp2p::{backend, proto::util};
+    use libp2p::{core::connection::Endpoint, Multiaddr, PeerId};
+    use tokio::sync::oneshot;
 
     #[tokio::test]
-    async fn it_works() {}
+    async fn connection_established_dialer_valid() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        let (tx, rx) = oneshot::channel();
+        let peer_id = PeerId::random();
+        backend.pending_conns.insert(peer_id, PendingState::Dialed { tx });
+
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    peer_id,
+                    ConnectedPoint::Dialer {
+                        address: Multiaddr::empty(),
+                        role_override: Endpoint::Dialer,
+                    }
+                )
+                .await,
+            Ok(())
+        );
+        assert!(std::matches!(
+            backend.pending_conns.remove(&peer_id),
+            Some(backend::PendingState::OutboundAccepted { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn connection_established_dialer_invalid_state() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        let (tx, rx) = oneshot::channel();
+        let peer_id = PeerId::random();
+        backend.pending_conns.insert(peer_id, PendingState::OutboundAccepted { tx });
+
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    peer_id,
+                    ConnectedPoint::Dialer {
+                        address: Multiaddr::empty(),
+                        role_override: Endpoint::Dialer,
+                    }
+                )
+                .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidState))
+        );
+
+        backend.pending_conns.insert(
+            peer_id,
+            PendingState::InboundAccepted {
+                addr: Multiaddr::empty(),
+            },
+        );
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    peer_id,
+                    ConnectedPoint::Dialer {
+                        address: Multiaddr::empty(),
+                        role_override: Endpoint::Dialer,
+                    }
+                )
+                .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidState))
+        );
+    }
+
+    #[tokio::test]
+    async fn connection_established_dialer_peer_doesnt_exist() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    PeerId::random(),
+                    ConnectedPoint::Dialer {
+                        address: Multiaddr::empty(),
+                        role_override: Endpoint::Dialer,
+                    }
+                )
+                .await,
+            Err(P2pError::PeerDoesntExist)
+        );
+    }
+
+    #[tokio::test]
+    async fn connection_established_listener_valid() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        let peer_id = PeerId::random();
+
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    peer_id,
+                    ConnectedPoint::Listener {
+                        local_addr: Multiaddr::empty(),
+                        send_back_addr: Multiaddr::empty(),
+                    }
+                )
+                .await,
+            Ok(()),
+        );
+
+        assert!(std::matches!(
+            backend.pending_conns.remove(&peer_id),
+            Some(backend::PendingState::InboundAccepted { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn connection_established_listener_already_exists() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        let peer_id = PeerId::random();
+        backend.pending_conns.insert(
+            peer_id,
+            backend::PendingState::InboundAccepted {
+                addr: Multiaddr::empty(),
+            },
+        );
+
+        assert_eq!(
+            backend
+                .on_connection_established(
+                    peer_id,
+                    ConnectedPoint::Listener {
+                        local_addr: Multiaddr::empty(),
+                        send_back_addr: Multiaddr::empty(),
+                    }
+                )
+                .await,
+            Err(P2pError::ProtocolError(ProtocolError::InvalidState))
+        );
+    }
+
+    #[tokio::test]
+    async fn outgoing_error_inbound_exists() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+    }
+
+    #[tokio::test]
+    async fn outgoing_error_peer_id_none() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+
+        assert_eq!(
+            backend.on_outgoing_connection_error(None, DialError::LocalPeerId).await,
+            Ok(())
+        );
+    }
+
+    #[tokio::test]
+    async fn outgoing_error_dialed_exists() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        let peer_id = PeerId::random();
+        let (tx, mut rx) = oneshot::channel();
+        backend.pending_conns.insert(peer_id, backend::PendingState::Dialed { tx });
+
+        assert_eq!(
+            backend.on_outgoing_connection_error(Some(peer_id), DialError::Banned,).await,
+            Ok(())
+        );
+
+        if let Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused)) =
+            rx.try_recv().unwrap()
+        {
+        } else {
+            panic!("invalid event received, expected `ConnectionRefused`");
+        }
+    }
+
+    #[tokio::test]
+    async fn outgoing_error_outbound_exists() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        let peer_id = PeerId::random();
+        let (tx, mut rx) = oneshot::channel();
+        backend
+            .pending_conns
+            .insert(peer_id, backend::PendingState::OutboundAccepted { tx });
+
+        assert_eq!(
+            backend.on_outgoing_connection_error(Some(peer_id), DialError::Aborted,).await,
+            Ok(())
+        );
+
+        if let Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused)) =
+            rx.try_recv().unwrap()
+        {
+        } else {
+            panic!("invalid event received, expected `ConnectionRefused`");
+        }
+    }
+
+    #[tokio::test]
+    async fn outgoing_error_peer_doesnt_exist() {
+        let (mut backend, _, _, _, _) = util::make_libp2p(
+            common::chain::config::create_mainnet(),
+            test_utils::make_address("/ip6/::1/tcp/"),
+            &[],
+        )
+        .await;
+        assert_eq!(
+            backend
+                .on_outgoing_connection_error(Some(PeerId::random()), DialError::NoAddresses,)
+                .await,
+            Err(P2pError::Libp2pError(Libp2pError::DialError(
+                "Dial error: no addresses for peer.".to_string()
+            )))
+        );
+    }
 }
