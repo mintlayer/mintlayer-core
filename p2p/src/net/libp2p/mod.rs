@@ -443,6 +443,9 @@ where
             types::ConnectivityEvent::PeerDisconnected { peer_id } => {
                 todo!();
             }
+            types::ConnectivityEvent::PeerError { peer_id, error } => {
+                todo!();
+            }
             types::ConnectivityEvent::PeerMisbehaved { peer_id, behaviour } => {
                 todo!();
             }
