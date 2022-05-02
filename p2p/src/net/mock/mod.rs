@@ -176,6 +176,10 @@ where
         // )
     }
 
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+        todo!();
+    }
+
     fn local_addr(&self) -> &T::Address {
         &self.addr
     }

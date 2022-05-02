@@ -51,11 +51,17 @@ pub enum Command {
         response: oneshot::Sender<error::Result<()>>,
     },
 
-    /// Connect to a remote peer at address `peer_addr` whose PeerId is `peer_id`
+    /// Connect to a remote peer at address `peer_addr`
     Connect {
         peer_id: PeerId,
         peer_addr: Multiaddr,
         response: oneshot::Sender<error::Result<IdentifyInfo>>,
+    },
+
+    /// Disconnect remote peer
+    Disconnect {
+        peer_id: PeerId,
+        response: oneshot::Sender<error::Result<()>>,
     },
 
     // TODO: rethink this message
