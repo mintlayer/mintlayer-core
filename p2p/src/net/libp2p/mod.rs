@@ -425,29 +425,34 @@ where
         &self.peer_id
     }
 
+    // TODO: `impl TryInto<ConnectivityEvent> for types::ConnectivityEvent`??
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
-                Ok(ConnectivityEvent::PeerConnected {
+                Ok(ConnectivityEvent::ConnectionAccepted {
                     peer_info: (*peer_info).try_into()?,
                 })
             }
-            types::ConnectivityEvent::PeerDiscovered { peers } => {
-                Ok(ConnectivityEvent::PeerDiscovered {
-                    peers: parse_peers(peers),
+            types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
+                Ok(ConnectivityEvent::IncomingConnection {
+                    addr,
+                    peer_info: (*peer_info).try_into()?,
                 })
             }
-            types::ConnectivityEvent::PeerExpired { peers } => Ok(ConnectivityEvent::PeerExpired {
+            types::ConnectivityEvent::Discovered { peers } => Ok(ConnectivityEvent::Discovered {
                 peers: parse_peers(peers),
             }),
-            types::ConnectivityEvent::PeerDisconnected { peer_id } => {
-                todo!();
+            types::ConnectivityEvent::Expired { peers } => Ok(ConnectivityEvent::Expired {
+                peers: parse_peers(peers),
+            }),
+            types::ConnectivityEvent::Disconnected { peer_id } => {
+                Ok(ConnectivityEvent::Disconnected { peer_id })
             }
-            types::ConnectivityEvent::PeerError { peer_id, error } => {
-                todo!();
+            types::ConnectivityEvent::Error { peer_id, error } => {
+                Ok(ConnectivityEvent::Error { peer_id, error })
             }
-            types::ConnectivityEvent::PeerMisbehaved { peer_id, behaviour } => {
-                todo!();
+            types::ConnectivityEvent::Misbehaved { peer_id, behaviour } => {
+                Ok(ConnectivityEvent::Misbehaved { peer_id, behaviour })
             }
         }
     }

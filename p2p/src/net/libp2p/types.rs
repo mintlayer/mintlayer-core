@@ -91,26 +91,32 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum ConnectivityEvent {
-    /// Connection with a data stream has been opened by a remote peer
+    /// Outbound connection accepted by remote
     ConnectionAccepted { peer_info: Box<IdentifyInfo> },
 
+    /// Inbound connection incoming
+    IncomingConnection {
+        addr: Multiaddr,
+        peer_info: Box<IdentifyInfo>,
+    },
+
     /// One or more peers were discovered by one of the discovery strategies
-    PeerDiscovered { peers: Vec<(PeerId, Multiaddr)> },
+    Discovered { peers: Vec<(PeerId, Multiaddr)> },
 
     /// One or more peers that were previously discovered have expired
-    PeerExpired { peers: Vec<(PeerId, Multiaddr)> },
+    Expired { peers: Vec<(PeerId, Multiaddr)> },
 
     /// Peer disconnected from the swarm
-    PeerDisconnected { peer_id: PeerId },
+    Disconnected { peer_id: PeerId },
 
     /// An error occurred with a connected peer
-    PeerError {
+    Error {
         peer_id: PeerId,
         error: error::P2pError,
     },
 
     /// Peer misbehaved
-    PeerMisbehaved { peer_id: PeerId, behaviour: u32 },
+    Misbehaved { peer_id: PeerId, behaviour: u32 },
 }
 
 #[derive(Debug, Clone)]

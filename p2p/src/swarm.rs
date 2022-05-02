@@ -251,15 +251,13 @@ where
     /// Handle network event received from the network service provider
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
-            net::ConnectivityEvent::PeerConnected { peer_info } => {
-                todo!();
-            }
-            net::ConnectivityEvent::PeerDiscovered { peers } => self.peer_discovered(&peers),
-            net::ConnectivityEvent::PeerExpired { peers } => self.peer_expired(&peers),
-            net::ConnectivityEvent::PeerDisconnected { peer_id } => {
-                todo!();
-            }
-            net::ConnectivityEvent::PeerMisbehaved { .. } => todo!(),
+            net::ConnectivityEvent::IncomingConnection { .. } => todo!(),
+            net::ConnectivityEvent::ConnectionAccepted { .. } => todo!(),
+            net::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
+            net::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
+            net::ConnectivityEvent::Disconnected { .. } => todo!(),
+            net::ConnectivityEvent::Misbehaved { .. } => todo!(),
+            net::ConnectivityEvent::Error { .. } => todo!(),
         }
     }
 }
@@ -449,7 +447,6 @@ mod tests {
     #[tokio::test]
     async fn test_auto_connect_mock() {
         let config = Arc::new(config::create_mainnet());
-        // let addr: SocketAddr = test_utils::make_address("[::1]:");
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let mut swarm = make_swarm_manager::<Libp2pService>(addr).await;
         let mut swarm2 =
