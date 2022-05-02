@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 type HashType = Id<Block>;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -57,6 +57,10 @@ impl ChainConfig {
 
     pub fn version(&self) -> &SemVer {
         &self.version
+    }
+
+    pub fn chain_type(&self) -> &ChainType {
+        &self.chain_type
     }
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
@@ -156,6 +160,7 @@ mod tests {
 
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(1, config.net_upgrades.len());
+        assert_eq!(config.chain_type(), &ChainType::Mainnet);
     }
 
     #[test]
