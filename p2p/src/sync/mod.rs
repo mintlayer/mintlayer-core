@@ -302,7 +302,7 @@ mod tests {
             tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
         let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         let conn1_id = match conn2_res {
-            ConnectivityEvent::PeerConnected { peer_info } => peer_info.peer_id,
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 
@@ -382,7 +382,7 @@ mod tests {
             tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
         let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         let conn1_id = match conn2_res {
-            ConnectivityEvent::PeerConnected { peer_info } => peer_info.peer_id,
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
             _ => panic!("invalid event received, expected incoming connection"),
         };
 

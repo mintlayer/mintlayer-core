@@ -64,7 +64,7 @@ impl Backend {
 
                             // TODO: implement peer profiling
                             self.conn_tx
-                                .send(types::ConnectivityEvent::PeerMisbehaved {
+                                .send(types::ConnectivityEvent::Misbehaved {
                                     peer_id: propagation_source,
                                     behaviour: 0,
                                 })
@@ -254,7 +254,7 @@ mod tests {
         );
         assert_eq!(
             conn_rx.try_recv(),
-            Ok(types::ConnectivityEvent::PeerMisbehaved {
+            Ok(types::ConnectivityEvent::Misbehaved {
                 peer_id: *backend2.swarm.local_peer_id(),
                 behaviour: 0u32,
             })

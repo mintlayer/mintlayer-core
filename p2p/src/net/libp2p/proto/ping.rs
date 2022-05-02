@@ -54,7 +54,7 @@ impl Backend {
 
                 self.swarm.disconnect_peer_id(peer);
                 self.conn_tx
-                    .send(types::ConnectivityEvent::PeerDisconnected { peer_id: peer })
+                    .send(types::ConnectivityEvent::Disconnected { peer_id: peer })
                     .await
                     .map_err(P2pError::from)
             }
@@ -226,7 +226,7 @@ mod tests {
                             );
                             assert_eq!(
                                 conn_rx.try_recv(),
-                                Ok(types::ConnectivityEvent::PeerDisconnected { peer_id: peer })
+                                Ok(types::ConnectivityEvent::Disconnected { peer_id: peer })
                             );
                             needed_events -= 1;
                         }

@@ -40,13 +40,13 @@ impl Backend {
         match event {
             MdnsEvent::Discovered(peers) => {
                 self.send_mdns_event(peers.collect(), |peers| {
-                    types::ConnectivityEvent::PeerDiscovered { peers }
+                    types::ConnectivityEvent::Discovered { peers }
                 })
                 .await
             }
             MdnsEvent::Expired(expired) => {
                 self.send_mdns_event(expired.collect(), |peers| {
-                    types::ConnectivityEvent::PeerExpired { peers }
+                    types::ConnectivityEvent::Expired { peers }
                 })
                 .await
             }
@@ -100,7 +100,7 @@ mod tests {
                         );
                         assert!(std::matches!(
                             conn_rx.try_recv(),
-                            Ok(types::ConnectivityEvent::PeerDiscovered { .. })
+                            Ok(types::ConnectivityEvent::Discovered { .. })
                         ));
                         break;
                     }
@@ -188,12 +188,12 @@ mod tests {
                         );
 
                         match conn_rx.try_recv() {
-                            Ok(types::ConnectivityEvent::PeerDiscovered { peers }) => {
+                            Ok(types::ConnectivityEvent::Discovered { peers }) => {
                                 if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
                                     backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id());
                                 }
                             }
-                            Ok(types::ConnectivityEvent::PeerExpired { peers }) => {
+                            Ok(types::ConnectivityEvent::Expired { peers }) => {
                                 if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
                                     break;
                                 }

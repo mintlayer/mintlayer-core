@@ -58,25 +58,62 @@ where
     pub protocols: Vec<T::ProtocolId>,
 }
 
+// TODO: rename to `SwarmEvent`!
 #[derive(Debug)]
 pub enum ConnectivityEvent<T>
 where
     T: NetworkService,
 {
-    /// Incoming connection from remote peer
-    PeerConnected { peer_info: PeerInfo<T> },
+    /// Outbound connection accepted
+    ConnectionAccepted {
+        /// Peer information
+        peer_info: PeerInfo<T>,
+    },
+
+    /// Inbound connection received
+    IncomingConnection {
+        /// Peer address
+        addr: T::Address,
+
+        /// Peer information
+        peer_info: PeerInfo<T>,
+    },
 
     /// One or more peers discovered
-    PeerDiscovered { peers: Vec<AddrInfo<T>> },
+    Discovered {
+        /// Address information
+        peers: Vec<AddrInfo<T>>,
+    },
 
     /// One one more peers have expired
-    PeerExpired { peers: Vec<AddrInfo<T>> },
+    Expired {
+        /// Address information
+        peers: Vec<AddrInfo<T>>,
+    },
 
     /// Peer disconnected
-    PeerDisconnected { peer_id: T::PeerId },
+    Disconnected {
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+    },
+
+    /// Error occurred with peer
+    Error {
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        /// Error that occurred
+        error: error::P2pError,
+    },
 
     /// Peer misbehaved
-    PeerMisbehaved { peer_id: T::PeerId, behaviour: u32 },
+    Misbehaved {
+        /// Unique ID of the peer
+        peer_id: T::PeerId,
+
+        // TODO: fix
+        behaviour: u32,
+    },
 }
 
 // TODO: separate events for blocks and transactions?
