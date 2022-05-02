@@ -182,6 +182,7 @@ impl Backend {
     }
 
     // TODO: into separate handlers?
+    // TODO: there has to be a better way to add new commands?
     /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: types::Command) -> error::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
@@ -202,6 +203,22 @@ impl Backend {
                 }
                 Err(e) => Err(e.into()),
             },
+            types::Command::Disconnect { peer_id, response } => {
+                if self.swarm.is_connected(&peer_id) {
+                    return response
+                        .send(Err(P2pError::PeerDoesntExist))
+                        .map_err(|_| P2pError::ChannelClosed);
+                }
+
+                match self.swarm.disconnect_peer_id(peer_id) {
+                    Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+                    Err(_) => response
+                        .send(Err(P2pError::Unknown(
+                            "`Swarm::disconnect_peer_id() returned Err(())`".to_string(),
+                        )))
+                        .map_err(|_| P2pError::ChannelClosed),
+                }
+            }
             types::Command::SendMessage {
                 topic,
                 message,

@@ -240,6 +240,12 @@ where
     /// `addr` - socket address of the peer
     async fn connect(&mut self, address: T::Address) -> error::Result<PeerInfo<T>>;
 
+    /// Disconnect active connection
+    ///
+    /// # Arguments
+    /// `peer_id` - Peer ID of the remote peer
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()>;
+
     /// Return the socket address of the network service provider
     fn local_addr(&self) -> &T::Address;
 

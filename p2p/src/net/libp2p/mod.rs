@@ -417,6 +417,19 @@ where
         Ok(info.try_into()?)
     }
 
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+        log::debug!("disconnect peer {:?}", peer_id);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::Disconnect {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+        rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
+    }
+
     fn local_addr(&self) -> &T::Address {
         &self.addr
     }
