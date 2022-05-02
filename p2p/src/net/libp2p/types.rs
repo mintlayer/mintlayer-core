@@ -103,6 +103,12 @@ pub enum ConnectivityEvent {
     /// Peer disconnected from the swarm
     PeerDisconnected { peer_id: PeerId },
 
+    /// An error occurred with a connected peer
+    PeerError {
+        peer_id: PeerId,
+        error: error::P2pError,
+    },
+
     /// Peer misbehaved
     PeerMisbehaved { peer_id: PeerId, behaviour: u32 },
 }

@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+// TODO: store peerid where appropriate!
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     DifferentNetwork,
@@ -23,8 +25,10 @@ pub enum ProtocolError {
     Unresponsive,
     InvalidProtocol,
     UnknownNetwork,
+    InvalidState,
 }
 
+// TODO: refactor error code
 #[derive(Debug, PartialEq, Eq)]
 pub enum Libp2pError {
     NoiseError(String),
@@ -32,6 +36,7 @@ pub enum Libp2pError {
     DialError(String),
     SubscriptionError(String),
     PublishError(String),
+    IdentifyError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -45,6 +50,7 @@ pub enum P2pError {
     Unknown(String),
     ChannelClosed,
     NoPeers,
+    PeerDoesntExist,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
@@ -145,6 +151,9 @@ impl std::fmt::Display for ProtocolError {
             }
             ProtocolError::UnknownNetwork => {
                 write!(f, "Unknown network")
+            }
+            ProtocolError::InvalidState => {
+                write!(f, "Invalid state")
             }
         }
     }
