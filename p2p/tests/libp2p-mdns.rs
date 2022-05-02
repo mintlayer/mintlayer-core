@@ -60,7 +60,7 @@ async fn test_libp2p_peer_discovery() {
         let (serv_res, _) = tokio::join!(serv.poll_next(), serv2.poll_next());
 
         match serv_res.unwrap() {
-            ConnectivityEvent::PeerDiscovered { peers } => {
+            ConnectivityEvent::Discovered { peers } => {
                 assert!(!peers.is_empty());
 
                 // verify that all discovered addresses are either ipv4 or ipv6,

@@ -39,7 +39,7 @@ impl Backend {
                 );
 
                 self.conn_tx
-                    .send(types::ConnectivityEvent::PeerError {
+                    .send(types::ConnectivityEvent::Error {
                         peer_id,
                         error: P2pError::Libp2pError(Libp2pError::IdentifyError(error.to_string())),
                     })
@@ -68,10 +68,10 @@ impl Backend {
                     Some(PendingState::OutboundAccepted { tx }) => {
                         tx.send(Ok(info)).map_err(|_| P2pError::ChannelClosed)
                     }
-                    // TODO: send addr to frontend
-                    Some(PendingState::InboundAccepted { addr: _ }) => self
+                    Some(PendingState::InboundAccepted { addr }) => self
                         .conn_tx
-                        .send(types::ConnectivityEvent::ConnectionAccepted {
+                        .send(types::ConnectivityEvent::IncomingConnection {
+                            addr,
                             peer_info: Box::new(info),
                         })
                         .await
@@ -183,7 +183,7 @@ mod tests {
             Ok(())
         );
 
-        if let Ok(types::ConnectivityEvent::PeerError { peer_id, error }) = conn_rx.try_recv() {
+        if let Ok(types::ConnectivityEvent::Error { peer_id, error }) = conn_rx.try_recv() {
             assert_eq!(peer_id, *backend2.swarm.local_peer_id());
             assert!(std::matches!(error, P2pError::Libp2pError(_)));
         }
