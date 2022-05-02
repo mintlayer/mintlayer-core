@@ -17,7 +17,7 @@
 #![allow(unused, dead_code)]
 
 use crate::{
-    error::{self, P2pError},
+    error::{self, P2pError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkService},
 };
@@ -32,6 +32,8 @@ use tokio::sync::mpsc;
 
 const MAX_ACTIVE_CONNECTIONS: usize = 32;
 
+// TODO: store active address
+// TODO: store other discovered addresses
 #[derive(Debug)]
 struct PeerContext<T>
 where
@@ -97,24 +99,6 @@ where
         }
     }
 
-    /// SwarmManager event loop
-    pub async fn run(&mut self) -> error::Result<()> {
-        loop {
-            tokio::select! {
-                event = self.rx_swarm.recv().fuse() => {
-                    self.on_swarm_control_event(event).await?;
-                }
-                event = self.handle.poll_next() => match event {
-                    Ok(event) => self.on_network_event(event).await?,
-                    Err(e) => {
-                        log::error!("failed to read network event: {:?}", e);
-                        return Err(e);
-                    }
-                }
-            }
-        }
-    }
-
     /// Handle swarm control event
     async fn on_swarm_control_event(
         &mut self,
@@ -149,6 +133,7 @@ where
     /// active connections the local node has is below threshold
     ///
     // TODO: ugly, refactor
+    // TODO: move this to its own file?
     async fn auto_connect(&mut self) -> error::Result<()> {
         // we have enough active connections
         if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
@@ -224,6 +209,7 @@ where
         log::info!("discovered {} new peers", peers.len());
 
         for info in peers.iter() {
+            // TODO: update peer stats
             if self.peers.contains_key(&info.id) {
                 continue;
             }
@@ -244,20 +230,123 @@ where
         Ok(())
     }
 
+    // TODO: implement
     fn peer_expired(&mut self, peers: &[net::AddrInfo<T>]) -> error::Result<()> {
         Ok(())
+    }
+
+    /// Destroy peer information and close all connections to it
+    async fn destroy_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+        log::debug!("destroying peer {:?}", peer_id);
+
+        self.tx_sync
+            .send(event::SyncControlEvent::Disconnected { peer_id })
+            .await
+            .map_err(P2pError::from)?;
+        self.peers.remove(&peer_id);
+        self.handle.disconnect(peer_id).await
     }
 
     /// Handle network event received from the network service provider
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
-            net::ConnectivityEvent::IncomingConnection { .. } => todo!(),
-            net::ConnectivityEvent::ConnectionAccepted { .. } => todo!(),
+            net::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
+                let peer_id = peer_info.peer_id;
+                log::debug!(
+                    "incoming connection from peer {:?}, address {:?}",
+                    peer_id,
+                    addr
+                );
+
+                if self.peers.get(&peer_id).is_some() {
+                    log::error!("peer {:?} re-established connection", peer_id);
+                    return self.destroy_peer(peer_id).await;
+                }
+
+                if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
+                    log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
+                    // TODO: save peer information for later?
+                    // TODO: i.e., consider this a peer discovery event?
+                    return self.destroy_peer(peer_id).await;
+                }
+
+                if peer_info.net != *self.config.chain_type() {
+                    log::error!(
+                        "peer {:?} is in different network, ours {:?}, theirs {:?}",
+                        peer_id,
+                        peer_info.net,
+                        self.config.chain_type()
+                    );
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                }
+
+                // TODO: check supported protocols
+                // TODO: check version
+
+                self.peers.insert(peer_id, PeerContext { info: peer_info });
+                self.tx_sync
+                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .await
+                    .map_err(P2pError::from)
+            }
+            net::ConnectivityEvent::ConnectionAccepted { peer_info } => {
+                let peer_id = peer_info.peer_id;
+                log::debug!("outbound connection accepted by peer {:?}", peer_id);
+
+                if self.peers.get(&peer_id).is_some() {
+                    log::error!("peer {:?} re-established connection", peer_id);
+                    return self.destroy_peer(peer_id).await;
+                }
+
+                if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
+                    log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
+                    // TODO: save peer information for later?
+                    // TODO: i.e., consider this a peer discovery event?
+                    return self.destroy_peer(peer_id).await;
+                }
+
+                if peer_info.net != *self.config.chain_type() {
+                    log::error!(
+                        "peer {:?} is in different network, ours {:?}, theirs {:?}",
+                        peer_id,
+                        peer_info.net,
+                        self.config.chain_type()
+                    );
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                }
+
+                // TODO: check supported protocols
+                // TODO: check version
+
+                self.peers.insert(peer_id, PeerContext { info: peer_info });
+                self.tx_sync
+                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .await
+                    .map_err(P2pError::from)
+            }
             net::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
             net::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
-            net::ConnectivityEvent::Disconnected { .. } => todo!(),
-            net::ConnectivityEvent::Misbehaved { .. } => todo!(),
-            net::ConnectivityEvent::Error { .. } => todo!(),
+            net::ConnectivityEvent::Disconnected { .. } => Ok(()),
+            net::ConnectivityEvent::Misbehaved { .. } => Ok(()),
+            net::ConnectivityEvent::Error { .. } => Ok(()),
+        }
+    }
+
+    /// SwarmManager event loop
+    pub async fn run(&mut self) -> error::Result<()> {
+        loop {
+            tokio::select! {
+                event = self.rx_swarm.recv().fuse() => {
+                    self.on_swarm_control_event(event).await?;
+                }
+                event = self.handle.poll_next() => match event {
+                    Ok(event) => self.on_network_event(event).await?,
+                    Err(e) => {
+                        log::error!("failed to read network event: {:?}", e);
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 }
