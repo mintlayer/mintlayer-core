@@ -22,6 +22,7 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 pub mod libp2p;
 pub mod mock;
 
+// TODO: move all these to types.rs!
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddrInfo<T>
 where
@@ -54,6 +55,7 @@ where
     /// User agent of the peer
     pub agent: Option<String>,
 
+    // TODO: protocolid must not generic!
     /// List of supported protocols
     pub protocols: Vec<T::ProtocolId>,
 }
