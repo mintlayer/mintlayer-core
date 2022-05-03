@@ -20,7 +20,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
-pub trait Subsystem: Sized {
+pub trait Subsystem: 'static + Send + Sized {
     /// Custom shutdown procedure.
     async fn shutdown(self) {}
 }
