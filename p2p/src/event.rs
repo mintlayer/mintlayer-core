@@ -16,10 +16,15 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::message;
-use crate::net::NetworkService;
+use crate::{message, net::NetworkService, sync};
+use common::chain::{
+    block::{Block, BlockHeader},
+    transaction::Transaction,
+};
 use serialization::{Decode, Encode};
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, oneshot};
+use util::Handle;
 
 #[derive(Debug)]
 pub enum PeerSyncEvent<T>
@@ -52,5 +57,31 @@ where
     Disconnected {
         /// Unique peer ID
         peer_id: T::PeerId,
+    },
+}
+
+#[derive(Debug, Handle)]
+pub enum P2pEvent {
+    GetLocator {
+        response: oneshot::Sender<Vec<BlockHeader>>,
+    },
+    NewBlock {
+        block: Block,
+        response: oneshot::Sender<()>,
+    },
+    GetBlocks {
+        headers: Vec<BlockHeader>,
+        response: oneshot::Sender<Vec<Block>>,
+    },
+    GetHeaders {
+        locator: Vec<BlockHeader>,
+        response: oneshot::Sender<Vec<BlockHeader>>,
+    },
+    GetBestBlockHeader {
+        response: oneshot::Sender<BlockHeader>,
+    },
+    GetUniqHeaders {
+        headers: Vec<BlockHeader>,
+        response: oneshot::Sender<Option<Vec<BlockHeader>>>,
     },
 }

@@ -51,9 +51,15 @@ pub enum P2pError {
     ChannelClosed,
     NoPeers,
     PeerDoesntExist,
+    InvalidData,
+    PeerExists,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
+
+pub trait FatalError {
+    fn into_fatal(self) -> core::result::Result<(), P2pError>;
+}
 
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {

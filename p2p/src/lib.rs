@@ -69,6 +69,7 @@ where
         .await?;
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let (tx_sync, rx_sync) = mpsc::channel(16);
+        let (tx_p2p, rx_p2p) = mpsc::channel(16);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
@@ -76,17 +77,19 @@ where
             let _ = swarm.run().await;
         });
 
+        let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
-            let _ = sync_mgr.run().await;
+            if let Err(e) =
+                sync::SyncManager::<T>::new(sync_config, sync, rx_sync, tx_p2p).run().await
+            {
+                todo!();
+            }
         });
 
         tokio::spawn(async move {
             if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
                 todo!();
             }
-            // let mut sync_mgr = ;
-            // let _ = sync_mgr.run().await;
         });
 
         Ok(Self { config, tx_swarm })
