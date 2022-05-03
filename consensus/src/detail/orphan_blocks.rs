@@ -38,7 +38,6 @@ pub enum OrphanAddError {
 }
 
 impl OrphanBlocksPool {
-    #[allow(dead_code)]
     pub fn new_default() -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
@@ -60,7 +59,6 @@ impl OrphanBlocksPool {
         }
     }
 
-    #[allow(dead_code)]
     fn drop_block(&mut self, block_id: &H256) {
         let block = self
             .orphan_by_id
@@ -115,7 +113,6 @@ impl OrphanBlocksPool {
     }
 
     // keep digging in the orphans tree until we find a block that has no children, then delete that
-    #[allow(dead_code)]
     fn del_one_deepest_child(&mut self, block_id: &H256) {
         let next_block = self
             .orphan_by_prev_id
@@ -130,7 +127,6 @@ impl OrphanBlocksPool {
         }
     }
 
-    #[allow(dead_code)]
     fn prune(&mut self) {
         if self.orphan_by_id.len() < self.max_orphans {
             return;
@@ -141,7 +137,6 @@ impl OrphanBlocksPool {
         self.del_one_deepest_child(&id);
     }
 
-    #[allow(dead_code)]
     pub fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError> {
         self.prune();
         let block_id = block.get_id();
