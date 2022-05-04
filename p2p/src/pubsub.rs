@@ -19,10 +19,13 @@
 use crate::{
     error::{self, P2pError},
     event,
-    message::MessageType,
+    message::{Message, MessageType, PubSubMessage},
     net::{self, NetworkService, PubSubService},
 };
-use common::chain::ChainConfig;
+use common::{
+    chain::{block::Block, ChainConfig},
+    primitives::Idable,
+};
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -44,12 +47,58 @@ where
         Self { handle }
     }
 
-    pub async fn on_floodsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
-        todo!();
+    async fn is_valid_block(&mut self, block: Block) -> error::Result<bool> {
+        // TODO: call consensus here and send it `block`
+        // TODO: get response from consensus that tells whether the block was valid or not
+        Ok(true)
+    }
+
+    async fn process_invalid_block(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::MessageId,
+    ) -> error::Result<()> {
+        log::warn!("peer {:?} sent an invalid block (id {:?}), report ");
+
+        self.handle
+            .report_validation_result(peer_id, message_id, net::ValidationResult::Reject)
+            .await?;
+
+        self.swarm_handle
+            .report_peer_behaviour(peer_id, swarm::PeerBehaviour::InvalidPubSubMessage)
+            .await
     }
 
     pub async fn run(&mut self) -> error::Result<()> {
-        todo!();
+        // TODO: add receiver here which accepts function calls from other subsystems
+        loop {
+            tokio::select! {
+                event = self.handle.poll_next() => {
+                    let net::PubSubEvent::MessageReceived { peer_id, message_id, message } = event?;
+
+                    log::debug!("received pubsub message from peer {:?}, message id {:?}", peer_id, message_id);
+
+                    match message {
+                        Message { msg: MessageType::PubSub(PubSubMessage::Block(block)), .. } => {
+                            if !self.is_valid_block(block).await? {
+                                return self.process_invalid_block(peer_id, message_id).await;
+                            }
+
+                            log::debug!(
+                                "block with id {:?} from peer {:?} is valid, forward it to other peers",
+                                message_id,
+                                peer_id
+                            );
+
+                            self.handle
+                                .report_validation_result(peer_id, message_id, net::ValidationResult::Accept)
+                                .await
+                        }
+                        _ => self.process_invalid_block(peer_id, message_id).await?,
+                    }
+                }
+            }
+        }
     }
 }
 
