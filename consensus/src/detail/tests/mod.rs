@@ -24,6 +24,9 @@ use common::chain::{Destination, Transaction, TxInput, TxOutput};
 use common::primitives::H256;
 use common::primitives::{Amount, Id};
 use rand::prelude::*;
+use std::sync::Mutex;
+
+pub(in crate::detail::tests) type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
 mod test_framework;
 

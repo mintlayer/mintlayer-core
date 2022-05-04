@@ -108,9 +108,9 @@ impl<'a> BlockTestFrameWork {
             println!("{}X", "--".repeat(depth));
         } else {
             for block_id in &blocks {
-                let block_index = self.get_block_index(&block_id);
+                let block_index = self.get_block_index(block_id);
                 let mut main_chain = "";
-                if self.is_block_in_main_chain(&block_id) {
+                if self.is_block_in_main_chain(block_id) {
                     main_chain = ",M";
                 }
                 println!(
@@ -125,7 +125,7 @@ impl<'a> BlockTestFrameWork {
                         .position(|block| block.get_block_id() == block_id)
                         .unwrap()
                 );
-                let block_children = Self::get_children_blocks(&block_id, &self.block_indexes);
+                let block_children = Self::get_children_blocks(block_id, &self.block_indexes);
                 if !block_children.is_empty() {
                     self.debug_print_chains(block_children, depth + 1);
                 }

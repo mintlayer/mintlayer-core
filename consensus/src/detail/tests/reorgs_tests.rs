@@ -22,8 +22,6 @@ use crate::detail::tests::*;
 use blockchain_storage::Store;
 use common::chain::config::create_mainnet;
 
-type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
-
 #[test]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
@@ -145,7 +143,7 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFrameWork, events: &EventLi
             5,
         )
         .is_ok());
-    check_last_event(btf, &events);
+    check_last_event(btf, events);
 
     let block = btf
         .consensus
@@ -242,44 +240,44 @@ fn check_reorg_to_first_chain(btf: &mut BlockTestFrameWork, events: &EventList) 
     //
     let block_id = btf.block_indexes[2].get_block_id().clone();
     assert!(btf.create_chain(&block_id, 2).is_ok());
-    check_last_event(btf, &events);
+    check_last_event(btf, events);
 
     // b3
     btf.test_block(
-        &btf.block_indexes[3].get_block_id(),
+        btf.block_indexes[3].get_block_id(),
         Some(btf.block_indexes[1].get_block_id()),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(&btf.block_indexes[3].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
     // b4
     btf.test_block(
-        &btf.block_indexes[4].get_block_id(),
+        btf.block_indexes[4].get_block_id(),
         Some(btf.block_indexes[3].get_block_id()),
         None,
         3,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(&btf.block_indexes[4].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[4].get_block_id()));
     // b5
     btf.test_block(
-        &btf.block_indexes[5].get_block_id(),
+        btf.block_indexes[5].get_block_id(),
         Some(btf.block_indexes[2].get_block_id()),
         Some(btf.block_indexes[6].get_block_id()),
         3,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[5].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[5].get_block_id()));
     // b6
     btf.test_block(
-        &btf.block_indexes[6].get_block_id(),
+        btf.block_indexes[6].get_block_id(),
         Some(btf.block_indexes[5].get_block_id()),
         None,
         4,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[6].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[6].get_block_id()));
 }
 
 fn check_make_alternative_chain_longer(btf: &mut BlockTestFrameWork, events: &EventList) {
@@ -302,25 +300,25 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFrameWork, events: &Ev
         .unwrap();
     let block = btf.random_block(&block, None);
     assert!(btf.add_special_block(block).is_ok());
-    check_last_event(btf, &events);
+    check_last_event(btf, events);
     // b3
     btf.test_block(
-        &btf.block_indexes[3].get_block_id(),
+        btf.block_indexes[3].get_block_id(),
         Some(btf.block_indexes[1].get_block_id()),
         Some(btf.block_indexes[4].get_block_id()),
         2,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[3].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
     // b4
     btf.test_block(
-        &btf.block_indexes[4].get_block_id(),
+        btf.block_indexes[4].get_block_id(),
         Some(btf.block_indexes[3].get_block_id()),
         None,
         3,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[4].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[4].get_block_id()));
 }
 
 fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
@@ -335,13 +333,13 @@ fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
     // Nothing should happen at this point. We saw B2 first so it takes priority.
     // Don't reorg to a chain of the same length
     assert!(btf.create_chain(&btf.genesis().get_id(), 2).is_ok());
-    check_last_event(btf, &events);
+    check_last_event(btf, events);
     assert!(btf.create_chain(&btf.block_indexes[1].get_block_id().clone(), 1).is_ok());
-    check_last_event(btf, &events);
+    check_last_event(btf, events);
 
     // genesis
     btf.test_block(
-        &btf.block_indexes[0].get_block_id(),
+        btf.block_indexes[0].get_block_id(),
         None,
         Some(btf.block_indexes[1].get_block_id()),
         0,
@@ -349,37 +347,34 @@ fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
     );
     // b1
     btf.test_block(
-        &btf.block_indexes[1].get_block_id(),
+        btf.block_indexes[1].get_block_id(),
         Some(&btf.genesis().get_id()),
         Some(btf.block_indexes[2].get_block_id()),
         1,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[1].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[1].get_block_id()));
     // b2
     btf.test_block(
-        &btf.block_indexes[2].get_block_id(),
+        btf.block_indexes[2].get_block_id(),
         Some(btf.block_indexes[1].get_block_id()),
         None,
         2,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(&btf.block_indexes[2].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[2].get_block_id()));
     // b3
     btf.test_block(
-        &btf.block_indexes[3].get_block_id(),
+        btf.block_indexes[3].get_block_id(),
         Some(btf.block_indexes[1].get_block_id()),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(&btf.block_indexes[3].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
 }
 
-fn check_last_event(
-    btf: &mut BlockTestFrameWork,
-    events: &Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>,
-) {
+fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
     wait_for_threadpool(btf);
     let events = events.lock().unwrap();
@@ -406,7 +401,7 @@ fn wait_for_threadpool(btf: &mut BlockTestFrameWork) {
 }
 
 fn subscribe_to_events(btf: &mut BlockTestFrameWork, events: &EventList) {
-    let events = Arc::clone(&events);
+    let events = Arc::clone(events);
     // Add the genesis
     events.lock().unwrap().push((btf.genesis().get_id(), BlockHeight::from(0)));
     assert!(!events.lock().unwrap().is_empty());
