@@ -182,7 +182,6 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFrameWork) {
             1
         )
         .is_ok());
-    btf.print_chains();
     let block = btf
         .consensus
         .blockchain_storage
@@ -197,7 +196,6 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFrameWork) {
     assert!(btf.add_special_block(double_spend_block).is_ok());
     // Cause reorg on a failed block
     assert!(btf.create_chain(&block_id, 10).is_err());
-    btf.print_chains();
 }
 
 fn check_fork_that_double_spends(btf: &mut BlockTestFrameWork) {
@@ -376,7 +374,7 @@ fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
 
 fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
-    wait_for_threadpool(btf);
+    wait_for_threadpool(&mut btf.consensus);
     let events = events.lock().unwrap();
     assert!(!events.is_empty());
     match events.last() {
@@ -393,11 +391,6 @@ fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
             panic!("Events haven't received");
         }
     }
-}
-
-fn wait_for_threadpool(btf: &mut BlockTestFrameWork) {
-    let handle = btf.consensus.events_broadcaster.spawn_handle(|| {});
-    assert!(handle.wait_timeout(std::time::Duration::from_secs(3)).is_ok());
 }
 
 fn subscribe_to_events(btf: &mut BlockTestFrameWork, events: &EventList) {

@@ -40,11 +40,12 @@ fn test_events_simple_subscribe() {
         let expected_block_height = BlockHeight::new(1);
 
         // Event handler
+        let events: EventList = Arc::new(Mutex::new(Vec::new()));
+        let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(block_height == expected_block_height);
-                    assert!(block_id == expected_block_id);
+                    events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
         );
@@ -53,6 +54,11 @@ fn test_events_simple_subscribe() {
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+        assert!(events.lock().unwrap().len() == 1);
+        events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
+            assert!(block_height == &expected_block_height);
+            assert!(block_id == &expected_block_id);
+        });
     });
 }
 
@@ -77,21 +83,27 @@ fn test_events_with_a_bunch_of_subscribers() {
         let expected_block_height = BlockHeight::new(1);
 
         // Event handler
+        let events: EventList = Arc::new(Mutex::new(Vec::new()));
+        let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(block_height == expected_block_height);
-                    assert!(block_id == expected_block_id);
+                    events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
         );
 
         // Subscribe and then process a new block
-        for _ in 1..=COUNT_SUBSCRIBERS {
+        for _ in 0..COUNT_SUBSCRIBERS {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
         assert!(!consensus.event_subscribers.is_empty());
         assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+        assert!(events.lock().unwrap().len() == COUNT_SUBSCRIBERS);
+        events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
+            assert!(block_height == &expected_block_height);
+            assert!(block_id == &expected_block_id);
+        });
     });
 }
 
@@ -110,7 +122,7 @@ fn test_events_a_bunch_of_events() {
         let mut map_heights: BTreeMap<Id<Block>, BlockHeight> = BTreeMap::new();
         let mut blocks = Vec::new();
         let mut rand_block = consensus.chain_config.genesis_block().clone();
-        for height in 1..=COUNT_EVENTS {
+        for height in 0..COUNT_EVENTS {
             rand_block = produce_test_block(&consensus.chain_config, &rand_block, false);
             blocks.push(rand_block.clone());
             map_heights.insert(
@@ -120,24 +132,29 @@ fn test_events_a_bunch_of_events() {
         }
 
         // Event handler
+        let events: EventList = Arc::new(Mutex::new(Vec::new()));
+        let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
                 ConsensusEvent::NewTip(block_id, block_height) => {
-                    assert!(map_heights.contains_key(&block_id));
-                    assert!(&block_height == map_heights.get(&block_id).unwrap());
+                    events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
         );
 
         // Subscribe and then process a new block
-        for _ in 1..=COUNT_SUBSCRIBERS {
+        for _ in 0..COUNT_SUBSCRIBERS {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
         assert!(!consensus.event_subscribers.is_empty());
 
         for block in blocks {
             // We should connect a new block
-            assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+            let block_index =
+                consensus.process_block(block.clone(), BlockSource::Local).unwrap().unwrap();
+            wait_for_threadpool(&mut consensus);
+            assert!(block_index.get_block_id() == &events.lock().unwrap().last().unwrap().0);
+            assert!(block_index.get_block_height() == events.lock().unwrap().last().unwrap().1);
         }
     });
 }
@@ -159,13 +176,16 @@ fn test_events_orphan_block() {
         );
 
         // Event handler
+        let events: EventList = Arc::new(Mutex::new(Vec::new()));
+        let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
             move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(_, _) => {
-                    panic!("Never should happen")
+                ConsensusEvent::NewTip(block_id, block_height) => {
+                    events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
         );
+        assert!(events.lock().unwrap().is_empty());
 
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
