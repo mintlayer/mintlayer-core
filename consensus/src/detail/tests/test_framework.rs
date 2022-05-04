@@ -89,10 +89,6 @@ impl<'a> BlockTestFrameWork {
         result
     }
 
-    fn get_block_index(&self, block_id: &Id<Block>) -> BlockIndex {
-        self.consensus.blockchain_storage.get_block_index(block_id).unwrap().unwrap()
-    }
-
     #[allow(dead_code)]
     pub(in crate::detail::tests) fn print_chains(&self) {
         self.debug_print_chains(vec![self.genesis().get_id()], 0);
@@ -108,7 +104,13 @@ impl<'a> BlockTestFrameWork {
             println!("{}X", "--".repeat(depth));
         } else {
             for block_id in &blocks {
-                let block_index = self.get_block_index(block_id);
+                let block_index = self
+                    .consensus
+                    .blockchain_storage
+                    .get_block_index(block_id)
+                    .ok()
+                    .flatten()
+                    .unwrap();
                 let mut main_chain = "";
                 if self.is_block_in_main_chain(block_id) {
                     main_chain = ",M";
@@ -269,7 +271,13 @@ impl<'a> BlockTestFrameWork {
             }
         }
 
-        let block_index = self.get_block_index(block_id);
+        let block_index = self
+            .consensus
+            .blockchain_storage
+            .get_block_index(block_id)
+            .ok()
+            .flatten()
+            .unwrap();
         assert_eq!(block_index.get_prev_block_id().as_ref(), prev_block_id);
         assert_eq!(block_index.get_block_height(), BlockHeight::new(height));
         self.check_block_at_height(block_index.get_block_height().next_height(), next_block_id);
