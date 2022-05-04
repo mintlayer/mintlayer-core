@@ -284,8 +284,13 @@ impl<'a> BlockTestFrameWork {
     }
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
-        let block_index =
-            self.consensus.blockchain_storage.get_block_index(block_id).unwrap().unwrap();
+        let block_index = self
+            .consensus
+            .blockchain_storage
+            .get_block_index(block_id)
+            .ok()
+            .flatten()
+            .unwrap();
         let height = block_index.get_block_height();
         let id_at_height =
             self.consensus.blockchain_storage.get_block_id_by_height(&height).unwrap();

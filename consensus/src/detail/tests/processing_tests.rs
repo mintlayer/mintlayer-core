@@ -100,7 +100,7 @@ fn test_empty_consensus() {
         let consensus = Consensus::new(config, storage).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_some());
         assert!(
-            consensus.get_best_block_id().unwrap().unwrap()
+            consensus.get_best_block_id().ok().flatten().unwrap()
                 == consensus.chain_config.genesis_block().get_id()
         );
         assert!(consensus
