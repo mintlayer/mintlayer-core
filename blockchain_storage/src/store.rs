@@ -1,5 +1,5 @@
 use common::chain::block::block_index::BlockIndex;
-use common::chain::block::Block;
+use common::chain::block::{Block, BlockHeader};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
@@ -138,6 +138,11 @@ impl BlockchainStorageRead for Store {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_block_header_by_id(
+            &self,
+            id: &Id<Block>
+        ) -> crate::Result<Option<BlockHeader>>;
     }
 }
 
@@ -245,6 +250,14 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
+    }
+
+    fn get_block_header_by_id(&self, id: &Id<Block>) -> crate::Result<Option<BlockHeader>> {
+        match self.get_block_index(id) {
+            Err(e) => Err(e),
+            Ok(None) => Ok(None),
+            Ok(Some(block_index)) => Ok(Some(block_index.get_block_header().to_owned())),
+        }
     }
 }
 
@@ -707,5 +720,61 @@ pub(crate) mod test {
         );
         assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
         assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
+    }
+
+    #[test]
+    #[cfg(not(loom))]
+    fn test_get_block_header_by_id() {
+        use common::{chain::block::ConsensusData, primitives::H256};
+
+        // Prepare some test data
+        let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
+        let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
+        let block0 = Block::new(
+            vec![tx0],
+            Some(Id::new(&H256::default())),
+            12,
+            ConsensusData::None,
+        )
+        .unwrap();
+        let header0 = block0.header().clone();
+        let block_index0 = BlockIndex::new(&block0, 20, BlockHeight::new(0), 0u32);
+
+        let block1 = Block::new(
+            vec![tx1.clone()],
+            Some(Id::new(&block0.get_id().get())),
+            34,
+            ConsensusData::None,
+        )
+        .unwrap();
+        let header1 = block1.header().clone();
+        let block_index1 = BlockIndex::new(&block1, 40, BlockHeight::new(1), 0u32);
+
+        // Set up the store
+        let mut store = Store::new_empty().unwrap();
+
+        assert_eq!(store.set_block_index(&block_index0), Ok(()));
+        assert_eq!(store.set_block_index(&block_index1), Ok(()));
+        assert_eq!(
+            store.get_block_header_by_id(&block0.get_id()),
+            Ok(Some(header0))
+        );
+        assert_eq!(
+            store.get_block_header_by_id(&block1.get_id()),
+            Ok(Some(header1))
+        );
+
+        // try to query non-existent header
+        let block2 = Block::new(
+            vec![tx1],
+            Some(Id::new(&block1.get_id().get())),
+            34,
+            ConsensusData::None,
+        )
+        .unwrap();
+        assert_eq!(
+            store.get_block_header_by_id(&block2.get_id()),
+            Ok(None)
+        );
     }
 }

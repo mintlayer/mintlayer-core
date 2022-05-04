@@ -1,7 +1,7 @@
 //! A mock version of the blockchian storage.
 
 use common::chain::block::block_index::BlockIndex;
-use common::chain::block::Block;
+use common::chain::block::{Block, BlockHeader};
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
 };
@@ -32,6 +32,11 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_block_header_by_id(
+            &self,
+            id: &Id<Block>
+        ) -> crate::Result<Option<BlockHeader>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
@@ -90,6 +95,11 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_block_header_by_id(
+            &self,
+            id: &Id<Block>
+        ) -> crate::Result<Option<BlockHeader>>;
     }
 
     impl storage::traits::TransactionRo for StoreTxRo {
@@ -122,6 +132,11 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_block_header_by_id(
+            &self,
+            id: &Id<Block>
+        ) -> crate::Result<Option<BlockHeader>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {

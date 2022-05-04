@@ -1,7 +1,7 @@
 //! Application-level interface for the persistent blockchain storage.
 
 use common::chain::block::block_index::BlockIndex;
-use common::chain::block::Block;
+use common::chain::block::{Block, BlockHeader};
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
@@ -60,6 +60,9 @@ pub trait BlockchainStorageRead {
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+
+    /// Get mainchain block header by height
+    fn get_block_header_by_id(&self, id: &Id<Block>) -> crate::Result<Option<BlockHeader>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -70,7 +73,7 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Set the hash of the best block
     fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
 
-    // Set the block index
+    /// Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
 
     /// Add a new block into the database
