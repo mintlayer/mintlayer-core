@@ -18,6 +18,7 @@ proptest = "1.0.0"
 serialization = { path = "../serialization" }
 replace_with = "0.1.7"
 slave-pool = "0.2.3"
+itertools = "0.10.3"
 
 [dev-dependencies]
 static_assertions = "1.1"

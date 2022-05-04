@@ -590,6 +590,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "crypto",
+ "itertools",
  "logging",
  "num",
  "proptest",

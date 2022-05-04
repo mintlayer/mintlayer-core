@@ -22,7 +22,7 @@ pub mod rpc;
 use std::sync::Arc;
 
 use common::{
-    chain::{block::Block, ChainConfig},
+    chain::{block::Block, block::BlockHeader, ChainConfig},
     primitives::{BlockHeight, Id},
 };
 pub use detail::BlockError;
@@ -99,6 +99,10 @@ impl ConsensusInterface {
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError> {
         self.consensus.get_block(block_id).map_err(ConsensusError::FailedToReadProperty)
+    }
+
+    pub fn get_locator(&self) -> Result<Vec<BlockHeader>, ConsensusError> {
+        self.consensus.get_locator().map_err(ConsensusError::FailedToReadProperty)
     }
 }
 

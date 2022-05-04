@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): S. Afach, A. Sinitsyn
-
 use crate::detail::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
 use crate::ConsensusEvent;
 use blockchain_storage::BlockchainStorageRead;
@@ -22,7 +21,9 @@ use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
-use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
+use common::chain::block::{
+    calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader,
+};
 use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
@@ -204,6 +205,36 @@ impl Consensus {
         // Reasonable reduce amount of calls to DB
         let block = consensus_ref.db_tx.get_block(id).map_err(BlockError::from)?;
         Ok(block)
+    }
+
+    pub fn get_header_from_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<BlockHeader>, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        let id = consensus_ref
+            .db_tx
+            .get_block_id_by_height(height)?
+            .ok_or(BlockError::NotFound)?;
+        consensus_ref.db_tx.get_block_header_by_id(&id).map_err(BlockError::from)
+    }
+
+    pub fn get_locator(&self) -> Result<Vec<BlockHeader>, BlockError> {
+        let id = self.get_best_block_id()?.ok_or(BlockError::NotFound)?;
+        let height = self.get_block_height_in_main_chain(&id)?.ok_or(BlockError::NotFound)?;
+
+        let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
+            .take_while(|i| (height - BlockDistance::new(*i)).is_some())
+            .map(|i| {
+                self.get_header_from_height(
+                    &(height - BlockDistance::new(i)).expect("distance to be valid"),
+                )
+            })
+            .filter(|res| res.is_ok())
+            .filter_map(|res| res.unwrap())
+            .collect::<Vec<_>>();
+
+        Ok(headers)
     }
 }
 
