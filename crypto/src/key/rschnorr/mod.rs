@@ -296,12 +296,12 @@ mod test {
         use std::slice;
         let mut rng = make_true_rng();
         let zero_sk = &vec![0u8; 32][..];
+        let hldr;
+        {
+            let (sk, _pk) = MLRistrettoPrivateKey::new(&mut rng);
+            hldr = sk.as_bytes().as_ptr();
+        }
         unsafe {
-            let hldr;
-            {
-                let (sk, _pk) = MLRistrettoPrivateKey::new(&mut rng);
-                hldr = sk.as_bytes().as_ptr();
-            }
             assert_eq!(slice::from_raw_parts(hldr, 32), zero_sk);
         }
     }
