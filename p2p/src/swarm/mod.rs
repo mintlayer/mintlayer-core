@@ -333,6 +333,7 @@ where
     }
 
     /// SwarmManager event loop
+    // pub async fn run(&mut self, mut call_rq: CallRequest<Self>, mut shutdown_rq: ShutdownRequest) {
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {

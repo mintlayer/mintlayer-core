@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
+
 use crate::net::{ConnectivityService, NetworkService, PubSubService, SyncingService};
 use common::chain::ChainConfig;
 use logging::log;
@@ -28,7 +30,6 @@ pub mod pubsub;
 pub mod swarm;
 pub mod sync;
 
-#[allow(unused)]
 pub struct P2P<T>
 where
     T: NetworkService,
@@ -40,7 +41,6 @@ where
     tx_swarm: mpsc::Sender<event::SwarmControlEvent<T>>,
 }
 
-#[allow(unused)]
 impl<T> P2P<T>
 where
     T: 'static + NetworkService,
@@ -81,13 +81,16 @@ where
             let _ = sync_mgr.run().await;
         });
 
-        tokio::spawn(async move {
-            if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
-                todo!();
-            }
-            // let mut sync_mgr = ;
-            // let _ = sync_mgr.run().await;
-        });
+        // tokio::spawn(async move {
+        //     if let Err(e) = pubsub::PubSubManager::<T>::new(
+        //         flood,
+        //         subsystem::Handle::new(
+        //     ).run().await {
+        //         todo!();
+        //     }
+        //     let mut sync_mgr = ;
+        //     let _ = sync_mgr.run().await;
+        // });
 
         Ok(Self { config, tx_swarm })
     }
@@ -99,5 +102,52 @@ where
         loop {
             std::thread::sleep(std::time::Duration::from_secs(5));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::net::libp2p::Libp2pService;
+    use crate::pubsub::PubSubManager;
+    use crate::swarm::SwarmManager;
+    use common::chain::config;
+    use libp2p::Multiaddr;
+    use tokio::sync::mpsc;
+
+    #[tokio::test]
+    async fn test_subsys_init() {
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
+        let config = Arc::new(config::create_mainnet());
+        let (conn, pubsub, sync) = Libp2pService::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+
+        let storage = blockchain_storage::Store::new_empty().unwrap();
+        let manager = subsystem::Manager::new("mintlayer");
+        let consensus = manager.start(
+            "consensus",
+            consensus::make_consensus(config::create_mainnet(), storage.clone()).unwrap(),
+        );
+
+		let (tx1, rx1) = mpsc::channel(16);
+		let (tx2, rx2) = mpsc::channel(16);
+        let mut swarm_mgr = SwarmManager::<Libp2pService>::new(Arc::clone(&config), conn, rx1, tx2);
+        let swarm = manager.start_raw("swarm", |call_rq, shut_rq| async move {
+            swarm_mgr.run(call_rq, shut_rq).await
+        });
+
+        let mut pubsub_mgr = PubSubManager::<Libp2pService>::new(pubsub, consensus.clone());
+        let pubsub = manager.start_raw("pubsub", |call_rq, shut_rq| async move {
+            pubsub_mgr.run(call_rq, shut_rq).await
+        });
+
+        manager.main().await;
     }
 }
