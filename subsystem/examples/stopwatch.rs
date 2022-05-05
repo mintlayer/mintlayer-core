@@ -36,7 +36,7 @@ impl Stopwatch {
 async fn main() {
     logging::init_logging::<&std::path::Path>(None);
 
-    let app = subsystem::Manager::new("toplevel");
+    let mut app = subsystem::Manager::new("toplevel");
     app.install_signal_handlers();
     app.start_raw("watch", Stopwatch::start);
     app.main().await

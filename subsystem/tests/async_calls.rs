@@ -65,7 +65,7 @@ fn async_calls() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
+            let mut app = subsystem::Manager::new("app");
             let logger = app.start("logger", Logger::new("logging".to_string()));
             let counter = app.start("counter", Counter::new(logger.clone()));
 

@@ -60,7 +60,7 @@ impl SomeSubsystemRpcServer for SomeSubsystemHandle {
 async fn main() -> anyhow::Result<()> {
     logging::init_logging::<&std::path::Path>(None);
 
-    let app = subsystem::Manager::new("rpc-example");
+    let mut app = subsystem::Manager::new("rpc-example");
     app.install_signal_handlers();
     let some_subsystem = app.start("some_subsys", SomeSubsystem(0));
     let _rpc_subsystem = app.start(

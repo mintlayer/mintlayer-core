@@ -107,7 +107,7 @@ fn basic_passive_subsystem() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
+            let mut app = subsystem::Manager::new("app");
 
             let substr = app.start("substr", Substringer::new("abc".into()));
             let counter = app.start("counter", Counter::new());
@@ -127,7 +127,7 @@ fn basic_passive_shutdown() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
+            let mut app = subsystem::Manager::new("app");
 
             let _substr = app.start("substr", Substringer::new("abc".into()));
             let _counter = app.start("counter", Counter::new());

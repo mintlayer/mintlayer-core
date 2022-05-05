@@ -17,6 +17,7 @@
 
 use core::future::Future;
 use core::time::Duration;
+use futures::future::BoxFuture;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task;
 
@@ -66,6 +67,9 @@ pub struct Manager {
     // Manager name
     name: &'static str,
 
+    // Shutdown timeout settings
+    shutdown_timeout: Option<Duration>,
+
     // Used by the manager to order all subsystems to shut down.
     shutdown_request_tx: broadcast::Sender<()>,
 
@@ -75,8 +79,8 @@ pub struct Manager {
     shutting_down_tx: mpsc::Sender<()>,
     shutting_down_rx: mpsc::Receiver<()>,
 
-    // Shutdown timeout settings
-    shutdown_timeout: Option<Duration>,
+    // List of subsystem tasks.
+    subsystem_tasks: Vec<BoxFuture<'static, ()>>,
 }
 
 impl Manager {
@@ -95,6 +99,7 @@ impl Manager {
 
         let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
+        let subsystem_tasks = Vec::new();
 
         Self {
             name,
@@ -102,6 +107,7 @@ impl Manager {
             shutting_down_tx,
             shutting_down_rx,
             shutdown_timeout,
+            subsystem_tasks,
         }
     }
 
@@ -115,7 +121,7 @@ impl Manager {
     ///
     /// A typical skeleton of a subsystem looks like this:
     /// ```no_run
-    /// # let manager = subsystem::Manager::new("app");
+    /// # let mut manager = subsystem::Manager::new("app");
     /// let subsystem = manager.start_raw("my-subsystem", |mut call, mut shutdown| async move {
     ///     loop {
     ///         tokio::select! {
@@ -127,10 +133,10 @@ impl Manager {
     ///         };
     ///     }
     /// });
-    /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid amnbiguity.
+    /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid ambiguity.
     /// ```
     pub fn start_raw_with_config<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
-        &self,
+        &mut self,
         config: SubsystemConfig,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     ) -> Handle<T> {
@@ -144,7 +150,7 @@ impl Manager {
         let (action_tx, action_rx) = mpsc::channel(config.call_queue_capacity);
         let call_rq = CallRequest(action_rx);
 
-        task::spawn(async move {
+        self.subsystem_tasks.push(Box::pin(async move {
             log::info!("Subsystem {}/{} started", manager_name, subsys_name);
 
             // Perform the subsystem task.
@@ -157,7 +163,9 @@ impl Manager {
 
             // Close the channel to signal the completion of the shutdown.
             std::mem::drop(shutting_down_tx);
-        });
+        }));
+
+        log::info!("Subsystem {}/{} initialised", manager_name, subsys_name);
 
         Handle::new(action_tx)
     }
@@ -168,7 +176,7 @@ impl Manager {
     /// from other subsystems. A hook to be invoked on shutdown can be specified by means of the
     /// [Subsystem] trait.
     pub fn start_with_config<S: Subsystem>(
-        &self,
+        &mut self,
         config: SubsystemConfig,
         mut subsys: S,
     ) -> Handle<S> {
@@ -185,7 +193,7 @@ impl Manager {
 
     /// Start a raw subsystem. See [Manager::start_raw_with_config].
     pub fn start_raw<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
-        &self,
+        &mut self,
         name: &'static str,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     ) -> Handle<T> {
@@ -193,7 +201,7 @@ impl Manager {
     }
 
     /// Start a passive subsystem. See [Manager::start_with_config].
-    pub fn start<S: Subsystem>(&self, name: &'static str, subsys: S) -> Handle<S> {
+    pub fn start<S: Subsystem>(&mut self, name: &'static str, subsys: S) -> Handle<S> {
         self.start_with_config(SubsystemConfig::named(name), subsys)
     }
 
@@ -202,7 +210,7 @@ impl Manager {
     /// This adds a subsystem that listens for the Ctrl-C signal and exits once it is received,
     /// signalling all other subsystems and the whole manager to shut down.
     #[cfg(not(loom))]
-    pub fn install_signal_handlers(&self) {
+    pub fn install_signal_handlers(&mut self) {
         self.start_raw(
             "ctrl-c",
             |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
@@ -263,15 +271,17 @@ impl Manager {
     ///
     /// Completes when all the subsystems are fully shut down.
     pub async fn main(mut self) {
-        // The main task just waits for the shutdown signal and coordinates the cleanup at the end.
-        // All other functionality is performed by subsystems.
+        log::info!("Manager {} starting subsystems", self.name);
 
-        log::info!("Manager {} running", self.name);
+        // Run all the subsystem tasks.
+        for subsys in self.subsystem_tasks {
+            task::spawn(subsys);
+        }
 
         // Signal the manager is shut down so it does not wait for itself
         std::mem::drop(self.shutting_down_tx);
 
-        // Wait for a subsystem to shut down.
+        // Wait for a subsystem to shut down and coordinate cleanup of the remaining subsystems.
         self.shutting_down_rx
             .recv()
             .await
@@ -303,7 +313,7 @@ mod test {
     async fn shutdown_timeout() {
         testing_logger::setup();
 
-        let man = Manager::new_with_config(ManagerConfig {
+        let mut man = Manager::new_with_config(ManagerConfig {
             name: "timeout_test",
             shutdown_timeout: Some(Duration::from_secs(1)),
         });
