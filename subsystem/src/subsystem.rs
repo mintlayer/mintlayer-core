@@ -20,7 +20,7 @@ use tokio::sync::{broadcast, mpsc, oneshot};
 
 /// Defines hooks into a subsystem lifecycle.
 #[async_trait::async_trait]
-pub trait Subsystem: Sized {
+pub trait Subsystem: 'static + Send + Sized {
     /// Custom shutdown procedure.
     async fn shutdown(self) {}
 }
@@ -61,7 +61,7 @@ type Action<T, R> = Box<dyn Send + for<'a> FnOnce(&'a mut T) -> BoxFuture<'a, R>
 /// Call request
 pub struct CallRequest<T>(pub(crate) mpsc::Receiver<Action<T, ()>>);
 
-impl<T: 'static + Send> CallRequest<T> {
+impl<T: 'static> CallRequest<T> {
     /// Receive an external call to this subsystem.
     pub async fn recv(&mut self) -> Action<T, ()> {
         match self.0.recv().await {

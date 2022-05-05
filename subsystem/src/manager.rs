@@ -167,7 +167,7 @@ impl Manager {
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
     /// from other subsystems. A hook to be invoked on shutdown can be specified by means of the
     /// [Subsystem] trait.
-    pub fn start_with_config<S: 'static + Send + Subsystem>(
+    pub fn start_with_config<S: Subsystem>(
         &self,
         config: SubsystemConfig,
         mut subsys: S,
@@ -193,7 +193,7 @@ impl Manager {
     }
 
     /// Start a passive subsystem. See [Manager::start_with_config].
-    pub fn start<S: 'static + Send + Subsystem>(&self, name: &'static str, subsys: S) -> Handle<S> {
+    pub fn start<S: Subsystem>(&self, name: &'static str, subsys: S) -> Handle<S> {
         self.start_with_config(SubsystemConfig::named(name), subsys)
     }
 
