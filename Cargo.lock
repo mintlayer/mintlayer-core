@@ -583,6 +583,7 @@ version = "0.1.0"
 dependencies = [
  "blockchain-storage",
  "common",
+ "crypto",
  "logging",
  "num",
  "parity-scale-codec",
@@ -591,6 +592,7 @@ dependencies = [
  "rand 0.8.4",
  "replace_with",
  "slave-pool",
+ "static_assertions",
  "thiserror",
 ]
 
