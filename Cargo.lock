@@ -2356,6 +2356,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "common",
+ "crypto",
  "futures",
  "futures-timer",
  "itertools",

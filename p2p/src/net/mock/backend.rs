@@ -22,7 +22,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::FutureExt;
-// use futures_timer::Delay;
 use logging::log;
 use serialization::{Decode, Encode};
 use std::{
@@ -96,17 +95,7 @@ impl Backend {
                             continue;
                         }
 
-                        tokio::select! {
-                            _ = tokio::time::sleep(self.timeout) => {
-                                let _ = response.send(Err(
-                                    P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-                                );
-                            }
-                            res = TcpStream::connect(addr) => match res {
-                                Ok(socket) => { let _ = response.send(Ok(socket)); },
-                                Err(e) => { let _ = response.send(Err(e.into())); },
-                            }
-                        }
+						todo!();
                     }
                 }
             }

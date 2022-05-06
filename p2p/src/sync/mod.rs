@@ -209,7 +209,7 @@ where
 mod tests {
     use super::*;
     use crate::net::{
-        libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
+        libp2p::Libp2pService, mock::{types::MockPeerId, MockService}, ConnectivityEvent, ConnectivityService,
         SyncingService,
     };
     use common::chain::config;
@@ -252,11 +252,8 @@ mod tests {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
         let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
-        // send Connected event to SyncManager
-        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
-
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id: MockPeerId::random() }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -268,24 +265,21 @@ mod tests {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
         let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
-        // send Connected event to SyncManager
-        let peer_id: SocketAddr = test_utils::make_address("[::1]:");
-
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id: MockPeerId::random() }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
 
         // no peer with this id exist, nothing happens
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: addr }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: MockPeerId::random() }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: MockPeerId::random() }).await,
             Ok(())
         );
         assert!(mgr.peers.is_empty());

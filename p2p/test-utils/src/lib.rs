@@ -51,7 +51,3 @@ where
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
     format!("{}{}", addr, port).parse().unwrap()
 }
-
-pub fn get_mock_id() -> <MockService as NetworkService>::PeerId {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
-}

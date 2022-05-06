@@ -15,13 +15,42 @@
 //
 // Author(s): A. Altonen
 use crate::{error, message, net};
-use std::net::SocketAddr;
+use crypto::random::{Rng, make_pseudo_rng};
+use std::{
+ net::SocketAddr,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
 use tokio::{net::TcpStream, sync::oneshot};
+
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct MockPeerId(u64);
+
+impl MockPeerId {
+    pub fn random() -> Self {
+        let mut rng = make_pseudo_rng();
+        Self(rng.gen::<u64>())
+    }
+
+    pub fn from_socket_address(addr: &SocketAddr) -> Self {
+        let mut hasher = DefaultHasher::new();
+        addr.hash(&mut hasher);
+        Self(hasher.finish())
+    }
+}
+
+pub struct MockPeerInfo {
+    pub peer_id: MockPeerId,
+    pub net: common::chain::config::ChainType,
+    pub version: common::primitives::version::SemVer,
+    pub agent: Option<String>,
+    pub protocols: Vec<String>,
+}
 
 pub enum Command {
     Connect {
         addr: SocketAddr,
-        response: oneshot::Sender<error::Result<TcpStream>>,
+        response: oneshot::Sender<error::Result<MockPeerInfo>>,
     },
 }
 
