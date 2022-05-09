@@ -56,7 +56,7 @@ impl Address {
         if data.get_hrp() != cfg.address_prefix() {
             return Err(AddressError::InvalidPrefix(data.get_hrp().to_owned()));
         }
-        let data_inner = data.get_base32_data();
+        let data_inner = data.get_data();
         let result = data_inner.to_vec();
         Ok(result)
     }
@@ -64,7 +64,7 @@ impl Address {
     #[allow(dead_code)]
     fn data_internal(&self) -> Result<Vec<u8>, AddressError> {
         let data = encoding::decode(&self.address)?;
-        Ok(data.get_base32_data().to_owned())
+        Ok(data.get_data().to_owned())
     }
 
     pub fn from_public_key_hash(
@@ -114,8 +114,10 @@ mod tests {
         let cfg = create_mainnet();
         let (_priv_key, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let public_key_hash = PublicKeyHash::from(&pub_key);
+        let hrp = cfg.address_prefix();
         let address1 = Address::new(&cfg, public_key_hash.encode());
         let address2 = Address::new_with_hrp(cfg.address_prefix(), public_key_hash.encode());
         assert_eq!(address1, address2);
+        assert_eq!(&address1.unwrap().address[0..hrp.len()], hrp);
     }
 }

@@ -1,4 +1,4 @@
-use bech32::{self, CheckBase32, Error, FromBase32, ToBase32, Variant};
+use bech32::{self, convert_bits, Error, FromBase32, ToBase32, Variant};
 use core::fmt;
 use displaydoc::Display;
 use thiserror::Error;
@@ -6,7 +6,7 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DecodedBech32 {
     hrp: String,
-    base32_data: Vec<u8>,
+    data: Vec<u8>,
 }
 
 impl DecodedBech32 {
@@ -14,13 +14,12 @@ impl DecodedBech32 {
         &self.hrp
     }
 
-    pub fn get_base32_data(&self) -> &[u8] {
-        &self.base32_data
+    pub fn get_data(&self) -> &[u8] {
+        &self.data
     }
 
     pub fn encode(self) -> Result<String, Bech32Error> {
-        let data = &self.base32_data.check_base32()?;
-        bech32::encode(&self.hrp, data, Variant::Bech32m).map_err(|e| e.into())
+        encode(&self.hrp, self.data)
     }
 }
 
@@ -80,12 +79,9 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
             // }
             // ------- EOL
 
-            let data = FromBase32::from_base32(&data)?;
+            let data = convert_bits(&data, 5, 8, false)?;
 
-            Ok(DecodedBech32 {
-                hrp,
-                base32_data: data,
-            })
+            Ok(DecodedBech32 { hrp, data })
         }
         Err(e) => Err(e.into()),
     }
@@ -112,7 +108,7 @@ mod tests {
         log::info!("value of decoded: {:?}", decoded);
 
         assert_eq!(hrp, decoded.get_hrp());
-        assert_eq!(data, decoded.get_base32_data());
+        assert_eq!(data, decoded.get_data());
     }
 
     // #[test]
@@ -293,30 +289,30 @@ mod tests {
     //     });
     // }
 
-    // #[test]
-    // fn check_valid_strings() {
-    //     vec!(
-    //         "A1LQFN3A",
-    //         "a1lqfn3a",
-    //         "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
-    //         "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx",
-    //         "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
-    //         "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
-    //         "?1v759aa",
-    //     ).iter().for_each(|s| {
-    //         match decode(*s) {
-    //            Ok(decoded) => {
-    //                match decoded.encode() {
-    //                    Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
-    //                    Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
-    //                }
-    //            }
-    //            Err(e) => {
-    //                panic!("Did not decode: {:?} Reason: {:?}", s, e)
-    //            }
-    //        }
-    //     });
-    // }
+    #[test]
+    fn check_valid_strings() {
+        vec!(
+            "A1LQFN3A",
+            "a1lqfn3a",
+            "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
+            "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx",
+            // "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
+            "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
+            "?1v759aa",
+        ).iter().for_each(|s| {
+            match decode(*s) {
+               Ok(decoded) => {
+                   match decoded.encode() {
+                       Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
+                       Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
+                   }
+               }
+               Err(e) => {
+                   panic!("Did not decode: {:?} Reason: {:?}", s, e)
+               }
+           }
+        });
+    }
 
     #[test]
     fn check_invalid_strings() {
