@@ -15,7 +15,9 @@
 //
 // Author(s): A. Altonen
 use crate::{error, message, net};
+use common::{chain::config, primitives::version};
 use crypto::random::{make_pseudo_rng, Rng};
+use parity_scale_codec::{Decode, Encode};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -72,9 +74,55 @@ pub enum FloodsubEvent {
     },
 }
 
-#[derive(Debug)]
+pub enum SyncingEvent {}
+
+/// Events sent by the peer object to mock backend
+#[derive(Debug, PartialEq)]
 pub enum PeerEvent {
+    PeerInfoReceived {
+        network: config::ChainType,
+        version: version::SemVer,
+        protocols: Vec<Protocol>,
+    },
+}
+
+// TODO: Handle?
+/// Events sent by the mock backend to peers
+#[derive(Debug)]
+pub enum MockEvent {
     Dummy,
 }
 
-pub enum SyncingEvent {}
+#[derive(Debug, Encode, Decode, PartialEq)]
+pub struct Protocol {
+    name: String,
+    version: version::SemVer,
+}
+
+impl Protocol {
+    pub fn new(name: &str, version: version::SemVer) -> Self {
+        Self {
+            name: name.to_string(),
+            version,
+        }
+    }
+}
+
+#[derive(Debug, Encode, Decode, PartialEq)]
+pub enum HandshakeMessage {
+    Hello {
+        version: common::primitives::version::SemVer,
+        network: [u8; 4],
+        protocols: Vec<Protocol>,
+    },
+    HelloAck {
+        version: common::primitives::version::SemVer,
+        network: [u8; 4],
+        protocols: Vec<Protocol>,
+    },
+}
+
+#[derive(Debug, Encode, Decode, PartialEq)]
+pub enum Message {
+    Handshake(HandshakeMessage),
+}

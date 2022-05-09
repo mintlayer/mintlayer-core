@@ -118,7 +118,7 @@ impl NetworkService for MockService {
         addr: Self::Address,
         _strategies: &[Self::DiscoveryStrategy],
         _topics: &[PubSubTopic],
-        _config: Arc<common::chain::ChainConfig>,
+        config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(
         Self::ConnectivityHandle,
@@ -132,10 +132,18 @@ impl NetworkService for MockService {
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
-            if let Err(err) =
-                backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, sync_tx, timeout)
-                    .run()
-                    .await
+            if let Err(err) = backend::Backend::new(
+                addr,
+                socket,
+                Arc::clone(&config),
+                cmd_rx,
+                conn_tx,
+                flood_tx,
+                sync_tx,
+                timeout,
+            )
+            .run()
+            .await
             {
                 log::error!("mock backend failed: {:?}", err);
             }

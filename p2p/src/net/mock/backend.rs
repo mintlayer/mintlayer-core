@@ -21,6 +21,7 @@ use crate::{
     net::{NetworkService, PubSubTopic},
 };
 use async_trait::async_trait;
+use common::chain::config;
 use futures::FutureExt;
 use logging::log;
 use serialization::{Decode, Encode};
@@ -28,6 +29,7 @@ use std::{
     collections::HashMap,
     io::{Error, ErrorKind},
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -37,7 +39,7 @@ use tokio::{
 
 struct PeerContext {
     peer_id: types::MockPeerId,
-    tx: mpsc::Sender<types::PeerEvent>,
+    tx: mpsc::Sender<types::MockEvent>,
     state: ConnectionState,
 }
 
@@ -64,6 +66,9 @@ pub struct Backend {
     /// Socket for listening to incoming connections
     socket: TcpListener,
 
+    /// Chain config
+    config: Arc<config::ChainConfig>,
+
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::Receiver<types::Command>,
 
@@ -87,9 +92,11 @@ pub struct Backend {
 }
 
 impl Backend {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         addr: SocketAddr,
         socket: TcpListener,
+        config: Arc<config::ChainConfig>,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _flood_tx: mpsc::Sender<types::FloodsubEvent>,
@@ -97,6 +104,7 @@ impl Backend {
         timeout: std::time::Duration,
     ) -> Self {
         Self {
+            config,
             addr,
             socket,
             cmd_rx,
@@ -124,8 +132,17 @@ impl Backend {
                         });
 
                         let tx = self.peer_chan.0.clone();
+                        let config = Arc::clone(&self.config);
+
                         tokio::spawn(async move {
-                            if let Err(e) = peer::Peer::new(peer_id, socket, tx, rx).start().await {
+                            if let Err(e) = peer::Peer::new(
+                                peer_id,
+                                peer::Role::Inbound,
+                                config,
+                                socket,
+                                tx,
+                                rx
+                            ).start().await {
                                 log::error!("peer failed: {:?}", e);
                             }
                         });
@@ -136,11 +153,19 @@ impl Backend {
                     }
                 },
                 event = self.peer_chan.1.recv().fuse() => {
-                    let (_peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
+                    let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
 
                     match event {
-                        types::PeerEvent::Dummy => {
-                            todo!();
+                        types::PeerEvent::PeerInfoReceived { network, version, protocols } => {
+                            match self.peers.remove(&peer_id).expect("zzz").state {
+                                ConnectionState::Dialed { .. } => panic!("zzz"),
+                                ConnectionState::InboundAccepted { addr } => {
+                                    todo!();
+                                }
+                                ConnectionState::OutboundAccepted { tx } => {
+                                    todo!();
+                                }
+                            }
                         }
                     }
                 },
@@ -150,6 +175,7 @@ impl Backend {
                             let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
                             continue;
                         }
+
                         todo!();
                     }
                 }

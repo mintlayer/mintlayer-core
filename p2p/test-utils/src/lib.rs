@@ -42,6 +42,19 @@ pub async fn get_tcp_socket() -> TcpStream {
     TcpStream::connect(addr).await.unwrap()
 }
 
+pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
+    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
+    let addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
+    let server = TcpListener::bind(addr).await.unwrap();
+    let peer_fut = TcpStream::connect(addr);
+
+    let (res1, res2) = tokio::join!(
+        server.accept(), peer_fut
+    );
+
+    (res1.unwrap().0, res2.unwrap())
+}
+
 /// Allocate a port and create a socket address for given NetworkService
 pub fn make_address<T>(addr: &str) -> T
 where
