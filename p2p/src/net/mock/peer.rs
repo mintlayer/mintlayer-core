@@ -65,7 +65,7 @@ impl Peer {
     async fn handshake(&mut self) -> error::Result<()> {
         match self.role {
             Role::Inbound => {
-                let (network, version, protocols) =
+                let (net, version, protocols) =
                     if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version,
                         network,
@@ -86,21 +86,23 @@ impl Peer {
                     };
 
                 self.socket
-                    .send(types::Message::Handshake(types::HandshakeMessage::HelloAck {
-                        version: *self.config.version(),
-                        network: *self.config.magic_bytes(),
-                        protocols: vec![
-                            types::Protocol::new("floodsub", *self.config.version()),
-                            types::Protocol::new("ping", *self.config.version()),
-                        ],
-                    }))
+                    .send(types::Message::Handshake(
+                        types::HandshakeMessage::HelloAck {
+                            version: *self.config.version(),
+                            network: *self.config.magic_bytes(),
+                            protocols: vec![
+                                types::Protocol::new("floodsub", *self.config.version()),
+                                types::Protocol::new("ping", *self.config.version()),
+                            ],
+                        },
+                    ))
                     .await?;
 
                 self.tx
                     .send((
                         self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            network,
+                            net,
                             version,
                             protocols,
                         },
@@ -120,7 +122,7 @@ impl Peer {
                     }))
                     .await?;
 
-                let (network, version, protocols) = if let Ok(Some(types::Message::Handshake(
+                let (net, version, protocols) = if let Ok(Some(types::Message::Handshake(
                     types::HandshakeMessage::HelloAck {
                         version,
                         network,
@@ -145,7 +147,7 @@ impl Peer {
                     .send((
                         self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            network,
+                            net,
                             version,
                             protocols,
                         },
@@ -223,7 +225,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    network: common::chain::config::ChainType::Mainnet,
+                    net: common::chain::config::ChainType::Mainnet,
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),
@@ -280,7 +282,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    network: common::chain::config::ChainType::Mainnet,
+                    net: common::chain::config::ChainType::Mainnet,
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),

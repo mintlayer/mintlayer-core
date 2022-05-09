@@ -116,36 +116,41 @@ impl Backend {
         }
     }
 
+    async fn create_peer(
+        &mut self,
+        socket: TcpStream,
+        peer_id: types::MockPeerId,
+        role: peer::Role,
+        state: ConnectionState,
+    ) -> error::Result<()> {
+        let (tx, rx) = mpsc::channel(16);
+        let socket = socket::MockSocket::new(socket);
+
+        self.peers.insert(peer_id, PeerContext { peer_id, tx, state });
+
+        let tx = self.peer_chan.0.clone();
+        let config = Arc::clone(&self.config);
+
+        tokio::spawn(async move {
+            if let Err(e) = peer::Peer::new(peer_id, role, config, socket, tx, rx).start().await {
+                log::error!("peer failed: {:?}", e);
+            }
+        });
+
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {
                 event = self.socket.accept() => match event {
                     Ok(info) => {
-                        let (tx, rx) = mpsc::channel(16);
-                        let peer_id = types::MockPeerId::from_socket_address(&info.1);
-                        let socket = socket::MockSocket::new(info.0);
-
-                        self.peers.insert(peer_id, PeerContext {
-                            peer_id,
-                            tx,
-                            state: ConnectionState::InboundAccepted { addr: info.1 },
-                        });
-
-                        let tx = self.peer_chan.0.clone();
-                        let config = Arc::clone(&self.config);
-
-                        tokio::spawn(async move {
-                            if let Err(e) = peer::Peer::new(
-                                peer_id,
-                                peer::Role::Inbound,
-                                config,
-                                socket,
-                                tx,
-                                rx
-                            ).start().await {
-                                log::error!("peer failed: {:?}", e);
-                            }
-                        });
+                        self.create_peer(
+                            info.0,
+                            types::MockPeerId::from_socket_address(&info.1),
+                            peer::Role::Inbound,
+                            ConnectionState::InboundAccepted { addr: info.1 }
+                        ).await?;
                     }
                     Err(e) => {
                         log::error!("accept() failed: {:?}", e);
@@ -156,14 +161,19 @@ impl Backend {
                     let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
 
                     match event {
-                        types::PeerEvent::PeerInfoReceived { network, version, protocols } => {
+                        types::PeerEvent::PeerInfoReceived { net, version, protocols } => {
                             match self.peers.remove(&peer_id).expect("zzz").state {
                                 ConnectionState::Dialed { .. } => panic!("zzz"),
-                                ConnectionState::InboundAccepted { addr } => {
-                                    todo!();
-                                }
                                 ConnectionState::OutboundAccepted { tx } => {
-                                    todo!();
+                                    tx.send(Ok(types::MockPeerInfo {
+                                        peer_id,
+                                        net,
+                                        version,
+                                        agent: None,
+                                        protocols,
+                                    })).unwrap();
+                                }
+                                ConnectionState::InboundAccepted { addr } => {
                                 }
                             }
                         }
@@ -176,7 +186,24 @@ impl Backend {
                             continue;
                         }
 
-                        todo!();
+                        tokio::select! {
+                            _ = tokio::time::sleep(self.timeout) => {
+                                let _ = response.send(Err(
+                                    P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+                                );
+                            }
+                            res = TcpStream::connect(addr) => match res {
+                                Ok(socket) => {
+                                    self.create_peer(
+                                        socket,
+                                        types::MockPeerId::from_socket_address(&addr),
+                                        peer::Role::Outbound,
+                                        ConnectionState::OutboundAccepted { tx: response }
+                                    ).await?;
+                                },
+                                Err(e) => { let _ = response.send(Err(e.into())); },
+                            }
+                        }
                     }
                 }
             }

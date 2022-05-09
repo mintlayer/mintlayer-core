@@ -19,6 +19,8 @@ use crate::{
     error::{self, P2pError},
     message,
     net::{
+        self,
+        mock::types::{MockPeerId, MockPeerInfo},
         ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
         PubSubService, PubSubTopic, SyncingMessage, SyncingService, ValidationResult,
     },
@@ -43,6 +45,24 @@ pub mod backend;
 pub mod peer;
 pub mod socket;
 pub mod types;
+
+// TODO: create common protocol type defined in net/mod.rs!
+impl<T> TryInto<net::PeerInfo<T>> for MockPeerInfo
+where
+    T: NetworkService<PeerId = MockPeerId, ProtocolId = String>,
+{
+    type Error = P2pError;
+
+    fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
+        Ok(net::PeerInfo {
+            peer_id: self.peer_id,
+            net: self.net,
+            version: self.version,
+            agent: None,
+            protocols: self.protocols.iter().map(|proto| proto.name()).cloned().collect::<Vec<_>>(),
+        })
+    }
+}
 
 #[derive(Debug)]
 pub enum MockDiscoveryStrategy {}
@@ -176,6 +196,7 @@ impl NetworkService for MockService {
 impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
     T: NetworkService<Address = SocketAddr, PeerId = types::MockPeerId> + Send,
+    MockPeerInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -188,7 +209,7 @@ where
             .map_err(|e| e)? // channel closed
             .map_err(|e| e)?; // command failure
 
-        todo!();
+        Ok(peer_info.try_into()?)
     }
 
     async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
@@ -257,127 +278,47 @@ where
     }
 }
 
-/*
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::mock::MockService;
-    use crate::net::ConnectivityEvent;
-    use crate::peer::{Peer, PeerRole};
-    use common::chain::config;
-    use serialization::{Decode, Encode};
-    use std::net::SocketAddr;
-    use std::sync::Arc;
-    use tokio::io::{AsyncReadExt, AsyncWriteExt};
-    use tokio::net::{TcpStream, UdpSocket};
-
-    #[derive(Debug, Encode, Decode, PartialEq, Eq)]
-    struct Transaction {
-        hash: u64,
-        value: u128,
-    }
 
     #[tokio::test]
-    async fn test_new() {
-        let srv_ipv4 = MockService::start(
-            "127.0.0.1:5555".parse().unwrap(),
+    async fn connect_to_remote() {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (mut conn1, _, _) = MockService::start(
+            test_utils::make_address("[::1]:"),
             &[],
             &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
-        assert!(srv_ipv4.is_ok());
-
-        // address already in use
-        let err = MockService::start(
-            "127.0.0.1:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
-        assert!(err.is_err());
-
-        // bind to IPv6 localhost
-        let srv_ipv6 = MockService::start(
-            "[::1]:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
-        assert!(srv_ipv6.is_ok());
-
-        // address already in use
-        let s_ipv6 = MockService::start(
-            "[::1]:5555".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
-        assert!(s_ipv6.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_connect() {
-        use tokio::net::TcpListener;
-
-        // create `TcpListener`, spawn a task, and start accepting connections
-        let addr: SocketAddr = "127.0.0.1:6666".parse().unwrap();
-        let server = TcpListener::bind(addr).await.unwrap();
-
-        tokio::spawn(async move {
-            loop {
-                if server.accept().await.is_ok() {}
-            }
-        });
-
-        // create service that is used for testing `connect()`
-        let srv = MockService::start(
-            "127.0.0.1:7777".parse().unwrap(),
-            &[],
-            &[],
-            std::time::Duration::from_secs(10),
-        )
-        .await;
-        assert!(srv.is_ok());
-        let (mut srv, _) = srv.unwrap();
-
-        // try to connect to self, should fail
-        let res = srv.connect("127.0.0.1:7777".parse().unwrap()).await;
-        println!("{:?}", res);
-        assert!(res.is_err());
-
-        // try to connect to an address that (hopefully)
-        // doesn't have a `TcpListener` running, should fail
-        let res = srv.connect("127.0.0.1:1".parse().unwrap()).await;
-        assert!(res.is_err());
-
-        // try to connect to the `TcpListener` that was spawned above, should succeeed
-        let res = srv.connect("127.0.0.1:6666".parse().unwrap()).await;
-        assert!(res.is_ok());
-    }
-
-    #[tokio::test]
-    async fn test_accept() {
-        // create service that is used for testing `accept()`
-        let addr: SocketAddr = "[::1]:9999".parse().unwrap();
-        let (mut srv, _) = MockService::start(
-            "[::1]:9999".parse().unwrap(),
-            &[],
-            &[],
+            Arc::clone(&config),
             std::time::Duration::from_secs(10),
         )
         .await
         .unwrap();
 
-        let (acc, con) = tokio::join!(srv.poll_next(), TcpStream::connect(addr));
-        assert!(acc.is_ok());
-        assert!(con.is_ok());
-        let acc: ConnectivityEvent<MockService> = acc.unwrap();
+        let (conn2, _, _) = MockService::start(
+            test_utils::make_address("[::1]:"),
+            &[],
+            &[],
+            config,
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
 
-        // TODO: is there any sensible way to make `accept()` fail?
+        assert_eq!(
+            conn1.connect(*conn2.local_addr()).await,
+            Ok(net::PeerInfo {
+                peer_id: *conn2.peer_id(),
+                net: common::chain::config::ChainType::Mainnet,
+                version: common::primitives::version::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: vec!["floodsub".to_string(), "ping".to_string()],
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn accept_incoming() {
+        todo!();
     }
 }
-*/

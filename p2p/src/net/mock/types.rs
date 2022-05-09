@@ -47,7 +47,7 @@ pub struct MockPeerInfo {
     pub net: common::chain::config::ChainType,
     pub version: common::primitives::version::SemVer,
     pub agent: Option<String>,
-    pub protocols: Vec<String>,
+    pub protocols: Vec<Protocol>,
 }
 
 pub enum Command {
@@ -80,7 +80,7 @@ pub enum SyncingEvent {}
 #[derive(Debug, PartialEq)]
 pub enum PeerEvent {
     PeerInfoReceived {
-        network: config::ChainType,
+        net: config::ChainType,
         version: version::SemVer,
         protocols: Vec<Protocol>,
     },
@@ -105,6 +105,10 @@ impl Protocol {
             name: name.to_string(),
             version,
         }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
     }
 }
 
