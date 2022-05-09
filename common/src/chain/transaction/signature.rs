@@ -18,7 +18,10 @@
 use crypto::hash::StreamHasher;
 use parity_scale_codec::Encode;
 
-use crate::primitives::{id::DefaultHashAlgoStream, H256};
+use crate::primitives::{
+    id::{hash_encoded_to, DefaultHashAlgoStream},
+    H256,
+};
 
 use self::inputsig::StandardInputSignature;
 
@@ -73,39 +76,33 @@ pub fn signature_hash(
         .get(input_num)
         .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
 
-    stream.write(tx.get_flags().encode());
+    hash_encoded_to(&tx.get_flags(), &mut stream);
 
     match mode.inputs_mode() {
         sighashtype::InputsMode::CommitWhoPays => {
             for input in tx.get_inputs() {
-                let encoded = input.get_outpoint().encode();
-                stream.write(encoded);
+                hash_encoded_to(&input.get_outpoint(), &mut stream);
             }
         }
         sighashtype::InputsMode::AnyoneCanPay => {
-            let encoded = target_input.get_outpoint().encode();
-            stream.write(encoded);
+            hash_encoded_to(&target_input.get_outpoint(), &mut stream);
         }
     }
 
     match mode.outputs_mode() {
         sighashtype::OutputsMode::All => {
-            for output in tx.get_outputs() {
-                let encoded = output.encode();
-                stream.write(encoded);
-            }
+            hash_encoded_to(tx.get_outputs(), &mut stream);
         }
         sighashtype::OutputsMode::None => (),
         sighashtype::OutputsMode::Single => {
             let output = tx.get_outputs().get(input_num).ok_or_else(|| {
                 TransactionSigError::InvalidInputIndex(input_num, tx.get_outputs().len())
             })?;
-            let encoded = output.encode();
-            stream.write(encoded);
+            hash_encoded_to(&output.encode(), &mut stream);
         }
     }
 
-    stream.write(tx.get_lock_time().encode());
+    hash_encoded_to(&tx.get_lock_time(), &mut stream);
 
     let result = stream.finalize().into();
     Ok(result)
