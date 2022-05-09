@@ -167,12 +167,14 @@ impl Peer {
         loop {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Dummy => {
-                        todo!();
+                    MockEvent::Disconnect => {
+                        break;
                     }
                 }
             }
         }
+
+        Ok(())
     }
 }
 
@@ -335,5 +337,46 @@ mod tests {
             rx1.try_recv(),
             Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
         );
+    }
+
+    #[tokio::test]
+    async fn disconnect() {
+        let (socket1, socket2) = test_utils::get_two_connected_sockets().await;
+        let socket1 = socket::MockSocket::new(socket1);
+        let mut socket2 = socket::MockSocket::new(socket2);
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, rx1) = mpsc::channel(16);
+        let (tx2, rx2) = mpsc::channel(16);
+        let peer_id = MockPeerId::random();
+
+        let mut peer = Peer::new(
+            peer_id,
+            Role::Inbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move { peer.start().await });
+
+        assert!(socket2.recv().now_or_never().is_none());
+        assert!(socket2
+            .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                version: *config.version(),
+                network: *config.magic_bytes(),
+                protocols: vec![
+                    types::Protocol::new("floodsub", *config.version()),
+                    types::Protocol::new("ping", *config.version()),
+                ],
+            }))
+            .await
+            .is_ok());
+
+        assert_eq!(
+            tx2.send(MockEvent::Disconnect).await.map_err(P2pError::from),
+            Ok(())
+        );
+        assert_eq!(handle.await.unwrap(), Ok(()));
     }
 }

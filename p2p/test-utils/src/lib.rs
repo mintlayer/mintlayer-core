@@ -48,9 +48,7 @@ pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
     let server = TcpListener::bind(addr).await.unwrap();
     let peer_fut = TcpStream::connect(addr);
 
-    let (res1, res2) = tokio::join!(
-        server.accept(), peer_fut
-    );
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
 
     (res1.unwrap().0, res2.unwrap())
 }

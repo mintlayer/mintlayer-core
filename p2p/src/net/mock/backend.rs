@@ -40,16 +40,10 @@ use tokio::{
 struct PeerContext {
     peer_id: types::MockPeerId,
     tx: mpsc::Sender<types::MockEvent>,
-    state: ConnectionState,
 }
 
 #[derive(Debug)]
 enum ConnectionState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed {
-        tx: oneshot::Sender<error::Result<types::MockPeerInfo>>,
-    },
-
     /// Connection established for outbound connection
     OutboundAccepted {
         tx: oneshot::Sender<error::Result<types::MockPeerInfo>>,
@@ -71,6 +65,9 @@ pub struct Backend {
 
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::Receiver<types::Command>,
+
+    /// Pending connections
+    pending: HashMap<types::MockPeerId, (PeerContext, ConnectionState)>,
 
     /// Active peers
     peers: HashMap<types::MockPeerId, PeerContext>,
@@ -109,6 +106,7 @@ impl Backend {
             socket,
             cmd_rx,
             peers: HashMap::new(),
+            pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
             conn_tx,
             _flood_tx,
@@ -126,7 +124,7 @@ impl Backend {
         let (tx, rx) = mpsc::channel(16);
         let socket = socket::MockSocket::new(socket);
 
-        self.peers.insert(peer_id, PeerContext { peer_id, tx, state });
+        self.pending.insert(peer_id, (PeerContext { peer_id, tx }, state));
 
         let tx = self.peer_chan.0.clone();
         let config = Arc::clone(&self.config);
@@ -140,6 +138,7 @@ impl Backend {
         Ok(())
     }
 
+    // TODO: separate into command and event handlers
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {
@@ -162,8 +161,9 @@ impl Backend {
 
                     match event {
                         types::PeerEvent::PeerInfoReceived { net, version, protocols } => {
-                            match self.peers.remove(&peer_id).expect("zzz").state {
-                                ConnectionState::Dialed { .. } => panic!("zzz"),
+                            let (ctx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+
+                            match state {
                                 ConnectionState::OutboundAccepted { tx } => {
                                     tx.send(Ok(types::MockPeerInfo {
                                         peer_id,
@@ -186,6 +186,8 @@ impl Backend {
                                     }).await?;
                                 }
                             }
+
+                            self.peers.insert(peer_id, ctx);
                         }
                     }
                 },
@@ -213,6 +215,15 @@ impl Backend {
                                 },
                                 Err(e) => { let _ = response.send(Err(e.into())); },
                             }
+                        }
+                    }
+                    types::Command::Disconnect { peer_id, response } => {
+                        match self.peers.remove(&peer_id) {
+                            Some(peer) => {
+                                let res = peer.tx.send(types::MockEvent::Disconnect).await;
+                                let _ = response.send(res.map_err(P2pError::from));
+                            }
+                            None => { let _ = response.send(Err(P2pError::PeerDoesntExist)); },
                         }
                     }
                 }

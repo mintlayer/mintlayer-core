@@ -213,7 +213,17 @@ where
     }
 
     async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::Disconnect {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e)
     }
 
     fn local_addr(&self) -> &T::Address {
@@ -231,6 +241,9 @@ where
                     addr,
                     peer_info: peer_info.try_into()?,
                 })
+            }
+            types::ConnectivityEvent::Disconnected { peer_id } => {
+                Ok(ConnectivityEvent::Disconnected { peer_id })
             }
         }
     }
@@ -363,5 +376,23 @@ mod tests {
             }
             _ => panic!("invalid event received, expected incoming connection"),
         };
+    }
+
+    #[tokio::test]
+    async fn disconnect() {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let timeout = std::time::Duration::from_secs(10);
+
+        let addr = test_utils::make_address("[::1]:");
+        let (mut conn1, _, _) =
+            MockService::start(addr, &[], &[], Arc::clone(&config), timeout).await.unwrap();
+
+        let addr = test_utils::make_address("[::1]:");
+        let (mut conn2, _, _) = MockService::start(addr, &[], &[], config, timeout).await.unwrap();
+
+        let (res1, res2) = tokio::join!(conn1.connect(*conn2.local_addr()), conn2.poll_next());
+        let peer_id = res1.unwrap().peer_id;
+
+        assert_eq!(conn1.disconnect(peer_id).await, Ok(()));
     }
 }

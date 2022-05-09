@@ -51,9 +51,16 @@ pub struct MockPeerInfo {
 }
 
 pub enum Command {
+    /// Connect to a remote peer at address `peer_addr`
     Connect {
         addr: SocketAddr,
         response: oneshot::Sender<error::Result<MockPeerInfo>>,
+    },
+
+    /// Disconnect remote peer
+    Disconnect {
+        peer_id: MockPeerId,
+        response: oneshot::Sender<error::Result<()>>,
     },
 }
 
@@ -62,6 +69,10 @@ pub enum ConnectivityEvent {
     IncomingConnection {
         addr: SocketAddr,
         peer_info: MockPeerInfo,
+    },
+
+    Disconnected {
+        peer_id: MockPeerId,
     },
 }
 
@@ -91,7 +102,7 @@ pub enum PeerEvent {
 /// Events sent by the mock backend to peers
 #[derive(Debug)]
 pub enum MockEvent {
-    Dummy,
+    Disconnect,
 }
 
 #[derive(Debug, Encode, Decode, PartialEq)]
