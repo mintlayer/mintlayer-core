@@ -76,6 +76,8 @@ pub fn signature_hash(
         .get(input_num)
         .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
 
+    hash_encoded_to(&mode.get(), &mut stream);
+
     hash_encoded_to(&tx.get_flags(), &mut stream);
 
     match mode.inputs_mode() {
@@ -98,7 +100,7 @@ pub fn signature_hash(
             let output = tx.get_outputs().get(input_num).ok_or_else(|| {
                 TransactionSigError::InvalidInputIndex(input_num, tx.get_outputs().len())
             })?;
-            hash_encoded_to(&output.encode(), &mut stream);
+            hash_encoded_to(&output, &mut stream);
         }
     }
 
