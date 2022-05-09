@@ -77,7 +77,7 @@ pub fn signature_hash(
         .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
 
     hash_encoded_to(&mode.get(), &mut stream);
-
+    hash_encoded_to(&tx.version_byte(), &mut stream);
     hash_encoded_to(&tx.get_flags(), &mut stream);
 
     match mode.inputs_mode() {

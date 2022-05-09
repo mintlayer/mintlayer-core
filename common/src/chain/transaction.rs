@@ -69,6 +69,17 @@ impl Transaction {
         Ok(tx)
     }
 
+    pub fn version_byte(&self) -> u8 {
+        let result = match &self {
+            Transaction::V1(_) => 1,
+        };
+        debug_assert_eq!(
+            result,
+            *self.encode().get(0).expect("Unexpected version byte")
+        );
+        result
+    }
+
     pub fn is_replaceable(&self) -> bool {
         match &self {
             Transaction::V1(tx) => tx.is_replaceable(),
@@ -104,5 +115,27 @@ impl Transaction {
         match &self {
             Transaction::V1(tx) => tx.get_serialized_hash(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crypto::random::{RngCore, SeedableRng};
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn version_byte() {
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let flags = rng.next_u32();
+        let lock_time = rng.next_u32();
+
+        let tx =
+            Transaction::new(flags, vec![], vec![], lock_time).expect("Failed to create test tx");
+        let encoded_tx = tx.encode();
+        assert_eq!(tx.version_byte(), *encoded_tx.get(0).unwrap());
+
+        // let's ensure that flags comes right after that
+        assert_eq!(u32::decode(&mut &encoded_tx[1..5]).unwrap(), flags);
     }
 }
