@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
-use crate::primitives::{BlockDistance, BlockHeight};
+use crate::primitives::{BlockDistance, BlockHeight, Compact};
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
@@ -25,10 +25,41 @@ pub trait Activate {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum UpgradeVersion {
-    Genesis = 0,
-    PoW,
+    Genesis,
+    ConsensusUpgrade(ConsensusUpgrade),
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ConsensusUpgrade {
+    PoW { initial_difficulty: Compact },
     PoS,
     DSA,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum ConsensusStatus {
+    // Either genesis or previous block was not PoW
+    PoW(PoWStatus),
+    PoS,
+    DSA,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
+pub enum PoWStatus {
+    Ongoing,
+    Threshold { initial_difficulty: Compact },
+}
+
+impl From<ConsensusUpgrade> for ConsensusStatus {
+    fn from(upgrade: ConsensusUpgrade) -> Self {
+        match upgrade {
+            ConsensusUpgrade::PoW { initial_difficulty } => {
+                ConsensusStatus::PoW(PoWStatus::Threshold { initial_difficulty })
+            }
+            ConsensusUpgrade::PoS => ConsensusStatus::PoS,
+            ConsensusUpgrade::DSA => ConsensusStatus::DSA,
+        }
+    }
 }
 
 impl Activate for UpgradeVersion {}
@@ -92,6 +123,37 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
                 },
             )
         })
+    }
+}
+
+impl NetUpgrades<UpgradeVersion> {
+    pub fn consensus_status(&self, height: BlockHeight) -> ConsensusStatus {
+        let (last_upgrade_height, last_consensus_upgrade) = self
+            .0
+            .iter()
+            .rev()
+            .filter(|(block_height, _upgrade)| *block_height <= height)
+            .find_map(|(block_height, upgrade)| {
+                if let UpgradeVersion::ConsensusUpgrade(consensus_upgrade) = upgrade {
+                    Some((block_height, consensus_upgrade))
+                } else {
+                    None
+                }
+            })
+            .expect("Some consensus must have been set");
+        match last_consensus_upgrade {
+            ConsensusUpgrade::PoW { initial_difficulty } => {
+                if *last_upgrade_height < height {
+                    ConsensusStatus::PoW(PoWStatus::Ongoing)
+                } else {
+                    ConsensusStatus::PoW(PoWStatus::Threshold {
+                        initial_difficulty: *initial_difficulty,
+                    })
+                }
+            }
+            ConsensusUpgrade::PoS => ConsensusStatus::PoS,
+            ConsensusUpgrade::DSA => ConsensusStatus::DSA,
+        }
     }
 }
 

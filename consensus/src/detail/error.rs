@@ -37,6 +37,8 @@ pub enum BlockError {
         block_height: BlockHeight,
         ancestor_height: BlockHeight,
     },
+    #[error("Invalid Proof of Work")]
+    InvalidPoW,
     #[error("The previous block invalid")]
     PrevBlockInvalid,
     #[error("The storage cause failure `{0}`")]

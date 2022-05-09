@@ -15,7 +15,7 @@
 //
 // Author(s): C. Yap
 
-use common::chain::PoWChainConfig;
+use common::chain::{ChainConfig, PoWChainConfig};
 use common::Uint256;
 use std::time::Duration;
 
@@ -25,6 +25,10 @@ pub mod work;
 pub struct PoW(PoWChainConfig);
 
 impl PoW {
+    pub fn new(chain_config: &ChainConfig) -> Self {
+        PoW(chain_config.get_proof_of_work_config())
+    }
+
     pub fn difficulty_limit(&self) -> Uint256 {
         self.0.limit()
     }

@@ -16,6 +16,8 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::detail::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
+use crate::detail::pow::work::check_proof_of_work;
+use crate::detail::pow::PoW;
 use crate::ConsensusEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
@@ -23,9 +25,10 @@ use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
-use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
+use common::chain::PoWStatus;
+use common::chain::{calculate_tx_index_from_block, ConsensusStatus};
 use common::chain::{OutPointSourceId, Transaction};
 use common::primitives::BlockDistance;
 use common::primitives::{time, BlockHeight, Id, Idable};
@@ -590,9 +593,40 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        let _consensus_data = block.consensus_data();
-        // TODO: PoW is not in master at the moment =(
-        Ok(())
+        let block_index =
+            self.db_tx.get_block_index(&block.get_id())?.ok_or(BlockError::NotFound)?;
+        let block_height = block_index.get_block_height();
+        match self.chain_config.net_upgrade().consensus_status(block_height) {
+            ConsensusStatus::PoW(pow_status) => {
+                self.check_pow_consensus(block, &block_index, pow_status)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    fn check_pow_consensus(
+        &self,
+        block: &Block,
+        block_index: &BlockIndex,
+        pow_status: PoWStatus,
+    ) -> Result<(), BlockError> {
+        let work_required = match pow_status {
+            PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
+            PoWStatus::Ongoing => {
+                let prev_block_index = self.get_previous_block_index(block_index)?;
+                PoW::new(self.chain_config).get_work_required(
+                    &prev_block_index,
+                    block.block_time(),
+                    self,
+                )?
+            }
+        };
+
+        if check_proof_of_work(block.get_id().get(), work_required)? {
+            Ok(())
+        } else {
+            Err(BlockError::InvalidPoW)
+        }
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
