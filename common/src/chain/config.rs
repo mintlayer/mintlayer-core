@@ -94,6 +94,7 @@ fn create_mainnet_genesis() -> Block {
         0,
         InputWitness::NoSignature(Some(genesis_message)),
     );
+    // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
         Destination::Address(genesis_mint_receiver_pubkeyhash),
