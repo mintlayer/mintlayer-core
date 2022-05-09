@@ -74,7 +74,10 @@ impl ChainConfig {
     }
 }
 
-const MAINNET_ADDRESS_PREFIX: &str = "mt";
+const MAINNET_ADDRESS_PREFIX: &str = "mtc";
+#[allow(dead_code)]
+const TESTNET_ADDRESS_PREFIX: &str = "tmt";
+
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
