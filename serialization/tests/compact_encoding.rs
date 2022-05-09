@@ -1,5 +1,7 @@
+mod utils;
+
 use serialization::{Decode, Encode};
-use serialization_utils::CompactWrapper;
+use utils::CompactWrapper;
 
 #[test]
 fn test_scale_compact_numbers() {

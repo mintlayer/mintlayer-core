@@ -1,7 +1,9 @@
+mod utils;
+
 use arraytools::ArrayTools;
 use hex_literal::hex;
 use serialization::{Decode, Encode};
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+use utils::{OptionWrapper, SimpleWrapper};
 use std::collections::BTreeMap;
 
 #[test]

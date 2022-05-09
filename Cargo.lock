@@ -3363,14 +3363,6 @@ dependencies = [
  "hex-literal",
  "parity-scale-codec",
  "rand 0.8.4",
- "serialization-utils",
-]
-
-[[package]]
-name = "serialization-utils"
-version = "0.1.0"
-dependencies = [
- "parity-scale-codec",
 ]
 
 [[package]]

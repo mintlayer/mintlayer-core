@@ -1,5 +1,7 @@
+mod utils;
+
 use serialization::{Decode, Encode};
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_numbers() {

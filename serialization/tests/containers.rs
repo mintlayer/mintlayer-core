@@ -1,8 +1,9 @@
+mod utils;
+
 use rand::Rng;
 use serialization::{Decode, Encode};
-use serialization_utils::SimpleWrapper;
+use utils::SimpleWrapper;
 use std::collections::BTreeMap;
-// use std::collections::HashMap;
 
 #[test]
 fn test_scale_vectors() {

@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use parity_scale_codec::{Decode, Encode, HasCompact};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
