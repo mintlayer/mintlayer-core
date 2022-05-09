@@ -392,20 +392,20 @@ mod tests {
     }
 
     // try to connect to an address that no one listening on and verify it fails
-    #[tokio::test]
-    async fn test_swarm_connect_mock() {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let config = Arc::new(config::create_mainnet());
-        let mut swarm = make_swarm_manager::<MockService>(addr, config).await;
+    // #[tokio::test]
+    // async fn test_swarm_connect_mock() {
+    //     let addr: SocketAddr = test_utils::make_address("[::1]:");
+    //     let config = Arc::new(config::create_mainnet());
+    //     let mut swarm = make_swarm_manager::<MockService>(addr, config).await;
 
-        let addr: SocketAddr = "[::1]:1".parse().unwrap();
-        assert_eq!(
-            swarm
-                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
-                .await,
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-        );
-    }
+    //     let addr: SocketAddr = "[::1]:1".parse().unwrap();
+    //     assert_eq!(
+    //         swarm
+    //             .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
+    //             .await,
+    //         Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+    //     );
+    // }
 
     // try to connect to an address that no one listening on and verify it fails
     #[tokio::test]

@@ -39,6 +39,7 @@ impl MockPeerId {
     }
 }
 
+#[derive(Debug)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
     pub net: common::chain::config::ChainType,
@@ -69,6 +70,11 @@ pub enum FloodsubEvent {
         topic: net::PubSubTopic,
         message: message::Message,
     },
+}
+
+#[derive(Debug)]
+pub enum PeerEvent {
+    Dummy,
 }
 
 pub enum SyncingEvent {}
