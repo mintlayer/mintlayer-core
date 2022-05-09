@@ -16,7 +16,6 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::hash::StreamHasher;
-use parity_scale_codec::Encode;
 
 use crate::primitives::{
     id::{hash_encoded_to, DefaultHashAlgoStream},
