@@ -32,7 +32,7 @@ pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: Block
 pub(crate) fn get_starting_block_time(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
-    db_accessor: ConsensusRef,
+    db_accessor: &ConsensusRef,
 ) -> Result<u32, BlockError> {
     let retarget_height = {
         let height: u64 = block_index.get_block_height().into();

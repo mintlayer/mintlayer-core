@@ -31,7 +31,10 @@ use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, BlockError> {
+pub(crate) fn check_proof_of_work(
+    block_hash: H256,
+    block_bits: Compact,
+) -> Result<bool, BlockError> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
@@ -62,7 +65,7 @@ impl PoW {
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
-        db_accessor: ConsensusRef,
+        db_accessor: &ConsensusRef,
     ) -> Result<Compact, BlockError> {
         //TODO: check prev_block_index exists
         let prev_block_bits = {
