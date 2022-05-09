@@ -49,8 +49,8 @@ impl Builder {
         self
     }
 
-    /// Start the RPC server and get the RPC object
-    pub async fn start(self) -> anyhow::Result<Rpc> {
+    /// Build the RPC server and get the RPC object
+    pub async fn build(self) -> anyhow::Result<Rpc> {
         Rpc::new(&self.address, self.methods).await
     }
 }
@@ -116,7 +116,7 @@ mod tests {
     async fn rpc_server() -> anyhow::Result<()> {
         let rpc = Builder::new("127.0.0.1:3030".parse().unwrap())
             .register(SubsystemRpcImpl.into_rpc())
-            .start()
+            .build()
             .await?;
 
         let url = format!("http://{}", rpc.address());

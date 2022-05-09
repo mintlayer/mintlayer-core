@@ -122,7 +122,7 @@ impl Manager {
     /// A typical skeleton of a subsystem looks like this:
     /// ```no_run
     /// # let mut manager = subsystem::Manager::new("app");
-    /// let subsystem = manager.start_raw("my-subsystem", |mut call, mut shutdown| async move {
+    /// let subsystem = manager.add_raw_subsystem("my-subsys", |mut call, mut shutdown| async move {
     ///     loop {
     ///         tokio::select! {
     ///             // Shutdown received, break out of the loop.
@@ -135,7 +135,10 @@ impl Manager {
     /// });
     /// # let _ = subsystem.call(|()| ());  // Fix the call type to avoid ambiguity.
     /// ```
-    pub fn start_raw_with_config<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+    pub fn add_raw_subsystem_with_config<
+        T: 'static + Send,
+        F: 'static + Send + Future<Output = ()>,
+    >(
         &mut self,
         config: SubsystemConfig,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
@@ -175,12 +178,12 @@ impl Manager {
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
     /// from other subsystems. A hook to be invoked on shutdown can be specified by means of the
     /// [Subsystem] trait.
-    pub fn start_with_config<S: Subsystem>(
+    pub fn add_subsystem_with_config<S: Subsystem>(
         &mut self,
         config: SubsystemConfig,
         mut subsys: S,
     ) -> Handle<S> {
-        self.start_raw_with_config(config, |mut call_rq, mut shutdown_rq| async move {
+        self.add_raw_subsystem_with_config(config, |mut call_rq, mut shutdown_rq| async move {
             loop {
                 tokio::select! {
                     () = shutdown_rq.recv() => { break; }
@@ -191,18 +194,18 @@ impl Manager {
         })
     }
 
-    /// Start a raw subsystem. See [Manager::start_raw_with_config].
-    pub fn start_raw<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
+    /// Start a raw subsystem. See [Manager::add_raw_subsystem_with_config].
+    pub fn add_raw_subsystem<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &mut self,
         name: &'static str,
         subsystem: impl 'static + Send + FnOnce(CallRequest<T>, ShutdownRequest) -> F,
     ) -> Handle<T> {
-        self.start_raw_with_config(SubsystemConfig::named(name), subsystem)
+        self.add_raw_subsystem_with_config(SubsystemConfig::named(name), subsystem)
     }
 
     /// Start a passive subsystem. See [Manager::start_with_config].
-    pub fn start<S: Subsystem>(&mut self, name: &'static str, subsys: S) -> Handle<S> {
-        self.start_with_config(SubsystemConfig::named(name), subsys)
+    pub fn add_subsystem<S: Subsystem>(&mut self, name: &'static str, subsys: S) -> Handle<S> {
+        self.add_subsystem_with_config(SubsystemConfig::named(name), subsys)
     }
 
     /// Install termination signal handlers.
@@ -211,7 +214,7 @@ impl Manager {
     /// signalling all other subsystems and the whole manager to shut down.
     #[cfg(not(loom))]
     pub fn install_signal_handlers(&mut self) {
-        self.start_raw(
+        self.add_raw_subsystem(
             "ctrl-c",
             |mut call_rq: CallRequest<()>, mut shutdown_rq| async move {
                 tokio::select! {
@@ -318,7 +321,7 @@ mod test {
             shutdown_timeout: Some(Duration::from_secs(1)),
         });
 
-        man.start_raw(
+        man.add_raw_subsystem(
             "does_not_want_to_exit",
             |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
         );

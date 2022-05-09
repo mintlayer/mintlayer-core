@@ -38,7 +38,7 @@ fn shortlived() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let mut app = subsystem::Manager::new("shortlived");
-        app.start_raw("nop", |_: CallRequest<()>, _| async {});
+        app.add_raw_subsystem("nop", |_: CallRequest<()>, _| async {});
         app.main().await;
     });
 }
@@ -49,8 +49,8 @@ fn trivial() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let mut app = subsystem::Manager::new("trivial");
-        app.start("trivial", Trivial);
-        app.start_raw("nop", |_: CallRequest<()>, _| async {});
+        app.add_subsystem("trivial", Trivial);
+        app.add_raw_subsystem("nop", |_: CallRequest<()>, _| async {});
         app.main().await;
     });
 }
