@@ -40,6 +40,7 @@ use tokio::{
 };
 
 pub mod backend;
+pub mod socket;
 pub mod types;
 
 #[derive(Debug)]
@@ -61,10 +62,10 @@ where
     /// Socket address of the network service provider
     addr: SocketAddr,
 
-	/// Unique peer ID of the local node
+    /// Unique peer ID of the local node
     peer_id: types::MockPeerId,
 
-	/// Timeout for operations
+    /// Timeout for operations
     timeout: std::time::Duration,
 
     /// TX channel for sending commands to mock backend

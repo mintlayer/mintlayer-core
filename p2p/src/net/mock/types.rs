@@ -15,11 +15,11 @@
 //
 // Author(s): A. Altonen
 use crate::{error, message, net};
-use crypto::random::{Rng, make_pseudo_rng};
+use crypto::random::{make_pseudo_rng, Rng};
 use std::{
- net::SocketAddr,
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
+    net::SocketAddr,
 };
 use tokio::{net::TcpStream, sync::oneshot};
 

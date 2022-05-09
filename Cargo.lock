@@ -2355,6 +2355,7 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "common",
  "crypto",
  "futures",
@@ -2369,6 +2370,7 @@ dependencies = [
  "sscanf",
  "test-utils",
  "tokio",
+ "tokio-util",
  "void",
 ]
 

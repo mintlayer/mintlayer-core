@@ -6,17 +6,20 @@ license = "MIT"
 
 [dependencies]
 async-trait = "0.1.51"
+bytes = "1.1.0"
 futures = "0.3.15"
 futures-timer = "3.0.2"
+itertools = "0.10.3"
 parity-scale-codec = "2.3.1"
 rand = "0.8.4"
+sscanf = "0.2.1"
 void = "1.0.2"
-itertools = "0.10.3"
+
+# local dependencies
 common = { path = "../common/" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 serialization = { path = "../serialization/" }
-sscanf = "0.2.1"
 
 [dependencies.libp2p]
 version = "0.44.0"
@@ -27,6 +30,11 @@ features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-
 version = "1"
 default-features = false
 features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
+
+[dependencies.tokio-util]
+version = "0.7"
+default-features = false
+features = ["codec"]
 
 [dev-dependencies]
 portpicker = "0.1.1"
