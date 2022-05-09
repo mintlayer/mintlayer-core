@@ -225,7 +225,14 @@ where
     }
 
     async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
-        todo!();
+        match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
+                Ok(ConnectivityEvent::IncomingConnection {
+                    addr,
+                    peer_info: peer_info.try_into()?,
+                })
+            }
+        }
     }
 }
 
@@ -319,6 +326,42 @@ mod tests {
 
     #[tokio::test]
     async fn accept_incoming() {
-        todo!();
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (mut conn1, _, _) = MockService::start(
+            test_utils::make_address("[::1]:"),
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+
+        let (mut conn2, _, _) = MockService::start(
+            test_utils::make_address("[::1]:"),
+            &[],
+            &[],
+            config,
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+
+        let (res1, res2) = tokio::join!(conn1.connect(*conn2.local_addr()), conn2.poll_next());
+        let conn1_id = match res2.unwrap() {
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => {
+                assert_eq!(peer_info.net, common::chain::config::ChainType::Mainnet);
+                assert_eq!(
+                    peer_info.version,
+                    common::primitives::version::SemVer::new(0, 1, 0),
+                );
+                assert_eq!(peer_info.agent, None);
+                assert_eq!(
+                    peer_info.protocols,
+                    vec!["floodsub".to_string(), "ping".to_string()],
+                );
+            }
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
     }
 }

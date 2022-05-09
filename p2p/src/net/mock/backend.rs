@@ -174,6 +174,16 @@ impl Backend {
                                     })).unwrap();
                                 }
                                 ConnectionState::InboundAccepted { addr } => {
+                                    self.conn_tx.send(types::ConnectivityEvent::IncomingConnection {
+                                        addr,
+                                        peer_info: types::MockPeerInfo {
+                                            peer_id,
+                                            net,
+                                            version,
+                                            agent: None,
+                                            protocols,
+                                        }
+                                    }).await?;
                                 }
                             }
                         }

@@ -248,24 +248,8 @@ mod tests {
     }
 
     // handle peer connection event
-    // #[tokio::test]
-    // async fn test_peer_connected() {
-    //     let addr: SocketAddr = test_utils::make_address("[::1]:");
-    //     let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
-
-    //     assert_eq!(
-    //         mgr.on_sync_event(event::SyncControlEvent::Connected {
-    //             peer_id: MockPeerId::random()
-    //         })
-    //         .await,
-    //         Ok(())
-    //     );
-    //     assert_eq!(mgr.peers.len(), 1);
-    // }
-
-    // handle peer disconnection event
     #[tokio::test]
-    async fn test_peer_disconnected() {
+    async fn test_peer_connected() {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
         let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
@@ -274,6 +258,20 @@ mod tests {
                 peer_id: MockPeerId::random()
             })
             .await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
+    }
+
+    // handle peer disconnection event
+    #[tokio::test]
+    async fn test_peer_disconnected() {
+        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
+        let peer_id = MockPeerId::random();
+
+        assert_eq!(
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -289,10 +287,7 @@ mod tests {
         assert_eq!(mgr.peers.len(), 1);
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Disconnected {
-                peer_id: MockPeerId::random()
-            })
-            .await,
+            mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id }).await,
             Ok(())
         );
         assert!(mgr.peers.is_empty());

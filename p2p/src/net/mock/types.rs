@@ -57,10 +57,11 @@ pub enum Command {
     },
 }
 
+#[derive(Debug)]
 pub enum ConnectivityEvent {
     IncomingConnection {
-        peer_id: SocketAddr,
-        socket: TcpStream,
+        addr: SocketAddr,
+        peer_info: MockPeerInfo,
     },
 }
 
