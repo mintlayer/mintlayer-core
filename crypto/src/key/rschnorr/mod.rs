@@ -196,9 +196,9 @@ impl std::ops::Add for &MLRistrettoPublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::random::make_true_rng;
     use hex::ToHex;
     use tari_crypto::tari_utilities::message_format::MessageFormat;
-    use crate::random::make_true_rng;
 
     #[test]
     fn basic() {

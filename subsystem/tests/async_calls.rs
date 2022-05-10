@@ -65,11 +65,11 @@ fn async_calls() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
-            let logger = app.start("logger", Logger::new("logging".to_string()));
-            let counter = app.start("counter", Counter::new(logger.clone()));
+            let mut app = subsystem::Manager::new("app");
+            let logger = app.add_subsystem("logger", Logger::new("logging".to_string()));
+            let counter = app.add_subsystem("counter", Counter::new(logger.clone()));
 
-            app.start_raw("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
+            app.add_raw_subsystem("test", |_call_rq: CallRequest<()>, _shut_rq| async move {
                 logger.call(|l| l.write("starting")).await.unwrap();
 
                 // Bump the counter twice

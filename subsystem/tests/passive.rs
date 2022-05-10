@@ -107,13 +107,13 @@ fn basic_passive_subsystem() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
+            let mut app = subsystem::Manager::new("app");
 
-            let substr = app.start("substr", Substringer::new("abc".into()));
-            let counter = app.start("counter", Counter::new());
+            let substr = app.add_subsystem("substr", Substringer::new("abc".into()));
+            let counter = app.add_subsystem("counter", Counter::new());
 
             let tester = Tester::new(substr, counter);
-            app.start_raw("test", |call_rq, shut_rq| async move {
+            app.add_raw_subsystem("test", |call_rq, shut_rq| async move {
                 tester.run(call_rq, shut_rq).await
             });
 
@@ -127,14 +127,14 @@ fn basic_passive_shutdown() {
     let runtime = helpers::init_test_runtime();
     common::concurrency::model(move || {
         runtime.block_on(async {
-            let app = subsystem::Manager::new("app");
+            let mut app = subsystem::Manager::new("app");
 
-            let _substr = app.start("substr", Substringer::new("abc".into()));
-            let _counter = app.start("counter", Counter::new());
+            let _substr = app.add_subsystem("substr", Substringer::new("abc".into()));
+            let _counter = app.add_subsystem("counter", Counter::new());
 
             // Start a subsystem that immediately terminates, instructing the remaining subsystems
             // to terminate too.
-            let _shut: subsystem::Handle<()> = app.start_raw("terminator", |_, _| async {});
+            let _shut: subsystem::Handle<()> = app.add_raw_subsystem("terminator", |_, _| async {});
 
             app.main().await
         })
