@@ -163,6 +163,7 @@ mod tests {
     use crate::chain::upgrades::netupgrade::NetUpgrades;
     use crate::chain::Activate;
     use crate::primitives::BlockHeight;
+    use crate::Uint256;
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
     pub enum MockVersion {
@@ -286,5 +287,69 @@ mod tests {
             (three_height - BlockDistance::new(1)).unwrap(),
         );
         check(MockVersion::Three, three_height, BlockHeight::max());
+    }
+
+    fn mock_consensus_upgrades() -> NetUpgrades<UpgradeVersion> {
+        let genesis_pow = BlockHeight::new(0);
+        let first_pos_upgrade = BlockHeight::new(10_000);
+        let back_to_pow = BlockHeight::new(15_000);
+
+        let upgrades = vec![
+            (
+                genesis_pow,
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                    initial_difficulty: Uint256::from_u64(1000).unwrap().into(),
+                }),
+            ),
+            (
+                first_pos_upgrade,
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoS),
+            ),
+            (
+                back_to_pow,
+                UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                    initial_difficulty: Uint256::from_u64(2000).unwrap().into(),
+                }),
+            ),
+        ];
+
+        NetUpgrades::initialize(upgrades)
+    }
+
+    #[test]
+    fn consensus_upgrade() {
+        let upgrades = mock_consensus_upgrades();
+        assert_eq!(
+            upgrades.consensus_status(0.into()),
+            ConsensusStatus::PoW(PoWStatus::Threshold {
+                initial_difficulty: Uint256::from_u64(1000).unwrap().into()
+            })
+        );
+        assert_eq!(
+            upgrades.consensus_status(1.into()),
+            ConsensusStatus::PoW(PoWStatus::Ongoing)
+        );
+        assert_eq!(
+            upgrades.consensus_status(9_999.into()),
+            ConsensusStatus::PoW(PoWStatus::Ongoing)
+        );
+        assert_eq!(
+            upgrades.consensus_status(10_000.into()),
+            ConsensusStatus::PoS
+        );
+        assert_eq!(
+            upgrades.consensus_status(14_999.into()),
+            ConsensusStatus::PoS
+        );
+        assert_eq!(
+            upgrades.consensus_status(15_000.into()),
+            ConsensusStatus::PoW(PoWStatus::Threshold {
+                initial_difficulty: Uint256::from_u64(2_000).unwrap().into()
+            })
+        );
+        assert_eq!(
+            upgrades.consensus_status(15_001.into()),
+            ConsensusStatus::PoW(PoWStatus::Ongoing)
+        );
     }
 }
