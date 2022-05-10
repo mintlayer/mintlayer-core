@@ -63,7 +63,7 @@ impl PoW {
         prev_block_index: &BlockIndex,
         new_block_time: u32,
         db_accessor: ConsensusRef,
-    ) -> Result<Compact, Error> {
+    ) -> Result<Compact, BlockError> {
         //TODO: check prev_block_index exists
         let prev_block_bits = {
             if let ConsensusData::PoW(pow_data) =
@@ -71,7 +71,7 @@ impl PoW {
             {
                 pow_data.bits()
             } else {
-                return Err(Error::NoPowData);
+                return Err(BlockError::NoPowData);
             }
         };
 
@@ -106,7 +106,7 @@ impl PoW {
         &self,
         retarget_block_time: u32,
         prev_block_index: &BlockIndex,
-    ) -> Result<Compact, Error> {
+    ) -> Result<Compact, BlockError> {
         // limit adjustment step
         let actual_timespan_of_last_interval =
             self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
@@ -117,7 +117,7 @@ impl PoW {
             {
                 pow_data.bits()
             } else {
-                return Err(Error::NoPowData);
+                return Err(BlockError::NoPowData);
             }
         };
 

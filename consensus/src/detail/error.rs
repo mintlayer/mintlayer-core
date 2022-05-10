@@ -87,7 +87,10 @@ pub enum BlockError {
     #[error("Unexpected numeric type conversion error `{0:?}`")]
     InternalNumTypeConversionError(Id<Block>),
     #[error("Conversion failed: `{0:?}`")]
-    Conversion(String), // To be expanded
+    Conversion(String),
+    #[error("No PoW data for block")]
+    NoPowData,
+    // To be expanded
 }
 
 impl From<blockchain_storage::Error> for BlockError {
