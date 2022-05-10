@@ -1,94 +1,4 @@
-use bech32::{self, convert_bits, Error, FromBase32, ToBase32, Variant};
-use core::fmt;
-use displaydoc::Display;
-use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedBech32 {
-    hrp: String,
-    data: Vec<u8>,
-}
-
-impl DecodedBech32 {
-    pub fn get_hrp(&self) -> &str {
-        &self.hrp
-    }
-
-    pub fn get_data(&self) -> &[u8] {
-        &self.data
-    }
-
-    pub fn encode(self) -> Result<String, Bech32Error> {
-        encode(&self.hrp, self.data)
-    }
-}
-
-#[derive(Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Display)]
-pub enum Bech32Error {
-    /// missing separator
-    NoSeparator,
-    /// Invalid checksum
-    FailedChecksum,
-    /// Length either too short or too long
-    InvalidLength,
-    /// char value not supported
-    InvalidChar(char),
-    /// the provided u8 value in the data is invalid
-    InvalidData(u8),
-    /// Padding issue
-    InvalidPadding,
-    /// a mix of lowercase and uppercase is not allowed
-    MixCase,
-    /// only variant Bech32M is supported
-    UnsupportedVariant,
-    /// list of indices containing invalid characters in a bech32 string
-    ErrorLocation(Vec<usize>),
-    /// wraps the rust error
-    StdError(#[from] fmt::Error),
-}
-
-impl From<bech32::Error> for Bech32Error {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::MissingSeparator => Self::NoSeparator,
-            Error::InvalidChecksum => Self::FailedChecksum,
-            Error::InvalidLength => Self::InvalidLength,
-            Error::InvalidChar(x) => Self::InvalidChar(x),
-            Error::InvalidData(x) => Self::InvalidData(x),
-            Error::InvalidPadding => Self::InvalidPadding,
-            Error::MixedCase => Self::MixCase,
-        }
-    }
-}
-
-pub fn encode<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
-    let data = data.to_base32();
-    bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
-}
-
-pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
-    match bech32::decode(s) {
-        Ok((hrp, data, variant)) => {
-            if variant == Variant::Bech32 {
-                return Err(Bech32Error::UnsupportedVariant);
-            }
-
-            // ------- this checking is only for BITCOIN: Witness Programs
-            // if hrp == "bc" && ( s.len() < 2 || s.len() > 40 ) {
-            //     return Err(Bech32Error::InvalidLength);
-            // }
-            // ------- EOL
-
-            let data = convert_bits(&data, 5, 8, false)?;
-
-            Ok(DecodedBech32 { hrp, data })
-        }
-        Err(e) => Err(e.into()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
     use super::*;
     use bitcoin_bech32::WitnessProgram;
     use hex::FromHex;
@@ -296,7 +206,7 @@ mod tests {
             "a1lqfn3a",
             "an83characterlonghumanreadablepartthatcontainsthetheexcludedcharactersbioandnumber11sg7hg6",
             "abcdef1l7aum6echk45nj3s0wdvt2fg8x9yrzpqzd3ryx",
-            // "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
+            "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
         ).iter().for_each(|s| {
@@ -349,4 +259,3 @@ mod tests {
             }
         });
     }
-}
