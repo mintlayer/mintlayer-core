@@ -66,8 +66,8 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
         }
     }
 
-    fn estimated_size(&self) -> usize {
-        todo!()
+    fn estimated_size(&self) -> Option<usize> {
+        None
     }
 
     fn derive_cache(&self) -> UtxosCache {

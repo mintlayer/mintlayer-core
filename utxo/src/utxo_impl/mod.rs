@@ -92,8 +92,8 @@ pub trait UtxosView {
     /// Retrieves the block hash of the best block in this view
     fn get_best_block_hash(&self) -> Option<Id<Block>>;
 
-    /// Estimated size of the whole view (should be 0 if empty.)
-    fn estimated_size(&self) -> usize;
+    /// Estimated size of the whole view (None if not implemented)
+    fn estimated_size(&self) -> Option<usize>;
 
     fn derive_cache(&self) -> UtxosCache;
 }
@@ -426,8 +426,8 @@ impl<'a> UtxosView for UtxosCache<'a> {
             self.parent.and_then(|parent| parent.get_best_block_hash()))
     }
 
-    fn estimated_size(&self) -> usize {
-        todo!()
+    fn estimated_size(&self) -> Option<usize> {
+        None
     }
 
     fn derive_cache(&self) -> UtxosCache {

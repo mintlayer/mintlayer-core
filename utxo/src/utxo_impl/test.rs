@@ -81,18 +81,7 @@ fn check_spend_utxo(
     // perform the spend_utxo
     let res = child.spend_utxo(&child_outpoint);
 
-    match spend_result {
-        Ok(_) => {
-            assert!(res.is_ok());
-        }
-        Err(expected_e) => {
-            if let Err(actual_e) = res {
-                assert_eq!(expected_e, actual_e);
-            } else {
-                assert!(false);
-            }
-        }
-    }
+    assert_eq!(spend_result.map(|_| ()), res.map(|_| ()));
 
     let key = &child_outpoint;
     let ret_value = child.utxos.get(key);
