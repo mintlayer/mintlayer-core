@@ -28,12 +28,14 @@ pub struct OutPoint {
     index: u32,
 }
 
-fn outpoint_source_id_as_monolithic_tuple(v: &OutPointSourceId) -> (u8, H256) {
-    let tx_out_index = 0;
-    let blk_reward_index = 1;
-    match v {
-        OutPointSourceId::Transaction(h) => (tx_out_index, h.get()),
-        OutPointSourceId::BlockReward(h) => (blk_reward_index, h.get()),
+impl OutPointSourceId {
+    fn outpoint_source_id_as_monolithic_tuple(&self) -> (u8, H256) {
+        const TX_OUT_INDEX: u8 = 0;
+        const BLK_REWARD_INDEX: u8 = 1;
+        match self {
+            OutPointSourceId::Transaction(h) => (TX_OUT_INDEX, h.get()),
+            OutPointSourceId::BlockReward(h) => (BLK_REWARD_INDEX, h.get()),
+        }
     }
 }
 
@@ -45,8 +47,8 @@ impl PartialOrd for OutPointSourceId {
 
 impl Ord for OutPointSourceId {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = outpoint_source_id_as_monolithic_tuple(self);
-        let other_id = outpoint_source_id_as_monolithic_tuple(other);
+        let id = self.outpoint_source_id_as_monolithic_tuple();
+        let other_id = other.outpoint_source_id_as_monolithic_tuple();
         id.cmp(&other_id)
     }
 }
@@ -59,8 +61,8 @@ impl PartialOrd for OutPoint {
 
 impl Ord for OutPoint {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        let id = outpoint_source_id_as_monolithic_tuple(&self.id);
-        let other_id = outpoint_source_id_as_monolithic_tuple(&other.id);
+        let id = self.id.outpoint_source_id_as_monolithic_tuple();
+        let other_id = other.id.outpoint_source_id_as_monolithic_tuple();
 
         (id, self.index).cmp(&(other_id, other.index))
     }
