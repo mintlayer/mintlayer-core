@@ -11,20 +11,19 @@ pub fn encode<T: AsRef<[u8]>>(raw_data: T) -> Result<Vec<u5>, Bech32Error> {
 }
 
 pub fn decode<T: AsRef<[u5]>>(base32_data: T) -> Result<Vec<u8>, Bech32Error> {
-    convert_bits(base32_data.as_ref(), 5, 8, true).map_err(Bech32Error::from)
+    convert_bits(base32_data.as_ref(), 5, 8, false).map_err(Bech32Error::from)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bech32::u5;
 
     #[test]
     fn numeric_test() {
-        let buffer = vec![u5::try_from_u8(0).unwrap()];
-        assert_eq!(decode(buffer).unwrap(), vec![0]);
+        let buffer = encode(vec![0u8]).unwrap();
+        assert_eq!(decode(buffer).unwrap(), vec![0u8]);
 
-        let buffer = vec![u5::try_from_u8(b'M').unwrap(), u5::try_from_u8(b'Y').unwrap()];
-        assert_eq!(decode(buffer).unwrap(), vec![0]);
+        let buffer = encode(Vec::<u8>::new()).unwrap();
+        assert_eq!(decode(buffer).unwrap(), Vec::<u8>::new());
     }
 }
