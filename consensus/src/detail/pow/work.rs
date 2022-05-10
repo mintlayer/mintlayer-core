@@ -22,7 +22,7 @@ use crate::detail::pow::helpers::{
 };
 use crate::detail::ConsensusRef;
 
-use crate::detail::pow::{Error, PoW};
+use crate::detail::pow::PoW;
 use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::BlockIndex;
@@ -155,7 +155,7 @@ fn mine(
     max_nonce: u128,
     bits: Compact,
     block_rewards: Vec<TxOutput>,
-) -> Result<bool, Error> {
+) -> Result<bool, BlockError> {
     let mut data = PoWData::new(bits, 0, block_rewards);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
