@@ -16,11 +16,11 @@
 // Author(s): A. Altonen
 #![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
-    error::{self, P2pError},
+    error::{self, P2pError, ProtocolError},
     message,
     net::{
         self,
-        mock::types::{MockPeerId, MockPeerInfo},
+        mock::types::{MockPeerId, MockPeerInfo, MockRequestId},
         ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
         PubSubService, PubSubTopic, SyncingMessage, SyncingService, ValidationResult,
     },
@@ -40,6 +40,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::{mpsc, oneshot},
 };
+use utils::ensure;
 
 pub mod backend;
 pub mod peer;
@@ -72,9 +73,6 @@ pub struct MockService;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
-
-#[derive(Debug, Copy, Clone)]
-pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T>
 where
@@ -118,7 +116,7 @@ where
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
 
-    _sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -148,7 +146,7 @@ impl NetworkService for MockService {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (flood_tx, _flood_rx) = mpsc::channel(16);
-        let (sync_tx, _sync_rx) = mpsc::channel(16);
+        let (sync_tx, sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
@@ -185,7 +183,7 @@ impl NetworkService for MockService {
             },
             Self::SyncingHandle {
                 cmd_tx,
-                _sync_rx,
+                sync_rx,
                 _marker: Default::default(),
             },
         ))
@@ -282,7 +280,26 @@ where
         peer_id: T::PeerId,
         message: message::Message,
     ) -> error::Result<T::RequestId> {
-        todo!();
+        ensure!(
+            std::matches!(
+                message.msg,
+                message::MessageType::Syncing(message::SyncingMessage::Request(_))
+            ),
+            P2pError::ProtocolError(ProtocolError::InvalidMessage)
+        );
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                message,
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 
     async fn send_response(
@@ -290,11 +307,49 @@ where
         request_id: T::RequestId,
         message: message::Message,
     ) -> error::Result<()> {
-        todo!();
+        ensure!(
+            std::matches!(
+                message.msg,
+                message::MessageType::Syncing(message::SyncingMessage::Response(_))
+            ),
+            P2pError::ProtocolError(ProtocolError::InvalidMessage)
+        );
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message,
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
     }
 
     async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
-        todo!();
+        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            } => Ok(net::SyncingMessage::Request {
+                peer_id,
+                request_id,
+                request,
+            }),
+            types::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            } => Ok(net::SyncingMessage::Response {
+                peer_id,
+                request_id,
+                response,
+            }),
+        }
     }
 }
 
@@ -394,5 +449,60 @@ mod tests {
         let peer_id = res1.unwrap().peer_id;
 
         assert_eq!(conn1.disconnect(peer_id).await, Ok(()));
+    }
+
+    #[tokio::test]
+    async fn test_request_response() {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let timeout = std::time::Duration::from_secs(10);
+
+        let addr = test_utils::make_address("[::1]:");
+        let (mut conn1, _, mut sync1) =
+            MockService::start(addr, &[], &[], Arc::clone(&config), timeout).await.unwrap();
+
+        let addr = test_utils::make_address("[::1]:");
+        let (mut conn2, _, mut sync2) =
+            MockService::start(addr, &[], &[], config, timeout).await.unwrap();
+
+        let (res1, res2) = tokio::join!(conn1.connect(*conn2.local_addr()), conn2.poll_next());
+        let peer_id = res1.unwrap().peer_id;
+        let request = message::Message {
+            magic: [1, 2, 3, 4],
+            msg: message::MessageType::Syncing(message::SyncingMessage::Request(
+                message::SyncingRequest::GetHeaders { locator: vec![] },
+            )),
+        };
+        sync1.send_request(peer_id, request.clone()).await.unwrap();
+
+        let request_id = if let Ok(net::SyncingMessage::Request {
+            request_id,
+            request: recv_req,
+            ..
+        }) = sync2.poll_next().await
+        {
+            assert_eq!(recv_req, request);
+            request_id
+        } else {
+            panic!("invalid message received");
+        };
+
+        let response = message::Message {
+            magic: [1, 2, 3, 4],
+            msg: message::MessageType::Syncing(message::SyncingMessage::Response(
+                message::SyncingResponse::Headers { headers: vec![] },
+            )),
+        };
+        sync2.send_response(request_id, response.clone()).await.unwrap();
+
+        if let Ok(net::SyncingMessage::Response {
+            request_id,
+            response: recv_resp,
+            ..
+        }) = sync1.poll_next().await
+        {
+            assert_eq!(recv_resp, response);
+        } else {
+            panic!("invalid message received");
+        }
     }
 }

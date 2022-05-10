@@ -24,6 +24,7 @@ use crate::{
 };
 use common::chain::config;
 use futures::FutureExt;
+use logging::log;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -167,8 +168,23 @@ impl Peer {
         loop {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => {
-                        break;
+                    MockEvent::Disconnect => break,
+                    MockEvent::SendMessage(message) => self.socket.send(*message).await?,
+                },
+                message = self.socket.recv() => match message {
+                    Ok(Some(message)) => {
+                        self.tx.send((
+                            self.peer_id,
+                            types::PeerEvent::MessageReceived { message }
+                        )).await?;
+                    },
+                    Ok(None) => {
+                        log::warn!("connection closed");
+                        // TODO: inform backend
+                    },
+                    Err(e) => {
+                        log::warn!("error with connection: {:?}", e);
+                        // TODO: inform backend
                     }
                 }
             }

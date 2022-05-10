@@ -22,11 +22,12 @@ use crate::{
 };
 use async_trait::async_trait;
 use common::chain::config;
+use crypto::random::{make_pseudo_rng, Rng};
 use futures::FutureExt;
 use logging::log;
 use serialization::{Decode, Encode};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Error, ErrorKind},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
@@ -72,6 +73,9 @@ pub struct Backend {
     /// Active peers
     peers: HashMap<types::MockPeerId, PeerContext>,
 
+    /// Pending outgoing requests
+    req_inbound: HashMap<types::MockRequestId, types::MockPeerId>,
+
     /// TX channel for sending events to the frontend
     conn_tx: mpsc::Sender<types::ConnectivityEvent>,
 
@@ -83,6 +87,9 @@ pub struct Backend {
 
     /// TX channel for sending events to the frontend
     _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+
+    /// TX channel for sending syncing events to the frontend
+    sync_tx: mpsc::Sender<types::SyncingEvent>,
 
     /// Timeout for outbound operations
     timeout: std::time::Duration,
@@ -97,7 +104,7 @@ impl Backend {
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _flood_tx: mpsc::Sender<types::FloodsubEvent>,
-        _sync_tx: mpsc::Sender<types::SyncingEvent>,
+        sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
         Self {
@@ -107,9 +114,11 @@ impl Backend {
             cmd_rx,
             peers: HashMap::new(),
             pending: HashMap::new(),
+            req_inbound: HashMap::new(),
             peer_chan: mpsc::channel(64),
             conn_tx,
             _flood_tx,
+            sync_tx,
             timeout,
         }
     }
@@ -189,6 +198,31 @@ impl Backend {
 
                             self.peers.insert(peer_id, ctx);
                         }
+                        types::PeerEvent::MessageReceived { message } => match message {
+                            types::Message::Handshake(_) => {
+                                log::error!("peer {:?} sent handshaking message", peer_id);
+                                // TODO: report misbehaviour
+                            }
+                            types::Message::Syncing(types::SyncingMessage::Request {
+                                request_id, request
+                            }) => {
+                                self.req_inbound.insert(request_id, peer_id);
+                                self.sync_tx.send(types::SyncingEvent::Request {
+                                    peer_id,
+                                    request_id,
+                                    request,
+                                }).await?;
+                            }
+                            types::Message::Syncing(types::SyncingMessage::Response {
+                                request_id, response
+                            }) => {
+                                self.sync_tx.send(types::SyncingEvent::Response {
+                                    peer_id,
+                                    request_id,
+                                    response,
+                                }).await?;
+                            }
+                        }
                     }
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
@@ -224,6 +258,45 @@ impl Backend {
                                 let _ = response.send(res.map_err(P2pError::from));
                             }
                             None => { let _ = response.send(Err(P2pError::PeerDoesntExist)); },
+                        }
+                    }
+                    types::Command::SendRequest { peer_id, message, response } => {
+                        match self.peers.get_mut(&peer_id) {
+                            Some(peer) => {
+                                let request_id = make_pseudo_rng().gen::<types::MockRequestId>();
+
+                                peer.tx.send(types::MockEvent::SendMessage(
+                                    Box::new(types::Message::Syncing(types::SyncingMessage::Request {
+                                        request_id,
+                                        request: message,
+                                    }))
+                                )).await?;
+
+                                // TODO:
+                                let _ = response.send(Ok(request_id));
+                            }
+                            None => log::error!("peer {:?} does not exist", peer_id),
+                        }
+                    }
+                    types::Command::SendResponse { request_id, message, response } => {
+                        match self.req_inbound.remove(&request_id) {
+                            Some(peer_id) => {
+                                let peer = self
+                                    .peers
+                                    .get_mut(&peer_id)
+                                    .expect("peer to exist") // TODO:
+                                    .tx
+                                    .send(
+                                        types::MockEvent::SendMessage(
+                                        Box::new(types::Message::Syncing(types::SyncingMessage::Response {
+                                            request_id,
+                                            response: message,
+                                    })))).await?;
+                                    let _ = response.send(Ok(())); // TODO:
+                            }
+                            None => {
+                                log::error!("unknown request id {:?}", request_id);
+                            }
                         }
                     }
                 }

@@ -25,6 +25,8 @@ use std::{
 };
 use tokio::{net::TcpStream, sync::oneshot};
 
+pub type MockRequestId = u64;
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct MockPeerId(u64);
 
@@ -62,6 +64,34 @@ pub enum Command {
         peer_id: MockPeerId,
         response: oneshot::Sender<error::Result<()>>,
     },
+
+    /// Send request to remote peer
+    SendRequest {
+        peer_id: MockPeerId,
+        message: message::Message,
+        response: oneshot::Sender<error::Result<MockRequestId>>,
+    },
+
+    /// Send response to remote peer
+    SendResponse {
+        request_id: MockRequestId,
+        message: message::Message,
+        response: oneshot::Sender<error::Result<()>>,
+    },
+}
+
+pub enum SyncingEvent {
+    Request {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        request: message::Message,
+    },
+
+    Response {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        response: message::Message,
+    },
 }
 
 #[derive(Debug)]
@@ -86,8 +116,6 @@ pub enum FloodsubEvent {
     },
 }
 
-pub enum SyncingEvent {}
-
 /// Events sent by the peer object to mock backend
 #[derive(Debug, PartialEq)]
 pub enum PeerEvent {
@@ -96,6 +124,10 @@ pub enum PeerEvent {
         version: version::SemVer,
         protocols: Vec<Protocol>,
     },
+
+    MessageReceived {
+        message: Message,
+    },
 }
 
 // TODO: Handle?
@@ -103,6 +135,7 @@ pub enum PeerEvent {
 #[derive(Debug)]
 pub enum MockEvent {
     Disconnect,
+    SendMessage(Box<Message>),
 }
 
 #[derive(Debug, Encode, Decode, PartialEq)]
@@ -139,6 +172,19 @@ pub enum HandshakeMessage {
 }
 
 #[derive(Debug, Encode, Decode, PartialEq)]
+pub enum SyncingMessage {
+    Request {
+        request_id: u64,
+        request: message::Message,
+    },
+    Response {
+        request_id: u64,
+        response: message::Message,
+    },
+}
+
+#[derive(Debug, Encode, Decode, PartialEq)]
 pub enum Message {
     Handshake(HandshakeMessage),
+    Syncing(SyncingMessage),
 }

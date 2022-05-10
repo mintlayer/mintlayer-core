@@ -20,6 +20,7 @@ common = { path = "../common/" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 serialization = { path = "../serialization/" }
+utils = { path = "../utils" }
 
 [dependencies.libp2p]
 version = "0.44.0"
