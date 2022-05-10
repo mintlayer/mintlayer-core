@@ -26,7 +26,6 @@ pub mod work;
 
 #[derive(Debug)]
 pub enum Error {
-    Conversion(String),
     BlockError(BlockError),
     NoPowData,
 }
