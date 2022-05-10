@@ -27,7 +27,6 @@ pub mod work;
 #[derive(Debug)]
 pub enum Error {
     BlockError(BlockError),
-    NoPowData,
 }
 
 impl From<BlockError> for Error {

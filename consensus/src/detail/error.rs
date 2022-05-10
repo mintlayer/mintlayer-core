@@ -91,6 +91,8 @@ pub enum BlockError {
     InternalNumTypeConversionError(Id<Block>),
     #[error("Internal block representation is invalid `{0}`")]
     BlockConsistencyError(BlockConsistencyError),
+    #[error("No PoW data for block")]
+    NoPowData,
     #[error("Conversion failed: `{0:?}`")]
     Conversion(String),
     // To be expanded
