@@ -17,7 +17,7 @@
 #![allow(dead_code, unused_variables, unused_imports, clippy::type_complexity)]
 use crate::{
     error::{self, P2pError},
-    net::mock::{peer, socket, types},
+    net::mock::{self, peer, socket, types},
     net::{NetworkService, PubSubTopic},
 };
 use async_trait::async_trait;
@@ -147,6 +147,176 @@ impl Backend {
         Ok(())
     }
 
+    // TODO: separate fatal and non-fatal errors
+    async fn on_event(
+        &mut self,
+        peer_id: mock::MockPeerId,
+        event: types::PeerEvent,
+    ) -> error::Result<()> {
+        match event {
+            types::PeerEvent::PeerInfoReceived {
+                net,
+                version,
+                protocols,
+            } => {
+                let (ctx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+
+                match state {
+                    ConnectionState::OutboundAccepted { tx } => {
+                        tx.send(Ok(types::MockPeerInfo {
+                            peer_id,
+                            net,
+                            version,
+                            agent: None,
+                            protocols,
+                        }))
+                        .map_err(|_| P2pError::ChannelClosed)?;
+                    }
+                    ConnectionState::InboundAccepted { addr } => {
+                        self.conn_tx
+                            .send(types::ConnectivityEvent::IncomingConnection {
+                                addr,
+                                peer_info: types::MockPeerInfo {
+                                    peer_id,
+                                    net,
+                                    version,
+                                    agent: None,
+                                    protocols,
+                                },
+                            })
+                            .await?;
+                    }
+                }
+
+                self.peers.insert(peer_id, ctx);
+                Ok(())
+            }
+            types::PeerEvent::MessageReceived { message } => match message {
+                types::Message::Handshake(_) => {
+                    // TODO: report misbehaviour
+                    log::error!("peer {:?} sent handshaking message", peer_id);
+                    Ok(())
+                }
+                types::Message::Syncing(types::SyncingMessage::Request {
+                    request_id,
+                    request,
+                }) => {
+                    self.req_inbound.insert(request_id, peer_id);
+                    self.sync_tx
+                        .send(types::SyncingEvent::Request {
+                            peer_id,
+                            request_id,
+                            request,
+                        })
+                        .await
+                        .map_err(P2pError::from)
+                }
+                types::Message::Syncing(types::SyncingMessage::Response {
+                    request_id,
+                    response,
+                }) => self
+                    .sync_tx
+                    .send(types::SyncingEvent::Response {
+                        peer_id,
+                        request_id,
+                        response,
+                    })
+                    .await
+                    .map_err(P2pError::from),
+            },
+        }
+    }
+
+    async fn on_command(&mut self, cmd: types::Command) -> error::Result<()> {
+        match cmd {
+            types::Command::Connect { addr, response } => {
+                if self.addr == addr {
+                    let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
+                    return Ok(());
+                }
+
+                tokio::select! {
+                    _ = tokio::time::sleep(self.timeout) => {
+                        response.send(Err(
+                            P2pError::SocketError(std::io::ErrorKind::ConnectionRefused)
+                        )).map_err(|e| P2pError::ChannelClosed)
+                    }
+                    res = TcpStream::connect(addr) => match res {
+                        Ok(socket) => {
+                            self.create_peer(
+                                socket,
+                                types::MockPeerId::from_socket_address(&addr),
+                                peer::Role::Outbound,
+                                ConnectionState::OutboundAccepted { tx: response }
+                            ).await
+                        },
+                        Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
+                    }
+                }
+            }
+            types::Command::Disconnect { peer_id, response } => match self.peers.remove(&peer_id) {
+                Some(peer) => {
+                    let res = peer.tx.send(types::MockEvent::Disconnect).await;
+                    response.send(res.map_err(P2pError::from)).map_err(|_| P2pError::ChannelClosed)
+                }
+                None => response
+                    .send(Err(P2pError::PeerDoesntExist))
+                    .map_err(|_| P2pError::ChannelClosed),
+            },
+            types::Command::SendRequest {
+                peer_id,
+                message,
+                response,
+            } => match self.peers.get_mut(&peer_id) {
+                Some(peer) => {
+                    let request_id = make_pseudo_rng().gen::<types::MockRequestId>();
+
+                    peer.tx
+                        .send(types::MockEvent::SendMessage(Box::new(
+                            types::Message::Syncing(types::SyncingMessage::Request {
+                                request_id,
+                                request: message,
+                            }),
+                        )))
+                        .await?;
+
+                    response.send(Ok(request_id)).map_err(|_| P2pError::ChannelClosed)
+                }
+                None => {
+                    log::error!("peer {:?} does not exist", peer_id);
+                    Ok(())
+                }
+            },
+            types::Command::SendResponse {
+                request_id,
+                message,
+                response,
+            } => {
+                match self.req_inbound.remove(&request_id) {
+                    Some(peer_id) => {
+                        let peer = self
+                            .peers
+                            .get_mut(&peer_id)
+                            .expect("peer to exist") // TODO:
+                            .tx
+                            .send(types::MockEvent::SendMessage(Box::new(
+                                types::Message::Syncing(types::SyncingMessage::Response {
+                                    request_id,
+                                    response: message,
+                                }),
+                            )))
+                            .await?;
+                        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    None => {
+                        log::error!("unknown request id {:?}", request_id);
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
     // TODO: separate into command and event handlers
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
@@ -167,138 +337,10 @@ impl Backend {
                 },
                 event = self.peer_chan.1.recv().fuse() => {
                     let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
-
-                    match event {
-                        types::PeerEvent::PeerInfoReceived { net, version, protocols } => {
-                            let (ctx, state) = self.pending.remove(&peer_id).expect("peer to exist");
-
-                            match state {
-                                ConnectionState::OutboundAccepted { tx } => {
-                                    tx.send(Ok(types::MockPeerInfo {
-                                        peer_id,
-                                        net,
-                                        version,
-                                        agent: None,
-                                        protocols,
-                                    })).unwrap();
-                                }
-                                ConnectionState::InboundAccepted { addr } => {
-                                    self.conn_tx.send(types::ConnectivityEvent::IncomingConnection {
-                                        addr,
-                                        peer_info: types::MockPeerInfo {
-                                            peer_id,
-                                            net,
-                                            version,
-                                            agent: None,
-                                            protocols,
-                                        }
-                                    }).await?;
-                                }
-                            }
-
-                            self.peers.insert(peer_id, ctx);
-                        }
-                        types::PeerEvent::MessageReceived { message } => match message {
-                            types::Message::Handshake(_) => {
-                                log::error!("peer {:?} sent handshaking message", peer_id);
-                                // TODO: report misbehaviour
-                            }
-                            types::Message::Syncing(types::SyncingMessage::Request {
-                                request_id, request
-                            }) => {
-                                self.req_inbound.insert(request_id, peer_id);
-                                self.sync_tx.send(types::SyncingEvent::Request {
-                                    peer_id,
-                                    request_id,
-                                    request,
-                                }).await?;
-                            }
-                            types::Message::Syncing(types::SyncingMessage::Response {
-                                request_id, response
-                            }) => {
-                                self.sync_tx.send(types::SyncingEvent::Response {
-                                    peer_id,
-                                    request_id,
-                                    response,
-                                }).await?;
-                            }
-                        }
-                    }
+                    self.on_event(peer_id, event).await?;
                 },
-                event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    types::Command::Connect { addr, response } => {
-                        if self.addr == addr {
-                            let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
-                            continue;
-                        }
-
-                        tokio::select! {
-                            _ = tokio::time::sleep(self.timeout) => {
-                                let _ = response.send(Err(
-                                    P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-                                );
-                            }
-                            res = TcpStream::connect(addr) => match res {
-                                Ok(socket) => {
-                                    self.create_peer(
-                                        socket,
-                                        types::MockPeerId::from_socket_address(&addr),
-                                        peer::Role::Outbound,
-                                        ConnectionState::OutboundAccepted { tx: response }
-                                    ).await?;
-                                },
-                                Err(e) => { let _ = response.send(Err(e.into())); },
-                            }
-                        }
-                    }
-                    types::Command::Disconnect { peer_id, response } => {
-                        match self.peers.remove(&peer_id) {
-                            Some(peer) => {
-                                let res = peer.tx.send(types::MockEvent::Disconnect).await;
-                                let _ = response.send(res.map_err(P2pError::from));
-                            }
-                            None => { let _ = response.send(Err(P2pError::PeerDoesntExist)); },
-                        }
-                    }
-                    types::Command::SendRequest { peer_id, message, response } => {
-                        match self.peers.get_mut(&peer_id) {
-                            Some(peer) => {
-                                let request_id = make_pseudo_rng().gen::<types::MockRequestId>();
-
-                                peer.tx.send(types::MockEvent::SendMessage(
-                                    Box::new(types::Message::Syncing(types::SyncingMessage::Request {
-                                        request_id,
-                                        request: message,
-                                    }))
-                                )).await?;
-
-                                // TODO:
-                                let _ = response.send(Ok(request_id));
-                            }
-                            None => log::error!("peer {:?} does not exist", peer_id),
-                        }
-                    }
-                    types::Command::SendResponse { request_id, message, response } => {
-                        match self.req_inbound.remove(&request_id) {
-                            Some(peer_id) => {
-                                let peer = self
-                                    .peers
-                                    .get_mut(&peer_id)
-                                    .expect("peer to exist") // TODO:
-                                    .tx
-                                    .send(
-                                        types::MockEvent::SendMessage(
-                                        Box::new(types::Message::Syncing(types::SyncingMessage::Response {
-                                            request_id,
-                                            response: message,
-                                    })))).await?;
-                                    let _ = response.send(Ok(())); // TODO:
-                            }
-                            None => {
-                                log::error!("unknown request id {:?}", request_id);
-                            }
-                        }
-                    }
+                event = self.cmd_rx.recv().fuse() => {
+                    self.on_command(event.ok_or(P2pError::ChannelClosed)?).await?
                 }
             }
         }
