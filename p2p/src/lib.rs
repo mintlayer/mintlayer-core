@@ -68,18 +68,18 @@ where
         )
         .await?;
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
-        let (tx_sync, rx_sync) = mpsc::channel(16);
+        // let (tx_sync, rx_sync) = mpsc::channel(16);
 
-        let swarm_config = Arc::clone(&config);
-        tokio::spawn(async move {
-            let mut swarm = swarm::SwarmManager::<T>::new(swarm_config, conn, rx_swarm, tx_sync);
-            let _ = swarm.run().await;
-        });
+        // let swarm_config = Arc::clone(&config);
+        // tokio::spawn(async move {
+        //     let mut swarm = swarm::SwarmManager::<T>::new(swarm_config, conn, rx_swarm, tx_sync);
+        //     let _ = swarm.run().await;
+        // });
 
-        tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
-            let _ = sync_mgr.run().await;
-        });
+        // tokio::spawn(async move {
+        //     let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
+        //     let _ = sync_mgr.run().await;
+        // });
 
         // tokio::spawn(async move {
         //     if let Err(e) = pubsub::PubSubManager::<T>::new(
@@ -114,6 +114,7 @@ mod tests {
     use common::chain::config;
     use libp2p::Multiaddr;
     use tokio::sync::mpsc;
+    use crate::sync::SyncManager;
 
     #[tokio::test]
     async fn test_subsys_init() {
@@ -130,22 +131,31 @@ mod tests {
         .unwrap();
 
         let storage = blockchain_storage::Store::new_empty().unwrap();
-        let manager = subsystem::Manager::new("mintlayer");
-        let consensus = manager.start(
+        let mut manager = subsystem::Manager::new("mintlayer");
+        let consensus = manager.add_subsystem(
             "consensus",
             consensus::make_consensus(config::create_mainnet(), storage.clone()).unwrap(),
         );
 
-		let (tx1, rx1) = mpsc::channel(16);
-		let (tx2, rx2) = mpsc::channel(16);
+		// NOTE: these channels are needed because `SwarmManager` must be able to call
+		// `SyncManager` and `PubSubManager` and the managers cannot be initialized if
+		// handles to them are acquired only after they are created.
+        let (tx1, rx1) = mpsc::channel(16);
+        let (tx2, rx2) = mpsc::channel(16);
+
         let mut swarm_mgr = SwarmManager::<Libp2pService>::new(Arc::clone(&config), conn, rx1, tx2);
-        let swarm = manager.start_raw("swarm", |call_rq, shut_rq| async move {
+        let swarm_handle = manager.add_raw_subsystem("swarm", |call_rq, shut_rq| async move {
             swarm_mgr.run(call_rq, shut_rq).await
         });
 
-        let mut pubsub_mgr = PubSubManager::<Libp2pService>::new(pubsub, consensus.clone());
-        let pubsub = manager.start_raw("pubsub", |call_rq, shut_rq| async move {
+        let mut pubsub_mgr = PubSubManager::<Libp2pService>::new(pubsub, consensus, swarm_handle.clone());
+        let pubsub = manager.add_raw_subsystem("pubsub", |call_rq, shut_rq| async move {
             pubsub_mgr.run(call_rq, shut_rq).await
+        });
+
+        let mut sync_mgr = SyncManager::<Libp2pService>::new(sync, rx2, swarm_handle);
+        let sync = manager.add_raw_subsystem("sync", |call_rq, shut_rq| async move {
+            sync_mgr.run(call_rq, shut_rq).await
         });
 
         manager.main().await;

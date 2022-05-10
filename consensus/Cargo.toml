@@ -13,6 +13,7 @@ crypto = { path = '../crypto' }
 num = "0.4.0"
 rand = "0.8.4"
 logging = { path = '../logging' }
+subsystem = { path = '../subsystem' }
 thiserror = "1.0.30"
 proptest = "1.0.0"
 parity-scale-codec-derive = "2.3.1"

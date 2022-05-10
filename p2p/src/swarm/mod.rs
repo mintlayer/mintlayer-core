@@ -28,6 +28,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use subsystem::subsystem::{CallRequest, ShutdownRequest};
 use tokio::sync::mpsc;
 
 const MAX_ACTIVE_CONNECTIONS: usize = 32;
@@ -332,21 +333,22 @@ where
         }
     }
 
+    // pub async fn run(&mut self) -> error::Result<()> {
     /// SwarmManager event loop
-    // pub async fn run(&mut self, mut call_rq: CallRequest<Self>, mut shutdown_rq: ShutdownRequest) {
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self, mut call_rq: CallRequest<Self>, mut shutdown_rq: ShutdownRequest) {
         loop {
             tokio::select! {
                 event = self.rx_swarm.recv().fuse() => {
-                    self.on_swarm_control_event(event).await?;
+                    self.on_swarm_control_event(event).await.unwrap();
                 }
                 event = self.handle.poll_next() => match event {
-                    Ok(event) => self.on_network_event(event).await?,
+                    Ok(event) => self.on_network_event(event).await.unwrap(),
                     Err(e) => {
                         log::error!("failed to read network event: {:?}", e);
-                        return Err(e);
+                        // return Err(e);
                     }
-                }
+                },
+                call = call_rq.recv() => call(self).await,
             }
         }
     }

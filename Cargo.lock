@@ -598,6 +598,7 @@ dependencies = [
  "replace_with",
  "slave-pool",
  "static_assertions",
+ "subsystem",
  "thiserror",
 ]
 
@@ -2375,7 +2376,9 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "blockchain-storage",
  "common",
+ "consensus",
  "futures",
  "futures-timer",
  "itertools",
@@ -2385,6 +2388,7 @@ dependencies = [
  "portpicker",
  "rand 0.8.5",
  "sscanf",
+ "subsystem",
  "test-utils",
  "tokio",
  "void",

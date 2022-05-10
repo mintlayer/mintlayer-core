@@ -37,6 +37,8 @@ pub struct ConsensusInterface {
     consensus: detail::Consensus,
 }
 
+impl subsystem::Subsystem for ConsensusInterface {}
+
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
 pub enum ConsensusError {
     #[error("Initialization error")]
