@@ -32,7 +32,7 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
 }
 
 /// randomly select half of the provided outpoints to spend, and returns it in a vec of structure of TxInput
-pub fn create_tx_inputs(outpoints: &Vec<OutPoint>) -> Vec<TxInput> {
+pub fn create_tx_inputs(outpoints: &[OutPoint]) -> Vec<TxInput> {
     let mut rng = make_pseudo_rng();
     let to_spend = seq::index::sample(&mut rng, outpoints.len(), outpoints.len() / 2).into_vec();
     to_spend
