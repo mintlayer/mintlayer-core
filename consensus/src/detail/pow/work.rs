@@ -23,6 +23,7 @@ use crate::detail::pow::helpers::{
 use crate::detail::ConsensusRef;
 
 use crate::detail::pow::{Error, PoW};
+use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::BlockIndex;
 use common::chain::block::{Block, ConsensusData};
@@ -30,7 +31,7 @@ use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Error> {
+fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, BlockError> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
@@ -38,7 +39,7 @@ fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Er
             hash <= target
         })
         .map_err(|e| {
-            Error::Conversion(format!(
+            BlockError::Conversion(format!(
                 "conversion of {:?} to Uint256 type: {:?}",
                 block_bits, e
             ))
@@ -126,6 +127,7 @@ impl PoW {
             prev_block_bits,
             self.difficulty_limit(),
         )
+        .map_err(Into::into)
     }
 
     fn next_work_required_for_min_difficulty(

@@ -86,7 +86,8 @@ pub enum BlockError {
     SerializationInvariantError(Id<Block>),
     #[error("Unexpected numeric type conversion error `{0:?}`")]
     InternalNumTypeConversionError(Id<Block>),
-    // To be expanded
+    #[error("Conversion failed: `{0:?}`")]
+    Conversion(String), // To be expanded
 }
 
 impl From<blockchain_storage::Error> for BlockError {

@@ -15,8 +15,8 @@
 //
 // Author(s): C. Yap
 
-use crate::detail::pow::Error;
 use crate::detail::ConsensusRef;
+use crate::BlockError;
 use common::chain::block::BlockIndex;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
@@ -33,7 +33,7 @@ pub(crate) fn get_starting_block_time(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
     db_accessor: ConsensusRef,
-) -> Result<u32, Error> {
+) -> Result<u32, BlockError> {
     let retarget_height = {
         let height: u64 = block_index.get_block_height().into();
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
@@ -59,23 +59,23 @@ pub fn calculate_new_target(
     target_timespan: u64,
     old_target: Compact,
     difficulty_limit: Uint256,
-) -> Result<Compact, Error> {
+) -> Result<Compact, BlockError> {
     let actual_timespan = Uint256::from_u64(actual_timespan_of_last_interval).ok_or_else(|| {
-        Error::Conversion(format!(
+        BlockError::Conversion(format!(
             "conversion of actual timespan {:?} to Uint256 type failed.",
             actual_timespan_of_last_interval
         ))
     })?;
 
     let target_timespan = Uint256::from_u64(target_timespan).ok_or_else(|| {
-        Error::Conversion(format!(
+        BlockError::Conversion(format!(
             "conversion of target timespan {:?} to Uint256 type failed.",
             target_timespan
         ))
     })?;
 
     let old_target = Uint256::try_from(old_target).map_err(|e| {
-        Error::Conversion(format!(
+        BlockError::Conversion(format!(
             "conversion of bits {:?} to Uint256 type: {:?}",
             old_target, e
         ))
