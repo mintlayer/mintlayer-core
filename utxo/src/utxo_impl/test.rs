@@ -137,11 +137,11 @@ fn check_write_utxo(
     }
 
     // perform batch write
-    let sinlge_entry_cache = ConsumedUtxoCache {
+    let single_entry_cache = ConsumedUtxoCache {
         container: single_entry_map,
         best_block: Id::new(&H256::random()),
     };
-    let res = parent.batch_write(sinlge_entry_cache);
+    let res = parent.batch_write(single_entry_cache);
     let entry = parent.utxos.get(key);
 
     match result {
