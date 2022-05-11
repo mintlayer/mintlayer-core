@@ -205,27 +205,24 @@ where
 
     fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
         let proto = self.protocol_version.clone();
-        let (version, net) =
-            match sscanf::scanf!(proto, "/{}/{}.{}.{}-{}", String, u8, u8, u16, String) {
+        let (version, magic_bytes) =
+            match sscanf::scanf!(proto, "/{}/{}.{}.{}-{:x}", String, u8, u8, u16, u32) {
                 Err(e) => Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol)),
                 Ok((proto, maj, min, pat, magic)) => {
                     if proto != "mintlayer" {
                         return Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol));
                     }
 
-                    // TODO: `impl TryInto<ChainType> for u32`?
-                    let net = match magic.as_str() {
-                        "1a64e5f1" => common::chain::config::ChainType::Mainnet,
-                        _ => return Err(P2pError::ProtocolError(ProtocolError::UnknownNetwork)),
-                    };
-
-                    Ok((common::primitives::version::SemVer::new(maj, min, pat), net))
+                    Ok((
+                        common::primitives::version::SemVer::new(maj, min, pat),
+                        magic.to_le_bytes(),
+                    ))
                 }
             }?;
 
         Ok(net::PeerInfo {
             peer_id: PeerId::from_public_key(&self.public_key),
-            net,
+            magic_bytes,
             version,
             agent: Some(self.agent_version),
             protocols: self.protocols,
@@ -286,15 +283,13 @@ impl NetworkService for Libp2pService {
                 version.major,
                 version.minor,
                 version.patch,
-                ((magic[0] as u32) << 24)
-                    | ((magic[1] as u32) << 16)
-                    | ((magic[2] as u32) << 8)
-                    | (magic[3] as u32)
+                config.magic_bytes_as_u32(),
             );
 
             let mut behaviour = types::ComposedBehaviour {
                 mdns: Mdns::new(Default::default()).await?,
                 ping: ping::Behaviour::new(
+                    // TODO: get this from a config
                     ping::Config::new()
                         .with_timeout(std::time::Duration::from_secs(60))
                         .with_interval(std::time::Duration::from_secs(60))
@@ -322,6 +317,7 @@ impl NetworkService for Libp2pService {
             SwarmBuilder::new(transport, behaviour, peer_id).build()
         };
 
+        // TODO: channel sizes!
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (gossip_tx, gossip_rx) = mpsc::channel(64);
         let (conn_tx, conn_rx) = mpsc::channel(64);
@@ -810,7 +806,7 @@ mod tests {
     impl<T: NetworkService> PartialEq for net::PeerInfo<T> {
         fn eq(&self, other: &Self) -> bool {
             self.peer_id == other.peer_id
-                && self.net == other.net
+                && self.magic_bytes == other.magic_bytes
                 && self.version == other.version
                 && self.agent == other.agent
                 && self.protocols == other.protocols

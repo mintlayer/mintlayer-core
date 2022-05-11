@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use crate::{error, message};
 use async_trait::async_trait;
-use common::{chain, primitives};
+use common::primitives;
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
@@ -47,7 +47,7 @@ where
     pub peer_id: T::PeerId,
 
     /// Peer network
-    pub net: chain::config::ChainType,
+    pub magic_bytes: [u8; 4],
 
     /// Peer software version
     pub version: primitives::version::SemVer,
