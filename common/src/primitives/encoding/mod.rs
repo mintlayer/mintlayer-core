@@ -1,6 +1,3 @@
-use bech32::u5;
-use bech32::{self};
-
 mod errors;
 pub use errors::*;
 mod base32;
@@ -9,13 +6,12 @@ pub use bech32m::decode;
 pub use bech32m::encode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedBech32 {
+pub struct DecodedBase32FromBech32 {
     hrp: String,
     data: Vec<u8>,
-    base32: Vec<u5>,
 }
 
-impl DecodedBech32 {
+impl DecodedBase32FromBech32 {
     pub fn get_hrp(&self) -> &str {
         &self.hrp
     }

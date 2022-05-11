@@ -4,7 +4,7 @@ use bech32::u5;
 use bech32::CheckBase32;
 
 pub fn encode<T: AsRef<[u8]>>(raw_data: T) -> Result<Vec<u5>, Bech32Error> {
-    convert_bits(raw_data.as_ref(), 8, 5, true)
+    convert_bits(raw_data.as_ref(), 8, 5, false)
         .map_err(Bech32Error::from)?
         .check_base32()
         .map_err(Bech32Error::from)

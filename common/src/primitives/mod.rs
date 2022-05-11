@@ -29,6 +29,6 @@ pub mod version;
 
 pub use amount::Amount;
 pub use compact::Compact;
-pub use encoding::{Bech32Error, DecodedBech32};
+pub use encoding::{Bech32Error, DecodedBase32FromBech32};
 pub use height::{BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};

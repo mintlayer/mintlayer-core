@@ -1,13 +1,15 @@
 use super::Bech32Error;
-use super::DecodedBech32;
-use bech32::{self, convert_bits, Variant};
+use super::DecodedBase32FromBech32;
+use bech32::CheckBase32;
+use bech32::{self, Variant};
 
 pub fn encode<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
-    let data = super::base32::encode(data.as_ref())?;
+    let data = data.check_base32()?;
+    // let data = super::base32::encode(data.as_ref())?;
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
 
-pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
+pub fn decode(s: &str) -> Result<DecodedBase32FromBech32, Bech32Error> {
     match bech32::decode(s) {
         Ok((hrp, base32, variant)) => {
             if variant == Variant::Bech32 {
@@ -20,9 +22,9 @@ pub fn decode(s: &str) -> Result<DecodedBech32, Bech32Error> {
             // }
             // ------- EOL
 
-            let data = convert_bits(&base32, 5, 8, false)?;
-
-            Ok(DecodedBech32 { hrp, data, base32 })
+            let data = base32.iter().map(|x| x.to_u8()).collect();
+            // let data = super::base32::decode(base32)?;
+            Ok(DecodedBase32FromBech32 { hrp, data })
         }
         Err(e) => Err(e.into()),
     }
