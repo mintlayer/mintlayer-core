@@ -165,6 +165,21 @@ pub fn create_custom(
     }
 }
 
+pub fn create_unit_test_config() -> ChainConfig {
+    ChainConfig {
+        chain_type: ChainType::Mainnet,
+        address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        net_upgrades: NetUpgrades::unit_tests(),
+        rpc_port: 15234,
+        p2p_port: 8978,
+        magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+        genesis_block: create_mainnet_genesis(),
+        version: SemVer::new(0, 1, 0),
+        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
