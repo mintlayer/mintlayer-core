@@ -1,6 +1,7 @@
 #![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
 use crate::primitives::{BlockDistance, BlockHeight, Compact};
+use crate::Uint256;
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
@@ -25,8 +26,8 @@ pub trait Activate {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum UpgradeVersion {
-    Genesis,
     ConsensusUpgrade(ConsensusUpgrade),
+    SomeUpgrade,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -66,7 +67,11 @@ impl Activate for UpgradeVersion {}
 
 impl Default for UpgradeVersion {
     fn default() -> Self {
-        Self::Genesis
+        const POW_INITIAL_DIFFICULTY: u64 = 1000;
+        let initial_difficulty = Uint256::from_u64(POW_INITIAL_DIFFICULTY)
+            .expect("conversion should work")
+            .into();
+        Self::ConsensusUpgrade(ConsensusUpgrade::PoW { initial_difficulty })
     }
 }
 
