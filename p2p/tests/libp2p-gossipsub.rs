@@ -27,7 +27,7 @@ use p2p::{
     message::{self, MessageType, PubSubMessage, SyncingMessage, SyncingRequest},
     net::{
         self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pService, Libp2pStrategy},
+        libp2p::{Libp2pConnectivityHandle, Libp2pDiscoveryStrategy, Libp2pService},
         ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
         PubSubTopic,
     },

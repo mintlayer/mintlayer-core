@@ -43,7 +43,7 @@ pub mod backend;
 pub mod types;
 
 #[derive(Debug)]
-pub enum MockStrategy {}
+pub enum MockDiscoveryStrategy {}
 
 #[derive(Debug)]
 pub struct MockService;
@@ -95,7 +95,7 @@ where
 #[async_trait]
 impl NetworkService for MockService {
     type Address = SocketAddr;
-    type Strategy = MockStrategy;
+    type DiscoveryStrategy = MockDiscoveryStrategy;
     type PeerId = SocketAddr;
     type ProtocolId = String;
     type RequestId = MockRequestId;
@@ -106,7 +106,7 @@ impl NetworkService for MockService {
 
     async fn start(
         addr: Self::Address,
-        _strategies: &[Self::Strategy],
+        _strategies: &[Self::DiscoveryStrategy],
         _topics: &[PubSubTopic],
         _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,

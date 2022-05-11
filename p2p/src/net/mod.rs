@@ -188,7 +188,7 @@ pub trait NetworkService {
     type RequestId: Send + Debug;
 
     /// Enum of different peer discovery strategies that the implementation provides
-    type Strategy;
+    type DiscoveryStrategy;
 
     /// Id that identifies a protocol
     type ProtocolId: Debug + Send + Clone + PartialEq;
@@ -214,7 +214,7 @@ pub trait NetworkService {
     /// `timeout` - timeout for outbound connections
     async fn start(
         addr: Self::Address,
-        strategies: &[Self::Strategy],
+        strategies: &[Self::DiscoveryStrategy],
         topics: &[PubSubTopic],
         config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
