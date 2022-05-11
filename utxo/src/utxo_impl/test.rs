@@ -43,8 +43,6 @@ fn check_add_utxo(
 
         check_flags(ret_value, result_flags, false);
     }
-
-    println!("the value of the map: {:?}", cache);
 }
 
 /// Checks `spend_utxo` method behaviour.
