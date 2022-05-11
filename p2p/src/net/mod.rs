@@ -188,7 +188,7 @@ pub trait NetworkService {
     type RequestId: Send + Debug;
 
     /// Enum of different peer discovery strategies that the implementation provides
-    type Strategy;
+    type DiscoveryStrategy;
 
     /// Id that identifies a protocol
     type ProtocolId: Debug + Send + Clone + PartialEq;
@@ -208,15 +208,15 @@ pub trait NetworkService {
     /// Initialize the network service provider
     ///
     /// # Arguments
-    /// `addr` - socket address for incoming P2P traffic
+    /// `bind_addr` - socket address for incoming P2P traffic
     /// `strategies` - list of strategies that are used for peer discovery
     /// `topics` - list of floodsub topics that the implementation should subscribe to
     /// `timeout` - timeout for outbound connections
     async fn start(
-        addr: Self::Address,
-        strategies: &[Self::Strategy],
+        bind_addr: Self::Address,
+        strategies: &[Self::DiscoveryStrategy],
         topics: &[PubSubTopic],
-        config: Arc<common::chain::ChainConfig>,
+        chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(
         Self::ConnectivityHandle,

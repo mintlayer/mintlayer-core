@@ -67,7 +67,7 @@ mod types;
 
 /// libp2p-specifc peer discovery strategies
 #[derive(Debug, PartialEq, Eq)]
-pub enum Libp2pStrategy {
+pub enum Libp2pDiscoveryStrategy {
     /// Use mDNS to find peers in the local network
     MulticastDns,
 }
@@ -80,7 +80,7 @@ where
     T: NetworkService,
 {
     /// Address where the network services has been bound
-    addr: Multiaddr,
+    bind_addr: Multiaddr,
 
     /// Peer Id of the local node
     peer_id: PeerId,
@@ -233,7 +233,7 @@ where
 #[async_trait]
 impl NetworkService for Libp2pService {
     type Address = Multiaddr;
-    type Strategy = Libp2pStrategy;
+    type DiscoveryStrategy = Libp2pDiscoveryStrategy;
     type PeerId = PeerId;
     type ProtocolId = String;
     type RequestId = RequestId;
@@ -243,10 +243,10 @@ impl NetworkService for Libp2pService {
     type SyncingHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
-        addr: Self::Address,
-        strategies: &[Self::Strategy],
+        bind_addr: Self::Address,
+        strategies: &[Self::DiscoveryStrategy],
         topics: &[PubSubTopic],
-        config: Arc<common::chain::ChainConfig>,
+        chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> error::Result<(
         Self::ConnectivityHandle,
@@ -276,14 +276,14 @@ impl NetworkService for Libp2pService {
                 .expect("configuration to be valid");
 
             // TODO: impl display for semver/magic bytes?
-            let version = config.version();
-            let magic = config.magic_bytes();
+            let version = chain_config.version();
+            let magic = chain_config.magic_bytes();
             let protocol = format!(
                 "/mintlayer/{}.{}.{}-{:x}",
                 version.major,
                 version.minor,
                 version.patch,
-                config.magic_bytes_as_u32(),
+                chain_config.magic_bytes_as_u32(),
             );
 
             let mut behaviour = types::ComposedBehaviour {
@@ -325,7 +325,7 @@ impl NetworkService for Libp2pService {
 
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
-        let relay_mdns = strategies.iter().any(|s| s == &Libp2pStrategy::MulticastDns);
+        let relay_mdns = strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns);
         log::trace!("multicast dns enabled {}", relay_mdns);
 
         // run the libp2p backend in a background task
@@ -342,7 +342,7 @@ impl NetworkService for Libp2pService {
         let (tx, rx) = oneshot::channel();
         cmd_tx
             .send(types::Command::Listen {
-                addr: addr.clone(),
+                addr: bind_addr.clone(),
                 response: tx,
             })
             .await?;
@@ -350,7 +350,7 @@ impl NetworkService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle {
-                addr: addr.with(Protocol::P2p(peer_id.into())),
+                bind_addr: bind_addr.with(Protocol::P2p(peer_id.into())),
                 peer_id,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
@@ -427,7 +427,7 @@ where
     }
 
     fn local_addr(&self) -> &T::Address {
-        &self.addr
+        &self.bind_addr
     }
 
     fn peer_id(&self) -> &T::PeerId {
@@ -632,7 +632,7 @@ mod tests {
     async fn test_connect_new() {
         let config = Arc::new(common::chain::config::create_mainnet());
         let service = Libp2pService::start(
-            "/ip6/::1/tcp/8900".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             config,
@@ -648,7 +648,7 @@ mod tests {
     async fn test_connect_new_addrinuse() {
         let config = Arc::new(common::chain::config::create_mainnet());
         let service = Libp2pService::start(
-            "/ip6/::1/tcp/8901".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Arc::clone(&config),
@@ -658,7 +658,7 @@ mod tests {
         assert!(service.is_ok());
 
         let service = Libp2pService::start(
-            "/ip6/::1/tcp/8901".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             config,
@@ -680,7 +680,7 @@ mod tests {
     async fn test_connect_accept() {
         let config = Arc::new(common::chain::config::create_mainnet());
         let service1 = Libp2pService::start(
-            "/ip6/::1/tcp/8902".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Arc::clone(&config),
@@ -688,7 +688,7 @@ mod tests {
         )
         .await;
         let service2 = Libp2pService::start(
-            "/ip6/::1/tcp/8903".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             Arc::clone(&config),
@@ -716,7 +716,7 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
         let (mut service, _, _) = Libp2pService::start(
-            "/ip6/::1/tcp/8905".parse().unwrap(),
+            test_utils::make_address("/ip6/::1/tcp/"),
             &[],
             &[],
             config,
@@ -817,7 +817,7 @@ mod tests {
     #[test]
     fn test_parse_peers_valid_1_peer() {
         let config = Arc::new(common::chain::config::create_mainnet());
-        let id: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let id = PeerId::random();
         let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
         let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
         let addrs = vec![(id, ip4.clone()), (id, ip6.clone())];
@@ -880,13 +880,13 @@ mod tests {
     // that `parse_peers()` returns only that peer
     #[test]
     fn test_parse_peers_valid_3_peers_1_valid() {
-        let id_1: PeerId = "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
+        let id_1 = PeerId::random();
         let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
 
-        let id_2: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
+        let id_2 = PeerId::random();
         let dns: Multiaddr = "/dns4/foo.com/tcp/80/http".parse().unwrap();
 
-        let id_3: PeerId = "12D3KooWGK4RzvNeioS9aXdzmYXU3mgDrRPjQd8SVyXCkHNxLbWN".parse().unwrap();
+        let id_3 = PeerId::random();
         let quic: Multiaddr = "/ip4/127.0.0.1/tcp/9090/quic".parse().unwrap();
 
         let addrs = vec![(id_1, ip4.clone()), (id_2, dns), (id_3, quic)];
@@ -903,8 +903,6 @@ mod tests {
     }
 
     // try to connect to a service that is not listening with a small timeout and verify that the connection fails
-    // TODO: verify on windows/mac
-    #[cfg(target_os = "linux")]
     #[tokio::test]
     async fn test_connect_with_timeout() {
         let config = Arc::new(common::chain::config::create_mainnet());
@@ -919,9 +917,8 @@ mod tests {
         .unwrap();
 
         let port = portpicker::pick_unused_port().unwrap();
-        let id: PeerId = "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
         let mut addr: Multiaddr = format!("/ip6/::1/tcp/{}", port).parse().unwrap();
-        addr.push(Protocol::P2p(id.into()));
+        addr.push(Protocol::P2p(PeerId::random().into()));
 
         // first try to connect to address nobody is listening to
         // and verify that the connection is refused immediately
@@ -930,15 +927,22 @@ mod tests {
             service.connect(addr.clone()).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
+
+        let timeout = if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
+            0
+        } else {
+            2
+        };
         assert_eq!(
             std::time::SystemTime::now().duration_since(start).unwrap().as_secs(),
-            0
+            timeout
         );
 
         // then create a socket that listens to the address and verify that it takes
         // 2 seconds to get the `ConnectionRefused` error, as expected
         let _service = TcpListener::bind(format!("[::1]:{}", port)).await.unwrap();
         let start = std::time::SystemTime::now();
+
         assert_eq!(
             service.connect(addr).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))

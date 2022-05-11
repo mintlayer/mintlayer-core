@@ -138,6 +138,7 @@ pub fn create_mainnet() -> ChainConfig {
 
 // TODO: use builder type?
 #[allow(clippy::too_many_arguments)]
+#[cfg(features = "testing")]
 pub fn create_custom(
     chain_type: Option<ChainType>,
     address_prefix: Option<String>,
@@ -153,8 +154,7 @@ pub fn create_custom(
     ChainConfig {
         chain_type: chain_type.unwrap_or(ChainType::Mainnet),
         address_prefix: address_prefix.unwrap_or_else(|| MAINNET_ADDRESS_PREFIX.to_owned()),
-        height_checkpoint_data: height_checkpoint_data
-            .unwrap_or_default(),
+        height_checkpoint_data: height_checkpoint_data.unwrap_or_default(),
         net_upgrades: net_upgrades.unwrap_or_default(),
         rpc_port: rpc_port.unwrap_or(15234),
         p2p_port: p2p_port.unwrap_or(8978),
@@ -179,6 +179,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "testing")]
     fn custom_creation() {
         let config = create_custom(
             Some(ChainType::Regtest),

@@ -600,6 +600,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_outbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(
@@ -627,7 +628,7 @@ mod tests {
 
         tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
 
-		// TODO: implement connect properly
+        // TODO: implement connect properly
         // assert_eq!(
         //     swarm1.handle.connect(addr).await,
         //     Err(P2pError::ProtocolError(ProtocolError::UnknownNetwork)),
@@ -658,6 +659,7 @@ mod tests {
         assert_eq!(swarm2.on_network_event(conn2_res).await, Ok(()));
     }
 
+    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_inbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(

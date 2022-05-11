@@ -23,7 +23,7 @@ use p2p::{
     message::{self, MessageType},
     net::{
         self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pService, Libp2pStrategy},
+        libp2p::{Libp2pConnectivityHandle, Libp2pDiscoveryStrategy, Libp2pService},
         ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
         PubSubTopic,
     },
@@ -37,7 +37,7 @@ async fn test_libp2p_peer_discovery() {
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut serv, _, _) = Libp2pService::start(
         addr.clone(),
-        &[Libp2pStrategy::MulticastDns],
+        &[Libp2pDiscoveryStrategy::MulticastDns],
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
@@ -48,7 +48,7 @@ async fn test_libp2p_peer_discovery() {
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut serv2, _, _) = Libp2pService::start(
         addr2.clone(),
-        &[Libp2pStrategy::MulticastDns],
+        &[Libp2pDiscoveryStrategy::MulticastDns],
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
