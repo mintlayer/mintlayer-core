@@ -69,7 +69,7 @@ impl Utxo {
         self.is_block_reward
     }
 
-    pub fn height(&self) -> &UtxoSource {
+    pub fn source_height(&self) -> &UtxoSource {
         &self.source
     }
 
@@ -190,9 +190,7 @@ impl<'a> UtxosCache<'a> {
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
-        let key = outpoint;
-
-        if let Some(res) = self.utxos.get(key) {
+        if let Some(res) = self.utxos.get(outpoint) {
             return Some(res.clone());
         }
 
