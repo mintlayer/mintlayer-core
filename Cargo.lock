@@ -4067,6 +4067,7 @@ dependencies = [
  "crypto",
  "iter_tools",
  "parity-scale-codec",
+ "thiserror",
 ]
 
 [[package]]

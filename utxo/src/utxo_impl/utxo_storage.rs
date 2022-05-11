@@ -45,9 +45,18 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         match self.0.get_utxo(outpoint) {
             Ok(res) => res,
-            Err(_) => {
+            Err(e) => {
                 //todo: handle errors
-                None
+                // match e {
+                //     Error::OverwritingUtxo => todo!(),
+                //     Error::UtxoAlreadyExists => todo!(),
+                //     Error::UtxoAlreadySpent => todo!(),
+                //     Error::NoUtxoFound => todo!(),
+                //     Error::CacheWithoutBestBlock => todo!(),
+                //     Error::NoBlockchainHeightFound => todo!(),
+                //     Error::DBError(db_error) => match db_error {},
+                // }
+                panic!("Storage error while retrieving")
             }
         }
     }
