@@ -322,55 +322,46 @@ impl<'a> UtxosCache<'a> {
     /// Flags the utxo as "spent", given an outpoint.
     /// Returns the Utxo if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
-        match self.get_utxo_entry(outpoint) {
-            None => Err(Error::NoUtxoFound),
-            Some(entry) => {
-                let key = outpoint;
+        let entry = self.get_utxo_entry(outpoint).ok_or(Error::NoUtxoFound)?;
+        // TODO: update the memory usage
+        // self.memory_usage must be deducted from this entry's size
 
-                // TODO: update the memory usage
-                // self.memory_usage must be deducted from this entry's size
-
-                // check whether this entry is fresh
-                if entry.is_fresh {
-                    // This is only available in this view. Remove immediately.
-                    self.utxos.remove(key);
-                } else {
-                    // mark this as 'spent'
-                    let new_entry = UtxoEntry {
-                        status: UtxoStatus::Spent,
-                        is_dirty: true,
-                        is_fresh: false,
-                    };
-                    self.utxos.insert(key.clone(), new_entry);
-                }
-
-                entry.take_utxo().ok_or(Error::UtxoAlreadySpent)
-            }
+        // check whether this entry is fresh
+        if entry.is_fresh {
+            // This is only available in this view. Remove immediately.
+            self.utxos.remove(outpoint);
+        } else {
+            // mark this as 'spent'
+            let new_entry = UtxoEntry {
+                status: UtxoStatus::Spent,
+                is_dirty: true,
+                is_fresh: false,
+            };
+            self.utxos.insert(outpoint.clone(), new_entry);
         }
+
+        entry.take_utxo().ok_or(Error::UtxoAlreadySpent)
     }
 
     /// Checks whether utxo exists in the cache
     pub fn has_utxo_in_cache(&self, outpoint: &OutPoint) -> bool {
-        let key = outpoint;
-        self.utxos.contains_key(key)
+        self.utxos.contains_key(outpoint)
     }
 
     /// Returns a mutable reference of the utxo, given the outpoint.
     pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Option<&mut Utxo> {
-        self.get_utxo_entry(outpoint).and_then(|status| {
-            match status.status {
-                UtxoStatus::Spent => None,
-                UtxoStatus::Entry(utxo) => {
-                    let key = outpoint;
-                    self.utxos.insert(
-                        key.clone(),
-                        UtxoEntry::new(utxo, status.is_fresh, status.is_dirty),
-                    );
-                    //TODO: update the memory storage here
-                    self.utxos.get_mut(key).and_then(|entry| entry.utxo_mut())
-                }
+        let status = self.get_utxo_entry(outpoint)?;
+        match status.status {
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => {
+                self.utxos.insert(
+                    outpoint.clone(),
+                    UtxoEntry::new(utxo, status.is_fresh, status.is_dirty),
+                );
+                //TODO: update the memory storage here
+                self.utxos.get_mut(outpoint).and_then(|entry| entry.utxo_mut())
             }
-        })
+        }
     }
 
     /// removes the utxo in the cache with the outpoint
