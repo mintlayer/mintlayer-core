@@ -8,12 +8,11 @@ use common::primitives::{Id, H256};
 use crypto::random::{make_pseudo_rng, Rng};
 
 fn random_bool() -> bool {
-    let rng = make_pseudo_rng().gen_range(0..2);
-    rng == 0
+    make_pseudo_rng().gen::<bool>()
 }
 
-fn random_u64() -> u64 {
-    make_pseudo_rng().gen_range(0..50u64)
+fn random_u64(max: u64) -> u64 {
+    make_pseudo_rng().gen_range(0..max)
 }
 
 fn populate_cache<'a>(
@@ -122,15 +121,15 @@ fn stack_flush_test() {
     parent.set_best_block(block_hash);
 
     let parent_clone = parent.clone();
-    let (cache1, mut cache1_outps) = populate_cache(&parent_clone, random_u64(), &outps);
+    let (cache1, mut cache1_outps) = populate_cache(&parent_clone, random_u64(50), &outps);
     outps.append(&mut cache1_outps);
 
     let cache1_clone = cache1.clone();
-    let (cache2, mut cache2_outps) = populate_cache(&cache1_clone, random_u64(), &outps);
+    let (cache2, mut cache2_outps) = populate_cache(&cache1_clone, random_u64(50), &outps);
     outps.append(&mut cache2_outps);
 
     let cache2_clone = cache2.clone();
-    let (mut cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(), &outps);
+    let (mut cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(50), &outps);
     outps.append(&mut cache3_outps);
 
     let new_block_hash = Id::new(&H256::random());
