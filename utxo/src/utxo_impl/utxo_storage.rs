@@ -47,16 +47,7 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
             Ok(res) => res,
             Err(e) => {
                 //todo: handle errors
-                // match e {
-                //     Error::OverwritingUtxo => todo!(),
-                //     Error::UtxoAlreadyExists => todo!(),
-                //     Error::UtxoAlreadySpent => todo!(),
-                //     Error::NoUtxoFound => todo!(),
-                //     Error::CacheWithoutBestBlock => todo!(),
-                //     Error::NoBlockchainHeightFound => todo!(),
-                //     Error::DBError(db_error) => match db_error {},
-                // }
-                panic!("Storage error while retrieving")
+                None
             }
         }
     }
