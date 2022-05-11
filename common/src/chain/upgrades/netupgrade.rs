@@ -35,6 +35,7 @@ pub enum ConsensusUpgrade {
     PoW { initial_difficulty: Compact },
     PoS,
     DSA,
+    IgnoreConsensus,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -43,6 +44,7 @@ pub enum ConsensusStatus {
     PoW(PoWStatus),
     PoS,
     DSA,
+    IgnoreConsensus,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
@@ -59,6 +61,7 @@ impl From<ConsensusUpgrade> for ConsensusStatus {
             }
             ConsensusUpgrade::PoS => ConsensusStatus::PoS,
             ConsensusUpgrade::DSA => ConsensusStatus::DSA,
+            ConsensusUpgrade::IgnoreConsensus => ConsensusStatus::IgnoreConsensus,
         }
     }
 }
@@ -161,6 +164,7 @@ impl NetUpgrades<UpgradeVersion> {
             }
             ConsensusUpgrade::PoS => ConsensusStatus::PoS,
             ConsensusUpgrade::DSA => ConsensusStatus::DSA,
+            ConsensusUpgrade::IgnoreConsensus => ConsensusStatus::IgnoreConsensus,
         }
     }
 }
