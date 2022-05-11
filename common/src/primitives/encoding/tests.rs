@@ -11,10 +11,10 @@ fn check_encode() {
     let data = vec![0x00, 0x01, 0x02];
     let hrp = "bech32";
 
-    let encoded = encode(hrp, data.clone()).expect("it should not fail");
+    let encoded = super::bech32m::base32_to_bech32m(hrp, data.clone()).expect("it should not fail");
     assert_eq!(encoded, "bech321qpzq0geym".to_string());
 
-    let decoded = decode(&encoded).expect("should decode okay");
+    let decoded = super::bech32m::bech32m_to_base32(&encoded).expect("should decode okay");
     log::info!("value of decoded: {:?}", decoded);
 
     assert_eq!(hrp, decoded.get_hrp());
@@ -101,11 +101,11 @@ fn check_valid_addresses() {
             )
         };
 
-        match super::bech32m::decode(s) {
+        match super::bech32m::bech32m_to_base32(s) {
             Ok(decoded) => {
                 // check the result of our decoder vs bitcoin_bech32 decoder.
-                assert_eq!(version, decoded.data[0]);
-                assert_eq!(data, decoded.data[1..]);
+                assert_eq!(version, decoded.get_data()[0]);
+                assert_eq!(data, decoded.get_data()[1..]);
 
                 // compare the result of our decoder against the expected data.
                 let data_x = {
@@ -113,7 +113,7 @@ fn check_valid_addresses() {
                         Vec::from_hex(d).expect("should not fail to convert to Vec<u8>");
                     string_data.to_base32().into_iter().map(|d| d.to_u8()).collect::<Vec<u8>>()
                 };
-                assert_eq!(data_x, decoded.data[1..]);
+                assert_eq!(data_x, decoded.get_data()[1..]);
 
                 // compare the result of our decoder against the expected version.
                 let version_x = {
@@ -126,9 +126,12 @@ fn check_valid_addresses() {
                         version_and_len[0] - 0x50
                     }
                 };
-                assert_eq!(version_x, decoded.data[0]);
+                assert_eq!(version_x, decoded.get_data()[0]);
 
-                match super::bech32m::encode(decoded.get_hrp(), decoded.data.clone()) {
+                match super::bech32m::base32_to_bech32m(
+                    decoded.get_hrp(),
+                    <&[u8]>::clone(&decoded.get_data()),
+                ) {
                     Ok(encoded) => {
                         assert_eq!(s.to_lowercase(), encoded.to_lowercase())
                     }
@@ -183,7 +186,7 @@ fn check_invalid_addresses() {
             }
         }
 
-        match super::bech32m::decode(s) {
+        match super::bech32m::bech32m_to_base32(s) {
             Ok(decoded) => match decoded.encode() {
                 Ok(encoded) => {
                     assert_eq!(s.to_lowercase(), encoded.to_lowercase())
@@ -210,9 +213,9 @@ fn check_valid_strings() {
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
         ).iter().for_each(|s| {
-            match super::bech32m::decode(*s) {
+            match super::bech32m::bech32m_to_base32(*s) {
                Ok(decoded) => {
-                   match super::bech32m::encode(decoded.get_hrp(), decoded.data.clone()) {
+                   match super::bech32m::base32_to_bech32m(decoded.get_hrp(), <&[u8]>::clone(&decoded.get_data())) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
                        Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
                    }
@@ -253,7 +256,7 @@ fn check_invalid_strings() {
             ("bc1qz377zwe5awr68dnggengqx9vrjt05k98q3sw2n", Bech32Error::UnsupportedVariant),
             ("tb1qgk665m2auw09rc7pqyf7aulcuhmatz9xqtr5mxew7zuysacaascqs9v0vn", Bech32Error::FailedChecksum)
         ).iter().for_each(|(s,b_err)| {
-            match decode(*s) {
+            match super::decode(*s) {
                 Ok(_) => { panic!("Should be invalid: {:?}", s) }
                 Err(e) => { assert_eq!(*b_err,e) }
             }
