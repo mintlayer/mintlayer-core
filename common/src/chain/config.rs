@@ -121,7 +121,6 @@ fn create_mainnet_genesis() -> Block {
         .expect("Error creating genesis block")
 }
 
-#[allow(dead_code)]
 pub fn create_mainnet() -> ChainConfig {
     ChainConfig {
         chain_type: ChainType::Mainnet,
