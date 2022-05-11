@@ -593,27 +593,34 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        let block_index =
-            self.db_tx.get_block_index(&block.get_id())?.ok_or(BlockError::NotFound)?;
-        let block_height = block_index.get_block_height();
+        let block_height = if block.is_genesis(self.chain_config) {
+            BlockHeight::from(0)
+        } else {
+            let prev_block_id =
+                block.prev_block_id().expect("Block not genesis so must have a prev_block_id");
+            self.db_tx
+                .get_block_index(&prev_block_id)?
+                .ok_or(BlockError::Orphan)?
+                .get_block_height()
+                .checked_add(1)
+                .expect("max block height reached")
+        };
+
         match self.chain_config.net_upgrade().consensus_status(block_height) {
-            ConsensusStatus::PoW(pow_status) => {
-                self.check_pow_consensus(block, &block_index, pow_status)
-            }
+            ConsensusStatus::PoW(pow_status) => self.check_pow_consensus(block, pow_status),
             _ => unimplemented!(),
         }
     }
 
-    fn check_pow_consensus(
-        &self,
-        block: &Block,
-        block_index: &BlockIndex,
-        pow_status: PoWStatus,
-    ) -> Result<(), BlockError> {
+    fn check_pow_consensus(&self, block: &Block, pow_status: PoWStatus) -> Result<(), BlockError> {
         let work_required = match pow_status {
             PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
             PoWStatus::Ongoing => {
-                let prev_block_index = self.get_previous_block_index(block_index)?;
+                let prev_block_id = block
+                    .prev_block_id()
+                    .expect("If PoWStatus is `Onging` then we cannot be at genesis");
+                let prev_block_index =
+                    self.db_tx.get_block_index(&prev_block_id)?.ok_or(BlockError::NotFound)?;
                 PoW::new(self.chain_config).get_work_required(
                     &prev_block_index,
                     block.block_time(),
