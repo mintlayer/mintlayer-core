@@ -22,6 +22,7 @@ use blockchain_storage::Store;
 use common::address::Address;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_mainnet;
+use common::chain::config::create_unit_test_config;
 
 use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::H256;
@@ -143,7 +144,7 @@ fn generate_random_invalid_block() -> Block {
 }
 
 fn setup_consensus() -> Consensus {
-    let config = create_mainnet();
+    let config = create_unit_test_config();
     let storage = Store::new_empty().unwrap();
     Consensus::new(config, storage).unwrap()
 }
@@ -240,7 +241,7 @@ fn test_indices_calculations() {
 fn test_process_genesis_block_wrong_block_source() {
     common::concurrency::model(|| {
         // Genesis can't be from Peer, test it
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config.clone(), storage).unwrap();
 
@@ -255,7 +256,7 @@ fn test_process_genesis_block_wrong_block_source() {
 fn test_process_genesis_block() {
     common::concurrency::model(|| {
         // This test process only Genesis block
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 
@@ -283,7 +284,7 @@ fn test_process_genesis_block() {
 fn test_straight_chain() {
     common::concurrency::model(|| {
         // In this test, processing a few correct blocks in a single chain
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 
@@ -347,7 +348,7 @@ fn test_straight_chain() {
 #[test]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 
@@ -421,7 +422,7 @@ fn test_reorg_simple() {
 #[test]
 fn test_orphans_chains() {
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -1192,7 +1193,7 @@ fn test_empty_consensus() {
             .unwrap()
             .is_none());
         // Let's add genesis
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let consensus = Consensus::new(config, storage).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_some());
@@ -1353,7 +1354,7 @@ fn test_events_a_bunch_of_events() {
     const COUNT_EVENTS: usize = 100;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -1397,7 +1398,7 @@ fn test_events_orphan_block() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = create_unit_test_config();
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 

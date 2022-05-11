@@ -12,6 +12,15 @@ impl<T: Default> Default for NetUpgrades<T> {
     }
 }
 
+impl NetUpgrades<UpgradeVersion> {
+    pub fn unit_tests() -> Self {
+        Self(vec![(
+            BlockHeight::zero(),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        )])
+    }
+}
+
 pub trait Activate {
     fn is_activated(&self, height: BlockHeight, net_upgrades: &NetUpgrades<Self>) -> bool
     where
