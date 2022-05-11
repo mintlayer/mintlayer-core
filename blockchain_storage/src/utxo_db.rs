@@ -105,6 +105,6 @@ mod test {
         assert!(db_interface.set_undo_data(block_id.clone(), &undo).is_ok());
         assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(Some(undo)));
         assert!(db_interface.del_undo_data(block_id.clone()).is_ok());
-        assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(None));
+        assert_eq!(db_interface.get_undo_data(block_id), Ok(None));
     }
 }

@@ -632,8 +632,7 @@ pub(crate) mod test {
         let is_block_reward = random_value % 3 == 0;
 
         // generate utxo
-        let utxo = Utxo::new(output, is_block_reward, BlockHeight::new(block_height));
-        utxo
+        Utxo::new(output, is_block_reward, BlockHeight::new(block_height))
     }
 
     /// returns a block undo with random utxos and TxUndos.
@@ -701,13 +700,13 @@ pub(crate) mod test {
         assert_eq!(store.del_undo_data(id1.clone()), Ok(()));
         assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
         assert_eq!(
-            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
         assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
         assert_eq!(
             store.get_undo_data(id1.clone()).unwrap().unwrap(),
-            block_undo1.clone()
+            block_undo1
         );
     }
 }
