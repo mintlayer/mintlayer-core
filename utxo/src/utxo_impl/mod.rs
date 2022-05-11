@@ -274,8 +274,7 @@ impl<'a> UtxosCache<'a> {
         outpoint: &OutPoint,
         possible_overwrite: bool,
     ) -> Result<(), Error> {
-        let key = outpoint;
-        let is_fresh = match self.utxos.get(key) {
+        let is_fresh = match self.utxos.get(outpoint) {
             None => {
                 // An insert can be done. This utxo doesn't exist yet, so it's fresh.
                 !possible_overwrite
@@ -314,7 +313,7 @@ impl<'a> UtxosCache<'a> {
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
 
-        self.utxos.insert(key.clone(), new_entry);
+        self.utxos.insert(outpoint.clone(), new_entry);
 
         Ok(())
     }
