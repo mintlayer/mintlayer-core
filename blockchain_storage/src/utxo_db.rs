@@ -78,6 +78,7 @@ mod test {
         (utxo, outpoint)
     }
 
+    #[cfg(not(loom))]
     #[test]
     fn db_impl_test() {
         let store = Store::new_empty().expect("should create a store");

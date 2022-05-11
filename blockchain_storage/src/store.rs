@@ -666,6 +666,7 @@ pub(crate) mod test {
         BlockUndo::new(block_undo, block_height)
     }
 
+    #[cfg(not(loom))]
     #[test]
     fn undo_test() {
         let block_undo0 = create_rand_block_undo(10, 5, BlockHeight::new(1));
