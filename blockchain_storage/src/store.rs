@@ -705,9 +705,6 @@ pub(crate) mod test {
             block_undo0.clone()
         );
         assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
-        assert_eq!(
-            store.get_undo_data(id1.clone()).unwrap().unwrap(),
-            block_undo1
-        );
+        assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
     }
 }
