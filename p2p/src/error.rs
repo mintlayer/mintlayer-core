@@ -51,8 +51,11 @@ pub enum P2pError {
     ChannelClosed,
     NoPeers,
     PeerDoesntExist,
+    InvalidAddress,
+    InvalidData,
 }
 
+// TODO: move this to src/lib.rs
 pub type Result<T> = core::result::Result<T, P2pError>;
 
 impl From<std::io::Error> for P2pError {
@@ -125,6 +128,12 @@ impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
 impl From<libp2p::gossipsub::error::PublishError> for P2pError {
     fn from(e: libp2p::gossipsub::error::PublishError) -> P2pError {
         P2pError::Libp2pError(Libp2pError::PublishError(e.to_string()))
+    }
+}
+
+impl From<subsystem::subsystem::CallError> for P2pError {
+    fn from(e: subsystem::subsystem::CallError) -> P2pError {
+        P2pError::ChannelClosed
     }
 }
 
