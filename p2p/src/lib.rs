@@ -24,6 +24,7 @@ use crate::{
 };
 use common::chain::block;
 use common::chain::ChainConfig;
+use consensus::consensus_interface;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc};
 use tokio::sync::mpsc;
@@ -33,6 +34,7 @@ pub mod event;
 pub mod message;
 pub mod net;
 pub mod pubsub;
+pub mod rpc;
 pub mod swarm;
 pub mod sync;
 
@@ -90,7 +92,7 @@ where
     pub async fn new(
         bind_addr: String,
         config: Arc<ChainConfig>,
-        consensus: subsystem::Handle<consensus::ConsensusInterface>,
+        consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
     ) -> error::Result<Self>
     where
         <T as NetworkService>::Address: FromStr,
@@ -147,7 +149,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
-    consensus: subsystem::Handle<consensus::ConsensusInterface>,
+    consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
     bind_addr: String,
 ) -> Result<P2pInterface<T>, P2pError>
 where
