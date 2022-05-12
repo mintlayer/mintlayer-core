@@ -25,15 +25,15 @@ use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
+use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
-use common::chain::PoWStatus;
-use common::chain::{calculate_tx_index_from_block, ConsensusStatus};
 use common::chain::{OutPointSourceId, Transaction};
 use common::primitives::BlockDistance;
 use common::primitives::{time, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
 use std::sync::Arc;
+mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
 
@@ -48,6 +48,8 @@ type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
 mod spend_cache;
 use spend_cache::CachedInputs;
+
+use consensus_validator::BlockIndexHandle;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
@@ -219,6 +221,22 @@ struct ConsensusRefRo<'a> {
     db_tx: TxRo<'a>,
     #[allow(dead_code)]
     orphan_blocks: &'a OrphanBlocksPool,
+}
+
+impl<'a> BlockIndexHandle for ConsensusRef<'a> {
+    fn get_block_index(
+        &self,
+        block_index: &Id<Block>,
+    ) -> blockchain_storage::Result<Option<BlockIndex>> {
+        self.db_tx.get_block_index(block_index)
+    }
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        self.get_ancestor(block_index, ancestor_height)
+    }
 }
 
 impl<'a> ConsensusRef<'a> {
@@ -593,49 +611,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        let block_height = if block.is_genesis(self.chain_config) {
-            BlockHeight::from(0)
-        } else {
-            let prev_block_id =
-                block.prev_block_id().expect("Block not genesis so must have a prev_block_id");
-            self.db_tx
-                .get_block_index(&prev_block_id)?
-                .ok_or(BlockError::Orphan)?
-                .get_block_height()
-                .checked_add(1)
-                .expect("max block height reached")
-        };
-
-        match self.chain_config.net_upgrade().consensus_status(block_height) {
-            ConsensusStatus::PoW(pow_status) => self.check_pow_consensus(block, pow_status),
-            ConsensusStatus::IgnoreConsensus => Ok(()),
-            ConsensusStatus::PoS => todo!(),
-            ConsensusStatus::DSA => todo!(),
-        }
-    }
-
-    fn check_pow_consensus(&self, block: &Block, pow_status: PoWStatus) -> Result<(), BlockError> {
-        let work_required = match pow_status {
-            PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
-            PoWStatus::Ongoing => {
-                let prev_block_id = block
-                    .prev_block_id()
-                    .expect("If PoWStatus is `Onging` then we cannot be at genesis");
-                let prev_block_index =
-                    self.db_tx.get_block_index(&prev_block_id)?.ok_or(BlockError::NotFound)?;
-                PoW::new(self.chain_config).get_work_required(
-                    &prev_block_index,
-                    block.block_time(),
-                    self,
-                )?
-            }
-        };
-
-        if check_proof_of_work(block.get_id().get(), work_required)? {
-            Ok(())
-        } else {
-            Err(BlockError::InvalidPoW)
-        }
+        consensus_validator::validate_consensus(self.chain_config, block, self)
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
