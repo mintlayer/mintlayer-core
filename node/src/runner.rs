@@ -4,6 +4,7 @@ use crate::options::Options;
 use common::chain::config::ChainType;
 use consensus::rpc::ConsensusRpcServer;
 use std::sync::Arc;
+use p2p::rpc::P2pRpcServer;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -37,7 +38,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     let p2p = manager.add_subsystem(
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
-            std::sync::Arc::new(common::chain::config::create_mainnet()),
+            Arc::clone(&chain_config),
             consensus.clone(),
             opts.p2p_addr,
         )
@@ -51,6 +52,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         rpc::Builder::new(opts.rpc_addr)
             .register(consensus.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
+            .register(p2p.clone().into_rpc())
             .build()
             .await?,
     );

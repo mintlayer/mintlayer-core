@@ -13,10 +13,12 @@ rand = "0.8.4"
 void = "1.0.2"
 itertools = "0.10.3"
 sscanf = "0.2.1"
-serialization = { path = "../serialization/" }
+jsonrpsee = { version = "0.13.1", features = ["macros"] }
 common = { path = "../common/" }
 consensus = { path = "../consensus/" }
 logging = { path = "../logging/" }
+rpc = { path = "../rpc/" }
+serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 
 [dependencies.libp2p]
