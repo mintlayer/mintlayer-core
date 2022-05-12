@@ -17,10 +17,10 @@
 
 #![allow(dead_code)]
 
+use crate::detail::consensus_validator::BlockIndexHandle;
 use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
-use crate::detail::ConsensusRef;
 
 use crate::detail::pow::PoW;
 use crate::BlockError;
@@ -65,7 +65,7 @@ impl PoW {
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
-        db_accessor: &ConsensusRef,
+        db_accessor: &dyn BlockIndexHandle,
     ) -> Result<Compact, BlockError> {
         //TODO: check prev_block_index exists
         let prev_block_bits = {
