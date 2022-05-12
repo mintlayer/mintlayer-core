@@ -1,5 +1,5 @@
 use crate::uint::Uint256;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::ops::Shl;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Debug, Encode, Decode)]

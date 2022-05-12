@@ -3,10 +3,9 @@ use crate::{
     chain::block::Block,
     primitives::{Id, Idable},
 };
-use parity_scale_codec::Encode;
-use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
+use serialization::{Decode, Encode};
 
-#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum Spender {
     #[codec(index = 0)]
     RegularInput(Id<Transaction>),
@@ -26,7 +25,7 @@ impl From<Id<Block>> for Spender {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum OutputSpentState {
     Unspent,
     SpentBy(Spender),
@@ -38,7 +37,7 @@ pub enum OutputSpentState {
 /// and we then read the binary data at a specific offset and size, which we deserialize
 /// to get the transaction.
 /// This struct represents the position of a transaction in the database
-#[derive(Clone, Debug, PartialEq, Eq, Encode, DecodeDer)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainPosition {
     block_id: Id<Block>,
     byte_offset_in_block: u32,
@@ -75,7 +74,7 @@ pub enum SpendError {
 }
 
 /// This enum represents that we can either spend from a block reward or a regular transaction
-#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum SpendablePosition {
     Transaction(TxMainChainPosition),
     BlockReward(Id<Block>),
@@ -104,7 +103,7 @@ pub enum TxMainChainIndexError {
 /// 1. The state on whether its outputs are spent
 /// 2. The position on where to find that transaction in the mainchain (block + binary position)
 /// This struct also is used in a read-modify-write operation to modify the spent-state of a transaction
-#[derive(Clone, Debug, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub struct TxMainChainIndex {
     position: SpendablePosition,
     spent: Vec<OutputSpentState>,

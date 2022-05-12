@@ -2,7 +2,7 @@ use crate::chain::block::Block;
 use crate::chain::ChainConfig;
 use crate::primitives::{BlockHeight, Id, Idable};
 // use crate::Uint256;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 #[allow(dead_code, unused_variables)]

@@ -3,7 +3,7 @@ use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id, Idable};
-use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
+use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};

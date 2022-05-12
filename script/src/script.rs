@@ -29,7 +29,7 @@
 
 use core::{default::Default, fmt};
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use crate::{error::Error, opcodes};
 

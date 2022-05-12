@@ -1,6 +1,7 @@
-use parity_scale_codec_derive::{Decode, Encode};
 use std::fmt;
 use std::ops::{Add, Sub};
+
+use serialization::{Decode, Encode};
 
 type HeightIntType = u64;
 type DistanceIntType = i64;

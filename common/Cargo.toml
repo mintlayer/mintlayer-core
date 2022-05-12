@@ -7,22 +7,23 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bech32 = "0.8.1"
-thiserror = "1.0.30"
-displaydoc = { default-features = false, version = "0.2" }
 script = { path = '../script'}
 crypto = { path = '../crypto'}
-hex-literal = "0.3.4"
-merkletree = "0.21.0"
-static_assertions = "1.1.0"
-generic-array = "0.14.4"
-rand = "0.8.4"
-anyhow = "1.0.51"
-parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
-parity-scale-codec-derive = "2.3.1"
-sscanf = "0.2.1"
-lazy_static = "1.4.0"
+serialization = { path = "../serialization" }
 logging = { path = "../logging/" }
+
+anyhow = "1.0.51"
+bech32 = "0.8.1"
+displaydoc = { default-features = false, version = "0.2" }
+generic-array = "0.14.4"
+hex-literal = "0.3.4"
+lazy_static = "1.4.0"
+merkletree = "0.21.0"
+parity-scale-codec = "2.3.1"
+rand = "0.8.4"
+sscanf = "0.2.1"
+static_assertions = "1.1.0"
+thiserror = "1.0.30"
 
 # for fixed_hash
 arbitrary = "1.1.0"

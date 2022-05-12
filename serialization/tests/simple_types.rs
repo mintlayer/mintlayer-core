@@ -1,5 +1,7 @@
-use parity_scale_codec::{Decode, Encode};
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+mod utils;
+
+use serialization::{Decode, Encode};
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_numbers() {

@@ -2,9 +2,10 @@ use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::primitives::{Id, H256};
-use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, EncodeDer, DecodeDer)]
+use serialization::{Decode, Encode};
+
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
 pub struct BlockHeader {
     pub(super) prev_block_hash: Option<Id<Block>>,
     pub(super) tx_merkle_root: Option<H256>,
@@ -13,7 +14,7 @@ pub struct BlockHeader {
     pub(super) consensus_data_inner: ConsensusData,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
     pub(super) transactions: Vec<Transaction>,
