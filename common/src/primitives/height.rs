@@ -19,7 +19,7 @@ type DistanceIntType = i64;
     serde::Serialize,
     serde::Deserialize,
 )]
-pub struct BlockHeight(HeightIntType);
+pub struct BlockHeight(#[codec(compact)] HeightIntType);
 
 // Display should be defined for thiserr crate
 impl fmt::Display for BlockHeight {
@@ -230,7 +230,10 @@ mod tests {
     #[test]
     fn blockheight_json() {
         fn check(height: BlockHeight) {
-            use serde_test::{assert_tokens, Token::{NewtypeStruct, U64}};
+            use serde_test::{
+                assert_tokens,
+                Token::{NewtypeStruct, U64},
+            };
             // Block height serializes to just a number, represented by a newtype struct
             assert_tokens(
                 &height,
@@ -242,7 +245,10 @@ mod tests {
                 ],
             );
             assert_eq!(serde_json::to_value(height).ok(), Some(height.0.into()));
-            assert_eq!(serde_json::to_string(&height).ok(), Some(height.0.to_string()));
+            assert_eq!(
+                serde_json::to_string(&height).ok(),
+                Some(height.0.to_string())
+            );
         }
         check(BlockHeight::new(0));
         check(BlockHeight::new(1));
