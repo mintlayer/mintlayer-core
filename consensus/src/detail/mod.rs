@@ -16,8 +16,6 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::detail::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
-use crate::detail::pow::work::check_proof_of_work;
-use crate::detail::pow::PoW;
 use crate::ConsensusEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
