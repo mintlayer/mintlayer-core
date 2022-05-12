@@ -24,6 +24,7 @@ use crate::{
 };
 use common::chain::ChainConfig;
 use common::primitives::Idable;
+use consensus::consensus_interface;
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -34,7 +35,7 @@ where
     T: NetworkService,
 {
     handle: T::PubSubHandle,
-    consensus: subsystem::Handle<consensus::ConsensusInterface>,
+    consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
 }
 
 impl<T> PubSubManager<T>
@@ -44,7 +45,7 @@ where
 {
     pub fn new(
         handle: T::PubSubHandle,
-        consensus: subsystem::Handle<consensus::ConsensusInterface>,
+        consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
     ) -> Self {
         Self { handle, consensus }
     }

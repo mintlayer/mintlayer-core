@@ -23,15 +23,11 @@ use crate::{
     net::{self, NetworkService, SyncingService},
 };
 use common::chain::block::{Block, BlockHeader};
+use consensus::consensus_interface;
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::mpsc;
-
-trait ConsensusInterface {
-    fn get_locator(&mut self) -> Result<Vec<BlockHeader>, ()>;
-    fn get_uniq_headers(&mut self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ()>;
-}
 
 /// State of the peer
 enum PeerState {
@@ -79,7 +75,7 @@ where
 {
     pub fn new(
         handle: T::SyncingHandle,
-        _: subsystem::Handle<consensus::ConsensusInterface>,
+        _: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
         _: mpsc::Receiver<event::SyncEvent>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
     ) -> Self {
@@ -245,8 +241,8 @@ mod tests {
         .await
         .unwrap();
 
-        let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-        let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
+        // let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
+        // let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
 
         let mut manager = subsystem::Manager::new("mintlayer");
         manager.install_signal_handlers();
