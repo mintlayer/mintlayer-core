@@ -2,8 +2,8 @@ mod utils;
 
 use rand::Rng;
 use serialization::{Decode, Encode};
-use utils::{OptionWrapper, SimpleWrapper};
 use std::collections::BTreeMap;
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_structures() {

@@ -3,8 +3,8 @@ mod utils;
 use arraytools::ArrayTools;
 use hex_literal::hex;
 use serialization::{Decode, Encode};
-use utils::{OptionWrapper, SimpleWrapper};
 use std::collections::BTreeMap;
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_version_compatibility_numbers() {

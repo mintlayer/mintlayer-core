@@ -1,6 +1,6 @@
 mod utils;
 
-use serialization::{Encode, Decode};
+use serialization::{Decode, Encode};
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Debug, Decode, Encode)]
 enum Enum1A {
