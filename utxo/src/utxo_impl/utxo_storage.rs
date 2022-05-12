@@ -46,8 +46,10 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
         match self.0.get_utxo(outpoint) {
             Ok(res) => res,
             Err(e) => {
-                //todo: handle errors
-                None
+                panic!(
+                    "Database error while attempting to retrieve utxo from the database: {}",
+                    e
+                );
             }
         }
     }
@@ -59,9 +61,11 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
     fn get_best_block_hash(&self) -> Option<Id<Block>> {
         match self.0.get_best_block_id() {
             Ok(opt_id) => opt_id,
-            Err(_) => {
-                // TODO: handle errors
-                None
+            Err(e) => {
+                panic!(
+                    "Database error while attempting to retrieve utxo set best block hash from the database: {}",
+                    e
+                );
             }
         }
     }
