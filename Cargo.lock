@@ -2370,6 +2370,7 @@ dependencies = [
  "common",
  "consensus",
  "logging",
+ "p2p",
  "rpc",
  "strum",
  "subsystem",
@@ -2524,7 +2525,9 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "blockchain-storage",
  "common",
+ "consensus",
  "futures",
  "futures-timer",
  "itertools",
@@ -2535,6 +2538,7 @@ dependencies = [
  "rand 0.8.5",
  "serialization",
  "sscanf",
+ "subsystem",
  "test-utils",
  "tokio",
  "void",

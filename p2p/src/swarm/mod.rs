@@ -72,7 +72,7 @@ where
     discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
 
     /// RX channel for receiving control events
-    rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+    rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
 
     /// TX channel for sending events to SyncManager
     tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
@@ -86,7 +86,7 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
-        rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+        rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
@@ -102,10 +102,10 @@ where
     /// Handle swarm control event
     async fn on_swarm_control_event(
         &mut self,
-        event: Option<event::SwarmControlEvent<T>>,
+        event: Option<event::SwarmEvent<T>>,
     ) -> error::Result<()> {
         match event.ok_or(P2pError::ChannelClosed)? {
-            event::SwarmControlEvent::Connect { addr } => {
+            event::SwarmEvent::Connect(addr) => {
                 log::debug!(
                     "try to establish outbound connection to peer at address {:?}",
                     addr
@@ -240,7 +240,7 @@ where
         log::debug!("destroying peer {:?}", peer_id);
 
         self.tx_sync
-            .send(event::SyncControlEvent::Disconnected { peer_id })
+            .send(event::SyncControlEvent::Disconnected(peer_id))
             .await
             .map_err(P2pError::from)?;
         self.peers.remove(&peer_id);
@@ -285,7 +285,7 @@ where
 
                 self.peers.insert(peer_id, PeerContext { info: peer_info });
                 self.tx_sync
-                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .send(event::SyncControlEvent::Connected(peer_id))
                     .await
                     .map_err(P2pError::from)
             }
@@ -320,7 +320,7 @@ where
 
                 self.peers.insert(peer_id, PeerContext { info: peer_info });
                 self.tx_sync
-                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .send(event::SyncControlEvent::Connected(peer_id))
                     .await
                     .map_err(P2pError::from)
             }
@@ -400,9 +400,7 @@ mod tests {
 
         let addr: SocketAddr = "[::1]:1".parse().unwrap();
         assert_eq!(
-            swarm
-                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
-                .await,
+            swarm.on_swarm_control_event(Some(event::SwarmEvent::Connect(addr))).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
     }
@@ -419,9 +417,7 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(
-            swarm
-                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
-                .await,
+            swarm.on_swarm_control_event(Some(event::SwarmEvent::Connect(addr))).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
     }

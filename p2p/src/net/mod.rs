@@ -203,7 +203,7 @@ pub trait NetworkService {
     type SyncingHandle: Send;
 
     /// Unique ID assigned to each pubsub message
-    type MessageId: Send + Clone;
+    type MessageId: Send + Clone + Debug;
 
     /// Initialize the network service provider
     ///

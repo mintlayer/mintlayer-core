@@ -16,25 +16,20 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::message;
-use crate::net::NetworkService;
+use crate::{message, net::NetworkService};
+use common::chain::block::Block;
 use serialization::{Decode, Encode};
-use tokio::sync::mpsc;
 
 #[derive(Debug)]
-pub enum PeerSyncEvent<T>
-where
-    T: NetworkService,
-{
-    Dummy { peer_id: T::PeerId },
+pub enum SwarmEvent<T: NetworkService> {
+    /// Try to establish connection with a remote peer
+    Connect(T::Address),
 }
 
 #[derive(Debug)]
-pub enum SwarmControlEvent<T>
-where
-    T: NetworkService,
-{
-    Connect { addr: T::Address },
+pub enum SyncEvent {
+    /// Publish a block to the network
+    PublishBlock(Block),
 }
 
 #[derive(Debug)]
@@ -43,14 +38,8 @@ where
     T: NetworkService,
 {
     /// Peer connected
-    Connected {
-        /// Unique peer ID
-        peer_id: T::PeerId,
-    },
+    Connected(T::PeerId),
 
     /// Peer disconnected
-    Disconnected {
-        /// Unique peer ID
-        peer_id: T::PeerId,
-    },
+    Disconnected(T::PeerId),
 }
