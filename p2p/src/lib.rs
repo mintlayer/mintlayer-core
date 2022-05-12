@@ -132,7 +132,7 @@ where
 
         // TODO: merge with syncmanager when appropriate
         tokio::spawn(async move {
-            if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
+            if let Err(e) = pubsub::PubSubManager::<T>::new(flood, consensus).run().await {
                 log::error!("PubSubManager failed: {:?}", e);
             }
         });
