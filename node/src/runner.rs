@@ -33,6 +33,18 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         consensus::make_consensus(chain_config, storage.clone())?,
     );
 
+    // P2P subsystem
+    let p2p = manager.add_subsystem(
+        "p2p",
+        p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
+            std::sync::Arc::new(common::chain::config::create_mainnet()),
+            consensus.clone(),
+            opts.p2p_addr,
+        )
+        .await
+        .unwrap(),
+    );
+
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",

@@ -12,6 +12,7 @@ blockchain-storage = { path = "../blockchain_storage/" }
 common = { path = "../common/" }
 consensus = { path = "../consensus/" }
 logging = { path = "../logging/" }
+p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }
 subsystem = { path = "../subsystem/" }
 

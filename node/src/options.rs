@@ -22,6 +22,10 @@ pub struct Options {
     /// Blockchain type
     #[clap(long, value_name = "NET", possible_values = ChainType::VARIANTS)]
     pub net: ChainType,
+
+    /// Address to bind P2P to
+    #[clap(long, value_name = "ADDR", default_value = "/ip6/::1/tcp/3031")]
+    pub p2p_addr: String,
 }
 
 impl Options {
