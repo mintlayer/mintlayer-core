@@ -11,7 +11,19 @@ use std::collections::BTreeMap;
 
 type HashType = Id<Block>;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::Display,
+    strum::EnumVariantNames,
+    strum::EnumString,
+)]
+#[strum(serialize_all = "kebab-case")]
 pub enum ChainType {
     Mainnet,
     Testnet,

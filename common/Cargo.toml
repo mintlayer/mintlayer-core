@@ -24,6 +24,7 @@ rand = "0.8.4"
 serde = "1.0"
 sscanf = "0.2.1"
 static_assertions = "1.1.0"
+strum = { version = "0.24", features = ["derive"] }
 thiserror = "1.0.30"
 
 # for fixed_hash
