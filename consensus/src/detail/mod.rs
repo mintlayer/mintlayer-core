@@ -609,7 +609,8 @@ impl<'a> ConsensusRef<'a> {
         match self.chain_config.net_upgrade().consensus_status(block_height) {
             ConsensusStatus::PoW(pow_status) => self.check_pow_consensus(block, pow_status),
             ConsensusStatus::IgnoreConsensus => Ok(()),
-            _ => unimplemented!(),
+            ConsensusStatus::PoS => todo!(),
+            ConsensusStatus::DSA => todo!(),
         }
     }
 
