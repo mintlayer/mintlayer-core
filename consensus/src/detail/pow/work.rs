@@ -27,14 +27,13 @@ use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::BlockIndex;
 use common::chain::block::{Block, ConsensusData};
+use common::chain::config::ChainConfig;
+use common::chain::PoWStatus;
 use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-pub(crate) fn check_proof_of_work(
-    block_hash: H256,
-    block_bits: Compact,
-) -> Result<bool, BlockError> {
+fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, BlockError> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
@@ -49,6 +48,36 @@ pub(crate) fn check_proof_of_work(
         })
 }
 
+pub(crate) fn check_pow_consensus(
+    chain_config: &ChainConfig,
+    block: &Block,
+    pow_status: PoWStatus,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<(), BlockError> {
+    let work_required = match pow_status {
+        PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
+        PoWStatus::Ongoing => {
+            let prev_block_id = block
+                .prev_block_id()
+                .expect("If PoWStatus is `Onging` then we cannot be at genesis");
+            let prev_block_index = block_index_handle
+                .get_block_index(&prev_block_id)?
+                .ok_or(BlockError::NotFound)?;
+            PoW::new(chain_config).get_work_required(
+                &prev_block_index,
+                block.block_time(),
+                block_index_handle,
+            )?
+        }
+    };
+
+    if check_proof_of_work(block.get_id().get(), work_required)? {
+        Ok(())
+    } else {
+        Err(BlockError::InvalidPoW)
+    }
+}
+
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
     fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
@@ -61,7 +90,7 @@ impl PoW {
         )
     }
 
-    pub(crate) fn get_work_required(
+    fn get_work_required(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
