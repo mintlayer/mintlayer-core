@@ -22,7 +22,7 @@ use std::time::Duration;
 mod helpers;
 pub mod work;
 
-pub struct PoW(PoWChainConfig);
+struct PoW(PoWChainConfig);
 
 impl PoW {
     pub fn new(chain_config: &ChainConfig) -> Self {
