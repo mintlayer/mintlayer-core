@@ -3,6 +3,7 @@
 use crate::{Error, TxUndo};
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{BlockHeight, Id, Idable};
+use logging::log;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 
@@ -457,7 +458,8 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             // exists in the parent cache. If this ever happens, it means
                             // the FRESH flag was misapplied and there is a logic error in
                             // the calling code.
-                            return Err(Error::UtxoAlreadyExists);
+                            log::error!("CRITICAL: An invariant in Utxo was broken");
+                            return Err(Error::FreshUtxoAlreadyExists);
                         }
 
                         if parent_entry.is_fresh && entry.is_spent() {

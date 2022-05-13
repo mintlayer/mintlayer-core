@@ -14,7 +14,7 @@ pub enum Error {
     #[error(
         "The utxo was marked FRESH in the child cache, but the utxo exists in the parent cache. This can be considered a fatal error."
     )]
-    UtxoAlreadyExists,
+    FreshUtxoAlreadyExists,
     #[error("Attempted to spend a UTXO that's already spent")]
     UtxoAlreadySpent,
     #[error("Attempted to spend a non-existing UTXO")]

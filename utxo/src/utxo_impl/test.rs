@@ -1,7 +1,7 @@
 use common::primitives::{BlockHeight, Id, Idable, H256};
 
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
-use crate::Error::{self, OverwritingUtxo, UtxoAlreadyExists};
+use crate::Error::{self, FreshUtxoAlreadyExists, OverwritingUtxo};
 use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView};
 
 use crate::test_helper::create_tx_outputs;
@@ -347,21 +347,21 @@ fn batch_write_test() {
     check_write_utxo(Present, Absent,   Ok(Present),            Some(DIRTY),        None,               Some(DIRTY));
     check_write_utxo(Present, Absent,   Ok(Present),            Some(FRESH | DIRTY),None ,              Some(FRESH | DIRTY));
     check_write_utxo(Present, Spent ,   Ok(Spent),              Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Spent ,   Err(UtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Spent ,   Ok(Absent),             Some(FRESH),        Some(DIRTY),        None);
-    check_write_utxo(Present, Spent ,   Err(UtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Spent ,   Ok(Spent),              Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Spent ,   Err(UtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Spent ,   Ok(Absent),             Some(FRESH | DIRTY),Some(DIRTY),        None);
-    check_write_utxo(Present, Spent ,   Err(UtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Present,  Ok(Present),            Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Present,  Err(UtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Present,  Ok(Present),            Some(FRESH),        Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Present, Present,  Err(UtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Present,  Ok(Present),            Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Present,  Err(UtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
     check_write_utxo(Present, Present,  Ok(Present),            Some(FRESH | DIRTY),Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Present, Present,  Err(UtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
+    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
 }
 
 #[test]

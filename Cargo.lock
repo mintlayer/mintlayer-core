@@ -4097,6 +4097,7 @@ dependencies = [
  "common",
  "crypto",
  "iter_tools",
+ "logging",
  "parity-scale-codec",
  "thiserror",
 ]
