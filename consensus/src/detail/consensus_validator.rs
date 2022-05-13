@@ -4,6 +4,7 @@ use common::chain::block::BlockIndex;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
 use common::chain::ConsensusStatus;
+use common::chain::PoWStatus;
 use common::primitives::BlockHeight;
 use common::primitives::Id;
 
@@ -46,21 +47,33 @@ pub(crate) fn validate_consensus(
     Ok(())
 }
 
+fn validate_pow_consensus(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    pow_status: &PoWStatus,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<(), BlockError> {
+    if let ConsensusData::PoW(..) = header.consensus_data() {
+        check_pow_consensus(chain_config, header, pow_status, block_index_handle)
+    } else {
+        Err(BlockError::ConsensusTypeMismatch(
+            "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
+        ))
+    }
+}
+
 fn do_validate(
     chain_config: &ChainConfig,
-    block: &BlockHeader,
+    header: &BlockHeader,
     consensus_status: &ConsensusStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
-    let block_consensus_data = block.consensus_data();
-    match (block_consensus_data, consensus_status) {
-        (_, ConsensusStatus::IgnoreConsensus) => Ok(()),
-        (ConsensusData::PoW(..), ConsensusStatus::PoW(pow_status)) => {
-            check_pow_consensus(chain_config, block, *pow_status, block_index_handle)
+    match consensus_status {
+        ConsensusStatus::PoW(pow_status) => {
+            validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
-        (block_consensus_data, chain_consensus_status) => Err(BlockError::ConsensusTypeMismatch {
-            block_consensus_data: block_consensus_data.clone(),
-            chain_consensus_status: *chain_consensus_status,
-        }),
+        ConsensusStatus::IgnoreConsensus => Ok(()),
+        ConsensusStatus::PoS => todo!(),
+        ConsensusStatus::DSA => todo!(),
     }
 }

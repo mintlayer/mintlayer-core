@@ -15,8 +15,6 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use common::chain::block::ConsensusData;
-use common::chain::ConsensusStatus;
 use common::{
     chain::{block::Block, SpendError, Spender, Transaction, TxMainChainIndexError},
     primitives::{Amount, BlockHeight, Id},
@@ -94,11 +92,8 @@ pub enum BlockError {
     Conversion(String),
     #[error("No PoW data for block")]
     NoPowData,
-    #[error("Block consensus data is {block_consensus_data:?}, current config is {chain_consensus_status:?}")]
-    ConsensusTypeMismatch {
-        block_consensus_data: ConsensusData,
-        chain_consensus_status: ConsensusStatus,
-    },
+    #[error("Block consensus type does not match our chain configuration: `{0:?}`")]
+    ConsensusTypeMismatch(String),
 }
 
 impl From<blockchain_storage::Error> for BlockError {
