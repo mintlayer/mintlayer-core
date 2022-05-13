@@ -263,3 +263,39 @@ fn check_invalid_strings() {
             }
         });
 }
+
+#[test]
+fn check_arbitraty_data_convertion() {
+    let test_hrp = "hrp";
+    let dataset = vec![
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_vec(),
+        b"z y x w v u t s r q p o n m l k j i h g f e d c b a".to_vec(),
+        b"1234567890".to_vec(),
+        vec![0],
+        Vec::<u8>::new(),
+    ];
+    for test_data in &dataset {
+        let encoded_data = super::encode(test_hrp, test_data).unwrap();
+        dbg!(&encoded_data);
+        let decoded_data = super::decode(&encoded_data).unwrap();
+        assert_eq!(test_data, decoded_data.get_data());
+        assert_eq!(test_hrp, decoded_data.get_hrp());
+    }
+}
+#[test]
+fn check_bech32m_convertion_to_arbitraty_data() {
+    let test_hrp = "hrp";
+    let dataset = vec![
+        "hrp1g9pyx3z9ger5sj22fdxy6nj02pg4y56524t9wkzetgqqazk6",
+        "hrp10gs8jgrcypmjqa3qw5s8ggrnypezqufqwqsx7grwypkjqmpqdvsx5grfyp5zqeeqvcsx2gryyp3jqc3qvyq7p8jc",
+        "hrp1xyerxdp4xcmnswfs3y3n8w",
+        "hrp1qqh9dn75",
+        "hrp1etsu3g",
+    ];
+    for test_data in dataset {
+        let decoded_data = super::decode(test_data).unwrap();
+        let encoded_data = super::encode(test_hrp, decoded_data.get_data()).unwrap();
+
+        assert_eq!(test_data, encoded_data);
+    }
+}
