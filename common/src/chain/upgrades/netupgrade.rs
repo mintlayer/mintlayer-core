@@ -48,7 +48,7 @@ pub enum ConsensusUpgrade {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Ord, PartialOrd)]
-pub enum ConsensusStatus {
+pub enum RequiredConsensus {
     // Either genesis or previous block was not PoW
     PoW(PoWStatus),
     PoS,
@@ -62,15 +62,15 @@ pub enum PoWStatus {
     Threshold { initial_difficulty: Compact },
 }
 
-impl From<ConsensusUpgrade> for ConsensusStatus {
+impl From<ConsensusUpgrade> for RequiredConsensus {
     fn from(upgrade: ConsensusUpgrade) -> Self {
         match upgrade {
             ConsensusUpgrade::PoW { initial_difficulty } => {
-                ConsensusStatus::PoW(PoWStatus::Threshold { initial_difficulty })
+                RequiredConsensus::PoW(PoWStatus::Threshold { initial_difficulty })
             }
-            ConsensusUpgrade::PoS => ConsensusStatus::PoS,
-            ConsensusUpgrade::DSA => ConsensusStatus::DSA,
-            ConsensusUpgrade::IgnoreConsensus => ConsensusStatus::IgnoreConsensus,
+            ConsensusUpgrade::PoS => RequiredConsensus::PoS,
+            ConsensusUpgrade::DSA => RequiredConsensus::DSA,
+            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
         }
     }
 }
@@ -147,7 +147,7 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
 }
 
 impl NetUpgrades<UpgradeVersion> {
-    pub fn consensus_status(&self, height: BlockHeight) -> ConsensusStatus {
+    pub fn consensus_status(&self, height: BlockHeight) -> RequiredConsensus {
         let (last_upgrade_height, last_consensus_upgrade) = self
             .0
             .iter()
@@ -164,16 +164,16 @@ impl NetUpgrades<UpgradeVersion> {
         match last_consensus_upgrade {
             ConsensusUpgrade::PoW { initial_difficulty } => {
                 if *last_upgrade_height < height {
-                    ConsensusStatus::PoW(PoWStatus::Ongoing)
+                    RequiredConsensus::PoW(PoWStatus::Ongoing)
                 } else {
-                    ConsensusStatus::PoW(PoWStatus::Threshold {
+                    RequiredConsensus::PoW(PoWStatus::Threshold {
                         initial_difficulty: *initial_difficulty,
                     })
                 }
             }
-            ConsensusUpgrade::PoS => ConsensusStatus::PoS,
-            ConsensusUpgrade::DSA => ConsensusStatus::DSA,
-            ConsensusUpgrade::IgnoreConsensus => ConsensusStatus::IgnoreConsensus,
+            ConsensusUpgrade::PoS => RequiredConsensus::PoS,
+            ConsensusUpgrade::DSA => RequiredConsensus::DSA,
+            ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
         }
     }
 }
@@ -342,35 +342,35 @@ mod tests {
         let upgrades = mock_consensus_upgrades();
         assert_eq!(
             upgrades.consensus_status(0.into()),
-            ConsensusStatus::PoW(PoWStatus::Threshold {
+            RequiredConsensus::PoW(PoWStatus::Threshold {
                 initial_difficulty: Uint256::from_u64(1000).unwrap().into()
             })
         );
         assert_eq!(
             upgrades.consensus_status(1.into()),
-            ConsensusStatus::PoW(PoWStatus::Ongoing)
+            RequiredConsensus::PoW(PoWStatus::Ongoing)
         );
         assert_eq!(
             upgrades.consensus_status(9_999.into()),
-            ConsensusStatus::PoW(PoWStatus::Ongoing)
+            RequiredConsensus::PoW(PoWStatus::Ongoing)
         );
         assert_eq!(
             upgrades.consensus_status(10_000.into()),
-            ConsensusStatus::PoS
+            RequiredConsensus::PoS
         );
         assert_eq!(
             upgrades.consensus_status(14_999.into()),
-            ConsensusStatus::PoS
+            RequiredConsensus::PoS
         );
         assert_eq!(
             upgrades.consensus_status(15_000.into()),
-            ConsensusStatus::PoW(PoWStatus::Threshold {
+            RequiredConsensus::PoW(PoWStatus::Threshold {
                 initial_difficulty: Uint256::from_u64(2_000).unwrap().into()
             })
         );
         assert_eq!(
             upgrades.consensus_status(15_001.into()),
-            ConsensusStatus::PoW(PoWStatus::Ongoing)
+            RequiredConsensus::PoW(PoWStatus::Ongoing)
         );
     }
 }

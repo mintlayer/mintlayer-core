@@ -3,8 +3,8 @@ use common::chain::block::BlockHeader;
 use common::chain::block::BlockIndex;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
-use common::chain::ConsensusStatus;
 use common::chain::PoWStatus;
+use common::chain::RequiredConsensus;
 use common::primitives::BlockHeight;
 use common::primitives::Id;
 
@@ -65,15 +65,15 @@ fn validate_pow_consensus(
 fn do_validate(
     chain_config: &ChainConfig,
     header: &BlockHeader,
-    consensus_status: &ConsensusStatus,
+    consensus_status: &RequiredConsensus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
     match consensus_status {
-        ConsensusStatus::PoW(pow_status) => {
+        RequiredConsensus::PoW(pow_status) => {
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
-        ConsensusStatus::IgnoreConsensus => Ok(()),
-        ConsensusStatus::PoS => todo!(),
-        ConsensusStatus::DSA => todo!(),
+        RequiredConsensus::IgnoreConsensus => Ok(()),
+        RequiredConsensus::PoS => todo!(),
+        RequiredConsensus::DSA => todo!(),
     }
 }
