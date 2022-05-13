@@ -4,7 +4,7 @@ use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosit
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id, Idable};
-use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
+use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
 use utxo::{BlockUndo, Utxo};
 
@@ -235,8 +235,9 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
             Ok(Some(block)) => {
                 let begin = tx_index.get_byte_offset_in_block() as usize;
                 let end = begin + tx_index.get_serialized_size() as usize;
-                let tx = block.get(begin..end).expect("Transaction outside of block range");
-                let tx = Transaction::decode_all(tx).expect("Invalid tx encoding in DB");
+                let encoded_tx = block.get(begin..end).expect("Transaction outside of block range");
+                let tx =
+                    Transaction::decode_all(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
                 Ok(Some(tx))
             }
         }
@@ -346,7 +347,7 @@ impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
     {
         let col = self.0.get::<DBIdx, I>();
         let data = col.get(key).map_err(crate::Error::from)?;
-        Ok(data.map(|d| T::decode_all(d).expect("Cannot decode a database value")))
+        Ok(data.map(|d| T::decode_all(&mut &*d).expect("Cannot decode a database value")))
     }
 
     // Read a value for a well-known entry

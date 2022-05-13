@@ -7,8 +7,15 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Local dependencies
+subsystem = { path = "../subsystem" }
+logging = { path = "../logging" }
+
+# External dependencies
 anyhow = "1.0.56"
+async-trait = "0.1.51"
 jsonrpsee = { version = "0.10.1", features = ["full"] }
 
 [dev-dependencies]
+async-trait = "0.1.51"
 tokio = "1.17.0"

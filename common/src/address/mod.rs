@@ -1,7 +1,7 @@
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error, DecodedBech32};
 use crypto::hash::hash;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {

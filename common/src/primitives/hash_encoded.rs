@@ -1,7 +1,7 @@
 //! Hash an object by its encoding
 
 use crypto::hash::StreamHasher;
-use parity_scale_codec::Encode;
+use serialization::Encode;
 
 /// Feed an encoded version of the object into a stream hasher
 pub fn hash_encoded_to<T: Encode, H: StreamHasher>(val: &T, hasher: &mut H) {

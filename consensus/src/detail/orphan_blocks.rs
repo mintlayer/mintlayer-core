@@ -17,19 +17,18 @@
 
 use common::chain::block::Block;
 use common::primitives::{Idable, H256};
-use rand::prelude::ThreadRng;
 use rand::seq::SliceRandom;
 use std::collections::BTreeMap;
-use std::rc::Rc;
+use std::sync::Arc;
 
 pub const DEFAULT_MAX_ORPHAN_BLOCKS: usize = 512;
 
+// FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<H256>,
-    orphan_by_id: BTreeMap<H256, Rc<Block>>,
-    orphan_by_prev_id: BTreeMap<H256, Vec<Rc<Block>>>,
+    orphan_by_id: BTreeMap<H256, Arc<Block>>,
+    orphan_by_prev_id: BTreeMap<H256, Vec<Arc<Block>>>,
     max_orphans: usize,
-    rng: ThreadRng,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -38,14 +37,12 @@ pub enum OrphanAddError {
 }
 
 impl OrphanBlocksPool {
-    #[allow(dead_code)]
     pub fn new_default() -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
             orphan_by_id: BTreeMap::new(),
             orphan_by_prev_id: BTreeMap::new(),
             max_orphans: DEFAULT_MAX_ORPHAN_BLOCKS,
-            rng: rand::thread_rng(),
         }
     }
 
@@ -56,11 +53,9 @@ impl OrphanBlocksPool {
             orphan_by_id: BTreeMap::new(),
             orphan_by_prev_id: BTreeMap::new(),
             max_orphans,
-            rng: rand::thread_rng(),
         }
     }
 
-    #[allow(dead_code)]
     fn drop_block(&mut self, block_id: &H256) {
         let block = self
             .orphan_by_id
@@ -115,7 +110,6 @@ impl OrphanBlocksPool {
     }
 
     // keep digging in the orphans tree until we find a block that has no children, then delete that
-    #[allow(dead_code)]
     fn del_one_deepest_child(&mut self, block_id: &H256) {
         let next_block = self
             .orphan_by_prev_id
@@ -130,18 +124,16 @@ impl OrphanBlocksPool {
         }
     }
 
-    #[allow(dead_code)]
     fn prune(&mut self) {
         if self.orphan_by_id.len() < self.max_orphans {
             return;
         }
-        let id = self.orphan_ids.choose(&mut self.rng);
+        let id = self.orphan_ids.choose(&mut crypto::random::make_pseudo_rng());
         let id = *id.expect("As orphans can never be empty, this should always return");
 
         self.del_one_deepest_child(&id);
     }
 
-    #[allow(dead_code)]
     pub fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError> {
         self.prune();
         let block_id = block.get_id();
@@ -149,7 +141,7 @@ impl OrphanBlocksPool {
             return Err(OrphanAddError::BlockAlreadyInOrphanList(block));
         }
 
-        let rc_block = Rc::new(block);
+        let rc_block = Arc::new(block);
         self.orphan_by_id.insert(block_id.get(), rc_block.clone());
         self.orphan_ids.push(block_id.get());
         self.orphan_by_prev_id
@@ -194,7 +186,7 @@ impl OrphanBlocksPool {
         let res = res
             .drain(..)
             .map(|blk| {
-                Rc::try_unwrap(blk)
+                Arc::try_unwrap(blk)
                     .expect("There cannot be more than one copy of the Rc. This is unexpected.")
             })
             .collect();
@@ -299,7 +291,7 @@ mod tests {
                 .orphan_by_prev_id
                 .get(&block.prev_block_id().expect("Prev block not found").get())
             {
-                assert!(blocks.contains(&Rc::new(block.clone())))
+                assert!(blocks.contains(&Arc::new(block.clone())))
             } else {
                 panic!(
                     "the block {:#?} is not in `orphan_by_prev_id` field.",
@@ -666,7 +658,7 @@ mod tests {
 
         // all blocks in sim_blocks should appear in the children list
         sim_blocks.into_iter().for_each(|child| {
-            assert!(children.contains(&Rc::new(child)));
+            assert!(children.contains(&Arc::new(child)));
         });
 
         // the remaining blocks in the pool should all belong to conn_blocks

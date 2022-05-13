@@ -84,15 +84,6 @@ macro_rules! hex_script {
     };
 }
 
-macro_rules! ensure {
-    ($cond:expr, $err:expr) => {
-        ($cond).then(|| ()).ok_or_else(|| ($err))?
-    };
-    ($cond:expr) => {
-        ($cond).then(|| ())?
-    };
-}
-
 // Export some hash functions.
 pub use crypto::hash;
 

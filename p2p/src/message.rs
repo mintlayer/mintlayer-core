@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use common::primitives::version::SemVer;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Copy, Clone, PartialEq, Eq)]
 #[allow(unused)]

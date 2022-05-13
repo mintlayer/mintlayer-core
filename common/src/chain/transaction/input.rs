@@ -1,6 +1,6 @@
 use crate::chain::{block::Block, transaction::Transaction};
 use crate::primitives::{Id, H256};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum OutPointSourceId {

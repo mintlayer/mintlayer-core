@@ -17,7 +17,7 @@
 
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -45,7 +45,7 @@ impl From<Uint256> for H256 {
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct Id<T: ?Sized> {
     id: H256,
-    _shadow: std::marker::PhantomData<T>,
+    _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
 // We implement Ord manually to avoid it getting inherited to T through PhantomData, because Id having Ord doesn't mean T requiring Ord

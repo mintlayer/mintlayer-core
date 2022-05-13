@@ -40,7 +40,7 @@ use libp2p::{
     Multiaddr, Transport,
 };
 use logging::log;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 

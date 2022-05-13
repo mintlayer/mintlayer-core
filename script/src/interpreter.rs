@@ -25,6 +25,7 @@ use crate::{
     util,
 };
 use std::{borrow::Cow, cmp, ops, ops::Range};
+use utils::ensure;
 
 /// Item on the data stack.
 ///

@@ -1,6 +1,6 @@
 use crate::chain::TxOutput;
 use crate::primitives::Compact;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
 pub enum ConsensusData {

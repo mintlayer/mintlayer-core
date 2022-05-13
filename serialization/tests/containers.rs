@@ -1,8 +1,9 @@
-use parity_scale_codec::{Decode, Encode};
+mod utils;
+
 use rand::Rng;
-use serialization_utils::SimpleWrapper;
+use serialization::{Decode, Encode};
+use utils::SimpleWrapper;
 use std::collections::BTreeMap;
-// use std::collections::HashMap;
 
 #[test]
 fn test_scale_vectors() {

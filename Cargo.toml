@@ -21,6 +21,7 @@ members = [
   "network",       # network abstractions and their implementations
   "rpc",           # rpc abstraction and implementation
   "serialization", # serialization interfaces and implementations
+  "subsystem",     # Utilities for working with concurrent subsystems
   "node",          # node executable
   "wallet",        # wallet executable
   "utils",         # various utilities
@@ -39,6 +40,7 @@ default-members = [
   "network",
   "rpc",
   "serialization",
+  "subsystem",
   "node",
   "wallet",
   "utils",

@@ -158,7 +158,10 @@ mockall::mock! {
 mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
-    use common::{primitives::{Idable, H256}, chain::block::ConsensusData};
+    use common::{
+        chain::block::ConsensusData,
+        primitives::{Idable, H256},
+    };
     use storage::traits::{TransactionRo, TransactionRw};
 
     const TXFAIL: crate::Error =

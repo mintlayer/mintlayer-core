@@ -64,7 +64,9 @@ pub async fn create_two_mock_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<MockService>, Peer<MockService>) {
     let addr: SocketAddr = make_address("[::1]:");
-    let (mut server, _) = MockService::start(addr, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+    let (mut server, _) = MockService::start(addr, &[], &[], std::time::Duration::from_secs(10))
+        .await
+        .unwrap();
     let peer_fut = TcpStream::connect(addr);
 
     let (remote_res, local_res) = tokio::join!(server.poll_next(), peer_fut);
@@ -116,10 +118,16 @@ pub async fn create_two_libp2p_peers(
     config: Arc<ChainConfig>,
 ) -> (Peer<Libp2pService>, Peer<Libp2pService>) {
     let addr1: Multiaddr = make_address("/ip6/::1/tcp/");
-    let (mut server1, _) = Libp2pService::start(addr1, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+    let (mut server1, _) =
+        Libp2pService::start(addr1, &[], &[], std::time::Duration::from_secs(10))
+            .await
+            .unwrap();
 
     let addr2: Multiaddr = make_address("/ip6/::1/tcp/");
-    let (mut server2, _) = Libp2pService::start(addr2, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+    let (mut server2, _) =
+        Libp2pService::start(addr2, &[], &[], std::time::Duration::from_secs(10))
+            .await
+            .unwrap();
 
     let server1_conn_fut = server1.connect(server2.local_addr().clone());
 
