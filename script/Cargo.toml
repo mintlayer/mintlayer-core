@@ -10,7 +10,7 @@ serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 
 displaydoc = { default-features = false, version = "0.2" }
-parity-scale-codec = "2.3.1"
+parity-scale-codec = "3.1.2"
 
 [dev-dependencies]
 flate2 = "1.0.22"
