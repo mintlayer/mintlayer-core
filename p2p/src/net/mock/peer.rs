@@ -66,7 +66,7 @@ impl Peer {
     async fn handshake(&mut self) -> error::Result<()> {
         match self.role {
             Role::Inbound => {
-                let (net, version, protocols) =
+                let (magic_bytes, version, protocols) =
                     if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
                         version,
                         network,
@@ -78,7 +78,7 @@ impl Peer {
                         }
 
                         (
-                            common::chain::config::ChainType::Mainnet,
+                            network,
                             version,
                             protocols,
                         )
@@ -103,7 +103,7 @@ impl Peer {
                     .send((
                         self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            net,
+                            magic_bytes,
                             version,
                             protocols,
                         },
@@ -123,7 +123,7 @@ impl Peer {
                     }))
                     .await?;
 
-                let (net, version, protocols) = if let Ok(Some(types::Message::Handshake(
+                let (magic_bytes, version, protocols) = if let Ok(Some(types::Message::Handshake(
                     types::HandshakeMessage::HelloAck {
                         version,
                         network,
@@ -136,7 +136,7 @@ impl Peer {
                     }
 
                     (
-                        common::chain::config::ChainType::Mainnet,
+                        network,
                         version,
                         protocols,
                     )
@@ -148,7 +148,7 @@ impl Peer {
                     .send((
                         self.peer_id,
                         types::PeerEvent::PeerInfoReceived {
-                            net,
+                            magic_bytes,
                             version,
                             protocols,
                         },
@@ -243,7 +243,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    net: common::chain::config::ChainType::Mainnet,
+                    magic_bytes: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),
@@ -300,7 +300,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    net: common::chain::config::ChainType::Mainnet,
+                    magic_bytes: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),

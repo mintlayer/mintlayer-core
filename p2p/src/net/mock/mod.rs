@@ -57,7 +57,7 @@ where
     fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
         Ok(net::PeerInfo {
             peer_id: self.peer_id,
-            net: self.net,
+            magic_bytes: self.magic_bytes,
             version: self.version,
             agent: None,
             protocols: self.protocols.iter().map(|proto| proto.name()).cloned().collect::<Vec<_>>(),
@@ -374,7 +374,7 @@ mod tests {
             test_utils::make_address("[::1]:"),
             &[],
             &[],
-            config,
+            Arc::clone(&config),
             std::time::Duration::from_secs(10),
         )
         .await
@@ -384,7 +384,7 @@ mod tests {
             conn1.connect(*conn2.local_addr()).await,
             Ok(net::PeerInfo {
                 peer_id: *conn2.peer_id(),
-                net: common::chain::config::ChainType::Mainnet,
+                magic_bytes: *config.magic_bytes(),
                 version: common::primitives::version::SemVer::new(0, 1, 0),
                 agent: None,
                 protocols: vec!["floodsub".to_string(), "ping".to_string()],
@@ -409,7 +409,7 @@ mod tests {
             test_utils::make_address("[::1]:"),
             &[],
             &[],
-            config,
+            Arc::clone(&config),
             std::time::Duration::from_secs(10),
         )
         .await
@@ -418,7 +418,7 @@ mod tests {
         let (res1, res2) = tokio::join!(conn1.connect(*conn2.local_addr()), conn2.poll_next());
         let conn1_id = match res2.unwrap() {
             ConnectivityEvent::IncomingConnection { peer_info, .. } => {
-                assert_eq!(peer_info.net, common::chain::config::ChainType::Mainnet);
+                assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
                 assert_eq!(
                     peer_info.version,
                     common::primitives::version::SemVer::new(0, 1, 0),

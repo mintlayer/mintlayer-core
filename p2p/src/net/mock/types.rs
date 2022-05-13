@@ -46,7 +46,7 @@ impl MockPeerId {
 #[derive(Debug)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
-    pub net: common::chain::config::ChainType,
+    pub magic_bytes: [u8; 4],
     pub version: common::primitives::version::SemVer,
     pub agent: Option<String>,
     pub protocols: Vec<Protocol>,
@@ -120,7 +120,7 @@ pub enum FloodsubEvent {
 #[derive(Debug, PartialEq)]
 pub enum PeerEvent {
     PeerInfoReceived {
-        net: config::ChainType,
+        magic_bytes: [u8; 4],
         version: version::SemVer,
         protocols: Vec<Protocol>,
     },

@@ -155,7 +155,7 @@ impl Backend {
     ) -> error::Result<()> {
         match event {
             types::PeerEvent::PeerInfoReceived {
-                net,
+                magic_bytes,
                 version,
                 protocols,
             } => {
@@ -165,7 +165,7 @@ impl Backend {
                     ConnectionState::OutboundAccepted { tx } => {
                         tx.send(Ok(types::MockPeerInfo {
                             peer_id,
-                            net,
+                            magic_bytes,
                             version,
                             agent: None,
                             protocols,
@@ -178,7 +178,7 @@ impl Backend {
                                 addr,
                                 peer_info: types::MockPeerInfo {
                                     peer_id,
-                                    net,
+                                    magic_bytes,
                                     version,
                                     agent: None,
                                     protocols,
