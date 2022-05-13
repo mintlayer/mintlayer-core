@@ -1,8 +1,8 @@
 //! Node initialisation routine.
 
 use crate::options::Options;
-use consensus::rpc::ConsensusRpcServer;
 use common::chain::config::ChainType;
+use consensus::rpc::ConsensusRpcServer;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -14,7 +14,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Initialize storage and chain configuration
     let storage = blockchain_storage::Store::new_empty()?;
 
-    // CHain configuration
+    // Chain configuration
     let chain_config = match opts.net {
         ChainType::Mainnet => common::chain::config::create_mainnet(),
         chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),

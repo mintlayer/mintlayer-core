@@ -641,11 +641,13 @@ dependencies = [
  "rand 0.8.4",
  "replace_with",
  "rpc",
+ "serde_json",
  "serialization",
  "slave-pool",
  "static_assertions",
  "subsystem",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
