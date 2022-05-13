@@ -1,7 +1,9 @@
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
+use crate::chain::ChainConfig;
 use crate::primitives::id;
+use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
 
 use serialization::{Decode, Encode};
@@ -22,6 +24,10 @@ impl BlockHeader {
 
     pub fn block_id(&self) -> Id<Block> {
         Id::new(&id::hash_encoded(self))
+    }
+
+    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
+        self.prev_block_hash == None && chain_config.genesis_block().get_id() == self.block_id()
     }
 }
 

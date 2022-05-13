@@ -192,7 +192,7 @@ impl Block {
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.prev_block_id() == None && chain_config.genesis_block().get_id() == self.get_id()
+        self.header().is_genesis(chain_config)
     }
 }
 
