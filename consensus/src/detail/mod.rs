@@ -608,7 +608,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        consensus_validator::validate_consensus(self.chain_config, block, self)
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self)
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {

@@ -25,8 +25,8 @@ use crate::detail::pow::helpers::{
 use crate::detail::pow::PoW;
 use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
-use common::chain::block::BlockIndex;
 use common::chain::block::{Block, ConsensusData};
+use common::chain::block::{BlockHeader, BlockIndex};
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
 use common::chain::TxOutput;
@@ -50,28 +50,29 @@ fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Bl
 
 pub(crate) fn check_pow_consensus(
     chain_config: &ChainConfig,
-    block: &Block,
+    header: &BlockHeader,
     pow_status: PoWStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
     let work_required = match pow_status {
         PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
         PoWStatus::Ongoing => {
-            let prev_block_id = block
-                .prev_block_id()
+            let prev_block_id = header
+                .get_prev_block_id()
+                .clone()
                 .expect("If PoWStatus is `Onging` then we cannot be at genesis");
             let prev_block_index = block_index_handle
                 .get_block_index(&prev_block_id)?
                 .ok_or(BlockError::NotFound)?;
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
-                block.block_time(),
+                header.block_time(),
                 block_index_handle,
             )?
         }
     };
 
-    if check_proof_of_work(block.get_id().get(), work_required)? {
+    if check_proof_of_work(header.block_id().get(), work_required)? {
         Ok(())
     } else {
         Err(BlockError::InvalidPoW)
