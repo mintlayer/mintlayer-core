@@ -1,6 +1,7 @@
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
+use crate::primitives::id;
 use crate::primitives::{Id, H256};
 
 use serialization::{Decode, Encode};
@@ -17,6 +18,10 @@ pub struct BlockHeader {
 impl BlockHeader {
     pub fn consensus_data(&self) -> &ConsensusData {
         &self.consensus_data_inner
+    }
+
+    pub fn block_id(&self) -> Id<Block> {
+        Id::new(&id::hash_encoded(self))
     }
 }
 
