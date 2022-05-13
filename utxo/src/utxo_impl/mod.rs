@@ -241,12 +241,8 @@ impl<'a> UtxosCache<'a> {
         for (idx, output) in tx.get_outputs().iter().enumerate() {
             let outpoint = OutPoint::new(id.clone(), idx as u32);
 
-            let overwrite = if check_for_overwrite {
-                self.has_utxo(&outpoint)
-            } else {
-                // by default no overwrite allowed.
-                false
-            };
+            // by default no overwrite allowed.
+            let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
 
             let utxo = Utxo {
                 output: output.clone(),
