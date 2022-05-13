@@ -34,6 +34,14 @@ impl BlockHeader {
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.prev_block_hash == None && chain_config.genesis_block().get_id() == self.block_id()
     }
+
+    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
+        &self.prev_block_hash
+    }
+
+    pub fn block_time(&self) -> u32 {
+        self.time
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

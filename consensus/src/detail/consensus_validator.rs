@@ -1,4 +1,5 @@
 use common::chain::block::Block;
+use common::chain::block::BlockHeader;
 use common::chain::block::BlockIndex;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
@@ -23,14 +24,16 @@ pub(crate) trait BlockIndexHandle {
 
 pub(crate) fn validate_consensus(
     chain_config: &ChainConfig,
-    block: &Block,
+    header: &BlockHeader,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
-    let block_height = if block.is_genesis(chain_config) {
+    let block_height = if header.is_genesis(chain_config) {
         BlockHeight::from(0)
     } else {
-        let prev_block_id =
-            block.prev_block_id().expect("Block not genesis so must have a prev_block_id");
+        let prev_block_id = header
+            .get_prev_block_id()
+            .clone()
+            .expect("Block not genesis so must have a prev_block_id");
         block_index_handle
             .get_block_index(&prev_block_id)?
             .ok_or(BlockError::Orphan)?
@@ -39,13 +42,13 @@ pub(crate) fn validate_consensus(
             .expect("max block height reached")
     };
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
-    do_validate(chain_config, block, &consensus_status, block_index_handle)?;
+    do_validate(chain_config, header, &consensus_status, block_index_handle)?;
     Ok(())
 }
 
 fn do_validate(
     chain_config: &ChainConfig,
-    block: &Block,
+    block: &BlockHeader,
     consensus_status: &ConsensusStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
