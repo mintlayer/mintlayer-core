@@ -51,11 +51,11 @@ fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Bl
 pub(crate) fn check_pow_consensus(
     chain_config: &ChainConfig,
     header: &BlockHeader,
-    pow_status: PoWStatus,
+    pow_status: &PoWStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
     let work_required = match pow_status {
-        PoWStatus::Threshold { initial_difficulty } => initial_difficulty,
+        PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
         PoWStatus::Ongoing => {
             let prev_block_id = header
                 .get_prev_block_id()
