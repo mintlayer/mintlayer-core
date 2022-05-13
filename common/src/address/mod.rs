@@ -1,5 +1,5 @@
 use crate::chain::ChainConfig;
-use crate::primitives::{encoding, Bech32Error, DecodedBase32FromBech32};
+use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 use crypto::key::PublicKey;
 use parity_scale_codec::Encode;
 
@@ -12,7 +12,7 @@ pub trait AddressableData<T: AsRef<[u8]>> {
         encoding::encode(self.get_hrp(), self.get_data())
     }
 
-    fn decode(&mut self, addr: &str) -> Result<DecodedBase32FromBech32, Bech32Error> {
+    fn decode(&mut self, addr: &str) -> Result<DecodedArbitraryDataFromBech32, Bech32Error> {
         encoding::decode(addr)
     }
 

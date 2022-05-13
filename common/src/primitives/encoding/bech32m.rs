@@ -1,10 +1,10 @@
 use super::Bech32Error;
+use super::DecodedArbitraryDataFromBech32;
 use super::DecodedBase32FromBech32;
-use bech32::CheckBase32;
+use bech32::u5;
 use bech32::{self, Variant};
 
-pub fn base32_to_bech32m<T: AsRef<[u8]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
-    let data = data.check_base32()?;
+pub fn base32_to_bech32m<T: AsRef<[u5]>>(hrp: &str, data: T) -> Result<String, Bech32Error> {
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
 
@@ -22,8 +22,7 @@ pub fn bech32m_to_base32(s: &str) -> Result<DecodedBase32FromBech32, Bech32Error
             // }
             // ------- EOL
 
-            let data = base32.iter().map(|x| x.to_u8()).collect();
-            Ok(DecodedBase32FromBech32::new(hrp, data))
+            Ok(DecodedBase32FromBech32::new(hrp, base32))
         }
         Err(e) => Err(e.into()),
     }
@@ -37,7 +36,7 @@ pub fn arbitrary_data_to_bech32m<T: AsRef<[u8]>>(
     bech32::encode(hrp, data, Variant::Bech32m).map_err(|e| e.into())
 }
 
-pub fn bech32m_to_arbitrary_data(s: &str) -> Result<DecodedBase32FromBech32, Bech32Error> {
+pub fn bech32m_to_arbitrary_data(s: &str) -> Result<DecodedArbitraryDataFromBech32, Bech32Error> {
     match bech32::decode(s) {
         Ok((hrp, base32, variant)) => {
             if variant == Variant::Bech32 {
@@ -45,7 +44,7 @@ pub fn bech32m_to_arbitrary_data(s: &str) -> Result<DecodedBase32FromBech32, Bec
             }
 
             let data = super::base32::decode(base32)?;
-            Ok(DecodedBase32FromBech32::new(hrp, data))
+            Ok(DecodedArbitraryDataFromBech32::new(hrp, data))
         }
         Err(e) => Err(e.into()),
     }

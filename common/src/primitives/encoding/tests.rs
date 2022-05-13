@@ -1,4 +1,5 @@
 use super::*;
+use bech32::CheckBase32;
 use bech32::ToBase32;
 use bitcoin_bech32::WitnessProgram;
 use hex::FromHex;
@@ -8,7 +9,7 @@ use logging::log;
 fn check_encode() {
     logging::init_logging::<&std::path::Path>(None);
 
-    let data = vec![0x00, 0x01, 0x02];
+    let data = vec![0x00, 0x01, 0x02].check_base32().unwrap();
     let hrp = "bech32";
 
     let encoded = super::bech32m::base32_to_bech32m(hrp, data.clone()).expect("it should not fail");
@@ -104,14 +105,14 @@ fn check_valid_addresses() {
         match super::bech32m::bech32m_to_base32(s) {
             Ok(decoded) => {
                 // check the result of our decoder vs bitcoin_bech32 decoder.
-                assert_eq!(version, decoded.get_data()[0]);
-                assert_eq!(data, decoded.get_data()[1..]);
+                assert_eq!(version, decoded.get_data()[0].to_u8());
+                assert_eq!(data.check_base32().unwrap(), decoded.get_data()[1..]);
 
                 // compare the result of our decoder against the expected data.
                 let data_x = {
                     let string_data =
                         Vec::from_hex(d).expect("should not fail to convert to Vec<u8>");
-                    string_data.to_base32().into_iter().map(|d| d.to_u8()).collect::<Vec<u8>>()
+                    string_data.to_base32()
                 };
                 assert_eq!(data_x, decoded.get_data()[1..]);
 
@@ -126,11 +127,11 @@ fn check_valid_addresses() {
                         version_and_len[0] - 0x50
                     }
                 };
-                assert_eq!(version_x, decoded.get_data()[0]);
+                assert_eq!(version_x, decoded.get_data()[0].to_u8());
 
                 match super::bech32m::base32_to_bech32m(
                     decoded.get_hrp(),
-                    <&[u8]>::clone(&decoded.get_data()),
+                    <&[bech32::u5]>::clone(&decoded.get_data()),
                 ) {
                     Ok(encoded) => {
                         assert_eq!(s.to_lowercase(), encoded.to_lowercase())
@@ -215,7 +216,7 @@ fn check_valid_strings() {
         ).iter().for_each(|s| {
             match super::bech32m::bech32m_to_base32(*s) {
                Ok(decoded) => {
-                   match super::bech32m::base32_to_bech32m(decoded.get_hrp(), <&[u8]>::clone(&decoded.get_data())) {
+                   match super::bech32m::base32_to_bech32m(decoded.get_hrp(), <&[bech32::u5]>::clone(&decoded.get_data())) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
                        Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
                    }

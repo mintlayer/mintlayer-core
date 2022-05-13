@@ -6,26 +6,26 @@ pub use bech32m::arbitrary_data_to_bech32m as encode;
 pub use bech32m::bech32m_to_arbitrary_data as decode;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct Decoded {
+struct Decoded<T> {
     hrp: String,
-    data: Vec<u8>,
+    data: Vec<T>,
 }
 
-impl Decoded {
+impl<T> Decoded<T> {
     pub fn get_hrp(&self) -> &str {
         &self.hrp
     }
 
-    pub fn get_data(&self) -> &[u8] {
+    pub fn get_data(&self) -> &[T] {
         &self.data
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedBase32FromBech32(Decoded);
+pub struct DecodedBase32FromBech32(Decoded<bech32::u5>);
 
 impl DecodedBase32FromBech32 {
-    pub fn new(hrp: String, data: Vec<u8>) -> Self {
+    pub fn new(hrp: String, data: Vec<bech32::u5>) -> Self {
         Self(Decoded { hrp, data })
     }
 
@@ -33,7 +33,7 @@ impl DecodedBase32FromBech32 {
         self.0.get_hrp()
     }
 
-    pub fn get_data(&self) -> &[u8] {
+    pub fn get_data(&self) -> &[bech32::u5] {
         self.0.get_data()
     }
 
@@ -43,7 +43,7 @@ impl DecodedBase32FromBech32 {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DecodedArbitraryDataFromBech32(Decoded);
+pub struct DecodedArbitraryDataFromBech32(Decoded<u8>);
 
 impl DecodedArbitraryDataFromBech32 {
     pub fn new(hrp: String, data: Vec<u8>) -> Self {
