@@ -54,8 +54,23 @@ pub(crate) fn check_pow_consensus(
     pow_status: &PoWStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
-    let work_required = match pow_status {
-        PoWStatus::Threshold { initial_difficulty } => *initial_difficulty,
+    let work_required =
+        calculate_work_required(chain_config, header, pow_status, block_index_handle)?;
+    if check_proof_of_work(header.block_id().get(), work_required)? {
+        Ok(())
+    } else {
+        Err(BlockError::InvalidPoW)
+    }
+}
+
+fn calculate_work_required(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    pow_status: &PoWStatus,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<Compact, BlockError> {
+    match pow_status {
+        PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
             let prev_block_id = header
                 .get_prev_block_id()
@@ -68,14 +83,8 @@ pub(crate) fn check_pow_consensus(
                 &prev_block_index,
                 header.block_time(),
                 block_index_handle,
-            )?
+            )
         }
-    };
-
-    if check_proof_of_work(header.block_id().get(), work_required)? {
-        Ok(())
-    } else {
-        Err(BlockError::InvalidPoW)
     }
 }
 
