@@ -62,6 +62,16 @@ fn validate_pow_consensus(
     }
 }
 
+fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), BlockError> {
+    if let ConsensusData::None = header.consensus_data() {
+        Ok(())
+    } else {
+        Err(BlockError::ConsensusTypeMismatch(
+            "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
+        ))
+    }
+}
+
 fn do_validate(
     chain_config: &ChainConfig,
     header: &BlockHeader,
@@ -72,7 +82,7 @@ fn do_validate(
         RequiredConsensus::PoW(pow_status) => {
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
-        RequiredConsensus::IgnoreConsensus => Ok(()),
+        RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
         RequiredConsensus::PoS => todo!(),
         RequiredConsensus::DSA => todo!(),
     }
