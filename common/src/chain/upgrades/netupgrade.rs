@@ -89,7 +89,7 @@ impl Default for UpgradeVersion {
 
 impl<T: Default + Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
-    pub(crate) fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
+    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
         let mut upgrades = upgrades;
         upgrades.sort_unstable();
 
@@ -158,7 +158,11 @@ impl NetUpgrades<UpgradeVersion> {
                 }
             })
             .expect("Some consensus must have been set");
-        match last_consensus_upgrade {
+        eprintln!(
+            "last_upgrade_height: {:?}, last_consensus_upgrade: {:?}",
+            last_upgrade_height, last_consensus_upgrade
+        );
+        let status = match last_consensus_upgrade {
             ConsensusUpgrade::PoW { initial_difficulty } => {
                 if *last_upgrade_height < height {
                     RequiredConsensus::PoW(PoWStatus::Ongoing)
@@ -171,7 +175,9 @@ impl NetUpgrades<UpgradeVersion> {
             ConsensusUpgrade::PoS => RequiredConsensus::PoS,
             ConsensusUpgrade::DSA => RequiredConsensus::DSA,
             ConsensusUpgrade::IgnoreConsensus => RequiredConsensus::IgnoreConsensus,
-        }
+        };
+        eprintln!("The status for height {:0} is {:?}", height, status);
+        status
     }
 }
 

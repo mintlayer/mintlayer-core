@@ -37,6 +37,12 @@ fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Bl
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
+            /*
+            eprintln!(
+                "checking proof of work: hash {:?}, target {:?}",
+                hash, target
+            );
+            */
 
             hash <= target
         })
@@ -192,7 +198,7 @@ impl PoW {
     }
 }
 
-fn mine(
+pub(crate) fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,

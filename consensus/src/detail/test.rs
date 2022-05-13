@@ -15,18 +15,19 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::*;
 use blockchain_storage::Store;
 use common::address::Address;
+use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};
-use common::chain::config::create_mainnet;
 use common::chain::config::create_unit_test_config;
+use common::chain::config::{create_mainnet, ChainConfigBuilder};
 
 use common::chain::{Destination, OutputSpentState, Transaction, TxInput, TxOutput};
-use common::primitives::H256;
 use common::primitives::{Amount, Id};
+use common::primitives::{Compact, H256};
 use rand::prelude::*;
 
 #[derive(Debug)]
@@ -143,10 +144,31 @@ fn generate_random_invalid_block() -> Block {
     Block::new(transactions, prev_id, time, ConsensusData::None).expect(ERR_CREATE_BLOCK_FAIL)
 }
 
+struct ConsensusBuilder {
+    config: ChainConfig,
+    storage: Store,
+}
+
+impl ConsensusBuilder {
+    fn new() -> Self {
+        Self {
+            config: create_unit_test_config(),
+            storage: Store::new_empty().unwrap(),
+        }
+    }
+    fn build(self) -> Consensus {
+        Consensus::new(self.config, self.storage).unwrap()
+    }
+
+    #[allow(unused)]
+    fn with_config(mut self, chain_config: ChainConfig) -> Self {
+        self.config = chain_config;
+        self
+    }
+}
+
 fn setup_consensus() -> Consensus {
-    let config = create_unit_test_config();
-    let storage = Store::new_empty().unwrap();
-    Consensus::new(config, storage).unwrap()
+    ConsensusBuilder::new().build()
 }
 
 fn create_utxo_data(
@@ -173,6 +195,15 @@ fn create_utxo_data(
 }
 
 fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
+    produce_test_block_with_consensus_data(config, prev_block, orphan, ConsensusData::None)
+}
+
+fn produce_test_block_with_consensus_data(
+    config: &ChainConfig,
+    prev_block: &Block,
+    orphan: bool,
+    consensus_data: ConsensusData,
+) -> Block {
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
@@ -190,7 +221,7 @@ fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) ->
             Some(Id::new(&prev_block.get_id().get()))
         },
         time::get() as u32,
-        ConsensusData::None,
+        consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
@@ -738,7 +769,10 @@ struct BlockTestFrameWork {
 
 impl<'a> BlockTestFrameWork {
     pub fn new() -> Self {
-        let consensus = setup_consensus();
+        Self::with_consensus(setup_consensus())
+    }
+
+    pub fn with_consensus(consensus: Consensus) -> Self {
         let genesis = consensus.chain_config.genesis_block().clone();
         Self {
             consensus,
@@ -858,7 +892,13 @@ impl<'a> BlockTestFrameWork {
         }
     }
 
-    pub fn create_chain(&mut self, parent_block_id: &Id<Block>, count_blocks: usize) {
+    //fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
+    pub fn create_chain(
+        &mut self,
+        parent_block_id: &Id<Block>,
+        count_blocks: usize,
+        block_producer: impl Fn(&ChainConfig, &Block, bool) -> Block,
+    ) {
         let mut block = self
             .consensus
             .blockchain_storage
@@ -868,7 +908,7 @@ impl<'a> BlockTestFrameWork {
             .unwrap();
 
         for _ in 0..count_blocks {
-            block = produce_test_block(&self.consensus.chain_config.clone(), &block, false);
+            block = block_producer(&self.consensus.chain_config.clone(), &block, false);
             self.consensus
                 .process_block(block.clone(), BlockSource::Local)
                 .expect("Err block processing");
@@ -977,8 +1017,8 @@ fn test_very_long_reorgs() {
         // #
         // # Nothing should happen at this point. We saw b2 first so it takes priority.
         println!("\nDon't reorg to a chain of the same length");
-        btf.create_chain(&btf.genesis().get_id(), 2);
-        btf.create_chain(&btf.blocks[1].get_id(), 1);
+        btf.create_chain(&btf.genesis().get_id(), 2, produce_test_block);
+        btf.create_chain(&btf.blocks[1].get_id(), 1, produce_test_block);
         btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
         // genesis
@@ -1060,7 +1100,7 @@ fn test_very_long_reorgs() {
         //                 +-- 0xdf27…0fa5 (H:2,P:3)
         //                         +-- 0x67fd…6419 (H:3,P:4))
         let block_id = btf.blocks[btf.blocks.len() - 3].get_id();
-        btf.create_chain(&block_id, 2);
+        btf.create_chain(&block_id, 2, produce_test_block);
         btf.debug_print_chains(vec![btf.genesis().get_id()], 0);
 
         // b3
@@ -1145,7 +1185,7 @@ fn test_very_long_reorgs() {
         //                 +-- 0xdf27…0fa5 (H:2,P:3)
         //                         +-- 0x67fd…6419 (H:3,P:4)
         println!("Reject a block with a spend from a re-org'ed out tx");
-        btf.create_chain(&btf.blocks[5].get_id(), 4);
+        btf.create_chain(&btf.blocks[5].get_id(), 4, produce_test_block);
         let block_id = btf.blocks[4].get_id();
         let double_spend_block = btf.random_block(
             &btf.blocks[10],
@@ -1162,7 +1202,7 @@ fn test_very_long_reorgs() {
         // #                                                                                     \-> b38 (11/37)
         // #
 
-        btf.create_chain(&btf.blocks[10].get_id(), 1);
+        btf.create_chain(&btf.blocks[10].get_id(), 1, produce_test_block);
         // # save 37's spendable output, but then double-spend out11 to invalidate the block
         let double_spend_block = btf.random_block(
             &btf.blocks[10],
@@ -1428,7 +1468,7 @@ fn test_events_orphan_block() {
 #[test]
 fn test_get_ancestor() {
     let mut btf = BlockTestFrameWork::new();
-    btf.create_chain(&btf.genesis().get_id(), 3);
+    btf.create_chain(&btf.genesis().get_id(), 3, produce_test_block);
     let block_2_index = btf.get_block_index(&btf.blocks[2].get_id());
     let block_1_index = btf.get_block_index(&btf.blocks[1].get_id());
     let block_0_index = btf.get_block_index(&btf.blocks[0].get_id());
@@ -1464,4 +1504,175 @@ fn test_get_ancestor() {
         }),
         btf.consensus.make_db_tx().get_ancestor(&block_1_index, 2.into())
     );
+}
+
+struct DummyBlockIndexHandle {
+    block_indices: HashMap<H256, BlockIndex>,
+}
+
+impl DummyBlockIndexHandle {
+    fn new(block_indices: Vec<BlockIndex>) -> Self {
+        Self {
+            block_indices: block_indices
+                .into_iter()
+                .map(|block_index| (block_index.get_block_id().get(), block_index))
+                .collect(),
+        }
+    }
+}
+
+impl BlockIndexHandle for DummyBlockIndexHandle {
+    fn get_block_index(
+        &self,
+        block_id: &Id<Block>,
+    ) -> blockchain_storage::Result<Option<BlockIndex>> {
+        Ok(self.block_indices.get(&block_id.get()).cloned())
+    }
+    fn get_ancestor(
+        &self,
+        _block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        self.block_indices
+            .iter()
+            .find_map(|(_id, block_index)| {
+                if block_index.get_block_height() == ancestor_height {
+                    Some(block_index)
+                } else {
+                    None
+                }
+            })
+            .cloned()
+            .ok_or(BlockError::NotFound)
+    }
+}
+
+#[test]
+fn test_consensus_type() {
+    use common::chain::ConsensusUpgrade;
+    use common::chain::NetUpgrades;
+    use common::chain::UpgradeVersion;
+    use common::Uint256;
+
+    let ignore_consensus = BlockHeight::new(0);
+    let pow = BlockHeight::new(5);
+    let ignore_again = BlockHeight::new(10);
+    let pow_again = BlockHeight::new(15);
+
+    let min_difficulty =
+        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF]);
+
+    let upgrades = vec![
+        (
+            ignore_consensus,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            pow,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: min_difficulty.into(),
+            }),
+        ),
+        (
+            ignore_again,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            pow_again,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: min_difficulty.into(),
+            }),
+        ),
+    ];
+
+    let net_upgrades = NetUpgrades::initialize(upgrades);
+
+    // Internally this calls Consensus::new, which processes the genesis block
+    // This should succeed because ChainConfigBuilder by default uses create_mainnet_genesis to
+    // create the genesis_block, and this function creates a genesis block with
+    // ConsenssuData::None, which agreess with the net_upgrades we defined above.
+    let config = ChainConfigBuilder::new().with_net_upgrades(net_upgrades).build();
+    let consensus = ConsensusBuilder::new().with_config(config.clone()).build();
+
+    let mut btf = BlockTestFrameWork::with_consensus(consensus);
+    println!("btf len after creation:{}", btf.blocks.len());
+
+    // The next block will have height 1. At this height, we are still under IngoreConsenssu, so
+    // processing a block with PoWData will fail
+    let pow_block = produce_test_block_with_consensus_data(
+        &config,
+        btf.genesis(),
+        false,
+        ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])),
+    );
+    assert!(matches!(
+        btf.add_special_block(pow_block),
+        Err(BlockError::ConsensusTypeMismatch(..))
+    ));
+
+    // Create 4 more blocks with Consensus Nonw
+    btf.create_chain(&btf.genesis().get_id(), 4, produce_test_block);
+
+    // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
+    // with ConsensusData::None and see that adding it fails
+    let block_without_consensus_data =
+        produce_test_block_with_consensus_data(&config, &btf.blocks[4], false, ConsensusData::None);
+    assert!(matches!(
+        btf.add_special_block(block_without_consensus_data),
+        Err(BlockError::ConsensusTypeMismatch(..))
+    ));
+    println!("btf blocks len before mining loop:{}", btf.blocks.len());
+
+    // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
+    for i in 5..10 {
+        println!("i={}", i);
+        let mut mined_block = btf.random_block(&btf.blocks[i - 1], None);
+        let bits = min_difficulty.into();
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+                .expect("Unexpected conversion error")
+        );
+        assert!(btf.add_special_block(mined_block).is_ok());
+    }
+    println!("btf blocks len after mining loop:{}", btf.blocks.len());
+
+    // Block 10 should ignore consensus according to net upgrades. The following Pow block should
+    // fail.
+    let mut mined_block = btf.random_block(&btf.blocks[9], None);
+    let bits = min_difficulty.into();
+    assert!(
+        crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+            .expect("Unexpected conversion error")
+    );
+    assert!(matches!(
+        btf.add_special_block(mined_block),
+        Err(BlockError::ConsensusTypeMismatch(..))
+    ));
+
+    // Create blocks 10-14 without consensus data as required by net_upgrades
+    btf.create_chain(&btf.blocks[9].get_id(), 5, produce_test_block);
+
+    // At height 15 we are again proof of work, ignoring consensus should fail
+    let block_without_consensus_data = produce_test_block_with_consensus_data(
+        &config,
+        &btf.blocks[14],
+        false,
+        ConsensusData::None,
+    );
+    assert!(matches!(
+        btf.add_special_block(block_without_consensus_data),
+        Err(BlockError::ConsensusTypeMismatch(..))
+    ));
+
+    // Mining should work
+    for i in 15..20 {
+        println!("i={}", i);
+        let mut mined_block = btf.random_block(&btf.blocks[i - 1], None);
+        let bits = min_difficulty.into();
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+                .expect("Unexpected conversion error")
+        );
+        assert!(btf.add_special_block(mined_block).is_ok());
+    }
 }
