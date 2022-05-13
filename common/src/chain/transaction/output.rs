@@ -2,8 +2,6 @@ use crate::{
     address::pubkeyhash::PublicKeyHash,
     primitives::{Amount, Id},
 };
-use parity_scale_codec::{Decode, Encode};
-use crate::primitives::{Amount, Id};
 use script::Script;
 use serialization::{Decode, Encode};
 

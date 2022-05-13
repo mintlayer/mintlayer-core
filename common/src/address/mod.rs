@@ -1,14 +1,9 @@
+use self::pubkeyhash::PublicKeyHash;
 use crate::chain::ChainConfig;
 use crate::primitives::{encoding, Bech32Error, DecodedArbitraryDataFromBech32};
 use crypto::key::PublicKey;
-use parity_scale_codec::Encode;
-
-use self::pubkeyhash::PublicKeyHash;
-
 pub mod pubkeyhash;
-use crate::primitives::{encoding, Bech32Error, DecodedBech32};
-use crypto::hash::hash;
-use serialization::{Decode, Encode};
+use serialization::Encode;
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {

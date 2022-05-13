@@ -175,6 +175,7 @@ mod test {
     };
     use crate::ConsumedUtxoCache;
     use common::chain::config::create_mainnet;
+    use common::chain::signature::inputsig::InputWitness;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
     use common::primitives::{Amount, BlockHeight, Idable};
     use common::primitives::{Id, H256};
@@ -427,7 +428,7 @@ mod test {
                     let id: Id<Block> = Id::new(&H256::random());
                     let id = OutPointSourceId::BlockReward(id);
 
-                    TxInput::new(id, i, vec![])
+                    TxInput::new(id, i, InputWitness::NoSignature(None))
                 })
                 .collect();
 

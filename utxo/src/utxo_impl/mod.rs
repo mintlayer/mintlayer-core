@@ -127,6 +127,7 @@ pub struct UtxosCache<'a> {
 
 /// Tells the state of the utxo
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+#[allow(clippy::large_enum_variant)]
 pub enum UtxoStatus {
     Spent,
     Entry(Utxo),

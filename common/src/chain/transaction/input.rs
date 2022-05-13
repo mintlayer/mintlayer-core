@@ -1,8 +1,6 @@
 use crate::chain::{
     block::Block, transaction::signature::inputsig::InputWitness, transaction::Transaction,
 };
-use parity_scale_codec::{Decode, Encode};
-use crate::chain::{block::Block, transaction::Transaction};
 use crate::primitives::{Id, H256};
 use serialization::{Decode, Encode};
 
