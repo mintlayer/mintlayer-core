@@ -3,7 +3,9 @@ use crate::{
     primitives::{Amount, Id},
 };
 use parity_scale_codec::{Decode, Encode};
+use crate::primitives::{Amount, Id};
 use script::Script;
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {

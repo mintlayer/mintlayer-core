@@ -3,6 +3,7 @@ use std::io::BufWriter;
 use crate::key::rschnorr::RistrettoSchnorrSignature;
 use num_derive::FromPrimitive;
 use parity_scale_codec::{Decode, DecodeAll, Encode};
+use serialization::{Decode, Encode};
 use tari_crypto::tari_utilities::message_format::MessageFormat;
 
 #[derive(FromPrimitive)]
@@ -22,7 +23,7 @@ impl Encode for Signature {
         buf.into_inner().expect("Flushing should never fail")
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         // format: enum index followed by data
         match &self {
             Signature::RistrettoSchnorr(s) => {
@@ -35,19 +36,17 @@ impl Encode for Signature {
 }
 
 impl Decode for Signature {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let sig_kind_raw = input.read_byte()?;
         let sig_kind: Option<SignatureKind> = num::FromPrimitive::from_u8(sig_kind_raw);
-        let sig_kind = sig_kind
-            .ok_or_else(|| parity_scale_codec::Error::from("Invalid/Unknown signature kind"))?;
+        let sig_kind =
+            sig_kind.ok_or_else(|| serialization::Error::from("Invalid/Unknown signature kind"))?;
         let data = Vec::decode(input)?;
 
         match sig_kind {
             SignatureKind::RistrettoSchnorr => {
                 let sig = RistrettoSchnorrSignature::from_binary(&data).map_err(|_| {
-                    parity_scale_codec::Error::from("Private Key deserialization failed")
+                    serialization::Error::from("Private Key deserialization failed")
                 })?;
                 Ok(Signature::RistrettoSchnorr(sig))
             }

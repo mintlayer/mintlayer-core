@@ -6,6 +6,9 @@ use parity_scale_codec::Encode;
 use self::pubkeyhash::PublicKeyHash;
 
 pub mod pubkeyhash;
+use crate::primitives::{encoding, Bech32Error, DecodedBech32};
+use crypto::hash::hash;
+use serialization::{Decode, Encode};
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {

@@ -1,12 +1,17 @@
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id, Idable};
-use parity_scale_codec::{Codec, Decode, DecodeAll, Encode};
+use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
+use utxo::{BlockUndo, Utxo};
 
-use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
+use crate::{
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional, UndoRead,
+    UndoWrite, UtxoRead, UtxoWrite,
+};
 
 mod well_known {
     use super::{Block, Codec, Id};
@@ -31,6 +36,7 @@ mod well_known {
 
     declare_entry!(StoreVersion: u32);
     declare_entry!(BestBlockId: Id<Block>);
+    declare_entry!(UtxosBestBlockId: Id<Block>);
 }
 
 storage::decl_schema! {
@@ -46,6 +52,10 @@ storage::decl_schema! {
         pub DBTxIndex: Single,
         // Storage for block IDs indexed by block height.
         pub DBBlockByHeight: Single,
+        // Store for Utxo Entries
+        pub DBUtxo: Single,
+        // Store for BlockUndo
+        pub DBBlockUndo: Single
     }
 }
 
@@ -131,6 +141,19 @@ impl BlockchainStorageRead for Store {
     }
 }
 
+impl UtxoRead for Store {
+    delegate_to_transaction! {
+        fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+        fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
+    }
+}
+
+impl UndoRead for Store {
+    delegate_to_transaction! {
+        fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+    }
+}
+
 impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
@@ -154,6 +177,21 @@ impl BlockchainStorageWrite for Store {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+    }
+}
+
+impl UtxoWrite for Store {
+    delegate_to_transaction! {
+        fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+        fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+        fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+    }
+}
+
+impl UndoWrite for Store {
+    delegate_to_transaction! {
+        fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
 
@@ -197,8 +235,9 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
             Ok(Some(block)) => {
                 let begin = tx_index.get_byte_offset_in_block() as usize;
                 let end = begin + tx_index.get_serialized_size() as usize;
-                let tx = block.get(begin..end).expect("Transaction outside of block range");
-                let tx = Transaction::decode_all(tx).expect("Invalid tx encoding in DB");
+                let encoded_tx = block.get(begin..end).expect("Transaction outside of block range");
+                let tx =
+                    Transaction::decode_all(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
                 Ok(Some(tx))
             }
         }
@@ -206,6 +245,23 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
 
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
+    }
+}
+
+/// Utxo data storage transaction
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+        self.read::<DBUtxo, _, _>(&outpoint.encode())
+    }
+
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>> {
+        self.read_value::<well_known::UtxosBestBlockId>()
+    }
+}
+
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UndoRead for StoreTx<Tx> {
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+        self.read::<DBBlockUndo, _, _>(id.as_ref())
     }
 }
 
@@ -255,6 +311,32 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 }
 
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
+    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+        let key = outpoint.encode();
+        self.write::<DBUtxo, _, _>(key, &entry)
+    }
+
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()> {
+        let key = outpoint.encode();
+        self.0.get_mut::<DBUtxo, _>().del(&key).map_err(Into::into)
+    }
+
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
+        self.write_value::<well_known::UtxosBestBlockId>(block_id)
+    }
+}
+
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UndoWrite for StoreTx<Tx> {
+    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
+        self.write::<DBBlockUndo, _, _>(id.encode(), undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()> {
+        self.0.get_mut::<DBBlockUndo, _>().del(id.as_ref()).map_err(Into::into)
+    }
+}
+
 impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
     // Read a value from the database and decode it
     fn read<DBIdx, I, T>(&'a self, key: &[u8]) -> crate::Result<Option<T>>
@@ -265,7 +347,7 @@ impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
     {
         let col = self.0.get::<DBIdx, I>();
         let data = col.get(key).map_err(crate::Error::from)?;
-        Ok(data.map(|d| T::decode_all(d).expect("Cannot decode a database value")))
+        Ok(data.map(|d| T::decode_all(&mut &*d).expect("Cannot decode a database value")))
     }
 
     // Read a value for a well-known entry
@@ -312,8 +394,12 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 }
 
 #[cfg(test)]
-mod test {
+pub(crate) mod test {
     use super::*;
+    use common::chain::{Destination, TxOutput};
+    use common::primitives::{Amount, H256};
+    use crypto::random::{make_pseudo_rng, Rng};
+    use utxo::{BlockUndo, TxUndo};
 
     #[test]
     fn test_storage_get_default_version_in_tx() {
@@ -537,5 +623,89 @@ mod test {
             let _ = thr1.join();
             assert_eq!(store.get_storage_version(), Ok(10));
         })
+    }
+
+    /// returns a tuple of utxo and outpoint, for testing.
+    fn create_rand_utxo(block_height: u64) -> Utxo {
+        // just a random value generated, and also a random `is_block_reward` value.
+        let random_value = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
+        let output = TxOutput::new(Amount::from_atoms(random_value), Destination::PublicKey);
+        let is_block_reward = random_value % 3 == 0;
+
+        // generate utxo
+        Utxo::new(output, is_block_reward, BlockHeight::new(block_height))
+    }
+
+    /// returns a block undo with random utxos and TxUndos.
+    ///
+    /// # Arguments
+    /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
+    /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
+    pub fn create_rand_block_undo(
+        max_lim_of_utxos: u8,
+        max_lim_of_tx_undos: u8,
+        block_height: BlockHeight,
+    ) -> BlockUndo {
+        let mut counter: u64 = 0;
+
+        let mut block_undo: Vec<TxUndo> = vec![];
+
+        let undo_rng = make_pseudo_rng().gen_range(1..max_lim_of_tx_undos);
+        for _ in 0..undo_rng {
+            let mut tx_undo = vec![];
+
+            let utxo_rng = make_pseudo_rng().gen_range(1..max_lim_of_utxos);
+            for i in 0..utxo_rng {
+                counter += u64::from(i);
+
+                tx_undo.push(create_rand_utxo(counter));
+            }
+
+            block_undo.push(TxUndo::new(tx_undo));
+        }
+
+        BlockUndo::new(block_undo, block_height)
+    }
+
+    #[cfg(not(loom))]
+    #[test]
+    fn undo_test() {
+        let block_undo0 = create_rand_block_undo(10, 5, BlockHeight::new(1));
+        // create id:
+        let id0: Id<Block> = Id::new(&H256::random());
+
+        // set up the store
+        let mut store = Store::new_empty().unwrap();
+
+        // store is empty, so no undo data should be found.
+        assert_eq!(store.get_undo_data(id0.clone()), Ok(None));
+
+        // add undo data and check if it is there
+        assert_eq!(store.add_undo_data(id0.clone(), &block_undo0), Ok(()));
+        assert_eq!(
+            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+
+        // insert, remove, and reinsert the next block_undo
+
+        let block_undo1 = create_rand_block_undo(5, 10, BlockHeight::new(2));
+        // create id:
+        let id1: Id<Block> = Id::new(&H256::random());
+
+        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(
+            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.del_undo_data(id1.clone()), Ok(()));
+        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(
+            store.get_undo_data(id0).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
     }
 }

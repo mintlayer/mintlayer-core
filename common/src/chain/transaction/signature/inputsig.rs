@@ -68,7 +68,7 @@ impl StandardInputSignature {
     }
 
     pub fn from_data<T: AsRef<[u8]>>(raw_data: T) -> Result<Self, TransactionSigError> {
-        let decoded_sig = StandardInputSignature::decode_all(raw_data.as_ref())
+        let decoded_sig = StandardInputSignature::decode_all(&mut raw_data.as_ref())
             .map_err(|_| TransactionSigError::DecodingWitnessFailed)?;
         Ok(decoded_sig)
     }

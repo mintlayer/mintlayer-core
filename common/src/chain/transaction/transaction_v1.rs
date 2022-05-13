@@ -3,11 +3,11 @@ pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
 use crate::primitives::{id, Id, Idable};
 use crypto::hash::StreamHasher;
-use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
+use serialization::{Decode, Encode};
 
 use super::Transaction;
 
-#[derive(Debug, Clone, PartialEq, Eq, EncodeDer, DecodeDer)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TransactionV1 {
     flags: u32,
     inputs: Vec<TxInput>,

@@ -53,8 +53,8 @@ impl From<std::io::Error> for P2pError {
     }
 }
 
-impl From<parity_scale_codec::Error> for P2pError {
-    fn from(e: parity_scale_codec::Error) -> P2pError {
+impl From<serialization::Error> for P2pError {
+    fn from(e: serialization::Error) -> P2pError {
         P2pError::DecodeFailure(e.to_string())
     }
 }

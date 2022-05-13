@@ -1,8 +1,9 @@
 pub mod rschnorr;
 pub mod signature;
 
+use serialization::{Decode, Encode};
+
 use crate::random::make_true_rng;
-use parity_scale_codec_derive::{Decode as DecodeDer, Encode as EncodeDer};
 pub use signature::Signature;
 
 use self::rschnorr::RistrittoSignatureError;
@@ -14,27 +15,27 @@ pub enum SignatureError {
     SignatureConstructionError,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum KeyKind {
     RistrettoSchnorr,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PrivateKey {
     key: PrivateKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub struct PublicKey {
     pub_key: PublicKeyHolder,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub(crate) enum PrivateKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPrivateKey),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, DecodeDer, EncodeDer)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum PublicKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPublicKey),
 }

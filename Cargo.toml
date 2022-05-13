@@ -25,6 +25,7 @@ members = [
   "node",          # node executable
   "wallet",        # wallet executable
   "utils",         # various utilities
+  "utxo",         # various utilities
 #  "test",          # integration tests
 ]
 
@@ -43,6 +44,7 @@ default-members = [
   "node",
   "wallet",
   "utils",
+  "utxo",
 #  "test",
 ]
 
@@ -58,6 +60,7 @@ p2p = { path = "p2p"}
 network = { path = "network"}
 rpc = { path = "rpc"}
 serialization = { path = "serialization"}
+utxo = { path = "utxo"}
 
 [profile.release]
 debug-assertions = true

@@ -1,6 +1,8 @@
-use parity_scale_codec::{Decode, Encode};
+mod utils;
+
 use rand::Rng;
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+use serialization::{Decode, Encode};
+use utils::{OptionWrapper, SimpleWrapper};
 use std::collections::BTreeMap;
 
 #[test]

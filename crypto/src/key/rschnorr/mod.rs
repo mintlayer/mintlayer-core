@@ -4,8 +4,8 @@ use generic_array::GenericArray;
 pub use internal::add_sigs;
 pub use internal::RistrettoSchnorrSignature;
 use internal::*;
-use parity_scale_codec::{Decode, Encode};
 use rand::{CryptoRng, Rng};
+use serialization::{Decode, Encode};
 use tari_crypto::{keys::PublicKey, tari_utilities::ByteArray};
 
 use crate::hash::{Blake2b32Stream, StreamHasher};
@@ -34,7 +34,7 @@ impl Encode for MLRistrettoPrivateKey {
         self.key_data.as_bytes().encoded_size()
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         self.key_data.as_bytes().encode_to(dest)
     }
 
@@ -48,13 +48,11 @@ impl Encode for MLRistrettoPrivateKey {
 }
 
 impl Decode for MLRistrettoPrivateKey {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = Vec::decode(input)?;
         RistrettoSecretKey::from_bytes(&v)
             .map(|r| MLRistrettoPrivateKey { key_data: r })
-            .map_err(|_| parity_scale_codec::Error::from("Private Key deserialization failed"))
+            .map_err(|_| serialization::Error::from("Private Key deserialization failed"))
     }
 }
 
@@ -120,7 +118,7 @@ impl Encode for MLRistrettoPublicKey {
         self.pubkey_data.as_bytes().encoded_size()
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         self.pubkey_data.as_bytes().encode_to(dest)
     }
 
@@ -134,13 +132,11 @@ impl Encode for MLRistrettoPublicKey {
 }
 
 impl Decode for MLRistrettoPublicKey {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = Vec::decode(input)?;
         RistrettoPublicKey::from_bytes(&v)
             .map(|r| MLRistrettoPublicKey { pubkey_data: r })
-            .map_err(|_| parity_scale_codec::Error::from("Public Key deserialization failed"))
+            .map_err(|_| serialization::Error::from("Public Key deserialization failed"))
     }
 }
 

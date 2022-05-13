@@ -30,7 +30,7 @@ pub struct AuthorizedPublicKeyHashSpend {
 
 impl AuthorizedPublicKeyHashSpend {
     pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, TransactionSigError> {
-        let decoded = AuthorizedPublicKeyHashSpend::decode_all(data.as_ref())
+        let decoded = AuthorizedPublicKeyHashSpend::decode_all(&mut data.as_ref())
             .map_err(|e| TransactionSigError::AddressAuthDecodingFailed(e.to_string()))?;
         Ok(decoded)
     }

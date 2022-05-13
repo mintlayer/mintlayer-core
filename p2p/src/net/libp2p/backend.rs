@@ -30,7 +30,7 @@ use libp2p::{
     Multiaddr, PeerId,
 };
 use logging::log;
-use parity_scale_codec::Decode;
+use serialization::Decode;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::{mpsc, oneshot};
 
