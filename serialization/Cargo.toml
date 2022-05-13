@@ -9,5 +9,5 @@ license = "MIT"
 [dependencies]
 arraytools = "0.1.5"
 hex-literal = "0.3.4"
-parity-scale-codec = {version = "2.3.1", features = ["derive", "chain-error"]}
+parity-scale-codec = {version = "3.1.2", features = ["derive", "chain-error"]}
 rand = "0.8.4"

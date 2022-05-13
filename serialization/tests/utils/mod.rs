@@ -30,5 +30,5 @@ impl<T: HasCompact> CompactWrapper<T> {
 
 pub fn check_encoding<T: Encode + DecodeAll + Eq + std::fmt::Debug>(x: T, expected: &[u8]) {
     assert_eq!(x.encode(), expected, "Invalid encoding");
-    assert_eq!(T::decode_all(expected), Ok(x), "Invalid decoding");
+    assert_eq!(T::decode_all(&mut &*expected), Ok(x), "Invalid decoding");
 }
