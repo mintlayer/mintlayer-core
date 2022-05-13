@@ -129,4 +129,19 @@ mod tests {
         err_conversion(0x01fedcba);
         err_conversion(!0x00800000); // overflow
     }
+    /*
+
+    #[test]
+    fn test_min_difficulty() {
+        let min_difficulty = Uint256([
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+        ]);
+        let compact: Compact = min_difficulty.into();
+        let min_difficulty_again = Uint256::try_from(compact).expect("conversion");
+        assert_eq!(min_difficulty, min_difficulty_again)
+    }
+    */
 }

@@ -180,6 +180,39 @@ pub fn create_unit_test_config() -> ChainConfig {
     }
 }
 
+#[derive(Default)]
+pub struct ChainConfigBuilder {
+    net_upgrades: NetUpgrades<UpgradeVersion>,
+}
+
+impl ChainConfigBuilder {
+    pub fn new() -> Self {
+        Self {
+            net_upgrades: NetUpgrades::unit_tests(),
+        }
+    }
+
+    pub fn with_net_upgrades(mut self, net_upgrades: NetUpgrades<UpgradeVersion>) -> Self {
+        self.net_upgrades = net_upgrades;
+        self
+    }
+
+    pub fn build(self) -> ChainConfig {
+        ChainConfig {
+            chain_type: ChainType::Mainnet,
+            address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
+            height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+            net_upgrades: self.net_upgrades,
+            rpc_port: 15234,
+            p2p_port: 8978,
+            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+            genesis_block: create_mainnet_genesis(),
+            version: SemVer::new(0, 1, 0),
+            blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

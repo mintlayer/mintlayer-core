@@ -20,12 +20,11 @@ use std::sync::Mutex;
 use crate::detail::tests::test_framework::BlockTestFrameWork;
 use crate::detail::tests::*;
 use blockchain_storage::Store;
-use common::chain::config::create_mainnet;
 
 #[test]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 

@@ -92,7 +92,7 @@ impl Default for UpgradeVersion {
 
 impl<T: Default + Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
-    pub(crate) fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
+    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
         let mut upgrades = upgrades;
         upgrades.sort_unstable();
 

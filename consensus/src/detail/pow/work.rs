@@ -192,7 +192,7 @@ impl PoW {
     }
 }
 
-fn mine(
+pub(crate) fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
