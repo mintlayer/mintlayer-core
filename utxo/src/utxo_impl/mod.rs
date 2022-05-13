@@ -131,6 +131,15 @@ pub enum UtxoStatus {
     Entry(Utxo),
 }
 
+impl UtxoStatus {
+    fn into_option(self) -> Option<Utxo> {
+        match self {
+            UtxoStatus::Spent => None,
+            UtxoStatus::Entry(utxo) => Some(utxo),
+        }
+    }
+}
+
 /// Just the Utxo with additional information.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub(crate) struct UtxoEntry {
@@ -348,17 +357,14 @@ impl<'a> UtxosCache<'a> {
     /// Returns a mutable reference of the utxo, given the outpoint.
     pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Option<&mut Utxo> {
         let status = self.get_utxo_entry(outpoint)?;
-        match status.status {
-            UtxoStatus::Spent => None,
-            UtxoStatus::Entry(utxo) => {
-                self.utxos.insert(
-                    outpoint.clone(),
-                    UtxoEntry::new(utxo, status.is_fresh, status.is_dirty),
-                );
-                //TODO: update the memory storage here
-                self.utxos.get_mut(outpoint).and_then(|entry| entry.utxo_mut())
-            }
-        }
+        let utxo: Utxo = status.status.into_option()?;
+
+        let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
+            //TODO: update the memory storage here
+            UtxoEntry::new(utxo, status.is_fresh, status.is_dirty)
+        });
+
+        utxo.utxo_mut()
     }
 
     /// removes the utxo in the cache with the outpoint
