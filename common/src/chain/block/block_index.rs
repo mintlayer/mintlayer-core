@@ -40,8 +40,7 @@ impl BlockIndex {
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.block_header.prev_block_hash == None
-            && chain_config.genesis_block().get_id() == self.block_id
+        self.block_header.is_genesis(chain_config)
     }
 
     // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
