@@ -25,6 +25,10 @@ impl BlockHeader {
     pub fn consensus_data(&self) -> &ConsensusData {
         &self.consensus_data
     }
+
+    pub fn block_id(&self) -> Id<Block> {
+        Id::new(&id::hash_encoded(self))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
