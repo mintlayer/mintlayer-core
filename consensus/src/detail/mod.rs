@@ -608,10 +608,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)
-    }
-
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
         // check for duplicate inputs (see CVE-2018-17144)
         {
@@ -653,7 +649,7 @@ impl<'a> ConsensusRef<'a> {
     fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
         //TODO: The parts that check the block in isolation without the knowledge of the state should not take
         //      storage as an argument (either directly or indirectly as done here through self)
-        self.check_consensus(block)?;
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
         self.check_block_detail(block, block_source)?;
         Ok(())
     }
