@@ -365,11 +365,16 @@ name = "blockchain-storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "crypto",
+ "itertools",
  "mockall",
+ "num-traits",
  "parity-scale-codec",
+ "rand 0.8.4",
  "serialization",
  "storage",
  "thiserror",
+ "utxo",
 ]
 
 [[package]]
@@ -1489,6 +1494,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68f2d64f2edebec4ce84ad108148e67e1064789bee435edc5b60ad398714a3a9"
 
 [[package]]
+name = "iter_tools"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fc962511e9e85f92f36d5ccaf971bd558269f8037b729eaf2db36c79c19c325"
+dependencies = [
+ "itertools",
+]
+
+[[package]]
 name = "itertools"
 version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2071,6 +2085,7 @@ dependencies = [
  "script",
  "serialization",
  "storage",
+ "utxo",
 ]
 
 [[package]]
@@ -4074,6 +4089,18 @@ dependencies = [
 [[package]]
 name = "utils"
 version = "0.1.0"
+
+[[package]]
+name = "utxo"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "crypto",
+ "iter_tools",
+ "logging",
+ "parity-scale-codec",
+ "thiserror",
+]
 
 [[package]]
 name = "valuable"

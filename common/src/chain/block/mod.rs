@@ -118,6 +118,31 @@ impl Block {
         Ok(block)
     }
 
+    // this function is needed to avoid a circular dependency with storage
+    pub fn new_with_no_consensus(
+        transactions: Vec<Transaction>,
+        hash_prev_block: Option<Id<Block>>,
+        time: u32,
+    ) -> Result<Self, BlockCreationError> {
+        let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
+
+        let header = BlockHeader {
+            time,
+            consensus_data_inner: ConsensusData::None,
+            prev_block_hash: hash_prev_block,
+            tx_merkle_root,
+            witness_merkle_root,
+        };
+
+        let block = Block::V1(BlockV1 {
+            header,
+            transactions,
+        });
+
+        Ok(block)
+    }
+
     pub fn update_consensus_data(&mut self, consensus_data: ConsensusData) {
         match self {
             Block::V1(blk) => blk.update_consensus_data(consensus_data),
