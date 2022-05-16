@@ -7,9 +7,11 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-blockchain-storage = { path = '../blockchain_storage' }
+async-trait = "0.1.51"
+blockchain-storage = { path = '../blockchain_storage'}
 common = { path = '../common' }
 crypto = { path = '../crypto' }
+jsonrpsee = { version = "0.10", features = ["macros"] }
 num = "0.4.0"
 rand = "0.8.4"
 logging = { path = '../logging' }
@@ -17,7 +19,11 @@ thiserror = "1.0.30"
 proptest = "1.0.0"
 serialization = { path = "../serialization" }
 replace_with = "0.1.7"
+rpc = { path = '../rpc' }
 slave-pool = "0.2.3"
+subsystem = { path = '../subsystem' }
 
 [dev-dependencies]
+serde_json = "1.0"
 static_assertions = "1.1"
+tokio = "1.0"

@@ -102,6 +102,10 @@ impl ConsensusInterface {
     }
 }
 
+impl subsystem::Subsystem for ConsensusInterface {}
+
+type ConsensusHandle = subsystem::Handle<ConsensusInterface>;
+
 pub fn make_consensus(
     chain_config: ChainConfig,
     blockchain_storage: blockchain_storage::Store,
