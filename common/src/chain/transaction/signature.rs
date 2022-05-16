@@ -81,6 +81,7 @@ pub fn signature_hash(
 
     match mode.inputs_mode() {
         sighashtype::InputsMode::CommitWhoPays => {
+            hash_encoded_to(&(tx.get_inputs().len() as u32), &mut stream);
             for input in tx.get_inputs() {
                 hash_encoded_to(&input.get_outpoint(), &mut stream);
             }
