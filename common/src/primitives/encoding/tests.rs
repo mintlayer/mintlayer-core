@@ -2,8 +2,11 @@ use super::*;
 use bech32::CheckBase32;
 use bech32::ToBase32;
 use bitcoin_bech32::WitnessProgram;
+use crypto::random::make_pseudo_rng;
 use hex::FromHex;
 use logging::log;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 
 #[test]
 fn check_encode() {
@@ -282,8 +285,9 @@ fn check_arbitraty_data_convertion() {
         assert_eq!(test_hrp, decoded_data.get_hrp());
     }
 }
+
 #[test]
-fn check_bech32m_convertion_to_arbitraty_data() {
+fn check_bech32m_convertion_to_arbitraty_chosen_data() {
     let test_hrp = "hrp";
     let dataset = vec![
         "hrp1g9pyx3z9ger5sj22fdxy6nj02pg4y56524t9wkzetgqqazk6",
@@ -292,10 +296,74 @@ fn check_bech32m_convertion_to_arbitraty_data() {
         "hrp1qqh9dn75",
         "hrp1etsu3g",
     ];
-    for test_data in dataset {
+
+    let expected_results =vec![
+        "4142434445464748494a4b4c4d4e4f505152535455565758595a", 
+        "7a2079207820772076207520742073207220712070206f206e206d206c206b206a206920682067206620652064206320622061", 
+        "31323334353637383930", 
+        "00", 
+        ""
+    ];
+
+    for test_data_and_expected_result in dataset.iter().zip(expected_results) {
+        let test_data = test_data_and_expected_result.0;
+        let expected_result_hex = test_data_and_expected_result.1;
+        let expected_result = hex::decode(expected_result_hex).unwrap();
         let decoded_data = super::decode(test_data).unwrap();
         let encoded_data = super::encode(test_hrp, decoded_data.get_data()).unwrap();
 
-        assert_eq!(test_data, encoded_data);
+        assert_eq!(decoded_data.get_hrp(), "hrp");
+        assert_eq!(decoded_data.get_data(), expected_result);
+        assert_eq!(*test_data, encoded_data);
     }
+}
+
+fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
+    let hrp_length = 1 + rng.gen::<usize>() % 10;
+    let test_hrp = make_pseudo_rng()
+        .sample_iter(&Alphanumeric)
+        .take(hrp_length)
+        .map(char::from)
+        .collect::<String>()
+        .to_lowercase();
+    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
+
+    let encoded_data = super::encode(&test_hrp, &random_bytes).unwrap();
+    dbg!(&encoded_data);
+    let decoded_data = super::decode(&encoded_data).unwrap();
+    assert_eq!(random_bytes, decoded_data.get_data());
+    assert_eq!(test_hrp, decoded_data.get_hrp());
+}
+
+#[test]
+fn bech32m_check_random_data_convertion_back_and_forth() {
+    let mut rng = make_pseudo_rng();
+    let data_length = rng.gen::<usize>() % 100;
+    bech32m_test_random_data(&mut rng, data_length);
+}
+
+#[test]
+fn bech32m_empty_hrp_is_invalid() {
+    let mut rng = make_pseudo_rng();
+    let hrp_length = 0;
+    let data_length = rng.gen::<usize>() % 100;
+    let test_hrp = make_pseudo_rng()
+        .sample_iter(&Alphanumeric)
+        .take(hrp_length)
+        .map(char::from)
+        .collect::<String>()
+        .to_lowercase();
+    let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
+
+    assert_eq!(
+        super::encode(&test_hrp, &random_bytes).unwrap_err(),
+        Bech32Error::InvalidLength
+    );
+}
+
+#[test]
+fn bech32m_empty_data_is_valid() {
+    let mut rng = make_pseudo_rng();
+    let data_length = 0;
+    bech32m_test_random_data(&mut rng, data_length);
 }
