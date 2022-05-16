@@ -83,7 +83,7 @@ fn spend_tx_in_the_same_block() {
                 Some(block_id)
             );
         }
-        // The case is invalid. Transsactions should be in order
+        // The case is invalid. Transactions must in order.
         // +--Block----------------+
         // |                       |
         // | +-------tx-1--------+ |
@@ -224,7 +224,7 @@ fn double_spend_tx_in_the_same_block() {
 #[test]
 fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
-        // Check is it correctly spend when a couple of transactions in a different blocks pointing on one output
+        // A few different blocks use an exactly one output. Check whether it's might spend
         //
         // Genesis -> b1 -> b2 where
         //
