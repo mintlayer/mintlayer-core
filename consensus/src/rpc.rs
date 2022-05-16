@@ -65,7 +65,7 @@ mod test {
                     assert_eq!(hash_str.len(), 64);
                     assert!(hash_str.chars().all(|ch| ch.is_ascii_hexdigit()));
                     hash_str
-                },
+                }
                 _ => panic!("expected a json object"),
             };
 

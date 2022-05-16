@@ -18,8 +18,7 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{FloodsubTopic, NetworkService, SocketService},
-    peer::Peer,
+    net::{NetworkService, PubSubTopic},
 };
 use async_trait::async_trait;
 use futures::FutureExt;
@@ -64,6 +63,7 @@ impl Backend {
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+        _sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
         Self {

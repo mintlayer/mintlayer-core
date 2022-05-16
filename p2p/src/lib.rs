@@ -14,8 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-
-use crate::net::{ConnectivityService, FloodsubService, NetworkService};
+use crate::net::{ConnectivityService, NetworkService, PubSubService, SyncingService};
 use common::chain::ChainConfig;
 use logging::log;
 use std::sync::Arc;
@@ -25,8 +24,7 @@ pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
-pub mod peer;
-pub mod proto;
+pub mod pubsub;
 pub mod swarm;
 pub mod sync;
 
@@ -47,8 +45,10 @@ impl<T> P2P<T>
 where
     T: 'static + NetworkService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::FloodsubHandle: FloodsubService<T>,
+    T::SyncingHandle: SyncingService<T>,
+    T::PubSubHandle: PubSubService<T>,
 {
+    // TODO: think about channel sizes
     /// Create new P2P
     ///
     /// # Arguments
@@ -59,29 +59,34 @@ where
         addr: T::Address,
         config: Arc<ChainConfig>,
     ) -> error::Result<Self> {
-        let (conn, flood) = T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await?;
+        let (conn, flood, sync) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await?;
         let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let (tx_sync, rx_sync) = mpsc::channel(16);
-        let (tx_peer, rx_peer) = mpsc::channel(16);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut swarm = swarm::SwarmManager::<T>::new(
-                swarm_config,
-                conn,
-                rx_swarm,
-                tx_sync,
-                tx_peer,
-                mgr_backlog,
-                peer_backlock,
-            );
+            let mut swarm = swarm::SwarmManager::<T>::new(swarm_config, conn, rx_swarm, tx_sync);
             let _ = swarm.run().await;
         });
 
-        let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync_config, flood, rx_sync, rx_peer);
+            let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
             let _ = sync_mgr.run().await;
+        });
+
+        tokio::spawn(async move {
+            if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
+                todo!();
+            }
+            // let mut sync_mgr = ;
+            // let _ = sync_mgr.run().await;
         });
 
         Ok(Self { config, tx_swarm })

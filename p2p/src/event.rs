@@ -21,36 +21,6 @@ use crate::net::NetworkService;
 use serialization::{Decode, Encode};
 use tokio::sync::mpsc;
 
-#[derive(Debug, Encode, Decode)]
-pub enum PeerEvent<T>
-where
-    T: NetworkService,
-{
-    Swarm(PeerSwarmEvent<T>),
-    Syncing(PeerSyncEvent<T>),
-}
-
-#[derive(Debug)]
-pub enum PeerSwarmEvent<T>
-where
-    T: NetworkService,
-{
-    /// Handshaking failed
-    HandshakeFailed { peer_id: T::PeerId },
-
-    /// Handshaking succeeded
-    HandshakeSucceeded { peer_id: T::PeerId },
-
-    /// Remote peer disconnected
-    Disconnected { peer_id: T::PeerId },
-
-    /// Inbound or outbound message
-    Message {
-        peer_id: T::PeerId,
-        message: message::Message,
-    },
-}
-
 #[derive(Debug)]
 pub enum PeerSyncEvent<T>
 where
@@ -76,9 +46,6 @@ where
     Connected {
         /// Unique peer ID
         peer_id: T::PeerId,
-
-        /// TX channel for sending syncing messages to peer
-        tx: mpsc::Sender<PeerEvent<T>>,
     },
 
     /// Peer disconnected
