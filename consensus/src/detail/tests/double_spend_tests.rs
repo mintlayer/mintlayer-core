@@ -233,7 +233,7 @@ fn double_spend_tx_in_the_same_block() {
 #[test]
 fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
-        // A few different blocks use an exactly one output. Check whether it's might spend
+        // Different blocks in the same chain attempt to spend the same output
         //
         // Genesis -> b1 -> b2
         //
