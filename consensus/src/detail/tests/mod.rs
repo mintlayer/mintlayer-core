@@ -217,5 +217,10 @@ fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, T
 fn wait_for_threadpool_to_finish(consensus: &mut Consensus) {
     // We continue execution when previous threads finished, or cause panic in 3 secs
     let handle = consensus.events_broadcaster.spawn_handle(|| {});
+    // TODO: This is not the correct way to check threads finishing because of the thread pool has
+    // multiple threads (where it's now only one), there's no guarantee that the last spawned event will
+    // finish last. The correct solution to this is either keeping track of all handles, or
+    // counting the number of running threads with an atomic counter through a wrapper that
+    // calls the functions and increase/decrease the counter.
     assert!(handle.wait_timeout(std::time::Duration::from_secs(3)).is_ok());
 }
