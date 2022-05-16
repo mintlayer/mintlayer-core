@@ -24,6 +24,9 @@ use common::primitives::{Amount, Id};
 fn spend_tx_in_the_same_block() {
     common::concurrency::model(|| {
         // Check is it correctly spend when the second tx pointing on the first tx
+        //
+        // Genesis -> b1
+        //
         // +--Block----------------+
         // |                       |
         // | +-------tx-1--------+ |
@@ -84,6 +87,9 @@ fn spend_tx_in_the_same_block() {
             );
         }
         // The case is invalid. Transactions must in order.
+        //
+        // Genesis -> b1
+        //
         // +--Block----------------+
         // |                       |
         // | +-------tx-1--------+ |
@@ -146,6 +152,9 @@ fn spend_tx_in_the_same_block() {
 fn double_spend_tx_in_the_same_block() {
     common::concurrency::model(|| {
         // Check is it correctly spend when a couple of transactions pointing on one output
+        //
+        // Genesis -> b1
+        //
         // +--Block----------------+
         // |                       |
         // | +-------tx-1--------+ |
