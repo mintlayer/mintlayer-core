@@ -226,7 +226,7 @@ fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
         // A few different blocks use an exactly one output. Check whether it's might spend
         //
-        // Genesis -> b1 -> b2 where
+        // Genesis -> b1 -> b2
         //
         // +--Block-1--------------+
         // |                       |
