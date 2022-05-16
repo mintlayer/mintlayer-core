@@ -8,30 +8,24 @@ license = "MIT"
 async-trait = "0.1.51"
 futures = "0.3.15"
 futures-timer = "3.0.2"
+parity-scale-codec = "3.1.2"
 rand = "0.8.4"
 void = "1.0.2"
 itertools = "0.10.3"
-
-[dependencies.common]
-path = "../common/"
-
-[dependencies.logging]
-path = "../logging/"
+common = { path = "../common/" }
+logging = { path = "../logging/" }
+serialization = { path = "../serialization/" }
+sscanf = "0.2.1"
 
 [dependencies.libp2p]
-git = "https://github.com/mintlayer/rust-libp2p"
-branch = "streaming-protocol-v0.42.2"
+version = "0.44.0"
 default-features = false
-features = ["floodsub", "mdns", "mplex", "noise", "streaming", "tcp-async-io"]
+features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io"]
 
 [dependencies.tokio]
 version = "1"
-features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
-
-[dependencies.parity-scale-codec]
 default-features = false
-features = ['derive']
-version = '2.0.0'
+features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
 portpicker = "0.1.1"

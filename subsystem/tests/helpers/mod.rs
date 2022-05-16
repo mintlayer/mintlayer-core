@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,6 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): A. Altonen
-pub mod connectivity;
-pub mod handshake;
+// Author(s): L. Kuklinek
+
+static INIT: std::sync::Once = std::sync::Once::new();
+
+pub fn init_test_runtime() -> tokio::runtime::Runtime {
+    INIT.call_once(|| logging::init_logging::<&std::path::Path>(None));
+
+    let mut runtime = tokio::runtime::Builder::new_multi_thread();
+    #[cfg(not(loom))]
+    runtime.enable_all();
+    runtime.worker_threads(4).build().unwrap()
+}

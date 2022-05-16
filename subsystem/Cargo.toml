@@ -1,0 +1,33 @@
+[package]
+name = "subsystem"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+default = [ "time" ]
+time = [ "tokio/time" ]
+
+[dependencies]
+
+# External dependencies
+async-trait = "0.1.51"
+cfg-if = "1.0"
+thiserror = "1.0"
+
+# Local dependencies
+logging = { path = "../logging" }
+
+[dependencies.futures]
+version = "0.3"
+default-features = false
+features = [ "alloc" ]
+
+[dependencies.tokio]
+version = "1"
+default-features = false
+features = [ "macros", "rt", "rt-multi-thread", "signal", "sync" ]
+
+[dev-dependencies]
+common = { path = "../common" }
+testing_logger = "0.1"

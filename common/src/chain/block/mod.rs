@@ -25,10 +25,10 @@ pub use block_index::*;
 mod block_v1;
 pub mod consensus_data;
 
-use block_v1::BlockHeader;
+pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use super::ChainConfig;
 
@@ -105,6 +105,31 @@ impl Block {
         let header = BlockHeader {
             time,
             consensus_data_inner: consensus_data,
+            prev_block_hash: hash_prev_block,
+            tx_merkle_root,
+            witness_merkle_root,
+        };
+
+        let block = Block::V1(BlockV1 {
+            header,
+            transactions,
+        });
+
+        Ok(block)
+    }
+
+    // this function is needed to avoid a circular dependency with storage
+    pub fn new_with_no_consensus(
+        transactions: Vec<Transaction>,
+        hash_prev_block: Option<Id<Block>>,
+        time: u32,
+    ) -> Result<Self, BlockCreationError> {
+        let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
+
+        let header = BlockHeader {
+            time,
+            consensus_data_inner: ConsensusData::None,
             prev_block_hash: hash_prev_block,
             tx_merkle_root,
             witness_merkle_root,

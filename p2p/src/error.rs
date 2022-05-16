@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+// TODO: store peerid where appropriate!
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     DifferentNetwork,
@@ -21,8 +23,12 @@ pub enum ProtocolError {
     InvalidMessage,
     Incompatible,
     Unresponsive,
+    InvalidProtocol,
+    UnknownNetwork,
+    InvalidState,
 }
 
+// TODO: refactor error code
 #[derive(Debug, PartialEq, Eq)]
 pub enum Libp2pError {
     NoiseError(String),
@@ -30,6 +36,7 @@ pub enum Libp2pError {
     DialError(String),
     SubscriptionError(String),
     PublishError(String),
+    IdentifyError(String),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,6 +50,7 @@ pub enum P2pError {
     Unknown(String),
     ChannelClosed,
     NoPeers,
+    PeerDoesntExist,
 }
 
 pub type Result<T> = core::result::Result<T, P2pError>;
@@ -53,8 +61,8 @@ impl From<std::io::Error> for P2pError {
     }
 }
 
-impl From<parity_scale_codec::Error> for P2pError {
-    fn from(e: parity_scale_codec::Error) -> P2pError {
+impl From<serialization::Error> for P2pError {
+    fn from(e: serialization::Error) -> P2pError {
         P2pError::DecodeFailure(e.to_string())
     }
 }
@@ -108,6 +116,18 @@ impl From<&str> for P2pError {
     }
 }
 
+impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::SubscriptionError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::SubscriptionError(e.to_string()))
+    }
+}
+
+impl From<libp2p::gossipsub::error::PublishError> for P2pError {
+    fn from(e: libp2p::gossipsub::error::PublishError) -> P2pError {
+        P2pError::Libp2pError(Libp2pError::PublishError(e.to_string()))
+    }
+}
+
 impl std::fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -125,6 +145,15 @@ impl std::fmt::Display for ProtocolError {
             }
             ProtocolError::Unresponsive => {
                 write!(f, "No response from remote peer")
+            }
+            ProtocolError::InvalidProtocol => {
+                write!(f, "Invalid protocol string")
+            }
+            ProtocolError::UnknownNetwork => {
+                write!(f, "Unknown network")
+            }
+            ProtocolError::InvalidState => {
+                write!(f, "Invalid state")
             }
         }
     }

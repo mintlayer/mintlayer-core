@@ -37,7 +37,9 @@ pub enum FloodsubEvent {
     /// Message received from one of the floodsub topics
     MessageReceived {
         peer_id: SocketAddr,
-        topic: net::FloodsubTopic,
+        topic: net::PubSubTopic,
         message: message::Message,
     },
 }
+
+pub enum SyncingEvent {}

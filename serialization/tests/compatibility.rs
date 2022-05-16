@@ -1,8 +1,10 @@
+mod utils;
+
 use arraytools::ArrayTools;
 use hex_literal::hex;
-use parity_scale_codec::{Decode, Encode};
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+use serialization::{Decode, Encode};
 use std::collections::BTreeMap;
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_version_compatibility_numbers() {

@@ -4,8 +4,8 @@ use generic_array::GenericArray;
 pub use internal::add_sigs;
 pub use internal::RistrettoSchnorrSignature;
 use internal::*;
-use parity_scale_codec::{Decode, Encode};
 use rand::{CryptoRng, Rng};
+use serialization::{Decode, Encode};
 use tari_crypto::{keys::PublicKey, tari_utilities::ByteArray};
 
 use crate::hash::{Blake2b32Stream, StreamHasher};
@@ -34,7 +34,7 @@ impl Encode for MLRistrettoPrivateKey {
         self.key_data.as_bytes().encoded_size()
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         self.key_data.as_bytes().encode_to(dest)
     }
 
@@ -48,13 +48,11 @@ impl Encode for MLRistrettoPrivateKey {
 }
 
 impl Decode for MLRistrettoPrivateKey {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = Vec::decode(input)?;
         RistrettoSecretKey::from_bytes(&v)
             .map(|r| MLRistrettoPrivateKey { key_data: r })
-            .map_err(|_| parity_scale_codec::Error::from("Private Key deserialization failed"))
+            .map_err(|_| serialization::Error::from("Private Key deserialization failed"))
     }
 }
 
@@ -120,7 +118,7 @@ impl Encode for MLRistrettoPublicKey {
         self.pubkey_data.as_bytes().encoded_size()
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         self.pubkey_data.as_bytes().encode_to(dest)
     }
 
@@ -134,13 +132,11 @@ impl Encode for MLRistrettoPublicKey {
 }
 
 impl Decode for MLRistrettoPublicKey {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = Vec::decode(input)?;
         RistrettoPublicKey::from_bytes(&v)
             .map(|r| MLRistrettoPublicKey { pubkey_data: r })
-            .map_err(|_| parity_scale_codec::Error::from("Public Key deserialization failed"))
+            .map_err(|_| serialization::Error::from("Public Key deserialization failed"))
     }
 }
 
@@ -196,13 +192,13 @@ impl std::ops::Add for &MLRistrettoPublicKey {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::random::make_true_rng;
     use hex::ToHex;
-    use rand::SeedableRng;
     use tari_crypto::tari_utilities::message_format::MessageFormat;
 
     #[test]
     fn basic() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let pk2 = MLRistrettoPublicKey::from_private_key(&sk);
         assert_eq!(pk, pk2);
@@ -210,7 +206,7 @@ mod test {
 
     #[test]
     fn import_from_short_key() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         {
             let sk_bytes = sk.as_bytes();
@@ -230,7 +226,7 @@ mod test {
 
     #[test]
     fn serialize() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = make_true_rng();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let sk_encoded = sk.encode();
         let pk_encoded = pk.encode();
@@ -274,7 +270,7 @@ mod test {
 
     #[test]
     fn sign_and_verify() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = make_true_rng();
         let msg_size = 1 + rand::random::<usize>() % 10000;
         let msg: Vec<u8> = (0..msg_size).map(|_| rand::random::<u8>()).collect();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
@@ -284,10 +280,25 @@ mod test {
 
     #[test]
     fn sign_empty() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = make_true_rng();
         let msg: Vec<u8> = Vec::new();
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let sig = sk.sign_message(&mut rng, &msg).unwrap();
         assert!(pk.verify_message(&sig, &msg));
+    }
+
+    #[test]
+    fn sk_zeroed() {
+        use std::slice;
+        let mut rng = make_true_rng();
+        let zero_sk = &vec![0u8; 32][..];
+        let hldr;
+        {
+            let (sk, _pk) = MLRistrettoPrivateKey::new(&mut rng);
+            hldr = sk.as_bytes().as_ptr();
+        }
+        unsafe {
+            assert_eq!(slice::from_raw_parts(hldr, 32), zero_sk);
+        }
     }
 }

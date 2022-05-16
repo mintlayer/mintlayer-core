@@ -3,13 +3,16 @@
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id};
 use storage::traits;
+use utxo::{BlockUndo, Utxo};
 
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 mod store;
+mod utxo_db;
 
 pub use storage::transaction::{TransactionRo, TransactionRw};
 pub use store::Store;
@@ -95,6 +98,31 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+}
+
+/// Queries to get the Utxo
+// this is not exposed outside the crate, because we only want this to be accessible
+// using the UtxoDB.
+pub(crate) trait UtxoRead {
+    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
+}
+
+/// Queries to update the Utxo
+// this is not exposed outside the crate, because we only want this to be accessible
+// using the UtxoDB.
+pub(crate) trait UtxoWrite: UtxoRead {
+    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+}
+
+pub(crate) trait UndoRead {
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+}
+pub(crate) trait UndoWrite: UndoRead {
+    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage

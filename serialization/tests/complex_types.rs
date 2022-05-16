@@ -1,7 +1,9 @@
-use parity_scale_codec::{Decode, Encode};
+mod utils;
+
 use rand::Rng;
-use serialization_utils::{OptionWrapper, SimpleWrapper};
+use serialization::{Decode, Encode};
 use std::collections::BTreeMap;
+use utils::{OptionWrapper, SimpleWrapper};
 
 #[test]
 fn test_scale_structures() {

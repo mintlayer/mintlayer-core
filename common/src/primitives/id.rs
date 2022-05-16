@@ -17,7 +17,7 @@
 
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -42,10 +42,34 @@ impl From<Uint256> for H256 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+impl serde::Serialize for H256 {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&format!("{:x}", self))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for H256 {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct HashVisitor;
+        impl<'de> serde::de::Visitor<'de> for HashVisitor {
+            type Value = H256;
+            fn expecting(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                fmt.write_str("a hex-encoded hash")
+            }
+            fn visit_str<E: serde::de::Error>(self, s: &str) -> Result<Self::Value, E> {
+                s.parse().map_err(serde::de::Error::custom)
+            }
+        }
+        d.deserialize_str(HashVisitor)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct Id<T: ?Sized> {
     id: H256,
-    _shadow: std::marker::PhantomData<T>,
+    #[serde(skip)]
+    _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
 // We implement Ord manually to avoid it getting inherited to T through PhantomData, because Id having Ord doesn't mean T requiring Ord
@@ -146,6 +170,14 @@ mod tests {
         assert_eq!(h1, h3.into());
     }
 
+    const SAMPLE_HASHES: [&str; 5] = [
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000001",
+        "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
+        "02f0000ff000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f",
+        "000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c",
+    ];
+
     #[test]
     fn h256_to_uint256_and_vice_versa() {
         fn check(value: &str) {
@@ -161,9 +193,7 @@ mod tests {
             assert_eq!(hash_value, H256::from(uint_value));
         }
 
-        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
-        check("000000000000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
-        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
+        SAMPLE_HASHES.iter().cloned().for_each(check)
     }
 
     #[test]
@@ -181,10 +211,36 @@ mod tests {
             assert_eq!(h.as_bytes(), bytes);
             assert_eq!(u.to_bytes(), bytes);
         }
-        check("0000000000000000000000000000000000000000000000000000000000000000");
-        check("0000000000000000000000000000000000000000000000000000000000000001");
-        check("000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd");
-        check("02f0000ff000000004ec466ce4732fe6f1ed1cddc2ed4b328fff5224276e3f6f");
-        check("000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c");
+        SAMPLE_HASHES.iter().cloned().for_each(check)
+    }
+
+    #[test]
+    fn h256_json() {
+        fn check(hex: &'static str) {
+            use serde_json::Value;
+            let hash: H256 = hex.parse().unwrap();
+            // hash should serialize into its hex string
+            serde_test::assert_tokens(&hash, &[serde_test::Token::Str(hex)]);
+            assert_eq!(
+                serde_json::to_value(hash).ok(),
+                Some(Value::String(format!("{:x}", hash)))
+            );
+        }
+        SAMPLE_HASHES.iter().cloned().for_each(check)
+    }
+
+    #[test]
+    fn id_json() {
+        fn check(hex: &'static str) {
+            use serde_json::Value;
+            let id: Id<()> = Id::new(&hex.parse().unwrap());
+            // ID should serialize into its hex string
+            serde_test::assert_tokens(&id, &[serde_test::Token::Str(hex)]);
+            assert_eq!(
+                serde_json::to_value(&id).ok(),
+                Some(Value::String(format!("{:x}", id.id)))
+            );
+        }
+        SAMPLE_HASHES.iter().cloned().for_each(check)
     }
 }

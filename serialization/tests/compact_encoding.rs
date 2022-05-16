@@ -1,5 +1,7 @@
-use parity_scale_codec::{Decode, Encode};
-use serialization_utils::CompactWrapper;
+mod utils;
+
+use serialization::{Decode, Encode};
+use utils::CompactWrapper;
 
 #[test]
 fn test_scale_compact_numbers() {

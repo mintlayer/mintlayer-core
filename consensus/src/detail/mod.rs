@@ -32,7 +32,7 @@ use common::primitives::{time, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 mod orphan_blocks;
-use parity_scale_codec::Encode;
+use serialization::Encode;
 
 mod error;
 pub use error::*;
