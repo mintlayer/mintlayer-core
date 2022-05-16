@@ -35,8 +35,6 @@ mod double_spend_tests;
 #[cfg(test)]
 mod events_tests;
 #[cfg(test)]
-mod indices_tests;
-#[cfg(test)]
 mod processing_tests;
 #[cfg(test)]
 mod reorgs_tests;
@@ -82,82 +80,6 @@ fn random_address(chain_config: &ChainConfig) -> Destination {
     address.shuffle(&mut rng);
     let receiver = Address::new(chain_config, address).expect("Failed to create address");
     Destination::Address(receiver)
-}
-
-fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
-    let mut bytes = [0u8; 32];
-    g.fill_bytes(&mut bytes);
-    H256::from(bytes)
-}
-
-fn generate_random_bytes(g: &mut impl rand::Rng, length: usize) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    bytes.resize(length, 0);
-    g.fill_bytes(&mut bytes);
-    bytes
-}
-
-fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
-    let witness_size = g.next_u32();
-    let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
-    let outpoint = if g.next_u32() % 2 == 0 {
-        OutPointSourceId::Transaction(Id::new(&generate_random_h256(g)))
-    } else {
-        OutPointSourceId::BlockReward(Id::new(&generate_random_h256(g)))
-    };
-
-    TxInput::new(outpoint, g.next_u32(), witness)
-}
-
-fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
-    let config = create_mainnet();
-
-    let addr =
-        Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
-
-    TxOutput::new(
-        Amount::from_atoms(g.next_u64() as u128),
-        Destination::Address(addr),
-    )
-}
-
-fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction {
-    let inputs = {
-        let input_count = 1 + (rng.next_u32() as usize) % 10;
-        (0..input_count)
-            .into_iter()
-            .map(|_| generate_random_invalid_input(rng))
-            .collect::<Vec<_>>()
-    };
-
-    let outputs = {
-        let output_count = 1 + (rng.next_u32() as usize) % 10;
-        (0..output_count)
-            .into_iter()
-            .map(|_| generate_random_invalid_output(rng))
-            .collect::<Vec<_>>()
-    };
-
-    let flags = rng.next_u32();
-    let lock_time = rng.next_u32();
-
-    Transaction::new(flags, inputs, outputs, lock_time).expect(ERR_CREATE_TX_FAIL)
-}
-
-fn generate_random_invalid_block() -> Block {
-    let mut rng = rand::rngs::StdRng::from_entropy();
-
-    let transactions = {
-        let transaction_count = rng.next_u32() % 2000;
-        (0..transaction_count)
-            .into_iter()
-            .map(|_| generate_random_invalid_transaction(&mut rng))
-            .collect::<Vec<_>>()
-    };
-    let time = rng.next_u32();
-    let prev_id = Some(Id::new(&generate_random_h256(&mut rng)));
-
-    Block::new(transactions, prev_id, time, ConsensusData::None).expect(ERR_CREATE_BLOCK_FAIL)
 }
 
 fn create_utxo_data(
