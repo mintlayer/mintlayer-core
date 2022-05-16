@@ -374,7 +374,7 @@ fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
 
 fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
-    wait_for_threadpool(&mut btf.consensus);
+    wait_for_threadpool_to_finish(&mut btf.consensus);
     let events = events.lock().unwrap();
     assert!(!events.is_empty());
     match events.last() {

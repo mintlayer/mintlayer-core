@@ -214,7 +214,7 @@ fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, T
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 
-fn wait_for_threadpool(consensus: &mut Consensus) {
+fn wait_for_threadpool_to_finish(consensus: &mut Consensus) {
     // We continue execution when previous threads finished, or cause panic in 3 secs
     let handle = consensus.events_broadcaster.spawn_handle(|| {});
     assert!(handle.wait_timeout(std::time::Duration::from_secs(3)).is_ok());
