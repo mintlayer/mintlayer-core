@@ -105,6 +105,9 @@ pub fn signature_hash(
 
     hash_encoded_to(&tx.get_lock_time(), &mut stream);
 
+    // TODO: for P2SH add OP_CODESEPARATOR position
+    hash_encoded_to(&u32::MAX, &mut stream);
+
     let result = stream.finalize().into();
     Ok(result)
 }
