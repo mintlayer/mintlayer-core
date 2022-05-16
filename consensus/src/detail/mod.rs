@@ -46,6 +46,8 @@ type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
+const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
+
 mod spend_cache;
 
 use spend_cache::CachedInputs;
@@ -230,6 +232,51 @@ impl Consensus {
                     &(height - BlockDistance::new(i)).expect("distance to be valid"),
                 )
             })
+            .filter(|res| res.is_ok())
+            .filter_map(|res| res.unwrap())
+            .collect::<Vec<_>>();
+
+        Ok(headers)
+    }
+
+    // TODO: use `ConsensusRef::is_block_in_main_chain()` implementation instead, how?
+    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        let height = block_index.get_block_height();
+        let id_at_height =
+            consensus_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+        match id_at_height {
+            Some(id) => Ok(id == *block_index.get_block_id()),
+            None => Ok(false),
+        }
+    }
+
+    pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
+        // use genesis block if no common ancestor with better block height is found
+        let mut best = BlockHeight::new(0);
+
+        for header in locator.iter() {
+            let consensus_ref = self.make_ro_db_tx();
+            if let Some(block_index) = consensus_ref.db_tx.get_block_index(&header.block_id())? {
+                if self.is_block_in_main_chain(&block_index)? {
+                    best = block_index.get_block_height();
+                    break;
+                }
+            }
+        }
+
+        // get headers until either the best block or header limit is reached
+        let limit = std::cmp::min(
+            (best + HEADER_LIMIT).ok_or(BlockError::Unknown)?,
+            self.get_block_height_in_main_chain(
+                &self.get_best_block_id()?.expect("best block to exist"),
+            )?
+            .expect("best block's height to exist"),
+        );
+
+        let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
+            .take_while(|height| height <= &limit)
+            .map(|height| self.get_header_from_height(&height))
             .filter(|res| res.is_ok())
             .filter_map(|res| res.unwrap())
             .collect::<Vec<_>>();

@@ -772,9 +772,6 @@ pub(crate) mod test {
             ConsensusData::None,
         )
         .unwrap();
-        assert_eq!(
-            store.get_block_header_by_id(&block2.get_id()),
-            Ok(None)
-        );
+        assert_eq!(store.get_block_header_by_id(&block2.get_id()), Ok(None));
     }
 }
