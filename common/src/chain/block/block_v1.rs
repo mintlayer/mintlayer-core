@@ -32,7 +32,7 @@ impl BlockVersion for BlockV1 {
 impl BlockV1 {
     pub fn check_version(&self) -> Result<(), super::BlockConsistencyError> {
         let a = self.header.block_version;
-        let b = <Self as BlockVersion>::static_version(&self);
+        let b = <Self as BlockVersion>::static_version(self);
         if a != b {
             return Err(super::BlockConsistencyError::VersionMismatch(a, b));
         }
