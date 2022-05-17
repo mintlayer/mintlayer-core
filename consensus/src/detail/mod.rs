@@ -209,6 +209,10 @@ impl Consensus {
         Ok(block)
     }
 
+    pub fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, BlockError> {
+        Ok(self.make_ro_db_tx().db_tx.get_block_index(id).map_err(BlockError::from)?)
+    }
+
     pub fn get_header_from_height(
         &self,
         height: &BlockHeight,
@@ -256,8 +260,7 @@ impl Consensus {
         let mut best = BlockHeight::new(0);
 
         for header in locator.iter() {
-            let consensus_ref = self.make_ro_db_tx();
-            if let Some(block_index) = consensus_ref.db_tx.get_block_index(&header.block_id())? {
+            if let Some(block_index) = self.get_block_index(&header.block_id())? {
                 if self.is_block_in_main_chain(&block_index)? {
                     best = block_index.get_block_height();
                     break;
@@ -282,6 +285,43 @@ impl Consensus {
             .collect::<Vec<_>>();
 
         Ok(headers)
+    }
+
+    pub fn get_uniq_headers(
+        &self,
+        headers: Vec<BlockHeader>,
+    ) -> Result<Vec<BlockHeader>, BlockError> {
+        if headers.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // verify that the first block attaches to our chain
+        let mut prev_id: Id<Block> = match headers[0].get_prev_block_id() {
+            None => return Err(BlockError::PrevBlockInvalid),
+            Some(id) => {
+                self.get_block_index(id)?.ok_or(BlockError::NotFound).map(|_| id.to_owned())?
+            }
+        };
+
+        // verify that the headers are in order and collect all unknown headers
+        let headers = headers
+            .iter()
+            .map(|header| {
+                if header.get_prev_block_id() != &Some(prev_id.to_owned()) {
+                    Err(BlockError::Orphan)
+                } else {
+                    prev_id = header.block_id();
+                    match self.get_block_index(&prev_id)? {
+                        None => Ok(Some(header.to_owned())),
+                        Some(_) => Ok(None),
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        itertools::process_results(headers, |iter| {
+            iter.filter_map(|headers| headers).collect::<Vec<_>>()
+        })
     }
 }
 
