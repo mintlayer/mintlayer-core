@@ -52,7 +52,7 @@ use libp2p::{
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
