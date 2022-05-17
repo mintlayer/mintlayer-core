@@ -19,22 +19,24 @@ mod detail;
 
 pub mod rpc;
 
+pub mod consensus_interface_impl;
+
+pub mod consensus_interface;
+
 use std::sync::Arc;
 
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
+use consensus_interface::ConsensusInterface;
+pub use consensus_interface_impl::ConsensusInterfaceImpl;
 pub use detail::BlockError;
-use detail::{BlockSource, Consensus};
+use detail::Consensus;
 
 #[derive(Debug)]
 pub enum ConsensusEvent {
     NewTip(Id<Block>, BlockHeight),
-}
-
-pub struct ConsensusInterface {
-    consensus: detail::Consensus,
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
@@ -47,72 +49,17 @@ pub enum ConsensusError {
     FailedToReadProperty(BlockError),
 }
 
-impl ConsensusInterface {
-    pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
-        self.consensus.subscribe_to_events(handler)
-    }
+impl subsystem::Subsystem for Box<dyn ConsensusInterface> {}
 
-    pub fn process_block(
-        &mut self,
-        block: Block,
-        source: BlockSource,
-    ) -> Result<(), ConsensusError> {
-        self.consensus
-            .process_block(block, source)
-            .map_err(ConsensusError::ProcessBlockError)?;
-        Ok(())
-    }
-
-    pub fn get_best_block_id(&self) -> Result<Id<Block>, ConsensusError> {
-        Ok(self
-            .consensus
-            .get_best_block_id()
-            .map_err(ConsensusError::FailedToReadProperty)?
-            .expect("There always must be a best block"))
-    }
-
-    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ConsensusError> {
-        Ok(self
-            .consensus
-            .get_block_height_in_main_chain(block_id)
-            .map_err(ConsensusError::FailedToReadProperty)?
-            .is_some())
-    }
-
-    pub fn get_block_height_in_main_chain(
-        &self,
-        block_id: &Id<Block>,
-    ) -> Result<Option<BlockHeight>, ConsensusError> {
-        self.consensus
-            .get_block_height_in_main_chain(block_id)
-            .map_err(ConsensusError::FailedToReadProperty)
-    }
-
-    pub fn get_block_id_from_height(
-        &self,
-        height: &BlockHeight,
-    ) -> Result<Option<Id<Block>>, ConsensusError> {
-        self.consensus
-            .get_block_id_from_height(height)
-            .map_err(ConsensusError::FailedToReadProperty)
-    }
-
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError> {
-        self.consensus.get_block(block_id).map_err(ConsensusError::FailedToReadProperty)
-    }
-}
-
-impl subsystem::Subsystem for ConsensusInterface {}
-
-type ConsensusHandle = subsystem::Handle<ConsensusInterface>;
+type ConsensusHandle = subsystem::Handle<Box<dyn ConsensusInterface>>;
 
 pub fn make_consensus(
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
-) -> Result<ConsensusInterface, ConsensusError> {
+) -> Result<Box<dyn ConsensusInterface>, ConsensusError> {
     let cons = Consensus::new(chain_config, blockchain_storage)?;
-    let cons_interface = ConsensusInterface { consensus: cons };
-    Ok(cons_interface)
+    let cons_interface = ConsensusInterfaceImpl::new(cons);
+    Ok(Box::new(cons_interface))
 }
 
 #[cfg(test)]

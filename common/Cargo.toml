@@ -13,7 +13,7 @@ serialization = { path = "../serialization" }
 logging = { path = "../logging/" }
 
 anyhow = "1.0.51"
-bech32 = "0.8.1"
+bech32 = "0.9.0"
 displaydoc = { default-features = false, version = "0.2" }
 generic-array = "0.14.4"
 hex-literal = "0.3.4"
