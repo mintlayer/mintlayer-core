@@ -25,7 +25,7 @@ use common::chain::config::create_mainnet;
 #[test]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 

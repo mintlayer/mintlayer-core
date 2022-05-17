@@ -117,7 +117,7 @@ fn test_events_a_bunch_of_events() {
     const COUNT_EVENTS: usize = 100;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -169,7 +169,7 @@ fn test_events_orphan_block() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 

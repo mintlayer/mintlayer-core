@@ -23,7 +23,7 @@ use common::chain::{config::create_mainnet, OutputSpentState};
 fn test_process_genesis_block_wrong_block_source() {
     common::concurrency::model(|| {
         // Genesis can't be from Peer, test it
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config.clone(), storage).unwrap();
 
@@ -38,7 +38,7 @@ fn test_process_genesis_block_wrong_block_source() {
 fn test_process_genesis_block() {
     common::concurrency::model(|| {
         // This test process only Genesis block
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 
@@ -65,7 +65,7 @@ fn test_process_genesis_block() {
 #[test]
 fn test_orphans_chains() {
     common::concurrency::model(|| {
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -85,7 +85,7 @@ fn test_orphans_chains() {
 fn test_empty_consensus() {
     common::concurrency::model(|| {
         // No genesis
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let consensus = Consensus::new_no_genesis(config, storage).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_none());
@@ -95,7 +95,7 @@ fn test_empty_consensus() {
             .unwrap()
             .is_none());
         // Let's add genesis
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let consensus = Consensus::new(config, storage).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_some());
@@ -180,7 +180,7 @@ fn test_straight_chain() {
     common::concurrency::model(|| {
         const COUNT_BLOCKS: usize = 255;
         // In this test, processing a few correct blocks in a single chain
-        let config = create_mainnet();
+        let config = Arc::new(create_mainnet());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 

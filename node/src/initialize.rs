@@ -3,6 +3,7 @@
 use crate::options::Options;
 use common::chain::config::ChainType;
 use consensus::rpc::ConsensusRpcServer;
+use std::sync::Arc;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -16,7 +17,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
 
     // Chain configuration
     let chain_config = match opts.net {
-        ChainType::Mainnet => common::chain::config::create_mainnet(),
+        ChainType::Mainnet => Arc::new(common::chain::config::create_mainnet()),
         chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
     };
 
