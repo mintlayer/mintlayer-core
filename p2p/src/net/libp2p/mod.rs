@@ -126,10 +126,7 @@ where
 fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multiaddr> {
     let mut components = peer_addr.iter();
 
-    if !std::matches!(
-        components.next(),
-        Some(Protocol::Ip4(_) | Protocol::Ip6(_))
-    ) {
+    if !std::matches!(components.next(), Some(Protocol::Ip4(_) | Protocol::Ip6(_))) {
         return None;
     }
 
@@ -189,8 +186,7 @@ where
     peers
         .into_iter()
         .map(|(id, addr)| (id, parse_discovered_addr(id, addr)))
-        .filter(|(_id, addr)| addr.is_some())
-        .map(|(id, addr)| (id, addr.unwrap()))
+        .filter_map(|(id, addr)| addr.map(|addr| (id, addr)))
         .group_by(|info| info.0)
         .into_iter()
         .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))

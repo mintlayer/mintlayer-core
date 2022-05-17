@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
+#![allow(unused, clippy::unwrap_used)]
 
 use common::chain::ChainConfig;
 use libp2p::Multiaddr;

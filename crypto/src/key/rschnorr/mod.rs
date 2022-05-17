@@ -98,7 +98,7 @@ impl MLRistrettoPrivateKey {
         let (r, r_pub) = RistrettoPublicKey::random_keypair(rng);
         let k = &self.key_data;
         let e = Self::construct_challenge_from_message(msg);
-        let sig = RistrettoSchnorr::sign(k.clone(), r, &e).unwrap();
+        let sig = RistrettoSchnorr::sign(k.clone(), r, &e).expect("signing failed");
         debug_assert_eq!(*sig.get_public_nonce(), r_pub);
         Ok(sig)
     }

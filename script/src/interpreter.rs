@@ -375,7 +375,7 @@ fn check_multisig<'a, Ctx: Context>(
                 // signature being processed that has just been taken out of the iterator.
                 return Ok(false);
             }
-            match ctx.parse_pubkey(pubkeys.next().unwrap()) {
+            match ctx.parse_pubkey(pubkeys.next().expect("pubkeys run out")) {
                 // error -> quit immediately
                 ParseResult::Err => return Err(Error::PubkeyFormat),
                 // unrecognized pubkey type -> accept and continue
