@@ -227,7 +227,7 @@ impl Idable<Block> for Block {
     fn get_id(&self) -> Id<Self> {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.
-        self.header().get_id().into()
+        self.header().get_id()
     }
 }
 
