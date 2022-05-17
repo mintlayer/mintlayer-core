@@ -1,6 +1,8 @@
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
+use crate::primitives::id;
+use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
 
 use serialization::{Decode, Encode};
@@ -27,6 +29,24 @@ pub struct BlockV1 {
 
 impl BlockVersion for BlockV1 {
     const BLOCK_VERSION: u32 = 1;
+}
+
+impl Idable<BlockHeader> for BlockHeader {
+    fn get_id(&self) -> Id<Self> {
+        Id::new(&id::hash_encoded(self))
+    }
+}
+
+impl From<&Id<BlockHeader>> for Id<Block> {
+    fn from(id: &Id<BlockHeader>) -> Self {
+        Id::new(&id.get())
+    }
+}
+
+impl From<Id<BlockHeader>> for Id<Block> {
+    fn from(id: Id<BlockHeader>) -> Self {
+        Id::new(&id.get())
+    }
 }
 
 impl BlockV1 {
