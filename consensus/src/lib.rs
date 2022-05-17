@@ -33,7 +33,7 @@ pub enum ConsensusEvent {
     NewTip(Id<Block>, BlockHeight),
 }
 
-pub struct ConsensusInterface {
+pub struct ConsensusInterfaceImpl {
     consensus: detail::Consensus,
 }
 
@@ -47,7 +47,7 @@ pub enum ConsensusError {
     FailedToReadProperty(BlockError),
 }
 
-impl ConsensusInterface {
+impl ConsensusInterfaceImpl {
     pub fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
         self.consensus.subscribe_to_events(handler)
     }
@@ -102,16 +102,16 @@ impl ConsensusInterface {
     }
 }
 
-impl subsystem::Subsystem for ConsensusInterface {}
+impl subsystem::Subsystem for ConsensusInterfaceImpl {}
 
-type ConsensusHandle = subsystem::Handle<ConsensusInterface>;
+type ConsensusHandle = subsystem::Handle<ConsensusInterfaceImpl>;
 
 pub fn make_consensus(
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
-) -> Result<ConsensusInterface, ConsensusError> {
+) -> Result<ConsensusInterfaceImpl, ConsensusError> {
     let cons = Consensus::new(chain_config, blockchain_storage)?;
-    let cons_interface = ConsensusInterface { consensus: cons };
+    let cons_interface = ConsensusInterfaceImpl { consensus: cons };
     Ok(cons_interface)
 }
 
