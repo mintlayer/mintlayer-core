@@ -19,7 +19,6 @@ skip = [
     {name = "digest"},
     {name = "getrandom"},
     {name = "heck"},
-    {name = "hmac"},
     {name = "itoa"},
     {name = "parking_lot" },
     {name = "parking_lot_core" },
