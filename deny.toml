@@ -10,6 +10,7 @@ deny = []
 skip = [
     {name = "arrayvec"},
     {name = "base64"},
+    {name = "bech32"},
     {name = "blake2"},
     {name = "block-buffer"},
     {name = "byteorder"},
