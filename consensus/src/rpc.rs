@@ -38,13 +38,13 @@ fn handle_error<T>(e: Result<Result<T, ConsensusError>, CallError>) -> rpc::Resu
 mod test {
     use super::*;
     use serde_json::Value;
-    use std::future::Future;
+    use std::{future::Future, sync::Arc};
 
     async fn with_consensus<F: 'static + Send + Future<Output = ()>>(
         proc: impl 'static + Send + FnOnce(crate::ConsensusHandle) -> F,
     ) {
         let storage = blockchain_storage::Store::new_empty().unwrap();
-        let cfg = common::chain::config::create_mainnet();
+        let cfg = Arc::new(common::chain::config::create_mainnet());
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem("consensus", crate::make_consensus(cfg, storage).unwrap());
         let _ = man.add_raw_subsystem(

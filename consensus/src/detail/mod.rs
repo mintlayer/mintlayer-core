@@ -48,7 +48,7 @@ use spend_cache::CachedInputs;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
-    chain_config: ChainConfig,
+    chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     event_subscribers: Vec<EventHandler>,
@@ -85,7 +85,7 @@ impl Consensus {
     }
 
     pub fn new(
-        chain_config: ChainConfig,
+        chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
     ) -> Result<Self, crate::ConsensusError> {
         use crate::ConsensusError;
@@ -110,7 +110,7 @@ impl Consensus {
     }
 
     fn new_no_genesis(
-        chain_config: ChainConfig,
+        chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
     ) -> Result<Self, crate::ConsensusError> {
         let event_broadcaster = slave_pool::ThreadPool::new();

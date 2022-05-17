@@ -107,7 +107,7 @@ impl subsystem::Subsystem for ConsensusInterface {}
 type ConsensusHandle = subsystem::Handle<ConsensusInterface>;
 
 pub fn make_consensus(
-    chain_config: ChainConfig,
+    chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
 ) -> Result<ConsensusInterface, ConsensusError> {
     let cons = Consensus::new(chain_config, blockchain_storage)?;

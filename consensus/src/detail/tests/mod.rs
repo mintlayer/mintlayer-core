@@ -62,7 +62,7 @@ pub(in crate::detail::tests) enum TestSpentStatus {
 }
 
 fn setup_consensus() -> Consensus {
-    let config = create_mainnet();
+    let config = Arc::new(create_mainnet());
     let storage = Store::new_empty().unwrap();
     Consensus::new(config, storage).unwrap()
 }
