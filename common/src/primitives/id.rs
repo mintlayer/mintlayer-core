@@ -112,8 +112,9 @@ impl<T> AsRef<[u8]> for Id<T> {
 }
 
 /// a trait for objects that deserve having a unique id with implementations to how to ID them
-pub trait Idable<T: ?Sized> {
-    fn get_id(&self) -> Id<Self>;
+pub trait Idable {
+    type Tag: ?Sized;
+    fn get_id(&self) -> Id<Self::Tag>;
 }
 
 #[allow(dead_code)]
