@@ -693,7 +693,7 @@ async fn local_ahead_by_12_blocks() {
 
 // local and remote nodes are in different chains and remote has longer chain
 // verify that local downloads all blocks are reorgs
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn remote_local_diff_chains_remote_higher() {
     let (mut mgr1, mut conn1, _, _, mut rx_p2p1) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
@@ -922,7 +922,7 @@ async fn remote_local_diff_chains_remote_higher() {
 }
 
 // remote and local are in different branches and local has longer chain
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn remote_local_diff_chains_local_higher() {
     let (mut mgr1, mut conn1, _, _, mut rx_p2p1) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
@@ -1157,7 +1157,7 @@ async fn remote_local_diff_chains_local_higher() {
 
 // connect two remote nodes and as all three nodes are in different chains,
 // local node downloads all blocks
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn two_remote_nodes_different_chains() {
     let (mut mgr1, mut conn1, _, _, mut rx_p2p1) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
@@ -1354,31 +1354,43 @@ async fn two_remote_nodes_same_chain() {
     }
 
     let handle = tokio::spawn(async move {
-        get_locator(&mut rx_p2p, &mut local_cons).await;
-        get_locator(&mut rx_p2p, &mut local_cons).await;
-        let mut getuniqheaders_last = false;
+        // get_locator(&mut rx_p2p, &mut local_cons).await;
+        // get_locator(&mut rx_p2p, &mut local_cons).await;
 
-        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
-        get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
+        // get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
+        // get_uniq_headers_and_verify(&mut rx_p2p, &mut local_cons, &new_remote_block_hdrs).await;
 
-        for i in 0..24 {
-            match rx_p2p.recv().await.unwrap() {
-                event::P2pEvent::NewBlock { block, response } => {
-                    local_cons.accept_block(block);
-                    response.send(());
+        for i in 0..28 {
+            tokio::select! {
+                event = rx_p2p.recv().fuse() => match event.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(local_cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        let uniq = local_cons.get_uniq_headers(&headers);
+                        response.send(Some(uniq));
+                    }
+                    event::P2pEvent::NewBlock { block, response } => {
+                        local_cons.accept_block(block);
+                        response.send(());
+                    }
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(local_cons.get_locator());
+                    }
+                    event::P2pEvent::GetUniqHeaders { headers, response } => {
+                        let uniq = local_cons.get_uniq_headers(&headers);
+                        assert_eq!(&uniq, &[]);
+                        response.send(Some(uniq));
+                    }
+                    e => panic!("invalid message received: {:#?}", e),
+                },
+                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
+                    panic!("consensus task failed");
                 }
-                event::P2pEvent::GetLocator { response } => {
-                    response.send(local_cons.get_locator());
-                }
-                event::P2pEvent::GetUniqHeaders { headers, response } => {
-                    let uniq = local_cons.get_uniq_headers(&headers);
-                    assert_eq!(&uniq, &[]);
-                    response.send(Some(uniq));
-                }
-                e => panic!("invalid message received: {:#?}", e),
             }
         }
 
+        // println!("consensus done");
         local_cons
     });
 
@@ -1394,20 +1406,24 @@ async fn two_remote_nodes_same_chain() {
                     mgr1.on_syncing_event(event.unwrap()).await.unwrap();
                     mgr1.check_state().unwrap();
                 },
-                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
                     panic!("syncing test timed out");
                 }
             }
         }
 
+        // println!("mgr done");
         mgr1
     });
 
     for i in 0..24 {
+        // println!("-1 read {}", i);
         let (event, dest_peer_id) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id()) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id()) },
+            _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => { panic!("-1 panic"); },
         };
+        //       println!("done");
 
         match event {
             net::SyncingMessage::Request {
@@ -1489,7 +1505,7 @@ async fn two_remote_nodes_same_chain() {
 //
 // when local node has downloaded all blocks, add new blocks to
 // the remote chain and verify that local node downloads the new blocks too
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn two_remote_nodes_same_chain_new_blocks() {
     let (mut mgr1, mut conn1, _, _, mut rx_p2p) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
@@ -1527,12 +1543,12 @@ async fn two_remote_nodes_same_chain_new_blocks() {
     }
 
     let handle = tokio::spawn(async move {
-        get_locator(&mut rx_p2p, &mut local_cons).await;
-        get_locator(&mut rx_p2p, &mut local_cons).await;
-
-        for i in 0..40 {
+        for i in 0..42 {
             tokio::select! {
                 event = rx_p2p.recv().fuse() => match event.unwrap() {
+                    event::P2pEvent::GetLocator { response } => {
+                        response.send(local_cons.get_locator());
+                    }
                     event::P2pEvent::GetUniqHeaders { headers, response } => {
                         let uniq = local_cons.get_uniq_headers(&headers);
                         response.send(Some(uniq));
@@ -1550,12 +1566,13 @@ async fn two_remote_nodes_same_chain_new_blocks() {
                     }
                     e => panic!("invalid message received: {:#?}", e),
                 },
-                _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
                     panic!("consensus task timed out");
                 }
             }
         }
 
+        // println!("2 consensus done");
         local_cons
     });
 
@@ -1571,12 +1588,13 @@ async fn two_remote_nodes_same_chain_new_blocks() {
                     mgr1.on_syncing_event(event.unwrap()).await.unwrap();
                     mgr1.check_state().unwrap();
                 },
-                _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {
                     panic!("syncing test timed out");
                 }
             }
         }
 
+        // println!("2 mgr done");
         mgr1
     });
 
@@ -1584,9 +1602,11 @@ async fn two_remote_nodes_same_chain_new_blocks() {
     let mut reqs = HashMap::new();
 
     for i in 0..24 {
+        // println!("1 test {}", i);
         let (event, dest_peer_id) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id()) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id()) },
+            _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => { panic!("1 panic"); },
         };
 
         match event {
@@ -1652,6 +1672,8 @@ async fn two_remote_nodes_same_chain_new_blocks() {
         }
     }
 
+    //   println!("done");
+
     // TODO: use different rand
     // now that the headers have been changed and some block may have been
     // downloaded, add more blocks to the remote chain that the local node
@@ -1688,10 +1710,13 @@ async fn two_remote_nodes_same_chain_new_blocks() {
     }
 
     for i in 0..12 {
+        // println!("2 try to read {}", i);
         let (event, dest_peer_id) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id()) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id()) },
+            _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => { panic!("2 panic"); },
         };
+        //       println!("read");
 
         match event {
             net::SyncingMessage::Request {
