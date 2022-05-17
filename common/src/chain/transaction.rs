@@ -43,7 +43,8 @@ impl From<Id<TransactionV1>> for Id<Transaction> {
     }
 }
 
-impl Idable<Transaction> for Transaction {
+impl Idable for Transaction {
+    type Tag = Transaction;
     fn get_id(&self) -> Id<Transaction> {
         match &self {
             Transaction::V1(tx) => tx.get_id().into(),

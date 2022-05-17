@@ -31,7 +31,8 @@ impl BlockVersion for BlockV1 {
     const BLOCK_VERSION: u32 = 1;
 }
 
-impl Idable<Block> for BlockHeader {
+impl Idable for BlockHeader {
+    type Tag = Block;
     fn get_id(&self) -> Id<Block> {
         Id::new(&id::hash_encoded(self))
     }

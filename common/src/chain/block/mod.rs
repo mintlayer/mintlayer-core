@@ -223,7 +223,8 @@ impl Block {
     }
 }
 
-impl Idable<Block> for Block {
+impl Idable for Block {
+    type Tag = Block;
     fn get_id(&self) -> Id<Self> {
         // Block ID is just the hash of its header. The transaction list is committed to by the
         // inclusion of transaction Merkle root in the header. We also include the version number.

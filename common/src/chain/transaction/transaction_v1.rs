@@ -59,8 +59,9 @@ impl TransactionV1 {
     }
 }
 
-impl Idable<TransactionV1> for TransactionV1 {
-    fn get_id(&self) -> Id<Self> {
+impl Idable for TransactionV1 {
+    type Tag = Transaction;
+    fn get_id(&self) -> Id<Transaction> {
         let mut hash_stream = id::DefaultHashAlgoStream::new();
 
         // Collect data from inputs, excluding witnesses
