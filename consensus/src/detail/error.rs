@@ -84,7 +84,7 @@ pub enum BlockError {
     SerializationInvariantError(Id<Block>),
     #[error("Unexpected numeric type conversion error `{0:?}`")]
     InternalNumTypeConversionError(Id<Block>),
-    #[error("Internal block representation is invalid `{0:?}`")]
+    #[error("Internal block representation is invalid `{0}`")]
     BlockConsistencyError(BlockConsistencyError),
     // To be expanded
 }
