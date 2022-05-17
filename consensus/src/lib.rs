@@ -21,35 +21,22 @@ pub mod rpc;
 
 pub mod consensus_interface_impl;
 
+pub mod consensus_interface;
+
 use std::sync::Arc;
 
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
+use consensus_interface::ConsensusInterface;
 pub use consensus_interface_impl::ConsensusInterfaceImpl;
 pub use detail::BlockError;
-use detail::{BlockSource, Consensus};
+use detail::Consensus;
 
 #[derive(Debug)]
 pub enum ConsensusEvent {
     NewTip(Id<Block>, BlockHeight),
-}
-
-pub trait ConsensusInterface: Send {
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>);
-    fn process_block(&mut self, block: Block, source: BlockSource) -> Result<(), ConsensusError>;
-    fn get_best_block_id(&self) -> Result<Id<Block>, ConsensusError>;
-    fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ConsensusError>;
-    fn get_block_height_in_main_chain(
-        &self,
-        block_id: &Id<Block>,
-    ) -> Result<Option<BlockHeight>, ConsensusError>;
-    fn get_block_id_from_height(
-        &self,
-        height: &BlockHeight,
-    ) -> Result<Option<Id<Block>>, ConsensusError>;
-    fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError>;
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]

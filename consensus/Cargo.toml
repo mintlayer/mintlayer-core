@@ -27,3 +27,4 @@ subsystem = { path = '../subsystem' }
 serde_json = "1.0"
 static_assertions = "1.1"
 tokio = "1.0"
+mockall = "0.11"
