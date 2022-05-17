@@ -128,7 +128,7 @@ fn parse_discovered_addr(peer_id: PeerId, peer_addr: Multiaddr) -> Option<Multia
 
     if !std::matches!(
         components.next(),
-        Some(Protocol::Ip4(_)) | Some(Protocol::Ip6(_))
+        Some(Protocol::Ip4(_) | Protocol::Ip6(_))
     ) {
         return None;
     }

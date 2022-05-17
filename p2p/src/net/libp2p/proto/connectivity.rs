@@ -88,7 +88,7 @@ impl Backend {
     ) -> error::Result<()> {
         if let Some(peer_id) = peer_id {
             match self.pending_conns.remove(&peer_id) {
-                Some(PendingState::Dialed { tx }) | Some(PendingState::OutboundAccepted { tx }) => {
+                Some(PendingState::Dialed { tx } | PendingState::OutboundAccepted { tx }) => {
                     tx.send(Err(P2pError::SocketError(
                         std::io::ErrorKind::ConnectionRefused,
                     )))
