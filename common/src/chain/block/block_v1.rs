@@ -31,21 +31,9 @@ impl BlockVersion for BlockV1 {
     const BLOCK_VERSION: u32 = 1;
 }
 
-impl Idable<BlockHeader> for BlockHeader {
-    fn get_id(&self) -> Id<Self> {
+impl Idable<Block> for BlockHeader {
+    fn get_id(&self) -> Id<Block> {
         Id::new(&id::hash_encoded(self))
-    }
-}
-
-impl From<&Id<BlockHeader>> for Id<Block> {
-    fn from(id: &Id<BlockHeader>) -> Self {
-        Id::new(&id.get())
-    }
-}
-
-impl From<Id<BlockHeader>> for Id<Block> {
-    fn from(id: Id<BlockHeader>) -> Self {
-        Id::new(&id.get())
     }
 }
 
