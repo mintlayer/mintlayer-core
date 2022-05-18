@@ -15,7 +15,7 @@
 //
 // Author(s): L. Kuklinek, A. Altonen
 
-use crate::{error::P2pError, net::NetworkService};
+use crate::{error::P2pError, net::NetworkingService};
 use common::chain::block;
 use std::{fmt::Debug, str::FromStr};
 use subsystem::subsystem::CallError;
@@ -26,17 +26,17 @@ trait P2pRpc {
     #[method(name = "connect")]
     async fn connect(&self, addr: String) -> rpc::Result<()>;
 
-    // /// Publish new block on the network
-    // #[method(name = "publish_block")]
-    // async fn publish_block(&self, block: block::Block) -> rpc::Result<()>;
+    /// Get the number of peers
+    #[method(name = "get_peer_count")]
+    async fn get_peer_count(&self) -> rpc::Result<usize>;
 }
 
 #[async_trait::async_trait]
 impl<T> P2pRpcServer for super::P2pHandle<T>
 where
-    T: NetworkService + 'static,
-    <T as NetworkService>::Address: FromStr,
-    <<T as NetworkService>::Address as FromStr>::Err: Debug + Send,
+    T: NetworkingService + 'static,
+    <T as NetworkingService>::Address: FromStr,
+    <<T as NetworkingService>::Address as FromStr>::Err: Debug + Send,
 {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
         let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
@@ -44,13 +44,13 @@ where
         // handle_error(res)
     }
 
-    // async fn publish_block(&self, block: block::Block) -> rpc::Result<()> {
-    //     let res = self
-    //         .call_async_mut(|this| Box::pin(this.publish_block(block)))
-    //         .await;
-    //     Ok(())
-    //     // handle_error(res)
-    // }
+    async fn get_peer_count(&self) -> rpc::Result<usize> {
+        let res = self
+            .call_async(|this| Box::pin(this.get_peer_count()))
+            .await;
+        Ok(0)
+        // handle_error(res)
+    }
 }
 
 // fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> rpc::Result<T> {

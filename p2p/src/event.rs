@@ -16,17 +16,19 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::{message, net::NetworkService};
+use crate::{message, net::NetworkingService};
 use common::chain::block::{Block, BlockHeader};
 use serialization::{Decode, Encode};
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
-use util::Handle;
 
 #[derive(Debug)]
-pub enum SwarmEvent<T: NetworkService> {
+pub enum SwarmEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
     Connect(T::Address),
+
+    /// Get the total number of peers local node has a connection with
+    GetPeerCount(oneshot::Sender<usize>),
 }
 
 #[derive(Debug)]
@@ -38,37 +40,11 @@ pub enum SyncEvent {
 #[derive(Debug)]
 pub enum SyncControlEvent<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Peer connected
     Connected(T::PeerId),
 
     /// Peer disconnected
     Disconnected(T::PeerId),
-}
-
-#[derive(Debug, Handle)]
-pub enum P2pEvent {
-    GetLocator {
-        response: oneshot::Sender<Vec<BlockHeader>>,
-    },
-    NewBlock {
-        block: Block,
-        response: oneshot::Sender<()>,
-    },
-    GetBlocks {
-        headers: Vec<BlockHeader>,
-        response: oneshot::Sender<Vec<Block>>,
-    },
-    GetHeaders {
-        locator: Vec<BlockHeader>,
-        response: oneshot::Sender<Vec<BlockHeader>>,
-    },
-    GetBestBlockHeader {
-        response: oneshot::Sender<BlockHeader>,
-    },
-    GetUniqHeaders {
-        headers: Vec<BlockHeader>,
-        response: oneshot::Sender<Option<Vec<BlockHeader>>>,
-    },
 }

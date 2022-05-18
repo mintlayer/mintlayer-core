@@ -21,7 +21,7 @@ use crate::{
         self,
         libp2p::sync::*,
         libp2p::{backend::Backend, types},
-        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
+        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
         PubSubTopic, SyncingMessage, SyncingService,
     },
 };

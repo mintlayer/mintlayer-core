@@ -20,7 +20,7 @@ use crate::{
     error::{self, FatalError, P2pError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
-    net::{self, NetworkService, SyncingService},
+    net::{self, NetworkingService, SyncingService},
 };
 use common::{
     chain::{
@@ -38,10 +38,6 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-// TODO: add wrapper api for the request api
-// TODO: update peer state after each call
-
-pub mod mock_consensus;
 pub mod peer;
 
 // Define which errors are fatal for the sync manager as the error is bubbled
@@ -51,11 +47,16 @@ pub mod peer;
 //
 // This is just a convenience method to have access to nicer error handling
 impl<T> FatalError for error::Result<T> {
-    fn into_fatal(self) -> core::result::Result<(), P2pError> {
+    fn map_fatal_err(self) -> core::result::Result<(), P2pError> {
         if let Err(err) = self {
-            log::error!("call failed: {:#?}", err);
-            if err == P2pError::ChannelClosed {
-                return Err(err);
+            match err {
+                P2pError::ChannelClosed | P2pError::ConsensusError(_) => {
+                    log::error!("fatal error occurred: {:#?}", err);
+                    return Err(err);
+                }
+                _ => {
+                    log::error!("non-fatal error occurred: {:#?}", err);
+                }
             }
         }
 
@@ -85,7 +86,7 @@ pub enum SyncState {
 /// peer it's connected to and actively keep track of the peer's state.
 pub struct SyncManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Chain config
     config: Arc<ChainConfig>,
@@ -103,25 +104,25 @@ where
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
     /// Subsystem handle to Consensus
-    consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
 }
 
 impl<T> SyncManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::SyncingHandle: SyncingService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::SyncingHandle,
-        consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
             config,
             handle,
             rx_sync,
-            consensus,
+            consensus_handle,
             peers: Default::default(),
             state: SyncState::Uninitialized,
         }
@@ -135,29 +136,39 @@ where
         &mut self.handle
     }
 
+    pub async fn request_headers(
+        &mut self,
+        peer_id: T::PeerId,
+        locator: Vec<BlockHeader>,
+    ) -> error::Result<()> {
+        // TODO: save request id somewhere?
+        let _request_id = self
+            .handle
+            .send_request(
+                peer_id,
+                Message {
+                    magic: *self.config.magic_bytes(),
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator },
+                    )),
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
     pub async fn register_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
         log::info!("register peer {:?} to sync manager", peer_id);
 
         match self.peers.entry(peer_id) {
-            Entry::Occupied(_) => Err(P2pError::PeerExists),
+            Entry::Occupied(_) => {
+                log::error!("peer {:?} already known by sync manager", peer_id);
+                Err(P2pError::PeerExists)
+            }
             Entry::Vacant(entry) => {
-                let locator = self.consensus.call(move |this| this.get_locator()).await?.unwrap();
-                // let locator = self.p2p_handle.get_locator().await?;
+                let locator = self.consensus_handle.call(move |this| this.get_locator()).await??;
                 entry.insert(peer::PeerContext::new(peer_id));
-                // TODO: save request somewhere with a timer
-                let _ = self
-                    .handle
-                    .send_request(
-                        peer_id,
-                        Message {
-                            magic: *self.config.magic_bytes(),
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetHeaders { locator },
-                            )),
-                        },
-                    )
-                    .await?;
-                Ok(())
+                self.request_headers(peer_id, locator).await
             }
         }
     }
@@ -182,8 +193,7 @@ where
         );
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-        // let headers = self.p2p_handle.get_headers(locator).await?;
-        let headers = self.consensus.call(move |this| this.get_headers(locator)).await?.unwrap();
+        let headers = self.consensus_handle.call(move |this| this.get_headers(locator)).await??;
 
         self.handle
             .send_response(
@@ -211,13 +221,12 @@ where
         );
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-        // let blocks = self.p2p_handle.get_blocks(headers.to_vec()).await?;
         debug_assert!(headers.len() == 1);
         let blocks = vec![self
-            .consensus
+            .consensus_handle
             .call(move |this| this.get_block(headers[0].get_id()))
-            .await?
-            .unwrap()
+            .await??
+            // TODO: remove unwrap
             .unwrap()];
 
         self.handle
@@ -246,9 +255,8 @@ where
             headers
         );
 
-        // TODO: check error, ban peer
         let headers =
-            self.consensus.call(move |this| this.get_uniq_headers(headers)).await?.unwrap();
+            self.consensus_handle.call(move |this| this.get_uniq_headers(headers)).await??;
 
         if !headers.is_empty() {
             if let Some(next_block) = peer.register_headers(&headers) {
@@ -260,7 +268,7 @@ where
                             magic: *self.config.magic_bytes(),
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![next_block.clone()],
+                                    headers: vec![next_block.to_owned()],
                                 },
                             )),
                         },
@@ -281,39 +289,31 @@ where
         blocks: Vec<Block>,
     ) -> error::Result<()> {
         log::trace!("received {} blocks from peer {:?}", blocks.len(), peer_id,);
+        // TODO: remove
         debug_assert!(blocks.len() == 1);
-
-        let peer_id__ = {
-            let mut iretid = None;
-            for (i, (id, _)) in self.peers.iter().enumerate() {
-                if id == &peer_id {
-                    iretid = Some(i);
-                }
-            }
-
-            iretid
-        };
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
         // TODO: check error, ban peer
-        let block = blocks[0].clone();
-        match self
-            .consensus
-            .call_mut(move |this| {
-                this.process_block(block, BlockSource::Peer(peer_id__.unwrap() as u32))
-            })
-            .await?
-        {
+        let header = blocks[0].header().clone();
+        let block = blocks[0].to_owned();
+        let result = self
+            .consensus_handle
+            .call_mut(move |this| this.process_block(block, BlockSource::Peer))
+            .await?;
+
+        match result {
             Ok(_) => {}
             Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) => {
-                log::warn!("block {:?} already exists", id)
+                log::debug!("block {:?} already exists", id)
             }
-            Err(e) => return Err(P2pError::Unknown("consesus error".to_string())),
+            Err(e) => return Err(P2pError::ConsensusError(e)),
         }
 
-        match peer.register_block_response((blocks[0]).header()) {
+        let next_header = peer.register_block_response((blocks[0]).header());
+        match next_header {
             Ok(Some(next_block)) => {
+                // TODO: save request ids somewhere?
                 let _ = self
                     .handle
                     .send_request(
@@ -333,8 +333,8 @@ where
             }
             Ok(None) => {
                 // last block from peer, ask if peer knows of any new headers
-                // let locator = self.p2p_handle.get_locator().await?;
-                let locator = self.consensus.call(move |this| this.get_locator()).await?.unwrap();
+                let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
+                // TODO: save request ids somewhere?
                 let _ = self
                     .handle
                     .send_request(
@@ -366,16 +366,47 @@ where
                     self.state = SyncState::DownloadingBlocks;
                     return Ok(());
                 }
-                peer::PeerSyncState::UploadingHeaders => {
+                peer::PeerSyncState::UploadingHeaders | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
                     return Ok(());
                 }
-                _ => {}
+                peer::PeerSyncState::Idle => {}
             }
         }
 
         self.state = SyncState::Idle;
         Ok(())
+    }
+
+    async fn process_request(
+        &mut self,
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        request: SyncingRequest,
+    ) -> error::Result<()> {
+        match request {
+            SyncingRequest::GetHeaders { locator } => {
+                self.process_header_request(peer_id, request_id, locator).await
+            }
+            SyncingRequest::GetBlocks { headers } => {
+                self.process_block_request(peer_id, request_id, headers).await
+            }
+        }
+    }
+
+    async fn process_response(
+        &mut self,
+        peer_id: T::PeerId,
+        response: SyncingResponse,
+    ) -> error::Result<()> {
+        match response {
+            SyncingResponse::Headers { headers } => {
+                self.process_header_response(peer_id, headers).await
+            }
+            SyncingResponse::Blocks { blocks } => {
+                self.process_block_response(peer_id, blocks).await
+            }
+        }
     }
 
     /// Handle incoming block/header request/response
@@ -387,44 +418,44 @@ where
                 request:
                     Message {
                         msg: MessageType::Syncing(SyncingMessage::Request(message)),
-                        ..
+                        magic: _,
                     },
-            } => match message {
-                SyncingRequest::GetHeaders { locator } => {
-                    self.process_header_request(peer_id, request_id, locator).await
-                }
-                SyncingRequest::GetBlocks { headers } => {
-                    self.process_block_request(peer_id, request_id, headers).await
-                }
-            },
+            } => {
+                log::debug!(
+                    "process incoming request (id {:?}) from peer {:?}",
+                    request_id,
+                    peer_id
+                );
+                self.process_request(peer_id, request_id, message).await
+            }
             net::SyncingMessage::Response {
                 peer_id,
-                request_id: _,
+                request_id,
                 response:
                     Message {
                         msg: MessageType::Syncing(SyncingMessage::Response(message)),
-                        ..
+                        magic: _,
                     },
-            } => match message {
-                SyncingResponse::Headers { headers } => {
-                    self.process_header_response(peer_id, headers).await
-                }
-                SyncingResponse::Blocks { blocks } => {
-                    self.process_block_response(peer_id, blocks).await
-                }
-            },
+            } => {
+                log::debug!(
+                    "process incoming response (id {:?}) from peer {:?}",
+                    request_id,
+                    peer_id
+                );
+                self.process_response(peer_id, message).await
+            }
             net::SyncingMessage::Request { peer_id, .. }
             | net::SyncingMessage::Response { peer_id, .. } => {
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 // TODO: disconnect peer and ban it
-                // TODO: send `Misbehaved` event to SwarmManager
+                // TODO: send `Misbehaved` event to PeerManager
                 Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
     }
 
-    /// Handle control-related sync event from P2P/SwarmManager
-    async fn on_sync_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
+    /// Handle control-related sync event from P2P/PeerManager
+    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
         match event {
             event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
             event::SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id).await,
@@ -438,14 +469,14 @@ where
         loop {
             tokio::select! {
                 res = self.handle.poll_next() => {
-                    self.on_syncing_event(res?).await.into_fatal()?;
+                    self.on_syncing_event(res?).await.map_fatal_err()?;
                 }
                 res = self.rx_sync.recv().fuse() => {
-                    self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await.into_fatal()?;
+                    self.on_control_event(res.ok_or(P2pError::ChannelClosed)?).await.map_fatal_err()?;
                 }
             }
 
-            self.check_state().into_fatal()?;
+            self.check_state().map_fatal_err()?;
         }
     }
 }
@@ -483,7 +514,7 @@ where
 // >>>>>>> dad30749 (sync: Add simplified syncing implementation)
 //     )
 //     where
-//         T: NetworkService,
+//         T: NetworkingService,
 //         T::ConnectivityHandle: ConnectivityService<T>,
 //         T::SyncingHandle: SyncingService<T>,
 //     {

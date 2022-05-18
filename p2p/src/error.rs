@@ -54,13 +54,16 @@ pub enum P2pError {
     InvalidAddress,
     InvalidData,
     PeerExists,
+    SubsystemFailure,
+    ConsensusError(consensus::ConsensusError),
+    DatabaseFailure,
 }
 
 // TODO: move this to src/lib.rs
 pub type Result<T> = core::result::Result<T, P2pError>;
 
 pub trait FatalError {
-    fn into_fatal(self) -> core::result::Result<(), P2pError>;
+    fn map_fatal_err(self) -> core::result::Result<(), P2pError>;
 }
 
 impl From<std::io::Error> for P2pError {
@@ -139,6 +142,12 @@ impl From<libp2p::gossipsub::error::PublishError> for P2pError {
 impl From<subsystem::subsystem::CallError> for P2pError {
     fn from(e: subsystem::subsystem::CallError) -> P2pError {
         P2pError::ChannelClosed
+    }
+}
+
+impl From<consensus::ConsensusError> for P2pError {
+    fn from(e: consensus::ConsensusError) -> P2pError {
+        P2pError::ConsensusError(e)
     }
 }
 

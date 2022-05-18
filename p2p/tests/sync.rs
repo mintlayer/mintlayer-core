@@ -33,7 +33,7 @@ use p2p::{
     event::SyncControlEvent,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{
-        self, libp2p::Libp2pService, ConnectivityEvent, ConnectivityService, NetworkService,
+        self, libp2p::Libp2pService, ConnectivityEvent, ConnectivityService, NetworkingService,
         SyncingService,
     },
     sync::SyncManager,
@@ -57,7 +57,7 @@ async fn make_sync_manager<T>(
     mpsc::Sender<SyncControlEvent<T>>,
 )
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingHandle: SyncingService<T>,
 {
@@ -83,7 +83,7 @@ where
 
 async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let (conn1_res, conn2_res) =
@@ -150,7 +150,7 @@ async fn process_header_request<T>(
     handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
 ) -> Result<(), P2pError>
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::SyncingHandle: SyncingService<T>,
 {
     if let net::SyncingMessage::Request {
@@ -185,7 +185,7 @@ where
 
 async fn advance_mgr_state<T>(mgr: &mut SyncManager<T>) -> Result<(), P2pError>
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::SyncingHandle: SyncingService<T>,
 {
     let event = mgr.handle_mut().poll_next().await.unwrap();
@@ -427,7 +427,7 @@ async fn local_ahead_by_12_blocks() {
                 assert_eq!(blocks.len(), 1);
                 let block = blocks[0].to_owned();
                 mgr2_handle
-                    .call_mut(move |this| this.process_block(block, BlockSource::Peer(1)))
+                    .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
                     .unwrap()
                     .unwrap();
@@ -620,7 +620,7 @@ async fn remote_local_diff_chains_local_higher() {
                 assert_eq!(blocks.len(), 1);
                 let block = blocks[0].to_owned();
                 mgr2_handle
-                    .call_mut(move |this| this.process_block(block, BlockSource::Peer(1)))
+                    .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
                     .unwrap()
                     .unwrap();
@@ -811,7 +811,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 assert_eq!(blocks.len(), 1);
                 let block = blocks[0].to_owned();
                 mgr2_handle
-                    .call_mut(move |this| this.process_block(block, BlockSource::Peer(1)))
+                    .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
                     .unwrap()
                     .unwrap();

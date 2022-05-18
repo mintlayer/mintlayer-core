@@ -19,7 +19,7 @@
 use crate::{
     error::{self, P2pError},
     event,
-    net::{self, NetworkService},
+    net::{self, NetworkingService},
     sync,
 };
 use common::chain::block::{Block, BlockHeader};
@@ -46,7 +46,7 @@ pub enum PeerSyncState {
 /// Syncing-related context of the peer
 pub struct PeerContext<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Unique peer ID
     peer_id: T::PeerId,
@@ -61,7 +61,7 @@ where
 
 impl<T> PeerContext<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     pub fn new(peer_id: T::PeerId) -> Self {
         Self {

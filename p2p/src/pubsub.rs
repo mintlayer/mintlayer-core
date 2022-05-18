@@ -20,7 +20,7 @@ use crate::{
     error::{self, P2pError},
     event,
     message::{self, Message, MessageType, PubSubMessage},
-    net::{self, NetworkService, PubSubService},
+    net::{self, NetworkingService, PubSubService},
 };
 use common::chain::ChainConfig;
 use common::primitives::Idable;
@@ -30,66 +30,82 @@ use logging::log;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
+// TODO: figure out proper channel sizes
+const CHANNEL_SIZE: usize = 64;
+
 pub struct PubSubManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     handle: T::PubSubHandle,
-    consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
 }
 
 impl<T> PubSubManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
     T::PubSubHandle: PubSubService<T>,
 {
     pub fn new(
         handle: T::PubSubHandle,
-        consensus: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
     ) -> Self {
-        Self { handle, consensus }
+        Self {
+            handle,
+            consensus_handle,
+        }
     }
 
-    pub async fn on_floodsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
-        // TODO: use `ensure!()` to check all values
-        if let net::PubSubEvent::MessageReceived {
-            peer_id,
-            message_id,
-            message:
-                Message {
-                    magic,
-                    msg: MessageType::PubSub(PubSubMessage::Block(block)),
-                },
-        } = event
-        {
-            let result = match self
-                .consensus
-                .call_mut(move |this| this.process_block(block, consensus::BlockSource::Peer(1337)))
-                .await?
-            {
-                Ok(_) => net::ValidationResult::Accept,
-                Err(err) => {
-                    // TODO: report misbehaviour to swarm manager and close connection
-                    log::error!(
-                        "block rejected, peer id {:?}, message id {:?}, reason, {:?}",
-                        peer_id,
-                        message_id,
-                        err
-                    );
-                    net::ValidationResult::Reject
-                }
-            };
+    pub async fn on_pubsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
+        // TODO: remove one global message type and create multiple message types
+        match event {
+            net::PubSubEvent::MessageReceived {
+                peer_id,
+                message_id,
+                message:
+                    Message {
+                        magic,
+                        msg: MessageType::PubSub(PubSubMessage::Block(block)),
+                    },
+            } => {
+                let result = match self
+                    .consensus_handle
+                    .call_mut(move |this| this.process_block(block, consensus::BlockSource::Peer))
+                    .await?
+                {
+                    Ok(_) => net::ValidationResult::Accept,
+                    Err(err) => {
+                        // TODO: report misbehaviour to swarm manager and close connection
+                        log::error!(
+                            "block rejected, peer id {:?}, message id {:?}, reason, {:?}",
+                            peer_id,
+                            message_id,
+                            err
+                        );
+                        net::ValidationResult::Reject
+                    }
+                };
 
-            return self.handle.report_validation_result(peer_id, message_id, result).await;
+                return self.handle.report_validation_result(peer_id, message_id, result).await;
+            }
+            net::PubSubEvent::MessageReceived {
+                peer_id,
+                message_id: _,
+                message:
+                    Message {
+                        magic: _,
+                        msg: MessageType::Syncing(_),
+                    },
+            } => {
+                // TODO: ban peer
+                log::error!("peer {:?} sent syncing message through pubsub", peer_id);
+                Ok(())
+            }
         }
-
-        // TODO: handle unexpected message
-        todo!();
     }
 
     pub async fn run(&mut self) -> error::Result<()> {
-        // TODO: channel size
-        let (tx, mut rx) = mpsc::channel(16);
+        let (tx, mut rx) = mpsc::channel(CHANNEL_SIZE);
         let config = common::chain::config::create_mainnet();
 
         let subscribe_func =
@@ -97,43 +113,46 @@ where
                 move |consensus_event: consensus::ConsensusEvent| match consensus_event {
                     consensus::ConsensusEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
-                            tx.send(block_id).await.unwrap();
+                            if let Err(e) = tx.send(block_id).await {
+                                log::error!("pubsub manager closed: {:?}", e)
+                            }
                         });
                     }
                 },
             );
 
-        self.consensus
-            .call_mut(move |this| this.subscribe_to_events(subscribe_func))
+        self.consensus_handle
+            .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
-            .unwrap();
+            .map_err(|_| P2pError::SubsystemFailure)?;
 
         loop {
             tokio::select! {
                 event = self.handle.poll_next() => {
-                    self.on_floodsub_event(event?).await?;
+                    self.on_pubsub_event(event?).await?;
                 }
                 block_id = rx.recv().fuse() => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
-                    let block = match self
-                        .consensus
-                        .call_mut(move |this| {
-                            this.get_block(block_id)
-                        })
-                        .await
-                    {
-                        Ok(Ok(Some(block))) => block,
-                        _ => {
-                            // TODO: what to do here?
-                            log::error!("error occurred with trying to get best block");
-                            return Err(P2pError::InvalidData);
-                        }
-                    };
+                    let block = self
+                        .consensus_handle
+                        .call(|this| this.get_block(block_id))
+                        .await??;
 
-                    self.handle.publish(message::Message {
-                        magic: *config.magic_bytes(),
-                        msg: message::MessageType::PubSub(message::PubSubMessage::Block(block))
-                    }).await?;
+                    match block {
+                        Some(block) => {
+                            self.handle
+                                .publish(message::Message {
+                                    magic: *config.magic_bytes(),
+                                    msg: message::MessageType::PubSub(
+                                        message::PubSubMessage::Block(block),
+                                    ),
+                                })
+                                .await?;
+                        }
+                        None => {
+                            log::error!("CRITICAL: best block not available")
+                        }
+                    }
                 }
             }
         }

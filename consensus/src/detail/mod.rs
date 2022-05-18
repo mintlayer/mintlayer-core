@@ -41,7 +41,6 @@ mod error;
 pub use error::*;
 mod pow;
 
-type PeerId = u32;
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
@@ -64,7 +63,7 @@ pub struct Consensus {
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum BlockSource {
-    Peer(PeerId),
+    Peer,
     Local,
 }
 
