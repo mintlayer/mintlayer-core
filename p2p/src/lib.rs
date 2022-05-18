@@ -124,9 +124,11 @@ where
         });
 
         let sync_handle = consensus.clone();
+        let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            if let Err(e) =
-                sync::SyncManager::<T>::new(sync, sync_handle, rx_sync, rx_p2p_sync).run().await
+            if let Err(e) = sync::SyncManager::<T>::new(sync_config, sync, sync_handle, rx_p2p_sync)
+                .run()
+                .await
             {
                 log::error!("SyncManager failed: {:?}", e);
             }

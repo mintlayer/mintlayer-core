@@ -12,14 +12,18 @@ parity-scale-codec = "3.1.2"
 rand = "0.8.4"
 void = "1.0.2"
 itertools = "0.10.3"
+lazy_static = "1.4.0"
 sscanf = "0.2.1"
 jsonrpsee = { version = "0.13.1", features = ["macros"] }
+
 common = { path = "../common/" }
 consensus = { path = "../consensus/" }
 logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
+crypto = { path = "../crypto/" }
+util = { path = "src/util"}
 
 [dependencies.libp2p]
 version = "0.44.0"
