@@ -83,7 +83,7 @@ fn do_validate(
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => todo!(),
-        RequiredConsensus::DSA => todo!(),
+        RequiredConsensus::PoS => Err(BlockError::UnsupportedConsensusType),
+        RequiredConsensus::DSA => Err(BlockError::UnsupportedConsensusType),
     }
 }

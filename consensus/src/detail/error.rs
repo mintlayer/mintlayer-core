@@ -99,6 +99,8 @@ pub enum BlockError {
     ConsensusTypeMismatch(String),
     #[error("Conversion failed: `{0:?}`")]
     Conversion(String),
+    #[error("Unsupported consensus type")]
+    UnsupportedConsensusType,
 }
 
 impl From<blockchain_storage::Error> for BlockError {
