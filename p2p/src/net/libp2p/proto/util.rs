@@ -52,7 +52,7 @@ use libp2p::{
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -77,7 +77,9 @@ pub async fn make_libp2p(
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&id_keys)
+        .expect("noise keys not authentic");
 
     let transport = TcpConfig::new()
         .nodelay(true)
@@ -111,7 +113,7 @@ pub async fn make_libp2p(
         );
 
         let mut behaviour = types::ComposedBehaviour {
-            mdns: Mdns::new(Default::default()).await.unwrap(),
+            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping: ping::Behaviour::new(
                 ping::Config::new()
                     .with_timeout(std::time::Duration::from_secs(60))
@@ -145,7 +147,7 @@ pub async fn make_libp2p(
     let (conn_tx, conn_rx) = mpsc::channel(64);
     let (sync_tx, sync_rx) = mpsc::channel(64);
 
-    swarm.listen_on(addr).unwrap();
+    swarm.listen_on(addr).expect("swarm listen failed");
     (
         Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, true),
         cmd_tx,
@@ -170,7 +172,9 @@ pub async fn make_libp2p_with_ping(
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&id_keys)
+        .expect("noise keys not authentic");
 
     let transport = TcpConfig::new()
         .nodelay(true)
@@ -204,7 +208,7 @@ pub async fn make_libp2p_with_ping(
         );
 
         let mut behaviour = types::ComposedBehaviour {
-            mdns: Mdns::new(Default::default()).await.unwrap(),
+            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
@@ -233,7 +237,7 @@ pub async fn make_libp2p_with_ping(
     let (conn_tx, conn_rx) = mpsc::channel(64);
     let (sync_tx, sync_rx) = mpsc::channel(64);
 
-    swarm.listen_on(addr).unwrap();
+    swarm.listen_on(addr).expect("swarm listen failed");
     (
         Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, true),
         cmd_tx,
@@ -248,7 +252,7 @@ where
     A: NetworkBehaviour,
     B: NetworkBehaviour,
 {
-    swarm2.dial(addr).unwrap();
+    swarm2.dial(addr).expect("swarm dial failed");
 
     loop {
         tokio::select! {
@@ -271,7 +275,9 @@ where
 pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, identity::Keypair) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
-    let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys).unwrap();
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&id_keys)
+        .expect("noise keys not authentic");
 
     (
         TcpConfig::new()

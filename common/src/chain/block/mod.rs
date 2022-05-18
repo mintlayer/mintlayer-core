@@ -100,10 +100,11 @@ impl Block {
         time: u32,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
+        type BlockWithVersion = BlockV1;
+
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
-        type BlockWithVersion = BlockV1;
         let version_value = <BlockWithVersion as BlockVersion>::BLOCK_VERSION;
 
         let header = BlockHeader {
@@ -129,10 +130,11 @@ impl Block {
         prev_block_hash: Option<Id<Block>>,
         time: u32,
     ) -> Result<Self, BlockCreationError> {
+        type BlockWithVersion = BlockV1;
+
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
-        type BlockWithVersion = BlockV1;
         let version_value = <BlockWithVersion as BlockVersion>::BLOCK_VERSION;
 
         let header = BlockHeader {

@@ -70,7 +70,7 @@ async fn test_libp2p_peer_discovery() {
                         let mut components = addr.iter();
                         assert!(matches!(
                             components.next(),
-                            Some(Protocol::Ip6(_)) | Some(Protocol::Ip4(_))
+                            Some(Protocol::Ip6(_) | Protocol::Ip4(_))
                         ));
                         assert!(matches!(components.next(), Some(Protocol::Tcp(_))));
                         assert!(matches!(components.next(), Some(Protocol::P2p(_))));

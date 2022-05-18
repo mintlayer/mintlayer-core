@@ -403,7 +403,7 @@ impl Script {
     /// Create an assembly decoding of the script in the given byte slice.
     pub fn bytes_to_asm(script: &[u8]) -> String {
         let mut buf = String::new();
-        Script::bytes_to_asm_fmt(script, &mut buf).unwrap();
+        Script::bytes_to_asm_fmt(script, &mut buf).expect("formatting error");
         buf
     }
 

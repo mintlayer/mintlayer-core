@@ -22,7 +22,7 @@ use crate::{
 };
 use libp2p::{gossipsub::GossipsubEvent, identify::Identify, swarm::SwarmBuilder};
 use logging::log;
-use parity_scale_codec::Decode;
+use serialization::Decode;
 
 impl Backend {
     pub async fn on_gossipsub_event(&mut self, event: GossipsubEvent) -> error::Result<()> {
@@ -106,7 +106,7 @@ mod tests {
         swarm::SwarmEvent,
         Multiaddr, PeerId,
     };
-    use parity_scale_codec::Encode;
+    use serialization::Encode;
     use std::{collections::HashSet, sync::Arc};
 
     impl PartialEq for types::PubSubEvent {

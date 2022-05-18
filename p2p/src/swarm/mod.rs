@@ -171,16 +171,16 @@ where
 
                 // TODO: let user specify their preference?
                 let addr = if ip6.is_empty() {
-                    Arc::clone(ip4.iter().next().unwrap())
+                    Arc::clone(ip4.iter().next().expect("ip4 empty"))
                 } else {
-                    Arc::clone(ip6.iter().next().unwrap())
+                    Arc::clone(ip6.iter().next().expect("ip6 empty"))
                 };
 
                 (*peer_info.0, addr)
             })
             .collect::<_>();
 
-        for (id, addr) in peers.into_iter() {
+        for (id, addr) in peers {
             log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
 
             // TODO: don't remove entry but modify it
