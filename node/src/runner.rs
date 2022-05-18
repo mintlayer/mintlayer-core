@@ -3,8 +3,8 @@
 use crate::options::Options;
 use common::chain::config::ChainType;
 use consensus::rpc::ConsensusRpcServer;
-use std::sync::Arc;
 use p2p::rpc::P2pRpcServer;
+use std::sync::Arc;
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -31,7 +31,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Consensus subsystem
     let consensus = manager.add_subsystem(
         "consensus",
-        consensus::make_consensus(chain_config, storage.clone())?,
+        consensus::make_consensus(Arc::clone(&chain_config), storage.clone())?,
     );
 
     // P2P subsystem

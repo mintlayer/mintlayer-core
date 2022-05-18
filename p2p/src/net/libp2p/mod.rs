@@ -281,6 +281,8 @@ impl NetworkService for Libp2pService {
                 version.patch,
                 chain_config.magic_bytes_as_u32(),
             );
+            let mut req_cfg = RequestResponseConfig::default();
+            req_cfg.set_request_timeout(std::time::Duration::from_secs(5));
 
             let mut behaviour = types::ComposedBehaviour {
                 mdns: Mdns::new(Default::default()).await?,
@@ -295,7 +297,7 @@ impl NetworkService for Libp2pService {
                 sync: RequestResponse::new(
                     SyncingCodec(),
                     iter::once((SyncingProtocol(), ProtocolSupport::Full)),
-                    RequestResponseConfig::default(),
+                    req_cfg,
                 ),
                 gossipsub: Gossipsub::new(
                     MessageAuthenticity::Signed(id_keys.clone()),

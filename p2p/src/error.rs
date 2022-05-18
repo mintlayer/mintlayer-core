@@ -53,10 +53,15 @@ pub enum P2pError {
     PeerDoesntExist,
     InvalidAddress,
     InvalidData,
+    PeerExists,
 }
 
 // TODO: move this to src/lib.rs
 pub type Result<T> = core::result::Result<T, P2pError>;
+
+pub trait FatalError {
+    fn into_fatal(self) -> core::result::Result<(), P2pError>;
+}
 
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {

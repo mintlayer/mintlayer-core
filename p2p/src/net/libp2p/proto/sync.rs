@@ -60,12 +60,22 @@ impl Backend {
                 log::debug!("response sent, request id {:?}", request_id);
                 Ok(())
             }
-            RequestResponseEvent::OutboundFailure { peer, .. } => {
-                log::error!("outbound failure, destroy peer info, inform front-end");
+            RequestResponseEvent::OutboundFailure {
+                peer,
+                request_id,
+                error,
+            } => {
+                println!("outbound error happened: {:?}", error);
+                // log::error!("outbound failure, destroy peer info, inform front-end");
                 Ok(())
             }
-            RequestResponseEvent::InboundFailure { peer, .. } => {
-                log::error!("inbound failure, destroy peer info, inform front-end");
+            RequestResponseEvent::InboundFailure {
+                peer,
+                request_id,
+                error,
+            } => {
+                println!("inbound error happened: {:?}", error);
+                // log::error!("inbound failure, destroy peer info, inform front-end");
                 Ok(())
             }
         }
