@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::detail::tests::test_framework::BlockTestFrameWork;
+use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use blockchain_storage::Store;
 use common::chain::block::consensus_data::PoWData;
@@ -251,8 +251,8 @@ fn test_straight_chain() {
 
 #[test]
 fn test_get_ancestor() {
-    use crate::detail::tests::test_framework::BlockTestFrameWork;
-    let mut btf = BlockTestFrameWork::new();
+    use crate::detail::tests::test_framework::BlockTestFramework;
+    let mut btf = BlockTestFramework::new();
     btf.create_chain(&btf.genesis().get_id(), 3).expect("Chain creation to succeed");
     let block_2_index = btf.block_indexes[2].clone();
     let block_1_index = btf.block_indexes[1].clone();
@@ -338,7 +338,7 @@ fn test_consensus_type() {
     let config = ChainConfigBuilder::new().with_net_upgrades(net_upgrades).build();
     let consensus = ConsensusBuilder::new().with_config(config.clone()).build();
 
-    let mut btf = BlockTestFrameWork::with_consensus(consensus);
+    let mut btf = BlockTestFramework::with_consensus(consensus);
 
     // The next block will have height 1. At this height, we are still under IngoreConsenssu, so
     // processing a block with PoWData will fail
@@ -469,7 +469,7 @@ fn test_pow() {
     let config = ChainConfigBuilder::new().with_net_upgrades(net_upgrades).build();
     let consensus = ConsensusBuilder::new().with_config(config).build();
 
-    let mut btf = BlockTestFrameWork::with_consensus(consensus);
+    let mut btf = BlockTestFramework::with_consensus(consensus);
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
