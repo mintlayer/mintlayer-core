@@ -23,7 +23,6 @@ rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 crypto = { path = "../crypto/" }
-util = { path = "src/util"}
 
 [dependencies.libp2p]
 version = "0.44.0"

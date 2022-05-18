@@ -18,11 +18,10 @@
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{NetworkService, PubSubTopic},
+    net::{NetworkingService, PubSubTopic},
 };
 use async_trait::async_trait;
 use futures::FutureExt;
-// use futures_timer::Delay;
 use logging::log;
 use serialization::{Decode, Encode};
 use std::{
@@ -50,7 +49,7 @@ pub struct Backend {
     conn_tx: mpsc::Sender<types::ConnectivityEvent>,
 
     /// TX channel for sending events to the frontend
-    _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+    _pubsub_tx: mpsc::Sender<types::PubSubEvent>,
 
     /// Timeout for outbound operations
     timeout: std::time::Duration,
@@ -62,7 +61,7 @@ impl Backend {
         socket: TcpListener,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
-        _flood_tx: mpsc::Sender<types::FloodsubEvent>,
+        _pubsub_tx: mpsc::Sender<types::PubSubEvent>,
         _sync_tx: mpsc::Sender<types::SyncingEvent>,
         timeout: std::time::Duration,
     ) -> Self {
@@ -71,7 +70,7 @@ impl Backend {
             socket,
             cmd_rx,
             conn_tx,
-            _flood_tx,
+            _pubsub_tx,
             timeout,
         }
     }

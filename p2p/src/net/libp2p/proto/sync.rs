@@ -65,8 +65,8 @@ impl Backend {
                 request_id,
                 error,
             } => {
-                println!("outbound error happened: {:?}", error);
-                // log::error!("outbound failure, destroy peer info, inform front-end");
+                // TODO: report to peer manager, should not be possible
+                log::error!("outbound failure, destroy peer info, inform front-end");
                 Ok(())
             }
             RequestResponseEvent::InboundFailure {
@@ -74,8 +74,9 @@ impl Backend {
                 request_id,
                 error,
             } => {
-                println!("inbound error happened: {:?}", error);
-                // log::error!("inbound failure, destroy peer info, inform front-end");
+                // TODO: report to peer manager,
+                // https://docs.rs/libp2p-request-response/latest/libp2p_request_response/enum.InboundFailure.html
+                log::error!("inbound failure, destroy peer info, inform front-end");
                 Ok(())
             }
         }

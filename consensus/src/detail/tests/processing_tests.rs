@@ -38,7 +38,7 @@ fn test_process_genesis_block_wrong_block_source() {
         let mut consensus = Consensus::new_no_genesis(config.clone(), storage).unwrap();
 
         // process the genesis block
-        let block_source = BlockSource::Peer(0);
+        let block_source = BlockSource::Peer;
         let result = consensus.process_block(config.genesis_block().clone(), block_source);
         assert_eq!(result.unwrap_err(), BlockError::InvalidBlockSource);
     });
@@ -223,8 +223,8 @@ fn test_straight_chain() {
                 .flatten()
                 .expect("Unable to get best block ID");
             assert_eq!(&best_block_id, block_index.get_block_id());
-            let block_source = BlockSource::Peer(1);
-            let new_block = produce_test_block(&prev_block, false);
+            let block_source = BlockSource::Peer;
+            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
             let new_block_index = dbg!(consensus.process_block(new_block.clone(), block_source))
                 .ok()
                 .flatten()

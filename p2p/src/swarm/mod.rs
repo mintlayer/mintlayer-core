@@ -19,7 +19,7 @@
 use crate::{
     error::{self, P2pError, ProtocolError},
     event,
-    net::{self, ConnectivityService, NetworkService},
+    net::{self, ConnectivityService, NetworkingService},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
@@ -37,14 +37,14 @@ const MAX_ACTIVE_CONNECTIONS: usize = 32;
 #[derive(Debug)]
 struct PeerContext<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     info: net::PeerInfo<T>,
 }
 
 enum PeerAddrInfo<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     Raw {
         /// Hashset of IPv4 addresses
@@ -55,9 +55,9 @@ where
     },
 }
 
-pub struct SwarmManager<T>
+pub struct PeerManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Chain config
     config: Arc<ChainConfig>,
@@ -78,9 +78,9 @@ where
     tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
 }
 
-impl<T> SwarmManager<T>
+impl<T> PeerManager<T>
 where
-    T: NetworkService + 'static,
+    T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     pub fn new(
@@ -125,6 +125,9 @@ where
                         log::error!("failed to establish outbound connection: {:?}", err);
                         err
                     })
+            }
+            event::SwarmEvent::GetPeerCount(response) => {
+                response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
         }
     }
@@ -332,7 +335,7 @@ where
         }
     }
 
-    /// SwarmManager event loop
+    /// PeerManager event loop
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {
@@ -365,9 +368,9 @@ mod tests {
     async fn make_swarm_manager<T>(
         addr: T::Address,
         config: Arc<common::chain::ChainConfig>,
-    ) -> SwarmManager<T>
+    ) -> PeerManager<T>
     where
-        T: NetworkService + 'static,
+        T: NetworkingService + 'static,
         T::ConnectivityHandle: ConnectivityService<T>,
     {
         let (conn, _, _) = T::start(
@@ -388,7 +391,7 @@ mod tests {
             }
         });
 
-        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
+        PeerManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
     }
 
     // try to connect to an address that no one listening on and verify it fails
@@ -439,12 +442,12 @@ mod tests {
         // check that peer with `id` has the correct ipv4 and ipv6 addresses
         let check_peer =
             |discovered: &HashMap<
-                <Libp2pService as NetworkService>::PeerId,
+                <Libp2pService as NetworkingService>::PeerId,
                 PeerAddrInfo<Libp2pService>,
             >,
              id: libp2p::PeerId,
-             ip4: Vec<Arc<<Libp2pService as NetworkService>::Address>>,
-             ip6: Vec<Arc<<Libp2pService as NetworkService>::Address>>| {
+             ip4: Vec<Arc<<Libp2pService as NetworkingService>::Address>>,
+             ip6: Vec<Arc<<Libp2pService as NetworkingService>::Address>>| {
                 let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
                     PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
                 };
