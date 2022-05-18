@@ -94,7 +94,7 @@ pub enum BlockError {
     #[error("Internal block representation is invalid `{0}`")]
     BlockConsistencyError(BlockConsistencyError),
     #[error("No PoW data for block")]
-    NoPowData,
+    NoPowDataInPreviousBlock,
     #[error("Block consensus type does not match our chain configuration: `{0:?}`")]
     ConsensusTypeMismatch(String),
     #[error("Conversion failed: `{0:?}`")]

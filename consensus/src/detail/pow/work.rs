@@ -109,14 +109,15 @@ impl PoW {
         new_block_time: u32,
         db_accessor: &dyn BlockIndexHandle,
     ) -> Result<Compact, BlockError> {
-        //TODO: check prev_block_index exists
+        let prev_block_consensus_data = prev_block_index.get_block_header().consensus_data();
+        // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
+        // block was PoW
+        debug_assert!(matches!(prev_block_consensus_data, ConsensusData::PoW(..)));
         let prev_block_bits = {
-            if let ConsensusData::PoW(pow_data) =
-                prev_block_index.get_block_header().consensus_data()
-            {
+            if let ConsensusData::PoW(pow_data) = prev_block_consensus_data {
                 pow_data.bits()
             } else {
-                return Err(BlockError::NoPowData);
+                return Err(BlockError::NoPowDataInPreviousBlock);
             }
         };
 
@@ -135,7 +136,11 @@ impl PoW {
         if !due_for_retarget(adjustment_interval, current_height) {
             return if self.allow_min_difficulty_blocks() {
                 // special difficulty rules
-                Ok(self.next_work_required_for_min_difficulty(new_block_time, prev_block_index))
+                Ok(self.next_work_required_for_min_difficulty(
+                    new_block_time,
+                    prev_block_index,
+                    prev_block_bits,
+                ))
             } else {
                 Ok(prev_block_bits)
             };
@@ -143,7 +148,7 @@ impl PoW {
 
         let retarget_block_time =
             get_starting_block_time(adjustment_interval, prev_block_index, db_accessor)?;
-        self.next_work_required(retarget_block_time, prev_block_index)
+        self.next_work_required(retarget_block_time, prev_block_index, prev_block_bits)
     }
 
     /// retargeting proof of work
@@ -151,20 +156,11 @@ impl PoW {
         &self,
         retarget_block_time: u32,
         prev_block_index: &BlockIndex,
+        prev_block_bits: Compact,
     ) -> Result<Compact, BlockError> {
         // limit adjustment step
         let actual_timespan_of_last_interval =
             self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
-
-        let prev_block_bits = {
-            if let ConsensusData::PoW(pow_data) =
-                prev_block_index.get_block_header().consensus_data()
-            {
-                pow_data.bits()
-            } else {
-                return Err(BlockError::NoPowData);
-            }
-        };
 
         calculate_new_target(
             actual_timespan_of_last_interval,
@@ -179,6 +175,7 @@ impl PoW {
         &self,
         new_block_time: u32,
         prev_block_index: &BlockIndex,
+        prev_block_bits: Compact,
     ) -> Compact {
         // If the new block's timestamp is more than 2 * 10 minutes
         // then allow mining of a min-difficulty block.
@@ -187,11 +184,10 @@ impl PoW {
             new_block_time,
             prev_block_index.get_block_time(),
         ) {
-            return Compact::from(self.difficulty_limit());
+            Compact::from(self.difficulty_limit())
+        } else {
+            prev_block_bits
         }
-
-        // Return the last non-special-min-difficulty-rules-block
-        special_rules::last_non_special_min_difficulty(prev_block_index)
     }
 }
 

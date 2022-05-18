@@ -96,7 +96,6 @@ pub fn calculate_new_target(
 }
 
 pub mod special_rules {
-    use super::*;
 
     /// Checks if it took > 20 minutes to find a block
     pub fn block_production_stalled(
@@ -105,25 +104,6 @@ pub mod special_rules {
         prev_block_time: u32,
     ) -> bool {
         new_block_time as u64 > (prev_block_time as u64 + (target_spacing_in_secs * 2))
-    }
-
-    pub fn last_non_special_min_difficulty(_block_index: &BlockIndex) -> Compact {
-        // Return the last non-special-min-difficulty-rules-block
-        // let mut ctr_index = block_index.clone();
-        // loop {
-        //     let block_bits = ctr_index.data.bits();
-        //     if ctr_index.height == BlockHeight::zero() {
-        //         return block_bits;
-        //     }
-        //
-        //     if due_for_retarget(pow_cfg, ctr_index.height) && block_bits == pow_cfg.limit() {
-        //         match ctr_index.prev() {
-        //             None => { return block_bits; }
-        //             Some(id) => {   }
-        //         }
-        //     }
-        // }
-        todo!()
     }
 }
 

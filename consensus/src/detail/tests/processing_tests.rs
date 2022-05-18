@@ -253,41 +253,89 @@ fn test_straight_chain() {
 fn test_get_ancestor() {
     use crate::detail::tests::test_framework::BlockTestFramework;
     let mut btf = BlockTestFramework::new();
-    btf.create_chain(&btf.genesis().get_id(), 3).expect("Chain creation to succeed");
-    let block_2_index = btf.block_indexes[2].clone();
-    let block_1_index = btf.block_indexes[1].clone();
-    let block_0_index = btf.block_indexes[0].clone();
+
+    // We will create two chains that split at height 100
+    const SPLIT_HEIGHT: usize = 100;
+    const ANCESTOR_HEIGHT: usize = 50;
+    const FIRST_CHAIN_HEIGHT: usize = 500;
+    const SECOND_CHAIN_LENGTH: usize = 300;
+    btf.create_chain(&btf.genesis().get_id(), SPLIT_HEIGHT)
+        .expect("Chain creation to succeed");
+
+    let ancestor = btf.block_indexes[ANCESTOR_HEIGHT].clone();
+    let split = btf.block_indexes[SPLIT_HEIGHT].clone();
+
+    // Create the first chain and test get_ancestor for this chain's  last block
+    btf.create_chain(split.get_block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
+        .expect("second chain");
+    let last_block_in_first_chain =
+        btf.block_indexes.last().expect("last block in first chain").clone();
+
+    const ANCESTOR_IN_FIRST_CHAIN_HEIGHT: usize = 400;
+    let ancestor_in_first_chain = btf
+        .block_indexes
+        .get(ANCESTOR_IN_FIRST_CHAIN_HEIGHT)
+        .expect("ancestor in first chain")
+        .clone();
 
     assert_eq!(
-        block_1_index,
+        last_block_in_first_chain,
         btf.consensus
             .make_db_tx()
-            .get_ancestor(&block_2_index, 1.into())
+            .get_ancestor(
+                &last_block_in_first_chain,
+                u64::try_from(FIRST_CHAIN_HEIGHT).unwrap().into()
+            )
             .expect("ancestor")
     );
 
     assert_eq!(
-        block_0_index,
+        ancestor,
         btf.consensus
             .make_db_tx()
-            .get_ancestor(&block_2_index, 0.into())
+            .get_ancestor(
+                &last_block_in_first_chain,
+                u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
+            )
             .expect("ancestor")
     );
 
     assert_eq!(
-        block_0_index,
+        ancestor_in_first_chain,
         btf.consensus
             .make_db_tx()
-            .get_ancestor(&block_0_index, 0.into())
+            .get_ancestor(
+                &last_block_in_first_chain,
+                u64::try_from(ANCESTOR_IN_FIRST_CHAIN_HEIGHT).unwrap().into()
+            )
+            .expect("ancestor in first chain")
+    );
+
+    // Create a second chain and test get_ancestor for this chain's last block
+    btf.create_chain(split.get_block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
+        .expect("second chain");
+    let last_block_in_second_chain =
+        btf.block_indexes.last().expect("last block in first chain").clone();
+    assert_eq!(
+        ancestor,
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(
+                &last_block_in_second_chain,
+                u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
+            )
             .expect("ancestor")
     );
-    // ERROR
+
     assert_eq!(
         Err(BlockError::InvalidAncestorHeight {
-            ancestor_height: 2.into(),
-            block_height: 1.into(),
+            ancestor_height: u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into(),
+            block_height: u64::try_from(SECOND_CHAIN_LENGTH).unwrap().into(),
         }),
-        btf.consensus.make_db_tx().get_ancestor(&block_1_index, 2.into())
+        btf.consensus.make_db_tx().get_ancestor(
+            &last_block_in_second_chain,
+            u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into()
+        )
     );
 }
 

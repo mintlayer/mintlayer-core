@@ -166,6 +166,7 @@ impl NetUpgrades<UpgradeVersion> {
                 if *last_upgrade_height < height {
                     RequiredConsensus::PoW(PoWStatus::Ongoing)
                 } else {
+                    debug_assert_eq!(*last_upgrade_height, height);
                     RequiredConsensus::PoW(PoWStatus::Threshold {
                         initial_difficulty: *initial_difficulty,
                     })
