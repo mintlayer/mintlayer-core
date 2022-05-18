@@ -415,6 +415,7 @@ mod tests {
             .unwrap();
 
         assert_ne!(req_id1, req_id2);
+        let mut first_req_id = req_id1;
 
         let (recv_req1_id, request1) = if let Ok(net::SyncingMessage::Request {
             peer_id: _,
@@ -426,8 +427,6 @@ mod tests {
         } else {
             panic!("invalid data received");
         };
-
-        // TODO: force order?
 
         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
             peer_id: _,
@@ -459,7 +458,8 @@ mod tests {
             response,
         }) = mgr1.handle.poll_next().await
         {
-            assert_eq!(request_id, req_id2);
+            first_req_id = request_id;
+            assert!(request_id == req_id2 || request_id == req_id1);
             assert_eq!(
                 response,
                 Message {
@@ -492,7 +492,12 @@ mod tests {
             response,
         }) = mgr1.handle.poll_next().await
         {
-            assert_eq!(request_id, req_id1);
+            if first_req_id == req_id1 {
+                assert_eq!(request_id, req_id2);
+            } else {
+                assert_eq!(request_id, req_id1);
+            }
+
             assert_eq!(
                 response,
                 Message {
