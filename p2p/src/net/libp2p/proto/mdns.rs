@@ -69,6 +69,7 @@ mod tests {
     };
     use std::collections::HashMap;
 
+    #[ignore]
     #[tokio::test]
     async fn test_on_discovered() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
@@ -112,6 +113,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_on_discovered_no_relay() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
@@ -158,6 +160,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_on_expired() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
@@ -211,6 +214,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_on_expired_no_relay() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
@@ -255,6 +259,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn test_mdns_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
