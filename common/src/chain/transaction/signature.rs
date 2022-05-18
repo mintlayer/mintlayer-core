@@ -148,9 +148,107 @@ pub fn verify_signature(
 
 #[cfg(test)]
 mod test {
+    use std::vec;
+
+    use crypto::key::{KeyKind, PrivateKey};
+
+    use super::{
+        inputsig::{InputWitness, StandardInputSignature},
+        sighashtype::SigHashType,
+    };
+    use crate::{
+        chain::{
+            signature::verify_signature, Destination, Transaction, TransactionCreationError,
+            TxInput, TxOutput,
+        },
+        primitives::{Amount, Id, H256},
+    };
+
+    fn generate_tx(
+        private_key: PrivateKey,
+        sighash_type: SigHashType,
+        dest: Destination,
+    ) -> Result<Transaction, TransactionCreationError> {
+        let mut tx = Transaction::new(
+            0,
+            vec![
+                TxInput::new(
+                    Id::<Transaction>::new(&H256::zero()).into(),
+                    0,
+                    InputWitness::NoSignature(None),
+                ),
+                TxInput::new(
+                    Id::<Transaction>::new(&H256::random()).into(),
+                    1,
+                    InputWitness::NoSignature(None),
+                ),
+            ],
+            vec![TxOutput::new(Amount::from_atoms(100), dest.clone())],
+            0,
+        )?;
+
+        let signature = StandardInputSignature::produce_signature_for_input(
+            &private_key,
+            sighash_type,
+            dest.clone(),
+            &tx,
+            0,
+        )
+        .unwrap();
+
+        tx.update_witness(0, InputWitness::Standard(signature.clone())).unwrap();
+        Ok(tx)
+    }
+
+    fn sign_tx(
+        tx: &mut Transaction,
+        private_key: &PrivateKey,
+        sighash_type: SigHashType,
+        dest: Destination,
+    ) {
+        for i in 0..tx.get_inputs().len() {
+            let input_sign = StandardInputSignature::produce_signature_for_input(
+                private_key,
+                sighash_type,
+                dest.clone(),
+                &tx,
+                0,
+            )
+            .unwrap();
+            tx.update_witness(i, InputWitness::Standard(input_sign)).unwrap();
+        }
+    }
+
     #[test]
     #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn sign_and_verify() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let outpoint_dest = Destination::PublicKey(public_key);
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let mut tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_ok());
+        // ALL
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+        // NONE
+        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+        // SINGLE
+        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+        // ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
     }
 }

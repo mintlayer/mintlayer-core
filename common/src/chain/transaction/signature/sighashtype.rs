@@ -26,13 +26,13 @@ use super::TransactionSigError;
 pub struct SigHashType(u8);
 
 impl SigHashType {
-    const ALL: u8 = 0x01;
-    const NONE: u8 = 0x02;
-    const SINGLE: u8 = 0x03;
-    const ANYONECANPAY: u8 = 0x80;
+    pub const ALL: u8 = 0x01;
+    pub const NONE: u8 = 0x02;
+    pub const SINGLE: u8 = 0x03;
+    pub const ANYONECANPAY: u8 = 0x80;
 
-    const MASK_OUT: u8 = 0x7f;
-    const MASK_IN: u8 = 0x80;
+    pub const MASK_OUT: u8 = 0x7f;
+    pub const MASK_IN: u8 = 0x80;
 
     pub fn inputs_mode(&self) -> InputsMode {
         match self.0 & Self::MASK_IN {

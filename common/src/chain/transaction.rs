@@ -31,6 +31,8 @@ pub mod signature;
 pub mod transaction_index;
 pub use transaction_index::*;
 
+use self::signature::inputsig::InputWitness;
+
 mod transaction_v1;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
@@ -114,6 +116,12 @@ impl Transaction {
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
         match &self {
             Transaction::V1(tx) => tx.get_serialized_hash(),
+        }
+    }
+
+    pub fn update_witness(&mut self, input_index: usize, witness: InputWitness) -> Result<(), ()> {
+        match self {
+            Transaction::V1(tx) => tx.update_witness(input_index, witness),
         }
     }
 }

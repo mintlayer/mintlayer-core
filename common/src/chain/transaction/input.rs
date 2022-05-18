@@ -112,6 +112,10 @@ impl TxInput {
     pub fn get_witness(&self) -> &InputWitness {
         &self.witness
     }
+
+    pub fn update_witness(&mut self, witness: InputWitness) {
+        self.witness = witness
+    }
 }
 
 #[cfg(test)]
