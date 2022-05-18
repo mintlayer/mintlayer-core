@@ -574,7 +574,9 @@ impl<'a> ConsensusRef<'a> {
     fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
         if self.db_tx.get_block_index(block_index.get_block_id())?.is_some() {
-            return Err(BlockError::Unknown);
+            return Err(BlockError::BlockAlreadyExists(
+                block_index.get_block_id().to_owned(),
+            ));
         }
         // TODO: Will be expanded
         Ok(())
