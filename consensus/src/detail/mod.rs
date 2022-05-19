@@ -170,6 +170,11 @@ impl Consensus {
         Ok(result)
     }
 
+    // TODO: implement
+    pub fn preliminary_block_check(&self, _block: Block) -> Result<(), BlockError> {
+        Ok(())
+    }
+
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
         let consensus_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB

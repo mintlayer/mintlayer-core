@@ -32,6 +32,12 @@ impl ConsensusInterface for ConsensusInterfaceImpl {
         Ok(())
     }
 
+    fn preliminary_block_check(&self, block: Block) -> Result<(), ConsensusError> {
+        self.consensus
+            .preliminary_block_check(block)
+            .map_err(ConsensusError::ProcessBlockError)
+    }
+
     fn get_best_block_id(&self) -> Result<Id<Block>, ConsensusError> {
         Ok(self
             .consensus
