@@ -27,7 +27,7 @@ use common::{
         block::{Block, BlockHeader},
         config::ChainConfig,
     },
-    primitives::Idable,
+    primitives::{Id, Idable},
 };
 use consensus::{consensus_interface, BlockError, BlockSource, ConsensusError::ProcessBlockError};
 use futures::FutureExt;
@@ -217,7 +217,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
-        headers: Vec<BlockHeader>,
+        headers: Vec<Id<Block>>,
     ) -> error::Result<()> {
         log::trace!(
             "received a block request from peer {:?}, header counter {}",
@@ -225,11 +225,15 @@ where
             headers.len(),
         );
 
+        if headers.len() != 1 {
+            log::error!("expected 1 header, received {} headers", headers.len());
+            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        }
+
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-        debug_assert!(headers.len() == 1);
         let blocks = vec![self
             .consensus_handle
-            .call(move |this| this.get_block(headers[0].get_id()))
+            .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
             .await??
             // TODO: remove unwrap
             .unwrap()];
@@ -273,7 +277,7 @@ where
                             magic: *self.config.magic_bytes(),
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![next_block.to_owned()],
+                                    headers: vec![next_block.get_id()],
                                 },
                             )),
                         },
@@ -294,14 +298,17 @@ where
         blocks: Vec<Block>,
     ) -> error::Result<()> {
         log::trace!("received {} blocks from peer {:?}", blocks.len(), peer_id,);
-        // TODO: remove
-        debug_assert!(blocks.len() == 1);
+
+        if blocks.len() != 1 {
+            log::error!("expected 1 block, received {} blocks", blocks.len());
+            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        }
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
         // TODO: check error, ban peer
-        let header = blocks[0].header().clone();
-        let block = blocks[0].to_owned();
+        let block = blocks.get(0).expect("block to exist").clone();
+        let header = blocks.get(0).expect("block to exist").header();
         let result = self
             .consensus_handle
             .call_mut(move |this| this.process_block(block, BlockSource::Peer))
@@ -315,7 +322,8 @@ where
             Err(e) => return Err(P2pError::ConsensusError(e)),
         }
 
-        let next_header = peer.register_block_response((blocks[0]).header());
+        let next_header =
+            peer.register_block_response((blocks.get(0).expect("block to exist")).header());
         match next_header {
             Ok(Some(next_block)) => {
                 // TODO: save request ids somewhere?
@@ -327,7 +335,7 @@ where
                             magic: *self.config.magic_bytes(),
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![next_block.clone()],
+                                    headers: vec![next_block.get_id()],
                                 },
                             )),
                         },
@@ -494,918 +502,271 @@ where
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::net::{
-//         libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
-//         SyncingService,
-//     };
-//     use common::chain::config;
-//     use libp2p::{multiaddr::Protocol, PeerId};
-//     use std::net::SocketAddr;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        event::{PubSubControlEvent, SyncControlEvent},
+        net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
+    };
+    use consensus::make_consensus;
+    use libp2p::PeerId;
 
-//     macro_rules! get_message {
-//         ($expression:expr, $($pattern:pat_param)|+, $ret:expr) => {
-//             match $expression {
-//                 $($pattern)|+ => $ret,
-//                 _ => panic!("invalid message received")
-//             }
-//         }
-//     }
-//     async fn make_sync_manager<T>(
-//         addr: T::Address,
-//     ) -> (
-//         SyncManager<T>,
-//         T::ConnectivityHandle,
-//         mpsc::Sender<event::SyncControlEvent<T>>,
-// <<<<<<< HEAD
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         mpsc::Sender<event::PeerSyncEvent<T>>,
-// =======
-//         mpsc::Receiver<event::P2pEvent>,
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-//     )
-//     where
-//         T: NetworkingService,
-//         T::ConnectivityHandle: ConnectivityService<T>,
-//         T::SyncingHandle: SyncingService<T>,
-//     {
-//         let (conn, _, sync) = T::start(
-//             addr,
-//             &[],
-//             &[],
-//             Arc::new(config::create_mainnet()),
-//             std::time::Duration::from_secs(10),
-//         )
-//         .await
-//         .unwrap();
+    async fn make_sync_manager<T>(
+        addr: T::Address,
+    ) -> (
+        SyncManager<T>,
+        T::ConnectivityHandle,
+        mpsc::Sender<SyncControlEvent<T>>,
+        mpsc::Receiver<PubSubControlEvent>,
+    )
+    where
+        T: NetworkingService,
+        T::ConnectivityHandle: ConnectivityService<T>,
+        T::SyncingHandle: SyncingService<T>,
+    {
+        let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
+        let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
+        let storage = blockchain_storage::Store::new_empty().unwrap();
+        let cfg = Arc::new(common::chain::config::create_mainnet());
+        let mut man = subsystem::Manager::new("TODO");
+        let handle = man.add_subsystem("consensus", make_consensus(cfg, storage).unwrap());
+        tokio::spawn(async move { man.main().await });
 
-// <<<<<<< HEAD
-//         // let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-//         // let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-//         let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
-// =======
-//         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
-//         let (tx_p2p, rx_p2p) = tokio::sync::mpsc::channel(16);
-//         let config = common::chain::config::create_mainnet();
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (conn, _, sync) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
 
-// <<<<<<< HEAD
-//         let mut manager = subsystem::Manager::new("mintlayer");
-//         manager.install_signal_handlers();
+        (
+            SyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_pubsub),
+            conn,
+            tx_p2p_sync,
+            rx_pubsub,
+        )
+    }
 
-//         // Consensus subsystem
-//         // let cons = manager.add_subsystem(
-//         //     "consensus",
-//         //     consensus::make_consensus(
-//         //         config::create_mainnet(),
-//         //         blockchain_storage::Store::new_empty().unwrap(),
-//         //     )
-//         //     .unwrap(),
-//         // );
+    async fn connect_services<T>(
+        conn1: &mut T::ConnectivityHandle,
+        conn2: &mut T::ConnectivityHandle,
+    ) where
+        T: NetworkingService,
+        T::ConnectivityHandle: ConnectivityService<T>,
+    {
+        let (conn1_res, conn2_res) =
+            tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+        let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
+        let conn1_id = match conn2_res {
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
+    }
 
-//         // let cons = subsystem::Handle<ConsensusInterface>;
+    // handle peer connection event
+    #[tokio::test]
+    async fn test_peer_connected() {
+        let (mut mgr, _, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
-//         todo!();
-//         // (
-//         //     SyncManager::<T>::new(sync, cons, rx_p2p, rx_sync),
-//         //     conn,
-//         //     tx_sync,
-//         // )
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         (SyncManager::<T>::new(sync, rx_sync), conn, tx_sync, tx_peer)
-// =======
-//         (
-//             SyncManager::<T>::new(Arc::new(config), sync, rx_sync, tx_p2p),
-//             conn,
-//             tx_sync,
-//             rx_p2p,
-//         )
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-//     }
-//     // handle peer connection event
-//     #[tokio::test]
-//     async fn test_peer_connected() {
-// <<<<<<< HEAD
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, mut tx_sync) = make_sync_manager::<MockService>(addr).await;
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
-// =======
-//         let (mut mgr, _, _, mut rx_p2p) =
-//             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
+        assert_eq!(
+            mgr.on_control_event(event::SyncControlEvent::Connected(PeerId::random())).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
+    }
 
-//         tokio::spawn(async move {
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::GetLocator { response },
-//                 {
-//                     response.send(mock_consensus::Consensus::with_height(4).get_locator());
-//                 }
-//             );
-//         });
+    // handle peer disconnection event
+    #[tokio::test]
+    async fn test_peer_disconnected() {
+        let (mut mgr, _, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
-//         assert_eq!(
-// <<<<<<< HEAD
-//             mgr.on_sync_event(event::SyncControlEvent::Connected(peer_id)).await,
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//             mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
-// =======
-//             mgr.on_sync_event(event::SyncControlEvent::Connected {
-//                 peer_id: PeerId::random()
-//             })
-//             .await,
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
-//     }
+        // send Connected event to SyncManager
+        let peer_id = PeerId::random();
 
-//     // handle peer disconnection event
-//     #[tokio::test]
-//     async fn test_peer_disconnected() {
-// <<<<<<< HEAD
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, mut tx_sync) = make_sync_manager::<MockService>(addr).await;
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         let addr: SocketAddr = test_utils::make_address("[::1]:");
-//         let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
-// =======
-//         let (mut mgr, _, _, mut rx_p2p) =
-//             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
+        assert_eq!(
+            mgr.on_control_event(event::SyncControlEvent::Connected(peer_id)).await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
 
-//         // send Connected event to SyncManager
-//         let peer_id = PeerId::random();
+        // no peer with this id exist, nothing happens
+        assert_eq!(
+            mgr.on_control_event(event::SyncControlEvent::Disconnected(PeerId::random()))
+                .await,
+            Ok(())
+        );
+        assert_eq!(mgr.peers.len(), 1);
 
-//         tokio::spawn(async move {
-//             get_message!(
-//                 rx_p2p.recv().await.unwrap(),
-//                 event::P2pEvent::GetLocator { response },
-//                 {
-//                     response.send(mock_consensus::Consensus::with_height(4).get_locator());
-//                 }
-//             );
-//         });
+        assert_eq!(
+            mgr.on_control_event(event::SyncControlEvent::Disconnected(peer_id)).await,
+            Ok(())
+        );
+        assert!(mgr.peers.is_empty());
+    }
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Connected(peer_id)).await,
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
+    #[tokio::test]
+    async fn test_request_response() {
+        let (mut mgr1, mut conn1, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
-//         // no peer with this id exist, nothing happens
-//         assert_eq!(
-// <<<<<<< HEAD
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected(addr)).await,
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected { peer_id: addr }).await,
-// =======
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected {
-//                 peer_id: PeerId::random()
-//             })
-//             .await,
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-//             Ok(())
-//         );
-//         assert_eq!(mgr.peers.len(), 1);
+        // connect the two managers together so that they can exchange messages
+        connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-//         assert_eq!(
-//             mgr.on_sync_event(event::SyncControlEvent::Disconnected(peer_id)).await,
-//             Ok(())
-//         );
-//         assert!(mgr.peers.is_empty());
-//     }
+        let req_id = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
 
-//     // #[tokio::test]
-//     // async fn test_request_response() {
-//     //     let (mut mgr1, mut conn1, _, _) =
-//     //         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-//     //     let (mut mgr2, mut conn2, _, _) =
-//     //         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        if let Ok(net::SyncingMessage::Request {
+            peer_id,
+            request_id,
+            request,
+        }) = mgr2.handle.poll_next().await
+        {
+            assert_eq!(
+                request,
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] }
+                    ))
+                }
+            );
 
-//     //     let (conn1_res, conn2_res) =
-//     //         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
-//     //     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-//     //     let conn1_id = match conn2_res {
-//     //         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
-//     //         _ => panic!("invalid event received, expected incoming connection"),
-//     //     };
+            mgr2.handle
+                .send_response(
+                    request_id,
+                    Message {
+                        magic: [5, 6, 7, 8],
+                        msg: MessageType::Syncing(SyncingMessage::Response(
+                            SyncingResponse::Headers { headers: vec![] },
+                        )),
+                    },
+                )
+                .await
+                .unwrap();
+        } else {
+            panic!("invalid data received");
+        }
+    }
 
-// <<<<<<< HEAD
-//     //     let req_id = mgr1
-//     //         .handle
-//     //         .send_request(
-//     //             *conn2.peer_id(),
-//     //             Message {
-//     //                 magic: [1, 2, 3, 4],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Request(
-//     //                     SyncingRequest::GetHeaders { locator: vec![] },
-//     //                 )),
-//     //             },
-//     //         )
-//     //         .await
-//     //         .unwrap();
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         let req_id = mgr1
-//             .handle
-//             .send_request(
-//                 *conn2.peer_id(),
-//                 Message {
-//                     magic: [1, 2, 3, 4],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] },
-//                     )),
-//                 },
-//             )
-//             .await
-//             .unwrap();
-// =======
-//         let req_id = mgr1
-//             .handle
-//             .send_request(
-//                 *conn2.peer_id(),
-//                 Message {
-//                     magic: [5, 6, 7, 8],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] },
-//                     )),
-//                 },
-//             )
-//             .await
-//             .unwrap();
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
+    #[tokio::test]
+    async fn test_multiple_requests_and_responses() {
+        let (mut mgr1, mut conn1, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
-// <<<<<<< HEAD
-//     //     if let Ok(net::SyncingMessage::Request {
-//     //         peer_id,
-//     //         request_id,
-//     //         request,
-//     //     }) = mgr2.handle.poll_next().await
-//     //     {
-//     //         assert_eq!(
-//     //             request,
-//     //             Message {
-//     //                 magic: [1, 2, 3, 4],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Request(
-//     //                     SyncingRequest::GetHeaders { locator: vec![] }
-//     //                 ))
-//     //             }
-//     //         );
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         if let Ok(net::SyncingMessage::Request {
-//             peer_id,
-//             request_id,
-//             request,
-//         }) = mgr2.handle.poll_next().await
-//         {
-//             assert_eq!(
-//                 request,
-//                 Message {
-//                     magic: [1, 2, 3, 4],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] }
-//                     ))
-//                 }
-//             );
-// =======
-//         if let Ok(net::SyncingMessage::Request {
-//             peer_id,
-//             request_id,
-//             request,
-//         }) = mgr2.handle.poll_next().await
-//         {
-//             assert_eq!(
-//                 request,
-//                 Message {
-//                     magic: [5, 6, 7, 8],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] }
-//                     ))
-//                 }
-//             );
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
+        // connect the two managers together so that they can exchange messages
+        connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-//     //         mgr2.handle
-//     //             .send_response(
-//     //                 request_id,
-//     //                 Message {
-//     //                     magic: [5, 6, 7, 8],
-//     //                     msg: MessageType::Syncing(SyncingMessage::Response(
-//     //                         SyncingResponse::Headers { headers: vec![] },
-//     //                     )),
-//     //                 },
-//     //             )
-//     //             .await
-//     //             .unwrap();
-//     //     } else {
-//     //         panic!("invalid data received");
-//     //     }
+        let req_id = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
 
-//     //     if let Ok(net::SyncingMessage::Response {
-//     //         peer_id, response, ..
-//     //     }) = mgr1.handle.poll_next().await
-//     //     {
-//     //         assert_eq!(
-//     //             response,
-//     //             Message {
-//     //                 magic: [5, 6, 7, 8],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-//     //                     headers: vec![]
-//     //                 },)),
-//     //             },
-//     //         );
-//     //     } else {
-//     //         panic!("invalid data received");
-//     //     }
-//     // }
+        let req_id = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
 
-//     // // peer1 sends to requests to peer2 and peer2 responds to them out of order
-//     // #[tokio::test]
-//     // async fn test_multiple_requests_and_responses() {
-//     //     let (mut mgr1, mut conn1, _, _) =
-//     //         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-//     //     let (mut mgr2, mut conn2, _, _) =
-//     //         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        for i in 0..2 {
+            if let Ok(net::SyncingMessage::Request {
+                peer_id,
+                request_id,
+                request,
+            }) = mgr2.handle.poll_next().await
+            {
+                if let Message {
+                    magic,
+                    msg:
+                        MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
+                            locator,
+                        })),
+                } = request
+                {
+                    mgr2.handle
+                        .send_response(
+                            request_id,
+                            Message {
+                                magic,
+                                msg: MessageType::Syncing(SyncingMessage::Response(
+                                    SyncingResponse::Headers { headers: vec![] },
+                                )),
+                            },
+                        )
+                        .await
+                        .unwrap();
+                }
+            } else {
+                panic!("invalid data received");
+            }
+        }
 
-//     //     let (conn1_res, conn2_res) =
-//     //         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
-//     //     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-//     //     let conn1_id = match conn2_res {
-//     //         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
-//     //         _ => panic!("invalid event received, expected incoming connection"),
-//     //     };
+        let mut magic_seen = 0;
+        for i in 0..2 {
+            if let Ok(net::SyncingMessage::Response {
+                peer_id,
+                request_id,
+                response,
+            }) = mgr1.handle.poll_next().await
+            {
+                if let Message {
+                    magic,
+                    msg:
+                        MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                            headers,
+                        })),
+                } = response
+                {
+                    if magic == [1, 2, 3, 4] {
+                        magic_seen += 1;
+                    } else {
+                        assert_eq!(magic, [5, 6, 7, 8]);
+                        magic_seen += 1;
+                    }
+                }
+            } else {
+                panic!("invalid data received");
+            }
+        }
 
-// <<<<<<< HEAD
-//     //     let req_id1 = mgr1
-//     //         .handle
-//     //         .send_request(
-//     //             *conn2.peer_id(),
-//     //             Message {
-//     //                 magic: [1, 2, 3, 4],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Request(
-//     //                     SyncingRequest::GetHeaders { locator: vec![] },
-//     //                 )),
-//     //             },
-//     //         )
-//     //         .await
-//     //         .unwrap();
-// ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-//         let req_id1 = mgr1
-//             .handle
-//             .send_request(
-//                 *conn2.peer_id(),
-//                 Message {
-//                     magic: [1, 2, 3, 4],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] },
-//                     )),
-//                 },
-//             )
-//             .await
-//             .unwrap();
-// =======
-//         let req_id1 = mgr1
-//             .handle
-//             .send_request(
-//                 *conn2.peer_id(),
-//                 Message {
-//                     magic: [5, 6, 7, 8],
-//                     msg: MessageType::Syncing(SyncingMessage::Request(
-//                         SyncingRequest::GetHeaders { locator: vec![] },
-//                     )),
-//                 },
-//             )
-//             .await
-//             .unwrap();
-// >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-
-//     //     let req_id2 = mgr1
-//     //         .handle
-//     //         .send_request(
-//     //             *conn2.peer_id(),
-//     //             Message {
-//     //                 magic: [5, 6, 7, 8],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Request(
-//     //                     SyncingRequest::GetHeaders { locator: vec![] },
-//     //                 )),
-//     //             },
-//     //         )
-//     //         .await
-//     //         .unwrap();
-
-// <<<<<<< HEAD
-// // <<<<<<< HEAD
-// //         assert_ne!(req_id1, req_id2);
-// //         let mut first_req_id = req_id1;
-// // ||||||| parent of aab58647 (p2p: Add P2pInterface)
-// //         assert_ne!(req_id1, req_id2);
-// // =======
-// //     //     assert_ne!(req_id1, req_id2);
-// // >>>>>>> aab58647 (p2p: Add P2pInterface)
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     assert_ne!(req_id1, req_id2);
-// =======
-// //     //     assert_ne!(req_id1, req_id2);
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
-
-// //     //     let (recv_req1_id, request1) = if let Ok(net::SyncingMessage::Request {
-// //     //         peer_id: _,
-// //     //         request_id,
-// //     //         request,
-// //     //     }) = mgr2.handle.poll_next().await
-// //     //     {
-// //     //         (request_id, request)
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     };
-
-// <<<<<<< HEAD
-// // <<<<<<< HEAD
-// //         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //             peer_id: _,
-// //             request_id,
-// //             request,
-// //         }) = mgr2.handle.poll_next().await
-// //         {
-// //             (request_id, request)
-// //         } else {
-// //             panic!("invalid data received");
-// //         };
-// // ||||||| parent of aab58647 (p2p: Add P2pInterface)
-// //         // TODO: force order?
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     // TODO: force order?
-// =======
-// // <<<<<<< HEAD
-// //     //     // TODO: force order?
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
-
-// <<<<<<< HEAD
-// //         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //             peer_id: _,
-// //             request_id,
-// //             request,
-// //         }) = mgr2.handle.poll_next().await
-// //         {
-// //             (request_id, request)
-// //         } else {
-// //             panic!("invalid data received");
-// //         };
-// // =======
-// //     //     // TODO: force order?
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-//     //         peer_id: _,
-//     //         request_id,
-//     //         request,
-//     //     }) = mgr2.handle.poll_next().await
-//     //     {
-//     //         (request_id, request)
-//     //     } else {
-//     //         panic!("invalid data received");
-//     //     };
-// =======
-// //     //     let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //     //         peer_id: _,
-// //     //         request_id,
-// //     //         request,
-// //     //     }) = mgr2.handle.poll_next().await
-// //     //     {
-// //     //         (request_id, request)
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     };
-// // ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-// //         // TODO: force order?
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
-
-// <<<<<<< HEAD
-// //     //     let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //     //         peer_id: _,
-// //     //         request_id,
-// //     //         request,
-// //     //     }) = mgr2.handle.poll_next().await
-// //     //     {
-// //     //         (request_id, request)
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     };
-// // >>>>>>> aab58647 (p2p: Add P2pInterface)
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     mgr2.handle
-//     //         .send_response(
-//     //             recv_req2_id,
-//     //             Message {
-//     //                 magic: [5, 6, 7, 8],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-//     //                     headers: vec![],
-//     //                 })),
-//     //             },
-//     //         )
-//     //         .await
-//     //         .unwrap();
-// =======
-// //         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //             peer_id: _,
-// //             request_id,
-// //             request,
-// //         }) = mgr2.handle.poll_next().await
-// //         {
-// //             (request_id, request)
-// //         } else {
-// //             panic!("invalid data received");
-// //         };
-// // =======
-// //         let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
-// //             peer_id: _,
-// //             request_id,
-// //             request,
-// //         }) = mgr2.handle.poll_next().await
-// //         {
-// //             (request_id, request)
-// //         } else {
-// //             panic!("invalid data received");
-// //         };
-// // >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
-
-// //     //     mgr2.handle
-// //     //         .send_response(
-// //     //             recv_req2_id,
-// //     //             Message {
-// //     //                 magic: [5, 6, 7, 8],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![],
-// //     //                 })),
-// //     //             },
-// //     //         )
-// //     //         .await
-// //     //         .unwrap();
-
-// <<<<<<< HEAD
-// // <<<<<<< HEAD
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             first_req_id = request_id;
-// //             assert!(request_id == req_id2 || request_id == req_id1);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// // ||||||| parent of aab58647 (p2p: Add P2pInterface)
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             assert_eq!(request_id, req_id2);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// // =======
-// //     //     if let Ok(net::SyncingMessage::Response {
-// //     //         peer_id,
-// //     //         request_id,
-// //     //         response,
-// //     //     }) = mgr1.handle.poll_next().await
-// //     //     {
-// //     //         assert_eq!(request_id, req_id2);
-// //     //         assert_eq!(
-// //     //             response,
-// //     //             Message {
-// //     //                 magic: [5, 6, 7, 8],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![]
-// //     //                 },)),
-// //     //             },
-// //     //         );
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     }
-// // >>>>>>> aab58647 (p2p: Add P2pInterface)
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     mgr2.handle
-//     //         .send_response(
-//     //             recv_req1_id,
-//     //             Message {
-//     //                 magic: [1, 2, 3, 4],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-//     //                     headers: vec![],
-//     //                 })),
-//     //             },
-//     //         )
-//     //         .await
-//     //         .unwrap();
-// =======
-// // <<<<<<< HEAD
-// //     //     if let Ok(net::SyncingMessage::Response {
-// //     //         peer_id,
-// //     //         request_id,
-// //     //         response,
-// //     //     }) = mgr1.handle.poll_next().await
-// //     //     {
-// //     //         assert_eq!(request_id, req_id2);
-// //     //         assert_eq!(
-// //     //             response,
-// //     //             Message {
-// //     //                 magic: [5, 6, 7, 8],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![]
-// //     //                 },)),
-// //     //             },
-// //     //         );
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     }
-// // ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             assert_eq!(request_id, req_id2);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// // =======
-// //         let mut next_id = req_id2;
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             // either response can come first as their order is not strictly specified
-// //             if request_id == next_id {
-// //                 next_id = req_id1;
-// //             } else {
-// //                 assert_eq!(request_id, req_id1);
-// //             }
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
-
-// <<<<<<< HEAD
-// //     //     mgr2.handle
-// //     //         .send_response(
-// //     //             recv_req1_id,
-// //     //             Message {
-// //     //                 magic: [1, 2, 3, 4],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![],
-// //     //                 })),
-// //     //             },
-// //     //         )
-// //     //         .await
-// //     //         .unwrap();
-
-// // <<<<<<< HEAD
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             if first_req_id == req_id1 {
-// //                 assert_eq!(request_id, req_id2);
-// //             } else {
-// //                 assert_eq!(request_id, req_id1);
-// //             }
-
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [1, 2, 3, 4],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// //     }
-// // ||||||| parent of aab58647 (p2p: Add P2pInterface)
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             assert_eq!(request_id, req_id1);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [1, 2, 3, 4],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// //     }
-// // =======
-// //     //     if let Ok(net::SyncingMessage::Response {
-// //     //         peer_id,
-// //     //         request_id,
-// //     //         response,
-// //     //     }) = mgr1.handle.poll_next().await
-// //     //     {
-// //     //         assert_eq!(request_id, req_id1);
-// //     //         assert_eq!(
-// //     //             response,
-// //     //             Message {
-// //     //                 magic: [1, 2, 3, 4],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![]
-// //     //                 },)),
-// //     //             },
-// //     //         );
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     }
-// //     // }
-// // >>>>>>> aab58647 (p2p: Add P2pInterface)
-// }
-// ||||||| parent of 59c0418c (sync: Add simplified syncing implementation)
-//     //     if let Ok(net::SyncingMessage::Response {
-//     //         peer_id,
-//     //         request_id,
-//     //         response,
-//     //     }) = mgr1.handle.poll_next().await
-//     //     {
-//     //         assert_eq!(request_id, req_id1);
-//     //         assert_eq!(
-//     //             response,
-//     //             Message {
-//     //                 magic: [1, 2, 3, 4],
-//     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-//     //                     headers: vec![]
-//     //                 },)),
-//     //             },
-//     //         );
-//     //     } else {
-//     //         panic!("invalid data received");
-//     //     }
-//     // }
-// }
-// =======
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// // >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-
-// // <<<<<<< HEAD
-// //     //     mgr2.handle
-// //     //         .send_response(
-// //     //             recv_req1_id,
-// //     //             Message {
-// //     //                 magic: [1, 2, 3, 4],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![],
-// //     //                 })),
-// //     //             },
-// //     //         )
-// //     //         .await
-// //     //         .unwrap();
-// // ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-// //         mgr2.handle
-// //             .send_response(
-// //                 recv_req1_id,
-// //                 Message {
-// //                     magic: [1, 2, 3, 4],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![],
-// //                     })),
-// //                 },
-// //             )
-// //             .await
-// //             .unwrap();
-// // =======
-// //         mgr2.handle
-// //             .send_response(
-// //                 recv_req1_id,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![],
-// //                     })),
-// //                 },
-// //             )
-// //             .await
-// //             .unwrap();
-// // >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-
-// // <<<<<<< HEAD
-// //     //     if let Ok(net::SyncingMessage::Response {
-// //     //         peer_id,
-// //     //         request_id,
-// //     //         response,
-// //     //     }) = mgr1.handle.poll_next().await
-// //     //     {
-// //     //         assert_eq!(request_id, req_id1);
-// //     //         assert_eq!(
-// //     //             response,
-// //     //             Message {
-// //     //                 magic: [1, 2, 3, 4],
-// //     //                 msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //     //                     headers: vec![]
-// //     //                 },)),
-// //     //             },
-// //     //         );
-// //     //     } else {
-// //     //         panic!("invalid data received");
-// //     //     }
-// //     // }
-// // ||||||| parent of dad30749 (sync: Add simplified syncing implementation)
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             assert_eq!(request_id, req_id1);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [1, 2, 3, 4],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// //     }
-// // =======
-// //         if let Ok(net::SyncingMessage::Response {
-// //             peer_id,
-// //             request_id,
-// //             response,
-// //         }) = mgr1.handle.poll_next().await
-// //         {
-// //             assert_eq!(request_id, next_id);
-// //             assert_eq!(
-// //                 response,
-// //                 Message {
-// //                     magic: [5, 6, 7, 8],
-// //                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-// //                         headers: vec![]
-// //                     },)),
-// //                 },
-// //             );
-// //         } else {
-// //             panic!("invalid data received");
-// //         }
-// //     }
-// // >>>>>>> dad30749 (sync: Add simplified syncing implementation)
-// // }
-// >>>>>>> 59c0418c (sync: Add simplified syncing implementation)
+        assert_eq!(magic_seen, 2);
+    }
+}
