@@ -7,6 +7,7 @@ use serialization::{Decode, Encode};
 
 use super::signature::inputsig::InputWitness;
 use super::Transaction;
+use super::TransactionUpdateError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct TransactionV1 {
@@ -59,10 +60,14 @@ impl TransactionV1 {
         Id::new(&id::hash_encoded(self))
     }
 
-    pub fn update_witness(&mut self, input_index: usize, witness: InputWitness) -> Result<(), ()> {
+    pub fn update_witness(
+        &mut self,
+        input_index: usize,
+        witness: InputWitness,
+    ) -> Result<(), TransactionUpdateError> {
         match self.inputs.get_mut(input_index) {
             Some(input) => input.update_witness(witness),
-            None => return Err(()),
+            None => return Err(TransactionUpdateError::Unknown),
         }
         Ok(())
     }

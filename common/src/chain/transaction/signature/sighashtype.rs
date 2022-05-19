@@ -136,9 +136,9 @@ mod test {
             Err(TransactionSigError::InvalidSigHashValue(0))
         );
         assert_eq!(
-            SigHashType::try_from(0 | SigHashType::ANYONECANPAY),
+            SigHashType::try_from(SigHashType::ANYONECANPAY),
             Err(TransactionSigError::InvalidSigHashValue(
-                0 | SigHashType::ANYONECANPAY
+                SigHashType::ANYONECANPAY
             ))
         );
     }

@@ -60,6 +60,11 @@ pub enum TransactionCreationError {
     Unknown,
 }
 
+#[derive(Debug, Clone)]
+pub enum TransactionUpdateError {
+    Unknown,
+}
+
 impl Transaction {
     pub fn new(
         flags: u32,
@@ -119,7 +124,11 @@ impl Transaction {
         }
     }
 
-    pub fn update_witness(&mut self, input_index: usize, witness: InputWitness) -> Result<(), ()> {
+    pub fn update_witness(
+        &mut self,
+        input_index: usize,
+        witness: InputWitness,
+    ) -> Result<(), TransactionUpdateError> {
         match self {
             Transaction::V1(tx) => tx.update_witness(input_index, witness),
         }

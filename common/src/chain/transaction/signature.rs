@@ -190,13 +190,13 @@ mod test {
         let signature = StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            dest.clone(),
+            dest,
             &tx,
             0,
         )
         .unwrap();
 
-        tx.update_witness(0, InputWitness::Standard(signature.clone())).unwrap();
+        tx.update_witness(0, InputWitness::Standard(signature)).unwrap();
         Ok(tx)
     }
 
@@ -211,7 +211,7 @@ mod test {
                 private_key,
                 sighash_type,
                 dest.clone(),
-                &tx,
+                tx,
                 0,
             )
             .unwrap();
@@ -273,7 +273,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        let mut tx = generate_tx(private_key, sighash_type, outpoint_dest.clone()).unwrap();
         tx.update_witness(
             0,
             InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
@@ -353,7 +353,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        let tx = generate_tx(private_key, sighash_type, outpoint_dest.clone()).unwrap();
         assert_eq!(
             verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
             Err(TransactionSigError::InvalidInputIndex(
