@@ -13,7 +13,7 @@ use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
-#[derive(Debug, Copy, Clone)]
+#[allow(dead_code)]
 type HashType = Id<Block>;
 
 #[derive(

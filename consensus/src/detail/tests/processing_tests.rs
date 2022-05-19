@@ -72,7 +72,7 @@ fn test_orphans_chains() {
         // Process the orphan block
         let new_block = consensus.chain_config.genesis_block().clone();
         for _ in 0..255 {
-            let new_block = produce_test_block(&consensus.chain_config, &new_block, true);
+            let new_block = produce_test_block(&new_block, true);
             assert_eq!(
                 consensus.process_block(new_block.clone(), BlockSource::Local),
                 Err(BlockError::Orphan)
@@ -126,11 +126,7 @@ fn test_spend_inputs_simple() {
         let mut consensus = setup_consensus();
 
         // Create a new block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
@@ -218,7 +214,7 @@ fn test_straight_chain() {
                 .expect("Unable to get best block ID");
             assert_eq!(&best_block_id, block_index.get_block_id());
             let block_source = BlockSource::Peer(1);
-            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
+            let new_block = produce_test_block(&prev_block, false);
             let new_block_index = dbg!(consensus.process_block(new_block.clone(), block_source))
                 .ok()
                 .flatten()

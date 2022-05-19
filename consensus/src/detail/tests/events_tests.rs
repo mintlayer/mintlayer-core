@@ -30,11 +30,7 @@ fn test_events_simple_subscribe() {
         let mut consensus = setup_consensus();
 
         // We should connect a new block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
         // The event "NewTip" should return block_id and height
         let expected_block_id = block.get_id();
         let expected_block_height = BlockHeight::new(1);
@@ -73,11 +69,7 @@ fn test_events_with_a_bunch_of_subscribers() {
         let mut consensus = setup_consensus();
 
         // We should connect a new block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            false,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
 
         // The event "NewTip" should return block_id and height
         let expected_block_id = block.get_id();
@@ -125,7 +117,7 @@ fn test_events_a_bunch_of_events() {
         let mut blocks = Vec::new();
         let mut rand_block = consensus.chain_config.genesis_block().clone();
         for height in 0..COUNT_EVENTS {
-            rand_block = produce_test_block(&consensus.chain_config, &rand_block, false);
+            rand_block = produce_test_block(&rand_block, false);
             blocks.push(rand_block.clone());
             map_heights.insert(
                 rand_block.get_id(),
@@ -174,11 +166,7 @@ fn test_events_orphan_block() {
         let mut consensus = Consensus::new(config, storage).unwrap();
 
         // Let's create an orphan block
-        let block = produce_test_block(
-            &consensus.chain_config,
-            consensus.chain_config.genesis_block(),
-            true,
-        );
+        let block = produce_test_block(consensus.chain_config.genesis_block(), true);
 
         // Event handler
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
