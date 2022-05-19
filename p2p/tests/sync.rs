@@ -311,7 +311,7 @@ async fn remote_ahead_by_7_blocks() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -436,7 +436,7 @@ async fn local_ahead_by_12_blocks() {
                     },
             } => {
                 assert_eq!(blocks.len(), 1);
-                let block = blocks[0].to_owned();
+                let block = blocks[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -481,7 +481,7 @@ async fn local_ahead_by_12_blocks() {
                     .await
                     .unwrap()
                     .unwrap();
-                work = VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(
@@ -599,7 +599,7 @@ async fn remote_local_diff_chains_local_higher() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -632,7 +632,7 @@ async fn remote_local_diff_chains_local_higher() {
                     },
             } => {
                 assert_eq!(blocks.len(), 1);
-                let block = blocks[0].to_owned();
+                let block = blocks[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -673,7 +673,7 @@ async fn remote_local_diff_chains_local_higher() {
                     .await
                     .unwrap()
                     .unwrap();
-                work = VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(
@@ -793,7 +793,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -826,7 +826,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     },
             } => {
                 assert_eq!(blocks.len(), 1);
-                let block = blocks[0].to_owned();
+                let block = blocks[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -867,7 +867,8 @@ async fn remote_local_diff_chains_remote_higher() {
                     .await
                     .unwrap()
                     .unwrap();
-                work = VecDeque::from(headers);
+                // work = VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(
@@ -994,7 +995,7 @@ async fn two_remote_nodes_different_chains() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
@@ -1140,7 +1141,7 @@ async fn two_remote_nodes_same_chains() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
@@ -1301,7 +1302,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     },
             } => {
                 assert_eq!(headers.len(), 1);
-                let id = headers[0].get_id();
+                let id = headers[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {

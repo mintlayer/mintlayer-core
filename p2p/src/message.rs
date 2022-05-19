@@ -14,13 +14,16 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use common::chain::block::{Block, BlockHeader};
+use common::{
+    chain::block::{Block, BlockHeader},
+    primitives::{Id, Idable},
+};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum SyncingRequest {
     GetHeaders { locator: Vec<BlockHeader> },
-    GetBlocks { headers: Vec<BlockHeader> },
+    GetBlocks { headers: Vec<Id<Block>> },
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
