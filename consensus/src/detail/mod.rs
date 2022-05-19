@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -36,7 +36,6 @@ use serialization::Encode;
 
 mod error;
 pub use error::*;
-
 mod pow;
 
 type PeerId = u32;
@@ -45,12 +44,11 @@ type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
 mod spend_cache;
-
 use spend_cache::CachedInputs;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
-    chain_config: ChainConfig,
+    chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     event_subscribers: Vec<EventHandler>,
@@ -87,7 +85,7 @@ impl Consensus {
     }
 
     pub fn new(
-        chain_config: ChainConfig,
+        chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
     ) -> Result<Self, crate::ConsensusError> {
         use crate::ConsensusError;
@@ -112,7 +110,7 @@ impl Consensus {
     }
 
     fn new_no_genesis(
-        chain_config: ChainConfig,
+        chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
     ) -> Result<Self, crate::ConsensusError> {
         let event_broadcaster = slave_pool::ThreadPool::new();
@@ -508,6 +506,8 @@ impl<'a> ConsensusRef<'a> {
         block: &Block,
         block_source: BlockSource,
     ) -> Result<(), BlockError> {
+        block.check_version()?;
+
         // Allows the previous block to be None only if the block hash is genesis
         if !block.is_genesis(self.chain_config) && block.prev_block_id().is_none() {
             return Err(BlockError::Unknown);
@@ -643,4 +643,4 @@ impl<'a> ConsensusRef<'a> {
 }
 
 #[cfg(test)]
-mod test;
+mod tests;

@@ -1,4 +1,5 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021 Protocol Labs
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -15,4 +16,9 @@
 //
 // Author(s): A. Altonen
 pub mod connectivity;
-pub mod handshake;
+pub mod gossipsub;
+pub mod identify;
+pub mod mdns;
+pub mod ping;
+pub mod sync;
+pub mod util;

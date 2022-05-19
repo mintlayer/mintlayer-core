@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2022 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -16,7 +16,10 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use common::{
-    chain::{block::Block, SpendError, Spender, Transaction, TxMainChainIndexError},
+    chain::{
+        block::{Block, BlockConsistencyError},
+        SpendError, Spender, Transaction, TxMainChainIndexError,
+    },
     primitives::{Amount, BlockHeight, Id},
 };
 use thiserror::Error;
@@ -81,6 +84,8 @@ pub enum BlockError {
     SerializationInvariantError(Id<Block>),
     #[error("Unexpected numeric type conversion error `{0:?}`")]
     InternalNumTypeConversionError(Id<Block>),
+    #[error("Internal block representation is invalid `{0}`")]
+    BlockConsistencyError(BlockConsistencyError),
     // To be expanded
 }
 
@@ -99,6 +104,12 @@ impl From<SpendError> for BlockError {
             SpendError::AlreadyUnspent => BlockError::InvariantBrokenAlreadyUnspent,
             SpendError::OutOfRange => BlockError::OutputIndexOutOfRange,
         }
+    }
+}
+
+impl From<BlockConsistencyError> for BlockError {
+    fn from(err: BlockConsistencyError) -> Self {
+        BlockError::BlockConsistencyError(err)
     }
 }
 

@@ -17,7 +17,7 @@
 
 use core::future::Future;
 use core::time::Duration;
-use futures::future::BoxFuture;
+use futures::future::{select_all, BoxFuture, FutureExt};
 use tokio::sync::{broadcast, mpsc};
 use tokio::task;
 
@@ -84,18 +84,18 @@ pub struct Manager {
 }
 
 impl Manager {
-    /// Initialise a new subsystem manager.
+    /// Initialize a new subsystem manager.
     pub fn new(name: &'static str) -> Self {
         Self::new_with_config(ManagerConfig::named(name))
     }
 
-    /// Initialise a new subsystem manager.
+    /// Initialize a new subsystem manager.
     pub fn new_with_config(config: ManagerConfig) -> Self {
         let ManagerConfig {
             name,
             shutdown_timeout,
         } = config;
-        log::info!("Initialising subsystem manager {}", name);
+        log::info!("Initializing subsystem manager {}", name);
 
         let (shutdown_request_tx, _shutdown_request_rx) = broadcast::channel(1);
         let (shutting_down_tx, shutting_down_rx) = mpsc::channel(1);
@@ -111,13 +111,13 @@ impl Manager {
         }
     }
 
-    /// Start a raw subsystem.
+    /// Add a raw subsystem.
     ///
     /// Gives full control over how shutdown and call requests are handled. If this is not
-    /// required, use [Manager::start] instead. A subsystem has to handle shutdown and call
+    /// required, use [Manager::add_subsystem] instead. A subsystem has to handle shutdown and call
     /// requests. It can also react to external IO events. If the subsystem handles *only* calls
     /// and shutdown requests without interaction with any additional IO and does not need custom
-    /// shutdown logic, use [Manager::start].
+    /// shutdown logic, use [Manager::add_subsystem].
     ///
     /// A typical skeleton of a subsystem looks like this:
     /// ```no_run
@@ -168,12 +168,12 @@ impl Manager {
             std::mem::drop(shutting_down_tx);
         }));
 
-        log::info!("Subsystem {}/{} initialised", manager_name, subsys_name);
+        log::info!("Subsystem {}/{} initialized", manager_name, subsys_name);
 
         Handle::new(action_tx)
     }
 
-    /// Start a passive subsystem.
+    /// Add a passive subsystem.
     ///
     /// A passive subsystem does not interact with the environment on its own. It only serves calls
     /// from other subsystems. A hook to be invoked on shutdown can be specified by means of the
@@ -194,7 +194,7 @@ impl Manager {
         })
     }
 
-    /// Start a raw subsystem. See [Manager::add_raw_subsystem_with_config].
+    /// Add a raw subsystem. See [Manager::add_raw_subsystem_with_config].
     pub fn add_raw_subsystem<T: 'static + Send, F: 'static + Send + Future<Output = ()>>(
         &mut self,
         name: &'static str,
@@ -203,7 +203,7 @@ impl Manager {
         self.add_raw_subsystem_with_config(SubsystemConfig::named(name), subsystem)
     }
 
-    /// Start a passive subsystem. See [Manager::start_with_config].
+    /// Add a passive subsystem. See [Manager::add_subsystem_with_config].
     pub fn add_subsystem<S: Subsystem>(&mut self, name: &'static str, subsys: S) -> Handle<S> {
         self.add_subsystem_with_config(SubsystemConfig::named(name), subsys)
     }
@@ -277,18 +277,48 @@ impl Manager {
         log::info!("Manager {} starting subsystems", self.name);
 
         // Run all the subsystem tasks.
+        let mut task_handles: Vec<_> = self.subsystem_tasks.into_iter().map(task::spawn).collect();
+        /*
         for subsys in self.subsystem_tasks {
             task::spawn(subsys);
         }
+        */
 
         // Signal the manager is shut down so it does not wait for itself
         std::mem::drop(self.shutting_down_tx);
 
-        // Wait for a subsystem to shut down and coordinate cleanup of the remaining subsystems.
-        self.shutting_down_rx
-            .recv()
-            .await
-            .unwrap_or_else(|| log::info!("Manager {}: all subsystems already down", self.name));
+        // Wait for a subsystem to shut down
+        loop {
+            // We have to handle the empty case explicitly to avoid panic
+            let tasks_join_future = if task_handles.is_empty() {
+                std::future::pending().left_future()
+            } else {
+                select_all(task_handles).right_future()
+            };
+            // Wait for either the shutdown signal or task crash
+            tokio::select! {
+                (result, _, rest) = tasks_join_future => {
+                    task_handles = rest;
+                    match result {
+                        // Task terminated gracefully
+                        Ok(()) => continue,
+                        // Task terminated in an unexpected way
+                        Err(e) => {
+                            let msg =
+                                format!("Manager {}: error from a subsystem: {}", self.name, e);
+                            log::error!("{}", msg);
+                            panic!("{}", msg);
+                        }
+                    }
+                }
+                shut = self.shutting_down_rx.recv() => {
+                    if shut.is_none() {
+                        log::info!("Manager {}: all subsystems already down", self.name);
+                    }
+                }
+            };
+            break;
+        }
 
         log::info!("Manager {} shutting down", self.name);
 

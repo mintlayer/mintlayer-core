@@ -17,11 +17,12 @@
 #![allow(unused)]
 
 use crate::{
-    error::{self, P2pError},
+    error::{self, P2pError, ProtocolError},
     event,
-    net::{self, FloodsubService, NetworkService},
+    message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
+    net::{self, NetworkService, SyncingService},
 };
-use common::chain::ChainConfig;
+use common::chain::block::{Block, BlockHeader};
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, sync::Arc};
@@ -40,11 +41,8 @@ where
     /// Unique peer ID
     peer_id: T::PeerId,
 
-    // State of the peer
+    /// State of the peer
     state: PeerState,
-
-    /// TX channel for sending syncing messages to remote peer
-    tx: mpsc::Sender<event::PeerEvent<T>>,
 }
 
 /// Sync manager is responsible for syncing the local blockchain to the chain with most trust
@@ -59,17 +57,11 @@ pub struct SyncManager<T>
 where
     T: NetworkService,
 {
-    /// Chain config
-    config: Arc<ChainConfig>,
-
     /// Handle for sending/receiving connectivity events
-    handle: T::FloodsubHandle,
+    handle: T::SyncingHandle,
 
     /// RX channel for receiving syncing-related control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
-
-    /// RX channel for receiving syncing events from peers
-    rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
 
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, PeerSyncState<T>>,
@@ -78,54 +70,107 @@ where
 impl<T> SyncManager<T>
 where
     T: NetworkService,
-    T::FloodsubHandle: FloodsubService<T>,
+    T::SyncingHandle: SyncingService<T>,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
-        handle: T::FloodsubHandle,
+        handle: T::SyncingHandle,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
-        rx_peer: mpsc::Receiver<event::PeerSyncEvent<T>>,
     ) -> Self {
         Self {
-            config,
             handle,
             rx_sync,
-            rx_peer,
             peers: Default::default(),
         }
     }
 
-    /// Handle floodsub event
-    fn on_floodsub_event(&mut self, event: net::FloodsubEvent<T>) -> error::Result<()> {
-        let net::FloodsubEvent::MessageReceived {
-            peer_id: _,
-            topic,
-            message,
-        } = event;
+    async fn process_header_request(
+        &mut self,
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        locator: Vec<BlockHeader>,
+    ) -> error::Result<()> {
+        todo!();
+    }
 
-        match topic {
-            net::FloodsubTopic::Transactions => {
-                log::debug!("received new transaction: {:#?}", message);
-            }
-            net::FloodsubTopic::Blocks => {
-                log::debug!("received new block: {:#?}", message);
+    async fn process_block_request(
+        &mut self,
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        headers: Vec<BlockHeader>,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    async fn process_header_response(
+        &mut self,
+        peer_id: T::PeerId,
+        headers: Vec<BlockHeader>,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    async fn process_block_response(
+        &mut self,
+        peer_id: T::PeerId,
+        blocks: Vec<Block>,
+    ) -> error::Result<()> {
+        todo!();
+    }
+
+    /// Handle incoming block/header request/response
+    async fn on_syncing_event(&mut self, event: net::SyncingMessage<T>) -> error::Result<()> {
+        match event {
+            net::SyncingMessage::Request {
+                peer_id,
+                request_id,
+                request:
+                    Message {
+                        msg: MessageType::Syncing(SyncingMessage::Request(message)),
+                        ..
+                    },
+            } => match message {
+                SyncingRequest::GetHeaders { locator } => {
+                    self.process_header_request(peer_id, request_id, locator).await
+                }
+                SyncingRequest::GetBlocks { headers } => {
+                    self.process_block_request(peer_id, request_id, headers).await
+                }
+            },
+            net::SyncingMessage::Response {
+                peer_id,
+                request_id: _,
+                response:
+                    Message {
+                        msg: MessageType::Syncing(SyncingMessage::Response(message)),
+                        ..
+                    },
+            } => match message {
+                SyncingResponse::Headers { headers } => {
+                    self.process_header_response(peer_id, headers).await
+                }
+                SyncingResponse::Blocks { blocks } => {
+                    self.process_block_response(peer_id, blocks).await
+                }
+            },
+            net::SyncingMessage::Request { peer_id, .. }
+            | net::SyncingMessage::Response { peer_id, .. } => {
+                log::error!("received an invalid message from peer {:?}", peer_id);
+                // TODO: disconnect peer and ban it
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
-
-        Ok(())
     }
 
     /// Handle control-related sync event from P2P/SwarmManager
     async fn on_sync_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
         match event {
-            event::SyncControlEvent::Connected { peer_id, tx } => {
+            event::SyncControlEvent::Connected { peer_id } => {
                 log::debug!("create new entry for peer {:?}", peer_id);
 
                 if let std::collections::hash_map::Entry::Vacant(e) = self.peers.entry(peer_id) {
                     e.insert(PeerSyncState {
                         peer_id,
                         state: PeerState::Idle,
-                        tx,
                     });
                 } else {
                     log::error!("peer {:?} already known by sync manager", peer_id);
@@ -143,17 +188,6 @@ where
         Ok(())
     }
 
-    /// Handle syncing-related event received from a remote peer
-    async fn on_peer_event(&mut self, event: event::PeerSyncEvent<T>) -> error::Result<()> {
-        match event {
-            event::PeerSyncEvent::Dummy { peer_id } => {
-                dbg!(peer_id);
-            }
-        }
-
-        Ok(())
-    }
-
     /// Run SyncManager event loop
     pub async fn run(&mut self) -> error::Result<()> {
         log::info!("starting sync manager event loop");
@@ -161,13 +195,10 @@ where
         loop {
             tokio::select! {
                 res = self.handle.poll_next() => {
-                    self.on_floodsub_event(res?)?;
+                    self.on_syncing_event(res?).await?;
                 }
                 res = self.rx_sync.recv().fuse() => {
                     self.on_sync_event(res.ok_or(P2pError::ChannelClosed)?).await?;
-                }
-                res = self.rx_peer.recv().fuse() => {
-                    self.on_peer_event(res.ok_or(P2pError::ChannelClosed)?).await?;
                 }
             }
         }
@@ -177,46 +208,55 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{mock::MockService, FloodsubService};
+    use crate::net::{
+        libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
+        SyncingService,
+    };
     use common::chain::config;
+    use libp2p::{multiaddr::Protocol, PeerId};
     use std::net::SocketAddr;
 
     async fn make_sync_manager<T>(
         addr: T::Address,
     ) -> (
         SyncManager<T>,
+        T::ConnectivityHandle,
         mpsc::Sender<event::SyncControlEvent<T>>,
         mpsc::Sender<event::PeerSyncEvent<T>>,
     )
     where
         T: NetworkService,
-        T::FloodsubHandle: FloodsubService<T>,
+        T::ConnectivityHandle: ConnectivityService<T>,
+        T::SyncingHandle: SyncingService<T>,
     {
         let config = Arc::new(config::create_mainnet());
-        let (_, flood) =
-            T::start(addr, &[], &[], std::time::Duration::from_secs(10)).await.unwrap();
+        let (conn, _, sync) = T::start(
+            addr,
+            &[],
+            &[],
+            Arc::clone(&config),
+            std::time::Duration::from_secs(10),
+        )
+        .await
+        .unwrap();
+
         let (tx_sync, rx_sync) = tokio::sync::mpsc::channel(16);
         let (tx_peer, rx_peer) = tokio::sync::mpsc::channel(16);
 
-        (
-            SyncManager::<T>::new(Arc::clone(&config), flood, rx_sync, rx_peer),
-            tx_sync,
-            tx_peer,
-        )
+        (SyncManager::<T>::new(sync, rx_sync), conn, tx_sync, tx_peer)
     }
 
     // handle peer connection event
     #[tokio::test]
     async fn test_peer_connected() {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let (mut mgr, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
+        let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
         // send Connected event to SyncManager
-        let (tx, rx) = mpsc::channel(1);
         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -226,14 +266,13 @@ mod tests {
     #[tokio::test]
     async fn test_peer_disconnected() {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        let (mut mgr, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
+        let (mut mgr, _, mut tx_sync, mut tx_peer) = make_sync_manager::<MockService>(addr).await;
 
         // send Connected event to SyncManager
-        let (tx, rx) = mpsc::channel(1);
         let peer_id: SocketAddr = test_utils::make_address("[::1]:");
 
         assert_eq!(
-            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id, tx }).await,
+            mgr.on_sync_event(event::SyncControlEvent::Connected { peer_id }).await,
             Ok(())
         );
         assert_eq!(mgr.peers.len(), 1);
@@ -250,5 +289,226 @@ mod tests {
             Ok(())
         );
         assert!(mgr.peers.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_request_response() {
+        let (mut mgr1, mut conn1, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+
+        let (conn1_res, conn2_res) =
+            tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+        let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        let conn1_id = match conn2_res {
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
+
+        let req_id = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        if let Ok(net::SyncingMessage::Request {
+            peer_id,
+            request_id,
+            request,
+        }) = mgr2.handle.poll_next().await
+        {
+            assert_eq!(
+                request,
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] }
+                    ))
+                }
+            );
+
+            mgr2.handle
+                .send_response(
+                    request_id,
+                    Message {
+                        magic: [5, 6, 7, 8],
+                        msg: MessageType::Syncing(SyncingMessage::Response(
+                            SyncingResponse::Headers { headers: vec![] },
+                        )),
+                    },
+                )
+                .await
+                .unwrap();
+        } else {
+            panic!("invalid data received");
+        }
+
+        if let Ok(net::SyncingMessage::Response {
+            peer_id, response, ..
+        }) = mgr1.handle.poll_next().await
+        {
+            assert_eq!(
+                response,
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                        headers: vec![]
+                    },)),
+                },
+            );
+        } else {
+            panic!("invalid data received");
+        }
+    }
+
+    // peer1 sends to requests to peer2 and peer2 responds to them out of order
+    #[tokio::test]
+    async fn test_multiple_requests_and_responses() {
+        let (mut mgr1, mut conn1, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+
+        let (conn1_res, conn2_res) =
+            tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+        let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        let conn1_id = match conn2_res {
+            ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+            _ => panic!("invalid event received, expected incoming connection"),
+        };
+
+        let req_id1 = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        let req_id2 = mgr1
+            .handle
+            .send_request(
+                *conn2.peer_id(),
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Request(
+                        SyncingRequest::GetHeaders { locator: vec![] },
+                    )),
+                },
+            )
+            .await
+            .unwrap();
+
+        assert_ne!(req_id1, req_id2);
+        let mut first_req_id = req_id1;
+
+        let (recv_req1_id, request1) = if let Ok(net::SyncingMessage::Request {
+            peer_id: _,
+            request_id,
+            request,
+        }) = mgr2.handle.poll_next().await
+        {
+            (request_id, request)
+        } else {
+            panic!("invalid data received");
+        };
+
+        let (recv_req2_id, request2) = if let Ok(net::SyncingMessage::Request {
+            peer_id: _,
+            request_id,
+            request,
+        }) = mgr2.handle.poll_next().await
+        {
+            (request_id, request)
+        } else {
+            panic!("invalid data received");
+        };
+
+        mgr2.handle
+            .send_response(
+                recv_req2_id,
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                        headers: vec![],
+                    })),
+                },
+            )
+            .await
+            .unwrap();
+
+        if let Ok(net::SyncingMessage::Response {
+            peer_id,
+            request_id,
+            response,
+        }) = mgr1.handle.poll_next().await
+        {
+            first_req_id = request_id;
+            assert!(request_id == req_id2 || request_id == req_id1);
+            assert_eq!(
+                response,
+                Message {
+                    magic: [5, 6, 7, 8],
+                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                        headers: vec![]
+                    },)),
+                },
+            );
+        } else {
+            panic!("invalid data received");
+        }
+
+        mgr2.handle
+            .send_response(
+                recv_req1_id,
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                        headers: vec![],
+                    })),
+                },
+            )
+            .await
+            .unwrap();
+
+        if let Ok(net::SyncingMessage::Response {
+            peer_id,
+            request_id,
+            response,
+        }) = mgr1.handle.poll_next().await
+        {
+            if first_req_id == req_id1 {
+                assert_eq!(request_id, req_id2);
+            } else {
+                assert_eq!(request_id, req_id1);
+            }
+
+            assert_eq!(
+                response,
+                Message {
+                    magic: [1, 2, 3, 4],
+                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                        headers: vec![]
+                    },)),
+                },
+            );
+        } else {
+            panic!("invalid data received");
+        }
     }
 }

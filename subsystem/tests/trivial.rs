@@ -15,7 +15,7 @@
 //
 // Author(s): L. Kuklinek
 
-use subsystem::subsystem::CallRequest;
+type NoRequest = subsystem::subsystem::CallRequest<()>;
 
 mod helpers;
 
@@ -38,7 +38,7 @@ fn shortlived() {
     let rt = helpers::init_test_runtime();
     rt.block_on(async {
         let mut app = subsystem::Manager::new("shortlived");
-        app.add_raw_subsystem("nop", |_: CallRequest<()>, _| async {});
+        app.add_raw_subsystem("nop", |_: NoRequest, _| async {});
         app.main().await;
     });
 }
@@ -50,7 +50,20 @@ fn trivial() {
     rt.block_on(async {
         let mut app = subsystem::Manager::new("trivial");
         app.add_subsystem("trivial", Trivial);
-        app.add_raw_subsystem("nop", |_: CallRequest<()>, _| async {});
+        app.add_raw_subsystem("nop", |_: NoRequest, _| async {});
+        app.main().await;
+    });
+}
+
+// Check subsystem panics propagate to manager
+#[test]
+#[should_panic]
+fn panic() {
+    let rt = helpers::init_test_runtime();
+    rt.block_on(async {
+        let mut app = subsystem::Manager::new("panic");
+        app.add_raw_subsystem("panic", |_: NoRequest, _| async { panic!("boom") });
+        app.add_subsystem("trivial", Trivial);
         app.main().await;
     });
 }

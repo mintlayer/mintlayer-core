@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let some_subsystem = app.add_subsystem("some_subsys", SomeSubsystem(0));
     let _rpc_subsystem = app.add_subsystem(
         "rpc",
-        rpc::Builder::new("127.0.0.1:3030".parse().unwrap())
+        rpc::Builder::new("127.0.0.1:3030".parse().expect("address parse error"))
             .register(some_subsystem.clone().into_rpc())
             .build()
             .await?,

@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 
 use common::chain::block::Block;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 pub mod utxo_storage;
 

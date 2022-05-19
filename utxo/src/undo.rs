@@ -2,7 +2,7 @@
 
 use crate::Utxo;
 use common::primitives::BlockHeight;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct TxUndo(Vec<Utxo>);
