@@ -158,8 +158,8 @@ mod test {
     };
     use crate::{
         chain::{
-            signature::verify_signature, Destination, Transaction, TransactionCreationError,
-            TxInput, TxOutput,
+            signature::{verify_signature, TransactionSigError},
+            Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
         },
         primitives::{Amount, Id, H256},
     };
@@ -221,7 +221,7 @@ mod test {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn sign_and_verify() {
+    fn check_sign_and_verify() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
@@ -229,26 +229,137 @@ mod test {
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
         assert!(verify_signature(&outpoint_dest, &tx, 1).is_ok());
+
         // ALL
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
         assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
         assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
-        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
-        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
-        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
-        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
-        // ANYONECANPAY
+
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
         let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
         assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
         assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+
+        // NONE
+        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+
+        let sighash_type =
+            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+
+        // SINGLE
+        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+
+        let sighash_type =
+            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_ok());
+        assert!(verify_signature(&outpoint_dest, &tx, 1).is_err());
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn check_verify_fails() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let outpoint_dest = Destination::PublicKey(public_key);
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let mut tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        tx.update_witness(
+            0,
+            InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        // ALL
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::ALL).unwrap(),
+                vec![],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
+                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        // NONE
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::NONE).unwrap(),
+                vec![],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
+                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        // SINGLE
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::SINGLE).unwrap(),
+                vec![],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+
+        tx.update_witness(
+            0,
+            InputWitness::Standard(StandardInputSignature::new(
+                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
+                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+            )),
+        )
+        .unwrap();
+        assert!(verify_signature(&outpoint_dest, &tx, 0).is_err());
+    }
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn check_invalid_input_index() {
+        const INVALID_INPUT_INDEX: usize = 1234567890;
+
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let outpoint_dest = Destination::PublicKey(public_key);
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let tx = generate_tx(private_key.clone(), sighash_type, outpoint_dest.clone()).unwrap();
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                2
+            ))
+        );
     }
 }

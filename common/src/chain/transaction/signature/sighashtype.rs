@@ -31,8 +31,8 @@ impl SigHashType {
     pub const SINGLE: u8 = 0x03;
     pub const ANYONECANPAY: u8 = 0x80;
 
-    pub const MASK_OUT: u8 = 0x7f;
-    pub const MASK_IN: u8 = 0x80;
+    const MASK_OUT: u8 = 0x7f;
+    const MASK_IN: u8 = 0x80;
 
     pub fn inputs_mode(&self) -> InputsMode {
         match self.0 & Self::MASK_IN {
@@ -68,6 +68,7 @@ impl TryFrom<u8> for SigHashType {
 }
 
 /// How inputs should be hashed
+#[derive(PartialEq, Debug)]
 pub enum InputsMode {
     /// Commit to all inputs
     CommitWhoPays,
@@ -82,6 +83,7 @@ impl Default for SigHashType {
 }
 
 /// How outputs should be hashed
+#[derive(PartialEq, Debug)]
 pub enum OutputsMode {
     /// Commit to all outputs
     All,
@@ -92,3 +94,52 @@ pub enum OutputsMode {
 }
 
 // TODO: test
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    #[allow(clippy::eq_op)]
+    fn check_sighashtype() {
+        // Check inputs and outputs mode
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::CommitWhoPays);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::All);
+
+        let sighash_type =
+            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::AnyoneCanPay);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::All);
+
+        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::CommitWhoPays);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::None);
+
+        let sighash_type =
+            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::AnyoneCanPay);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::None);
+
+        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::CommitWhoPays);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single);
+
+        let sighash_type =
+            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+        assert_eq!(sighash_type.inputs_mode(), InputsMode::AnyoneCanPay);
+        assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single);
+
+        // Check try from
+        assert_eq!(
+            SigHashType::try_from(0),
+            Err(TransactionSigError::InvalidSigHashValue(0))
+        );
+        assert_eq!(
+            SigHashType::try_from(0 | SigHashType::ANYONECANPAY),
+            Err(TransactionSigError::InvalidSigHashValue(
+                0 | SigHashType::ANYONECANPAY
+            ))
+        );
+    }
+}
