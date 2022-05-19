@@ -34,7 +34,7 @@ use p2p::{
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{
         self, libp2p::Libp2pService, ConnectivityEvent, ConnectivityService, NetworkingService,
-        SyncingService,
+        SyncingCodecService,
     },
     sync::SyncManager,
     sync::SyncState,
@@ -60,7 +60,7 @@ async fn make_sync_manager<T>(
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
@@ -154,7 +154,7 @@ async fn process_header_request<T>(
 ) -> Result<(), P2pError>
 where
     T: NetworkingService,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     if let net::SyncingMessage::Request {
         peer_id,
@@ -189,7 +189,7 @@ where
 async fn advance_mgr_state<T>(mgr: &mut SyncManager<T>) -> Result<(), P2pError>
 where
     T: NetworkingService,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     let event = mgr.handle_mut().poll_next().await.unwrap();
     mgr.on_syncing_event(event).await.unwrap();

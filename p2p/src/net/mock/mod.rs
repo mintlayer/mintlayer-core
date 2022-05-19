@@ -20,7 +20,7 @@ use crate::{
     message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingMessage, SyncingService, ValidationResult,
+        PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -81,7 +81,7 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingHandle<T>
+pub struct MockSyncingCodecHandle<T>
 where
     T: NetworkingService,
 {
@@ -102,7 +102,7 @@ impl NetworkingService for MockService {
     type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingHandle = MockSyncingHandle<Self>;
+    type SyncingCodecHandle = MockSyncingCodecHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -113,7 +113,7 @@ impl NetworkingService for MockService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
@@ -139,7 +139,7 @@ impl NetworkingService for MockService {
                 _pubsub_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingHandle {
+            Self::SyncingCodecHandle {
                 cmd_tx,
                 _sync_rx,
                 _marker: Default::default(),
@@ -225,7 +225,7 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingService<T> for MockSyncingHandle<T>
+impl<T> SyncingCodecService<T> for MockSyncingCodecHandle<T>
 where
     T: NetworkingService<PeerId = SocketAddr, RequestId = MockRequestId> + Send,
 {
