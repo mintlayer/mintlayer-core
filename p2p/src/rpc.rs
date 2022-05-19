@@ -45,9 +45,7 @@ where
     }
 
     async fn get_peer_count(&self) -> rpc::Result<usize> {
-        let res = self
-            .call_async(|this| Box::pin(this.get_peer_count()))
-            .await;
+        let res = self.call_async(|this| Box::pin(this.get_peer_count())).await;
         Ok(0)
         // handle_error(res)
     }

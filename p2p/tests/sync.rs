@@ -30,7 +30,7 @@ use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSo
 use crypto::random::Rng;
 use p2p::{
     error::P2pError,
-    event::SyncControlEvent,
+    event::{PubSubControlEvent, SyncControlEvent},
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{
         self, libp2p::Libp2pService, ConnectivityEvent, ConnectivityService, NetworkingService,
@@ -55,6 +55,7 @@ async fn make_sync_manager<T>(
     SyncManager<T>,
     T::ConnectivityHandle,
     mpsc::Sender<SyncControlEvent<T>>,
+    mpsc::Receiver<PubSubControlEvent>,
 )
 where
     T: NetworkingService,
@@ -62,6 +63,7 @@ where
     T::SyncingHandle: SyncingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
+    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let (conn, _, sync) = T::start(
@@ -75,9 +77,10 @@ where
     .unwrap();
 
     (
-        SyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync),
+        SyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_pubsub),
         conn,
         tx_p2p_sync,
+        rx_pubsub,
     )
 }
 
@@ -190,7 +193,7 @@ where
 {
     let event = mgr.handle_mut().poll_next().await.unwrap();
     mgr.on_syncing_event(event).await.unwrap();
-    mgr.check_state()
+    mgr.check_state().await
 }
 
 #[tokio::test]
@@ -201,10 +204,10 @@ async fn local_and_remote_in_sync() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -224,6 +227,10 @@ async fn local_and_remote_in_sync() {
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
@@ -236,10 +243,10 @@ async fn remote_ahead_by_7_blocks() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -256,7 +263,7 @@ async fn remote_ahead_by_7_blocks() {
         for i in 0..9 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -341,10 +348,14 @@ async fn remote_ahead_by_7_blocks() {
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
+    mgr1.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
@@ -354,10 +365,10 @@ async fn local_ahead_by_12_blocks() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, mut pubsub2) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -375,7 +386,7 @@ async fn local_ahead_by_12_blocks() {
         for i in 0..14 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -492,12 +503,15 @@ async fn local_ahead_by_12_blocks() {
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
-    mgr2.check_state();
+    mgr1.check_state().await.unwrap();
+    mgr2.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(mgr2.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
@@ -508,10 +522,10 @@ async fn remote_local_diff_chains_local_higher() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -535,7 +549,7 @@ async fn remote_local_diff_chains_local_higher() {
         for i in 0..24 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -681,14 +695,17 @@ async fn remote_local_diff_chains_local_higher() {
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
-    mgr2.check_state();
+    mgr1.check_state().await.unwrap();
+    mgr2.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await == local_tip);
     assert!(get_tip(&mgr2_handle).await != remote_tip);
     assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(mgr2.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 // local and remote nodes are in different chains and remote has longer chain
@@ -699,10 +716,10 @@ async fn remote_local_diff_chains_remote_higher() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, mut pubsub2) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -726,7 +743,7 @@ async fn remote_local_diff_chains_remote_higher() {
         for i in 0..20 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -872,14 +889,17 @@ async fn remote_local_diff_chains_remote_higher() {
     }
 
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
-    mgr2.check_state();
+    mgr1.check_state().await.unwrap();
+    mgr2.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert!(get_tip(&mgr1_handle).await != local_tip);
     assert!(get_tip(&mgr2_handle).await == remote_tip);
     assert_eq!(mgr1.state(), &SyncState::Idle);
-    assert_eq!(mgr2.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 #[tokio::test]
@@ -889,13 +909,13 @@ async fn two_remote_nodes_different_chains() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _) =
+    let (mut mgr3, mut conn3, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 
@@ -921,7 +941,7 @@ async fn two_remote_nodes_different_chains() {
         for i in 0..18 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -1009,12 +1029,16 @@ async fn two_remote_nodes_different_chains() {
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
+    mgr1.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 #[tokio::test]
@@ -1024,13 +1048,13 @@ async fn two_remote_nodes_same_chains() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _) =
+    let (mut mgr3, mut conn3, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 
@@ -1063,7 +1087,7 @@ async fn two_remote_nodes_same_chains() {
         for i in 0..70 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -1151,12 +1175,16 @@ async fn two_remote_nodes_same_chains() {
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
+    mgr1.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(get_tip(&mgr2_handle).await == mgr2_tip);
     assert!(get_tip(&mgr3_handle).await == mgr3_tip);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }
 
 #[tokio::test]
@@ -1166,13 +1194,13 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _) =
+    let (mut mgr1, mut conn1, _, mut pubsub) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _) =
+    let (mut mgr2, mut conn2, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _) =
+    let (mut mgr3, mut conn3, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 
@@ -1197,7 +1225,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         for i in 0..92 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state();
+            mgr1.check_state().await.unwrap();
         }
 
         mgr1
@@ -1308,9 +1336,13 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         }
     }
     let mut mgr1 = handle.await.unwrap();
-    mgr1.check_state();
+    mgr1.check_state().await.unwrap();
 
     assert!(same_tip(&mgr1_handle, &mgr3_handle).await);
     assert!(same_tip(&mgr2_handle, &mgr3_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+    assert_eq!(
+        pubsub.try_recv(),
+        Ok(PubSubControlEvent::InitialBlockDownloadDone),
+    );
 }

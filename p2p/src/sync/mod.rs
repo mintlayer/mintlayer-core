@@ -97,8 +97,11 @@ where
     /// Handle for sending/receiving connectivity events
     handle: T::SyncingHandle,
 
-    /// RX channel for receiving syncing-related control events
+    /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
+
+    /// TX channel for sending control events to pubsub
+    tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
 
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
@@ -117,11 +120,13 @@ where
         handle: T::SyncingHandle,
         consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
+        tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
             handle,
             rx_sync,
+            tx_pubsub,
             consensus_handle,
             peers: Default::default(),
             state: SyncState::Uninitialized,
@@ -359,7 +364,12 @@ where
     }
 
     // if all peers are idling, then it means we're idling -> fully synced
-    pub fn check_state(&mut self) -> error::Result<()> {
+    pub async fn check_state(&mut self) -> error::Result<()> {
+        if self.peers.is_empty() {
+            self.state = SyncState::Uninitialized;
+            return Ok(());
+        }
+
         for peer in self.peers.values() {
             match peer.state() {
                 peer::PeerSyncState::UploadingBlocks(_) => {
@@ -375,7 +385,10 @@ where
         }
 
         self.state = SyncState::Idle;
-        Ok(())
+        self.tx_pubsub
+            .send(event::PubSubControlEvent::InitialBlockDownloadDone)
+            .await
+            .map_err(P2pError::from)
     }
 
     async fn process_request(
@@ -476,7 +489,7 @@ where
                 }
             }
 
-            self.check_state().map_fatal_err()?;
+            self.check_state().await.map_fatal_err()?;
         }
     }
 }
