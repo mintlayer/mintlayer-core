@@ -119,6 +119,7 @@ where
         let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
         let (tx_sync, rx_sync) = mpsc::channel(CHANNEL_SIZE);
+        let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
@@ -133,9 +134,10 @@ where
         let sync_handle = consensus_handle.clone();
         let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            if let Err(e) = sync::SyncManager::<T>::new(sync_config, sync, sync_handle, rx_p2p_sync)
-                .run()
-                .await
+            if let Err(e) =
+                sync::SyncManager::<T>::new(sync_config, sync, sync_handle, rx_p2p_sync, tx_pubsub)
+                    .run()
+                    .await
             {
                 log::error!("SyncManager failed: {:?}", e);
             }
@@ -143,7 +145,11 @@ where
 
         // TODO: merge with syncmanager when appropriate
         tokio::spawn(async move {
-            if let Err(e) = pubsub::PubSubManager::<T>::new(pubsub, consensus_handle).run().await {
+            if let Err(e) =
+                pubsub::PubSubManager::<T>::new(config, pubsub, consensus_handle, rx_pubsub)
+                    .run()
+                    .await
+            {
                 log::error!("PubSubManager failed: {:?}", e);
             }
         });

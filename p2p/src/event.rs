@@ -48,3 +48,8 @@ where
     /// Peer disconnected
     Disconnected(T::PeerId),
 }
+
+#[derive(Debug, PartialEq)]
+pub enum PubSubControlEvent {
+    InitialBlockDownloadDone,
+}

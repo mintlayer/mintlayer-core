@@ -22,9 +22,8 @@ use crate::{
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
 };
-use common::chain::ChainConfig;
-use common::primitives::Idable;
-use consensus::consensus_interface;
+use common::{chain::ChainConfig, primitives::Idable};
+use consensus::{consensus_interface, BlockError, ConsensusError::ProcessBlockError};
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -37,8 +36,10 @@ pub struct PubSubManager<T>
 where
     T: NetworkingService,
 {
-    handle: T::PubSubHandle,
+    config: Arc<ChainConfig>,
+    pubsub_handle: T::PubSubHandle,
     consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 }
 
 impl<T> PubSubManager<T>
@@ -47,17 +48,24 @@ where
     T::PubSubHandle: PubSubService<T>,
 {
     pub fn new(
-        handle: T::PubSubHandle,
+        config: Arc<ChainConfig>,
+        pubsub_handle: T::PubSubHandle,
         consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
     ) -> Self {
         Self {
-            handle,
+            config,
+            pubsub_handle,
             consensus_handle,
+            rx_pubsub,
         }
     }
 
-    pub async fn on_pubsub_event(&mut self, event: net::PubSubEvent<T>) -> error::Result<()> {
-        // TODO: remove one global message type and create multiple message types
+    // TODO: remove one global message type and create multiple message types so we can get rid of this check
+    async fn validate_pubsub_message(
+        &mut self,
+        event: net::PubSubEvent<T>,
+    ) -> error::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
         match event {
             net::PubSubEvent::MessageReceived {
                 peer_id,
@@ -67,46 +75,59 @@ where
                         magic,
                         msg: MessageType::PubSub(PubSubMessage::Block(block)),
                     },
-            } => {
-                let result = match self
-                    .consensus_handle
-                    .call_mut(move |this| this.process_block(block, consensus::BlockSource::Peer))
-                    .await?
-                {
-                    Ok(_) => net::ValidationResult::Accept,
-                    Err(err) => {
-                        // TODO: report misbehaviour to swarm manager and close connection
-                        log::error!(
-                            "block rejected, peer id {:?}, message id {:?}, reason, {:?}",
-                            peer_id,
-                            message_id,
-                            err
-                        );
-                        net::ValidationResult::Reject
-                    }
-                };
-
-                return self.handle.report_validation_result(peer_id, message_id, result).await;
-            }
+            } => Ok((peer_id, message_id, PubSubMessage::Block(block))),
             net::PubSubEvent::MessageReceived {
                 peer_id,
-                message_id: _,
+                message_id,
                 message:
                     Message {
                         magic: _,
                         msg: MessageType::Syncing(_),
                     },
             } => {
-                // TODO: ban peer
-                log::error!("peer {:?} sent syncing message through pubsub", peer_id);
-                Ok(())
+                // TODO: report misbehaviour to swarm manager
+                log::error!("received an invalid message from peer {:?}", peer_id);
+                self.pubsub_handle
+                    .report_validation_result(peer_id, message_id, net::ValidationResult::Reject)
+                    .await?;
+                Err(P2pError::InvalidData)
             }
         }
     }
 
-    pub async fn run(&mut self) -> error::Result<()> {
+    // while initial block download is in progress, ignore all incoming data
+    // and wait for the completion event to be received from syncing
+    async fn node_syncing(&mut self) -> error::Result<()> {
+        loop {
+            tokio::select! {
+                event = self.pubsub_handle.poll_next() => {
+                    let (peer_id, message_id, _) = self.validate_pubsub_message(event?).await?;
+
+                    log::trace!(
+                        "received a pubsub message from peer {:?}, ignoring",
+                        peer_id
+                    );
+
+                    self.pubsub_handle
+                        .report_validation_result(
+                            peer_id,
+                            message_id,
+                            net::ValidationResult::Ignore,
+                        )
+                        .await?;
+                }
+                event = self.rx_pubsub.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    event::PubSubControlEvent::InitialBlockDownloadDone => {
+                        log::info!("initial block download done, activate pubsub");
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+
+    async fn node_active(&mut self) -> error::Result<()> {
         let (tx, mut rx) = mpsc::channel(CHANNEL_SIZE);
-        let config = common::chain::config::create_mainnet();
 
         let subscribe_func =
             Arc::new(
@@ -128,8 +149,43 @@ where
 
         loop {
             tokio::select! {
-                event = self.handle.poll_next() => {
-                    self.on_pubsub_event(event?).await?;
+                event = self.pubsub_handle.poll_next() => {
+                    let (peer_id, message_id, message) = self.validate_pubsub_message(event?).await?;
+
+                    log::trace!(
+                        "received a pubsub message from peer {:?}, send to consensus",
+                        peer_id
+                    );
+
+                    match message {
+                        PubSubMessage::Block(block) => {
+                            let result = match self
+                                .consensus_handle
+                                .call_mut(move |this| {
+                                    this.process_block(block, consensus::BlockSource::Peer)
+                                })
+                                .await?
+                            {
+                                Ok(_) => net::ValidationResult::Accept,
+                                Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) =>
+                                    net::ValidationResult::Accept, // TODO: ignore?
+                                Err(err) => {
+                                    // TODO: report misbehaviour to swarm manager and close connection
+                                    log::error!(
+                                    "block rejected, peer id {:?}, message id {:?}, reason, {:?}",
+                                    peer_id,
+                                    message_id,
+                                    err
+                                );
+
+                                net::ValidationResult::Reject
+                                }
+                            };
+                            self.pubsub_handle
+                                .report_validation_result(peer_id, message_id, result)
+                                .await?;
+                        }
+                    }
                 }
                 block_id = rx.recv().fuse() => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
@@ -140,9 +196,9 @@ where
 
                     match block {
                         Some(block) => {
-                            self.handle
+                            self.pubsub_handle
                                 .publish(message::Message {
-                                    magic: *config.magic_bytes(),
+                                    magic: *self.config.magic_bytes(),
                                     msg: message::MessageType::PubSub(
                                         message::PubSubMessage::Block(block),
                                     ),
@@ -156,6 +212,18 @@ where
                 }
             }
         }
+        todo!();
+    }
+
+    pub async fn run(&mut self) -> error::Result<()> {
+        // when node is started and it connects to some peers,
+        // it starts the initial block download. During this period,
+        // all events from both syncing and pubsub implementation should be ignored
+        self.node_syncing().await?;
+
+        // when the initial block download is done, SyncManager notifies us about it,
+        // meaning the PubSubManager can start processing block/transaction announcements
+        self.node_active().await
     }
 }
 
