@@ -200,7 +200,7 @@ pub trait NetworkingService {
     type PubSubHandle: Send;
 
     // TODO:
-    type SyncingHandle: Send;
+    type SyncingCodecHandle: Send;
 
     /// Unique ID assigned to each pubsub message
     type MessageId: Send + Clone + Debug;
@@ -221,7 +221,7 @@ pub trait NetworkingService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )>;
 }
 
@@ -290,7 +290,7 @@ where
 }
 
 #[async_trait]
-pub trait SyncingService<T>
+pub trait SyncingCodecService<T>
 where
     T: NetworkingService,
 {

@@ -23,7 +23,7 @@ use crate::{
     message,
     net::{
         self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
-        PubSubEvent, PubSubService, PubSubTopic, SyncingMessage, SyncingService,
+        PubSubEvent, PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage,
     },
 };
 use async_trait::async_trait;
@@ -254,7 +254,7 @@ impl NetworkingService for Libp2pService {
     type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
-    type SyncingHandle = Libp2pSyncHandle<Self>;
+    type SyncingCodecHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
@@ -265,7 +265,7 @@ impl NetworkingService for Libp2pService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -377,7 +377,7 @@ impl NetworkingService for Libp2pService {
                 gossip_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingHandle {
+            Self::SyncingCodecHandle {
                 cmd_tx,
                 sync_rx,
                 _marker: Default::default(),
@@ -550,7 +550,7 @@ where
 
 // TODO: move services to separate files + unit tests?
 #[async_trait]
-impl<T> SyncingService<T> for Libp2pSyncHandle<T>
+impl<T> SyncingCodecService<T> for Libp2pSyncHandle<T>
 where
     T: NetworkingService<PeerId = PeerId, MessageId = MessageId, RequestId = RequestId> + Send,
 {

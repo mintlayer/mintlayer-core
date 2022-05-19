@@ -19,7 +19,7 @@ use crate::{
     error::P2pError,
     net::{
         libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService,
-        PubSubService, SyncingService,
+        PubSubService, SyncingCodecService,
     },
 };
 use common::chain::block;
@@ -91,7 +91,7 @@ impl<T> P2P<T>
 where
     T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
     T::PubSubHandle: PubSubService<T>,
 {
     /// Start the P2P subsystem
@@ -146,11 +146,11 @@ where
         // TODO: merge with syncmanager when appropriate
         tokio::spawn(async move {
             if let Err(e) =
-                pubsub::PubSubManager::<T>::new(config, pubsub, consensus_handle, rx_pubsub)
+                pubsub::PubSubMessageHandler::<T>::new(config, pubsub, consensus_handle, rx_pubsub)
                     .run()
                     .await
             {
-                log::error!("PubSubManager failed: {:?}", e);
+                log::error!("PubSubMessageHandler failed: {:?}", e);
             }
         });
 
@@ -170,7 +170,7 @@ pub async fn make_p2p<T>(
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
     T::PubSubHandle: PubSubService<T>,
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,

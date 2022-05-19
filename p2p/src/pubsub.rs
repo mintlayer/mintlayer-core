@@ -32,7 +32,7 @@ use tokio::sync::mpsc;
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
 
-pub struct PubSubManager<T>
+pub struct PubSubMessageHandler<T>
 where
     T: NetworkingService,
 {
@@ -42,7 +42,7 @@ where
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 }
 
-impl<T> PubSubManager<T>
+impl<T> PubSubMessageHandler<T>
 where
     T: NetworkingService,
     T::PubSubHandle: PubSubService<T>,
@@ -222,7 +222,7 @@ where
         self.node_syncing().await?;
 
         // when the initial block download is done, SyncManager notifies us about it,
-        // meaning the PubSubManager can start processing block/transaction announcements
+        // meaning the PubSubMessageHandler can start processing block/transaction announcements
         self.node_active().await
     }
 }

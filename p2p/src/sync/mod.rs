@@ -20,7 +20,7 @@ use crate::{
     error::{self, FatalError, P2pError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
-    net::{self, NetworkingService, SyncingService},
+    net::{self, NetworkingService, SyncingCodecService},
 };
 use common::{
     chain::{
@@ -95,7 +95,7 @@ where
     state: SyncState,
 
     /// Handle for sending/receiving connectivity events
-    handle: T::SyncingHandle,
+    handle: T::SyncingCodecHandle,
 
     /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -113,11 +113,11 @@ where
 impl<T> SyncManager<T>
 where
     T: NetworkingService,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
-        handle: T::SyncingHandle,
+        handle: T::SyncingCodecHandle,
         consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
@@ -137,7 +137,7 @@ where
         &self.state
     }
 
-    pub fn handle_mut(&mut self) -> &mut T::SyncingHandle {
+    pub fn handle_mut(&mut self) -> &mut T::SyncingCodecHandle {
         &mut self.handle
     }
 
@@ -523,7 +523,7 @@ mod tests {
     where
         T: NetworkingService,
         T::ConnectivityHandle: ConnectivityService<T>,
-        T::SyncingHandle: SyncingService<T>,
+        T::SyncingCodecHandle: SyncingCodecService<T>,
     {
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
