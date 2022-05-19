@@ -221,7 +221,7 @@ mod test {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn check_sign_and_verify() {
+    fn sign_and_verify_different_sighash_types() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
@@ -269,7 +269,7 @@ mod test {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn check_verify_fails() {
+    fn check_verify_fails_different_sighash_types() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
@@ -347,7 +347,7 @@ mod test {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn check_invalid_input_index() {
+    fn check_invalid_input_index_for_verify_signature() {
         const INVALID_INPUT_INDEX: usize = 1234567890;
 
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);

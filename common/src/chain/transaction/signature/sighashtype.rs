@@ -101,7 +101,7 @@ mod test {
 
     #[test]
     #[allow(clippy::eq_op)]
-    fn check_sighashtype() {
+    fn check_sighashtype_conversion() {
         // Check inputs and outputs mode
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         assert_eq!(sighash_type.inputs_mode(), InputsMode::CommitWhoPays);
