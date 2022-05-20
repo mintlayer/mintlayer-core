@@ -213,3 +213,114 @@ fn test_get_headers_different_chains() {
         }
     });
 }
+
+#[test]
+fn test_get_uniq_headers() {
+    common::concurrency::model(|| {
+        {
+            let mut btf1 = BlockTestFrameWork::new();
+            let mut btf2 = BlockTestFrameWork::new();
+            let mut prev1 = btf1.genesis().clone();
+
+            for _ in 0..rand::thread_rng().gen_range(8..16) {
+                prev1 = btf1.random_block(&prev1, None);
+                btf1.add_special_block(prev1.clone()).unwrap();
+                btf2.add_special_block(prev1.clone()).unwrap();
+                assert_eq!(
+                    btf1.blocks[btf1.blocks.len() - 1],
+                    btf2.blocks[btf2.blocks.len() - 1],
+                );
+            }
+
+            let limit = rand::thread_rng().gen_range(32..256);
+            let mut prev2 = prev1.clone();
+            let mut headers1 = vec![];
+            let mut headers2 = vec![];
+
+            // add random blocks to both chains
+            for i in 0..(limit * 2) {
+                if i <= limit {
+                    prev1 = btf1.random_block(&prev1, None);
+                    headers1.push(prev1.header().clone());
+                    btf1.add_special_block(prev1.clone()).unwrap();
+                }
+
+                prev2 = btf1.random_block(&prev2, None);
+                headers2.push(prev2.header().clone());
+                btf2.add_special_block(prev2.clone()).unwrap();
+            }
+
+            let locator = btf1.consensus.get_locator().unwrap();
+            let headers = btf2.consensus.get_headers(locator).unwrap();
+            let headers = btf1.consensus.get_uniq_headers(headers).unwrap();
+            assert_eq!(headers, headers2);
+
+            let locator = btf2.consensus.get_locator().unwrap();
+            let headers = btf1.consensus.get_headers(locator).unwrap();
+            let headers = btf2.consensus.get_uniq_headers(headers).unwrap();
+            assert_eq!(headers, headers1);
+        }
+
+        // try to offer headers that don't attach to local chain
+        {
+            let mut btf1 = BlockTestFrameWork::new();
+            let mut btf2 = BlockTestFrameWork::new();
+            let mut prev = btf1.genesis().clone();
+
+            for _ in 0..rand::thread_rng().gen_range(8..16) {
+                prev = btf1.random_block(&prev, None);
+                btf1.add_special_block(prev.clone()).unwrap();
+                btf2.add_special_block(prev.clone()).unwrap();
+                assert_eq!(
+                    btf1.blocks[btf1.blocks.len() - 1],
+                    btf2.blocks[btf2.blocks.len() - 1],
+                );
+            }
+
+            let headers = (0..rand::thread_rng().gen_range(3..10))
+                .map(|_| {
+                    prev = btf2.random_block(&prev, None);
+                    btf2.add_special_block(prev.clone()).unwrap();
+                    prev.header().to_owned()
+                })
+                .collect::<Vec<_>>();
+
+            let headers = btf1.consensus.get_uniq_headers(headers[1..].to_vec());
+            assert_eq!(headers, Err(BlockError::NotFound));
+        }
+
+        // try to offer headers that are not in order
+        {
+            let mut btf1 = BlockTestFrameWork::new();
+            let mut btf2 = BlockTestFrameWork::new();
+            let mut prev = btf1.genesis().clone();
+
+            for _ in 0..rand::thread_rng().gen_range(8..16) {
+                prev = btf1.random_block(&prev, None);
+                btf1.add_special_block(prev.clone()).unwrap();
+                btf2.add_special_block(prev.clone()).unwrap();
+                assert_eq!(
+                    btf1.blocks[btf1.blocks.len() - 1],
+                    btf2.blocks[btf2.blocks.len() - 1],
+                );
+            }
+
+            let mut headers = (0..rand::thread_rng().gen_range(4..10))
+                .map(|_| {
+                    prev = btf2.random_block(&prev, None);
+                    btf2.add_special_block(prev.clone()).unwrap();
+                    prev.header().to_owned()
+                })
+                .collect::<Vec<_>>();
+
+            // swap headers to make them be out of order
+            let len = headers.len() - 1;
+            let tmp = headers[len - 1].clone();
+            headers[len - 1] = headers[len - 2].clone();
+            headers[len - 2] = tmp;
+
+            let headers = btf1.consensus.get_uniq_headers(headers);
+            assert_eq!(headers, Err(BlockError::Orphan));
+        }
+    });
+}

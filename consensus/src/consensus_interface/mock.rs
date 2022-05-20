@@ -31,5 +31,9 @@ mockall::mock! {
             &self,
             locator: Vec<BlockHeader>,
         ) -> Result<Vec<BlockHeader>, ConsensusError>;
+        fn get_uniq_headers(
+            &self,
+            headers: Vec<BlockHeader>,
+        ) -> Result<Vec<BlockHeader>, ConsensusError>;
     }
 }
