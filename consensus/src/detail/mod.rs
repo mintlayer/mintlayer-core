@@ -211,6 +211,10 @@ impl Consensus {
         Ok(block)
     }
 
+    pub fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, BlockError> {
+        self.make_ro_db_tx().db_tx.get_block_index(id).map_err(BlockError::from)
+    }
+
     pub fn get_header_from_height(
         &self,
         height: &BlockHeight,
@@ -235,6 +239,47 @@ impl Consensus {
                 )
             });
 
+        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+    }
+
+    // TODO: use `ConsensusRef::is_block_in_main_chain()` implementation instead, how?
+    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        let height = block_index.get_block_height();
+        let id_at_height =
+            consensus_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+        match id_at_height {
+            Some(id) => Ok(id == *block_index.get_block_id()),
+            None => Ok(false),
+        }
+    }
+
+    pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
+        // use genesis block if no common ancestor with better block height is found
+        let mut best = BlockHeight::new(0);
+
+		// TODO: implement `last_common_ancestor()`
+        for header in locator.iter() {
+            if let Some(block_index) = self.get_block_index(&header.get_id())? {
+                if self.is_block_in_main_chain(&block_index)? {
+                    best = block_index.get_block_height();
+                    break;
+                }
+            }
+        }
+
+        // get headers until either the best block or header limit is reached
+        let limit = std::cmp::min(
+            (best + HEADER_LIMIT).ok_or(BlockError::Unknown)?,
+            self.get_block_height_in_main_chain(
+                &self.get_best_block_id()?.expect("best block to exist"),
+            )?
+            .expect("best block's height to exist"),
+        );
+
+        let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
+            .take_while(|height| height <= &limit)
+            .map(|height| self.get_header_from_height(&height));
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 }

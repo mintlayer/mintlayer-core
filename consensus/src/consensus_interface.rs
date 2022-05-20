@@ -25,4 +25,5 @@ pub trait ConsensusInterface: Send {
     ) -> Result<Option<Id<Block>>, ConsensusError>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError>;
     fn get_locator(&self) -> Result<Vec<BlockHeader>, ConsensusError>;
+    fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ConsensusError>;
 }

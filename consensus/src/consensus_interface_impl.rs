@@ -73,4 +73,10 @@ impl ConsensusInterface for ConsensusInterfaceImpl {
     fn get_locator(&self) -> Result<Vec<BlockHeader>, ConsensusError> {
         self.consensus.get_locator().map_err(ConsensusError::FailedToReadProperty)
     }
+
+    fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ConsensusError> {
+        self.consensus
+            .get_headers(locator)
+            .map_err(ConsensusError::FailedToReadProperty)
+    }
 }
