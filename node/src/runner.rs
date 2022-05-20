@@ -11,6 +11,7 @@ enum Error {
     UnsupportedChain(ChainType),
 }
 
+/// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Initialize storage and chain configuration
     let storage = blockchain_storage::Store::new_empty()?;
@@ -42,4 +43,12 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     );
 
     Ok(manager)
+}
+
+/// Initialize and run the node
+pub async fn run(opts: Options) -> anyhow::Result<()> {
+    let manager = initialize(opts).await?;
+
+    #[allow(clippy::unit_arg)]
+    Ok(manager.main().await)
 }

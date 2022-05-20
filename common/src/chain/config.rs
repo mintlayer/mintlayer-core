@@ -23,6 +23,7 @@ type HashType = Id<Block>;
     strum::EnumVariantNames,
     strum::EnumString,
 )]
+#[strum(serialize_all = "kebab-case")]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -198,5 +199,19 @@ mod tests {
         assert_eq!(config.genesis_block(), mainnet.genesis_block(),);
         assert_ne!(config.magic_bytes(), mainnet.magic_bytes(),);
         assert_ne!(config.version(), mainnet.version(),);
+    }
+
+    #[test]
+    fn chain_type_names() {
+        use strum::VariantNames;
+
+        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
+        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
+
+        assert_eq!(ChainType::VARIANTS.len(), 4, "Unexpected number of chain types");
+        for chain_type_str in ChainType::VARIANTS {
+            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
+            assert_eq!(&chain_type.to_string(), chain_type_str);
+        }
     }
 }

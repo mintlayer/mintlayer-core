@@ -1,5 +1,6 @@
 //! Node configuration options
 
+use std::ffi::OsString;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use strum::VariantNames;
@@ -24,7 +25,7 @@ pub struct Options {
 }
 
 impl Options {
-    pub fn from_args() -> Self {
-        clap::Parser::parse()
+    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
+        clap::Parser::parse_from(args)
     }
 }
