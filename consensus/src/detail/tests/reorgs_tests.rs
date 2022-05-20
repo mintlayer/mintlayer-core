@@ -379,7 +379,6 @@ fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
             }
         }
         None => {
-            dbg!(btf.block_indexes.len());
             panic!("Events haven't received");
         }
     }

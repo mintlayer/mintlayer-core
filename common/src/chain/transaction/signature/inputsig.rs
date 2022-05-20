@@ -116,6 +116,10 @@ impl StandardInputSignature {
             raw_signature: serialized_sig,
         })
     }
+
+    pub fn get_raw_signature(&self) -> &Vec<u8> {
+        &self.raw_signature
+    }
 }
 
 impl Decode for StandardInputSignature {
