@@ -82,14 +82,15 @@ class ExampleTest(BitcoinTestFramework):
         self.setup_clean_chain = True
         self.num_nodes = 3
         # Use self.extra_args to change command-line arguments for the nodes
-        self.extra_args = [[], ["-logips"], []]
+        self.extra_args = [[], [], []]
 
         # self.log.info("I've finished set_test_params")  # Oops! Can't run self.log before run_test()
 
     # Use skip_test_if_missing_module() to skip the test if your test requires certain modules to be present.
     # This test uses generate which requires wallet to be compiled
     def skip_test_if_missing_module(self):
-        self.skip_if_no_wallet()
+        #self.skip_if_no_wallet()
+        pass
 
     # Use add_options() to add specific command-line options for your test.
     # In practice this is not used very much, since the tests are mostly written
@@ -117,13 +118,14 @@ class ExampleTest(BitcoinTestFramework):
         # In this test, we're not connecting node2 to node0 or node1. Calls to
         # sync_all() should not include node2, since we're not expecting it to
         # sync.
-        self.connect_nodes(0, 1)
-        self.sync_all(self.nodes[0:2])
+        # TODO: Re-enable connecting nodes
+        #self.connect_nodes(0, 1)
+        #self.sync_all(self.nodes[0:2])
 
     # Use setup_nodes() to customize the node start behaviour (for example if
     # you don't want to start all nodes at the start of the test).
-    # def setup_nodes():
-    #     pass
+    # def setup_nodes(self):
+    #    pass
 
     def custom_method(self):
         """Do some custom behaviour for this test
@@ -136,6 +138,20 @@ class ExampleTest(BitcoinTestFramework):
 
     def run_test(self):
         """Main test logic"""
+
+        # Get current tip hash
+        tip_hash = self.nodes[0].consensus_best_block_id()
+        self.log.info("bestblk: " + tip_hash)
+
+        # Get genesis hash (hash of block at height 0)
+        genesis_hash = self.nodes[0].consensus_block_id_at_height(0)
+        self.log.info("genesis: " + genesis_hash)
+
+        # Check they match
+        assert_equal(tip_hash, genesis_hash)
+
+        return
+        # TODO: Re-enable the follwing:
 
         # Create P2P connections will wait for a verack to make sure the connection is fully up
         peer_messaging = self.nodes[0].add_p2p_connection(BaseNode())

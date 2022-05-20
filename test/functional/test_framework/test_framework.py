@@ -233,22 +233,20 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
         config = self.config
 
-        fname_bitcoind = os.path.join(
+        fname_mintlayer_node = os.path.join(
             config["environment"]["BUILDDIR"],
-            "src",
-            "bitcoind" + config["environment"]["EXEEXT"],
+            "node" + config["environment"]["EXEEXT"],
         )
-        fname_bitcoincli = os.path.join(
+        fname_mintlayer_cli = os.path.join(
             config["environment"]["BUILDDIR"],
-            "src",
-            "bitcoin-cli" + config["environment"]["EXEEXT"],
+            "mintlayer-cli" + config["environment"]["EXEEXT"],
         )
-        self.options.bitcoind = os.getenv("BITCOIND", default=fname_bitcoind)
-        self.options.bitcoincli = os.getenv("BITCOINCLI", default=fname_bitcoincli)
+        self.options.bitcoind = os.getenv("MINTLAYER_NODE", default=fname_mintlayer_node)
+        self.options.bitcoincli = os.getenv("MINTLAYER_CLI", default=fname_mintlayer_cli)
 
         os.environ['PATH'] = os.pathsep.join([
-            os.path.join(config['environment']['BUILDDIR'], 'src'),
-            os.path.join(config['environment']['BUILDDIR'], 'src', 'qt'), os.environ['PATH']
+            config['environment']['BUILDDIR'],
+            os.environ['PATH']
         ])
 
         # Set up temp directory and start logging
