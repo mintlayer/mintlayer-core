@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use common::{
-    chain::block::Block,
+    chain::block::{Block, BlockHeader},
     primitives::{BlockHeight, Id},
 };
 
@@ -26,5 +26,6 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> Result<Option<Id<Block>>, ConsensusError>;
         fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError>;
+        fn get_locator(&self) -> Result<Vec<BlockHeader>, ConsensusError>;
     }
 }

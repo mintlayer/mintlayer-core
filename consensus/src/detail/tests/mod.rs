@@ -35,6 +35,8 @@ mod test_framework;
 #[cfg(test)]
 mod double_spend_tests;
 #[cfg(test)]
+mod syncing_tests;
+#[cfg(test)]
 mod events_tests;
 #[cfg(test)]
 mod processing_tests;
