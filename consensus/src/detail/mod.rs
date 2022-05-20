@@ -262,7 +262,6 @@ impl Consensus {
         // use genesis block if no common ancestor with better block height is found
         let mut best = BlockHeight::new(0);
 
-        // TODO: implement `last_common_ancestor()`
         for header in locator.iter() {
             if let Some(block_index) = self.get_block_index(&header.get_id())? {
                 if self.is_block_in_main_chain(&block_index)? {
@@ -287,39 +286,27 @@ impl Consensus {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub fn get_uniq_headers(
+    pub fn filter_already_existing_blocks(
         &self,
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, BlockError> {
-        if headers.is_empty() {
-            return Ok(vec![]);
-        }
-
         // verify that the first block attaches to our chain
-        let mut prev_id: Id<Block> = match headers[0].get_prev_block_id() {
+        match headers.get(0).ok_or(BlockError::Unknown)?.get_prev_block_id() {
             None => return Err(BlockError::PrevBlockInvalid),
             Some(id) => {
-                self.get_block_index(id)?.ok_or(BlockError::NotFound).map(|_| id.clone())?
-            }
-        };
-
-        // verify that the headers are in order and collect all unknown headers
-        let headers = headers
-            .iter()
-            .map(|header| {
-                if header.get_prev_block_id() != &Some(prev_id.clone()) {
-                    Err(BlockError::Orphan)
-                } else {
-                    prev_id = header.get_id();
-                    match self.get_block_index(&prev_id)? {
-                        None => Ok(Some(header.clone())),
-                        Some(_) => Ok(None),
-                    }
+                if self.get_block_index(id)?.is_none() {
+                    return Err(BlockError::NotFound);
                 }
-            })
-            .collect::<Vec<_>>();
+            }
+        }
 
-        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+        for (num, header) in headers.iter().enumerate() {
+            if self.get_block_index(&header.get_id())?.is_none() {
+                return Ok(headers[num..].to_vec());
+            }
+        }
+
+        Ok(vec![])
     }
 }
 

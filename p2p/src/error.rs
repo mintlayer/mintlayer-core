@@ -15,6 +15,7 @@
 //
 // Author(s): A. Altonen
 
+// TODO: think about which errors should be returned and when
 // TODO: store peerid where appropriate!
 #[derive(Debug, PartialEq, Eq)]
 pub enum ProtocolError {

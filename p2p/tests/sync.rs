@@ -477,11 +477,11 @@ async fn local_ahead_by_12_blocks() {
             } => {
                 assert_eq!(headers.len(), 12);
                 let headers = mgr2_handle
-                    .call(move |this| this.get_uniq_headers(headers))
+                    .call(move |this| this.filter_already_existing_blocks(headers))
                     .await
                     .unwrap()
                     .unwrap();
-                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(
@@ -669,11 +669,11 @@ async fn remote_local_diff_chains_local_higher() {
                     },
             } => {
                 let headers = mgr2_handle
-                    .call(move |this| this.get_uniq_headers(headers))
+                    .call(move |this| this.filter_already_existing_blocks(headers))
                     .await
                     .unwrap()
                     .unwrap();
-                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(
@@ -863,12 +863,11 @@ async fn remote_local_diff_chains_remote_higher() {
                     },
             } => {
                 let headers = mgr2_handle
-                    .call(move |this| this.get_uniq_headers(headers))
+                    .call(move |this| this.filter_already_existing_blocks(headers))
                     .await
                     .unwrap()
                     .unwrap();
-                // work = VecDeque::from(headers);
-                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>(); //VecDeque::from(headers);
+                work = headers.into_iter().map(|header| header.get_id()).collect::<VecDeque<_>>();
                 let header = work.pop_front().unwrap();
                 mgr2.handle_mut()
                     .send_request(

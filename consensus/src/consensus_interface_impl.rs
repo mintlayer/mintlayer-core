@@ -86,12 +86,12 @@ impl ConsensusInterface for ConsensusInterfaceImpl {
             .map_err(ConsensusError::FailedToReadProperty)
     }
 
-    fn get_uniq_headers(
+    fn filter_already_existing_blocks(
         &self,
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, ConsensusError> {
         self.consensus
-            .get_uniq_headers(headers)
+            .filter_already_existing_blocks(headers)
             .map_err(ConsensusError::FailedToReadProperty)
     }
 }

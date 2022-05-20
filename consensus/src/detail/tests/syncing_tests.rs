@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::detail::tests::*;
+use crate::detail::tests::{*, test_framework::BlockTestFrameWork};
 
 #[test]
 fn test_get_locator() {
@@ -29,7 +29,7 @@ fn test_get_locator() {
         for _ in 0..limit {
             let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
             consensus
-                .process_block(new_block.clone(), BlockSource::Peer(1))
+                .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
                 .flatten()
                 .unwrap();
@@ -71,7 +71,7 @@ fn test_get_headers_same_chain() {
         for _ in 0..limit {
             let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
             consensus
-                .process_block(new_block.clone(), BlockSource::Peer(1))
+                .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
                 .flatten()
                 .unwrap();
@@ -91,7 +91,7 @@ fn test_get_headers_same_chain() {
             let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
             headers.push(new_block.header().clone());
             consensus
-                .process_block(new_block.clone(), BlockSource::Peer(1))
+                .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
                 .flatten()
                 .unwrap();
@@ -106,13 +106,12 @@ fn test_get_headers_same_chain() {
         // because both locator and `consesus` are tracking the same chain, the first header
         // of locator is always the parent of the first header in `new_received_headers`
         assert_eq!(new_received_headers, headers[..hdr_limit]);
-        assert_eq!(headers[0].get_prev_block_id(), &Some(locator[0].block_id()));
+        assert_eq!(headers[0].get_prev_block_id(), &Some(locator[0].get_id()));
     });
 }
 
 #[test]
 fn test_get_headers_different_chains() {
-    use crate::detail::tests::test_framework::BlockTestFrameWork;
     common::concurrency::model(|| {
         // first create test where the chains have branched off at genesis
         // verify that the first header attaches to genesis
@@ -215,7 +214,7 @@ fn test_get_headers_different_chains() {
 }
 
 #[test]
-fn test_get_uniq_headers() {
+fn test_filter_already_existing_blocks() {
     common::concurrency::model(|| {
         {
             let mut btf1 = BlockTestFrameWork::new();
@@ -252,12 +251,12 @@ fn test_get_uniq_headers() {
 
             let locator = btf1.consensus.get_locator().unwrap();
             let headers = btf2.consensus.get_headers(locator).unwrap();
-            let headers = btf1.consensus.get_uniq_headers(headers).unwrap();
+            let headers = btf1.consensus.filter_already_existing_blocks(headers).unwrap();
             assert_eq!(headers, headers2);
 
             let locator = btf2.consensus.get_locator().unwrap();
             let headers = btf1.consensus.get_headers(locator).unwrap();
-            let headers = btf2.consensus.get_uniq_headers(headers).unwrap();
+            let headers = btf2.consensus.filter_already_existing_blocks(headers).unwrap();
             assert_eq!(headers, headers1);
         }
 
@@ -285,42 +284,8 @@ fn test_get_uniq_headers() {
                 })
                 .collect::<Vec<_>>();
 
-            let headers = btf1.consensus.get_uniq_headers(headers[1..].to_vec());
+            let headers = btf1.consensus.filter_already_existing_blocks(headers[1..].to_vec());
             assert_eq!(headers, Err(BlockError::NotFound));
-        }
-
-        // try to offer headers that are not in order
-        {
-            let mut btf1 = BlockTestFrameWork::new();
-            let mut btf2 = BlockTestFrameWork::new();
-            let mut prev = btf1.genesis().clone();
-
-            for _ in 0..rand::thread_rng().gen_range(8..16) {
-                prev = btf1.random_block(&prev, None);
-                btf1.add_special_block(prev.clone()).unwrap();
-                btf2.add_special_block(prev.clone()).unwrap();
-                assert_eq!(
-                    btf1.blocks[btf1.blocks.len() - 1],
-                    btf2.blocks[btf2.blocks.len() - 1],
-                );
-            }
-
-            let mut headers = (0..rand::thread_rng().gen_range(4..10))
-                .map(|_| {
-                    prev = btf2.random_block(&prev, None);
-                    btf2.add_special_block(prev.clone()).unwrap();
-                    prev.header().to_owned()
-                })
-                .collect::<Vec<_>>();
-
-            // swap headers to make them be out of order
-            let len = headers.len() - 1;
-            let tmp = headers[len - 1].clone();
-            headers[len - 1] = headers[len - 2].clone();
-            headers[len - 2] = tmp;
-
-            let headers = btf1.consensus.get_uniq_headers(headers);
-            assert_eq!(headers, Err(BlockError::Orphan));
         }
     });
 }

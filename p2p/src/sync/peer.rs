@@ -17,12 +17,15 @@
 #![allow(unused)]
 
 use crate::{
-    error::{self, P2pError},
+    error::{self, P2pError, ProtocolError},
     event,
     net::{self, NetworkingService},
     sync,
 };
-use common::chain::block::{Block, BlockHeader};
+use common::{
+    chain::block::{Block, BlockHeader},
+    primitives::{Id, Idable},
+};
 use logging::log;
 use std::collections::{HashSet, VecDeque};
 use tokio::sync::mpsc;
@@ -54,6 +57,10 @@ where
     /// State of the peer
     state: PeerSyncState,
 
+    /// Locator that was sent to the peer
+    /// Used to verify header response and pick unknown headers
+    locator: Vec<BlockHeader>,
+
     /// List of block headers indicating which blocks
     /// still need to be downloaded from the remote peer
     work: VecDeque<BlockHeader>,
@@ -63,17 +70,21 @@ impl<T> PeerContext<T>
 where
     T: NetworkingService,
 {
-    pub fn new(peer_id: T::PeerId) -> Self {
+    pub fn new(peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
         Self {
             peer_id,
+            locator,
             state: PeerSyncState::Unknown,
             work: VecDeque::new(),
         }
     }
 
-    pub fn register_headers(&mut self, headers: &[BlockHeader]) -> Option<BlockHeader> {
+    pub fn register_header_response(&mut self, headers: &[BlockHeader]) {
         self.state = PeerSyncState::Idle;
         self.work = VecDeque::from(headers.to_vec());
+    }
+
+    pub fn get_header_for_download(&mut self) -> Option<BlockHeader> {
         self.get_next_block()
     }
 
@@ -114,6 +125,14 @@ where
     pub fn state(&self) -> &PeerSyncState {
         &self.state
     }
+
+    pub fn set_locator(&mut self, locator: Vec<BlockHeader>) {
+        self.locator = locator;
+    }
+
+    pub fn locator(&self) -> &Vec<BlockHeader> {
+        &self.locator
+    }
 }
 
 #[cfg(test)]
@@ -125,7 +144,7 @@ mod tests {
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        PeerContext::<MockService>::new(addr)
+        PeerContext::<MockService>::new(addr, vec![])
     }
 
     #[test]
