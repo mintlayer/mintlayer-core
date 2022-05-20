@@ -1083,20 +1083,27 @@ async fn two_remote_nodes_same_chains() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
-    let handle = tokio::spawn(async move {
-        for i in 0..70 {
+    let (tx, mut rx) = mpsc::channel(1);
+    let mut handle = tokio::spawn(async move {
+        loop {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
+
+            if mgr1.state() == &SyncState::Idle {
+                break;
+            }
         }
 
+        tx.send(());
         mgr1
     });
 
-    for i in 0..70 {
+    loop {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
+            event = rx.recv() => { break },
         };
 
         match event {
@@ -1221,22 +1228,30 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
-    let handle = tokio::spawn(async move {
-        for i in 0..92 {
+    let (tx, mut rx) = mpsc::channel(1);
+    let mut gethdr_received = HashSet::new();
+    let mut blocks = vec![];
+
+    let mut handle = tokio::spawn(async move {
+        loop {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
+
+            if mgr1.state() == &SyncState::Idle {
+                break;
+            }
         }
 
+        tx.send(());
         mgr1
     });
 
-    let mut gethdr_received: HashMap<libp2p::PeerId, usize> = HashMap::new();
-
-    for i in 0..92 {
+	loop {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
+            event = rx.recv() => { break },
         };
 
         match event {
@@ -1267,26 +1282,22 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
                 }
 
-                // add more headers to both chains if the local node has requested headers once already
-                if (gethdr_received.get(conn2.peer_id()) >= Some(&1)
-                    && gethdr_received.get(conn3.peer_id()) == None)
-                    || (gethdr_received.get(conn2.peer_id()) == None
-                        && gethdr_received.get(conn3.peer_id()) >= Some(&1))
-                {
-                    let id = mgr2_handle
-                        .call(move |this| this.get_best_block_id())
-                        .await
-                        .unwrap()
-                        .unwrap();
-                    let parent =
-                        mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-                    let blocks = util::create_n_blocks(&parent.unwrap(), 10);
+                if gethdr_received.insert(dest_peer_id) {
+                    if blocks.is_empty() {
+                        let parent = mgr2_handle
+                            .call(move |this| this.get_block(this.get_best_block_id().unwrap()))
+                            .await
+                            .unwrap()
+                            .unwrap();
+                        blocks = util::create_n_blocks(&parent.unwrap(), 10);
+                    }
 
-                    util::import_blocks(&mgr2_handle, blocks.clone()).await;
-                    util::import_blocks(&mgr3_handle, blocks).await;
+                    if dest_peer_id == conn2.peer_id() {
+                        util::import_blocks(&mgr2_handle, blocks.clone()).await;
+                    } else {
+                        util::import_blocks(&mgr3_handle, blocks.clone()).await;
+                    }
                 }
-
-                *gethdr_received.entry(*dest_peer_id).or_insert_with(|| 0) += 1;
             }
             net::SyncingMessage::Request {
                 peer_id,
