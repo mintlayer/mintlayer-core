@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use common::{
-    chain::block::Block,
+    chain::block::{Block, BlockHeader},
     primitives::{BlockHeight, Id},
 };
 
@@ -68,5 +68,9 @@ impl ConsensusInterface for ConsensusInterfaceImpl {
 
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ConsensusError> {
         self.consensus.get_block(block_id).map_err(ConsensusError::FailedToReadProperty)
+    }
+
+    fn get_locator(&self) -> Result<Vec<BlockHeader>, ConsensusError> {
+        self.consensus.get_locator().map_err(ConsensusError::FailedToReadProperty)
     }
 }
