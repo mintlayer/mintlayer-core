@@ -32,7 +32,7 @@ mockall::mock! {
             &self,
             locator: Vec<BlockHeader>,
         ) -> Result<Vec<BlockHeader>, ConsensusError>;
-        fn get_uniq_headers(
+        fn filter_already_existing_blocks(
             &self,
             headers: Vec<BlockHeader>,
         ) -> Result<Vec<BlockHeader>, ConsensusError>;

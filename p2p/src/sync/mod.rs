@@ -40,6 +40,14 @@ use tokio::sync::mpsc;
 
 pub mod peer;
 
+// TODO: from config? global constant?
+const HEADER_LIMIT: usize = 2000;
+
+// TODO: add more tests
+// TODO: split syncing into separate files
+// TODO: match against error in `run()` and deal with `ProtocolError`
+// TODO: use ensure
+
 // Define which errors are fatal for the sync manager as the error is bubbled
 // up to the main event loop which then decides how to act on errors.
 // Peer not existing is not a fatal error for SyncManager but it is fatal error
@@ -108,8 +116,10 @@ where
 
     /// Subsystem handle to Consensus
     consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    // TODO: cache locator and invalidate it when `NewTip` event is received
 }
 
+// TODO: refactor this code
 impl<T> SyncManager<T>
 where
     T: NetworkingService,
@@ -141,7 +151,7 @@ where
         &mut self.handle
     }
 
-    pub async fn request_headers(
+    pub async fn send_header_request(
         &mut self,
         peer_id: T::PeerId,
         locator: Vec<BlockHeader>,
@@ -172,8 +182,8 @@ where
             }
             Entry::Vacant(entry) => {
                 let locator = self.consensus_handle.call(move |this| this.get_locator()).await??;
-                entry.insert(peer::PeerContext::new(peer_id));
-                self.request_headers(peer_id, locator).await
+                entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
+                self.send_header_request(peer_id, locator).await
             }
         }
     }
@@ -231,12 +241,20 @@ where
         }
 
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
-        let blocks = vec![self
+        let block_id = headers.get(0).expect("header to exist").clone();
+        let block = self
             .consensus_handle
             .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
             .await??
-            // TODO: remove unwrap
-            .unwrap()];
+            .ok_or_else(|| {
+                log::error!(
+                    "peer {:?} requested block we don't have \
+                        or database doesn't have a block it previously had, block id: {:?}",
+                    peer_id,
+                    block_id
+                );
+                P2pError::InvalidData
+            })?;
 
         self.handle
             .send_response(
@@ -244,13 +262,14 @@ where
                 Message {
                     magic: *self.config.magic_bytes(),
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                        blocks,
+                        blocks: vec![block],
                     })),
                 },
             )
             .await
     }
 
+    // TODO: get rid of the awful `set_state()` calls
     async fn process_header_response(
         &mut self,
         peer_id: T::PeerId,
@@ -264,27 +283,79 @@ where
             headers
         );
 
-        let headers =
-            self.consensus_handle.call(move |this| this.get_uniq_headers(headers)).await??;
+        if headers.len() > 2000 {
+            // TODO: ban peer
+            log::error!(
+                "peer sent {} headers while the maximum is {}",
+                headers.len(),
+                HEADER_LIMIT
+            );
+            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        }
 
-        if !headers.is_empty() {
-            if let Some(next_block) = peer.register_headers(&headers) {
-                let _ = self
-                    .handle
-                    .send_request(
-                        peer_id,
-                        Message {
-                            magic: *self.config.magic_bytes(),
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetBlocks {
-                                    headers: vec![next_block.get_id()],
-                                },
-                            )),
-                        },
-                    )
-                    .await;
-                peer.set_state(peer::PeerSyncState::UploadingBlocks(next_block));
+        if headers.is_empty() {
+            log::debug!("local node is in sync with peer {:?}", peer_id);
+            peer.set_state(peer::PeerSyncState::Idle);
+            return Ok(());
+        }
+
+        // make sure the first header attaches to the locator that was sent out
+        let mut prev_id = headers
+            .get(0)
+            .expect("first header to exist")
+            .get_prev_block_id()
+            .clone()
+            .ok_or_else(|| {
+                // TODO: ban peer
+                log::error!("peer {:?} sent a header with invalid previous id", peer_id);
+                P2pError::ProtocolError(ProtocolError::InvalidMessage)
+            })?;
+
+        if !peer.locator().iter().any(|header| header.get_id() == prev_id)
+            && self.config.genesis_block().get_id() != prev_id
+        {
+            // TODO: ban peer
+            log::error!(
+                "peer {:?} sent headers that don't attach to the sent locator or to genesis block",
+                peer_id
+            );
+
+            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        }
+
+        for header in &headers {
+            if header.get_prev_block_id() != &Some(prev_id) {
+                log::error!("peer {:?} sent headers that are out of order", peer_id);
+                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
             }
+            prev_id = header.get_id();
+        }
+
+        // TODO: fetch unique headers from chainstate
+        let unknown_headers = self
+            .consensus_handle
+            .call(|this| this.filter_already_existing_blocks(headers))
+            .await??;
+
+        peer.register_header_response(&unknown_headers);
+        if let Some(header) = peer.get_header_for_download() {
+            // TODO: create helper function for this message
+            // TODO: save request ids somewhere?
+            let _ = self
+                .handle
+                .send_request(
+                    peer_id,
+                    Message {
+                        magic: *self.config.magic_bytes(),
+                        msg: MessageType::Syncing(SyncingMessage::Request(
+                            SyncingRequest::GetBlocks {
+                                headers: vec![header.get_id()],
+                            },
+                        )),
+                    },
+                )
+                .await;
+            peer.set_state(peer::PeerSyncState::UploadingBlocks(header));
         } else {
             peer.set_state(peer::PeerSyncState::Idle);
         }
@@ -292,6 +363,7 @@ where
         Ok(())
     }
 
+    // TODO: create process_block function?
     async fn process_block_response(
         &mut self,
         peer_id: T::PeerId,
@@ -307,8 +379,8 @@ where
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
         // TODO: check error, ban peer
-        let block = blocks.get(0).expect("block to exist").clone();
-        let header = blocks.get(0).expect("block to exist").header();
+        let header = blocks.get(0).expect("block to exist").header().clone();
+        let block = blocks.into_iter().next().expect("block to exist");
         let result = self
             .consensus_handle
             .call_mut(move |this| this.process_block(block, BlockSource::Peer))
@@ -322,8 +394,7 @@ where
             Err(e) => return Err(P2pError::ConsensusError(e)),
         }
 
-        let next_header =
-            peer.register_block_response((blocks.get(0).expect("block to exist")).header());
+        let next_header = peer.register_block_response(&header);
         match next_header {
             Ok(Some(next_block)) => {
                 // TODO: save request ids somewhere?
@@ -347,6 +418,7 @@ where
             Ok(None) => {
                 // last block from peer, ask if peer knows of any new headers
                 let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
+                peer.set_locator(locator.clone());
                 // TODO: save request ids somewhere?
                 let _ = self
                     .handle
