@@ -85,6 +85,7 @@ class TestNode():
         self.coverage_dir = coverage_dir
         self.cwd = cwd
         self.descriptors = descriptors
+        self.init_rpc_url = rpc_url(self.datadir, self.index, self.chain, self.rpchost)
         if extra_conf is not None:
             append_config(datadir, extra_conf)
         # Most callers will just need to add extra args to the standard list below.
@@ -92,17 +93,24 @@ class TestNode():
         # Note that common args are set in the config file (see initialize_datadir)
         self.extra_args = extra_args
         self.version = version
+
+        # Calculate RPC address to be passed into the command line
+        rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
+
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
         self.args = [
             self.binary,
-            "-datadir=" + self.datadir,
-            "-logtimemicros",
-            "-debug",
-            "-debugexclude=libevent",
-            "-debugexclude=leveldb",
-            "-uacomment=testnode%d" % i,
+            "--net=mainnet",
+            "--rpc-addr={}".format(rpc_addr),
+            #"-X",
+            #"-datadir=" + self.datadir,
+            #"-logtimemicros",
+            #"-debug",
+            #"-debugexclude=libevent",
+            #"-debugexclude=leveldb",
+            #"-uacomment=testnode%d" % i,
         ]
         if use_valgrind:
             default_suppressions_file = os.path.join(
@@ -114,10 +122,10 @@ class TestNode():
                          "--gen-suppressions=all", "--exit-on-first-error=yes",
                          "--error-exitcode=1", "--quiet"] + self.args
 
-        if self.version_is_at_least(190000):
-            self.args.append("-logthreadnames")
-        if self.version_is_at_least(219900):
-            self.args.append("-logsourcelocations")
+        #if self.version_is_at_least(190000):
+        #    self.args.append("-logthreadnames")
+        #if self.version_is_at_least(219900):
+        #    self.args.append("-logsourcelocations")
 
         self.cli = TestNodeCLI(bitcoin_cli, self.datadir)
         self.use_cli = use_cli
@@ -226,17 +234,19 @@ class TestNode():
                     'bitcoind exited with status {} during initialization'.format(self.process.returncode)))
             try:
                 rpc = get_rpc_proxy(
-                    rpc_url(self.datadir, self.index, self.chain, self.rpchost),
+                    self.init_rpc_url,
                     self.index,
                     timeout=self.rpc_timeout // 2,  # Shorter timeout to allow for one retry in case of ETIMEDOUT
                     coveragedir=self.coverage_dir,
                 )
-                rpc.getblockcount()
+                rpc.consensus_best_block_id()
                 # If the call to getblockcount() succeeds then the RPC connection is up
                 if self.version_is_at_least(190000):
                     # getmempoolinfo.loaded is available since commit
                     # bb8ae2c (version 0.19.0)
-                    wait_until_helper(lambda: rpc.getmempoolinfo()['loaded'], timeout_factor=self.timeout_factor)
+                    #wait_until_helper(lambda: rpc.getmempoolinfo()['loaded'], timeout_factor=self.timeout_factor)
+                    self.log.warn("Waiting until mempool loaded not supported")
+
                     # Wait for the node to finish reindex, block import, and
                     # loading the mempool. Usually importing happens fast or
                     # even "immediate" when the node is started. However, there
@@ -254,7 +264,6 @@ class TestNode():
                     # as possible. Some tests might not need this, but the
                     # overhead is trivial, and the added guarantees are worth
                     # the minimal performance cost.
-                self.log.debug("RPC successfully started")
                 if self.use_cli:
                     return
                 self.rpc = rpc
@@ -333,9 +342,9 @@ class TestNode():
         try:
             # Do not use wait argument when testing older nodes, e.g. in feature_backwards_compatibility.py
             if self.version_is_at_least(180000):
-                self.stop(wait=wait)
+                self.node_exit(wait=wait)
             else:
-                self.stop()
+                self.node_exit()
         except http.client.CannotSendRequest:
             self.log.exception("Unable to stop node.")
 
@@ -346,8 +355,8 @@ class TestNode():
         # Check that stderr is as expected
         self.stderr.seek(0)
         stderr = self.stderr.read().decode('utf-8').strip()
-        if stderr != expected_stderr:
-            raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
+        #if stderr != expected_stderr:
+        #    raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
 
         self.stdout.close()
         self.stderr.close()

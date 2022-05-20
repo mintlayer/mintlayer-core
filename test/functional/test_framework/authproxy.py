@@ -76,8 +76,8 @@ class AuthServiceProxy():
         self.__url = urllib.parse.urlparse(service_url)
         user = None if self.__url.username is None else self.__url.username.encode('utf8')
         passwd = None if self.__url.password is None else self.__url.password.encode('utf8')
-        authpair = user + b':' + passwd
-        self.__auth_header = b'Basic ' + base64.b64encode(authpair)
+        #authpair = user + b':' + passwd
+        #self.__auth_header = b'Basic ' + base64.b64encode(authpair)
         self.timeout = timeout
         self._set_conn(connection)
 
@@ -96,7 +96,7 @@ class AuthServiceProxy():
         '''
         headers = {'Host': self.__url.hostname,
                    'User-Agent': USER_AGENT,
-                   'Authorization': self.__auth_header,
+                   #'Authorization': self.__auth_header,
                    'Content-type': 'application/json'}
         if os.name == 'nt':
             # Windows somehow does not like to re-use connections
@@ -132,7 +132,7 @@ class AuthServiceProxy():
         ))
         if args and argsn:
             raise ValueError('Cannot handle both named and positional arguments')
-        return {'version': '1.1',
+        return {'jsonrpc': '2.0',
                 'method': self._service_name,
                 'params': args or argsn,
                 'id': AuthServiceProxy.__id_count}
@@ -140,7 +140,7 @@ class AuthServiceProxy():
     def __call__(self, *args, **argsn):
         postdata = json.dumps(self.get_request(*args, **argsn), default=EncodeDecimal, ensure_ascii=self.ensure_ascii)
         response, status = self._request('POST', self.__url.path, postdata.encode('utf-8'))
-        if response['error'] is not None:
+        if 'error' in response and response['error'] is not None:
             raise JSONRPCException(response['error'], status)
         elif 'result' not in response:
             raise JSONRPCException({
@@ -176,7 +176,7 @@ class AuthServiceProxy():
                 'code': -342, 'message': 'missing HTTP response from server'})
 
         content_type = http_response.getheader('Content-Type')
-        if content_type != 'application/json':
+        if not content_type.startswith('application/json'):
             raise JSONRPCException(
                 {'code': -342, 'message': 'non-JSON HTTP response with \'%i %s\' from server' % (http_response.status, http_response.reason)},
                 http_response.status)
