@@ -340,6 +340,59 @@ fn test_get_ancestor() {
 }
 
 #[test]
+fn test_last_common_ancestor() {
+    use crate::detail::tests::test_framework::BlockTestFramework;
+    let mut btf = BlockTestFramework::new();
+
+    // We will create two chains that split at height 100
+    const SPLIT_HEIGHT: usize = 100;
+    const FIRST_CHAIN_HEIGHT: usize = 500;
+    const SECOND_CHAIN_LENGTH: usize = 300;
+    btf.create_chain(&btf.genesis().get_id(), SPLIT_HEIGHT)
+        .expect("Chain creation to succeed");
+    let genesis = btf.block_indexes.get(0).expect("genesis_block").clone();
+    let split = btf.block_indexes[SPLIT_HEIGHT].clone();
+
+    // First branch of fork
+    btf.create_chain(split.get_block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
+        .expect("Chain creation to succeed");
+    let last_block_in_first_chain =
+        btf.block_indexes.last().expect("last block in first chain").clone();
+
+    // Second branch of fork
+    btf.create_chain(split.get_block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
+        .expect("second chain");
+    let last_block_in_second_chain =
+        btf.block_indexes.last().expect("last block in first chain").clone();
+
+    assert_eq!(
+        btf.consensus
+            .make_db_tx()
+            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain),
+        Ok(split.clone())
+    );
+
+    assert_eq!(
+        btf.consensus
+            .make_db_tx()
+            .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain),
+        Ok(split.clone())
+    );
+
+    assert_eq!(
+        btf.consensus
+            .make_db_tx()
+            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain),
+        Ok(last_block_in_first_chain)
+    );
+
+    assert_eq!(
+        btf.consensus.make_db_tx().last_common_ancestor(&genesis, &split),
+        Ok(genesis)
+    );
+}
+
+#[test]
 fn test_consensus_type() {
     use common::chain::ConsensusUpgrade;
     use common::chain::NetUpgrades;

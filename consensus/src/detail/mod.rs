@@ -271,6 +271,37 @@ impl<'a> ConsensusRef<'a> {
         Ok(block_index_walk)
     }
 
+    #[allow(unused)]
+    fn last_common_ancestor(
+        &self,
+        first_block_index: &BlockIndex,
+        second_block_index: &BlockIndex,
+    ) -> Result<BlockIndex, BlockError> {
+        let mut first_block_index = first_block_index.clone();
+        let mut second_block_index = second_block_index.clone();
+        match first_block_index.get_block_height().cmp(&second_block_index.get_block_height()) {
+            std::cmp::Ordering::Greater => {
+                first_block_index =
+                    self.get_ancestor(&first_block_index, second_block_index.get_block_height())?;
+            }
+            std::cmp::Ordering::Less => {
+                second_block_index =
+                    self.get_ancestor(&second_block_index, first_block_index.get_block_height())?;
+            }
+            std::cmp::Ordering::Equal => {}
+        }
+
+        while first_block_index != second_block_index
+            && !first_block_index.is_genesis(self.chain_config)
+            && !second_block_index.is_genesis(self.chain_config)
+        {
+            first_block_index = self.get_previous_block_index(&first_block_index)?;
+            second_block_index = self.get_previous_block_index(&second_block_index)?;
+        }
+        assert_eq!(first_block_index, second_block_index);
+        Ok(first_block_index)
+    }
+
     // Get indexes for a new longest chain
     fn get_new_chain(
         &self,
