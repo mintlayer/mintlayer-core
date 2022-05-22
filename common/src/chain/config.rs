@@ -122,11 +122,12 @@ fn create_mainnet_genesis() -> Block {
 }
 
 pub fn create_mainnet() -> ChainConfig {
+    let chain_type = ChainType::Mainnet;
     ChainConfig {
-        chain_type: ChainType::Mainnet,
+        chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
         height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
-        net_upgrades: Default::default(),
+        net_upgrades: NetUpgrades::new(chain_type),
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
@@ -180,9 +181,14 @@ pub fn create_unit_test_config() -> ChainConfig {
     }
 }
 
-#[derive(Default)]
 pub struct ChainConfigBuilder {
     net_upgrades: NetUpgrades<UpgradeVersion>,
+}
+
+impl Default for ChainConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ChainConfigBuilder {

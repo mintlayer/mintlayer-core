@@ -1,14 +1,20 @@
 #![allow(clippy::upper_case_acronyms, clippy::needless_doctest_main)]
 
+use crate::chain::config::ChainType;
+use crate::chain::pow::limit;
 use crate::primitives::{BlockDistance, BlockHeight, Compact};
-use crate::Uint256;
 
 #[derive(Debug, Clone)]
 pub struct NetUpgrades<T>(Vec<(BlockHeight, T)>);
 
-impl<T: Default> Default for NetUpgrades<T> {
-    fn default() -> Self {
-        Self(vec![(BlockHeight::zero(), T::default())])
+impl NetUpgrades<UpgradeVersion> {
+    pub fn new(chain_type: ChainType) -> Self {
+        Self(vec![(
+            BlockHeight::zero(),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: limit(chain_type).into(),
+            }),
+        )])
     }
 }
 
@@ -77,36 +83,19 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
 
 impl Activate for UpgradeVersion {}
 
-impl Default for UpgradeVersion {
-    fn default() -> Self {
-        let initial_difficulty = Uint256([
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0xFFFFFFFFFFFFFFFF,
-            0x00000000FFFFFFFF,
-        ])
-        .into();
-        Self::ConsensusUpgrade(ConsensusUpgrade::PoW { initial_difficulty })
-    }
-}
 
-impl<T: Default + Ord + Copy> NetUpgrades<T> {
+impl<T:Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
-    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> Self {
+    pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> anyhow::Result<Self> {
         let mut upgrades = upgrades;
         upgrades.sort_unstable();
 
-        if let Some(&(height, _)) = upgrades.first() {
-            return if height == BlockHeight::zero() {
-                Self(upgrades)
-            } else {
-                let mut default = Self::default();
-                default.0.append(&mut upgrades);
-                default
-            };
+        match upgrades.first() {
+            Some(&(height, _)) if height == BlockHeight::zero() =>
+                Ok(Self(upgrades)),
+                _ => 
+                Err(anyhow::Error::msg("NetUpgrades must be initialized with a nonempty vector of upgrades with an upgrade at genesis"))
         }
-
-        Self::default()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -117,12 +106,6 @@ impl<T: Default + Ord + Copy> NetUpgrades<T> {
         self.0.len()
     }
 
-    pub fn get_version(&self, height: BlockHeight) -> T {
-        match self.0.iter().rfind(|&&(elem_height, _)| elem_height <= height) {
-            None => T::default(),
-            Some(&(_, version)) => version,
-        }
-    }
 
     pub fn height_range(&self, version: T) -> Option<(BlockHeight, BlockHeight)> {
         let res = self
@@ -197,18 +180,15 @@ mod tests {
         Five,
     }
 
-    impl Default for MockVersion {
-        fn default() -> Self {
-            Self::Zero
-        }
-    }
-
     impl Activate for MockVersion {}
 
     fn mock_netupgrades() -> (NetUpgrades<MockVersion>, BlockHeight, BlockHeight) {
         let mut upgrades = vec![];
+        let zero_height = BlockHeight::new(0);
         let two_height = BlockHeight::new(3500);
         let three_height = BlockHeight::new(80000);
+
+       upgrades.push((zero_height, MockVersion::Zero));
 
         upgrades.push((three_height, MockVersion::Three));
 
@@ -216,7 +196,7 @@ mod tests {
 
         upgrades.push((two_height, MockVersion::Two));
 
-        (NetUpgrades::initialize(upgrades), two_height, three_height)
+        (NetUpgrades::initialize(upgrades).expect("valid net upgrade"), two_height, three_height)
     }
 
     #[test]
@@ -238,44 +218,6 @@ mod tests {
         assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
     }
 
-    #[test]
-    fn check_upgrade_version_from_height() {
-        let (upgrades, two_height, three_height) = mock_netupgrades();
-
-        let check = |v: MockVersion, h: BlockHeight| {
-            assert_eq!(v, upgrades.get_version(h));
-        };
-
-        check(MockVersion::Zero, BlockHeight::zero());
-        check(MockVersion::One, BlockHeight::one());
-        check(MockVersion::One, BlockHeight::new(26));
-        check(
-            MockVersion::One,
-            (two_height - BlockDistance::new(1)).unwrap(),
-        );
-        check(MockVersion::Two, two_height);
-        check(
-            MockVersion::Two,
-            two_height.checked_add(1).expect("should be fine"),
-        );
-        check(
-            MockVersion::Two,
-            (three_height - BlockDistance::new(1)).unwrap(),
-        );
-        check(MockVersion::Three, three_height);
-        check(
-            MockVersion::Three,
-            three_height.checked_add(100).expect("should be fine"),
-        );
-        check(
-            MockVersion::Three,
-            three_height.checked_add(2022).expect("should be fine"),
-        );
-        check(
-            MockVersion::Three,
-            three_height.checked_add(3000).expect("should be fine"),
-        );
-    }
 
     #[test]
     fn check_upgrade_versions() {
@@ -311,7 +253,7 @@ mod tests {
         check(MockVersion::Three, three_height, BlockHeight::max());
     }
 
-    fn mock_consensus_upgrades() -> NetUpgrades<UpgradeVersion> {
+    fn mock_consensus_upgrades() -> anyhow::Result<NetUpgrades<UpgradeVersion>> {
         let genesis_pow = BlockHeight::new(0);
         let first_pos_upgrade = BlockHeight::new(10_000);
         let back_to_pow = BlockHeight::new(15_000);
@@ -340,7 +282,7 @@ mod tests {
 
     #[test]
     fn consensus_upgrade() {
-        let upgrades = mock_consensus_upgrades();
+        let upgrades = mock_consensus_upgrades().expect("valid netupgrades");
         assert_eq!(
             upgrades.consensus_status(0.into()),
             RequiredConsensus::PoW(PoWStatus::Threshold {

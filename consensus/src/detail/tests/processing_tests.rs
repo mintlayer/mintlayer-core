@@ -377,7 +377,7 @@ fn test_consensus_type() {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades);
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
 
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because ChainConfigBuilder by default uses create_mainnet_genesis to
@@ -508,7 +508,7 @@ fn test_pow() {
         ),
     ];
 
-    let net_upgrades = NetUpgrades::initialize(upgrades);
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
 
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because ChainConfigBuilder by default uses create_mainnet_genesis to
