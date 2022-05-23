@@ -410,6 +410,7 @@ mod test {
         );
     }
 
+    // TODO: Add checks for other sighash types
     #[test]
     fn sign_modify_then_verify() {
         // Create and sign tx, and then modify and verify it.
