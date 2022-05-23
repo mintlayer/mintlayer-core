@@ -102,6 +102,7 @@ fn test_events_with_a_bunch_of_subscribers() {
 
 #[test]
 fn test_events_a_bunch_of_events() {
+    use common::chain::config::create_unit_test_config;
     use std::sync::Arc;
 
     const COUNT_SUBSCRIBERS: usize = 10;
@@ -157,6 +158,7 @@ fn test_events_a_bunch_of_events() {
 
 #[test]
 fn test_events_orphan_block() {
+    use common::chain::config::create_unit_test_config;
     use std::sync::Arc;
 
     common::concurrency::model(|| {

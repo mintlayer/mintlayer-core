@@ -19,6 +19,7 @@ use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use blockchain_storage::Store;
 use common::chain::block::consensus_data::PoWData;
+use common::chain::config::create_unit_test_config;
 use common::chain::config::ChainConfigBuilder;
 use common::chain::ConsensusUpgrade;
 use common::chain::NetUpgrades;
@@ -450,14 +451,13 @@ fn test_consensus_type() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let config = ChainConfigBuilder::new().with_net_upgrades(net_upgrades).build();
-    let consensus = ConsensusBuilder::new().with_config(config.clone()).build();
+    let consensus = ConsensusBuilder::new().with_config(config).build();
 
     let mut btf = BlockTestFramework::with_consensus(consensus);
 
     // The next block will have height 1. At this height, we are still under IngoreConsenssu, so
     // processing a block with PoWData will fail
     let pow_block = produce_test_block_with_consensus_data(
-        &config,
         btf.genesis(),
         false,
         ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])),
@@ -473,7 +473,6 @@ fn test_consensus_type() {
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
     let block_without_consensus_data = produce_test_block_with_consensus_data(
-        &config,
         &btf.get_block(btf.block_indexes[4].get_block_id().clone()).unwrap().unwrap(),
         false,
         ConsensusData::None,
@@ -516,7 +515,7 @@ fn test_consensus_type() {
     // At height 15 we are again proof of work, ignoring consensus should fail
     let prev_block = btf.get_block(btf.block_indexes[14].get_block_id().clone()).unwrap().unwrap();
     let block_without_consensus_data =
-        produce_test_block_with_consensus_data(&config, &prev_block, false, ConsensusData::None);
+        produce_test_block_with_consensus_data(&prev_block, false, ConsensusData::None);
     assert!(matches!(
         btf.add_special_block(block_without_consensus_data),
         Err(BlockError::ConsensusTypeMismatch(..))

@@ -18,7 +18,7 @@
 use crate::detail::*;
 use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
-use common::chain::config::create_mainnet;
+use common::chain::config::create_unit_test_config;
 use common::chain::signature::inputsig::{InputWitness, StandardInputSignature};
 use common::chain::signature::sighashtype::SigHashType;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
@@ -128,12 +128,11 @@ fn setup_consensus() -> Consensus {
     ConsensusBuilder::new().build()
 }
 
-fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
-    produce_test_block_with_consensus_data(config, prev_block, orphan, ConsensusData::None)
+fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
+    produce_test_block_with_consensus_data(prev_block, orphan, ConsensusData::None)
 }
 
 fn produce_test_block_with_consensus_data(
-    config: &ChainConfig,
     prev_block: &Block,
     orphan: bool,
     consensus_data: ConsensusData,
