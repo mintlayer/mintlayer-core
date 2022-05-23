@@ -21,8 +21,8 @@ fn check_encode() {
     let decoded = super::bech32m::bech32m_to_base32(&encoded).expect("should decode okay");
     log::info!("value of decoded: {:?}", decoded);
 
-    assert_eq!(hrp, decoded.get_hrp());
-    assert_eq!(data, decoded.get_data());
+    assert_eq!(hrp, decoded.hrp());
+    assert_eq!(data, decoded.data());
 }
 
 #[test]
@@ -108,8 +108,8 @@ fn check_valid_addresses() {
         match super::bech32m::bech32m_to_base32(s) {
             Ok(decoded) => {
                 // check the result of our decoder vs bitcoin_bech32 decoder.
-                assert_eq!(version, decoded.get_data()[0].to_u8());
-                assert_eq!(data.check_base32().unwrap(), decoded.get_data()[1..]);
+                assert_eq!(version, decoded.data()[0].to_u8());
+                assert_eq!(data.check_base32().unwrap(), decoded.data()[1..]);
 
                 // compare the result of our decoder against the expected data.
                 let data_x = {
@@ -117,7 +117,7 @@ fn check_valid_addresses() {
                         Vec::from_hex(d).expect("should not fail to convert to Vec<u8>");
                     string_data.to_base32()
                 };
-                assert_eq!(data_x, decoded.get_data()[1..]);
+                assert_eq!(data_x, decoded.data()[1..]);
 
                 // compare the result of our decoder against the expected version.
                 let version_x = {
@@ -130,11 +130,11 @@ fn check_valid_addresses() {
                         version_and_len[0] - 0x50
                     }
                 };
-                assert_eq!(version_x, decoded.get_data()[0].to_u8());
+                assert_eq!(version_x, decoded.data()[0].to_u8());
 
                 match super::bech32m::base32_to_bech32m(
-                    decoded.get_hrp(),
-                    <&[bech32::u5]>::clone(&decoded.get_data()),
+                    decoded.hrp(),
+                    <&[bech32::u5]>::clone(&decoded.data()),
                 ) {
                     Ok(encoded) => {
                         assert_eq!(s.to_lowercase(), encoded.to_lowercase())
@@ -219,7 +219,7 @@ fn check_valid_strings() {
         ).iter().for_each(|s| {
             match super::bech32m::bech32m_to_base32(*s) {
                Ok(decoded) => {
-                   match super::bech32m::base32_to_bech32m(decoded.get_hrp(), <&[bech32::u5]>::clone(&decoded.get_data())) {
+                   match super::bech32m::base32_to_bech32m(decoded.hrp(), <&[bech32::u5]>::clone(&decoded.data())) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }
                        Err(e) => { panic!("Did not encode: {:?} Reason: {:?}",s,e) }
                    }
@@ -281,8 +281,8 @@ fn check_arbitraty_data_convertion() {
         let encoded_data = super::encode(test_hrp, test_data).unwrap();
         dbg!(&encoded_data);
         let decoded_data = super::decode(&encoded_data).unwrap();
-        assert_eq!(test_data, decoded_data.get_data());
-        assert_eq!(test_hrp, decoded_data.get_hrp());
+        assert_eq!(test_data, decoded_data.data());
+        assert_eq!(test_hrp, decoded_data.hrp());
     }
 }
 
@@ -310,10 +310,10 @@ fn check_bech32m_convertion_to_arbitraty_chosen_data() {
         let expected_result_hex = test_data_and_expected_result.1;
         let expected_result = hex::decode(expected_result_hex).unwrap();
         let decoded_data = super::decode(test_data).unwrap();
-        let encoded_data = super::encode(test_hrp, decoded_data.get_data()).unwrap();
+        let encoded_data = super::encode(test_hrp, decoded_data.data()).unwrap();
 
-        assert_eq!(decoded_data.get_hrp(), "hrp");
-        assert_eq!(decoded_data.get_data(), expected_result);
+        assert_eq!(decoded_data.hrp(), "hrp");
+        assert_eq!(decoded_data.data(), expected_result);
         assert_eq!(*test_data, encoded_data);
     }
 }
@@ -331,8 +331,8 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
     let encoded_data = super::encode(&test_hrp, &random_bytes).unwrap();
     dbg!(&encoded_data);
     let decoded_data = super::decode(&encoded_data).unwrap();
-    assert_eq!(random_bytes, decoded_data.get_data());
-    assert_eq!(test_hrp, decoded_data.get_hrp());
+    assert_eq!(random_bytes, decoded_data.data());
+    assert_eq!(test_hrp, decoded_data.hrp());
 }
 
 #[test]

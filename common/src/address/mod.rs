@@ -51,10 +51,10 @@ impl Address {
 
     pub fn data(&self, cfg: &ChainConfig) -> Result<Vec<u8>, AddressError> {
         let data = encoding::decode(&self.address)?;
-        if data.get_hrp() != cfg.address_prefix() {
-            return Err(AddressError::InvalidPrefix(data.get_hrp().to_owned()));
+        if data.hrp() != cfg.address_prefix() {
+            return Err(AddressError::InvalidPrefix(data.hrp().to_owned()));
         }
-        let data_inner = data.get_data();
+        let data_inner = data.data();
         let result = data_inner.to_vec();
         Ok(result)
     }
@@ -62,7 +62,7 @@ impl Address {
     #[allow(dead_code)]
     fn data_internal(&self) -> Result<Vec<u8>, AddressError> {
         let data = encoding::decode(&self.address)?;
-        Ok(data.get_data().to_owned())
+        Ok(data.data().to_owned())
     }
 
     pub fn from_public_key_hash(
@@ -70,7 +70,6 @@ impl Address {
         public_key_hash: &PublicKeyHash,
     ) -> Result<Self, AddressError> {
         let encoded = public_key_hash.encode();
-        println!("pub key hash encoded: {:?}", encoded);
         Address::new(cfg, encoded)
     }
 

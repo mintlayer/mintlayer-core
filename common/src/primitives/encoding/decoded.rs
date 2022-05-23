@@ -4,14 +4,15 @@ use super::*;
 struct Decoded<T> {
     hrp: String,
     data: Vec<T>,
+    // TODO: see if this can benefit for short string optimization
 }
 
 impl<T> Decoded<T> {
-    pub fn get_hrp(&self) -> &str {
+    pub fn hrp(&self) -> &str {
         &self.hrp
     }
 
-    pub fn get_data(&self) -> &[T] {
+    pub fn data(&self) -> &[T] {
         &self.data
     }
 }
@@ -24,16 +25,16 @@ impl DecodedBase32FromBech32 {
         Self(Decoded { hrp, data })
     }
 
-    pub fn get_hrp(&self) -> &str {
-        self.0.get_hrp()
+    pub fn hrp(&self) -> &str {
+        self.0.hrp()
     }
 
-    pub fn get_data(&self) -> &[bech32::u5] {
-        self.0.get_data()
+    pub fn data(&self) -> &[bech32::u5] {
+        self.0.data()
     }
 
     pub fn encode(&self) -> Result<String, Bech32Error> {
-        bech32m::base32_to_bech32m(self.get_hrp(), self.get_data())
+        bech32m::base32_to_bech32m(self.hrp(), self.data())
     }
 }
 
@@ -45,15 +46,15 @@ impl DecodedArbitraryDataFromBech32 {
         Self(Decoded { hrp, data })
     }
 
-    pub fn get_hrp(&self) -> &str {
-        self.0.get_hrp()
+    pub fn hrp(&self) -> &str {
+        self.0.hrp()
     }
 
-    pub fn get_data(&self) -> &[u8] {
-        self.0.get_data()
+    pub fn data(&self) -> &[u8] {
+        self.0.data()
     }
 
     pub fn encode(&self) -> Result<String, Bech32Error> {
-        bech32m::arbitrary_data_to_bech32m(self.get_hrp(), self.get_data())
+        bech32m::arbitrary_data_to_bech32m(self.hrp(), self.data())
     }
 }
