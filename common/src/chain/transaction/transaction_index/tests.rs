@@ -1,11 +1,15 @@
+use crypto::key::{KeyKind, PrivateKey};
 use rand::{RngCore, SeedableRng};
 
 use super::*;
 use crate::{
-    address::Address,
     chain::{
-        block::ConsensusData, config::create_mainnet, Destination, OutPointSourceId, TxInput,
-        TxOutput,
+        block::ConsensusData,
+        signature::{
+            inputsig::{InputWitness, StandardInputSignature},
+            sighashtype::SigHashType,
+        },
+        Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{Amount, H256},
 };
@@ -187,18 +191,21 @@ fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
         OutPointSourceId::BlockReward(Id::new(&generate_random_h256(g)))
     };
 
-    TxInput::new(outpoint, g.next_u32(), witness)
+    TxInput::new(
+        outpoint,
+        g.next_u32(),
+        InputWitness::Standard(StandardInputSignature::new(
+            SigHashType::try_from(SigHashType::ALL).unwrap(),
+            witness,
+        )),
+    )
 }
 
 fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
-    let config = create_mainnet();
-
-    let addr =
-        Address::new(&config, generate_random_bytes(g, 20)).expect("Failed to create address");
-
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TxOutput::new(
         Amount::from_atoms(g.next_u64() as u128),
-        Destination::Address(addr),
+        Destination::PublicKey(pub_key),
     )
 }
 

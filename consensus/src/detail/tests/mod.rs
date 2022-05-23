@@ -17,12 +17,14 @@
 
 use crate::detail::*;
 use blockchain_storage::Store;
-use common::address::Address;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_unit_test_config;
+use common::chain::signature::inputsig::{InputWitness, StandardInputSignature};
+use common::chain::signature::sighashtype::SigHashType;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
 use common::primitives::H256;
 use common::primitives::{Amount, Id};
+use crypto::key::{KeyKind, PrivateKey};
 use rand::prelude::*;
 use std::sync::Mutex;
 
@@ -61,23 +63,23 @@ pub(in crate::detail::tests) enum TestSpentStatus {
     NotInMainchain,
 }
 
-fn random_witness() -> Vec<u8> {
+fn random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
     witness.shuffle(&mut rng);
-    witness
+
+    InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        witness,
+    ))
 }
 
-fn random_address(chain_config: &ChainConfig) -> Destination {
-    let mut rng = rand::thread_rng();
-    let mut address: Vec<u8> = (1..22).collect();
-    address.shuffle(&mut rng);
-    let receiver = Address::new(chain_config, address).expect("Failed to create address");
-    Destination::Address(receiver)
+fn random_address() -> Destination {
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    Destination::PublicKey(pub_key)
 }
 
 fn create_utxo_data(
-    config: &ChainConfig,
     tx_id: &Id<Transaction>,
     index: usize,
     output: &TxOutput,
@@ -91,7 +93,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(config),
+                random_address(),
             ),
         ))
     } else {
@@ -126,12 +128,11 @@ fn setup_consensus() -> Consensus {
     ConsensusBuilder::new().build()
 }
 
-fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
-    produce_test_block_with_consensus_data(config, prev_block, orphan, ConsensusData::None)
+fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
+    produce_test_block_with_consensus_data(prev_block, orphan, ConsensusData::None)
 }
 
 fn produce_test_block_with_consensus_data(
-    config: &ChainConfig,
     prev_block: &Block,
     orphan: bool,
     consensus_data: ConsensusData,
@@ -139,11 +140,8 @@ fn produce_test_block_with_consensus_data(
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
-    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-        .transactions()
-        .iter()
-        .flat_map(|tx| create_new_outputs(config, tx))
-        .unzip();
+    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
+        prev_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
@@ -158,11 +156,11 @@ fn produce_test_block_with_consensus_data(
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
-fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
+fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
     tx.get_outputs()
         .iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(config, &tx.get_id(), index, output))
+        .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 

@@ -398,6 +398,7 @@ pub(crate) mod test {
     use super::*;
     use common::chain::{Destination, TxOutput};
     use common::primitives::{Amount, H256};
+    use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
     use utxo::{BlockUndo, TxUndo};
 
@@ -629,7 +630,11 @@ pub(crate) mod test {
     fn create_rand_utxo(block_height: u64) -> Utxo {
         // just a random value generated, and also a random `is_block_reward` value.
         let random_value = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
-        let output = TxOutput::new(Amount::from_atoms(random_value), Destination::PublicKey);
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let output = TxOutput::new(
+            Amount::from_atoms(random_value),
+            Destination::PublicKey(pub_key),
+        );
         let is_block_reward = random_value % 3 == 0;
 
         // generate utxo

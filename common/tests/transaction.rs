@@ -1,3 +1,4 @@
+use common::chain::signature::inputsig::InputWitness;
 use common::chain::transaction::*;
 use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
@@ -13,18 +14,22 @@ fn transaction_id_snapshots() {
         Destination::ScriptHash(Id::new(&hash0)),
     )]
     .to_vec();
-    let ins0: Vec<TxInput> =
-        [TxInput::new(Id::<Transaction>::new(&hash0).into(), 5, vec![])].to_vec();
+    let ins0: Vec<TxInput> = [TxInput::new(
+        Id::<Transaction>::new(&hash0).into(),
+        5,
+        InputWitness::NoSignature(None),
+    )]
+    .to_vec();
     let ins1: Vec<TxInput> = [
         TxInput::new(
             Id::<Transaction>::new(&hash1).into(),
             3,
-            vec![0x01, 0x05, 0x09],
+            InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
         ),
         TxInput::new(
             Id::<Transaction>::new(&hash2).into(),
             0,
-            vec![0x91, 0x55, 0x19, 0x00],
+            InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
         ),
     ]
     .to_vec();
