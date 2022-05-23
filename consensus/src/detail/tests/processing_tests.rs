@@ -38,7 +38,7 @@ fn test_process_genesis_block_wrong_block_source() {
         // process the genesis block
         let block_source = BlockSource::Peer(0);
         let result = consensus.process_block(config.genesis_block().clone(), block_source);
-        assert_eq!(result, Err(BlockError::InvalidBlockSource));
+        assert_eq!(result.unwrap_err(), BlockError::InvalidBlockSource);
     });
 }
 
@@ -82,8 +82,8 @@ fn test_orphans_chains() {
         for _ in 0..255 {
             let new_block = produce_test_block(&consensus.chain_config, &new_block, true);
             assert_eq!(
-                consensus.process_block(new_block.clone(), BlockSource::Local),
-                Err(BlockError::Orphan)
+                consensus.process_block(new_block.clone(), BlockSource::Local).unwrap_err(),
+                BlockError::Orphan
             );
         }
     });
@@ -279,7 +279,7 @@ fn test_get_ancestor() {
         .clone();
 
     assert_eq!(
-        last_block_in_first_chain,
+        last_block_in_first_chain.get_block_id(),
         btf.consensus
             .make_db_tx()
             .get_ancestor(
@@ -287,10 +287,11 @@ fn test_get_ancestor() {
                 u64::try_from(FIRST_CHAIN_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
+            .get_block_id()
     );
 
     assert_eq!(
-        ancestor,
+        ancestor.get_block_id(),
         btf.consensus
             .make_db_tx()
             .get_ancestor(
@@ -298,10 +299,11 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
+            .get_block_id()
     );
 
     assert_eq!(
-        ancestor_in_first_chain,
+        ancestor_in_first_chain.get_block_id(),
         btf.consensus
             .make_db_tx()
             .get_ancestor(
@@ -309,6 +311,7 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_IN_FIRST_CHAIN_HEIGHT).unwrap().into()
             )
             .expect("ancestor in first chain")
+            .get_block_id()
     );
 
     // Create a second chain and test get_ancestor for this chain's last block
@@ -317,7 +320,7 @@ fn test_get_ancestor() {
     let last_block_in_second_chain =
         btf.block_indexes.last().expect("last block in first chain").clone();
     assert_eq!(
-        ancestor,
+        ancestor.get_block_id(),
         btf.consensus
             .make_db_tx()
             .get_ancestor(
@@ -325,17 +328,21 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
+            .get_block_id()
     );
 
     assert_eq!(
-        Err(BlockError::InvalidAncestorHeight {
+        BlockError::InvalidAncestorHeight {
             ancestor_height: u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into(),
             block_height: u64::try_from(SECOND_CHAIN_LENGTH).unwrap().into(),
-        }),
-        btf.consensus.make_db_tx().get_ancestor(
-            &last_block_in_second_chain,
-            u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into()
-        )
+        },
+        btf.consensus
+            .make_db_tx()
+            .get_ancestor(
+                &last_block_in_second_chain,
+                u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into()
+            )
+            .unwrap_err()
     );
 }
 
@@ -368,27 +375,37 @@ fn test_last_common_ancestor() {
     assert_eq!(
         btf.consensus
             .make_db_tx()
-            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain),
-        Ok(split.clone())
+            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain)
+            .unwrap()
+            .get_block_id(),
+        split.get_block_id()
     );
 
     assert_eq!(
         btf.consensus
             .make_db_tx()
-            .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain),
-        Ok(split.clone())
+            .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain)
+            .unwrap()
+            .get_block_id(),
+        split.get_block_id()
     );
 
     assert_eq!(
         btf.consensus
             .make_db_tx()
-            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain),
-        Ok(last_block_in_first_chain)
+            .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain)
+            .unwrap()
+            .get_block_id(),
+        last_block_in_first_chain.get_block_id()
     );
 
     assert_eq!(
-        btf.consensus.make_db_tx().last_common_ancestor(&genesis, &split),
-        Ok(genesis)
+        btf.consensus
+            .make_db_tx()
+            .last_common_ancestor(&genesis, &split)
+            .unwrap()
+            .get_block_id(),
+        genesis.get_block_id()
     );
 }
 

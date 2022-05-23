@@ -5,7 +5,7 @@ use crate::primitives::{BlockHeight, Id, Idable};
 // use crate::Uint256;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
     block_id: Id<Block>,

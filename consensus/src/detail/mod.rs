@@ -151,15 +151,18 @@ impl Consensus {
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
         let block_index = consensus_ref.accept_block(&block);
-        if block_index == Err(BlockError::Orphan) {
-            if BlockSource::Local == block_source {
-                // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
-                consensus_ref.new_orphan_block(block)?;
+        if let Err(ref block_index_err) = block_index {
+            if *block_index_err == BlockError::Orphan {
+                if BlockSource::Local == block_source {
+                    // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
+                    consensus_ref.new_orphan_block(block)?;
+                }
+                return Err(BlockError::Orphan);
             }
-            return Err(BlockError::Orphan);
         }
         let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
+        // TODO: after finishing, we attempt to process orphans
         self.broadcast_new_tip_event(&result);
         Ok(result)
     }
@@ -291,14 +294,17 @@ impl<'a> ConsensusRef<'a> {
             std::cmp::Ordering::Equal => {}
         }
 
-        while first_block_index != second_block_index
+        while first_block_index.get_block_id() != second_block_index.get_block_id()
             && !first_block_index.is_genesis(self.chain_config)
             && !second_block_index.is_genesis(self.chain_config)
         {
             first_block_index = self.get_previous_block_index(&first_block_index)?;
             second_block_index = self.get_previous_block_index(&second_block_index)?;
         }
-        assert_eq!(first_block_index, second_block_index);
+        assert_eq!(
+            first_block_index.get_block_id(),
+            second_block_index.get_block_id()
+        );
         Ok(first_block_index)
     }
 
