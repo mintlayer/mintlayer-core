@@ -228,7 +228,10 @@ impl Consensus {
             .db_tx
             .get_block_id_by_height(height)?
             .ok_or(BlockError::NotFound)?;
-        consensus_ref.db_tx.get_block_header_by_id(&id).map_err(BlockError::from)
+        Ok(consensus_ref
+            .db_tx
+            .get_block_index(&id)?
+            .map(|block_index| block_index.get_block_header().clone()))
     }
 
     pub fn get_locator(&self) -> Result<Vec<BlockHeader>, BlockError> {
