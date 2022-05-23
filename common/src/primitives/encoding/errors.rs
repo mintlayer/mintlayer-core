@@ -1,29 +1,28 @@
 use bech32::{self, Error};
 use core::fmt;
-use displaydoc::Display;
-use thiserror::Error;
 
-#[derive(Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Display)]
+#[derive(thiserror::Error, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub enum Bech32Error {
     /// missing separator
+    #[error("Missing separator`")]
     NoSeparator,
-    /// Invalid checksum
+    #[error("Invalid checksum")]
     FailedChecksum,
-    /// Length either too short or too long
+    #[error("Length either too short or too long")]
     InvalidLength,
-    /// char value not supported
+    #[error("Char value not supported")]
     InvalidChar(char),
-    /// the provided u8 value in the data is invalid
+    #[error("Provided u8 value in the data is invalid")]
     InvalidData(u8),
-    /// Padding issue
+    #[error("Padding issue")]
     InvalidPadding,
-    /// a mix of lowercase and uppercase is not allowed
+    #[error("Mix of lowercase and uppercase is not allowed")]
     MixCase,
-    /// only variant Bech32M is supported
+    #[error("Only variant Bech32m is supported")]
     UnsupportedVariant,
-    /// list of indices containing invalid characters in a bech32 string
+    #[error("List of indices containing invalid characters in a bech32 string `{0:?}`")]
     ErrorLocation(Vec<usize>),
-    /// wraps the rust error
+    #[error("Standard rust error: `{0}`")]
     StdError(#[from] fmt::Error),
 }
 
