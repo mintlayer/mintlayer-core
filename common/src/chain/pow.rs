@@ -67,7 +67,7 @@ const fn allow_min_difficulty_blocks(chain_type: ChainType) -> bool {
     }
 }
 
-const fn limit(chain_type: ChainType) -> Uint256 {
+pub(crate) const fn limit(chain_type: ChainType) -> Uint256 {
     match chain_type {
         ChainType::Mainnet | ChainType::Testnet => Uint256([
             0xFFFFFFFFFFFFFFFF,

@@ -18,7 +18,6 @@
 use crate::detail::tests::*;
 use blockchain_storage::Store;
 use common::chain::block::Block;
-use common::chain::config::create_mainnet;
 use common::primitives::Id;
 use std::collections::BTreeMap;
 
@@ -117,7 +116,7 @@ fn test_events_a_bunch_of_events() {
     const COUNT_EVENTS: usize = 100;
 
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -169,7 +168,7 @@ fn test_events_orphan_block() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
