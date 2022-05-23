@@ -230,7 +230,7 @@ mod test {
         }
     }
 
-    fn verify_sign_tx(
+    fn verify_signed_tx(
         tx: &Transaction,
         outpoint_dest: &Destination,
     ) -> Result<(), TransactionSigError> {
@@ -248,43 +248,43 @@ mod test {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         // ALL
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         // NONE
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         // SINGLE
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
     }
 
     #[test]
@@ -422,7 +422,7 @@ mod test {
             sighash_type,
             outpoint_dest.clone(),
         );
-        assert_eq!(verify_sign_tx(&original_tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
 
         // Should failed due to changed flags
         let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
