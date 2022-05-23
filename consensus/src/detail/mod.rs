@@ -31,6 +31,7 @@ use common::primitives::BlockDistance;
 use common::primitives::{time, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
 use std::sync::Arc;
+mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
 
@@ -45,6 +46,8 @@ type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
 
 mod spend_cache;
 use spend_cache::CachedInputs;
+
+use consensus_validator::BlockIndexHandle;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
@@ -148,15 +151,18 @@ impl Consensus {
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
         let block_index = consensus_ref.accept_block(&block);
-        if block_index == Err(BlockError::Orphan) {
-            if BlockSource::Local == block_source {
-                // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
-                consensus_ref.new_orphan_block(block)?;
+        if let Err(ref block_index_err) = block_index {
+            if *block_index_err == BlockError::Orphan {
+                if BlockSource::Local == block_source {
+                    // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
+                    consensus_ref.new_orphan_block(block)?;
+                }
+                return Err(BlockError::Orphan);
             }
-            return Err(BlockError::Orphan);
         }
         let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
+        // TODO: after finishing, we attempt to process orphans
         self.broadcast_new_tip_event(&result);
         Ok(result)
     }
@@ -202,7 +208,7 @@ impl Consensus {
     }
 }
 
-struct ConsensusRef<'a> {
+pub(crate) struct ConsensusRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
     db_tx: TxRw<'a>,
@@ -218,6 +224,22 @@ struct ConsensusRefRo<'a> {
     orphan_blocks: &'a OrphanBlocksPool,
 }
 
+impl<'a> BlockIndexHandle for ConsensusRef<'a> {
+    fn get_block_index(
+        &self,
+        block_index: &Id<Block>,
+    ) -> blockchain_storage::Result<Option<BlockIndex>> {
+        self.db_tx.get_block_index(block_index)
+    }
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        self.get_ancestor(block_index, ancestor_height)
+    }
+}
+
 impl<'a> ConsensusRef<'a> {
     fn commit_db_tx(self) -> blockchain_storage::Result<()> {
         self.db_tx.commit()
@@ -227,6 +249,63 @@ impl<'a> ConsensusRef<'a> {
     fn get_previous_block_index(&self, block_index: &BlockIndex) -> Result<BlockIndex, BlockError> {
         let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(BlockError::NotFound)?;
         self.db_tx.get_block_index(prev_block_id)?.ok_or(BlockError::NotFound)
+    }
+
+    // TODO improve using pskip
+    fn get_ancestor(
+        &self,
+        block_index: &BlockIndex,
+        ancestor_height: BlockHeight,
+    ) -> Result<BlockIndex, BlockError> {
+        if ancestor_height > block_index.get_block_height() {
+            return Err(BlockError::InvalidAncestorHeight {
+                block_height: block_index.get_block_height(),
+                ancestor_height,
+            });
+        }
+
+        let mut height_walk = block_index.get_block_height();
+        let mut block_index_walk = block_index.clone();
+        while height_walk > ancestor_height {
+            block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+            height_walk =
+                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
+        }
+        Ok(block_index_walk)
+    }
+
+    #[allow(unused)]
+    fn last_common_ancestor(
+        &self,
+        first_block_index: &BlockIndex,
+        second_block_index: &BlockIndex,
+    ) -> Result<BlockIndex, BlockError> {
+        let mut first_block_index = first_block_index.clone();
+        let mut second_block_index = second_block_index.clone();
+        match first_block_index.get_block_height().cmp(&second_block_index.get_block_height()) {
+            std::cmp::Ordering::Greater => {
+                first_block_index =
+                    self.get_ancestor(&first_block_index, second_block_index.get_block_height())?;
+            }
+            std::cmp::Ordering::Less => {
+                second_block_index =
+                    self.get_ancestor(&second_block_index, first_block_index.get_block_height())?;
+            }
+            std::cmp::Ordering::Equal => {}
+        }
+
+        while first_block_index.get_block_id() != second_block_index.get_block_id()
+            && !first_block_index.is_genesis(self.chain_config)
+            && !second_block_index.is_genesis(self.chain_config)
+        {
+            first_block_index = self.get_previous_block_index(&first_block_index)?;
+            second_block_index = self.get_previous_block_index(&second_block_index)?;
+        }
+        assert_eq!(
+            first_block_index.get_block_id(),
+            second_block_index.get_block_id()
+        );
+        Ok(first_block_index)
     }
 
     // Get indexes for a new longest chain
@@ -566,12 +645,6 @@ impl<'a> ConsensusRef<'a> {
         Ok(())
     }
 
-    fn check_consensus(&self, block: &Block) -> Result<(), BlockError> {
-        let _consensus_data = block.consensus_data();
-        // TODO: PoW is not in master at the moment =(
-        Ok(())
-    }
-
     fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
         // check for duplicate inputs (see CVE-2018-17144)
         {
@@ -613,7 +686,7 @@ impl<'a> ConsensusRef<'a> {
     fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
         //TODO: The parts that check the block in isolation without the knowledge of the state should not take
         //      storage as an argument (either directly or indirectly as done here through self)
-        self.check_consensus(block)?;
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
         self.check_block_detail(block, block_source)?;
         Ok(())
     }

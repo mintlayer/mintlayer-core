@@ -28,6 +28,7 @@ type HashType = Id<Block>;
     strum::EnumVariantNames,
     strum::EnumString,
 )]
+#[strum(serialize_all = "kebab-case")]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -131,13 +132,13 @@ fn create_mainnet_genesis() -> Block {
         .expect("Error creating genesis block")
 }
 
-#[allow(dead_code)]
 pub fn create_mainnet() -> ChainConfig {
+    let chain_type = ChainType::Mainnet;
     ChainConfig {
-        chain_type: ChainType::Mainnet,
+        chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::new(),
-        net_upgrades: Default::default(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        net_upgrades: NetUpgrades::new(chain_type),
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
@@ -176,6 +177,59 @@ pub fn create_custom(
     }
 }
 
+pub fn create_unit_test_config() -> ChainConfig {
+    ChainConfig {
+        chain_type: ChainType::Mainnet,
+        address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        net_upgrades: NetUpgrades::unit_tests(),
+        rpc_port: 15234,
+        p2p_port: 8978,
+        magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+        genesis_block: create_mainnet_genesis(),
+        version: SemVer::new(0, 1, 0),
+        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+    }
+}
+
+pub struct ChainConfigBuilder {
+    net_upgrades: NetUpgrades<UpgradeVersion>,
+}
+
+impl Default for ChainConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ChainConfigBuilder {
+    pub fn new() -> Self {
+        Self {
+            net_upgrades: NetUpgrades::unit_tests(),
+        }
+    }
+
+    pub fn with_net_upgrades(mut self, net_upgrades: NetUpgrades<UpgradeVersion>) -> Self {
+        self.net_upgrades = net_upgrades;
+        self
+    }
+
+    pub fn build(self) -> ChainConfig {
+        ChainConfig {
+            chain_type: ChainType::Mainnet,
+            address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
+            height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+            net_upgrades: self.net_upgrades,
+            rpc_port: 15234,
+            p2p_port: 8978,
+            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+            genesis_block: create_mainnet_genesis(),
+            version: SemVer::new(0, 1, 0),
+            blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +263,19 @@ mod tests {
         assert_eq!(config.genesis_block(), mainnet.genesis_block(),);
         assert_ne!(config.magic_bytes(), mainnet.magic_bytes(),);
         assert_ne!(config.version(), mainnet.version(),);
+    }
+
+    #[test]
+    fn chain_type_names() {
+        use strum::VariantNames;
+
+        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
+        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
+
+        assert_eq!(ChainType::VARIANTS.len(), 4, "Unexpected number of chain types");
+        for chain_type_str in ChainType::VARIANTS {
+            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
+            assert_eq!(&chain_type.to_string(), chain_type_str);
+        }
     }
 }

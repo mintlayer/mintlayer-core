@@ -22,12 +22,24 @@ use common::primitives::Id;
 use common::primitives::H256;
 use std::panic;
 
-pub(in crate::detail::tests) struct BlockTestFrameWork {
+pub(in crate::detail::tests) struct BlockTestFramework {
     pub consensus: Consensus,
     pub block_indexes: Vec<BlockIndex>,
 }
 
-impl<'a> BlockTestFrameWork {
+impl<'a> BlockTestFramework {
+    pub fn with_consensus(consensus: Consensus) -> Self {
+        let genesis_index = consensus
+            .blockchain_storage
+            .get_block_index(&consensus.chain_config.genesis_block().get_id())
+            .unwrap()
+            .unwrap();
+        Self {
+            consensus,
+            block_indexes: vec![genesis_index],
+        }
+    }
+
     pub(in crate::detail::tests) fn new() -> Self {
         let consensus = setup_consensus();
         let genesis_index = consensus
@@ -312,5 +324,9 @@ impl<'a> BlockTestFrameWork {
             Some(id) => id == *block_index.get_block_id(),
             None => false,
         }
+    }
+
+    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, BlockError> {
+        self.consensus.get_block(block_id)
     }
 }

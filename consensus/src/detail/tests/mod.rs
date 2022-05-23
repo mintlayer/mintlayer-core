@@ -63,12 +63,6 @@ pub(in crate::detail::tests) enum TestSpentStatus {
     NotInMainchain,
 }
 
-fn setup_consensus() -> Consensus {
-    let config = Arc::new(create_mainnet());
-    let storage = Store::new_empty().unwrap();
-    Consensus::new(config, storage).unwrap()
-}
-
 fn random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
@@ -107,7 +101,43 @@ fn create_utxo_data(
     }
 }
 
-fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
+struct ConsensusBuilder {
+    config: ChainConfig,
+    storage: Store,
+}
+
+impl ConsensusBuilder {
+    fn new() -> Self {
+        Self {
+            config: create_unit_test_config(),
+            storage: Store::new_empty().unwrap(),
+        }
+    }
+    fn build(self) -> Consensus {
+        Consensus::new(Arc::new(self.config), self.storage).unwrap()
+    }
+
+    #[allow(unused)]
+    fn with_config(mut self, chain_config: ChainConfig) -> Self {
+        self.config = chain_config;
+        self
+    }
+}
+
+fn setup_consensus() -> Consensus {
+    ConsensusBuilder::new().build()
+}
+
+fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
+    produce_test_block_with_consensus_data(config, prev_block, orphan, ConsensusData::None)
+}
+
+fn produce_test_block_with_consensus_data(
+    config: &ChainConfig,
+    prev_block: &Block,
+    orphan: bool,
+    consensus_data: ConsensusData,
+) -> Block {
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
@@ -122,7 +152,7 @@ fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
             Some(Id::new(&prev_block.get_id().get()))
         },
         time::get() as u32,
-        ConsensusData::None,
+        consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)
 }

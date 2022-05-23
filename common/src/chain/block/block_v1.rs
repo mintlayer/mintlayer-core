@@ -1,6 +1,7 @@
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
+use crate::chain::ChainConfig;
 use crate::primitives::id;
 use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
@@ -19,6 +20,28 @@ pub struct BlockHeader {
     #[codec(compact)]
     pub(super) time: u32,
     pub(super) consensus_data: ConsensusData,
+}
+
+impl BlockHeader {
+    pub fn consensus_data(&self) -> &ConsensusData {
+        &self.consensus_data
+    }
+
+    pub fn block_id(&self) -> Id<Block> {
+        Id::new(&id::hash_encoded(self))
+    }
+
+    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
+        self.prev_block_hash == None && chain_config.genesis_block().get_id() == self.block_id()
+    }
+
+    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
+        &self.prev_block_hash
+    }
+
+    pub fn block_time(&self) -> u32 {
+        self.time
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]

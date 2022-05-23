@@ -17,18 +17,26 @@
 
 #![allow(dead_code)]
 
+use crate::detail::consensus_validator::BlockIndexHandle;
 use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
-use crate::detail::pow::temp::BlockIndex;
-use crate::detail::pow::{Error, PoW};
+
+use crate::detail::pow::PoW;
+use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};
+use common::chain::block::{BlockHeader, BlockIndex};
+use common::chain::config::ChainConfig;
+use common::chain::PoWStatus;
 use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
-pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool, Error> {
+pub(crate) fn check_proof_of_work(
+    block_hash: H256,
+    block_bits: Compact,
+) -> Result<bool, BlockError> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
@@ -36,16 +44,56 @@ pub fn check_proof_of_work(block_hash: H256, block_bits: Compact) -> Result<bool
             hash <= target
         })
         .map_err(|e| {
-            Error::ConversionError(format!(
+            BlockError::Conversion(format!(
                 "conversion of {:?} to Uint256 type: {:?}",
                 block_bits, e
             ))
         })
 }
 
+pub(crate) fn check_pow_consensus(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    pow_status: &PoWStatus,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<(), BlockError> {
+    let work_required =
+        calculate_work_required(chain_config, header, pow_status, block_index_handle)?;
+    if check_proof_of_work(header.block_id().get(), work_required)? {
+        Ok(())
+    } else {
+        Err(BlockError::InvalidPoW)
+    }
+}
+
+fn calculate_work_required(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    pow_status: &PoWStatus,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<Compact, BlockError> {
+    match pow_status {
+        PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
+        PoWStatus::Ongoing => {
+            let prev_block_id = header
+                .get_prev_block_id()
+                .clone()
+                .expect("If PoWStatus is `Onging` then we cannot be at genesis");
+            let prev_block_index = block_index_handle
+                .get_block_index(&prev_block_id)?
+                .ok_or(BlockError::NotFound)?;
+            PoW::new(chain_config).get_work_required(
+                &prev_block_index,
+                header.block_time(),
+                block_index_handle,
+            )
+        }
+    }
+}
+
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
-    pub fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
+    fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
         let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
 
         num::clamp(
@@ -55,20 +103,30 @@ impl PoW {
         )
     }
 
-    pub fn get_work_required(
+    fn get_work_required(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
-    ) -> Result<Compact, Error> {
-        //TODO: check prev_block_index exists
-        let prev_block_bits = prev_block_index.data.bits();
+        db_accessor: &dyn BlockIndexHandle,
+    ) -> Result<Compact, BlockError> {
+        let prev_block_consensus_data = prev_block_index.get_block_header().consensus_data();
+        // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
+        // block was PoW
+        debug_assert!(matches!(prev_block_consensus_data, ConsensusData::PoW(..)));
+        let prev_block_bits = {
+            if let ConsensusData::PoW(pow_data) = prev_block_consensus_data {
+                pow_data.bits()
+            } else {
+                return Err(BlockError::NoPowDataInPreviousBlock);
+            }
+        };
 
         if self.no_retargeting() {
             return Ok(prev_block_bits);
         }
 
         let current_height = prev_block_index
-            .height
+            .get_block_height()
             .checked_add(1)
             .expect("max block height has been reached.");
 
@@ -78,14 +136,19 @@ impl PoW {
         if !due_for_retarget(adjustment_interval, current_height) {
             return if self.allow_min_difficulty_blocks() {
                 // special difficulty rules
-                Ok(self.next_work_required_for_min_difficulty(new_block_time, prev_block_index))
+                Ok(self.next_work_required_for_min_difficulty(
+                    new_block_time,
+                    prev_block_index,
+                    prev_block_bits,
+                ))
             } else {
                 Ok(prev_block_bits)
             };
         }
 
-        let retarget_block_time = get_starting_block_time(adjustment_interval, prev_block_index);
-        self.next_work_required(retarget_block_time, prev_block_index)
+        let retarget_block_time =
+            get_starting_block_time(adjustment_interval, prev_block_index, db_accessor)?;
+        self.next_work_required(retarget_block_time, prev_block_index, prev_block_bits)
     }
 
     /// retargeting proof of work
@@ -93,7 +156,8 @@ impl PoW {
         &self,
         retarget_block_time: u32,
         prev_block_index: &BlockIndex,
-    ) -> Result<Compact, Error> {
+        prev_block_bits: Compact,
+    ) -> Result<Compact, BlockError> {
         // limit adjustment step
         let actual_timespan_of_last_interval =
             self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
@@ -101,15 +165,17 @@ impl PoW {
         calculate_new_target(
             actual_timespan_of_last_interval,
             self.target_timespan_in_secs(),
-            prev_block_index.data.bits(),
+            prev_block_bits,
             self.difficulty_limit(),
         )
+        .map_err(Into::into)
     }
 
     fn next_work_required_for_min_difficulty(
         &self,
         new_block_time: u32,
         prev_block_index: &BlockIndex,
+        prev_block_bits: Compact,
     ) -> Compact {
         // If the new block's timestamp is more than 2 * 10 minutes
         // then allow mining of a min-difficulty block.
@@ -118,20 +184,19 @@ impl PoW {
             new_block_time,
             prev_block_index.get_block_time(),
         ) {
-            return Compact::from(self.difficulty_limit());
+            Compact::from(self.difficulty_limit())
+        } else {
+            prev_block_bits
         }
-
-        // Return the last non-special-min-difficulty-rules-block
-        special_rules::last_non_special_min_difficulty(prev_block_index)
     }
 }
 
-pub fn mine(
+pub(crate) fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
     block_rewards: Vec<TxOutput>,
-) -> Result<bool, Error> {
+) -> Result<bool, BlockError> {
     let mut data = PoWData::new(bits, 0, block_rewards);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922

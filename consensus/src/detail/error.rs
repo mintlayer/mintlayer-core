@@ -32,6 +32,13 @@ pub enum BlockError {
     Orphan,
     #[error("Invalid block height `{0}`")]
     InvalidBlockHeight(BlockHeight),
+    #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
+    InvalidAncestorHeight {
+        block_height: BlockHeight,
+        ancestor_height: BlockHeight,
+    },
+    #[error("Invalid Proof of Work")]
+    InvalidPoW,
     #[error("The previous block invalid")]
     PrevBlockInvalid,
     #[error("The storage cause failure `{0}`")]
@@ -86,7 +93,14 @@ pub enum BlockError {
     InternalNumTypeConversionError(Id<Block>),
     #[error("Internal block representation is invalid `{0}`")]
     BlockConsistencyError(BlockConsistencyError),
-    // To be expanded
+    #[error("No PoW data for block")]
+    NoPowDataInPreviousBlock,
+    #[error("Block consensus type does not match our chain configuration: `{0:?}`")]
+    ConsensusTypeMismatch(String),
+    #[error("Conversion failed: `{0:?}`")]
+    Conversion(String),
+    #[error("Unsupported consensus type")]
+    UnsupportedConsensusType,
 }
 
 impl From<blockchain_storage::Error> for BlockError {

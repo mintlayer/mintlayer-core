@@ -17,15 +17,14 @@
 
 use std::sync::Mutex;
 
-use crate::detail::tests::test_framework::BlockTestFrameWork;
+use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use blockchain_storage::Store;
-use common::chain::config::create_mainnet;
 
 #[test]
 fn test_reorg_simple() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
 
@@ -91,7 +90,7 @@ fn test_reorg_simple() {
 #[test]
 fn test_very_long_reorgs() {
     common::concurrency::model(|| {
-        let mut btf = BlockTestFrameWork::new();
+        let mut btf = BlockTestFramework::new();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut btf, &events);
 
@@ -119,7 +118,7 @@ fn test_very_long_reorgs() {
     });
 }
 
-fn check_spend_tx_in_failed_block(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventList) {
     // Check spending of a transaction in a block which failed to connect
     //
     //+-- 0x07e3…6fe4 (H:8,M,B:10)
@@ -155,7 +154,7 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFrameWork, events: &EventLi
     assert!(btf.create_chain(&btf.block_indexes[12].get_block_id().clone(), 1).is_err());
 }
 
-fn check_spend_tx_in_other_fork(btf: &mut BlockTestFrameWork) {
+fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
     // # Attempt to spend a transaction created on a different fork
     //
     // +-- 0x4273…c93c (H:7,M,B:10)
@@ -190,7 +189,7 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFrameWork) {
     assert!(btf.create_chain(&block_id, 10).is_err());
 }
 
-fn check_fork_that_double_spends(btf: &mut BlockTestFrameWork) {
+fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
     // # Try to create a fork that double-spends
     // +-- 0x6e45…e8e8 (H:0,P:0)
     //         +-- 0xe090…995e (H:1,M,P:1)
@@ -216,7 +215,7 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFrameWork) {
     assert!(btf.add_special_block(double_spend_block).is_err());
 }
 
-fn check_reorg_to_first_chain(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn check_reorg_to_first_chain(btf: &mut BlockTestFramework, events: &EventList) {
     //  ... and back to the first chain.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -270,7 +269,7 @@ fn check_reorg_to_first_chain(btf: &mut BlockTestFrameWork, events: &EventList) 
     assert!(btf.is_block_in_main_chain(btf.block_indexes[6].get_block_id()));
 }
 
-fn check_make_alternative_chain_longer(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &EventList) {
     //  Now we add another block to make the alternative chain longer.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -311,7 +310,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFrameWork, events: &Ev
     assert!(btf.is_block_in_main_chain(btf.block_indexes[4].get_block_id()));
 }
 
-fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
     //  Fork like this:
     //
     //  +-- 0x6e45…e8e8 (H:0,B:0) = genesis
@@ -364,7 +363,7 @@ fn check_simple_fork(btf: &mut BlockTestFrameWork, events: &EventList) {
     assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
 }
 
-fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
     wait_for_threadpool_to_finish(&mut btf.consensus);
     let events = events.lock().unwrap();
@@ -384,7 +383,7 @@ fn check_last_event(btf: &mut BlockTestFrameWork, events: &EventList) {
     }
 }
 
-fn subscribe_to_events(btf: &mut BlockTestFrameWork, events: &EventList) {
+fn subscribe_to_events(btf: &mut BlockTestFramework, events: &EventList) {
     let events = Arc::clone(events);
     // Add the genesis
     events.lock().unwrap().push((btf.genesis().get_id(), BlockHeight::from(0)));
