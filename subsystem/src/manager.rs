@@ -230,11 +230,6 @@ impl Manager {
         );
     }
 
-    /// Issue an asynchronous shutdown request
-    pub async fn initiate_shutdown(&self) {
-        self.shutting_down_tx.send(()).await.expect("Shutdown receiver not existing")
-    }
-
     async fn wait_for_shutdown(mut shutting_down_rx: mpsc::Receiver<()>) {
         // Wait for the subsystems to go down, signalled by closing the shutting_down channel.
         while let Some(()) = shutting_down_rx.recv().await {}
@@ -268,6 +263,11 @@ impl Manager {
             // No timeout requested, just wait for shutdown
             shutdown_future.await
         }
+    }
+
+    /// Create a trigger object that can be used to shut down the system
+    pub fn make_shutdown_trigger(&self) -> ShutdownTrigger {
+        ShutdownTrigger(self.shutting_down_tx.clone())
     }
 
     /// Run the application main task.
@@ -337,6 +337,21 @@ impl Manager {
     }
 }
 
+/// Used to initiate shutdown of manager and subsystems.
+#[derive(Clone)]
+pub struct ShutdownTrigger(mpsc::Sender<()>);
+
+impl ShutdownTrigger {
+    /// Initiate shutdown
+    pub fn initiate(&self) {
+        use mpsc::error::TrySendError as E;
+        self.0.try_send(()).unwrap_or_else(|err| match err {
+            E::Full(_) => log::info!("Shutdown requested but the system is already shutting down"),
+            E::Closed(_) => log::info!("Shutdown requested but the system is already down"),
+        })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -355,7 +370,7 @@ mod test {
             "does_not_want_to_exit",
             |_call_rq: CallRequest<()>, _shut_rq| std::future::pending(),
         );
-        man.initiate_shutdown().await;
+        man.make_shutdown_trigger().initiate();
         man.main().await;
 
         testing_logger::validate(|logs| {

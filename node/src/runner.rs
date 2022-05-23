@@ -38,6 +38,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         "rpc",
         rpc::Builder::new(opts.rpc_addr)
             .register(consensus.clone().into_rpc())
+            .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .build()
             .await?,
     );
@@ -51,4 +52,36 @@ pub async fn run(opts: Options) -> anyhow::Result<()> {
 
     #[allow(clippy::unit_arg)]
     Ok(manager.main().await)
+}
+
+#[rpc::rpc(server, namespace = "node")]
+trait NodeRpc {
+    /// Order the node to exit
+    #[method(name = "exit")]
+    fn exit(&self) -> rpc::Result<()>;
+
+    /// Get node software version
+    #[method(name = "version")]
+    fn version(&self) -> rpc::Result<String>;
+}
+
+struct NodeRpc {
+    shutdown_trigger: subsystem::manager::ShutdownTrigger,
+}
+
+impl NodeRpc {
+    fn new(shutdown_trigger: subsystem::manager::ShutdownTrigger) -> Self {
+        Self { shutdown_trigger }
+    }
+}
+
+impl NodeRpcServer for NodeRpc {
+    fn exit(&self) -> rpc::Result<()> {
+        self.shutdown_trigger.initiate();
+        Ok(())
+    }
+
+    fn version(&self) -> rpc::Result<String> {
+        Ok(env!("CARGO_PKG_VERSION").into())
+    }
 }

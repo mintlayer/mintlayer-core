@@ -2369,6 +2369,7 @@ dependencies = [
  "clap 3.1.18",
  "common",
  "consensus",
+ "jsonrpsee",
  "logging",
  "rpc",
  "strum",

@@ -1,7 +1,7 @@
 //! Top-level node binary
 
-mod runner;
 mod options;
+mod runner;
 
 async fn run() -> anyhow::Result<()> {
     let opts = options::Options::from_args(std::env::args_os());
