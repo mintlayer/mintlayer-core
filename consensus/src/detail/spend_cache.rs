@@ -183,6 +183,17 @@ impl<'a> CachedInputs<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
+        /*
+        TODO(Roy): Add consensus data's output(s) here to spendable in the database
+        Whether we want to create a separate function for that is up to you, however,
+        it seems it's a bad idea because it's the same stuff for transactions and
+        block rewards, and repeating code is bad. Maybe change tx_num to Option<usize>,
+        and then None would mean we're going for the block reward. OR... better, an enum.
+
+        Don't forget that users are not allowed to spend the block reward before blockreward_maturity
+        passes; the check is down there. Feel free to move stuff around.
+        */
+
         let tx = block
             .transactions()
             .get(tx_num)
@@ -197,7 +208,7 @@ impl<'a> CachedInputs<'a> {
         self.check_inputs_amounts(tx)?;
 
         // verify signature
-        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
+        for (_input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
             let prev_tx_index_op = self.get_from_cached(outpoint)?;
 
@@ -221,7 +232,7 @@ impl<'a> CachedInputs<'a> {
                     output.get_destination().clone()
                 }
                 common::chain::SpendablePosition::BlockReward(reward_pos) => {
-                    // TODO(Roy): fill this
+                    // TODO(Roy): fill this with the block reward that the user now is spending
                     todo!()
                 }
             };

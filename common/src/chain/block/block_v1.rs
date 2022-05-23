@@ -2,10 +2,12 @@ use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::chain::ChainConfig;
+use crate::chain::TxOutput;
 use crate::primitives::id;
 use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
 
+use parity_scale_codec::Output;
 use serialization::{Decode, Encode};
 
 use super::BlockVersion;
@@ -41,6 +43,15 @@ impl BlockHeader {
 
     pub fn block_time(&self) -> u32 {
         self.time
+    }
+
+    pub fn block_reward_destinations() -> Option<Vec<TxOutput>> {
+        /* TODO(Roy): Block rewards should be part of the ConsensusData object; they're optional too
+           meaning: When someone mines and creates the ConsensusData object, they also specify the
+           output, to which the reward goes. We may or may not restrict the number of outputs,
+           but initially it doesn't matter
+        */
+        todo!();
     }
 }
 
