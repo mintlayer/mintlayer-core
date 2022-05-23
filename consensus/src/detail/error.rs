@@ -53,8 +53,11 @@ pub enum BlockError {
     OutputAlreadyPresentInInputsCache,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
-    #[error("Output index out of range")]
-    OutputIndexOutOfRange,
+    #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
+    OutputIndexOutOfRange {
+        tx_id: Option<Spender>,
+        source_output_index: usize,
+    },
     #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErased,
     #[error("Double-spend attempt")]
@@ -73,6 +76,8 @@ pub enum BlockError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
+    #[error("Signature verification failed in transaction with id: {0:?}")]
+    SignatureVerificationFailed(Id<Transaction>),
     #[error("Transaction index found but transaction not found")]
     InvariantErrorTransactionCouldNotBeLoaded,
     #[error("Input addition error")]
@@ -116,7 +121,13 @@ impl From<SpendError> for BlockError {
         match err {
             SpendError::AlreadySpent(spender) => BlockError::DoubleSpendAttempt(spender),
             SpendError::AlreadyUnspent => BlockError::InvariantBrokenAlreadyUnspent,
-            SpendError::OutOfRange => BlockError::OutputIndexOutOfRange,
+            SpendError::OutOfRange {
+                tx_id,
+                source_output_index,
+            } => BlockError::OutputIndexOutOfRange {
+                tx_id,
+                source_output_index,
+            },
         }
     }
 }

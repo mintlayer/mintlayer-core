@@ -29,9 +29,11 @@ fn invalid_output_count() {
 
 #[test]
 fn basic_spending() {
-    let block_id =
-        H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
-    let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
+    let block_id: Id<Block> =
+        H256::from_str("000000000000000000000000000000000000000000000000000000000000007b")
+            .unwrap()
+            .into();
+    let pos = TxMainChainPosition::new(block_id.clone(), 1, 2).into();
     let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
     // ensure index accesses are correct
@@ -40,11 +42,17 @@ fn basic_spending() {
     assert!(tx_index.get_spent_state(2).is_ok());
     assert_eq!(
         tx_index.get_spent_state(3).unwrap_err(),
-        SpendError::OutOfRange
+        SpendError::OutOfRange {
+            tx_id: None,
+            source_output_index: 3
+        }
     );
     assert_eq!(
         tx_index.get_spent_state(4).unwrap_err(),
-        SpendError::OutOfRange
+        SpendError::OutOfRange {
+            tx_id: None,
+            source_output_index: 4
+        }
     );
     assert_eq!(tx_index.get_output_count(), 3);
 
