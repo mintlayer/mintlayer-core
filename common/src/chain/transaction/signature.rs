@@ -195,7 +195,7 @@ mod test {
         }
     }
 
-    fn generate_unsign_tx(
+    fn generate_unsigned_tx(
         outpoint_dest: Destination,
     ) -> Result<Transaction, TransactionCreationError> {
         let tx = Transaction::new(
@@ -246,44 +246,43 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         // ALL
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         // NONE
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
-        dbg!(tx.get_outputs().len());
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         // SINGLE
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
 
         let sighash_type =
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         assert_eq!(verify_sign_tx(&tx, &outpoint_dest), Ok(()));
     }
@@ -293,7 +292,7 @@ mod test {
     fn check_verify_fails_different_sighash_types() {
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         // Try verify sign for tx with InputWitness::NoSignature and some data
         tx.update_witness(
             0,
@@ -318,6 +317,7 @@ mod test {
             verify_signature(&outpoint_dest, &tx, 0),
             Err(TransactionSigError::InvalidSignatureEncoding)
         );
+
         // SigHashType ALL - must fail because there are wrong bytes in raw_signature
         tx.update_witness(
             0,
@@ -397,7 +397,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
         // input index out of range
         assert_eq!(
@@ -415,7 +415,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut original_tx = generate_unsign_tx(outpoint_dest.clone()).unwrap();
+        let mut original_tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(
             &mut original_tx,
             &private_key,
