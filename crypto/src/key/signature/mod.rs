@@ -2,7 +2,7 @@ use std::io::BufWriter;
 
 use crate::key::rschnorr::RistrettoSchnorrSignature;
 use num_derive::FromPrimitive;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 use tari_crypto::tari_utilities::message_format::MessageFormat;
 
 #[derive(FromPrimitive)]
@@ -54,6 +54,11 @@ impl Decode for Signature {
 }
 
 impl Signature {
+    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, parity_scale_codec::Error> {
+        let decoded_sig = Signature::decode_all(&mut data.as_ref())?;
+        Ok(decoded_sig)
+    }
+
     pub fn is_aggregable(&self) -> bool {
         match self {
             Self::RistrettoSchnorr(_) => true,

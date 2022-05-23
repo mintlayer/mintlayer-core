@@ -1,6 +1,10 @@
-use crate::address::Address;
+use crypto::key::KeyKind;
+use crypto::key::PrivateKey;
+
+use crate::address::pubkeyhash::PublicKeyHash;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
+use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
@@ -9,6 +13,7 @@ use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
+#[allow(dead_code)]
 type HashType = Id<Block>;
 
 #[derive(
@@ -41,7 +46,7 @@ pub struct ChainConfig {
     #[allow(dead_code)]
     p2p_port: u16,
     #[allow(dead_code)]
-    height_checkpoint_data: BTreeMap<BlockHeight, HashType>,
+    height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     #[allow(dead_code)]
     net_upgrades: NetUpgrades<UpgradeVersion>,
     #[allow(dead_code)]
@@ -92,7 +97,10 @@ impl ChainConfig {
     }
 }
 
-const MAINNET_ADDRESS_PREFIX: &str = "mlt";
+const MAINNET_ADDRESS_PREFIX: &str = "mtc";
+#[allow(dead_code)]
+const TESTNET_ADDRESS_PREFIX: &str = "tmt";
+
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
@@ -102,17 +110,20 @@ fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{Destination, TxInput, TxOutput};
     use crate::primitives::Amount;
 
+    // TODO: replace this with our mint key
+    let (_mint_priv_key, mint_pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let genesis_mint_receiver_pubkeyhash = PublicKeyHash::from(&mint_pub_key);
+
     let genesis_message = b"".to_vec();
-    let genesis_mint_receiver = Address::new_with_hrp(MAINNET_ADDRESS_PREFIX, [])
-        .expect("Failed to create genesis mint address");
     let input = TxInput::new(
         Id::<Transaction>::new(&H256::zero()).into(),
         0,
-        genesis_message,
+        InputWitness::NoSignature(Some(genesis_message)),
     );
+    // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
-        Destination::Address(genesis_mint_receiver),
+        Destination::Address(genesis_mint_receiver_pubkeyhash),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");

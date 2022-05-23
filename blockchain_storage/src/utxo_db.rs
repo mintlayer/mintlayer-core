@@ -59,12 +59,17 @@ mod test {
     use crate::store::test::create_rand_block_undo;
     use common::chain::{Destination, OutPoint, OutPointSourceId, TxOutput};
     use common::primitives::{Amount, BlockHeight, H256};
+    use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
 
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
         let random_value = make_pseudo_rng().gen_range(0..u128::MAX);
-        let output = TxOutput::new(Amount::from_atoms(random_value), Destination::PublicKey);
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let output = TxOutput::new(
+            Amount::from_atoms(random_value),
+            Destination::PublicKey(pub_key),
+        );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.

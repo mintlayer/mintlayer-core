@@ -439,6 +439,8 @@ fn blockchain_or_mempool_utxo_test() {
 
 #[test]
 fn multiple_update_utxos_test() {
+    use common::chain::signature::inputsig::InputWitness;
+
     let mut cache = UtxosCache::default();
 
     // let's test `add_utxos`
@@ -463,7 +465,7 @@ fn multiple_update_utxos_test() {
         .into_iter()
         .map(|idx| {
             let id = OutPointSourceId::from(tx.get_id());
-            TxInput::new(id, idx as u32, vec![])
+            TxInput::new(id, idx as u32, InputWitness::NoSignature(None))
         })
         .collect_vec();
 

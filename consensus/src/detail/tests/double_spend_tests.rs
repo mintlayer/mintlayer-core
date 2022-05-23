@@ -40,7 +40,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address(&consensus.chain_config);
+            let receiver = random_address();
 
             let prev_block_tx_id = consensus
                 .chain_config
@@ -61,7 +61,7 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -103,7 +103,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address(&consensus.chain_config);
+            let receiver = random_address();
 
             let prev_block_tx_id =
                 consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -119,7 +119,7 @@ fn spend_tx_in_the_same_block() {
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
-            let input = TxInput::new(first_tx_id.into(), 0, vec![]);
+            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
@@ -171,7 +171,7 @@ fn double_spend_tx_in_the_same_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address(&consensus.chain_config);
+        let receiver = random_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -193,7 +193,11 @@ fn double_spend_tx_in_the_same_block() {
         // Create second tx
         let second_tx = Transaction::new(
             0,
-            vec![TxInput::new(first_tx_id.clone().into(), 0, vec![])],
+            vec![TxInput::new(
+                first_tx_id.clone().into(),
+                0,
+                InputWitness::NoSignature(None),
+            )],
             vec![TxOutput::new(Amount::from_atoms(987654321), receiver.clone())],
             0,
         )
@@ -202,7 +206,7 @@ fn double_spend_tx_in_the_same_block() {
         // Create third tx
         let third_tx = Transaction::new(
             123456789,
-            vec![TxInput::new(first_tx_id.into(), 0, vec![])],
+            vec![TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None))],
             vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
             0,
         )
@@ -252,7 +256,7 @@ fn double_spend_tx_in_another_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address(&consensus.chain_config);
+        let receiver = random_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();

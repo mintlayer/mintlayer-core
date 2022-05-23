@@ -1,11 +1,17 @@
-use crate::primitives::{Amount, Id};
+use crate::{
+    address::pubkeyhash::PublicKeyHash,
+    primitives::{Amount, Id},
+};
 use script::Script;
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {
-    Address(crate::address::Address), // Address type to be added
-    PublicKey,                        // Key type to be added
+    #[codec(index = 0)]
+    Address(PublicKeyHash), // Address type to be added
+    #[codec(index = 1)]
+    PublicKey(crypto::key::PublicKey), // Key type to be added
+    #[codec(index = 2)]
     ScriptHash(Id<Script>),
 }
 

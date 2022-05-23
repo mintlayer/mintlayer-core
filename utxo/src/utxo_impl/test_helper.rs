@@ -1,6 +1,8 @@
 use crate::{Utxo, UtxoEntry, UtxosCache};
+use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{Amount, BlockHeight, Id, H256};
+use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{make_pseudo_rng, seq, Rng};
 use iter_tools::Itertools;
 
@@ -22,9 +24,10 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
     for _ in 0..size {
         let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_outputs.push(TxOutput::new(
             Amount::from_atoms(random_amt),
-            Destination::PublicKey,
+            Destination::PublicKey(pub_key),
         ));
     }
 
@@ -39,7 +42,11 @@ pub fn create_tx_inputs(outpoints: &[OutPoint]) -> Vec<TxInput> {
         .into_iter()
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
-            TxInput::new(outpoint.get_tx_id(), outpoint.get_output_index(), vec![])
+            TxInput::new(
+                outpoint.get_tx_id(),
+                outpoint.get_output_index(),
+                InputWitness::NoSignature(None),
+            )
         })
         .collect_vec()
 }
@@ -66,7 +73,8 @@ pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
 fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
     let rng = make_pseudo_rng().gen_range(0..u128::MAX);
-    let output = TxOutput::new(Amount::from_atoms(rng), Destination::PublicKey);
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let output = TxOutput::new(Amount::from_atoms(rng), Destination::PublicKey(pub_key));
     let is_block_reward = rng % 3 == 0;
 
     // generate utxo

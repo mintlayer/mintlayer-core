@@ -59,11 +59,8 @@ impl<'a> BlockTestFramework {
         parent_block: &Block,
         params: Option<&[TestBlockParams]>,
     ) -> Block {
-        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_block
-            .transactions()
-            .iter()
-            .flat_map(|tx| create_new_outputs(&self.consensus.chain_config, tx))
-            .unzip();
+        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
+            parent_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
         let mut hash_prev_block = Some(parent_block.get_id());
         if let Some(params) = params {
@@ -80,7 +77,7 @@ impl<'a> BlockTestFramework {
                         let double_spend_input = TxInput::new(
                             OutPointSourceId::Transaction(block.transactions()[0].get_id()),
                             0,
-                            vec![],
+                            InputWitness::NoSignature(None),
                         );
                         inputs.push(double_spend_input)
                     }
@@ -206,7 +203,7 @@ impl<'a> BlockTestFramework {
             .unwrap();
 
         for _ in 0..count_blocks {
-            block = produce_test_block(&self.consensus.chain_config.clone(), &block, false);
+            block = produce_test_block(&block, false);
             let block_index = self.consensus.process_block(block.clone(), BlockSource::Local)?;
             self.block_indexes.push(block_index.unwrap_or_else(|| {
                 self.consensus
