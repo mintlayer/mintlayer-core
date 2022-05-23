@@ -14,12 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::detail::tests::{*, test_framework::BlockTestFrameWork};
+use crate::detail::tests::{test_framework::BlockTestFramework, *};
+use rand::Rng;
 
 #[test]
 fn test_get_locator() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(Arc::clone(&config), storage).unwrap();
 
@@ -61,7 +62,7 @@ fn test_get_locator() {
 #[test]
 fn test_get_headers_same_chain() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_mainnet());
+        let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut consensus = Consensus::new(config, storage).unwrap();
 
@@ -116,16 +117,12 @@ fn test_get_headers_different_chains() {
         // first create test where the chains have branched off at genesis
         // verify that the first header attaches to genesis
         {
-            let mut btf = BlockTestFrameWork::new();
+            let mut btf = BlockTestFramework::new();
             let limit = rand::thread_rng().gen_range(0..10_000);
-            btf.create_chain(
-                &btf.genesis().get_id(),
-                (limit / 10) as usize,
-                produce_test_block,
-            );
+            btf.create_chain(&btf.genesis().get_id(), (limit / 10) as usize).unwrap();
 
             let locator = btf.consensus.get_locator().unwrap();
-            btf.create_chain(&btf.genesis().get_id(), limit, produce_test_block);
+            btf.create_chain(&btf.genesis().get_id(), limit).unwrap();
 
             // verify that the locators are different now that the chain has more headers
             assert!(locator.len() < btf.consensus.get_locator().unwrap().len());
@@ -142,22 +139,22 @@ fn test_get_headers_different_chains() {
         //
         // Verify that the first returned header attaches to the other chain
         {
-            let mut btf = BlockTestFrameWork::new();
+            let mut btf = BlockTestFramework::new();
             let common_height = rand::thread_rng().gen_range(100..10_000);
-            btf.create_chain(&btf.genesis().get_id(), common_height, produce_test_block);
+            btf.create_chain(&btf.genesis().get_id(), common_height).unwrap();
 
             let limit = rand::thread_rng().gen_range(100..2500);
             btf.create_chain(
-                &btf.blocks[common_height - 1].get_id(),
+                &btf.block_indexes[common_height - 1].get_block_id().clone(),
                 limit,
-                produce_test_block,
-            );
+            )
+            .unwrap();
             let locator = btf.consensus.get_locator().unwrap();
             btf.create_chain(
-                &btf.blocks[common_height - 1].get_id(),
+                &btf.block_indexes[common_height - 1].get_block_id().clone(),
                 limit * 4,
-                produce_test_block,
-            );
+            )
+            .unwrap();
 
             let new_headers = btf.consensus.get_headers(locator).unwrap();
 
@@ -175,30 +172,30 @@ fn test_get_headers_different_chains() {
         //
         // Verify that the first returned header attaches before genesis
         {
-            let mut btf1 = BlockTestFrameWork::new();
-            let mut btf2 = BlockTestFrameWork::new();
+            let mut btf1 = BlockTestFramework::new();
+            let mut btf2 = BlockTestFramework::new();
             let mut prev = btf1.genesis().clone();
             for _ in 0..rand::thread_rng().gen_range(100..250) {
                 prev = btf1.random_block(&prev, None);
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
                 assert_eq!(
-                    btf1.blocks[btf1.blocks.len() - 1],
-                    btf2.blocks[btf2.blocks.len() - 1],
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
                 );
             }
 
             let limit = rand::thread_rng().gen_range(32..256);
             btf1.create_chain(
-                &btf1.blocks[btf1.blocks.len() - 1].get_id(),
+                &btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id().clone(),
                 limit,
-                produce_test_block,
-            );
+            )
+            .unwrap();
             btf2.create_chain(
-                &btf2.blocks[btf2.blocks.len() - 1].get_id(),
+                &btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id().clone(),
                 limit * 2,
-                produce_test_block,
-            );
+            )
+            .unwrap();
 
             let locator = btf1.consensus.get_locator().unwrap();
             let headers = btf2.consensus.get_headers(locator).unwrap();
@@ -217,8 +214,8 @@ fn test_get_headers_different_chains() {
 fn test_filter_already_existing_blocks() {
     common::concurrency::model(|| {
         {
-            let mut btf1 = BlockTestFrameWork::new();
-            let mut btf2 = BlockTestFrameWork::new();
+            let mut btf1 = BlockTestFramework::new();
+            let mut btf2 = BlockTestFramework::new();
             let mut prev1 = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {
@@ -226,8 +223,8 @@ fn test_filter_already_existing_blocks() {
                 btf1.add_special_block(prev1.clone()).unwrap();
                 btf2.add_special_block(prev1.clone()).unwrap();
                 assert_eq!(
-                    btf1.blocks[btf1.blocks.len() - 1],
-                    btf2.blocks[btf2.blocks.len() - 1],
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
                 );
             }
 
@@ -262,8 +259,8 @@ fn test_filter_already_existing_blocks() {
 
         // try to offer headers that don't attach to local chain
         {
-            let mut btf1 = BlockTestFrameWork::new();
-            let mut btf2 = BlockTestFrameWork::new();
+            let mut btf1 = BlockTestFramework::new();
+            let mut btf2 = BlockTestFramework::new();
             let mut prev = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {
@@ -271,8 +268,8 @@ fn test_filter_already_existing_blocks() {
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
                 assert_eq!(
-                    btf1.blocks[btf1.blocks.len() - 1],
-                    btf2.blocks[btf2.blocks.len() - 1],
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
                 );
             }
 
@@ -280,7 +277,7 @@ fn test_filter_already_existing_blocks() {
                 .map(|_| {
                     prev = btf2.random_block(&prev, None);
                     btf2.add_special_block(prev.clone()).unwrap();
-                    prev.header().to_owned()
+                    prev.header().clone()
                 })
                 .collect::<Vec<_>>();
 

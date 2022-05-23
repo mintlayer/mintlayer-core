@@ -108,7 +108,7 @@ async fn init_consensus_2(
 ) {
     let handle1 = util::start_consensus().await;
     let handle2 = util::start_consensus().await;
-    let config = common::chain::config::create_mainnet();
+    let config = common::chain::config::create_unit_test_config();
     let blocks = util::create_n_blocks(config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
@@ -127,7 +127,7 @@ async fn init_consensus_3(
     let handle1 = util::start_consensus().await;
     let handle2 = util::start_consensus().await;
     let handle3 = util::start_consensus().await;
-    let config = common::chain::config::create_mainnet();
+    let config = common::chain::config::create_unit_test_config();
     let blocks = util::create_n_blocks(config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
@@ -1247,7 +1247,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         mgr1
     });
 
-	loop {
+    loop {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },

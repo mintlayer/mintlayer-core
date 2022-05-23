@@ -600,12 +600,12 @@ mod tests {
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
         let storage = blockchain_storage::Store::new_empty().unwrap();
-        let cfg = Arc::new(common::chain::config::create_mainnet());
+        let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
         let handle = man.add_subsystem("consensus", make_consensus(cfg, storage).unwrap());
         tokio::spawn(async move { man.main().await });
 
-        let config = Arc::new(common::chain::config::create_mainnet());
+        let config = Arc::new(common::chain::config::create_unit_test_config());
         let (conn, _, sync) = T::start(
             addr,
             &[],
