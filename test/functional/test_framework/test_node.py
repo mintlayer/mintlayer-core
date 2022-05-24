@@ -102,6 +102,7 @@ class TestNode():
         # spam debug.log.
         self.args = [
             self.binary,
+            # TODO: change the following to regtest once we have one
             "--net=mainnet",
             "--rpc-addr={}".format(rpc_addr),
             #"-X",
