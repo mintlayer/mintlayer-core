@@ -17,6 +17,8 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
+// TODO: think about connection management
+
 use crate::{
     error::{self, Libp2pError, P2pError},
     message,
@@ -81,6 +83,9 @@ pub struct Backend {
     /// Set of pending connections
     pub(super) pending_conns: HashMap<PeerId, PendingState>,
 
+    /// Set of established connections
+    pub(super) established_conns: HashSet<PeerId>,
+
     /// Set of pending requests
     pub(super) pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
 
@@ -104,6 +109,7 @@ impl Backend {
             gossip_tx,
             sync_tx,
             pending_conns: HashMap::new(),
+            established_conns: HashSet::new(),
             pending_reqs: HashMap::new(),
             relay_mdns,
         }
