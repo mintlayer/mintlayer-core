@@ -16,6 +16,7 @@ import argparse
 from collections import deque
 import configparser
 import datetime
+import locale
 import os
 import time
 import shutil
@@ -27,15 +28,21 @@ import re
 import logging
 import unittest
 
+class UnicodeOnWindowsError(ValueError):
+    pass
+
 # Formatting. Default colors to empty strings.
 BOLD, GREEN, RED, GREY = ("", ""), ("", ""), ("", ""), ("", "")
 try:
+    # Give up on Unicode if UTF-8 is not the preferred encoding
+    if locale.getpreferredencoding() != 'UTF-8':
+        raise UnicodeOnWindowsError
     # Make sure python thinks it can write unicode to its stdout
     "\u2713".encode("utf_8").decode(sys.stdout.encoding)
     TICK = "✓ "
     CROSS = "✖ "
     CIRCLE = "○ "
-except UnicodeDecodeError:
+except (UnicodeDecodeError, UnicodeOnWindowsError):
     TICK = "P "
     CROSS = "x "
     CIRCLE = "o "
