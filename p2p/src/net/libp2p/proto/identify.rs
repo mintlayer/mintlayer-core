@@ -55,6 +55,12 @@ impl Backend {
                 Ok(())
             }
             IdentifyEvent::Received { peer_id, info } => {
+                // TODO: update swarm manager?
+                if self.established_conns.contains(&peer_id) {
+                    log::trace!("peer {:?} resent their info: {:#?}", peer_id, info);
+                    return Ok(());
+                }
+
                 match self.pending_conns.remove(&peer_id) {
                     None => {
                         log::error!("pending connection for peer {:?} does not exist", peer_id);
@@ -66,16 +72,19 @@ impl Backend {
                         Err(P2pError::ProtocolError(ProtocolError::InvalidState))
                     }
                     Some(PendingState::OutboundAccepted { tx }) => {
+                        self.established_conns.insert(peer_id);
                         tx.send(Ok(info)).map_err(|_| P2pError::ChannelClosed)
                     }
-                    Some(PendingState::InboundAccepted { addr }) => self
-                        .conn_tx
-                        .send(types::ConnectivityEvent::IncomingConnection {
-                            addr,
-                            peer_info: Box::new(info),
-                        })
-                        .await
-                        .map_err(|_| P2pError::ChannelClosed),
+                    Some(PendingState::InboundAccepted { addr }) => {
+                        self.established_conns.insert(peer_id);
+                        self.conn_tx
+                            .send(types::ConnectivityEvent::IncomingConnection {
+                                addr,
+                                peer_info: Box::new(info),
+                            })
+                            .await
+                            .map_err(|_| P2pError::ChannelClosed)
+                    }
                 }
             }
         }
