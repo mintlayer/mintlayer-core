@@ -26,6 +26,8 @@ use futures::FutureExt;
 use logging::log;
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Debug,
+    str::FromStr,
     sync::Arc,
 };
 use tokio::sync::mpsc;
@@ -82,6 +84,8 @@ impl<T> PeerManager<T>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
+    <T as NetworkingService>::Address: FromStr,
+    <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     pub fn new(
         config: Arc<ChainConfig>,
@@ -120,7 +124,7 @@ where
                                 response
                                     .send(Err(P2pError::PeerExists))
                                     .map_err(|_| P2pError::ChannelClosed)
-                            }
+                            },
                             None => {
                                 log::warn!("peer count: {:?}", self.peers.len());
                                 log::info!(
@@ -142,9 +146,11 @@ where
                 }
             }
             event::SwarmEvent::GetPeerCount(response) => {
-                log::warn!("peer count: {:?}", self.peers.len());
                 response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
+            event::SwarmEvent::GetBindAddress(response) => response
+                .send(self.handle.local_addr().to_string())
+                .map_err(|_| P2pError::ChannelClosed),
         }
     }
 
