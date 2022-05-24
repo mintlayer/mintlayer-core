@@ -123,11 +123,6 @@ class TestNode():
                          "--gen-suppressions=all", "--exit-on-first-error=yes",
                          "--error-exitcode=1", "--quiet"] + self.args
 
-        #if self.version_is_at_least(190000):
-        #    self.args.append("-logthreadnames")
-        #if self.version_is_at_least(219900):
-        #    self.args.append("-logsourcelocations")
-
         self.cli = TestNodeCLI(bitcoin_cli, self.datadir)
         self.use_cli = use_cli
         self.start_perf = start_perf
@@ -242,29 +237,29 @@ class TestNode():
                 )
                 rpc.consensus_best_block_id()
                 # If the call to getblockcount() succeeds then the RPC connection is up
-                if self.version_is_at_least(190000):
-                    # getmempoolinfo.loaded is available since commit
-                    # bb8ae2c (version 0.19.0)
-                    #wait_until_helper(lambda: rpc.getmempoolinfo()['loaded'], timeout_factor=self.timeout_factor)
-                    self.log.warn("Waiting until mempool loaded not supported")
 
-                    # Wait for the node to finish reindex, block import, and
-                    # loading the mempool. Usually importing happens fast or
-                    # even "immediate" when the node is started. However, there
-                    # is no guarantee and sometimes ThreadImport might finish
-                    # later. This is going to cause intermittent test failures,
-                    # because generally the tests assume the node is fully
-                    # ready after being started.
-                    #
-                    # For example, the node will reject block messages from p2p
-                    # when it is still importing with the error "Unexpected
-                    # block message received"
-                    #
-                    # The wait is done here to make tests as robust as possible
-                    # and prevent racy tests and intermittent failures as much
-                    # as possible. Some tests might not need this, but the
-                    # overhead is trivial, and the added guarantees are worth
-                    # the minimal performance cost.
+                # TODO: Wait until mempool is loaded
+                #wait_until_helper(lambda: rpc.getmempoolinfo()['loaded'], timeout_factor=self.timeout_factor)
+                self.log.warn("Waiting until mempool loaded not supported")
+
+                # Wait for the node to finish reindex, block import, and
+                # loading the mempool. Usually importing happens fast or
+                # even "immediate" when the node is started. However, there
+                # is no guarantee and sometimes ThreadImport might finish
+                # later. This is going to cause intermittent test failures,
+                # because generally the tests assume the node is fully
+                # ready after being started.
+                #
+                # For example, the node will reject block messages from p2p
+                # when it is still importing with the error "Unexpected
+                # block message received"
+                #
+                # The wait is done here to make tests as robust as possible
+                # and prevent racy tests and intermittent failures as much
+                # as possible. Some tests might not need this, but the
+                # overhead is trivial, and the added guarantees are worth
+                # the minimal performance cost.
+
                 if self.use_cli:
                     return
                 self.rpc = rpc
@@ -341,23 +336,13 @@ class TestNode():
             return
         self.log.debug("Stopping node")
         try:
-            # Do not use wait argument when testing older nodes, e.g. in feature_backwards_compatibility.py
-            if self.version_is_at_least(180000):
-                self.node_shutdown(wait=wait)
-            else:
-                self.node_shutdown()
+            self.node_shutdown()
         except http.client.CannotSendRequest:
             self.log.exception("Unable to stop node.")
 
         # If there are any running perf processes, stop them.
         for profile_name in tuple(self.perf_subprocesses.keys()):
             self._stop_perf(profile_name)
-
-        # Check that stderr is as expected
-        self.stderr.seek(0)
-        stderr = self.stderr.read().decode('utf-8').strip()
-        #if stderr != expected_stderr:
-        #    raise AssertionError("Unexpected stderr {} != {}".format(stderr, expected_stderr))
 
         self.stdout.close()
         self.stderr.close()
