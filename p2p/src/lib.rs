@@ -57,13 +57,16 @@ where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
+        let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Connect(
                 addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+                tx,
             ))
             .await
-            .map_err(|_| P2pError::ChannelClosed)
+            .map_err(|_| P2pError::ChannelClosed)?;
+        rx.await.map_err(P2pError::from)?
     }
 
     pub async fn get_peer_count(&self) -> error::Result<usize> {

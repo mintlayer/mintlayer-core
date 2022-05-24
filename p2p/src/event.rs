@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use crate::{message, net::NetworkingService};
+use crate::{error, message, net::NetworkingService};
 use common::chain::block::{Block, BlockHeader};
 use serialization::{Decode, Encode};
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use tokio::sync::{mpsc, oneshot};
 #[derive(Debug)]
 pub enum SwarmEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
-    Connect(T::Address),
+    Connect(T::Address, oneshot::Sender<error::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot::Sender<usize>),
