@@ -2546,6 +2546,7 @@ dependencies = [
  "sscanf",
  "subsystem",
  "test-utils",
+ "thiserror",
  "tokio",
  "void",
 ]

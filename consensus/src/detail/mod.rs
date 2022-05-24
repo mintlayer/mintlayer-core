@@ -170,7 +170,7 @@ impl Consensus {
         Ok(result)
     }
 
-    // TODO: implement
+    // TODO: used to check block size + other preliminary check before giving the block to process_block
     pub fn preliminary_block_check(&self, _block: Block) -> Result<(), BlockError> {
         Ok(())
     }
@@ -231,7 +231,7 @@ impl Consensus {
         Ok(consensus_ref
             .db_tx
             .get_block_index(&id)?
-            .map(|block_index| block_index.get_block_header().clone()))
+            .map(|block_index| block_index.into_block_header()))
     }
 
     pub fn get_locator(&self) -> Result<Vec<BlockHeader>, BlockError> {
@@ -255,10 +255,7 @@ impl Consensus {
         let height = block_index.get_block_height();
         let id_at_height =
             consensus_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
-        match id_at_height {
-            Some(id) => Ok(id == *block_index.get_block_id()),
-            None => Ok(false),
-        }
+        Ok(id_at_height.map_or(false, |id| id == *block_index.get_block_id()))
     }
 
     pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {

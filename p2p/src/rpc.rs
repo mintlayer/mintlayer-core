@@ -40,18 +40,16 @@ where
 {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
         let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
-        Ok(())
-        // handle_error(res)
+        handle_error(res)
     }
 
     async fn get_peer_count(&self) -> rpc::Result<usize> {
         let res = self.call_async(|this| Box::pin(this.get_peer_count())).await;
-        Ok(0)
-        // handle_error(res)
+        handle_error(res)
     }
 }
 
-// fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> rpc::Result<T> {
-//     e.map_err(rpc::Error::to_call_error)
-//         .and_then(|r| r.map_err(rpc::Error::to_call_error))
-// }
+fn handle_error<T>(e: Result<Result<T, P2pError>, CallError>) -> rpc::Result<T> {
+    e.map_err(rpc::Error::to_call_error)
+        .and_then(|r| r.map_err(rpc::Error::to_call_error))
+}

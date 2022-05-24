@@ -14,10 +14,11 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use thiserror::Error;
 
 // TODO: think about which errors should be returned and when
 // TODO: store peerid where appropriate!
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     DifferentNetwork,
     InvalidVersion,
@@ -30,33 +31,55 @@ pub enum ProtocolError {
 }
 
 // TODO: refactor error code
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum Libp2pError {
+    #[error("NoiseError: `{0:?}`")]
     NoiseError(String),
+    #[error("TransportError: `{0:?}`")]
     TransportError(String),
+    #[error("DialError: `{0:?}`")]
     DialError(String),
+    #[error("SubscriptionError: `{0:?}`")]
     SubscriptionError(String),
+    #[error("PublishError: `{0:?}`")]
     PublishError(String),
+    #[error("IdentifyError: `{0:?}`")]
     IdentifyError(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum P2pError {
+    #[error("SocketError: `{0:?}`")]
     SocketError(std::io::ErrorKind),
+    #[error("PeerDisconnected")]
     PeerDisconnected,
+    #[error("DecodeFailure: `{0:?}`")]
     DecodeFailure(String),
+    #[error("ProtocolError: `{0:?}`")]
     ProtocolError(ProtocolError),
+    #[error("TimeError: `{0:?}`")]
     TimeError(String),
+    #[error("Libp2pError: `{0:?}`")]
     Libp2pError(Libp2pError),
+    #[error("Unknown: `{0:?}`")]
     Unknown(String),
+    #[error("ChannelClosed")]
     ChannelClosed,
+    #[error("NoPeers")]
     NoPeers,
+    #[error("PeerDoesntExist")]
     PeerDoesntExist,
+    #[error("InvalidAddress")]
     InvalidAddress,
+    #[error("InvalidData")]
     InvalidData,
+    #[error("PeerExists")]
     PeerExists,
+    #[error("SubsystemFailure")]
     SubsystemFailure,
+    #[error("ConsensusError: `{0:?}`")]
     ConsensusError(consensus::ConsensusError),
+    #[error("DatabaseFailure")]
     DatabaseFailure,
 }
 
@@ -182,3 +205,6 @@ impl std::fmt::Display for ProtocolError {
         }
     }
 }
+
+// impl std::fmt::Display for ProtocolError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

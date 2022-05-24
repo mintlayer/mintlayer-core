@@ -20,13 +20,20 @@ use common::{
     chain::{
         block::{Block, ConsensusData},
         config::ChainConfig,
+        signature::{
+            inputsig::{InputWitness, StandardInputSignature},
+            sighashtype::SigHashType,
+        },
         transaction::Transaction,
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
 use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
-use crypto::random::Rng;
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::Rng,
+};
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
 
@@ -45,7 +52,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(config),
+                random_address(),
             ),
         ))
     } else {
@@ -93,44 +100,42 @@ fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, T
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 
-fn random_witness() -> Vec<u8> {
+fn random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
     witness.shuffle(&mut rng);
-    witness
+
+    InputWitness::Standard(StandardInputSignature::new(
+        SigHashType::try_from(SigHashType::ALL).unwrap(),
+        witness,
+    ))
 }
 
-fn random_address(chain_config: &ChainConfig) -> Destination {
-    let mut rng = rand::thread_rng();
-    let mut address: Vec<u8> = (1..22).collect();
-    address.shuffle(&mut rng);
-    let receiver = Address::new(chain_config, address).expect("Failed to create address");
-    Destination::Address(receiver)
+fn random_address() -> Destination {
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    Destination::PublicKey(pub_key)
 }
 
-pub async fn start_consensus() -> subsystem::Handle<Box<dyn ConsensusInterface>> {
+pub async fn start_consensus(
+    config: Arc<ChainConfig>,
+) -> subsystem::Handle<Box<dyn ConsensusInterface>> {
     let storage = blockchain_storage::Store::new_empty().unwrap();
-    let cfg = Arc::new(common::chain::config::create_unit_test_config());
     let mut man = subsystem::Manager::new("TODO");
-    let handle = man.add_subsystem("consensus", crate::make_consensus(cfg, storage).unwrap());
+    let handle = man.add_subsystem("consensus", crate::make_consensus(config, storage).unwrap());
     tokio::spawn(async move { man.main().await });
     handle
 }
 
-pub fn create_block(parent: &Block) -> Block {
-    produce_test_block(
-        &common::chain::config::create_unit_test_config(),
-        parent,
-        false,
-    )
+pub fn create_block(config: Arc<ChainConfig>, parent: &Block) -> Block {
+    produce_test_block(&config, parent, false)
 }
 
-pub fn create_n_blocks(parent: &Block, nblocks: usize) -> Vec<Block> {
+pub fn create_n_blocks(config: Arc<ChainConfig>, parent: &Block, nblocks: usize) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
     let mut prev = parent.clone();
 
     for i in 0..nblocks {
-        let block = create_block(&prev);
+        let block = create_block(Arc::clone(&config), &prev);
         prev = block.clone();
         blocks.push(block.clone());
     }
@@ -151,12 +156,13 @@ pub async fn import_blocks(
 }
 
 pub async fn add_more_blocks(
+    config: Arc<ChainConfig>,
     handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
     nblocks: usize,
 ) {
     let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
     let best_block = handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
 
-    let blocks = create_n_blocks(&best_block.unwrap(), nblocks);
+    let blocks = create_n_blocks(config, &best_block.unwrap(), nblocks);
     import_blocks(handle, blocks).await;
 }
