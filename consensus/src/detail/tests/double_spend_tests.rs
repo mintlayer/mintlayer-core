@@ -18,7 +18,7 @@
 use crate::detail::tests::*;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{Transaction, TxInput, TxOutput};
-use common::primitives::{Amount, Id};
+use common::primitives::{time, Amount, Id};
 
 #[test]
 fn spend_tx_in_the_same_block() {
@@ -53,7 +53,7 @@ fn spend_tx_in_the_same_block() {
             let input = TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id),
                 0,
-                random_witness(),
+                empty_witness(),
             );
             let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
@@ -111,7 +111,7 @@ fn spend_tx_in_the_same_block() {
             let input = TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id),
                 0,
-                random_witness(),
+                empty_witness(),
             );
             let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
 
@@ -182,7 +182,7 @@ fn double_spend_tx_in_the_same_block() {
             vec![TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id),
                 0,
-                random_witness(),
+                empty_witness(),
             )],
             vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
             0,
@@ -267,7 +267,7 @@ fn double_spend_tx_in_another_block() {
             vec![TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id.clone()),
                 0,
-                random_witness(),
+                empty_witness(),
             )],
             vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
             0,
@@ -285,7 +285,7 @@ fn double_spend_tx_in_another_block() {
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
         let first_block_id = first_block.get_id();
-        assert!(consensus.process_block(first_block, BlockSource::Local).is_ok());
+        consensus.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(
             consensus
                 .blockchain_storage
@@ -299,7 +299,7 @@ fn double_spend_tx_in_another_block() {
             vec![TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id),
                 0,
-                random_witness(),
+                empty_witness(),
             )],
             vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver)],
             0,

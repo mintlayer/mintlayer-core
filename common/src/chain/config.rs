@@ -5,6 +5,7 @@ use crate::address::pubkeyhash::PublicKeyHash;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
+use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
@@ -107,7 +108,7 @@ const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
 fn create_mainnet_genesis() -> Block {
-    use crate::chain::transaction::{Destination, TxInput, TxOutput};
+    use crate::chain::transaction::{TxInput, TxOutput};
     use crate::primitives::Amount;
 
     // TODO: replace this with our mint key
@@ -125,6 +126,25 @@ fn create_mainnet_genesis() -> Block {
         Amount::from_atoms(100000000000000),
         Destination::Address(genesis_mint_receiver_pubkeyhash),
     );
+    let tx = Transaction::new(0, vec![input], vec![output], 0)
+        .expect("Failed to create genesis coinbase transaction");
+
+    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
+        .expect("Error creating genesis block")
+}
+
+fn create_unit_test_genesis(premine_destination: Destination) -> Block {
+    use crate::chain::transaction::{TxInput, TxOutput};
+    use crate::primitives::Amount;
+
+    let genesis_message = b"".to_vec();
+    let input = TxInput::new(
+        Id::<Transaction>::new(&H256::zero()).into(),
+        0,
+        InputWitness::NoSignature(Some(genesis_message)),
+    );
+
+    let output = TxOutput::new(Amount::from_atoms(100000000000000), premine_destination);
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
@@ -171,7 +191,8 @@ pub fn create_custom(
         rpc_port: rpc_port.unwrap_or(15234),
         p2p_port: p2p_port.unwrap_or(8978),
         magic_bytes: magic_bytes.unwrap_or([0x1a, 0x64, 0xe5, 0xf1]),
-        genesis_block: genesis_block.unwrap_or_else(create_mainnet_genesis),
+        genesis_block: genesis_block
+            .unwrap_or_else(|| create_unit_test_genesis(Destination::AnyoneCanSpend)),
         version: version.unwrap_or_else(|| SemVer::new(0, 1, 0)),
         blockreward_maturity: blockreward_maturity.unwrap_or(MAINNET_BLOCKREWARD_MATURITY),
     }
@@ -186,7 +207,7 @@ pub fn create_unit_test_config() -> ChainConfig {
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block: create_mainnet_genesis(),
+        genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
@@ -223,7 +244,7 @@ impl ChainConfigBuilder {
             rpc_port: 15234,
             p2p_port: 8978,
             magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-            genesis_block: create_mainnet_genesis(),
+            genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
         }
@@ -272,7 +293,6 @@ mod tests {
         assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
         assert_eq!(&ChainType::Testnet.to_string(), "testnet");
 
-        assert_eq!(ChainType::VARIANTS.len(), 4, "Unexpected number of chain types");
         for chain_type_str in ChainType::VARIANTS {
             let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
             assert_eq!(&chain_type.to_string(), chain_type_str);

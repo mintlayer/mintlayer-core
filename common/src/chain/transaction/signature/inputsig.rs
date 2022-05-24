@@ -89,9 +89,8 @@ impl StandardInputSignature {
             }
             Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
             Destination::AnyoneCanSpend => {
-                if !self.raw_signature.is_empty() {
-                    return Err(TransactionSigError::InvalidSignatureEncoding);
-                }
+                // AnyoneCanSpend must use InputWitness::NoSignature
+                return Err(TransactionSigError::InvalidSignatureEncoding);
             }
         }
         Ok(())

@@ -609,5 +609,5 @@ fn test_pow() {
         crate::detail::pow::work::mine(&mut valid_block, u128::MAX, bits, vec![])
             .expect("Unexpected conversion error")
     );
-    assert!(btf.add_special_block(valid_block.clone()).is_ok());
+    btf.add_special_block(valid_block.clone()).unwrap();
 }

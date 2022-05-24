@@ -135,9 +135,12 @@ pub fn verify_signature(
         .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
     let input_witness = target_input.get_witness();
     match input_witness {
-        inputsig::InputWitness::NoSignature(_) => {
-            return Err(TransactionSigError::SignatureNotFound)
-        }
+        inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
+            Destination::Address(_) => return Err(TransactionSigError::SignatureNotFound),
+            Destination::PublicKey(_) => return Err(TransactionSigError::SignatureNotFound),
+            Destination::ScriptHash(_) => return Err(TransactionSigError::SignatureNotFound),
+            Destination::AnyoneCanSpend => {}
+        },
         inputsig::InputWitness::Standard(witness) => {
             verify_standard_input_signature(outpoint_destination, witness, tx, input_num)?
         }

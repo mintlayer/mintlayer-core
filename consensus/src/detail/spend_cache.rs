@@ -208,7 +208,7 @@ impl<'a> CachedInputs<'a> {
         self.check_inputs_amounts(tx)?;
 
         // verify signature
-        for (_input_idx, input) in tx.get_inputs().iter().enumerate() {
+        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
             let prev_tx_index_op = self.get_from_cached(outpoint)?;
 
@@ -236,13 +236,13 @@ impl<'a> CachedInputs<'a> {
                     todo!()
                 }
             };
-            // TODO(Roy): enable the code below to enable signature verification, which will break some tests
-            // common::chain::transaction::signature::verify_signature(
-            //     &input_outpoint_script,
-            //     tx,
-            //     input_idx,
-            // )
-            // .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
+
+            common::chain::transaction::signature::verify_signature(
+                &input_outpoint_script,
+                tx,
+                input_idx,
+            )
+            .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
         }
 
         // spend inputs of this transaction

@@ -22,9 +22,8 @@ use common::chain::config::create_unit_test_config;
 use common::chain::signature::inputsig::{InputWitness, StandardInputSignature};
 use common::chain::signature::sighashtype::SigHashType;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
-use common::primitives::H256;
+use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
-use crypto::key::{KeyKind, PrivateKey};
 use rand::prelude::*;
 use std::sync::Mutex;
 
@@ -63,6 +62,13 @@ pub(in crate::detail::tests) enum TestSpentStatus {
     NotInMainchain,
 }
 
+fn empty_witness() -> InputWitness {
+    let mut rng = rand::thread_rng();
+    let mut msg: Vec<u8> = (1..100).collect();
+    msg.shuffle(&mut rng);
+    InputWitness::NoSignature(Some(msg))
+}
+
 fn random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
     let mut witness: Vec<u8> = (1..100).collect();
@@ -74,9 +80,9 @@ fn random_witness() -> InputWitness {
     ))
 }
 
+// TODO: rename this function to anyonecanspend_address()
 fn random_address() -> Destination {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    Destination::PublicKey(pub_key)
+    Destination::AnyoneCanSpend
 }
 
 fn create_utxo_data(
@@ -89,7 +95,7 @@ fn create_utxo_data(
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
                 index as u32,
-                random_witness(),
+                empty_witness(),
             ),
             TxOutput::new(
                 (output.get_value() - Amount::from_atoms(1)).unwrap(),
