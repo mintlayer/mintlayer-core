@@ -64,4 +64,8 @@ impl BlockIndex {
     pub fn get_block_header(&self) -> &BlockHeader {
         &self.block_header
     }
+
+    pub fn into_block_header(self) -> BlockHeader {
+        self.block_header
+    }
 }

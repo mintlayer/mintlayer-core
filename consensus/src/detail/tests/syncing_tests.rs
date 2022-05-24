@@ -14,7 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(warnings)]
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
+use common::chain::config::TestChainConfig;
 use rand::Rng;
 
 #[test]
@@ -28,7 +30,7 @@ fn test_get_locator() {
         let limit = rand::thread_rng().gen::<u16>();
 
         for _ in 0..limit {
-            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
+            let new_block = produce_test_block(&prev_block, false);
             consensus
                 .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
@@ -70,7 +72,7 @@ fn test_get_headers_same_chain() {
         let limit = rand::thread_rng().gen::<u16>();
 
         for _ in 0..limit {
-            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
+            let new_block = produce_test_block(&prev_block, false);
             consensus
                 .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
@@ -89,7 +91,7 @@ fn test_get_headers_same_chain() {
         let mut headers = vec![];
 
         for _ in 0..limit {
-            let new_block = produce_test_block(&consensus.chain_config, &prev_block, false);
+            let new_block = produce_test_block(&prev_block, false);
             headers.push(new_block.header().clone());
             consensus
                 .process_block(new_block.clone(), BlockSource::Peer)
@@ -167,14 +169,16 @@ fn test_get_headers_different_chains() {
             );
         }
 
-        // create two chains which branch and where the the chain which
-        // is used for the locator is shorter
-        //
+        // create two chains which both have unique blocks and share some blocks
         // Verify that the first returned header attaches before genesis
         {
-            let mut btf1 = BlockTestFramework::new();
-            let mut btf2 = BlockTestFramework::new();
+            let config = TestChainConfig::new().build();
+            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ConsensusBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
+            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
             let mut prev = btf1.genesis().clone();
+
             for _ in 0..rand::thread_rng().gen_range(100..250) {
                 prev = btf1.random_block(&prev, None);
                 btf1.add_special_block(prev.clone()).unwrap();
@@ -214,8 +218,11 @@ fn test_get_headers_different_chains() {
 fn test_filter_already_existing_blocks() {
     common::concurrency::model(|| {
         {
-            let mut btf1 = BlockTestFramework::new();
-            let mut btf2 = BlockTestFramework::new();
+            let config = TestChainConfig::new().build();
+            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ConsensusBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
+            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
             let mut prev1 = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {
@@ -259,8 +266,11 @@ fn test_filter_already_existing_blocks() {
 
         // try to offer headers that don't attach to local chain
         {
-            let mut btf1 = BlockTestFramework::new();
-            let mut btf2 = BlockTestFramework::new();
+            let config = TestChainConfig::new().build();
+            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ConsensusBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
+            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
             let mut prev = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {

@@ -599,7 +599,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_outbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(
@@ -609,18 +608,11 @@ mod tests {
         .await;
         let mut swarm2 = make_swarm_manager::<Libp2pService>(
             test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(config::create_custom(
-                Some(ChainType::Testnet),
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some([1, 2, 3, 4]),
-                None,
-                None,
-                None,
-            )),
+            Arc::new(
+                common::chain::config::TestChainConfig::new()
+                    .with_magic_bytes([1, 2, 3, 4])
+                    .build(),
+            ),
         )
         .await;
         let addr = swarm2.handle.local_addr().clone();
@@ -658,7 +650,6 @@ mod tests {
         assert_eq!(swarm2.on_network_event(conn2_res).await, Ok(()));
     }
 
-    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_inbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(
@@ -668,18 +659,11 @@ mod tests {
         .await;
         let mut swarm2 = make_swarm_manager::<Libp2pService>(
             test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(config::create_custom(
-                Some(ChainType::Testnet),
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some([1, 2, 3, 4]),
-                None,
-                None,
-                None,
-            )),
+            Arc::new(
+                common::chain::config::TestChainConfig::new()
+                    .with_magic_bytes([1, 2, 3, 4])
+                    .build(),
+            ),
         )
         .await;
         let addr = swarm2.handle.local_addr().clone();

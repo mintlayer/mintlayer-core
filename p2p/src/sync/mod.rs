@@ -349,7 +349,7 @@ where
                         magic: *self.config.magic_bytes(),
                         msg: MessageType::Syncing(SyncingMessage::Request(
                             SyncingRequest::GetBlocks {
-                                headers: vec![header.get_id()],
+                                block_ids: vec![header.get_id()],
                             },
                         )),
                     },
@@ -406,7 +406,7 @@ where
                             magic: *self.config.magic_bytes(),
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![next_block.get_id()],
+                                    block_ids: vec![next_block.get_id()],
                                 },
                             )),
                         },
@@ -481,8 +481,8 @@ where
             SyncingRequest::GetHeaders { locator } => {
                 self.process_header_request(peer_id, request_id, locator).await
             }
-            SyncingRequest::GetBlocks { headers } => {
-                self.process_block_request(peer_id, request_id, headers).await
+            SyncingRequest::GetBlocks { block_ids } => {
+                self.process_block_request(peer_id, request_id, block_ids).await
             }
         }
     }

@@ -101,15 +101,15 @@ where
 // initialize two blockchains which have the same longest chain
 // that is `num_blocks` long
 async fn init_consensus_2(
+    config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
     subsystem::Handle<Box<dyn ConsensusInterface>>,
     subsystem::Handle<Box<dyn ConsensusInterface>>,
 ) {
-    let handle1 = util::start_consensus().await;
-    let handle2 = util::start_consensus().await;
-    let config = common::chain::config::create_unit_test_config();
-    let blocks = util::create_n_blocks(config.genesis_block(), num_blocks);
+    let handle1 = util::start_consensus(Arc::clone(&config)).await;
+    let handle2 = util::start_consensus(Arc::clone(&config)).await;
+    let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
     util::import_blocks(&handle2, blocks).await;
@@ -118,17 +118,17 @@ async fn init_consensus_2(
 }
 
 async fn init_consensus_3(
+    config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
     subsystem::Handle<Box<dyn ConsensusInterface>>,
     subsystem::Handle<Box<dyn ConsensusInterface>>,
     subsystem::Handle<Box<dyn ConsensusInterface>>,
 ) {
-    let handle1 = util::start_consensus().await;
-    let handle2 = util::start_consensus().await;
-    let handle3 = util::start_consensus().await;
-    let config = common::chain::config::create_unit_test_config();
-    let blocks = util::create_n_blocks(config.genesis_block(), num_blocks);
+    let handle1 = util::start_consensus(Arc::clone(&config)).await;
+    let handle2 = util::start_consensus(Arc::clone(&config)).await;
+    let handle3 = util::start_consensus(Arc::clone(&config)).await;
+    let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
     util::import_blocks(&handle2, blocks.clone()).await;
@@ -156,33 +156,34 @@ where
     T: NetworkingService,
     T::SyncingCodecHandle: SyncingCodecService<T>,
 {
-    if let net::SyncingMessage::Request {
-        peer_id,
-        request_id,
-        request:
-            Message {
-                msg:
-                    MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                        locator,
-                    })),
-                magic,
-            },
-    } = mgr.handle_mut().poll_next().await.unwrap()
-    {
-        let headers = handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
-        mgr.handle_mut()
-            .send_response(
-                request_id,
+    match mgr.handle_mut().poll_next().await.unwrap() {
+        net::SyncingMessage::Request {
+            peer_id,
+            request_id,
+            request:
                 Message {
+                    msg:
+                        MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
+                            locator,
+                        })),
                     magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers,
-                    })),
                 },
-            )
-            .await
-    } else {
-        panic!("invalid message");
+        } => {
+            let headers =
+                handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+            mgr.handle_mut()
+                .send_response(
+                    request_id,
+                    Message {
+                        magic,
+                        msg: MessageType::Syncing(SyncingMessage::Response(
+                            SyncingResponse::Headers { headers },
+                        )),
+                    },
+                )
+                .await
+        }
+        _ => panic!("invalid message"),
     }
 }
 
@@ -200,7 +201,8 @@ where
 async fn local_and_remote_in_sync() {
     logging::init_logging::<&str>(None);
 
-    let (handle1, handle2) = init_consensus_2(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -239,7 +241,8 @@ async fn local_and_remote_in_sync() {
 // no blocks are downloaded whereas loca node downloads the 7 new blocks from remote
 #[tokio::test]
 async fn remote_ahead_by_7_blocks() {
-    let (handle1, handle2) = init_consensus_2(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -252,7 +255,7 @@ async fn remote_ahead_by_7_blocks() {
 
     // add 7 more blocks on top of the best block (which is also known by mgr1)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr2_handle, 7).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
@@ -305,13 +308,13 @@ async fn remote_ahead_by_7_blocks() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -361,7 +364,8 @@ async fn remote_ahead_by_7_blocks() {
 // local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
 #[tokio::test]
 async fn local_ahead_by_12_blocks() {
-    let (handle1, handle2) = init_consensus_2(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -374,7 +378,7 @@ async fn local_ahead_by_12_blocks() {
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr1_handle, 12).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 12).await;
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
@@ -451,7 +455,7 @@ async fn local_ahead_by_12_blocks() {
                                 magic,
                                 msg: MessageType::Syncing(SyncingMessage::Request(
                                     SyncingRequest::GetBlocks {
-                                        headers: vec![header],
+                                        block_ids: vec![header],
                                     },
                                 )),
                             },
@@ -490,7 +494,7 @@ async fn local_ahead_by_12_blocks() {
                             magic,
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![header],
+                                    block_ids: vec![header],
                                 },
                             )),
                         },
@@ -518,7 +522,8 @@ async fn local_ahead_by_12_blocks() {
 // verify that remote nodes does a reorg
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher() {
-    let (handle1, handle2) = init_consensus_2(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -531,10 +536,10 @@ async fn remote_local_diff_chains_local_higher() {
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr1_handle, 14).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 14).await;
 
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr2_handle, 7).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
 
     // save local and remote tips so we can verify who did a reorg
     let local_tip = get_tip(&mgr1_handle).await;
@@ -593,13 +598,13 @@ async fn remote_local_diff_chains_local_higher() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -647,7 +652,7 @@ async fn remote_local_diff_chains_local_higher() {
                                 magic,
                                 msg: MessageType::Syncing(SyncingMessage::Request(
                                     SyncingRequest::GetBlocks {
-                                        headers: vec![header],
+                                        block_ids: vec![header],
                                     },
                                 )),
                             },
@@ -682,7 +687,7 @@ async fn remote_local_diff_chains_local_higher() {
                             magic,
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![header],
+                                    block_ids: vec![header],
                                 },
                             )),
                         },
@@ -712,7 +717,8 @@ async fn remote_local_diff_chains_local_higher() {
 // verify that local node does a reorg
 #[tokio::test]
 async fn remote_local_diff_chains_remote_higher() {
-    let (handle1, handle2) = init_consensus_2(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -725,10 +731,10 @@ async fn remote_local_diff_chains_remote_higher() {
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr1_handle, 5).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 5).await;
 
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(&mgr2_handle, 12).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 12).await;
 
     // save local and remote tips so we can verify who did a reorg
     let local_tip = get_tip(&mgr1_handle).await;
@@ -787,13 +793,13 @@ async fn remote_local_diff_chains_remote_higher() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -841,7 +847,7 @@ async fn remote_local_diff_chains_remote_higher() {
                                 magic,
                                 msg: MessageType::Syncing(SyncingMessage::Request(
                                     SyncingRequest::GetBlocks {
-                                        headers: vec![header],
+                                        block_ids: vec![header],
                                     },
                                 )),
                             },
@@ -876,7 +882,7 @@ async fn remote_local_diff_chains_remote_higher() {
                             magic,
                             msg: MessageType::Syncing(SyncingMessage::Request(
                                 SyncingRequest::GetBlocks {
-                                    headers: vec![header],
+                                    block_ids: vec![header],
                                 },
                             )),
                         },
@@ -904,7 +910,8 @@ async fn remote_local_diff_chains_remote_higher() {
 
 #[tokio::test]
 async fn two_remote_nodes_different_chains() {
-    let (handle1, handle2, handle3) = init_consensus_3(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -920,8 +927,8 @@ async fn two_remote_nodes_different_chains() {
             .await;
 
     // add 5 more blocks for first remote and 7 blocks to second remote
-    util::add_more_blocks(&mgr2_handle, 5).await;
-    util::add_more_blocks(&mgr3_handle, 7).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
+    util::add_more_blocks(Arc::clone(&config), &mgr3_handle, 7).await;
 
     // save local and remote tips so we can verify who did a reorg
     let mgr1_tip = get_tip(&mgr1_handle).await;
@@ -988,13 +995,13 @@ async fn two_remote_nodes_different_chains() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
@@ -1043,7 +1050,8 @@ async fn two_remote_nodes_different_chains() {
 
 #[tokio::test]
 async fn two_remote_nodes_same_chains() {
-    let (handle1, handle2, handle3) = init_consensus_3(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -1061,7 +1069,7 @@ async fn two_remote_nodes_same_chains() {
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
     let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = util::create_n_blocks(&parent.unwrap(), 32);
+    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
 
     util::import_blocks(&mgr2_handle, blocks.clone()).await;
     util::import_blocks(&mgr3_handle, blocks).await;
@@ -1141,13 +1149,13 @@ async fn two_remote_nodes_same_chains() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
@@ -1196,7 +1204,8 @@ async fn two_remote_nodes_same_chains() {
 
 #[tokio::test]
 async fn two_remote_nodes_same_chains_new_blocks() {
-    let (handle1, handle2, handle3) = init_consensus_3(8).await;
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -1214,7 +1223,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
     let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = util::create_n_blocks(&parent.unwrap(), 32);
+    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
 
     util::import_blocks(&mgr2_handle, blocks.clone()).await;
     util::import_blocks(&mgr3_handle, blocks).await;
@@ -1289,7 +1298,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                             .await
                             .unwrap()
                             .unwrap();
-                        blocks = util::create_n_blocks(&parent.unwrap(), 10);
+                        blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 10);
                     }
 
                     if dest_peer_id == conn2.peer_id() {
@@ -1306,13 +1315,13 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                headers,
+                                block_ids,
                             })),
                         magic,
                     },
             } => {
-                assert_eq!(headers.len(), 1);
-                let id = headers[0].clone();
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
                 let msg = Message {
                     magic,
                     msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
