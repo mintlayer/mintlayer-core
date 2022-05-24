@@ -29,6 +29,9 @@ pub enum SwarmEvent<T: NetworkingService> {
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot::Sender<usize>),
+
+    /// Get the bind address of the local node
+    GetBindAddress(oneshot::Sender<String>),
 }
 
 #[derive(Debug)]
