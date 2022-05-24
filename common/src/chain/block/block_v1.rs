@@ -7,7 +7,6 @@ use crate::primitives::id;
 use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
 
-use parity_scale_codec::Output;
 use serialization::{Decode, Encode};
 
 use super::BlockVersion;

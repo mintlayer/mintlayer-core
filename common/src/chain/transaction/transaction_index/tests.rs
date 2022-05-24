@@ -33,7 +33,7 @@ fn basic_spending() {
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b")
             .unwrap()
             .into();
-    let pos = TxMainChainPosition::new(block_id.clone(), 1, 2).into();
+    let pos = TxMainChainPosition::new(block_id, 1, 2).into();
     let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
     // ensure index accesses are correct

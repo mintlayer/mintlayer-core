@@ -70,8 +70,8 @@ impl CachedInputsOperation {
 
     pub fn get_tx_index(&self) -> Option<&TxMainChainIndex> {
         match self {
-            CachedInputsOperation::Write(idx) => Some(&idx),
-            CachedInputsOperation::Read(idx) => Some(&idx),
+            CachedInputsOperation::Write(idx) => Some(idx),
+            CachedInputsOperation::Read(idx) => Some(idx),
             CachedInputsOperation::Erase => None,
         }
     }
