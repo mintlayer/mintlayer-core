@@ -6,6 +6,7 @@ use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::transaction::Transaction;
+use crate::chain::upgrades::ConsensusUpgrade;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
@@ -88,6 +89,7 @@ impl ChainConfig {
         &self.net_upgrades
     }
 
+    // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
@@ -134,11 +136,26 @@ fn create_mainnet_genesis() -> Block {
 
 pub fn create_mainnet() -> ChainConfig {
     let chain_type = ChainType::Mainnet;
+    let pow_config = PoWChainConfig::new(chain_type);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(1),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: pow_config.limit().into(),
+            }),
+        ),
+    ];
+
     ChainConfig {
         chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
         height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
-        net_upgrades: NetUpgrades::new(chain_type),
+        net_upgrades: NetUpgrades::initialize(upgrades).expect("Should not fail"),
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
@@ -239,7 +256,7 @@ mod tests {
         let config = create_mainnet();
 
         assert!(!config.net_upgrades.is_empty());
-        assert_eq!(1, config.net_upgrades.len());
+        assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
     }
 
@@ -272,7 +289,6 @@ mod tests {
         assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
         assert_eq!(&ChainType::Testnet.to_string(), "testnet");
 
-        assert_eq!(ChainType::VARIANTS.len(), 4, "Unexpected number of chain types");
         for chain_type_str in ChainType::VARIANTS {
             let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
             assert_eq!(&chain_type.to_string(), chain_type_str);

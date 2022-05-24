@@ -17,6 +17,7 @@
 
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
+use crate::make_consensus;
 use blockchain_storage::Store;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::config::create_unit_test_config;
@@ -610,4 +611,11 @@ fn test_pow() {
             .expect("Unexpected conversion error")
     );
     assert!(btf.add_special_block(valid_block.clone()).is_ok());
+}
+
+#[test]
+fn test_mainnet_initialization() {
+    let config = Arc::new(common::chain::config::create_mainnet());
+    let storage = Store::new_empty().unwrap();
+    let _consensus = make_consensus(config, storage).unwrap();
 }
