@@ -88,6 +88,11 @@ impl StandardInputSignature {
                 verify_public_key_spending(pubkey, &sig_components, sighash)?
             }
             Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
+            Destination::AnyoneCanSpend => {
+                if !self.raw_signature.is_empty() {
+                    return Err(TransactionSigError::InvalidSignatureEncoding);
+                }
+            }
         }
         Ok(())
     }
@@ -110,6 +115,7 @@ impl StandardInputSignature {
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
+            Destination::AnyoneCanSpend => vec![],
         };
         Ok(Self {
             sighash_type,

@@ -13,6 +13,8 @@ pub enum Destination {
     PublicKey(crypto::key::PublicKey), // Key type to be added
     #[codec(index = 2)]
     ScriptHash(Id<Script>),
+    #[codec(index = 3)]
+    AnyoneCanSpend, // zero verification; used primarily for testing. Never use this for real money
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
