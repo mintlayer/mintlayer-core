@@ -20,7 +20,7 @@ pub struct Options {
     pub rpc_addr: SocketAddr,
 
     /// Blockchain type
-    #[clap(long, value_name = "NET", possible_values = ChainType::VARIANTS)]
+    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
     pub net: ChainType,
 
     /// Address to bind P2P to

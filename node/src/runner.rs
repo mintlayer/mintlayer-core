@@ -70,9 +70,9 @@ pub async fn run(opts: Options) -> anyhow::Result<()> {
 
 #[rpc::rpc(server, namespace = "node")]
 trait NodeRpc {
-    /// Order the node to exit
-    #[method(name = "exit")]
-    fn exit(&self) -> rpc::Result<()>;
+    /// Order the node to shutdown
+    #[method(name = "shutdown")]
+    fn shutdown(&self) -> rpc::Result<()>;
 
     /// Get node software version
     #[method(name = "version")]
@@ -90,7 +90,7 @@ impl NodeRpc {
 }
 
 impl NodeRpcServer for NodeRpc {
-    fn exit(&self) -> rpc::Result<()> {
+    fn shutdown(&self) -> rpc::Result<()> {
         self.shutdown_trigger.initiate();
         Ok(())
     }
