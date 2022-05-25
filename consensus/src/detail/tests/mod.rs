@@ -38,7 +38,6 @@ mod events_tests;
 mod processing_tests;
 #[cfg(test)]
 mod reorgs_tests;
-
 #[cfg(test)]
 mod signature_tests;
 
