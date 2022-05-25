@@ -274,7 +274,7 @@ impl TestChainConfig {
             net_upgrades: self.net_upgrades,
             rpc_port: 15234,
             p2p_port: 8978,
-            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+            magic_bytes: self.magic_bytes,
             genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
