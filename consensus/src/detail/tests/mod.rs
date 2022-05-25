@@ -80,8 +80,7 @@ fn random_witness() -> InputWitness {
     ))
 }
 
-// TODO: rename this function to anyonecanspend_address()
-fn random_address() -> Destination {
+fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
@@ -90,7 +89,9 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    if output.get_value() > Amount::from_atoms(1) {
+    let mut rng = thread_rng();
+    let spent_value = rng.gen_range(0..output.get_value().into_atoms());
+    if output.get_value() > Amount::from_atoms(spent_value) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -98,8 +99,8 @@ fn create_utxo_data(
                 empty_witness(),
             ),
             TxOutput::new(
-                (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(),
+                (output.get_value() - Amount::from_atoms(spent_value)).unwrap(),
+                anyonecanspend_address(),
             ),
         ))
     } else {

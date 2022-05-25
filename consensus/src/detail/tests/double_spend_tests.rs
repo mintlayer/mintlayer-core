@@ -40,7 +40,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address();
+            let receiver = anyonecanspend_address();
 
             let prev_block_tx_id = consensus
                 .chain_config
@@ -103,7 +103,7 @@ fn spend_tx_in_the_same_block() {
         {
             let mut consensus = setup_consensus();
             // Create base tx
-            let receiver = random_address();
+            let receiver = anyonecanspend_address();
 
             let prev_block_tx_id =
                 consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -171,7 +171,7 @@ fn double_spend_tx_in_the_same_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address();
+        let receiver = anyonecanspend_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
@@ -256,7 +256,7 @@ fn double_spend_tx_in_another_block() {
         // +-----------------------+
 
         let mut consensus = setup_consensus();
-        let receiver = random_address();
+        let receiver = anyonecanspend_address();
 
         let prev_block_tx_id =
             consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
