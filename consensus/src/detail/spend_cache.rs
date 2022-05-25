@@ -176,6 +176,69 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
+        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
+            let outpoint = input.get_outpoint();
+            let prev_tx_index_op = self.get_from_cached(outpoint)?;
+
+            let tx_index = prev_tx_index_op
+                .get_tx_index()
+                .ok_or(BlockError::PreviouslyCachedInputNotFound)?;
+            let input_outpoint_script = match tx_index.get_position() {
+                common::chain::SpendablePosition::Transaction(tx_pos) => {
+                    let prev_tx = self
+                        .db_tx
+                        .get_mainchain_tx_by_position(tx_pos)
+                        .map_err(BlockError::from)?
+                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded)?;
+                    let output = prev_tx
+                        .get_outputs()
+                        .get(input.get_outpoint().get_output_index() as usize)
+                        .ok_or(BlockError::OutputIndexOutOfRange {
+                            tx_id: Some(tx.get_id().into()),
+                            source_output_index: outpoint.get_output_index() as usize,
+                        })?;
+                    output.get_destination().clone()
+                }
+                common::chain::SpendablePosition::BlockReward(_reward_pos) => {
+                    // TODO(Roy): fill this with the block reward that the user now is spending
+                    todo!()
+                }
+            };
+
+            common::chain::transaction::signature::verify_signature(
+                &input_outpoint_script,
+                tx,
+                input_idx,
+            )
+            .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_spend(
+        &mut self,
+        tx: &Transaction,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<(), BlockError> {
+        for input in tx.get_inputs() {
+            let outpoint = input.get_outpoint();
+
+            if let OutPointSourceId::BlockReward(block_id) = outpoint.get_tx_id() {
+                self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+            }
+
+            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
+            prev_tx_index_op
+                .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
+                .map_err(BlockError::from)?;
+        }
+
+        Ok(())
+    }
+
     pub fn spend(
         &mut self,
         block: &Block,
@@ -207,57 +270,11 @@ impl<'a> CachedInputs<'a> {
         // check for attempted money printing
         self.check_inputs_amounts(tx)?;
 
-        // verify signature
-        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
-            let outpoint = input.get_outpoint();
-            let prev_tx_index_op = self.get_from_cached(outpoint)?;
-
-            let tx_index = prev_tx_index_op
-                .get_tx_index()
-                .ok_or(BlockError::PreviouslyCachedInputNotFound)?;
-            let input_outpoint_script = match tx_index.get_position() {
-                common::chain::SpendablePosition::Transaction(tx_pos) => {
-                    let prev_tx = self
-                        .db_tx
-                        .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(BlockError::from)?
-                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded)?;
-                    let output = prev_tx
-                        .get_outputs()
-                        .get(input.get_outpoint().get_output_index() as usize)
-                        .ok_or(BlockError::OutputIndexOutOfRange {
-                            tx_id: Some(tx.get_id().into()),
-                            source_output_index: outpoint.get_output_index() as usize,
-                        })?;
-                    output.get_destination().clone()
-                }
-                common::chain::SpendablePosition::BlockReward(reward_pos) => {
-                    // TODO(Roy): fill this with the block reward that the user now is spending
-                    todo!()
-                }
-            };
-
-            common::chain::transaction::signature::verify_signature(
-                &input_outpoint_script,
-                tx,
-                input_idx,
-            )
-            .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
-        }
+        // verify input signatures
+        self.verify_signatures(tx)?;
 
         // spend inputs of this transaction
-        for input in tx.get_inputs() {
-            let outpoint = input.get_outpoint();
-
-            if let OutPointSourceId::BlockReward(block_id) = outpoint.get_tx_id() {
-                self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
-            }
-
-            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
-            prev_tx_index_op
-                .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
-                .map_err(BlockError::from)?;
-        }
+        self.apply_spend(tx, spend_height, blockreward_maturity)?;
 
         // add the outputs of this transaction to the cache
         self.add_outputs(block, tx_num)?;
