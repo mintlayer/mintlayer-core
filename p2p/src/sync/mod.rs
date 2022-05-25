@@ -47,6 +47,7 @@ const HEADER_LIMIT: usize = 2000;
 // TODO: split syncing into separate files
 // TODO: match against error in `run()` and deal with `ProtocolError`
 // TODO: use ensure
+// TODO: create better api for request/response codec
 
 // Define which errors are fatal for the sync manager as the error is bubbled
 // up to the main event loop which then decides how to act on errors.
@@ -181,7 +182,7 @@ where
                 Err(P2pError::PeerExists)
             }
             Entry::Vacant(entry) => {
-                let locator = self.consensus_handle.call(move |this| this.get_locator()).await??;
+                let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
                 entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
                 self.send_header_request(peer_id, locator).await
             }
@@ -292,7 +293,6 @@ where
             );
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
-
         if headers.is_empty() {
             log::debug!("local node is in sync with peer {:?}", peer_id);
             peer.set_state(peer::PeerSyncState::Idle);
@@ -503,9 +503,9 @@ where
     }
 
     /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(&mut self, event: net::SyncingMessage<T>) -> error::Result<()> {
+    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> error::Result<()> {
         match event {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -521,7 +521,7 @@ where
                 );
                 self.process_request(peer_id, request_id, message).await
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -537,8 +537,8 @@ where
                 );
                 self.process_response(peer_id, message).await
             }
-            net::SyncingMessage::Request { peer_id, .. }
-            | net::SyncingMessage::Response { peer_id, .. } => {
+            net::SyncingEvent::Request { peer_id, .. }
+            | net::SyncingEvent::Response { peer_id, .. } => {
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 // TODO: disconnect peer and ban it
                 // TODO: send `Misbehaved` event to PeerManager
@@ -707,7 +707,7 @@ mod tests {
             .await
             .unwrap();
 
-        if let Ok(net::SyncingMessage::Request {
+        if let Ok(net::SyncingEvent::Request {
             peer_id,
             request_id,
             request,
@@ -779,7 +779,7 @@ mod tests {
             .unwrap();
 
         for i in 0..2 {
-            if let Ok(net::SyncingMessage::Request {
+            if let Ok(net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -813,7 +813,7 @@ mod tests {
 
         let mut magic_seen = 0;
         for i in 0..2 {
-            if let Ok(net::SyncingMessage::Response {
+            if let Ok(net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,

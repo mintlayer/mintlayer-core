@@ -133,7 +133,7 @@ where
 }
 
 #[derive(Debug)]
-pub enum SyncingMessage<T>
+pub enum SyncingEvent<T>
 where
     T: NetworkingService,
 {
@@ -309,5 +309,5 @@ where
     ) -> error::Result<()>;
 
     // TODO:
-    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>>;
+    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>>;
 }
