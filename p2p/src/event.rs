@@ -38,6 +38,9 @@ pub enum SwarmEvent<T: NetworkingService> {
 
     /// Get peer ID of the local node
     GetPeerId(oneshot::Sender<String>),
+
+    /// Get peer IDs of connected peers
+    GetConnectedPeers(oneshot::Sender<Vec<String>>),
 }
 
 #[derive(Debug)]
