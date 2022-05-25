@@ -20,7 +20,7 @@ use crate::{
     message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage, ValidationResult,
+        PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -245,7 +245,7 @@ where
         todo!();
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
+    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
         todo!();
     }
 }

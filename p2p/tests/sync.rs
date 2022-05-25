@@ -157,7 +157,7 @@ where
     T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
-        net::SyncingMessage::Request {
+        net::SyncingEvent::Request {
             peer_id,
             request_id,
             request:
@@ -274,7 +274,7 @@ async fn remote_ahead_by_7_blocks() {
 
     for i in 0..9 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -301,7 +301,7 @@ async fn remote_ahead_by_7_blocks() {
                     .await
                     .unwrap()
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -334,7 +334,7 @@ async fn remote_ahead_by_7_blocks() {
                     .await
                     .unwrap();
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -400,7 +400,7 @@ async fn local_ahead_by_12_blocks() {
 
     loop {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -427,7 +427,7 @@ async fn local_ahead_by_12_blocks() {
                     .await
                     .unwrap()
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -467,7 +467,7 @@ async fn local_ahead_by_12_blocks() {
                     break;
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -564,7 +564,7 @@ async fn remote_local_diff_chains_local_higher() {
 
     for i in 0..24 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -591,7 +591,7 @@ async fn remote_local_diff_chains_local_higher() {
                     .await
                     .unwrap()
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -624,7 +624,7 @@ async fn remote_local_diff_chains_local_higher() {
                     .await
                     .unwrap();
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -661,7 +661,7 @@ async fn remote_local_diff_chains_local_higher() {
                         .unwrap();
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -759,7 +759,7 @@ async fn remote_local_diff_chains_remote_higher() {
 
     for i in 0..20 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -786,7 +786,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     .await
                     .unwrap()
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -819,7 +819,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     .await
                     .unwrap();
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -856,7 +856,7 @@ async fn remote_local_diff_chains_remote_higher() {
                         .unwrap();
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -961,7 +961,7 @@ async fn two_remote_nodes_different_chains() {
         };
 
         match event {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -988,7 +988,7 @@ async fn two_remote_nodes_different_chains() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
                 }
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -1020,7 +1020,7 @@ async fn two_remote_nodes_different_chains() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -1115,7 +1115,7 @@ async fn two_remote_nodes_same_chains() {
         };
 
         match event {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -1142,7 +1142,7 @@ async fn two_remote_nodes_same_chains() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap()
                 }
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -1174,7 +1174,7 @@ async fn two_remote_nodes_same_chains() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -1264,7 +1264,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         };
 
         match event {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -1308,7 +1308,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     }
                 }
             }
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -1340,7 +1340,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     mgr3.handle_mut().send_response(request_id, msg).await.unwrap();
                 }
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
