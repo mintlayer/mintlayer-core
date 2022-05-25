@@ -324,6 +324,8 @@ def p2p_port(n):
     assert n <= MAX_NODES
     return PORT_MIN + n + (MAX_NODES * PortSeed.n) % (PORT_RANGE - 1 - MAX_NODES)
 
+def p2p_url(n):
+    return "/ip4/127.0.0.1/tcp/" + str(p2p_port(n))
 
 def rpc_port(n):
     return PORT_MIN + PORT_RANGE + n + (MAX_NODES * PortSeed.n) % (PORT_RANGE - 1 - MAX_NODES)
