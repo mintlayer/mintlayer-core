@@ -655,11 +655,11 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         timeout = int(timeout * self.options.timeout_factor)
         stop_time = time.time() + timeout
         while time.time() <= stop_time:
-            best_hash = [x.getbestblockhash() for x in rpc_connections]
+            best_hash = [x.consensus_best_block_id() for x in rpc_connections]
             if best_hash.count(best_hash[0]) == len(rpc_connections):
                 return
             # Check that each peer has at least one connection
-            assert (all([len(x.getpeerinfo()) for x in rpc_connections]))
+            assert (all([x.p2p_get_peer_count() for x in rpc_connections]))
             time.sleep(wait)
         raise AssertionError("Block sync timed out after {}s:{}".format(
             timeout,
@@ -691,7 +691,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def sync_all(self, nodes=None):
         self.sync_blocks(nodes)
-        self.sync_mempools(nodes)
+        # self.sync_mempools(nodes)
 
     def wait_until(self, test_function, timeout=60):
         return wait_until_helper(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor)
