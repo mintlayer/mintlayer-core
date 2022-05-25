@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
+use crate::primitives::id::hash_encoded;
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::{Id, Idable, H256};
@@ -63,7 +64,7 @@ pub fn calculate_witness_merkle_root(
         // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
         return Ok(Some(transactions[0].get_id().get()));
     }
-    let hashes: Vec<H256> = transactions.iter().map(|tx| tx.get_id().get()).collect();
+    let hashes: Vec<H256> = transactions.iter().map(|tx| hash_encoded(tx)).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
     Ok(Some(t.root()))
 }
