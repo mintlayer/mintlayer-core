@@ -138,15 +138,20 @@ pub enum PubSubEvent {
 }
 
 pub enum SyncingEvent {
-    SyncRequest {
+    Request {
         peer_id: PeerId,
         request_id: RequestId,
         request: Box<SyncRequest>,
     },
-    SyncResponse {
+    Response {
         peer_id: PeerId,
         request_id: RequestId,
         response: Box<SyncResponse>,
+    },
+    Error {
+        peer_id: PeerId,
+        request_id: RequestId,
+        error: net::RequestResponseError,
     },
 }
 

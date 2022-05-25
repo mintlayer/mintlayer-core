@@ -594,7 +594,7 @@ where
 
     async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::SyncRequest {
+            types::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -610,7 +610,7 @@ where
                     request,
                 })
             }
-            types::SyncingEvent::SyncResponse {
+            types::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
@@ -626,6 +626,15 @@ where
                     response,
                 })
             }
+            types::SyncingEvent::Error {
+                peer_id,
+                request_id,
+                error,
+            } => Ok(SyncingEvent::Error {
+                peer_id,
+                request_id,
+                error,
+            }),
         }
     }
 }

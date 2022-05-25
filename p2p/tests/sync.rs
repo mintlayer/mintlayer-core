@@ -30,7 +30,7 @@ use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSo
 use crypto::random::Rng;
 use p2p::{
     error::P2pError,
-    event::{PubSubControlEvent, SyncControlEvent},
+    event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{
         self, libp2p::Libp2pService, ConnectivityEvent, ConnectivityService, NetworkingService,
@@ -56,6 +56,7 @@ async fn make_sync_manager<T>(
     T::ConnectivityHandle,
     mpsc::Sender<SyncControlEvent<T>>,
     mpsc::Receiver<PubSubControlEvent>,
+    mpsc::Receiver<SwarmEvent<T>>,
 )
 where
     T: NetworkingService,
@@ -64,6 +65,7 @@ where
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
+    let (tx_swarm, rx_swarm) = mpsc::channel(16);
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let (conn, _, sync) = T::start(
@@ -77,10 +79,18 @@ where
     .unwrap();
 
     (
-        SyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_pubsub),
+        SyncManager::<T>::new(
+            Arc::clone(&config),
+            sync,
+            handle,
+            rx_p2p_sync,
+            tx_swarm,
+            tx_pubsub,
+        ),
         conn,
         tx_p2p_sync,
         rx_pubsub,
+        rx_swarm,
     )
 }
 
@@ -206,10 +216,10 @@ async fn local_and_remote_in_sync() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -246,10 +256,10 @@ async fn remote_ahead_by_7_blocks() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -369,10 +379,10 @@ async fn local_ahead_by_12_blocks() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, mut pubsub2) =
+    let (mut mgr2, mut conn2, _, mut pubsub2, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -527,10 +537,10 @@ async fn remote_local_diff_chains_local_higher() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -722,10 +732,10 @@ async fn remote_local_diff_chains_remote_higher() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, mut pubsub2) =
+    let (mut mgr2, mut conn2, _, mut pubsub2, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -916,13 +926,13 @@ async fn two_remote_nodes_different_chains() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _, _) =
+    let (mut mgr3, mut conn3, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 
@@ -1056,13 +1066,13 @@ async fn two_remote_nodes_same_chains() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _, _) =
+    let (mut mgr3, mut conn3, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 
@@ -1210,13 +1220,13 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub) =
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, _) =
+    let (mut mgr2, mut conn2, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
-    let (mut mgr3, mut conn3, _, _) =
+    let (mut mgr3, mut conn3, _, _, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
             .await;
 

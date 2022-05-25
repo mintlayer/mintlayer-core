@@ -132,6 +132,15 @@ where
     },
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RequestResponseError {
+    /// Request timed out
+    Timeout,
+
+    /// Connection was closed by remote
+    ConnectionClosed,
+}
+
 #[derive(Debug)]
 pub enum SyncingEvent<T>
 where
@@ -146,6 +155,11 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         response: message::Message,
+    },
+    Error {
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        error: RequestResponseError,
     },
 }
 
@@ -182,10 +196,10 @@ pub trait NetworkingService {
     type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone + ToString;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
+    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug + Sync;
 
     // TODO:
-    type RequestId: Send + Debug;
+    type RequestId: Send + Debug + Eq + Hash + Sync;
 
     /// Enum of different peer discovery strategies that the implementation provides
     type DiscoveryStrategy;
