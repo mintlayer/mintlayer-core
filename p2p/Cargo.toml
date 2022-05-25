@@ -8,14 +8,26 @@ license = "MIT"
 async-trait = "0.1.51"
 futures = "0.3.15"
 futures-timer = "3.0.2"
+itertools = "0.10.3"
+lazy_static = "1.4.0"
 parity-scale-codec = "3.1.2"
 rand = "0.8.4"
-void = "1.0.2"
-itertools = "0.10.3"
-common = { path = "../common/" }
-logging = { path = "../logging/" }
-serialization = { path = "../serialization/" }
 sscanf = "0.2.1"
+thiserror = "1.0"
+void = "1.0.2"
+
+# local dependencies
+common = { path = "../common/" }
+consensus = { path = "../consensus/" }
+crypto = { path = "../crypto/" }
+logging = { path = "../logging/" }
+rpc = { path = "../rpc/" }
+serialization = { path = "../serialization/" }
+subsystem = { path = "../subsystem/" }
+
+[dependencies.jsonrpsee]
+version = "0.13.1"
+features = ["macros"]
 
 [dependencies.libp2p]
 version = "0.44.0"
@@ -29,6 +41,7 @@ features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
 portpicker = "0.1.1"
+blockchain-storage = { path = "../blockchain_storage" }
 
 [dev-dependencies.test-utils]
 version = "0.1.0"

@@ -19,8 +19,8 @@ use crate::{
     error::{self, P2pError},
     message,
     net::{
-        ConnectivityEvent, ConnectivityService, NetworkService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingMessage, SyncingService, ValidationResult,
+        ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
+        PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -56,7 +56,7 @@ pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Socket address of the network service provider
     addr: SocketAddr,
@@ -71,19 +71,19 @@ where
 
 pub struct MockPubSubHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
 
-    /// RX channel for receiving floodsub events from mock backend
-    _flood_rx: mpsc::Receiver<types::FloodsubEvent>,
+    /// RX channel for receiving pubsub events from mock backend
+    _pubsub_rx: mpsc::Receiver<types::PubSubEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingHandle<T>
+pub struct MockSyncingCodecHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
@@ -93,7 +93,7 @@ where
 }
 
 #[async_trait]
-impl NetworkService for MockService {
+impl NetworkingService for MockService {
     type Address = SocketAddr;
     type DiscoveryStrategy = MockDiscoveryStrategy;
     type PeerId = SocketAddr;
@@ -102,7 +102,7 @@ impl NetworkService for MockService {
     type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingHandle = MockSyncingHandle<Self>;
+    type SyncingCodecHandle = MockSyncingCodecHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -113,17 +113,17 @@ impl NetworkService for MockService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
-        let (flood_tx, _flood_rx) = mpsc::channel(16);
+        let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, _sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
 
         tokio::spawn(async move {
             let mut mock =
-                backend::Backend::new(addr, socket, cmd_rx, conn_tx, flood_tx, sync_tx, timeout);
+                backend::Backend::new(addr, socket, cmd_rx, conn_tx, pubsub_tx, sync_tx, timeout);
             let _ = mock.run().await;
         });
 
@@ -136,10 +136,10 @@ impl NetworkService for MockService {
             },
             Self::PubSubHandle {
                 cmd_tx: cmd_tx.clone(),
-                _flood_rx,
+                _pubsub_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingHandle {
+            Self::SyncingCodecHandle {
                 cmd_tx,
                 _sync_rx,
                 _marker: Default::default(),
@@ -151,7 +151,7 @@ impl NetworkService for MockService {
 #[async_trait]
 impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
-    T: NetworkService<Address = SocketAddr, PeerId = SocketAddr> + Send,
+    T: NetworkingService<Address = SocketAddr, PeerId = SocketAddr> + Send,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -204,7 +204,7 @@ where
 #[async_trait]
 impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
-    T: NetworkService<PeerId = SocketAddr> + Send,
+    T: NetworkingService<PeerId = SocketAddr> + Send,
 {
     async fn publish(&mut self, message: message::Message) -> error::Result<()> {
         todo!();
@@ -225,9 +225,9 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingService<T> for MockSyncingHandle<T>
+impl<T> SyncingCodecService<T> for MockSyncingCodecHandle<T>
 where
-    T: NetworkService<PeerId = SocketAddr, RequestId = MockRequestId> + Send,
+    T: NetworkingService<PeerId = SocketAddr, RequestId = MockRequestId> + Send,
 {
     async fn send_request(
         &mut self,

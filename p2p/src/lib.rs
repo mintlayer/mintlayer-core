@@ -14,90 +14,168 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::net::{ConnectivityService, NetworkService, PubSubService, SyncingService};
+#![allow(unused)]
+use crate::{
+    error::P2pError,
+    net::{
+        libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService,
+        PubSubService, SyncingCodecService,
+    },
+};
+use common::chain::block;
 use common::chain::ChainConfig;
+use consensus::consensus_interface;
 use logging::log;
-use std::sync::Arc;
-use tokio::sync::mpsc;
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use tokio::sync::{mpsc, oneshot};
 
 pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
 pub mod pubsub;
+pub mod rpc;
 pub mod swarm;
 pub mod sync;
 
-#[allow(unused)]
-pub struct P2P<T>
-where
-    T: NetworkService,
-{
-    /// Chain config
-    config: Arc<ChainConfig>,
+// TODO: figure out proper channel sizes
+const CHANNEL_SIZE: usize = 64;
 
-    /// TX channel for sending swarm control events
-    tx_swarm: mpsc::Sender<event::SwarmControlEvent<T>>,
+// TODO: this should come from a config
+const TIMEOUT: Duration = Duration::from_secs(10);
+
+pub struct P2pInterface<T: NetworkingService> {
+    p2p: P2P<T>,
+}
+
+impl<T> P2pInterface<T>
+where
+    T: NetworkingService,
+{
+    pub async fn connect(&mut self, addr: String) -> error::Result<()>
+    where
+        <T as NetworkingService>::Address: FromStr,
+        <<T as NetworkingService>::Address as FromStr>::Err: Debug,
+    {
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::Connect(
+                addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+            ))
+            .await
+            .map_err(|_| P2pError::ChannelClosed)
+    }
+
+    pub async fn get_peer_count(&self) -> error::Result<usize> {
+        let (tx, rx) = oneshot::channel();
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::GetPeerCount(tx))
+            .await
+            .map_err(P2pError::from)?;
+        rx.await.map_err(P2pError::from)
+    }
 }
 
 #[allow(unused)]
+struct P2P<T: NetworkingService> {
+    // TODO: add abstration for channels
+    /// TX channel for sending swarm control events
+    pub tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
+
+    /// TX channel for sending syncing/pubsub events
+    pub tx_sync: mpsc::Sender<event::SyncEvent>,
+}
+
 impl<T> P2P<T>
 where
-    T: 'static + NetworkService,
+    T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingHandle: SyncingService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
     T::PubSubHandle: PubSubService<T>,
 {
-    // TODO: think about channel sizes
-    /// Create new P2P
+    /// Start the P2P subsystem
     ///
-    /// # Arguments
-    /// `addr` - socket address where the local node binds itself to
+    /// This function starts the networking backend and individual manager objects.
     pub async fn new(
-        mgr_backlog: usize,
-        peer_backlock: usize,
-        addr: T::Address,
+        bind_addr: String,
         config: Arc<ChainConfig>,
-    ) -> error::Result<Self> {
-        let (conn, flood, sync) = T::start(
-            addr,
+        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    ) -> error::Result<Self>
+    where
+        <T as NetworkingService>::Address: FromStr,
+        <<T as NetworkingService>::Address as FromStr>::Err: Debug,
+    {
+        let (conn, pubsub, sync) = T::start(
+            bind_addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
             &[],
-            &[],
+            &[net::PubSubTopic::Blocks],
             Arc::clone(&config),
-            std::time::Duration::from_secs(10),
+            TIMEOUT,
         )
         .await?;
-        let (tx_swarm, rx_swarm) = mpsc::channel(16);
-        let (tx_sync, rx_sync) = mpsc::channel(16);
+
+        // TODO: think about these channel sizes
+        let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
+        let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
+        let (tx_sync, rx_sync) = mpsc::channel(CHANNEL_SIZE);
+        let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
         let swarm_config = Arc::clone(&config);
         tokio::spawn(async move {
-            let mut swarm = swarm::SwarmManager::<T>::new(swarm_config, conn, rx_swarm, tx_sync);
-            let _ = swarm.run().await;
-        });
-
-        tokio::spawn(async move {
-            let mut sync_mgr = sync::SyncManager::<T>::new(sync, rx_sync);
-            let _ = sync_mgr.run().await;
-        });
-
-        tokio::spawn(async move {
-            if let Err(e) = pubsub::PubSubManager::<T>::new(flood).run().await {
-                todo!();
+            if let Err(e) = swarm::PeerManager::<T>::new(swarm_config, conn, rx_swarm, tx_p2p_sync)
+                .run()
+                .await
+            {
+                log::error!("PeerManager failed: {:?}", e);
             }
-            // let mut sync_mgr = ;
-            // let _ = sync_mgr.run().await;
         });
 
-        Ok(Self { config, tx_swarm })
-    }
+        let sync_handle = consensus_handle.clone();
+        let sync_config = Arc::clone(&config);
+        tokio::spawn(async move {
+            if let Err(e) =
+                sync::SyncManager::<T>::new(sync_config, sync, sync_handle, rx_p2p_sync, tx_pubsub)
+                    .run()
+                    .await
+            {
+                log::error!("SyncManager failed: {:?}", e);
+            }
+        });
 
-    /// Run the `P2P` event loop.
-    pub async fn run(&mut self) -> error::Result<()> {
-        log::info!("starting p2p event loop");
+        // TODO: merge with syncmanager when appropriate
+        tokio::spawn(async move {
+            if let Err(e) =
+                pubsub::PubSubMessageHandler::<T>::new(config, pubsub, consensus_handle, rx_pubsub)
+                    .run()
+                    .await
+            {
+                log::error!("PubSubMessageHandler failed: {:?}", e);
+            }
+        });
 
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-        }
+        Ok(Self { tx_swarm, tx_sync })
     }
+}
+
+impl<T: NetworkingService + 'static> subsystem::Subsystem for P2pInterface<T> {}
+
+pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
+
+pub async fn make_p2p<T>(
+    chain_config: Arc<ChainConfig>,
+    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    bind_addr: String,
+) -> Result<P2pInterface<T>, P2pError>
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::PubSubHandle: PubSubService<T>,
+    <T as NetworkingService>::Address: FromStr,
+    <<T as NetworkingService>::Address as FromStr>::Err: Debug,
+{
+    Ok(P2pInterface {
+        p2p: P2P::new(bind_addr, chain_config, consensus_handle).await?,
+    })
 }

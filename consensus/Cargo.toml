@@ -16,6 +16,7 @@ serialization = { path = "../serialization" }
 subsystem = { path = '../subsystem' }
 rpc = { path = '../rpc' }
 
+itertools = "0.10.3"
 jsonrpsee = { version = "0.13.1", features = ["macros"] }
 num = "0.4.0"
 rand = "0.8.4"

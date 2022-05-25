@@ -165,35 +165,6 @@ pub fn create_mainnet() -> ChainConfig {
     }
 }
 
-// TODO: use builder type?
-#[allow(clippy::too_many_arguments)]
-#[cfg(features = "testing")]
-pub fn create_custom(
-    chain_type: Option<ChainType>,
-    address_prefix: Option<String>,
-    rpc_port: Option<u16>,
-    p2p_port: Option<u16>,
-    height_checkpoint_data: Option<BTreeMap<BlockHeight, HashType>>,
-    net_upgrades: Option<NetUpgrades<UpgradeVersion>>,
-    magic_bytes: Option<[u8; 4]>,
-    genesis_block: Option<Block>,
-    version: Option<SemVer>,
-    blockreward_maturity: Option<BlockDistance>,
-) -> ChainConfig {
-    ChainConfig {
-        chain_type: chain_type.unwrap_or(ChainType::Mainnet),
-        address_prefix: address_prefix.unwrap_or_else(|| MAINNET_ADDRESS_PREFIX.to_owned()),
-        height_checkpoint_data: height_checkpoint_data.unwrap_or_default(),
-        net_upgrades: net_upgrades.unwrap_or_default(),
-        rpc_port: rpc_port.unwrap_or(15234),
-        p2p_port: p2p_port.unwrap_or(8978),
-        magic_bytes: magic_bytes.unwrap_or([0x1a, 0x64, 0xe5, 0xf1]),
-        genesis_block: genesis_block.unwrap_or_else(create_mainnet_genesis),
-        version: version.unwrap_or_else(|| SemVer::new(0, 1, 0)),
-        blockreward_maturity: blockreward_maturity.unwrap_or(MAINNET_BLOCKREWARD_MATURITY),
-    }
-}
-
 pub fn create_unit_test_config() -> ChainConfig {
     ChainConfig {
         chain_type: ChainType::Mainnet,
@@ -209,25 +180,32 @@ pub fn create_unit_test_config() -> ChainConfig {
     }
 }
 
-pub struct ChainConfigBuilder {
+pub struct TestChainConfig {
     net_upgrades: NetUpgrades<UpgradeVersion>,
+    magic_bytes: [u8; 4],
 }
 
-impl Default for ChainConfigBuilder {
+impl Default for TestChainConfig {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl ChainConfigBuilder {
+impl TestChainConfig {
     pub fn new() -> Self {
         Self {
             net_upgrades: NetUpgrades::unit_tests(),
+            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
         }
     }
 
     pub fn with_net_upgrades(mut self, net_upgrades: NetUpgrades<UpgradeVersion>) -> Self {
         self.net_upgrades = net_upgrades;
+        self
+    }
+
+    pub fn with_magic_bytes(mut self, magic_bytes: [u8; 4]) -> Self {
+        self.magic_bytes = magic_bytes;
         self
     }
 
@@ -239,7 +217,7 @@ impl ChainConfigBuilder {
             net_upgrades: self.net_upgrades,
             rpc_port: 15234,
             p2p_port: 8978,
-            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+            magic_bytes: self.magic_bytes,
             genesis_block: create_mainnet_genesis(),
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
@@ -261,28 +239,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "testing")]
-    fn custom_creation() {
-        let config = create_custom(
-            Some(ChainType::Regtest),
-            None,
-            None,
-            None,
-            None,
-            None,
-            Some([0x11, 0x22, 0x33, 0x44]),
-            None,
-            Some(SemVer::new(1, 2, 3)),
-            None,
-        );
-        let mainnet = create_mainnet();
-        assert_eq!(config.address_prefix(), mainnet.address_prefix(),);
-        assert_eq!(config.genesis_block(), mainnet.genesis_block(),);
-        assert_ne!(config.magic_bytes(), mainnet.magic_bytes(),);
-        assert_ne!(config.version(), mainnet.version(),);
-    }
-
-    #[test]
     fn chain_type_names() {
         use strum::VariantNames;
 
@@ -293,5 +249,13 @@ mod tests {
             let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
             assert_eq!(&chain_type.to_string(), chain_type_str);
         }
+    }
+
+    #[test]
+    fn different_magic_bytes() {
+        let config1 = TestChainConfig::new().build();
+        let config2 = TestChainConfig::new().with_magic_bytes([1, 2, 3, 4]).build();
+
+        assert_ne!(config1.magic_bytes(), config2.magic_bytes(),);
     }
 }

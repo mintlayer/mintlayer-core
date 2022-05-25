@@ -20,7 +20,7 @@ use common::chain::ChainConfig;
 use libp2p::Multiaddr;
 use p2p::net::{
     libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
-    NetworkService,
+    NetworkingService,
 };
 use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -42,7 +42,7 @@ pub async fn get_tcp_socket() -> TcpStream {
     TcpStream::connect(addr).await.unwrap()
 }
 
-/// Allocate a port and create a socket address for given NetworkService
+/// Allocate a port and create a socket address for given NetworkingService
 pub fn make_address<T>(addr: &str) -> T
 where
     T: std::str::FromStr,
@@ -52,6 +52,6 @@ where
     format!("{}{}", addr, port).parse().unwrap()
 }
 
-pub fn get_mock_id() -> <MockService as NetworkService>::PeerId {
+pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
 }

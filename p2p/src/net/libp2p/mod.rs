@@ -22,8 +22,8 @@ use crate::{
     error::{self, Libp2pError, P2pError, ProtocolError},
     message,
     net::{
-        self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingMessage, SyncingService,
+        self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
+        PubSubEvent, PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage,
     },
 };
 use async_trait::async_trait;
@@ -57,6 +57,7 @@ use std::{
     io, iter,
     num::NonZeroU32,
     sync::Arc,
+    time::Duration,
 };
 use tokio::sync::{mpsc, oneshot};
 
@@ -64,6 +65,23 @@ mod backend;
 mod proto;
 mod sync;
 mod types;
+
+/// Gossipsub configuration
+// TODO: config or spec?
+const GOSSIPSUB_HEARTBEAT: Duration = Duration::from_secs(10);
+const GOSSIPSUB_MAX_TRANSMIT_SIZE: usize = 2 * 1024 * 1024;
+
+/// Ping configuration
+/// NOTE: these are not from config but part of Mintlayer's protocol spec
+const PING_TIMEOUT: Duration = Duration::from_secs(60);
+const PING_INTERVAL: Duration = Duration::from_secs(60);
+const PING_MAX_RETRIES: u32 = 3;
+
+/// Request-response configuration
+const REQ_RESP_TIMEOUT: Duration = Duration::from_secs(10);
+
+// TODO: think about channel sizes
+const CHANNEL_SIZE: usize = 64;
 
 /// libp2p-specifc peer discovery strategies
 #[derive(Debug, PartialEq, Eq)]
@@ -77,7 +95,7 @@ pub struct Libp2pService;
 
 pub struct Libp2pConnectivityHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Address where the network services has been bound
     bind_addr: Multiaddr,
@@ -95,7 +113,7 @@ where
 
 pub struct Libp2pPubSubHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
@@ -107,7 +125,7 @@ where
 
 pub struct Libp2pSyncHandle<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
@@ -148,7 +166,7 @@ fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<Protocol> {
 
 impl<T> FromIterator<(PeerId, Multiaddr)> for net::AddrInfo<T>
 where
-    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+    T: NetworkingService<PeerId = PeerId, Address = Multiaddr>,
 {
     fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
         let mut entry = net::AddrInfo {
@@ -180,7 +198,7 @@ where
 /// Parse all discovered addresses and group them by PeerId
 fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
 where
-    T: NetworkService<PeerId = PeerId, Address = Multiaddr>,
+    T: NetworkingService<PeerId = PeerId, Address = Multiaddr>,
 {
     peers.sort_by(|a, b| a.0.cmp(&b.0));
     peers
@@ -195,7 +213,7 @@ where
 
 impl<T> TryInto<net::PeerInfo<T>> for IdentifyInfo
 where
-    T: NetworkService<PeerId = PeerId, ProtocolId = String>,
+    T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
 {
     type Error = P2pError;
 
@@ -227,7 +245,7 @@ where
 }
 
 #[async_trait]
-impl NetworkService for Libp2pService {
+impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type DiscoveryStrategy = Libp2pDiscoveryStrategy;
     type PeerId = PeerId;
@@ -236,7 +254,7 @@ impl NetworkService for Libp2pService {
     type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
-    type SyncingHandle = Libp2pSyncHandle<Self>;
+    type SyncingCodecHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
@@ -247,7 +265,7 @@ impl NetworkService for Libp2pService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -264,9 +282,9 @@ impl NetworkService for Libp2pService {
 
         let swarm = {
             let gossipsub_config = GossipsubConfigBuilder::default()
-                .heartbeat_interval(std::time::Duration::from_secs(10))
+                .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
                 .validation_mode(ValidationMode::Strict)
-                .max_transmit_size(2 * 1024 * 1024)
+                .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
                 .validate_messages()
                 .build()
                 .expect("configuration to be valid");
@@ -281,21 +299,24 @@ impl NetworkService for Libp2pService {
                 version.patch,
                 chain_config.magic_bytes_as_u32(),
             );
+            let mut req_cfg = RequestResponseConfig::default();
+            req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
 
             let mut behaviour = types::ComposedBehaviour {
                 mdns: Mdns::new(Default::default()).await?,
                 ping: ping::Behaviour::new(
-                    // TODO: get this from a config
                     ping::Config::new()
-                        .with_timeout(std::time::Duration::from_secs(60))
-                        .with_interval(std::time::Duration::from_secs(60))
-                        .with_max_failures(NonZeroU32::new(3).expect("max failures > 0")),
+                        .with_timeout(PING_TIMEOUT)
+                        .with_interval(PING_INTERVAL)
+                        .with_max_failures(
+                            NonZeroU32::new(PING_MAX_RETRIES).expect("max failures > 0"),
+                        ),
                 ),
                 identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
                 sync: RequestResponse::new(
                     SyncingCodec(),
                     iter::once((SyncingProtocol(), ProtocolSupport::Full)),
-                    RequestResponseConfig::default(),
+                    req_cfg,
                 ),
                 gossipsub: Gossipsub::new(
                     MessageAuthenticity::Signed(id_keys.clone()),
@@ -313,11 +334,10 @@ impl NetworkService for Libp2pService {
             SwarmBuilder::new(transport, behaviour, peer_id).build()
         };
 
-        // TODO: channel sizes!
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (gossip_tx, gossip_rx) = mpsc::channel(64);
-        let (conn_tx, conn_rx) = mpsc::channel(64);
-        let (sync_tx, sync_rx) = mpsc::channel(64);
+        let (cmd_tx, cmd_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (gossip_tx, gossip_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (conn_tx, conn_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (sync_tx, sync_rx) = mpsc::channel(CHANNEL_SIZE);
 
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
@@ -357,7 +377,7 @@ impl NetworkService for Libp2pService {
                 gossip_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingHandle {
+            Self::SyncingCodecHandle {
                 cmd_tx,
                 sync_rx,
                 _marker: Default::default(),
@@ -370,7 +390,7 @@ impl NetworkService for Libp2pService {
 #[async_trait]
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
-    T: NetworkService<Address = Multiaddr, PeerId = PeerId> + Send,
+    T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
     IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
@@ -467,7 +487,7 @@ where
 #[async_trait]
 impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
-    T: NetworkService<PeerId = PeerId, MessageId = MessageId> + Send,
+    T: NetworkingService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
     async fn publish(&mut self, message: message::Message) -> error::Result<()> {
         // TODO: add support for transactions in the future
@@ -530,9 +550,9 @@ where
 
 // TODO: move services to separate files + unit tests?
 #[async_trait]
-impl<T> SyncingService<T> for Libp2pSyncHandle<T>
+impl<T> SyncingCodecService<T> for Libp2pSyncHandle<T>
 where
-    T: NetworkService<PeerId = PeerId, MessageId = MessageId, RequestId = RequestId> + Send,
+    T: NetworkingService<PeerId = PeerId, MessageId = MessageId, RequestId = RequestId> + Send,
 {
     async fn send_request(
         &mut self,
@@ -799,7 +819,7 @@ mod tests {
         }
     }
 
-    impl<T: NetworkService> PartialEq for net::PeerInfo<T> {
+    impl<T: NetworkingService> PartialEq for net::PeerInfo<T> {
         fn eq(&self, other: &Self) -> bool {
             self.peer_id == other.peer_id
                 && self.magic_bytes == other.magic_bytes

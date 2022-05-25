@@ -33,8 +33,8 @@ pub enum ConnectivityEvent {
 }
 
 // TODO: use two events, one for txs and one for blocks?
-pub enum FloodsubEvent {
-    /// Message received from one of the floodsub topics
+pub enum PubSubEvent {
+    /// Message received from one of the pubsub topics
     MessageReceived {
         peer_id: SocketAddr,
         topic: net::PubSubTopic,

@@ -14,35 +14,47 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use common::chain::block::{Block, BlockHeader};
+use common::{
+    chain::block::{Block, BlockHeader},
+    primitives::{Id, Idable},
+};
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum SyncingRequest {
+    #[codec(index = 0)]
     GetHeaders { locator: Vec<BlockHeader> },
-    GetBlocks { headers: Vec<BlockHeader> },
+    #[codec(index = 1)]
+    GetBlocks { block_ids: Vec<Id<Block>> },
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum SyncingResponse {
+    #[codec(index = 0)]
     Headers { headers: Vec<BlockHeader> },
+    #[codec(index = 1)]
     Blocks { blocks: Vec<Block> },
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum PubSubMessage {
+    #[codec(index = 0)]
     Block(Block),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum SyncingMessage {
+    #[codec(index = 0)]
     Request(SyncingRequest),
+    #[codec(index = 1)]
     Response(SyncingResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum MessageType {
+    #[codec(index = 0)]
     Syncing(SyncingMessage),
+    #[codec(index = 1)]
     PubSub(PubSubMessage),
 }
 
