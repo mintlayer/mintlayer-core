@@ -5,8 +5,9 @@
 //! The framework is taken from Bitcoin and is written in Python. It is ultimately responsible for
 //! running the tests. All command line arguments are forwarded to it.
 
+use libtest_mimic::{run_tests, Arguments as HarnessArgs, Outcome, Test};
 use std::env::consts::EXE_SUFFIX;
-use std::{env, path::Path, process::Command};
+use std::{env, ffi::OsString, path::Path, process::Command};
 
 // Useful paths we get from Cargo
 const NODE_BINARY: &str = env!("CARGO_BIN_EXE_test_node");
@@ -34,7 +35,7 @@ impl std::fmt::Debug for Error {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn run(runner_args: &[OsString]) -> Result<(), Error> {
     // Various derived paths
     let top_source_dir = Path::new(CRATE_DIR).parent().unwrap().to_str().unwrap();
     let binary_dir = Path::new(NODE_BINARY).parent().unwrap().to_str().unwrap();
@@ -72,7 +73,7 @@ ENABLE_BITCOIND=true
         .arg(format!("--configfile={}", config_file_path.display()))
         .arg(format!("--tmpdirprefix={}", TEMP_DIR))
         // Forward the rest of the arguments from this executable
-        .args(env::args_os().skip(1))
+        .args(runner_args)
         // Wait for exit status
         .status()
         .map_err(Error::RunnerFailed)?;
@@ -82,4 +83,39 @@ ENABLE_BITCOIND=true
         return Err(Error::TestsFailed(status));
     }
     Ok(())
+}
+
+fn main() {
+    // Pre-process command line arguments
+    let (harness_args, runner_args) = {
+        let all_args: Vec<_> = env::args_os().collect();
+        // Arguments before a '--' are harness options, test_runner.py options come after the '--'
+        let mut arg_sections = all_args.splitn(2, |x| x == "--").fuse();
+        let mut harness_args = HarnessArgs::from_iter(arg_sections.next().unwrap_or(&[]));
+        let runner_args = arg_sections.next().map_or(Default::default(), |args| {
+            // If arguments are explicitly passed to test_runner.py, run ignored tests
+            harness_args.ignored = true;
+            args.to_owned()
+        });
+        (harness_args, runner_args)
+    };
+
+    let functional_tests = Test {
+        name: "functional".into(),
+        kind: String::new(),
+        is_ignored: true,
+        is_bench: false,
+        data: (),
+    };
+
+    let outcome = run_tests(&harness_args, vec![functional_tests], move |_| {
+        match run(&runner_args) {
+            Ok(()) => Outcome::Passed,
+            Err(e) => Outcome::Failed {
+                msg: Some(e.to_string()),
+            },
+        }
+    });
+
+    outcome.exit()
 }
