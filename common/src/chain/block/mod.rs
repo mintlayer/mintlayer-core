@@ -64,7 +64,7 @@ fn calculate_generic_merkle_root(
         // using bitcoin's way, blocks that only have the coinbase (or a single tx in general) use their coinbase as the merkleroot
         return Ok(Some(tx_hasher(&transactions[0])));
     }
-    let hashes: Vec<H256> = transactions.iter().map(|tx| tx_hasher(tx)).collect();
+    let hashes: Vec<H256> = transactions.iter().map(tx_hasher).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
     Ok(Some(t.root()))
 }
@@ -299,8 +299,8 @@ mod tests {
 
         let one_transaction = Transaction::new(0, inputs, Vec::new(), 0).unwrap();
 
-        let merkle_root = calculate_tx_merkle_root(&vec![one_transaction.clone()]);
-        let witness_merkle_root = calculate_witness_merkle_root(&vec![one_transaction.clone()]);
+        let merkle_root = calculate_tx_merkle_root(&[one_transaction.clone()]);
+        let witness_merkle_root = calculate_witness_merkle_root(&[one_transaction]);
 
         assert_ne!(merkle_root, witness_merkle_root);
     }
