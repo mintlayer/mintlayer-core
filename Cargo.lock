@@ -2170,6 +2170,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintlayer-test"
+version = "0.1.0"
+dependencies = [
+ "node",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3972,6 +3981,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
+ "parking_lot 0.12.0",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
