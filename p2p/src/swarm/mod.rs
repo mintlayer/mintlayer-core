@@ -124,7 +124,7 @@ where
                                 response
                                     .send(Err(P2pError::PeerExists))
                                     .map_err(|_| P2pError::ChannelClosed)
-                            },
+                            }
                             None => {
                                 log::warn!("peer count: {:?}", self.peers.len());
                                 log::info!(
@@ -145,6 +145,7 @@ where
                     }
                 }
             }
+            event::SwarmEvent::Disconnect(peer_id) => self.disconnect_peer(peer_id).await,
             event::SwarmEvent::GetPeerCount(response) => {
                 response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
@@ -261,7 +262,7 @@ where
     }
 
     /// Destroy peer information and close all connections to it
-    async fn destroy_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    async fn disconnect_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
         log::debug!("destroying peer {:?}", peer_id);
 
         self.tx_sync
@@ -285,14 +286,14 @@ where
 
                 if self.peers.get(&peer_id).is_some() {
                     log::error!("peer {:?} re-established connection", peer_id);
-                    return self.destroy_peer(peer_id).await;
+                    return self.disconnect_peer(peer_id).await;
                 }
 
                 if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
                     log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
                     // TODO: save peer information for later?
                     // TODO: i.e., consider this a peer discovery event?
-                    return self.destroy_peer(peer_id).await;
+                    return self.disconnect_peer(peer_id).await;
                 }
 
                 if peer_info.magic_bytes != *self.config.magic_bytes() {
@@ -320,14 +321,14 @@ where
 
                 if self.peers.get(&peer_id).is_some() {
                     log::error!("peer {:?} re-established connection", peer_id);
-                    return self.destroy_peer(peer_id).await;
+                    return self.disconnect_peer(peer_id).await;
                 }
 
                 if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
                     log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
                     // TODO: save peer information for later?
                     // TODO: i.e., consider this a peer discovery event?
-                    return self.destroy_peer(peer_id).await;
+                    return self.disconnect_peer(peer_id).await;
                 }
 
                 if peer_info.magic_bytes != *self.config.magic_bytes() {

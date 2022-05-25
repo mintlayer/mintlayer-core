@@ -51,7 +51,7 @@ pub struct MockService;
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T>
