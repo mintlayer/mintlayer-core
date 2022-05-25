@@ -44,13 +44,11 @@ impl BlockHeader {
         self.time
     }
 
-    pub fn block_reward_destinations() -> Option<Vec<TxOutput>> {
-        /* TODO(Roy): Block rewards should be part of the ConsensusData object; they're optional too
-           meaning: When someone mines and creates the ConsensusData object, they also specify the
-           output, to which the reward goes. We may or may not restrict the number of outputs,
-           but initially it doesn't matter
-        */
-        todo!();
+    pub fn block_reward_destinations(&self) -> Option<&[TxOutput]> {
+        match &self.consensus_data {
+            ConsensusData::None => None,
+            ConsensusData::PoW(pow_data) => Some(pow_data.outputs()),
+        }
     }
 }
 
