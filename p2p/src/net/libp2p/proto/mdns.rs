@@ -60,7 +60,7 @@ mod tests {
     use crate::net::{
         self,
         libp2p::{proto::util, Libp2pService},
-        NetworkService,
+        NetworkingService,
     };
     use futures::{FutureExt, StreamExt};
     use libp2p::{

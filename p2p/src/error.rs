@@ -14,9 +14,11 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use thiserror::Error;
 
+// TODO: think about which errors should be returned and when
 // TODO: store peerid where appropriate!
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     DifferentNetwork,
     InvalidVersion,
@@ -29,31 +31,64 @@ pub enum ProtocolError {
 }
 
 // TODO: refactor error code
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum Libp2pError {
+    #[error("NoiseError: `{0:?}`")]
     NoiseError(String),
+    #[error("TransportError: `{0:?}`")]
     TransportError(String),
+    #[error("DialError: `{0:?}`")]
     DialError(String),
+    #[error("SubscriptionError: `{0:?}`")]
     SubscriptionError(String),
+    #[error("PublishError: `{0:?}`")]
     PublishError(String),
+    #[error("IdentifyError: `{0:?}`")]
     IdentifyError(String),
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum P2pError {
+    #[error("SocketError: `{0:?}`")]
     SocketError(std::io::ErrorKind),
+    #[error("PeerDisconnected")]
     PeerDisconnected,
+    #[error("DecodeFailure: `{0:?}`")]
     DecodeFailure(String),
+    #[error("ProtocolError: `{0:?}`")]
     ProtocolError(ProtocolError),
+    #[error("TimeError: `{0:?}`")]
     TimeError(String),
+    #[error("Libp2pError: `{0:?}`")]
     Libp2pError(Libp2pError),
+    #[error("Unknown: `{0:?}`")]
     Unknown(String),
+    #[error("ChannelClosed")]
     ChannelClosed,
+    #[error("NoPeers")]
     NoPeers,
+    #[error("PeerDoesntExist")]
     PeerDoesntExist,
+    #[error("InvalidAddress")]
+    InvalidAddress,
+    #[error("InvalidData")]
+    InvalidData,
+    #[error("PeerExists")]
+    PeerExists,
+    #[error("SubsystemFailure")]
+    SubsystemFailure,
+    #[error("ConsensusError: `{0:?}`")]
+    ConsensusError(consensus::ConsensusError),
+    #[error("DatabaseFailure")]
+    DatabaseFailure,
 }
 
+// TODO: move this to src/lib.rs
 pub type Result<T> = core::result::Result<T, P2pError>;
+
+pub trait FatalError {
+    fn map_fatal_err(self) -> core::result::Result<(), P2pError>;
+}
 
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {
@@ -128,6 +163,18 @@ impl From<libp2p::gossipsub::error::PublishError> for P2pError {
     }
 }
 
+impl From<subsystem::subsystem::CallError> for P2pError {
+    fn from(e: subsystem::subsystem::CallError) -> P2pError {
+        P2pError::ChannelClosed
+    }
+}
+
+impl From<consensus::ConsensusError> for P2pError {
+    fn from(e: consensus::ConsensusError) -> P2pError {
+        P2pError::ConsensusError(e)
+    }
+}
+
 impl std::fmt::Display for ProtocolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
@@ -158,3 +205,6 @@ impl std::fmt::Display for ProtocolError {
         }
     }
 }
+
+// impl std::fmt::Display for ProtocolError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

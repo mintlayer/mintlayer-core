@@ -40,6 +40,8 @@ mod processing_tests;
 mod reorgs_tests;
 #[cfg(test)]
 mod signature_tests;
+#[cfg(test)]
+mod syncing_tests;
 
 pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
 pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";

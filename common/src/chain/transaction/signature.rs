@@ -166,15 +166,16 @@ mod test {
     use crypto::key::{KeyKind, PrivateKey};
     use std::vec;
 
+    // This is required because we can't access private fields of the Transaction class
     #[derive(Debug, Clone, PartialEq, Eq)]
-    struct TransactionUpdater {
+    struct MutableTransaction {
         pub flags: u32,
         pub inputs: Vec<TxInput>,
         pub outputs: Vec<TxOutput>,
         pub lock_time: u32,
     }
 
-    impl TryFrom<&Transaction> for TransactionUpdater {
+    impl TryFrom<&Transaction> for MutableTransaction {
         type Error = &'static str;
 
         fn try_from(tx: &Transaction) -> Result<Self, Self::Error> {
@@ -187,7 +188,7 @@ mod test {
         }
     }
 
-    impl TransactionUpdater {
+    impl MutableTransaction {
         fn generate_tx(&self) -> Result<Transaction, TransactionCreationError> {
             Transaction::new(
                 self.flags,
@@ -412,6 +413,7 @@ mod test {
         );
     }
 
+    // TODO: Add checks for other sighash types
     #[test]
     fn sign_modify_then_verify() {
         // Create and sign tx, and then modify and verify it.
@@ -428,7 +430,7 @@ mod test {
         assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
 
         // Should failed due to changed flags
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         tx_updater.flags = 1234567890;
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -436,7 +438,7 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         // Should failed due to changed lock_time
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         tx_updater.lock_time = 1234567890;
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -444,7 +446,7 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         // Should failed due to add a new input
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         let outpoinr_source_id =
             OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
 
@@ -459,7 +461,7 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         // Should failed due to change in witness
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         let signature = match tx_updater.inputs[0].get_witness() {
             InputWitness::Standard(signature) => {
                 // Let's change around 20ish last bytes, it's also avoided SCALE errors
@@ -489,7 +491,7 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         // Should failed due to add a new output
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_updater.outputs.push(TxOutput::new(
             Amount::from_atoms(1234567890),
@@ -501,7 +503,7 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         // Should failed due to change in output value
-        let mut tx_updater = TransactionUpdater::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         tx_updater.outputs[0] = TxOutput::new(
             (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
             tx_updater.outputs[0].get_destination().clone(),

@@ -1,0 +1,19 @@
+[package]
+name = "mintlayer-test"
+version = "0.1.0"
+edition = "2021"
+homepage = "https://github.com/mintlayer/mintlayer-core/issues"
+license = "MIT"
+
+[dependencies]
+node = { path = "../node" }
+
+tokio = { version = "1.0", features = ['full'] }
+
+[dev-dependencies]
+thiserror = "1.0"
+
+[[test]]
+name = "functional"
+path = "runner/functional.rs"
+harness = false

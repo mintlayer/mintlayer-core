@@ -83,8 +83,7 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
 
 impl Activate for UpgradeVersion {}
 
-
-impl<T:Ord + Copy> NetUpgrades<T> {
+impl<T: Ord + Copy> NetUpgrades<T> {
     #[allow(dead_code)]
     pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> anyhow::Result<Self> {
         let mut upgrades = upgrades;
@@ -93,7 +92,7 @@ impl<T:Ord + Copy> NetUpgrades<T> {
         match upgrades.first() {
             Some(&(height, _)) if height == BlockHeight::zero() =>
                 Ok(Self(upgrades)),
-                _ => 
+                _ =>
                 Err(anyhow::Error::msg("NetUpgrades must be initialized with a nonempty vector of upgrades with an upgrade at genesis"))
         }
     }
@@ -105,7 +104,6 @@ impl<T:Ord + Copy> NetUpgrades<T> {
     pub fn len(&self) -> usize {
         self.0.len()
     }
-
 
     pub fn height_range(&self, version: T) -> Option<(BlockHeight, BlockHeight)> {
         let res = self
@@ -188,7 +186,7 @@ mod tests {
         let two_height = BlockHeight::new(3500);
         let three_height = BlockHeight::new(80000);
 
-       upgrades.push((zero_height, MockVersion::Zero));
+        upgrades.push((zero_height, MockVersion::Zero));
 
         upgrades.push((three_height, MockVersion::Three));
 
@@ -196,7 +194,11 @@ mod tests {
 
         upgrades.push((two_height, MockVersion::Two));
 
-        (NetUpgrades::initialize(upgrades).expect("valid net upgrade"), two_height, three_height)
+        (
+            NetUpgrades::initialize(upgrades).expect("valid net upgrade"),
+            two_height,
+            three_height,
+        )
     }
 
     #[test]
@@ -217,7 +219,6 @@ mod tests {
         assert!(MockVersion::Three.is_activated(three_height, &upgrades));
         assert!(MockVersion::Three.is_activated(BlockHeight::max(), &upgrades));
     }
-
 
     #[test]
     fn check_upgrade_versions() {
