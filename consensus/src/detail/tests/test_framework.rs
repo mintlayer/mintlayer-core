@@ -121,6 +121,11 @@ impl<'a> BlockTestFramework {
     }
 
     #[allow(dead_code)]
+    pub(in crate::detail::tests) fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
+        self.consensus.blockchain_storage.get_block_index(id).ok().flatten().unwrap()
+    }
+
+    #[allow(dead_code)]
     pub(in crate::detail::tests) fn debug_print_chains(
         &self,
         blocks: Vec<Id<Block>>,

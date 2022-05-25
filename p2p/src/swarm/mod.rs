@@ -19,7 +19,7 @@
 use crate::{
     error::{self, P2pError, ProtocolError},
     event,
-    net::{self, ConnectivityService, NetworkService},
+    net::{self, ConnectivityService, NetworkingService},
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
@@ -37,14 +37,14 @@ const MAX_ACTIVE_CONNECTIONS: usize = 32;
 #[derive(Debug)]
 struct PeerContext<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     info: net::PeerInfo<T>,
 }
 
 enum PeerAddrInfo<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     Raw {
         /// Hashset of IPv4 addresses
@@ -55,9 +55,9 @@ where
     },
 }
 
-pub struct SwarmManager<T>
+pub struct PeerManager<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Chain config
     config: Arc<ChainConfig>,
@@ -72,21 +72,21 @@ where
     discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
 
     /// RX channel for receiving control events
-    rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+    rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
 
     /// TX channel for sending events to SyncManager
     tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
 }
 
-impl<T> SwarmManager<T>
+impl<T> PeerManager<T>
 where
-    T: NetworkService + 'static,
+    T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
-        rx_swarm: mpsc::Receiver<event::SwarmControlEvent<T>>,
+        rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
@@ -102,10 +102,10 @@ where
     /// Handle swarm control event
     async fn on_swarm_control_event(
         &mut self,
-        event: Option<event::SwarmControlEvent<T>>,
+        event: Option<event::SwarmEvent<T>>,
     ) -> error::Result<()> {
         match event.ok_or(P2pError::ChannelClosed)? {
-            event::SwarmControlEvent::Connect { addr } => {
+            event::SwarmEvent::Connect(addr) => {
                 log::debug!(
                     "try to establish outbound connection to peer at address {:?}",
                     addr
@@ -125,6 +125,9 @@ where
                         log::error!("failed to establish outbound connection: {:?}", err);
                         err
                     })
+            }
+            event::SwarmEvent::GetPeerCount(response) => {
+                response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
         }
     }
@@ -240,7 +243,7 @@ where
         log::debug!("destroying peer {:?}", peer_id);
 
         self.tx_sync
-            .send(event::SyncControlEvent::Disconnected { peer_id })
+            .send(event::SyncControlEvent::Disconnected(peer_id))
             .await
             .map_err(P2pError::from)?;
         self.peers.remove(&peer_id);
@@ -285,7 +288,7 @@ where
 
                 self.peers.insert(peer_id, PeerContext { info: peer_info });
                 self.tx_sync
-                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .send(event::SyncControlEvent::Connected(peer_id))
                     .await
                     .map_err(P2pError::from)
             }
@@ -320,7 +323,7 @@ where
 
                 self.peers.insert(peer_id, PeerContext { info: peer_info });
                 self.tx_sync
-                    .send(event::SyncControlEvent::Connected { peer_id })
+                    .send(event::SyncControlEvent::Connected(peer_id))
                     .await
                     .map_err(P2pError::from)
             }
@@ -332,7 +335,7 @@ where
         }
     }
 
-    /// SwarmManager event loop
+    /// PeerManager event loop
     pub async fn run(&mut self) -> error::Result<()> {
         loop {
             tokio::select! {
@@ -365,9 +368,9 @@ mod tests {
     async fn make_swarm_manager<T>(
         addr: T::Address,
         config: Arc<common::chain::ChainConfig>,
-    ) -> SwarmManager<T>
+    ) -> PeerManager<T>
     where
-        T: NetworkService + 'static,
+        T: NetworkingService + 'static,
         T::ConnectivityHandle: ConnectivityService<T>,
     {
         let (conn, _, _) = T::start(
@@ -388,7 +391,7 @@ mod tests {
             }
         });
 
-        SwarmManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
+        PeerManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
     }
 
     // try to connect to an address that no one listening on and verify it fails
@@ -400,9 +403,7 @@ mod tests {
 
         let addr: SocketAddr = "[::1]:1".parse().unwrap();
         assert_eq!(
-            swarm
-                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
-                .await,
+            swarm.on_swarm_control_event(Some(event::SwarmEvent::Connect(addr))).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
     }
@@ -419,9 +420,7 @@ mod tests {
                 .parse()
                 .unwrap();
         assert_eq!(
-            swarm
-                .on_swarm_control_event(Some(event::SwarmControlEvent::Connect { addr }))
-                .await,
+            swarm.on_swarm_control_event(Some(event::SwarmEvent::Connect(addr))).await,
             Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
         );
     }
@@ -443,12 +442,12 @@ mod tests {
         // check that peer with `id` has the correct ipv4 and ipv6 addresses
         let check_peer =
             |discovered: &HashMap<
-                <Libp2pService as NetworkService>::PeerId,
+                <Libp2pService as NetworkingService>::PeerId,
                 PeerAddrInfo<Libp2pService>,
             >,
              id: libp2p::PeerId,
-             ip4: Vec<Arc<<Libp2pService as NetworkService>::Address>>,
-             ip6: Vec<Arc<<Libp2pService as NetworkService>::Address>>| {
+             ip4: Vec<Arc<<Libp2pService as NetworkingService>::Address>>,
+             ip6: Vec<Arc<<Libp2pService as NetworkingService>::Address>>| {
                 let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
                     PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
                 };
@@ -600,7 +599,6 @@ mod tests {
         );
     }
 
-    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_outbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(
@@ -610,18 +608,11 @@ mod tests {
         .await;
         let mut swarm2 = make_swarm_manager::<Libp2pService>(
             test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(config::create_custom(
-                Some(ChainType::Testnet),
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some([1, 2, 3, 4]),
-                None,
-                None,
-                None,
-            )),
+            Arc::new(
+                common::chain::config::TestChainConfig::new()
+                    .with_magic_bytes([1, 2, 3, 4])
+                    .build(),
+            ),
         )
         .await;
         let addr = swarm2.handle.local_addr().clone();
@@ -659,7 +650,6 @@ mod tests {
         assert_eq!(swarm2.on_network_event(conn2_res).await, Ok(()));
     }
 
-    #[cfg(feature = "testing")]
     #[tokio::test]
     async fn connect_inbound_different_network() {
         let mut swarm1 = make_swarm_manager::<Libp2pService>(
@@ -669,18 +659,11 @@ mod tests {
         .await;
         let mut swarm2 = make_swarm_manager::<Libp2pService>(
             test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(config::create_custom(
-                Some(ChainType::Testnet),
-                None,
-                None,
-                None,
-                None,
-                None,
-                Some([1, 2, 3, 4]),
-                None,
-                None,
-                None,
-            )),
+            Arc::new(
+                common::chain::config::TestChainConfig::new()
+                    .with_magic_bytes([1, 2, 3, 4])
+                    .build(),
+            ),
         )
         .await;
         let addr = swarm2.handle.local_addr().clone();

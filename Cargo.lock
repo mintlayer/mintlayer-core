@@ -654,6 +654,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "crypto",
+ "itertools",
  "jsonrpsee",
  "logging",
  "mockall",
@@ -2169,6 +2170,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mintlayer-test"
+version = "0.1.0"
+dependencies = [
+ "node",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2371,6 +2381,7 @@ dependencies = [
  "consensus",
  "jsonrpsee",
  "logging",
+ "p2p",
  "rpc",
  "strum",
  "subsystem",
@@ -2525,18 +2536,26 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "blockchain-storage",
  "common",
+ "consensus",
+ "crypto",
  "futures",
  "futures-timer",
  "itertools",
+ "jsonrpsee",
+ "lazy_static",
  "libp2p",
  "logging",
  "parity-scale-codec",
  "portpicker",
  "rand 0.8.5",
+ "rpc",
  "serialization",
  "sscanf",
+ "subsystem",
  "test-utils",
+ "thiserror",
  "tokio",
  "void",
 ]
@@ -3962,6 +3981,7 @@ dependencies = [
  "mio",
  "num_cpus",
  "once_cell",
+ "parking_lot 0.12.0",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",

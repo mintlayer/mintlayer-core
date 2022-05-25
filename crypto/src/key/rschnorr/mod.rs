@@ -194,6 +194,7 @@ mod test {
     use super::*;
     use crate::random::make_true_rng;
     use hex::ToHex;
+    use parity_scale_codec::DecodeAll;
     use tari_crypto::tari_utilities::message_format::MessageFormat;
 
     #[test]
@@ -230,8 +231,8 @@ mod test {
         let (sk, pk) = MLRistrettoPrivateKey::new(&mut rng);
         let sk_encoded = sk.encode();
         let pk_encoded = pk.encode();
-        let sk2 = MLRistrettoPrivateKey::decode(&mut sk_encoded.as_slice()).unwrap();
-        let pk2 = MLRistrettoPublicKey::decode(&mut pk_encoded.as_slice()).unwrap();
+        let sk2 = MLRistrettoPrivateKey::decode_all(&mut sk_encoded.as_slice()).unwrap();
+        let pk2 = MLRistrettoPublicKey::decode_all(&mut pk_encoded.as_slice()).unwrap();
         assert_eq!(sk, sk2);
         assert_eq!(pk, pk2);
     }
@@ -262,8 +263,8 @@ mod test {
             "802a3830ebfd6658f7201d3330194abbfaf803f1b364876de518c61f9edba99526"
         );
 
-        let sk2 = MLRistrettoPrivateKey::decode(&mut sk_encoded.as_slice()).unwrap();
-        let pk2 = MLRistrettoPublicKey::decode(&mut pk_encoded.as_slice()).unwrap();
+        let sk2 = MLRistrettoPrivateKey::decode_all(&mut sk_encoded.as_slice()).unwrap();
+        let pk2 = MLRistrettoPublicKey::decode_all(&mut pk_encoded.as_slice()).unwrap();
         assert_eq!(sk, sk2);
         assert_eq!(pk, pk2);
     }

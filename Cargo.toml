@@ -26,7 +26,7 @@ members = [
   "wallet",        # wallet executable
   "utils",         # various utilities
   "utxo",         # various utilities
-#  "test",          # integration tests
+  "test",          # integration tests
 ]
 
 default-members = [

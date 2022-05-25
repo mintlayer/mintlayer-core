@@ -124,6 +124,9 @@ pub enum BlockError {
     Conversion(String),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
+    #[error("Block {0:?} already exists")]
+    BlockAlreadyExists(Id<Block>),
+    // To be expanded
 }
 
 impl From<blockchain_storage::Error> for BlockError {

@@ -24,7 +24,7 @@ use p2p::{
     net::{
         self,
         libp2p::{Libp2pConnectivityHandle, Libp2pDiscoveryStrategy, Libp2pService},
-        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
+        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
         PubSubTopic,
     },
 };
