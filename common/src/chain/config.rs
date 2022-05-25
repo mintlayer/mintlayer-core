@@ -39,11 +39,8 @@ pub enum ChainType {
 pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
-    #[allow(dead_code)]
     rpc_port: u16,
-    #[allow(dead_code)]
     p2p_port: u16,
-    #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
@@ -79,6 +76,18 @@ impl ChainConfig {
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
+    }
+
+    pub fn p2p_port(&self) -> u16 {
+        self.p2p_port
+    }
+
+    pub fn rpc_port(&self) -> u16 {
+        self.rpc_port
+    }
+
+    pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
+        &self.height_checkpoint_data
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
