@@ -48,11 +48,11 @@ fn create_utxo_data(
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
                 index as u32,
-                random_witness(),
+                nosig_random_witness(),
             ),
             TxOutput::new(
                 (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(),
+                anyonecanspend_address(),
             ),
         ))
     } else {
@@ -100,20 +100,16 @@ fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, T
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 
-fn random_witness() -> InputWitness {
+fn nosig_random_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
-    let mut witness: Vec<u8> = (1..100).collect();
-    witness.shuffle(&mut rng);
+    let mut data: Vec<u8> = (1..100).collect();
+    data.shuffle(&mut rng);
 
-    InputWitness::Standard(StandardInputSignature::new(
-        SigHashType::try_from(SigHashType::ALL).unwrap(),
-        witness,
-    ))
+    InputWitness::NoSignature(Some(data))
 }
 
-fn random_address() -> Destination {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    Destination::PublicKey(pub_key)
+fn anyonecanspend_address() -> Destination {
+    Destination::AnyoneCanSpend
 }
 
 pub async fn start_consensus(
