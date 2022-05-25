@@ -101,6 +101,16 @@ where
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
+
+    pub async fn get_connected_peers(&self) -> error::Result<Vec<String>> {
+        let (tx, rx) = oneshot::channel();
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::GetConnectedPeers(tx))
+            .await
+            .map_err(P2pError::from)?;
+        rx.await.map_err(P2pError::from)
+    }
 }
 
 #[allow(unused)]

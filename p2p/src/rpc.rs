@@ -37,6 +37,10 @@ trait P2pRpc {
     /// Get peer ID of the local node
     #[method(name = "get_peer_id")]
     async fn get_peer_id(&self) -> rpc::Result<String>;
+
+    /// Get peer IDs of connected peers
+    #[method(name = "get_connected_peers")]
+    async fn get_connected_peers(&self) -> rpc::Result<Vec<String>>;
 }
 
 #[async_trait::async_trait]
@@ -65,6 +69,11 @@ where
 
     async fn get_peer_id(&self) -> rpc::Result<String> {
         let res = self.call_async(|this| Box::pin(this.get_peer_id())).await;
+        handle_error(res)
+    }
+
+    async fn get_connected_peers(&self) -> rpc::Result<Vec<String>> {
+        let res = self.call_async(|this| Box::pin(this.get_connected_peers())).await;
         handle_error(res)
     }
 }
