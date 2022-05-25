@@ -152,6 +152,9 @@ where
             event::SwarmEvent::GetBindAddress(response) => response
                 .send(self.handle.local_addr().to_string())
                 .map_err(|_| P2pError::ChannelClosed),
+            event::SwarmEvent::GetPeerId(response) => response
+                .send(self.handle.peer_id().to_string())
+                .map_err(|_| P2pError::ChannelClosed),
         }
     }
 

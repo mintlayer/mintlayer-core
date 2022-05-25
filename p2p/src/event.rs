@@ -35,6 +35,9 @@ pub enum SwarmEvent<T: NetworkingService> {
 
     /// Get the bind address of the local node
     GetBindAddress(oneshot::Sender<String>),
+
+    /// Get peer ID of the local node
+    GetPeerId(oneshot::Sender<String>),
 }
 
 #[derive(Debug)]

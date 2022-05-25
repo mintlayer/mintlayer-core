@@ -48,6 +48,7 @@ pub struct P2pInterface<T: NetworkingService> {
     p2p: P2P<T>,
 }
 
+// TODO: reduce code duplication?
 impl<T> P2pInterface<T>
 where
     T: NetworkingService,
@@ -56,6 +57,8 @@ where
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
+        <T as NetworkingService>::PeerId: FromStr,
+        <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
     {
         let (tx, rx) = oneshot::channel();
         self.p2p
@@ -84,6 +87,16 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetBindAddress(tx))
+            .await
+            .map_err(P2pError::from)?;
+        rx.await.map_err(P2pError::from)
+    }
+
+    pub async fn get_peer_id(&self) -> error::Result<String> {
+        let (tx, rx) = oneshot::channel();
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::GetPeerId(tx))
             .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
@@ -194,6 +207,8 @@ where
     T::PubSubHandle: PubSubService<T>,
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
+    <T as NetworkingService>::PeerId: FromStr,
+    <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
         p2p: P2P::new(bind_addr, chain_config, consensus_handle).await?,
