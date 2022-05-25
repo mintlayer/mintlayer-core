@@ -115,7 +115,7 @@ fn create_mainnet_genesis() -> Block {
     let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
         &mut genesis_mint_pubkeyhash_encoded.as_slice(),
     )
-    .expect("Decoding genesis mint destination shouldn't failed");
+    .expect("Decoding genesis mint destination shouldn't fail");
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
