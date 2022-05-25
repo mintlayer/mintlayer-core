@@ -19,8 +19,7 @@ use crate::detail::*;
 use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_unit_test_config;
-use common::chain::signature::inputsig::{InputWitness, StandardInputSignature};
-use common::chain::signature::sighashtype::SigHashType;
+use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
@@ -39,6 +38,9 @@ mod events_tests;
 mod processing_tests;
 #[cfg(test)]
 mod reorgs_tests;
+
+#[cfg(test)]
+mod signature_tests;
 
 pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
 pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
@@ -67,17 +69,6 @@ fn empty_witness() -> InputWitness {
     let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(&mut rng);
     InputWitness::NoSignature(Some(msg))
-}
-
-fn random_witness() -> InputWitness {
-    let mut rng = rand::thread_rng();
-    let mut witness: Vec<u8> = (1..100).collect();
-    witness.shuffle(&mut rng);
-
-    InputWitness::Standard(StandardInputSignature::new(
-        SigHashType::try_from(SigHashType::ALL).unwrap(),
-        witness,
-    ))
 }
 
 fn anyonecanspend_address() -> Destination {
