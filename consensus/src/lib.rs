@@ -32,7 +32,7 @@ use common::{
 use consensus_interface::ConsensusInterface;
 pub use consensus_interface_impl::ConsensusInterfaceImpl;
 pub use detail::BlockError;
-use detail::Consensus;
+pub use detail::{BlockSource, Consensus};
 
 #[derive(Debug)]
 pub enum ConsensusEvent {

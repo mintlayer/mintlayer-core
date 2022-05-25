@@ -26,7 +26,7 @@ pub mod mock;
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddrInfo<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Unique ID of the peer
     pub id: T::PeerId,
@@ -41,7 +41,7 @@ where
 #[derive(Debug)]
 pub struct PeerInfo<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Unique ID of the peer
     pub peer_id: T::PeerId,
@@ -64,7 +64,7 @@ where
 #[derive(Debug)]
 pub enum ConnectivityEvent<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Outbound connection accepted
     ConnectionAccepted {
@@ -122,7 +122,7 @@ where
 #[derive(Debug)]
 pub enum PubSubEvent<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Message received from a PubSub topic
     MessageReceived {
@@ -135,7 +135,7 @@ where
 #[derive(Debug)]
 pub enum SyncingMessage<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     Request {
         peer_id: T::PeerId,
@@ -167,10 +167,10 @@ pub enum ValidationResult {
     Ignore,
 }
 
-/// `NetworkService` provides the low-level network interface
+/// `NetworkingService` provides the low-level network interface
 /// that each network service provider must implement
 #[async_trait]
-pub trait NetworkService {
+pub trait NetworkingService {
     /// Generic socket address that the underlying implementation uses
     ///
     /// # Examples
@@ -196,21 +196,21 @@ pub trait NetworkService {
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
 
-    /// Handle for sending/receiving floodsub-related events
+    /// Handle for sending/receiving pubsub-related events
     type PubSubHandle: Send;
 
     // TODO:
-    type SyncingHandle: Send;
+    type SyncingCodecHandle: Send;
 
     /// Unique ID assigned to each pubsub message
-    type MessageId: Send + Clone;
+    type MessageId: Send + Clone + Debug;
 
     /// Initialize the network service provider
     ///
     /// # Arguments
     /// `bind_addr` - socket address for incoming P2P traffic
     /// `strategies` - list of strategies that are used for peer discovery
-    /// `topics` - list of floodsub topics that the implementation should subscribe to
+    /// `topics` - list of pubsub topics that the implementation should subscribe to
     /// `timeout` - timeout for outbound connections
     async fn start(
         bind_addr: Self::Address,
@@ -221,7 +221,7 @@ pub trait NetworkService {
     ) -> error::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingHandle,
+        Self::SyncingCodecHandle,
     )>;
 }
 
@@ -231,7 +231,7 @@ pub trait NetworkService {
 #[async_trait]
 pub trait ConnectivityService<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     /// Connect to a remote node
     ///
@@ -264,13 +264,13 @@ where
 }
 
 /// PubSubService provides an interface through which objects can send
-/// and receive floodsub-related events to/from the network service provider
+/// and receive pubsub-related events to/from the network service provider
 #[async_trait]
 pub trait PubSubService<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
-    /// Publish data in a given floodsub topic
+    /// Publish data in a given pubsub topic
     ///
     /// # Arguments
     /// `topic` - identifier for the topic
@@ -290,9 +290,9 @@ where
 }
 
 #[async_trait]
-pub trait SyncingService<T>
+pub trait SyncingCodecService<T>
 where
-    T: NetworkService,
+    T: NetworkingService,
 {
     // TODO:
     async fn send_request(

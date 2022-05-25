@@ -22,7 +22,9 @@ use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
 use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
-use common::chain::block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block};
+use common::chain::block::{
+    calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader,
+};
 use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
@@ -39,10 +41,11 @@ mod error;
 pub use error::*;
 mod pow;
 
-type PeerId = u32;
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
 type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
+
+const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 mod spend_cache;
 use spend_cache::CachedInputs;
@@ -60,7 +63,7 @@ pub struct Consensus {
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum BlockSource {
-    Peer(PeerId),
+    Peer,
     Local,
 }
 
@@ -167,6 +170,11 @@ impl Consensus {
         Ok(result)
     }
 
+    // TODO: used to check block size + other preliminary check before giving the block to process_block
+    pub fn preliminary_block_check(&self, _block: Block) -> Result<(), BlockError> {
+        Ok(())
+    }
+
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
         let consensus_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
@@ -205,6 +213,100 @@ impl Consensus {
         // Reasonable reduce amount of calls to DB
         let block = consensus_ref.db_tx.get_block(id).map_err(BlockError::from)?;
         Ok(block)
+    }
+
+    pub fn get_block_index(&self, id: &Id<Block>) -> Result<Option<BlockIndex>, BlockError> {
+        self.make_ro_db_tx().db_tx.get_block_index(id).map_err(BlockError::from)
+    }
+
+    pub fn get_header_from_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<BlockHeader>, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        let id = consensus_ref
+            .db_tx
+            .get_block_id_by_height(height)?
+            .ok_or(BlockError::NotFound)?;
+        Ok(consensus_ref
+            .db_tx
+            .get_block_index(&id)?
+            .map(|block_index| block_index.into_block_header()))
+    }
+
+    pub fn get_locator(&self) -> Result<Vec<BlockHeader>, BlockError> {
+        let id = self.get_best_block_id()?.ok_or(BlockError::NotFound)?;
+        let height = self.get_block_height_in_main_chain(&id)?.ok_or(BlockError::NotFound)?;
+
+        let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
+            .take_while(|i| (height - BlockDistance::new(*i)).is_some())
+            .map(|i| {
+                self.get_header_from_height(
+                    &(height - BlockDistance::new(i)).expect("distance to be valid"),
+                )
+            });
+
+        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+    }
+
+    // TODO: use `ConsensusRef::is_block_in_main_chain()` implementation instead, how?
+    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
+        let consensus_ref = self.make_ro_db_tx();
+        let height = block_index.get_block_height();
+        let id_at_height =
+            consensus_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+        Ok(id_at_height.map_or(false, |id| id == *block_index.get_block_id()))
+    }
+
+    pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
+        // use genesis block if no common ancestor with better block height is found
+        let mut best = BlockHeight::new(0);
+
+        for header in locator.iter() {
+            if let Some(block_index) = self.get_block_index(&header.get_id())? {
+                if self.is_block_in_main_chain(&block_index)? {
+                    best = block_index.get_block_height();
+                    break;
+                }
+            }
+        }
+
+        // get headers until either the best block or header limit is reached
+        let limit = std::cmp::min(
+            (best + HEADER_LIMIT).ok_or(BlockError::Unknown)?,
+            self.get_block_height_in_main_chain(
+                &self.get_best_block_id()?.expect("best block to exist"),
+            )?
+            .expect("best block's height to exist"),
+        );
+
+        let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
+            .take_while(|height| height <= &limit)
+            .map(|height| self.get_header_from_height(&height));
+        itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+    }
+
+    pub fn filter_already_existing_blocks(
+        &self,
+        headers: Vec<BlockHeader>,
+    ) -> Result<Vec<BlockHeader>, BlockError> {
+        // verify that the first block attaches to our chain
+        match headers.get(0).ok_or(BlockError::Unknown)?.get_prev_block_id() {
+            None => return Err(BlockError::PrevBlockInvalid),
+            Some(id) => {
+                if self.get_block_index(id)?.is_none() {
+                    return Err(BlockError::NotFound);
+                }
+            }
+        }
+
+        for (num, header) in headers.iter().enumerate() {
+            if self.get_block_index(&header.get_id())?.is_none() {
+                return Ok(headers[num..].to_vec());
+            }
+        }
+
+        Ok(vec![])
     }
 }
 
@@ -574,7 +676,9 @@ impl<'a> ConsensusRef<'a> {
     fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
         if self.db_tx.get_block_index(block_index.get_block_id())?.is_some() {
-            return Err(BlockError::Unknown);
+            return Err(BlockError::BlockAlreadyExists(
+                block_index.get_block_id().clone(),
+            ));
         }
         // TODO: Will be expanded
         Ok(())

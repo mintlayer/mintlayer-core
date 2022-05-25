@@ -94,7 +94,7 @@ mod tests {
     use crate::net::{
         self,
         libp2p::{proto::util, Libp2pService},
-        NetworkService,
+        NetworkingService,
     };
     use common::chain::block::{consensus_data::ConsensusData, Block};
     use futures::{FutureExt, StreamExt};

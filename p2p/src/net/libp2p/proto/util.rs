@@ -21,8 +21,8 @@ use crate::{
         self,
         libp2p::sync::*,
         libp2p::{backend::Backend, types},
-        ConnectivityEvent, ConnectivityService, NetworkService, PubSubEvent, PubSubService,
-        PubSubTopic, SyncingMessage, SyncingService,
+        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
+        PubSubTopic, SyncingCodecService, SyncingMessage,
     },
 };
 use async_trait::async_trait;
