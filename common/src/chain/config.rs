@@ -192,6 +192,36 @@ pub fn create_mainnet() -> ChainConfig {
     }
 }
 
+// TODO: use builder type?
+#[allow(clippy::too_many_arguments)]
+#[cfg(features = "testing")]
+pub fn create_custom(
+    chain_type: Option<ChainType>,
+    address_prefix: Option<String>,
+    rpc_port: Option<u16>,
+    p2p_port: Option<u16>,
+    height_checkpoint_data: Option<BTreeMap<BlockHeight, HashType>>,
+    net_upgrades: Option<NetUpgrades<UpgradeVersion>>,
+    magic_bytes: Option<[u8; 4]>,
+    genesis_block: Option<Block>,
+    version: Option<SemVer>,
+    blockreward_maturity: Option<BlockDistance>,
+) -> ChainConfig {
+    ChainConfig {
+        chain_type: chain_type.unwrap_or(ChainType::Mainnet),
+        address_prefix: address_prefix.unwrap_or_else(|| MAINNET_ADDRESS_PREFIX.to_owned()),
+        height_checkpoint_data: height_checkpoint_data.unwrap_or_default(),
+        net_upgrades: net_upgrades.unwrap_or_default(),
+        rpc_port: rpc_port.unwrap_or(15234),
+        p2p_port: p2p_port.unwrap_or(8978),
+        magic_bytes: magic_bytes.unwrap_or([0x1a, 0x64, 0xe5, 0xf1]),
+        genesis_block: genesis_block
+            .unwrap_or_else(|| create_unit_test_genesis(Destination::AnyoneCanSpend)),
+        version: version.unwrap_or_else(|| SemVer::new(0, 1, 0)),
+        blockreward_maturity: blockreward_maturity.unwrap_or(MAINNET_BLOCKREWARD_MATURITY),
+    }
+}
+
 pub fn create_unit_test_config() -> ChainConfig {
     ChainConfig {
         chain_type: ChainType::Mainnet,
@@ -245,7 +275,7 @@ impl TestChainConfig {
             rpc_port: 15234,
             p2p_port: 8978,
             magic_bytes: self.magic_bytes,
-            genesis_block: create_mainnet_genesis(),
+            genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
         }

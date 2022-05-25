@@ -32,8 +32,6 @@ pub enum BlockError {
     InvariantErrorInvalidTip,
     #[error("Failed to find previous block in non-genesis setting")]
     InvariantErrorPrevBlockNotFound,
-    #[error("Block already exists")]
-    BlockAlreadyExists,
     #[error("Only genesis can have no previous block")]
     InvalidBlockNoPrevBlock,
     #[error("Block has an invalid merkle root")]
