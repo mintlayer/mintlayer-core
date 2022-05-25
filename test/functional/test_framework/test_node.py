@@ -35,6 +35,7 @@ from .util import (
     rpc_url,
     wait_until_helper,
     p2p_port,
+    p2p_url,
     EncodeDecimal,
 )
 
@@ -96,6 +97,7 @@ class TestNode():
 
         # Calculate RPC address to be passed into the command line
         rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
+        p2p_addr = p2p_url(self.index)
 
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
@@ -105,6 +107,7 @@ class TestNode():
             # TODO: change the following to regtest once we have one
             "--net=mainnet",
             "--rpc-addr={}".format(rpc_addr),
+            "--p2p-addr={}".format(p2p_addr),
             #"-X",
             #"-datadir=" + self.datadir,
             #"-logtimemicros",
