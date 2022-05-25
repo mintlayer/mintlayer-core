@@ -1,7 +1,5 @@
-use crypto::key::KeyKind;
-use crypto::key::PrivateKey;
+use hex::FromHex;
 
-use crate::address::pubkeyhash::PublicKeyHash;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
@@ -39,7 +37,6 @@ pub enum ChainType {
 
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
-    #[allow(dead_code)]
     chain_type: ChainType,
     address_prefix: String,
     #[allow(dead_code)]
@@ -48,15 +45,10 @@ pub struct ChainConfig {
     p2p_port: u16,
     #[allow(dead_code)]
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
-    #[allow(dead_code)]
     net_upgrades: NetUpgrades<UpgradeVersion>,
-    #[allow(dead_code)]
     magic_bytes: [u8; 4],
-    #[allow(dead_code)]
     genesis_block: Block,
-    #[allow(dead_code)]
     blockreward_maturity: BlockDistance,
-    #[allow(dead_code)]
     version: SemVer,
 }
 
@@ -113,8 +105,17 @@ fn create_mainnet_genesis() -> Block {
     use crate::primitives::Amount;
 
     // TODO: replace this with our mint key
-    let (_mint_priv_key, mint_pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let genesis_mint_receiver_pubkeyhash = PublicKeyHash::from(&mint_pub_key);
+    // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
+    // Pubub key:  "008090f5aee58be97ce2f7c014fa97ffff8c459a0c491f8124950724a187d134e25c"
+    // Public key hash:  "8640e6a3d3d53c7dffe2790b0e147c9a77197033"
+    // Destination:  "008640e6a3d3d53c7dffe2790b0e147c9a77197033"
+    let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
+    let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
+        .expect("Hex decoding of pubkeyhash shouldn't fail");
+    let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
+        &mut genesis_mint_pubkeyhash_encoded.as_slice(),
+    )
+    .expect("Decoding genesis mint destination shouldn't failed");
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
@@ -125,7 +126,7 @@ fn create_mainnet_genesis() -> Block {
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
-        Destination::Address(genesis_mint_receiver_pubkeyhash),
+        genesis_mint_destination,
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
