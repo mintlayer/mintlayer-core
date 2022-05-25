@@ -111,13 +111,12 @@ class ExampleTest(BitcoinTestFramework):
         them to self.nodes, connect them and then sync."""
 
         self.setup_nodes()
-        self.connect_nodes(0, 1)
 
         # In this test, we're not connecting node2 to node0 or node1. Calls to
         # sync_all() should not include node2, since we're not expecting it to
         # sync.
-        # TODO: Re-enable connecting nodes
-        #self.sync_all(self.nodes[0:2])
+        self.connect_nodes(0, 1)
+        self.log.info(self.nodes[0:2])
 
     # Use setup_nodes() to customize the node start behaviour (for example if
     # you don't want to start all nodes at the start of the test).
