@@ -40,6 +40,8 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
 
   build_ubuntu:
     runs-on: ubuntu-latest
@@ -61,6 +63,8 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
 
   build_macos:
     runs-on: macos-latest
@@ -82,3 +86,5 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    - name: Run functional tests
+      run: cargo test --release -p mintlayer-test --test functional -- --ignored
