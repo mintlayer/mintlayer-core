@@ -184,8 +184,10 @@ impl<'a> CachedInputs<'a> {
             let tx_index = prev_tx_index_op
                 .get_tx_index()
                 .ok_or(BlockError::PreviouslyCachedInputNotFound)?;
+
+            use common::chain::SpendablePosition;
             let input_outpoint_script = match tx_index.get_position() {
-                common::chain::SpendablePosition::Transaction(tx_pos) => {
+                SpendablePosition::Transaction(tx_pos) => {
                     let prev_tx = self
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
@@ -200,18 +202,15 @@ impl<'a> CachedInputs<'a> {
                         })?;
                     output.get_destination().clone()
                 }
-                common::chain::SpendablePosition::BlockReward(_reward_pos) => {
+                SpendablePosition::BlockReward(_reward_pos) => {
                     // TODO(Roy): fill this with the block reward that the user now is spending
                     todo!()
                 }
             };
 
-            common::chain::transaction::signature::verify_signature(
-                &input_outpoint_script,
-                tx,
-                input_idx,
-            )
-            .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
+            use common::chain::transaction::signature::verify_signature;
+            verify_signature(&input_outpoint_script, tx, input_idx)
+                .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
         }
 
         Ok(())
