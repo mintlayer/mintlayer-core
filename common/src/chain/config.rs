@@ -12,9 +12,6 @@ use crate::primitives::BlockDistance;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
-#[allow(dead_code)]
-type HashType = Id<Block>;
-
 #[derive(
     Debug,
     Copy,
@@ -164,7 +161,7 @@ pub fn create_mainnet() -> ChainConfig {
     ChainConfig {
         chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
         net_upgrades: NetUpgrades::initialize(upgrades).expect("Should not fail"),
         rpc_port: 15234,
         p2p_port: 8978,
@@ -179,7 +176,7 @@ pub fn create_unit_test_config() -> ChainConfig {
     ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
         net_upgrades: NetUpgrades::unit_tests(),
         rpc_port: 15234,
         p2p_port: 8978,
@@ -223,7 +220,7 @@ impl TestChainConfig {
         ChainConfig {
             chain_type: ChainType::Mainnet,
             address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-            height_checkpoint_data: BTreeMap::<BlockHeight, HashType>::new(),
+            height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
             net_upgrades: self.net_upgrades,
             rpc_port: 15234,
             p2p_port: 8978,
