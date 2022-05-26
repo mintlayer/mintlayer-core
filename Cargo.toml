@@ -18,7 +18,6 @@ members = [
   "script",        # bitcoin script and its interfaces
   "logging",       # logging engine and its interfaces
   "p2p",           # p2p communication interfaces and protocols
-  "network",       # network abstractions and their implementations
   "rpc",           # rpc abstraction and implementation
   "serialization", # serialization interfaces and implementations
   "subsystem",     # Utilities for working with concurrent subsystems
@@ -37,7 +36,6 @@ default-members = [
   "script",
   "logging",
   "p2p",
-  "network",
   "rpc",
   "serialization",
   "subsystem",
@@ -57,7 +55,6 @@ consensus = { path = "consensus"}
 script = { path = "script"}
 logging = { path = "logging"}
 p2p = { path = "p2p"}
-network = { path = "network"}
 rpc = { path = "rpc"}
 serialization = { path = "serialization"}
 utxo = { path = "utxo"}
