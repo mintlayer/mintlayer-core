@@ -55,6 +55,10 @@ pub enum TransactionSigError {
     ProducingSignatureFailed(crypto::key::SignatureError),
     #[error("Private key does not match with spender public key")]
     SpendeePrivatePublicKeyMismatch,
+    #[error("AnyoneCanSpend should not use standard signatures, this place should be unreachable")]
+    AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+    #[error("AnyoneCanSpend should not use standard signatures, so producing a signature for it is not possible")]
+    AttemptedToProduceSignatureForAnyoneCanSpend,
     #[error("Unsupported yet!")]
     Unsupported,
 }
