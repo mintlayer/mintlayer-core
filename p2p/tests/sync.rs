@@ -28,6 +28,7 @@ use common::{
 };
 use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use crypto::random::Rng;
+use futures::FutureExt;
 use p2p::{
     error::P2pError,
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
@@ -1375,4 +1376,150 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         pubsub.try_recv(),
         Ok(PubSubControlEvent::InitialBlockDownloadDone),
     );
+}
+
+// connect two nodes, they are in sync so no blocks are downloaded
+// then disconnect them, add more blocks to remote chains and reconnect the nodes
+// verify that local node downloads the blocks and after that they are in sync
+#[tokio::test]
+async fn test_connect_disconnect_resyncing() {
+    let config = Arc::new(common::chain::config::create_unit_test_config());
+    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let mgr1_handle = handle1.clone();
+    let mgr2_handle = handle2.clone();
+
+    let (mut mgr1, mut conn1, _, mut pubsub, _) =
+        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
+            .await;
+    let (mut mgr2, mut conn2, _, _, _) =
+        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
+            .await;
+
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+
+    // ensure that only a header request is received from the remote and
+    // as the nodes are tracking the same chain, no further messages are exchanged
+    let (res1, res2) = tokio::join!(
+        process_header_request(&mut mgr2, &mgr2_handle),
+        advance_mgr_state(&mut mgr1)
+    );
+
+    assert_eq!(res1, Ok(()));
+    assert_eq!(res2, Ok(()));
+
+    assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
+    assert_eq!(mgr1.state(), &SyncState::Idle);
+
+    assert_eq!(mgr1.unregister_peer(*conn2.peer_id()), Ok(()));
+    assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
+    assert_eq!(conn2.disconnect(*conn1.peer_id()).await, Ok(()));
+
+    let parent = mgr1_handle
+        .call(move |this| {
+            let id = this.get_best_block_id().unwrap();
+            this.get_block(id)
+        })
+        .await
+        .unwrap()
+        .unwrap();
+    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 7);
+    util::import_blocks(&mgr2_handle, blocks.clone()).await;
+
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
+
+    let handle = tokio::spawn(async move {
+        for i in 0..9 {
+            let event = mgr1.handle_mut().poll_next().await.unwrap();
+            mgr1.on_syncing_event(event).await.unwrap();
+            mgr1.check_state().await.unwrap();
+        }
+
+        mgr1
+    });
+
+    for i in 0..9 {
+        match mgr2.handle_mut().poll_next().await.unwrap() {
+            net::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request:
+                    Message {
+                        msg:
+                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
+                                locator,
+                            })),
+                        magic,
+                    },
+            } => {
+                let headers =
+                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                mgr2.handle_mut()
+                    .send_response(
+                        request_id,
+                        Message {
+                            magic,
+                            msg: MessageType::Syncing(SyncingMessage::Response(
+                                SyncingResponse::Headers { headers },
+                            )),
+                        },
+                    )
+                    .await
+                    .unwrap()
+            }
+            net::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request:
+                    Message {
+                        msg:
+                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
+                                block_ids,
+                            })),
+                        magic,
+                    },
+            } => {
+                assert_eq!(block_ids.len(), 1);
+                let id = block_ids[0].clone();
+                let blocks = vec![mgr2_handle
+                    .call(move |this| this.get_block(id))
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap()];
+                mgr2.handle_mut()
+                    .send_response(
+                        request_id,
+                        Message {
+                            magic,
+                            msg: MessageType::Syncing(SyncingMessage::Response(
+                                SyncingResponse::Blocks { blocks },
+                            )),
+                        },
+                    )
+                    .await
+                    .unwrap();
+            }
+            net::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response:
+                    Message {
+                        msg:
+                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
+                                headers,
+                            })),
+                        magic,
+                    },
+            } => {}
+            msg => panic!("invalid message received: {:?}", msg),
+        }
+    }
+
+    let mut mgr1 = handle.await.unwrap();
+    mgr1.check_state().await.unwrap();
+
+    assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
+    assert_eq!(mgr1.state(), &SyncState::Idle);
 }
