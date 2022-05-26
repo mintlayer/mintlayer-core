@@ -32,6 +32,7 @@ from .util import (
     get_datadir_path,
     initialize_datadir,
     p2p_port,
+    p2p_url,
     wait_until_helper,
 )
 
@@ -558,19 +559,21 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         self.nodes[i].process.wait(timeout)
 
     def connect_nodes(self, a, b):
-        from_connection = self.nodes[a]
-        to_connection = self.nodes[b]
-        ip_port = "127.0.0.1:" + str(p2p_port(b))
-        from_connection.addnode(ip_port, "onetry")
-        # poll until version handshake complete to avoid race conditions
-        # with transaction relaying
-        # See comments in net_processing:
-        # * Must have a version message before anything else
-        # * Must have a verack message before anything else
-        wait_until_helper(lambda: all(peer['version'] != 0 for peer in from_connection.getpeerinfo()))
-        wait_until_helper(lambda: all(peer['version'] != 0 for peer in to_connection.getpeerinfo()))
-        wait_until_helper(lambda: all(peer['bytesrecv_per_msg'].pop('verack', 0) == 24 for peer in from_connection.getpeerinfo()))
-        wait_until_helper(lambda: all(peer['bytesrecv_per_msg'].pop('verack', 0) == 24 for peer in to_connection.getpeerinfo()))
+        id_a = self.nodes[a].p2p_get_peer_id()
+        id_b = self.nodes[b].p2p_get_peer_id()
+
+        addr_a = p2p_url(a) + "/p2p/" + id_a
+        ret = self.nodes[b].p2p_connect(addr_a)
+        peers_a = self.nodes[a].p2p_get_connected_peers()
+        peers_b = self.nodes[b].p2p_get_connected_peers()
+
+        if id_a not in peers_b or id_b not in peers_a:
+            raise AssertionError(
+                "peers not connected to each other: peer a peers {}, peer b peers {}"
+            .format(
+                peers_a,
+                peers_b
+            ))
 
     def disconnect_nodes(self, a, b):
         def disconnect_nodes_helper(from_connection, node_num):
@@ -652,11 +655,11 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         timeout = int(timeout * self.options.timeout_factor)
         stop_time = time.time() + timeout
         while time.time() <= stop_time:
-            best_hash = [x.getbestblockhash() for x in rpc_connections]
+            best_hash = [x.consensus_best_block_id() for x in rpc_connections]
             if best_hash.count(best_hash[0]) == len(rpc_connections):
                 return
             # Check that each peer has at least one connection
-            assert (all([len(x.getpeerinfo()) for x in rpc_connections]))
+            assert (all([x.p2p_get_peer_count() for x in rpc_connections]))
             time.sleep(wait)
         raise AssertionError("Block sync timed out after {}s:{}".format(
             timeout,
@@ -688,7 +691,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
     def sync_all(self, nodes=None):
         self.sync_blocks(nodes)
-        self.sync_mempools(nodes)
+        # self.sync_mempools(nodes)
 
     def wait_until(self, test_function, timeout=60):
         return wait_until_helper(test_function, timeout=timeout, timeout_factor=self.options.timeout_factor)
