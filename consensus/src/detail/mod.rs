@@ -142,6 +142,22 @@ impl Consensus {
         }
     }
 
+    fn process_orphans(&mut self, last_processed_block: &Id<Block>) {
+        let orphan_processing_result: Result<(), BlockError> = self
+            .orphan_blocks
+            .take_all_children_of(last_processed_block)
+            .into_iter()
+            .try_for_each(|blk| {
+                let _ = self.process_block(blk, BlockSource::Local);
+                Ok(())
+            });
+
+        match orphan_processing_result {
+            Ok(_) => {}
+            Err(e) => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+        }
+    }
+
     pub fn process_block(
         &mut self,
         block: Block,
@@ -155,17 +171,19 @@ impl Consensus {
         let block_index = consensus_ref.accept_block(&block);
         if let Err(ref block_index_err) = block_index {
             if *block_index_err == BlockError::Orphan {
-                if BlockSource::Local == block_source {
-                    // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
+                if block_source == BlockSource::Local {
                     consensus_ref.new_orphan_block(block)?;
                 }
                 return Err(BlockError::Orphan);
             }
         }
-        let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
+        let result = consensus_ref.activate_best_chain(block_index?, best_block_id.clone())?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
-        // TODO: after finishing, we attempt to process orphans
+
         self.broadcast_new_tip_event(&result);
+
+        self.process_orphans(&block.get_id());
+
         Ok(result)
     }
 
