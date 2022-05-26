@@ -89,8 +89,10 @@ impl StandardInputSignature {
             }
             Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
             Destination::AnyoneCanSpend => {
-                // AnyoneCanSpend must use InputWitness::NoSignature
-                return Err(TransactionSigError::InvalidSignatureEncoding);
+                // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
+                return Err(
+                    TransactionSigError::AttemptedToVerifyStandardSignatureForAnyoneCanSpend,
+                );
             }
         }
         Ok(())
@@ -114,7 +116,11 @@ impl StandardInputSignature {
                 sig.encode()
             }
             Destination::ScriptHash(_) => return Err(TransactionSigError::Unsupported),
-            Destination::AnyoneCanSpend => vec![],
+
+            Destination::AnyoneCanSpend => {
+                // AnyoneCanSpend must use InputWitness::NoSignature, so this is unreachable
+                return Err(TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend);
+            }
         };
         Ok(Self {
             sighash_type,
