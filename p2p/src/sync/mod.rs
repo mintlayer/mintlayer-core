@@ -36,7 +36,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     sync::Arc,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 pub mod peer;
 
@@ -352,7 +352,7 @@ where
         );
         log::trace!("headers: {:#?}", headers);
 
-        if headers.len() > 2000 {
+        if headers.len() > HEADER_LIMIT {
             // TODO: ban peer
             log::error!(
                 "peer sent {} headers while the maximum is {}",
@@ -613,11 +613,12 @@ where
                             peer_id
                         );
                         self.unregister_peer(peer_id);
-                        return self
-                            .tx_swarm
-                            .send(event::SwarmEvent::Disconnect(peer_id))
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_swarm
+                            .send(event::SwarmEvent::Disconnect(peer_id, tx))
                             .await
-                            .map_err(P2pError::from);
+                            .map_err(P2pError::from)?;
+                        return rx.await.map_err(P2pError::from)?;
                     }
 
                     match request.request_type {
@@ -1074,10 +1075,12 @@ mod tests {
                 }
             }
 
+            let (tx, rx) = oneshot::channel();
             assert!(std::matches!(
                 swarm_rx.try_recv(),
-                Ok(SwarmEvent::Disconnect(peer2_id))
+                Ok(SwarmEvent::Disconnect(peer2_id, tx))
             ));
+            assert_eq!(rx.await, Ok(()));
         });
 
         for i in 0..4 {

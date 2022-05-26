@@ -26,6 +26,10 @@ trait P2pRpc {
     #[method(name = "connect")]
     async fn connect(&self, addr: String) -> rpc::Result<()>;
 
+    /// Disconnect peer
+    #[method(name = "disconnect")]
+    async fn disconnect(&self, peer_id: String) -> rpc::Result<()>;
+
     /// Get the number of peers
     #[method(name = "get_peer_count")]
     async fn get_peer_count(&self) -> rpc::Result<usize>;
@@ -54,6 +58,11 @@ where
 {
     async fn connect(&self, addr: String) -> rpc::Result<()> {
         let res = self.call_async_mut(|this| Box::pin(this.connect(addr))).await;
+        handle_error(res)
+    }
+
+    async fn disconnect(&self, peer_id: String) -> rpc::Result<()> {
+        let res = self.call_async_mut(|this| Box::pin(this.disconnect(peer_id))).await;
         handle_error(res)
     }
 

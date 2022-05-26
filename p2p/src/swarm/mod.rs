@@ -145,7 +145,9 @@ where
                     }
                 }
             }
-            event::SwarmEvent::Disconnect(peer_id) => self.disconnect_peer(peer_id).await,
+            event::SwarmEvent::Disconnect(peer_id, response) => response
+                .send(self.disconnect_peer(peer_id).await)
+                .map_err(|_| P2pError::ChannelClosed),
             event::SwarmEvent::GetPeerCount(response) => {
                 response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
