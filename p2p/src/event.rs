@@ -28,7 +28,7 @@ pub enum SwarmEvent<T: NetworkingService> {
     Connect(T::Address, oneshot::Sender<error::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(T::PeerId),
+    Disconnect(T::PeerId, oneshot::Sender<error::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot::Sender<usize>),
