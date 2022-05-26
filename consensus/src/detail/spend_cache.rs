@@ -225,8 +225,11 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            if let OutPointSourceId::BlockReward(block_id) = outpoint.get_tx_id() {
-                self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+            match outpoint.get_tx_id() {
+                OutPointSourceId::Transaction(_) => {}
+                OutPointSourceId::BlockReward(block_id) => {
+                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+                }
             }
 
             let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
