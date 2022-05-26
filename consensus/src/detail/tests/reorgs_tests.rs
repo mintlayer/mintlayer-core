@@ -44,9 +44,9 @@ fn test_reorg_simple() {
         );
 
         // Process the second block
-        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
-        let new_id = Some(block.get_id());
-        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+        let block_first = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let new_id = Some(block_first.get_id());
+        consensus.process_block(block_first.clone(), BlockSource::Local).unwrap();
         assert_eq!(
             consensus
                 .blockchain_storage
@@ -56,9 +56,10 @@ fn test_reorg_simple() {
         );
 
         // Process the parallel block and choose the better one
-        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block_second = produce_test_block(consensus.chain_config.genesis_block(), false);
+        assert_ne!(block_first.get_id(), block_second.get_id());
         // let new_id = Some(block.get_id());
-        assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+        consensus.process_block(block_second.clone(), BlockSource::Local).unwrap();
         assert_ne!(
             consensus
                 .blockchain_storage
@@ -75,7 +76,7 @@ fn test_reorg_simple() {
         );
 
         // Produce another block that cause reorg
-        let new_block = produce_test_block(&block, false);
+        let new_block = produce_test_block(&block_second, false);
         let new_id = Some(new_block.get_id());
         assert!(consensus.process_block(new_block, BlockSource::Local).is_ok());
         assert_eq!(

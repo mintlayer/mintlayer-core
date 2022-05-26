@@ -26,10 +26,26 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum BlockError {
-    #[error("Unknown error")]
-    Unknown,
     #[error("Orphan")]
     Orphan,
+    #[error("Invariant error: Attempted to connected block that isn't on the tip")]
+    InvariantErrorInvalidTip,
+    #[error("Failed to find previous block in non-genesis setting")]
+    InvariantErrorPrevBlockNotFound,
+    #[error("Only genesis can have no previous block")]
+    InvalidBlockNoPrevBlock,
+    #[error("Block has an invalid merkle root")]
+    MerkleRootMismatch,
+    #[error("Block has an invalid witness merkle root")]
+    WitnessMerkleRootMismatch,
+    #[error("Previous block time must be equal or lower")]
+    BlockTimeOrderInvalid,
+    #[error("Block from the future")]
+    BlockFromTheFuture,
+    #[error("Block size is too large")]
+    BlockTooLarge,
+    #[error("Block storage error `{0}`")]
+    StorageError(blockchain_storage::Error),
     #[error("Invalid block height `{0}`")]
     InvalidBlockHeight(BlockHeight),
     #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
@@ -53,8 +69,11 @@ pub enum BlockError {
     OutputAlreadyPresentInInputsCache,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
-    #[error("Output index out of range")]
-    OutputIndexOutOfRange,
+    #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
+    OutputIndexOutOfRange {
+        tx_id: Option<Spender>,
+        source_output_index: usize,
+    },
     #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
     MissingOutputOrSpentOutputErased,
     #[error("Double-spend attempt")]
@@ -73,6 +92,8 @@ pub enum BlockError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
+    #[error("Signature verification failed in transaction with id: {0:?}")]
+    SignatureVerificationFailed(Id<Transaction>),
     #[error("Transaction index found but transaction not found")]
     InvariantErrorTransactionCouldNotBeLoaded,
     #[error("Input addition error")]
@@ -107,10 +128,10 @@ pub enum BlockError {
 }
 
 impl From<blockchain_storage::Error> for BlockError {
-    fn from(_err: blockchain_storage::Error) -> Self {
+    fn from(err: blockchain_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
-        BlockError::Unknown
+        BlockError::StorageError(err)
     }
 }
 
@@ -119,7 +140,13 @@ impl From<SpendError> for BlockError {
         match err {
             SpendError::AlreadySpent(spender) => BlockError::DoubleSpendAttempt(spender),
             SpendError::AlreadyUnspent => BlockError::InvariantBrokenAlreadyUnspent,
-            SpendError::OutOfRange => BlockError::OutputIndexOutOfRange,
+            SpendError::OutOfRange {
+                tx_id,
+                source_output_index,
+            } => BlockError::OutputIndexOutOfRange {
+                tx_id,
+                source_output_index,
+            },
         }
     }
 }

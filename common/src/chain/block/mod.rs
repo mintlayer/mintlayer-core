@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
+
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::{Id, Idable, H256};
@@ -40,30 +41,30 @@ pub enum BlockConsistencyError {
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
 ) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
-    if transactions.is_empty() {
-        return Ok(None);
-    }
-    if transactions.len() == 1 {
-        // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-        return Ok(Some(transactions[0].get_id().get()));
-    }
-    let hashes: Vec<H256> = transactions.iter().map(|tx| tx.get_id().get()).collect();
-    let t = merkle::merkletree_from_vec(&hashes)?;
-    Ok(Some(t.root()))
+    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.get_id().get();
+    calculate_generic_merkle_root(&TX_HASHER, transactions)
 }
 
 pub fn calculate_witness_merkle_root(
     transactions: &[Transaction],
 ) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
+    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.get_serialized_hash().get();
+    calculate_generic_merkle_root(&TX_HASHER, transactions)
+}
+
+fn calculate_generic_merkle_root(
+    tx_hasher: &fn(&Transaction) -> H256,
+    transactions: &[Transaction],
+) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
     if transactions.is_empty() {
         return Ok(None);
     }
-    // TODO: provide implementation based on real serialization instead of get_id()
+
     if transactions.len() == 1 {
-        // using bitcoin's way, blocks that only have the coinbase use their coinbase as the merkleroot
-        return Ok(Some(transactions[0].get_id().get()));
+        // using bitcoin's way, blocks that only have the coinbase (or a single tx in general) use their coinbase as the merkleroot
+        return Ok(Some(tx_hasher(&transactions[0])));
     }
-    let hashes: Vec<H256> = transactions.iter().map(|tx| tx.get_id().get()).collect();
+    let hashes: Vec<H256> = transactions.iter().map(tx_hasher).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
     Ok(Some(t.root()))
 }
@@ -236,7 +237,9 @@ impl Idable for Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::chain::transaction::Transaction;
+    use crate::chain::{
+        signature::inputsig::InputWitness, transaction::Transaction, OutPointSourceId, TxInput,
+    };
 
     use super::*;
     use crypto::random::{make_pseudo_rng, Rng};
@@ -284,6 +287,22 @@ mod tests {
         let res = calculate_tx_merkle_root(block.transactions()).unwrap();
         let res = res.unwrap();
         assert_eq!(res, one_transaction.get_id().get());
+    }
+
+    #[test]
+    fn tx_with_witness_always_different_merkle_witness_root() {
+        let inputs = vec![TxInput::new(
+            OutPointSourceId::Transaction(H256::random().into()),
+            0,
+            InputWitness::NoSignature(Some(b"abc".to_vec())),
+        )];
+
+        let one_transaction = Transaction::new(0, inputs, Vec::new(), 0).unwrap();
+
+        let merkle_root = calculate_tx_merkle_root(&[one_transaction.clone()]);
+        let witness_merkle_root = calculate_witness_merkle_root(&[one_transaction]);
+
+        assert_ne!(merkle_root, witness_merkle_root);
     }
 
     #[test]

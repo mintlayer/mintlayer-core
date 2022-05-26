@@ -14,16 +14,15 @@ pub enum ConsensusData {
 pub struct PoWData {
     bits: Compact,
     nonce: u128,
-    /// contains the block reward
-    outputs: Vec<TxOutput>,
+    reward_outputs: Vec<TxOutput>,
 }
 
 impl PoWData {
-    pub fn new(bits: Compact, nonce: u128, outputs: Vec<TxOutput>) -> Self {
+    pub fn new(bits: Compact, nonce: u128, reward_outputs: Vec<TxOutput>) -> Self {
         PoWData {
             bits,
             nonce,
-            outputs,
+            reward_outputs,
         }
     }
     pub fn bits(&self) -> Compact {
@@ -35,7 +34,7 @@ impl PoWData {
     }
 
     pub fn outputs(&self) -> &[TxOutput] {
-        &self.outputs
+        &self.reward_outputs
     }
 
     pub fn update_nonce(&mut self, nonce: u128) {

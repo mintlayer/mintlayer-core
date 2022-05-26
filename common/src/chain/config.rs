@@ -3,6 +3,7 @@ use hex::FromHex;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
+use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::ConsensusUpgrade;
 use crate::chain::upgrades::NetUpgrades;
@@ -107,7 +108,7 @@ const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
 fn create_mainnet_genesis() -> Block {
-    use crate::chain::transaction::{Destination, TxInput, TxOutput};
+    use crate::chain::transaction::{TxInput, TxOutput};
     use crate::primitives::Amount;
 
     // TODO: replace this with our mint key
@@ -134,6 +135,25 @@ fn create_mainnet_genesis() -> Block {
         Amount::from_atoms(100000000000000),
         genesis_mint_destination,
     );
+    let tx = Transaction::new(0, vec![input], vec![output], 0)
+        .expect("Failed to create genesis coinbase transaction");
+
+    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
+        .expect("Error creating genesis block")
+}
+
+fn create_unit_test_genesis(premine_destination: Destination) -> Block {
+    use crate::chain::transaction::{TxInput, TxOutput};
+    use crate::primitives::Amount;
+
+    let genesis_message = b"".to_vec();
+    let input = TxInput::new(
+        Id::<Transaction>::new(&H256::zero()).into(),
+        0,
+        InputWitness::NoSignature(Some(genesis_message)),
+    );
+
+    let output = TxOutput::new(Amount::from_atoms(100000000000000), premine_destination);
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
@@ -181,7 +201,7 @@ pub fn create_unit_test_config() -> ChainConfig {
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block: create_mainnet_genesis(),
+        genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
@@ -225,7 +245,7 @@ impl TestChainConfig {
             rpc_port: 15234,
             p2p_port: 8978,
             magic_bytes: self.magic_bytes,
-            genesis_block: create_mainnet_genesis(),
+            genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
         }

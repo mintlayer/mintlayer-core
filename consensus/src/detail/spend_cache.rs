@@ -15,6 +15,8 @@
 //
 // Author(s): S. Afach
 
+use common::chain::transaction::signature::verify_signature;
+use common::chain::SpendablePosition;
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
@@ -90,11 +92,19 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn get_from_cached(
+    fn get_from_cached_mut(
         &mut self,
         outpoint: &OutPoint,
     ) -> Result<&mut CachedInputsOperation, BlockError> {
         let result = match self.inputs.get_mut(&outpoint.get_tx_id()) {
+            Some(tx_index) => tx_index,
+            None => return Err(BlockError::PreviouslyCachedInputNotFound),
+        };
+        Ok(result)
+    }
+
+    fn get_from_cached(&self, outpoint: &OutPoint) -> Result<&CachedInputsOperation, BlockError> {
+        let result = match self.inputs.get(&outpoint.get_tx_id()) {
             Some(tx_index) => tx_index,
             None => return Err(BlockError::PreviouslyCachedInputNotFound),
         };
@@ -121,7 +131,7 @@ impl<'a> CachedInputs<'a> {
 
     fn calculate_total_inputs(&self, tx: &Transaction) -> Result<Amount, BlockError> {
         let mut total = Amount::from_atoms(0);
-        for input in tx.get_inputs() {
+        for (_input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
             let tx_index = match self.inputs.get(&outpoint.get_tx_id()) {
                 Some(tx_index_op) => match tx_index_op {
@@ -139,7 +149,10 @@ impl<'a> CachedInputs<'a> {
                         Some(tx) => tx
                             .get_outputs()
                             .get(outpoint.get_output_index() as usize)
-                            .ok_or(BlockError::OutputIndexOutOfRange)?
+                            .ok_or(BlockError::OutputIndexOutOfRange {
+                                tx_id: Some(tx.get_id().into()),
+                                source_output_index: outpoint.get_output_index() as usize,
+                            })?
                             .get_value(),
                         None => return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded),
                     }
@@ -165,6 +178,69 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
+        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
+            let outpoint = input.get_outpoint();
+            let prev_tx_index_op = self.get_from_cached(outpoint)?;
+
+            let tx_index = prev_tx_index_op
+                .get_tx_index()
+                .ok_or(BlockError::PreviouslyCachedInputNotFound)?;
+
+            let input_outpoint_script = match tx_index.get_position() {
+                SpendablePosition::Transaction(tx_pos) => {
+                    let prev_tx = self
+                        .db_tx
+                        .get_mainchain_tx_by_position(tx_pos)
+                        .map_err(BlockError::from)?
+                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded)?;
+                    let output = prev_tx
+                        .get_outputs()
+                        .get(input.get_outpoint().get_output_index() as usize)
+                        .ok_or(BlockError::OutputIndexOutOfRange {
+                            tx_id: Some(tx.get_id().into()),
+                            source_output_index: outpoint.get_output_index() as usize,
+                        })?;
+                    output.get_destination().clone()
+                }
+                SpendablePosition::BlockReward(_reward_pos) => {
+                    // TODO(Roy): fill this with the block reward that the user now is spending
+                    todo!()
+                }
+            };
+
+            verify_signature(&input_outpoint_script, tx, input_idx)
+                .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
+        }
+
+        Ok(())
+    }
+
+    fn apply_spend(
+        &mut self,
+        tx: &Transaction,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<(), BlockError> {
+        for input in tx.get_inputs() {
+            let outpoint = input.get_outpoint();
+
+            match outpoint.get_tx_id() {
+                OutPointSourceId::Transaction(_) => {}
+                OutPointSourceId::BlockReward(block_id) => {
+                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+                }
+            }
+
+            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
+            prev_tx_index_op
+                .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
+                .map_err(BlockError::from)?;
+        }
+
+        Ok(())
+    }
+
     pub fn spend(
         &mut self,
         block: &Block,
@@ -172,6 +248,17 @@ impl<'a> CachedInputs<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
+        /*
+        TODO(Roy): Add consensus data's output(s) here to spendable in the database
+        Whether we want to create a separate function for that is up to you, however,
+        it seems it's a bad idea because it's the same stuff for transactions and
+        block rewards, and repeating code is bad. Maybe change tx_num to Option<usize>,
+        and then None would mean we're going for the block reward. OR... better, an enum.
+
+        Don't forget that users are not allowed to spend the block reward before blockreward_maturity
+        passes; the check is down there. Feel free to move stuff around.
+        */
+
         let tx = block
             .transactions()
             .get(tx_num)
@@ -185,19 +272,11 @@ impl<'a> CachedInputs<'a> {
         // check for attempted money printing
         self.check_inputs_amounts(tx)?;
 
+        // verify input signatures
+        self.verify_signatures(tx)?;
+
         // spend inputs of this transaction
-        for input in tx.get_inputs() {
-            let outpoint = input.get_outpoint();
-
-            if let OutPointSourceId::BlockReward(block_id) = outpoint.get_tx_id() {
-                self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
-            }
-
-            let prev_tx_index_op = self.get_from_cached(outpoint)?;
-            prev_tx_index_op
-                .spend(outpoint.get_output_index(), Spender::from(tx.get_id()))
-                .map_err(BlockError::from)?;
-        }
+        self.apply_spend(tx, spend_height, blockreward_maturity)?;
 
         // add the outputs of this transaction to the cache
         self.add_outputs(block, tx_num)?;
@@ -218,7 +297,7 @@ impl<'a> CachedInputs<'a> {
         for input in tx.get_inputs() {
             let outpoint = input.get_outpoint();
 
-            let input_tx_id_op = self.get_from_cached(outpoint)?;
+            let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
 
             // Mark input as unspend
             input_tx_id_op.unspend(outpoint.get_output_index()).map_err(BlockError::from)?;
