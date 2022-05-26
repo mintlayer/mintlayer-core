@@ -29,6 +29,10 @@ trait P2pRpc {
     /// Get the number of peers
     #[method(name = "get_peer_count")]
     async fn get_peer_count(&self) -> rpc::Result<usize>;
+
+    /// Get bind address of the local node
+    #[method(name = "get_bind_address")]
+    async fn get_bind_address(&self) -> rpc::Result<String>;
 }
 
 #[async_trait::async_trait]
@@ -45,6 +49,11 @@ where
 
     async fn get_peer_count(&self) -> rpc::Result<usize> {
         let res = self.call_async(|this| Box::pin(this.get_peer_count())).await;
+        handle_error(res)
+    }
+
+    async fn get_bind_address(&self) -> rpc::Result<String> {
+        let res = self.call_async(|this| Box::pin(this.get_bind_address())).await;
         handle_error(res)
     }
 }

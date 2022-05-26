@@ -43,10 +43,17 @@ pub mod peer;
 // TODO: from config? global constant?
 const HEADER_LIMIT: usize = 2000;
 
+// TODO: this comes from spec?
+const RETRY_LIMIT: usize = 3;
+
 // TODO: add more tests
 // TODO: split syncing into separate files
 // TODO: match against error in `run()` and deal with `ProtocolError`
 // TODO: use ensure
+// TODO: create better api for request/response codec
+// TODO: create helper function for creating requests/responses
+// TODO: cache locator and invalidate it when `NewTip` event is received
+// TODO: simplify code: remove code duplication, move code to submodules, add req/resp api, etc.
 
 // Define which errors are fatal for the sync manager as the error is bubbled
 // up to the main event loop which then decides how to act on errors.
@@ -70,6 +77,17 @@ impl<T> FatalError for error::Result<T> {
 
         Ok(())
     }
+}
+
+enum RequestType {
+    GetHeaders,
+    GetBlocks(Vec<Id<Block>>),
+}
+
+struct PendingRequest<T: NetworkingService> {
+    peer_id: T::PeerId,
+    request_type: RequestType,
+    retry_count: usize,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -108,6 +126,9 @@ where
     /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
 
+    /// TX channel for sending control events to swarm
+    tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
+
     /// TX channel for sending control events to pubsub
     tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
 
@@ -116,7 +137,9 @@ where
 
     /// Subsystem handle to Consensus
     consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
-    // TODO: cache locator and invalidate it when `NewTip` event is received
+
+    /// Pending requests
+    requests: HashMap<T::RequestId, PendingRequest<T>>,
 }
 
 // TODO: refactor this code
@@ -130,15 +153,18 @@ where
         handle: T::SyncingCodecHandle,
         consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
+        tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
         tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
             handle,
             rx_sync,
+            tx_swarm,
             tx_pubsub,
             consensus_handle,
             peers: Default::default(),
+            requests: HashMap::new(),
             state: SyncState::Uninitialized,
         }
     }
@@ -155,9 +181,10 @@ where
         &mut self,
         peer_id: T::PeerId,
         locator: Vec<BlockHeader>,
+        retry_count: usize,
     ) -> error::Result<()> {
-        // TODO: save request id somewhere?
-        let _request_id = self
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let request_id = self
             .handle
             .send_request(
                 peer_id,
@@ -169,6 +196,48 @@ where
                 },
             )
             .await?;
+        self.requests.insert(
+            request_id,
+            PendingRequest {
+                peer_id,
+                request_type: RequestType::GetHeaders,
+                retry_count,
+            },
+        );
+        peer.set_state(peer::PeerSyncState::UploadingHeaders);
+
+        Ok(())
+    }
+
+    pub async fn send_block_request(
+        &mut self,
+        peer_id: T::PeerId,
+        block_id: Id<Block>,
+        retry_count: usize,
+    ) -> error::Result<()> {
+        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let request_id = self
+            .handle
+            .send_request(
+                peer_id,
+                Message {
+                    magic: *self.config.magic_bytes(),
+                    msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
+                        block_ids: vec![block_id.clone()],
+                    })),
+                },
+            )
+            .await?;
+        self.requests.insert(
+            request_id,
+            PendingRequest {
+                peer_id,
+                request_type: RequestType::GetBlocks(vec![block_id.clone()]),
+                retry_count,
+            },
+        );
+        peer.set_state(peer::PeerSyncState::UploadingBlocks(block_id));
+
         Ok(())
     }
 
@@ -181,14 +250,14 @@ where
                 Err(P2pError::PeerExists)
             }
             Entry::Vacant(entry) => {
-                let locator = self.consensus_handle.call(move |this| this.get_locator()).await??;
+                let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
                 entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
-                self.send_header_request(peer_id, locator).await
+                self.send_header_request(peer_id, locator, 0).await
             }
         }
     }
 
-    pub async fn unregister_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    pub fn unregister_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
         log::info!("unregister peer {:?}", peer_id);
 
         self.peers.remove(&peer_id);
@@ -207,9 +276,7 @@ where
             locator
         );
 
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let headers = self.consensus_handle.call(move |this| this.get_headers(locator)).await??;
-
         self.handle
             .send_response(
                 request_id,
@@ -270,6 +337,7 @@ where
     }
 
     // TODO: get rid of the awful `set_state()` calls
+    // TODO: simplify this code massively
     async fn process_header_response(
         &mut self,
         peer_id: T::PeerId,
@@ -277,7 +345,7 @@ where
     ) -> error::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
-        log::debug!(
+        log::info!(
             "initialize peer {:?} state, headers: {:#?}",
             peer_id,
             headers
@@ -292,7 +360,6 @@ where
             );
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
-
         if headers.is_empty() {
             log::debug!("local node is in sync with peer {:?}", peer_id);
             peer.set_state(peer::PeerSyncState::Idle);
@@ -331,7 +398,6 @@ where
             prev_id = header.get_id();
         }
 
-        // TODO: fetch unique headers from chainstate
         let unknown_headers = self
             .consensus_handle
             .call(|this| this.filter_already_existing_blocks(headers))
@@ -339,9 +405,7 @@ where
 
         peer.register_header_response(&unknown_headers);
         if let Some(header) = peer.get_header_for_download() {
-            // TODO: create helper function for this message
-            // TODO: save request ids somewhere?
-            let _ = self
+            let request_id = self
                 .handle
                 .send_request(
                     peer_id,
@@ -354,8 +418,16 @@ where
                         )),
                     },
                 )
-                .await;
-            peer.set_state(peer::PeerSyncState::UploadingBlocks(header));
+                .await?;
+            self.requests.insert(
+                request_id,
+                PendingRequest {
+                    peer_id,
+                    request_type: RequestType::GetBlocks(vec![header.get_id()]),
+                    retry_count: 0,
+                },
+            );
+            peer.set_state(peer::PeerSyncState::UploadingBlocks(header.get_id()));
         } else {
             peer.set_state(peer::PeerSyncState::Idle);
         }
@@ -397,8 +469,7 @@ where
         let next_header = peer.register_block_response(&header);
         match next_header {
             Ok(Some(next_block)) => {
-                // TODO: save request ids somewhere?
-                let _ = self
+                let request_id = self
                     .handle
                     .send_request(
                         peer_id,
@@ -412,15 +483,22 @@ where
                         },
                     )
                     .await?;
-                peer.set_state(peer::PeerSyncState::UploadingBlocks(next_block));
+                self.requests.insert(
+                    request_id,
+                    PendingRequest {
+                        peer_id,
+                        request_type: RequestType::GetBlocks(vec![next_block.get_id()]),
+                        retry_count: 0,
+                    },
+                );
+                peer.set_state(peer::PeerSyncState::UploadingBlocks(next_block.get_id()));
                 Ok(())
             }
             Ok(None) => {
                 // last block from peer, ask if peer knows of any new headers
                 let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
                 peer.set_locator(locator.clone());
-                // TODO: save request ids somewhere?
-                let _ = self
+                let request_id = self
                     .handle
                     .send_request(
                         peer_id,
@@ -432,6 +510,14 @@ where
                         },
                     )
                     .await?;
+                self.requests.insert(
+                    request_id,
+                    PendingRequest {
+                        peer_id,
+                        request_type: RequestType::GetHeaders,
+                        retry_count: 0,
+                    },
+                );
                 peer.set_state(peer::PeerSyncState::UploadingHeaders);
                 Ok(())
             }
@@ -502,10 +588,64 @@ where
         }
     }
 
+    async fn process_error(
+        &mut self,
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        error: net::RequestResponseError,
+    ) -> error::Result<()> {
+        match error {
+            net::RequestResponseError::ConnectionClosed => {
+                self.unregister_peer(peer_id);
+            }
+            net::RequestResponseError::Timeout => {
+                if let Some(request) = self.requests.remove(&request_id) {
+                    log::warn!(
+                        "outbound request {:?} for peer {:?} timed out",
+                        request_id,
+                        peer_id
+                    );
+
+                    if request.retry_count == RETRY_LIMIT {
+                        log::error!(
+                            "peer {:?} failed to respond to request, close connection",
+                            peer_id
+                        );
+                        self.unregister_peer(peer_id);
+                        return self
+                            .tx_swarm
+                            .send(event::SwarmEvent::Disconnect(peer_id))
+                            .await
+                            .map_err(P2pError::from);
+                    }
+
+                    match request.request_type {
+                        RequestType::GetHeaders => {
+                            let locator =
+                                self.consensus_handle.call(|this| this.get_locator()).await??;
+                            self.send_header_request(peer_id, locator, request.retry_count + 1)
+                                .await?;
+                        }
+                        RequestType::GetBlocks(block_ids) => {
+                            assert_eq!(block_ids.len(), 1);
+                            self.send_block_request(
+                                peer_id,
+                                block_ids.get(0).expect("block id to exist").clone(),
+                                request.retry_count + 1,
+                            )
+                            .await?;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(&mut self, event: net::SyncingMessage<T>) -> error::Result<()> {
+    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> error::Result<()> {
         match event {
-            net::SyncingMessage::Request {
+            net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -521,7 +661,7 @@ where
                 );
                 self.process_request(peer_id, request_id, message).await
             }
-            net::SyncingMessage::Response {
+            net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -537,8 +677,13 @@ where
                 );
                 self.process_response(peer_id, message).await
             }
-            net::SyncingMessage::Request { peer_id, .. }
-            | net::SyncingMessage::Response { peer_id, .. } => {
+            net::SyncingEvent::Error {
+                peer_id,
+                request_id,
+                error,
+            } => self.process_error(peer_id, request_id, error).await,
+            net::SyncingEvent::Request { peer_id, .. }
+            | net::SyncingEvent::Response { peer_id, .. } => {
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 // TODO: disconnect peer and ban it
                 // TODO: send `Misbehaved` event to PeerManager
@@ -551,7 +696,7 @@ where
     async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
         match event {
             event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
-            event::SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id).await,
+            event::SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
         }
     }
 
@@ -578,7 +723,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        event::{PubSubControlEvent, SyncControlEvent},
+        event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
         net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
     };
     use consensus::make_consensus;
@@ -591,6 +736,7 @@ mod tests {
         T::ConnectivityHandle,
         mpsc::Sender<SyncControlEvent<T>>,
         mpsc::Receiver<PubSubControlEvent>,
+        mpsc::Receiver<SwarmEvent<T>>,
     )
     where
         T: NetworkingService,
@@ -599,6 +745,7 @@ mod tests {
     {
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
+        let (tx_swarm, rx_swarm) = mpsc::channel(16);
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
@@ -617,10 +764,18 @@ mod tests {
         .unwrap();
 
         (
-            SyncManager::<T>::new(Arc::clone(&config), sync, handle, rx_p2p_sync, tx_pubsub),
+            SyncManager::<T>::new(
+                Arc::clone(&config),
+                sync,
+                handle,
+                rx_p2p_sync,
+                tx_swarm,
+                tx_pubsub,
+            ),
             conn,
             tx_p2p_sync,
             rx_pubsub,
+            rx_swarm,
         )
     }
 
@@ -643,7 +798,7 @@ mod tests {
     // handle peer connection event
     #[tokio::test]
     async fn test_peer_connected() {
-        let (mut mgr, _, _, _) =
+        let (mut mgr, _, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
         assert_eq!(
@@ -656,7 +811,7 @@ mod tests {
     // handle peer disconnection event
     #[tokio::test]
     async fn test_peer_disconnected() {
-        let (mut mgr, _, _, _) =
+        let (mut mgr, _, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
         // send Connected event to SyncManager
@@ -685,9 +840,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_request_response() {
-        let (mut mgr1, mut conn1, _, _) =
+        let (mut mgr1, mut conn1, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-        let (mut mgr2, mut conn2, _, _) =
+        let (mut mgr2, mut conn2, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
         // connect the two managers together so that they can exchange messages
@@ -707,7 +862,7 @@ mod tests {
             .await
             .unwrap();
 
-        if let Ok(net::SyncingMessage::Request {
+        if let Ok(net::SyncingEvent::Request {
             peer_id,
             request_id,
             request,
@@ -742,9 +897,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_requests_and_responses() {
-        let (mut mgr1, mut conn1, _, _) =
+        let (mut mgr1, mut conn1, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
-        let (mut mgr2, mut conn2, _, _) =
+        let (mut mgr2, mut conn2, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
 
         // connect the two managers together so that they can exchange messages
@@ -779,7 +934,7 @@ mod tests {
             .unwrap();
 
         for i in 0..2 {
-            if let Ok(net::SyncingMessage::Request {
+            if let Ok(net::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -813,7 +968,7 @@ mod tests {
 
         let mut magic_seen = 0;
         for i in 0..2 {
-            if let Ok(net::SyncingMessage::Response {
+            if let Ok(net::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
@@ -840,5 +995,99 @@ mod tests {
         }
 
         assert_eq!(magic_seen, 2);
+    }
+
+    // receive getheaders before receiving `Connected` event from swarm manager
+    // which makes the request to be rejected and to time out in the sender end
+    #[tokio::test]
+    async fn test_out_of_order_events() {
+        let (mut mgr1, mut conn1, _, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+
+        // connect the two managers together so that they can exchange messages
+        connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+        let peer2_id = *conn2.peer_id();
+
+        tokio::spawn(async move {
+            mgr1.register_peer(peer2_id).await.unwrap();
+
+            match mgr1.handle.poll_next().await.unwrap() {
+                net::SyncingEvent::Error {
+                    peer_id,
+                    request_id,
+                    error,
+                } => {
+                    assert_eq!(error, net::RequestResponseError::Timeout);
+                    mgr1.process_error(peer_id, request_id, error).await.unwrap();
+                }
+                _ => panic!("invalid event received"),
+            }
+        });
+
+        assert!(std::matches!(
+            mgr2.handle.poll_next().await,
+            Ok(net::SyncingEvent::Request { .. })
+        ));
+        assert!(std::matches!(
+            mgr2.handle.poll_next().await,
+            Ok(net::SyncingEvent::Error { .. })
+        ));
+        assert!(std::matches!(
+            mgr2.handle.poll_next().await,
+            Ok(net::SyncingEvent::Request { .. })
+        ));
+    }
+
+    // verify that if after three retries the remote peer still
+    // hasn't responded to our request, the connection is closed
+    //
+    // marked as ignored as it takes quite a long time to complete
+    #[ignore]
+    #[tokio::test]
+    async fn request_timeout() {
+        let (mut mgr1, mut conn1, _, _, mut swarm_rx) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        let (mut mgr2, mut conn2, _, _, _) =
+            make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+
+        // connect the two managers together so that they can exchange messages
+        connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+        let peer2_id = *conn2.peer_id();
+
+        tokio::spawn(async move {
+            mgr1.register_peer(peer2_id).await.unwrap();
+
+            for i in 0..4 {
+                match mgr1.handle.poll_next().await.unwrap() {
+                    net::SyncingEvent::Error {
+                        peer_id,
+                        request_id,
+                        error,
+                    } => {
+                        assert_eq!(error, net::RequestResponseError::Timeout);
+                        mgr1.process_error(peer_id, request_id, error).await.unwrap();
+                    }
+                    _ => panic!("invalid event received"),
+                }
+            }
+
+            assert!(std::matches!(
+                swarm_rx.try_recv(),
+                Ok(SwarmEvent::Disconnect(peer2_id))
+            ));
+        });
+
+        for i in 0..4 {
+            assert!(std::matches!(
+                mgr2.handle.poll_next().await,
+                Ok(net::SyncingEvent::Request { .. })
+            ));
+            assert!(std::matches!(
+                mgr2.handle.poll_next().await,
+                Ok(net::SyncingEvent::Error { .. })
+            ));
+        }
     }
 }

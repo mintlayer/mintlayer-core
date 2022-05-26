@@ -23,7 +23,7 @@ use crate::{
     message,
     net::{
         self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
-        PubSubEvent, PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage,
+        PubSubEvent, PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent,
     },
 };
 use async_trait::async_trait;
@@ -592,9 +592,9 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
+    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::SyncingEvent::SyncRequest {
+            types::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request,
@@ -604,13 +604,13 @@ where
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 
-                Ok(SyncingMessage::Request {
+                Ok(SyncingEvent::Request {
                     peer_id,
                     request_id,
                     request,
                 })
             }
-            types::SyncingEvent::SyncResponse {
+            types::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response,
@@ -620,12 +620,21 @@ where
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 
-                Ok(SyncingMessage::Response {
+                Ok(SyncingEvent::Response {
                     peer_id,
                     request_id,
                     response,
                 })
             }
+            types::SyncingEvent::Error {
+                peer_id,
+                request_id,
+                error,
+            } => Ok(SyncingEvent::Error {
+                peer_id,
+                request_id,
+                error,
+            }),
         }
     }
 }
