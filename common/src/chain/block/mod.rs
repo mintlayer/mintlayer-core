@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
-use crate::primitives::id::hash_encoded;
+
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::{Id, Idable, H256};
