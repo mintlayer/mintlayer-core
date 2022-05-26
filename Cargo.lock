@@ -2205,7 +2205,6 @@ dependencies = [
  "consensus",
  "crypto",
  "logging",
- "network",
  "p2p",
  "rpc",
  "script",
@@ -2392,10 +2391,6 @@ dependencies = [
  "libc",
  "log",
 ]
-
-[[package]]
-name = "network"
-version = "0.1.0"
 
 [[package]]
 name = "newtype-ops"
