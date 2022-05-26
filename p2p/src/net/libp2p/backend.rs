@@ -210,14 +210,22 @@ impl Backend {
                 Err(e) => Err(e.into()),
             },
             types::Command::Disconnect { peer_id, response } => {
-                if self.swarm.is_connected(&peer_id) {
+                log::debug!("disconnect peer {:?}", peer_id);
+
+                if !self.swarm.is_connected(&peer_id) {
+                    log::debug!("peer {:?} is not connected", peer_id);
                     return response
                         .send(Err(P2pError::PeerDoesntExist))
                         .map_err(|_| P2pError::ChannelClosed);
                 }
 
                 match self.swarm.disconnect_peer_id(peer_id) {
-                    Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+                    Ok(_) => {
+                        log::trace!("peer {:?} disconnected", peer_id);
+                        self.established_conns.remove(&peer_id);
+                        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+                    }
+                    // TODO: handle this error better
                     Err(_) => response
                         .send(Err(P2pError::Unknown(
                             "`Swarm::disconnect_peer_id() returned Err(())`".to_string(),

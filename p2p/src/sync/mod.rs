@@ -345,11 +345,12 @@ where
     ) -> error::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
-        log::info!(
-            "initialize peer {:?} state, headers: {:#?}",
+        log::debug!(
+            "initialize peer {:?} state, number of headers: {}",
             peer_id,
-            headers
+            headers.len(),
         );
+        log::trace!("headers: {:#?}", headers);
 
         if headers.len() > 2000 {
             // TODO: ban peer
