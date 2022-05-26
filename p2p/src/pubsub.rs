@@ -194,16 +194,23 @@ where
                         .call(|this| this.get_block(block_id))
                         .await??;
 
+                    // TODO: make this look nicer
                     match block {
                         Some(block) => {
-                            self.pubsub_handle
+                            match self.pubsub_handle
                                 .publish(message::Message {
                                     magic: *self.config.magic_bytes(),
                                     msg: message::MessageType::PubSub(
                                         message::PubSubMessage::Block(block),
                                     ),
                                 })
-                                .await?;
+                                .await {
+                                    Ok(_) => {},
+                                    Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
+                                    Err(e) => {
+                                        log::error!("failed to publish message: {:?}", e);
+                                    }
+                                }
                         }
                         None => {
                             log::error!("CRITICAL: best block not available")
