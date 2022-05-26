@@ -669,6 +669,7 @@ dependencies = [
  "blockchain-storage",
  "common",
  "crypto",
+ "hex",
  "itertools",
  "jsonrpsee",
  "logging",
