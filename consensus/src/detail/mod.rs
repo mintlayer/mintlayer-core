@@ -29,8 +29,7 @@ use common::chain::calculate_tx_index_from_block;
 use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
 use common::chain::{OutPointSourceId, Transaction};
-use common::primitives::BlockDistance;
-use common::primitives::{time, BlockHeight, Id, Idable};
+use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use std::collections::BTreeSet;
 use std::sync::Arc;
 mod consensus_validator;
@@ -273,7 +272,7 @@ impl Consensus {
 
         // get headers until either the best block or header limit is reached
         let limit = std::cmp::min(
-            (best + HEADER_LIMIT).ok_or(BlockError::Unknown)?,
+            (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
             self.get_block_height_in_main_chain(
                 &self.get_best_block_id()?.expect("best block to exist"),
             )?
@@ -291,7 +290,7 @@ impl Consensus {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, BlockError> {
         // verify that the first block attaches to our chain
-        match headers.get(0).ok_or(BlockError::Unknown)?.get_prev_block_id() {
+        match headers.get(0).ok_or(BlockError::NotFound)?.get_prev_block_id() {
             None => return Err(BlockError::PrevBlockInvalid),
             Some(id) => {
                 if self.get_block_index(id)?.is_none() {
@@ -537,7 +536,7 @@ impl<'a> ConsensusRef<'a> {
     // Connect new block
     fn connect_tip(&mut self, new_tip_block_index: &BlockIndex) -> Result<(), BlockError> {
         if &self.db_tx.get_best_block_id()? != new_tip_block_index.get_prev_block_id() {
-            return Err(BlockError::Unknown);
+            return Err(BlockError::InvariantErrorInvalidTip);
         }
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
         self.check_tx_outputs(block.transactions())?;
@@ -586,7 +585,10 @@ impl<'a> ConsensusRef<'a> {
         // Disconnect transactions
         self.disconnect_transactions(block.transactions())?;
         self.db_tx.set_best_block_id(
-            block_index.get_prev_block_id().as_ref().ok_or(BlockError::Unknown)?,
+            block_index
+                .get_prev_block_id()
+                .as_ref()
+                .ok_or(BlockError::InvariantErrorPrevBlockNotFound)?,
         )?;
         // Disconnect block
         self.db_tx.del_block_id_at_height(&block_index.get_block_height())?;
@@ -666,6 +668,7 @@ impl<'a> ConsensusRef<'a> {
     }
 
     fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+        // TODO: before doing anything, we should ensure the block isn't already known
         let block_index = self.add_to_block_index(block)?;
         self.check_block_index(&block_index)?;
         self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
@@ -693,16 +696,16 @@ impl<'a> ConsensusRef<'a> {
 
         // Allows the previous block to be None only if the block hash is genesis
         if !block.is_genesis(self.chain_config) && block.prev_block_id().is_none() {
-            return Err(BlockError::Unknown);
+            return Err(BlockError::InvalidBlockNoPrevBlock);
         }
 
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.transactions()).map_or(
-            Err(BlockError::Unknown),
+            Err(BlockError::MerkleRootMismatch),
             |merkle_tree| {
                 if merkle_tree_root != merkle_tree {
-                    Err(BlockError::Unknown)
+                    Err(BlockError::MerkleRootMismatch)
                 } else {
                     Ok(())
                 }
@@ -712,10 +715,10 @@ impl<'a> ConsensusRef<'a> {
         // Witness merkle root
         let witness_merkle_root = block.witness_merkle_root();
         calculate_witness_merkle_root(block.transactions()).map_or(
-            Err(BlockError::Unknown),
+            Err(BlockError::WitnessMerkleRootMismatch),
             |witness_merkle| {
                 if witness_merkle_root != witness_merkle {
-                    Err(BlockError::Unknown)
+                    Err(BlockError::WitnessMerkleRootMismatch)
                 } else {
                     Ok(())
                 }
@@ -731,10 +734,10 @@ impl<'a> ConsensusRef<'a> {
                 // Time
                 let block_time = block.block_time();
                 if previous_block.get_block_time() > block_time {
-                    return Err(BlockError::Unknown);
+                    return Err(BlockError::BlockTimeOrderInvalid);
                 }
                 if i64::from(block_time) > time::get() {
-                    return Err(BlockError::Unknown);
+                    return Err(BlockError::BlockFromTheFuture);
                 }
             }
             None => {
@@ -781,7 +784,7 @@ impl<'a> ConsensusRef<'a> {
 
         //TODO: Size limits
         if block.encoded_size() > MAX_BLOCK_WEIGHT {
-            return Err(BlockError::Unknown);
+            return Err(BlockError::BlockTooLarge);
         }
         //TODO: Check signatures will be added when BLS is ready
         Ok(())

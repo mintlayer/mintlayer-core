@@ -70,7 +70,10 @@ impl TxMainChainPosition {
 pub enum SpendError {
     AlreadySpent(Spender),
     AlreadyUnspent,
-    OutOfRange,
+    OutOfRange {
+        tx_id: Option<Spender>,
+        source_output_index: usize,
+    },
 }
 
 /// This enum represents that we can either spend from a block reward or a regular transaction
@@ -178,24 +181,24 @@ impl TxMainChainIndex {
 
     pub fn spend(&mut self, index: u32, spender: Spender) -> Result<(), SpendError> {
         let index = index as usize;
-        if index >= self.spent.len() {
-            return Err(SpendError::OutOfRange);
-        }
 
         match self.spent.get_mut(index) {
-            None => Err(SpendError::OutOfRange),
+            None => Err(SpendError::OutOfRange {
+                tx_id: Some(spender),
+                source_output_index: index,
+            }),
             Some(spent_state) => Self::spend_internal(spent_state, spender),
         }
     }
 
     pub fn unspend(&mut self, index: u32) -> Result<(), SpendError> {
         let index = index as usize;
-        if index >= self.spent.len() {
-            return Err(SpendError::OutOfRange);
-        }
 
         match self.spent.get_mut(index) {
-            None => Err(SpendError::OutOfRange),
+            None => Err(SpendError::OutOfRange {
+                tx_id: None,
+                source_output_index: index,
+            }),
             Some(spent_state) => Self::unspend_internal(spent_state),
         }
     }
@@ -206,7 +209,10 @@ impl TxMainChainIndex {
 
     pub fn get_spent_state(&self, output_index: u32) -> Result<OutputSpentState, SpendError> {
         match self.spent.get(output_index as usize) {
-            None => Err(SpendError::OutOfRange),
+            None => Err(SpendError::OutOfRange {
+                tx_id: None,
+                source_output_index: output_index as usize,
+            }),
             Some(state) => Ok(state.clone()),
         }
     }

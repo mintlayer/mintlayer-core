@@ -19,12 +19,10 @@ use crate::detail::*;
 use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::create_unit_test_config;
-use common::chain::signature::inputsig::{InputWitness, StandardInputSignature};
-use common::chain::signature::sighashtype::SigHashType;
+use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
-use common::primitives::H256;
+use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
-use crypto::key::{KeyKind, PrivateKey};
 use rand::prelude::*;
 use std::sync::Mutex;
 
@@ -40,6 +38,8 @@ mod events_tests;
 mod processing_tests;
 #[cfg(test)]
 mod reorgs_tests;
+#[cfg(test)]
+mod signature_tests;
 #[cfg(test)]
 mod syncing_tests;
 
@@ -65,20 +65,15 @@ pub(in crate::detail::tests) enum TestSpentStatus {
     NotInMainchain,
 }
 
-fn random_witness() -> InputWitness {
+fn empty_witness() -> InputWitness {
     let mut rng = rand::thread_rng();
-    let mut witness: Vec<u8> = (1..100).collect();
-    witness.shuffle(&mut rng);
-
-    InputWitness::Standard(StandardInputSignature::new(
-        SigHashType::try_from(SigHashType::ALL).unwrap(),
-        witness,
-    ))
+    let mut msg: Vec<u8> = (1..100).collect();
+    msg.shuffle(&mut rng);
+    InputWitness::NoSignature(Some(msg))
 }
 
-fn random_address() -> Destination {
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    Destination::PublicKey(pub_key)
+fn anyonecanspend_address() -> Destination {
+    Destination::AnyoneCanSpend
 }
 
 fn create_utxo_data(
@@ -86,16 +81,18 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    if output.get_value() > Amount::from_atoms(1) {
+    let mut rng = thread_rng();
+    let spent_value = rng.gen_range(0..output.get_value().into_atoms());
+    if output.get_value() > Amount::from_atoms(spent_value) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
                 index as u32,
-                random_witness(),
+                empty_witness(),
             ),
             TxOutput::new(
-                (output.get_value() - Amount::from_atoms(1)).unwrap(),
-                random_address(),
+                (output.get_value() - Amount::from_atoms(spent_value)).unwrap(),
+                anyonecanspend_address(),
             ),
         ))
     } else {
