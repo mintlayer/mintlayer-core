@@ -196,7 +196,7 @@ pub trait NetworkingService {
     type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone + ToString;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug + Sync;
+    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug + Sync + ToString;
 
     // TODO:
     type RequestId: Send + Debug + Eq + Hash + Sync;
