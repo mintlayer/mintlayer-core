@@ -57,13 +57,16 @@ where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
+        let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Connect(
                 addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+                tx,
             ))
             .await
-            .map_err(|_| P2pError::ChannelClosed)
+            .map_err(|_| P2pError::ChannelClosed)?;
+        rx.await.map_err(P2pError::from)?
     }
 
     pub async fn get_peer_count(&self) -> error::Result<usize> {
@@ -71,6 +74,16 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetPeerCount(tx))
+            .await
+            .map_err(P2pError::from)?;
+        rx.await.map_err(P2pError::from)
+    }
+
+    pub async fn get_bind_address(&self) -> error::Result<String> {
+        let (tx, rx) = oneshot::channel();
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::GetBindAddress(tx))
             .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
@@ -132,12 +145,19 @@ where
         });
 
         let sync_handle = consensus_handle.clone();
+        let swarm_tx = tx_swarm.clone();
         let sync_config = Arc::clone(&config);
         tokio::spawn(async move {
-            if let Err(e) =
-                sync::SyncManager::<T>::new(sync_config, sync, sync_handle, rx_p2p_sync, tx_pubsub)
-                    .run()
-                    .await
+            if let Err(e) = sync::SyncManager::<T>::new(
+                sync_config,
+                sync,
+                sync_handle,
+                rx_p2p_sync,
+                swarm_tx,
+                tx_pubsub,
+            )
+            .run()
+            .await
             {
                 log::error!("SyncManager failed: {:?}", e);
             }

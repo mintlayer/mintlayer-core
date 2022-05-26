@@ -22,7 +22,7 @@ use crate::{
         libp2p::sync::*,
         libp2p::{backend::Backend, types},
         ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
-        PubSubTopic, SyncingCodecService, SyncingMessage,
+        PubSubTopic, SyncingCodecService, SyncingEvent,
     },
 };
 use async_trait::async_trait;

@@ -17,8 +17,11 @@
 use crate::{
     error::{self, P2pError},
     net::libp2p::{backend::Backend, types, SyncRequest, SyncResponse},
+    net::RequestResponseError,
 };
-use libp2p::request_response::{RequestResponseEvent, RequestResponseMessage};
+use libp2p::request_response::{
+    InboundFailure, OutboundFailure, RequestResponseEvent, RequestResponseMessage,
+};
 use logging::log;
 
 impl Backend {
@@ -35,7 +38,7 @@ impl Backend {
                 } => {
                     self.pending_reqs.insert(request_id, channel);
                     self.sync_tx
-                        .send(types::SyncingEvent::SyncRequest {
+                        .send(types::SyncingEvent::Request {
                             peer_id: peer,
                             request_id,
                             request: Box::new(request),
@@ -48,7 +51,7 @@ impl Backend {
                     response,
                 } => self
                     .sync_tx
-                    .send(types::SyncingEvent::SyncResponse {
+                    .send(types::SyncingEvent::Response {
                         peer_id: peer,
                         request_id,
                         response: Box::new(response),
@@ -65,19 +68,68 @@ impl Backend {
                 request_id,
                 error,
             } => {
-                // TODO: report to peer manager, should not be possible
-                log::error!("outbound failure, destroy peer info, inform front-end");
-                Ok(())
+                match error {
+                    OutboundFailure::Timeout => self
+                        .sync_tx
+                        .send(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: RequestResponseError::Timeout,
+                        })
+                        .await
+                        .map_err(|_| P2pError::ChannelClosed),
+                    OutboundFailure::ConnectionClosed => self
+                        .sync_tx
+                        .send(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: RequestResponseError::ConnectionClosed,
+                        })
+                        .await
+                        .map_err(|_| P2pError::ChannelClosed),
+                    OutboundFailure::DialFailure => {
+                        log::error!("CRITICAL: syncing code tried to dial peer");
+                        Ok(())
+                    }
+                    OutboundFailure::UnsupportedProtocols => {
+                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                        Ok(())
+                    }
+                }
             }
             RequestResponseEvent::InboundFailure {
                 peer,
                 request_id,
                 error,
             } => {
-                // TODO: report to peer manager,
-                // https://docs.rs/libp2p-request-response/latest/libp2p_request_response/enum.InboundFailure.html
-                log::error!("inbound failure, destroy peer info, inform front-end");
-                Ok(())
+                match error {
+                    InboundFailure::Timeout => self
+                        .sync_tx
+                        .send(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: RequestResponseError::Timeout,
+                        })
+                        .await
+                        .map_err(|_| P2pError::ChannelClosed),
+                    InboundFailure::ConnectionClosed => self
+                        .sync_tx
+                        .send(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: RequestResponseError::ConnectionClosed,
+                        })
+                        .await
+                        .map_err(|_| P2pError::ChannelClosed),
+                    InboundFailure::ResponseOmission => {
+                        log::error!("CRITICAL(??): response omitted!");
+                        Ok(())
+                    }
+                    InboundFailure::UnsupportedProtocols => {
+                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                        Ok(())
+                    }
+                }
             }
         }
     }

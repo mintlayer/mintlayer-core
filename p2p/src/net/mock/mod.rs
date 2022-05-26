@@ -20,7 +20,7 @@ use crate::{
     message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingCodecService, SyncingMessage, ValidationResult,
+        PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent, ValidationResult,
     },
 };
 use async_trait::async_trait;
@@ -51,7 +51,7 @@ pub struct MockService;
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T>
@@ -245,7 +245,7 @@ where
         todo!();
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>> {
+    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
         todo!();
     }
 }

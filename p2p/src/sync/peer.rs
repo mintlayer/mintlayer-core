@@ -37,7 +37,7 @@ pub enum PeerSyncState {
     Unknown,
 
     /// Peer is uploading blocks to local node
-    UploadingBlocks(BlockHeader),
+    UploadingBlocks(Id<Block>),
 
     /// Peer is uploading headers to local node
     UploadingHeaders,
@@ -94,7 +94,7 @@ where
     ) -> error::Result<Option<BlockHeader>> {
         match &self.state {
             PeerSyncState::UploadingBlocks(expected) => {
-                if expected != header {
+                if expected != &header.get_id() {
                     log::error!(
                         "peer sent us the wrong header, expected {:?}, got {:?}",
                         expected,
@@ -160,7 +160,7 @@ mod tests {
             Block::new(vec![], None, 1337u32, ConsensusData::None).unwrap().header().clone();
 
         assert_eq!(peer.state, PeerSyncState::Unknown);
-        peer.set_state(PeerSyncState::UploadingBlocks(header.clone()));
-        assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header));
+        peer.set_state(PeerSyncState::UploadingBlocks(header.get_id()));
+        assert_eq!(peer.state, PeerSyncState::UploadingBlocks(header.get_id()));
     }
 }

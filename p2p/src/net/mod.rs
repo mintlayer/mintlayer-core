@@ -132,8 +132,17 @@ where
     },
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RequestResponseError {
+    /// Request timed out
+    Timeout,
+
+    /// Connection was closed by remote
+    ConnectionClosed,
+}
+
 #[derive(Debug)]
-pub enum SyncingMessage<T>
+pub enum SyncingEvent<T>
 where
     T: NetworkingService,
 {
@@ -146,6 +155,11 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         response: message::Message,
+    },
+    Error {
+        peer_id: T::PeerId,
+        request_id: T::RequestId,
+        error: RequestResponseError,
     },
 }
 
@@ -179,13 +193,13 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone;
+    type Address: Send + Sync + Debug + PartialEq + Eq + Hash + Clone + ToString;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug;
+    type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug + Sync;
 
     // TODO:
-    type RequestId: Send + Debug;
+    type RequestId: Send + Debug + Eq + Hash + Sync;
 
     /// Enum of different peer discovery strategies that the implementation provides
     type DiscoveryStrategy;
@@ -309,5 +323,5 @@ where
     ) -> error::Result<()>;
 
     // TODO:
-    async fn poll_next(&mut self) -> error::Result<SyncingMessage<T>>;
+    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>>;
 }
