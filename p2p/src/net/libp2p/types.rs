@@ -106,6 +106,9 @@ pub enum ConnectivityEvent {
         peer_info: Box<IdentifyInfo>,
     },
 
+    /// Remote closed connection
+    ConnectionClosed { peer_id: PeerId },
+
     /// One or more peers were discovered by one of the discovery strategies
     Discovered { peers: Vec<(PeerId, Multiaddr)> },
 

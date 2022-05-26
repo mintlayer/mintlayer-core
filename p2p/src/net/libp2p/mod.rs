@@ -464,6 +464,9 @@ where
                     peer_info: (*peer_info).try_into()?,
                 })
             }
+            types::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                Ok(ConnectivityEvent::ConnectionClosed { peer_id })
+            }
             types::ConnectivityEvent::Discovered { peers } => Ok(ConnectivityEvent::Discovered {
                 peers: parse_peers(peers),
             }),

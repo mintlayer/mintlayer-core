@@ -1413,7 +1413,10 @@ async fn test_connect_disconnect_resyncing() {
 
     assert_eq!(mgr1.unregister_peer(*conn2.peer_id()), Ok(()));
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
-    assert_eq!(conn2.disconnect(*conn1.peer_id()).await, Ok(()));
+    assert!(std::matches!(
+        conn2.poll_next().await,
+        Ok(ConnectivityEvent::ConnectionClosed { .. })
+    ));
 
     let parent = mgr1_handle
         .call(move |this| {

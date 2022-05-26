@@ -16,7 +16,10 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, Libp2pError, P2pError, ProtocolError},
-    net::libp2p::backend::{Backend, PendingState},
+    net::libp2p::{
+        backend::{Backend, PendingState},
+        types,
+    },
 };
 use futures::StreamExt;
 use libp2p::{core::connection::ConnectedPoint, swarm::DialError, PeerId};
@@ -105,6 +108,14 @@ impl Backend {
             log::error!("unhandled connection error: {:#?}", error);
             Ok(())
         }
+    }
+
+    pub async fn on_connection_closed(&mut self, peer_id: PeerId) -> error::Result<()> {
+        self.established_conns.remove(&peer_id);
+        self.conn_tx
+            .send(types::ConnectivityEvent::ConnectionClosed { peer_id })
+            .await
+            .map_err(|_| P2pError::ChannelClosed)
     }
 }
 
