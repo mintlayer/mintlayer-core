@@ -569,35 +569,14 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             self.nodes[a].p2p_get_connected_peers().count(id_b) != 0, timeout=60)
 
     def disconnect_nodes(self, a, b):
-        def disconnect_nodes_helper(from_connection, node_num):
-            def get_peer_ids():
-                result = []
-                for peer in from_connection.getpeerinfo():
-                    if "testnode{}".format(node_num) in peer['subver']:
-                        result.append(peer['id'])
-                return result
+        id_a = self.nodes[a].p2p_get_peer_id()
+        id_b = self.nodes[b].p2p_get_peer_id()
 
-            peer_ids = get_peer_ids()
-            if not peer_ids:
-                self.log.warning("disconnect_nodes: {} and {} were not connected".format(
-                    from_connection.index,
-                    node_num,
-                ))
-                return
-            for peer_id in peer_ids:
-                try:
-                    from_connection.disconnectnode(nodeid=peer_id)
-                except JSONRPCException as e:
-                    # If this node is disconnected between calculating the peer id
-                    # and issuing the disconnect, don't worry about it.
-                    # This avoids a race condition if we're mass-disconnecting peers.
-                    if e.error['code'] != -29:  # RPC_CLIENT_NODE_NOT_CONNECTED
-                        raise
+        self.nodes[a].p2p_disconnect(id_b)
 
-            # wait to disconnect
-            wait_until_helper(lambda: not get_peer_ids(), timeout=5)
-
-        disconnect_nodes_helper(self.nodes[a], b)
+        wait_until_helper(lambda:
+            self.nodes[b].p2p_get_connected_peers().count(id_a) == 0 and
+            self.nodes[a].p2p_get_connected_peers().count(id_b) == 0, timeout=60)
 
     def split_network(self):
         """
@@ -739,7 +718,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
                     cache_node_dir,
                     chain=self.chain,
                     extra_conf=["bind=127.0.0.1"],
-                    extra_args=['-disablewallet'],
+                    extra_args=[],
                     rpchost=None,
                     timewait=self.rpc_timeout,
                     timeout_factor=self.options.timeout_factor,
@@ -756,24 +735,25 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             cache_node.wait_for_rpc_connection()
 
             # Set a time in the past, so that blocks don't end up in the future
-            cache_node.setmocktime(cache_node.getblockheader(cache_node.getbestblockhash())['time'])
+            # cache_node.setmocktime(cache_node.getblockheader(cache_node.getbestblockhash())['time'])
 
+            # TODO: add blocks to chain
+            #
             # Create a 199-block-long chain; each of the 3 first nodes
             # gets 25 mature blocks and 25 immature.
             # The 4th address gets 25 mature and only 24 immature blocks so that the very last
             # block in the cache does not age too much (have an old tip age).
             # This is needed so that we are out of IBD when the test starts,
             # see the tip age check in IsInitialBlockDownload().
-            gen_addresses = [k.address for k in TestNode.PRIV_KEYS][:3] + [create_deterministic_address_bcrt1_p2tr_op_true()[0]]
-            assert_equal(len(gen_addresses), 4)
-            for i in range(8):
-                self.generatetoaddress(
-                    cache_node,
-                    nblocks=25 if i != 7 else 24,
-                    address=gen_addresses[i % len(gen_addresses)],
-                )
-
-            assert_equal(cache_node.getblockchaininfo()["blocks"], 199)
+            # gen_addresses = [k.address for k in TestNode.PRIV_KEYS][:3] + [create_deterministic_address_bcrt1_p2tr_op_true()[0]]
+            # assert_equal(len(gen_addresses), 4)
+            # for i in range(8):
+            #     self.generatetoaddress(
+            #         cache_node,
+            #         nblocks=25 if i != 7 else 24,
+            #         address=gen_addresses[i % len(gen_addresses)],
+            #     )
+            # assert_equal(cache_node.getblockchaininfo()["blocks"], 199)
 
             # Shut it down, and clean up cache directories:
             self.stop_nodes()
@@ -782,10 +762,10 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
             def cache_path(*paths):
                 return os.path.join(cache_node_dir, self.chain, *paths)
 
-            os.rmdir(cache_path('wallets'))  # Remove empty wallets dir
-            for entry in os.listdir(cache_path()):
-                if entry not in ['chainstate', 'blocks', 'indexes']:  # Only indexes, chainstate and blocks folders
-                    os.remove(cache_path(entry))
+            # os.rmdir(cache_path('wallets'))  # Remove empty wallets dir
+            # for entry in os.listdir(cache_path()):
+            #     if entry not in ['chainstate', 'blocks', 'indexes']:  # Only indexes, chainstate and blocks folders
+            #         os.remove(cache_path(entry))
 
         for i in range(self.num_nodes):
             self.log.debug("Copy cache directory {} to node {}".format(cache_node_dir, i))

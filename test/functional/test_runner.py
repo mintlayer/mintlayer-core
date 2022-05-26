@@ -101,6 +101,7 @@ BASE_SCRIPTS = [
 
     # vv Tests less than 30s vv
     'example_test.py',
+    'p2p_syncing_test.py',
 
     # Don't append tests at the end to avoid merge conflicts
     # Put them in a random line within the section that fits their approximate run-time
