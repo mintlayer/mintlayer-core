@@ -359,6 +359,13 @@ where
                     .await
                     .map_err(P2pError::from)
             }
+            net::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                self.tx_sync
+                    .send(event::SyncControlEvent::Disconnected(peer_id))
+                    .await
+                    .map_err(P2pError::from)?;
+                self.disconnect_peer(peer_id).await
+            }
             net::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
             net::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
             net::ConnectivityEvent::Disconnected { .. } => Ok(()),
@@ -725,5 +732,37 @@ mod tests {
             swarm2.on_network_event(conn2_res).await,
             Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork))
         );
+    }
+
+    #[tokio::test]
+    async fn remote_closes_connection() {
+        let mut swarm1 = make_swarm_manager::<Libp2pService>(
+            test_utils::make_address("/ip6/::1/tcp/"),
+            Arc::new(config::create_mainnet()),
+        )
+        .await;
+        let mut swarm2 = make_swarm_manager::<Libp2pService>(
+            test_utils::make_address("/ip6/::1/tcp/"),
+            Arc::new(config::create_mainnet()),
+        )
+        .await;
+        let (conn1_res, conn2_res) = tokio::join!(
+            swarm1.handle.connect(swarm2.handle.local_addr().clone()),
+            swarm2.handle.poll_next()
+        );
+        let conn2_res: net::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        assert!(std::matches!(
+            conn2_res,
+            net::ConnectivityEvent::IncomingConnection { .. }
+        ));
+
+        assert_eq!(
+            swarm2.handle.disconnect(*swarm1.handle.peer_id()).await,
+            Ok(())
+        );
+        assert!(std::matches!(
+            swarm1.handle.poll_next().await,
+            Ok(net::ConnectivityEvent::ConnectionClosed { .. })
+        ));
     }
 }

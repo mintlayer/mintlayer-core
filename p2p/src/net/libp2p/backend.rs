@@ -161,6 +161,9 @@ impl Backend {
             SwarmEvent::OutgoingConnectionError { peer_id, error } => {
                 self.on_outgoing_connection_error(peer_id, error).await
             }
+            SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                self.on_connection_closed(peer_id).await
+            }
             SwarmEvent::NewListenAddr { address, .. } => {
                 log::trace!("new listen address {:?}", address);
                 Ok(())

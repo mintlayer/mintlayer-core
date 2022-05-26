@@ -81,6 +81,9 @@ where
         peer_info: PeerInfo<T>,
     },
 
+    /// Remote closed connection
+    ConnectionClosed { peer_id: T::PeerId },
+
     /// One or more peers discovered
     Discovered {
         /// Address information
