@@ -15,6 +15,8 @@
 //
 // Author(s): S. Afach
 
+use common::chain::transaction::signature::verify_signature;
+use common::chain::SpendablePosition;
 use std::collections::{btree_map::Entry, BTreeMap};
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
@@ -185,7 +187,6 @@ impl<'a> CachedInputs<'a> {
                 .get_tx_index()
                 .ok_or(BlockError::PreviouslyCachedInputNotFound)?;
 
-            use common::chain::SpendablePosition;
             let input_outpoint_script = match tx_index.get_position() {
                 SpendablePosition::Transaction(tx_pos) => {
                     let prev_tx = self
@@ -208,7 +209,6 @@ impl<'a> CachedInputs<'a> {
                 }
             };
 
-            use common::chain::transaction::signature::verify_signature;
             verify_signature(&input_outpoint_script, tx, input_idx)
                 .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
         }
