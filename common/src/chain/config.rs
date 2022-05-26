@@ -107,6 +107,8 @@ impl ChainConfig {
 const MAINNET_ADDRESS_PREFIX: &str = "mtc";
 #[allow(dead_code)]
 const TESTNET_ADDRESS_PREFIX: &str = "tmt";
+#[allow(dead_code)]
+const REGTEST_ADDRESS_PREFIX: &str = "rmt";
 
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
@@ -195,6 +197,41 @@ pub fn create_mainnet() -> ChainConfig {
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
+        genesis_block,
+        genesis_block_id,
+        version: SemVer::new(0, 1, 0),
+        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+    }
+}
+
+pub fn create_regtest() -> ChainConfig {
+    let chain_type = ChainType::Regtest;
+    let pow_config = PoWChainConfig::new(chain_type);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(1),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: pow_config.limit().into(),
+            }),
+        ),
+    ];
+
+    let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
+    let genesis_block_id = genesis_block.get_id();
+
+    ChainConfig {
+        chain_type,
+        address_prefix: REGTEST_ADDRESS_PREFIX.to_owned(),
+        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
+        net_upgrades: NetUpgrades::initialize(upgrades).expect("Should not fail"),
+        rpc_port: 11111,
+        p2p_port: 22222,
+        magic_bytes: [0xaa, 0xbb, 0xcc, 0xdd],
         genesis_block,
         genesis_block_id,
         version: SemVer::new(0, 1, 0),

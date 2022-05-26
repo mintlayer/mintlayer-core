@@ -20,6 +20,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Chain configuration
     let chain_config = match opts.net {
         ChainType::Mainnet => Arc::new(common::chain::config::create_mainnet()),
+        ChainType::Regtest => Arc::new(common::chain::config::create_regtest()),
         chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
     };
 
