@@ -157,10 +157,8 @@ impl Consensus {
                 Err(err) => Some(err.clone()),
             };
 
-        let block_errors = orphan_processing_result
-            .iter()
-            .filter_map(FILTER_ERROR)
-            .collect::<Vec<_>>();
+        let block_errors =
+            orphan_processing_result.iter().filter_map(FILTER_ERROR).collect::<Vec<_>>();
 
         let tip_coming_from_orphans = orphan_processing_result
             .into_iter()
@@ -385,9 +383,12 @@ impl<'a> ConsensusRef<'a> {
         block_source: BlockSource,
         block: Block,
     ) -> Result<Block, BlockError> {
-        if block_source == BlockSource::Local && !block.is_genesis(self.chain_config) && self
+        if block_source == BlockSource::Local
+            && !block.is_genesis(self.chain_config)
+            && self
                 .get_block_index(&block.prev_block_id().ok_or(BlockError::PrevBlockInvalid)?)?
-                .is_none() {
+                .is_none()
+        {
             self.new_orphan_block(block)?;
             return Err(BlockError::LocalOrphan);
         }
