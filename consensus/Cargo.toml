@@ -15,6 +15,7 @@ logging = { path = '../logging' }
 serialization = { path = "../serialization" }
 subsystem = { path = '../subsystem' }
 rpc = { path = '../rpc' }
+utils = { path = '../utils' }
 
 itertools = "0.10.3"
 jsonrpsee = { version = "0.13.1", features = ["macros"] }

@@ -78,28 +78,6 @@ pub enum BlockSource {
     Local,
 }
 
-// TODO: move this to its own module
-struct CountTracker {
-    source: Arc<std::sync::atomic::AtomicI32>,
-}
-
-impl CountTracker {
-    pub fn new(source: Arc<std::sync::atomic::AtomicI32>) -> Self {
-        source.fetch_add(1, std::sync::atomic::Ordering::Release);
-        Self { source }
-    }
-
-    pub fn value(&self) -> i32 {
-        self.source.load(std::sync::atomic::Ordering::Acquire)
-    }
-}
-
-impl Drop for CountTracker {
-    fn drop(&mut self) {
-        self.source.fetch_sub(1, std::sync::atomic::Ordering::Release);
-    }
-}
-
 impl Consensus {
     pub fn wait_for_all_events(&self) {
         while self.events_in_progress.load(std::sync::atomic::Ordering::Acquire) > 0 {
@@ -186,7 +164,7 @@ impl Consensus {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
                 let events_count = Arc::clone(&self.events_in_progress);
-                let tracker = CountTracker::new(events_count);
+                let tracker = utils::counttracker::CountTracker::new(events_count);
                 self.events_broadcaster.spawn(move || {
                     let tracker = tracker;
                     assert!(tracker.value() > 0);
