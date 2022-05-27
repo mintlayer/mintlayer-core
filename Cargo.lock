@@ -620,7 +620,6 @@ dependencies = [
  "bitcoin-bech32",
  "byteorder 1.4.3",
  "crypto",
- "displaydoc",
  "expect-test",
  "generic-array",
  "hex",
@@ -926,17 +925,6 @@ dependencies = [
  "block-buffer 0.10.2",
  "crypto-common",
  "subtle",
-]
-
-[[package]]
-name = "displaydoc"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bf95dc3f046b9da4f2d51833c0d3547d8564ef6910f5c1ed130306a75b92886"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -3394,7 +3382,6 @@ name = "script"
 version = "0.1.0"
 dependencies = [
  "crypto",
- "displaydoc",
  "flate2",
  "hex",
  "hex-literal",
@@ -3402,6 +3389,7 @@ dependencies = [
  "parity-scale-codec",
  "proptest",
  "serialization",
+ "thiserror",
  "utils",
 ]
 
