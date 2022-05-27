@@ -86,7 +86,6 @@ impl OrphanBlocksPool {
             .get_mut(
                 &block
                     .prev_block_id()
-                    .map(|block_id| block_id)
                     // TODO: Check this part due to Block type now has optional hash_prev_block
                     .expect("Corrupted orphan key"),
             )
