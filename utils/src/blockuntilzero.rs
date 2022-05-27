@@ -95,9 +95,11 @@ mod test {
 
     #[test]
     fn basic() {
+        const THREAD_COUNT: usize = 10;
+
         let blocker = BlockUntilZero::<AtomicI32>::new();
         // make many threads, which all will increase the counter value
-        let threads_handles = make_threads_with_counts(&blocker, 10);
+        let threads_handles = make_threads_with_counts(&blocker, THREAD_COUNT);
         let joiner_thread =
             std::thread::spawn(move || threads_handles.into_iter().for_each(|t| t.join().unwrap()));
         // the threads will join some time in the future, but the blocker will only return when the counter is zero
