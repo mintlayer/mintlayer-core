@@ -100,7 +100,7 @@ mod test {
         let threads_handles = make_threads_with_counts(&blocker, 10);
         let joiner_thread =
             std::thread::spawn(move || threads_handles.into_iter().for_each(|t| t.join().unwrap()));
-        // the two threads will join some time in the future, but the blocker will only return when the counter is zero
+        // the threads will join some time in the future, but the blocker will only return when the counter is zero
         blocker.wait_for_zero();
         assert_eq!(blocker.value(), 0);
         joiner_thread.join().unwrap();
