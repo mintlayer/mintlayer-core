@@ -33,6 +33,7 @@ use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Duration;
 mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
@@ -62,6 +63,13 @@ pub struct Consensus {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
+    events_in_progress: Arc<std::sync::atomic::AtomicI32>,
+}
+
+impl Drop for Consensus {
+    fn drop(&mut self) {
+        self.wait_for_all_events();
+    }
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -70,7 +78,40 @@ pub enum BlockSource {
     Local,
 }
 
+// TODO: move this to its own module
+struct CountTracker {
+    source: Arc<std::sync::atomic::AtomicI32>,
+}
+
+impl CountTracker {
+    pub fn new(source: Arc<std::sync::atomic::AtomicI32>) -> Self {
+        source.fetch_add(1, std::sync::atomic::Ordering::Release);
+        Self { source }
+    }
+
+    pub fn value(&self) -> i32 {
+        self.source.load(std::sync::atomic::Ordering::Acquire)
+    }
+}
+
+impl Drop for CountTracker {
+    fn drop(&mut self) {
+        self.source.fetch_sub(1, std::sync::atomic::Ordering::Release);
+    }
+}
+
 impl Consensus {
+    pub fn wait_for_all_events(&self) {
+        while self.events_in_progress.load(std::sync::atomic::Ordering::Acquire) > 0 {
+            std::thread::yield_now();
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(
+            self.events_in_progress.load(std::sync::atomic::Ordering::Acquire),
+            0
+        );
+    }
+
     fn make_db_tx(&mut self) -> ConsensusRef {
         let db_tx = self.blockchain_storage.transaction_rw();
         ConsensusRef {
@@ -134,6 +175,7 @@ impl Consensus {
             custom_orphan_error_hook,
             event_subscribers: Vec::new(),
             events_broadcaster: event_broadcaster,
+            events_in_progress: Arc::new(std::sync::atomic::AtomicI32::new(0)),
         };
         Ok(cons)
     }
@@ -143,8 +185,13 @@ impl Consensus {
             Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
-                self.events_broadcaster
-                    .spawn(move || f(ConsensusEvent::NewTip(new_id, new_height)))
+                let events_count = Arc::clone(&self.events_in_progress);
+                let tracker = CountTracker::new(events_count);
+                self.events_broadcaster.spawn(move || {
+                    let tracker = tracker;
+                    assert!(tracker.value() > 0);
+                    f(ConsensusEvent::NewTip(new_id, new_height))
+                })
             }),
             None => (),
         }
