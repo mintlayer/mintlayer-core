@@ -56,8 +56,9 @@ type ConsensusHandle = subsystem::Handle<Box<dyn ConsensusInterface>>;
 pub fn make_consensus(
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
+    custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
 ) -> Result<Box<dyn ConsensusInterface>, ConsensusError> {
-    let cons = Consensus::new(chain_config, blockchain_storage)?;
+    let cons = Consensus::new(chain_config, blockchain_storage, custom_orphan_error_hook)?;
     let cons_interface = ConsensusInterfaceImpl::new(cons);
     Ok(Box::new(cons_interface))
 }

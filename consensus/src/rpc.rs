@@ -46,7 +46,10 @@ mod test {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("rpctest");
-        let handle = man.add_subsystem("consensus", crate::make_consensus(cfg, storage).unwrap());
+        let handle = man.add_subsystem(
+            "consensus",
+            crate::make_consensus(cfg, storage, None).unwrap(),
+        );
         let _ = man.add_raw_subsystem(
             "test",
             move |_: subsystem::subsystem::CallRequest<()>, _| proc(handle),

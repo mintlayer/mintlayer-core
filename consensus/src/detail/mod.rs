@@ -52,11 +52,14 @@ use spend_cache::CachedInputs;
 
 use consensus_validator::BlockIndexHandle;
 
+pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
+
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
+    custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
 }
@@ -93,10 +96,12 @@ impl Consensus {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
+        custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     ) -> Result<Self, crate::ConsensusError> {
         use crate::ConsensusError;
 
-        let mut cons = Self::new_no_genesis(chain_config, blockchain_storage)?;
+        let mut cons =
+            Self::new_no_genesis(chain_config, blockchain_storage, custom_orphan_error_hook)?;
         let best_block_id = cons.get_best_block_id().map_err(|e| {
             ConsensusError::FailedToInitializeConsensus(format!("Database read error: {:?}", e))
         })?;
@@ -118,6 +123,7 @@ impl Consensus {
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
+        custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     ) -> Result<Self, crate::ConsensusError> {
         let event_broadcaster = slave_pool::ThreadPool::new();
         event_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
@@ -125,6 +131,7 @@ impl Consensus {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
+            custom_orphan_error_hook,
             event_subscribers: Vec::new(),
             events_broadcaster: event_broadcaster,
         };
@@ -151,10 +158,10 @@ impl Consensus {
             .map(|blk| self.process_block(blk, BlockSource::Local))
             .partition_result();
 
-        if !block_errors.is_empty() {
-            let errors_str: String = block_errors.iter().map(|e| format!("{}", e)).join("; ");
-            logging::log::error!("Failed to process a chain of orphan blocks: {}", errors_str);
-        }
+        block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
+            Some(handler) => handler(&e),
+            None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+        });
 
         // since we processed the blocks in order, the last one is the best tip
         block_indexes.into_iter().flatten().rev().next()

@@ -113,7 +113,7 @@ impl ConsensusBuilder {
         }
     }
     fn build(self) -> Consensus {
-        Consensus::new(Arc::new(self.config), self.storage).unwrap()
+        Consensus::new(Arc::new(self.config), self.storage, None).unwrap()
     }
 
     #[allow(unused)]
