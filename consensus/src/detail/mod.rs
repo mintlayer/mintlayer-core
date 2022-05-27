@@ -159,14 +159,12 @@ impl Consensus {
 
         let block_errors = orphan_processing_result
             .iter()
-            .map(|r| FILTER_ERROR(r))
-            .flatten()
+            .filter_map(FILTER_ERROR)
             .collect::<Vec<_>>();
 
         let tip_coming_from_orphans = orphan_processing_result
             .into_iter()
-            .map(|r| r.ok())
-            .flatten()
+            .filter_map(|r| r.ok())
             .flatten()
             .collect::<Vec<_>>();
 
@@ -195,7 +193,7 @@ impl Consensus {
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
         let block_index = consensus_ref.accept_block(&block)?;
-        let result = consensus_ref.activate_best_chain(block_index, best_block_id.clone())?;
+        let result = consensus_ref.activate_best_chain(block_index, best_block_id)?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
 
         let new_block_index_after_orphans = self.process_orphans(&block.get_id());
@@ -387,14 +385,11 @@ impl<'a> ConsensusRef<'a> {
         block_source: BlockSource,
         block: Block,
     ) -> Result<Block, BlockError> {
-        if block_source == BlockSource::Local && !block.is_genesis(self.chain_config) {
-            if self
+        if block_source == BlockSource::Local && !block.is_genesis(self.chain_config) && self
                 .get_block_index(&block.prev_block_id().ok_or(BlockError::PrevBlockInvalid)?)?
-                .is_none()
-            {
-                self.new_orphan_block(block)?;
-                return Err(BlockError::LocalOrphan);
-            }
+                .is_none() {
+            self.new_orphan_block(block)?;
+            return Err(BlockError::LocalOrphan);
         }
         Ok(block)
     }
