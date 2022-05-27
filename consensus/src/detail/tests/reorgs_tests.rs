@@ -27,7 +27,7 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config, storage).unwrap();
+        let mut consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let result = consensus.process_block(

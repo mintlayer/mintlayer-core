@@ -31,7 +31,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Consensus subsystem
     let consensus = manager.add_subsystem(
         "consensus",
-        consensus::make_consensus(Arc::clone(&chain_config), storage.clone())?,
+        consensus::make_consensus(Arc::clone(&chain_config), storage.clone(), None)?,
     );
 
     // P2P subsystem
