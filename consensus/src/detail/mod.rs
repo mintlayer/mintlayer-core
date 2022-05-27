@@ -145,26 +145,14 @@ impl Consensus {
 
     /// returns the new block index, which is the new tip, if any
     fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        const FILTER_ERROR: fn(&Result<Option<BlockIndex>, BlockError>) -> Option<BlockError> =
-            |r| match r {
-                Ok(_) => None,
-                Err(err) => Some(err.clone()),
-            };
-
         let orphans = self.orphan_blocks.take_all_children_of(last_processed_block);
         let orphan_processing_result = orphans
             .into_iter()
             .map(|blk| self.process_block(blk, BlockSource::Local))
             .collect::<Vec<_>>();
 
-        let block_errors =
-            orphan_processing_result.iter().filter_map(FILTER_ERROR).collect::<Vec<_>>();
-
-        let tip_coming_from_orphans = orphan_processing_result
-            .into_iter()
-            .filter_map(|r| r.ok())
-            .flatten()
-            .collect::<Vec<_>>();
+        let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) =
+            orphan_processing_result.into_iter().partition_result();
 
         if !block_errors.is_empty() {
             let errors_str: String = block_errors.iter().map(|e| format!("{}", e)).join("; ");
@@ -172,7 +160,7 @@ impl Consensus {
         }
 
         // since we processed the blocks in order, the last one is the best tip
-        tip_coming_from_orphans.last().cloned()
+        block_indexes.into_iter().flatten().rev().next()
     }
 
     /// returns the block index of the new tip
