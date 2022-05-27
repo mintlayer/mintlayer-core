@@ -31,7 +31,7 @@ impl<'a> BlockTestFramework {
     pub fn with_consensus(consensus: Consensus) -> Self {
         let genesis_index = consensus
             .blockchain_storage
-            .get_block_index(&consensus.chain_config.genesis_block().get_id())
+            .get_block_index(&consensus.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
         Self {
@@ -44,7 +44,7 @@ impl<'a> BlockTestFramework {
         let consensus = setup_consensus();
         let genesis_index = consensus
             .blockchain_storage
-            .get_block_index(&consensus.chain_config.genesis_block().get_id())
+            .get_block_index(&consensus.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
         Self {

@@ -24,10 +24,14 @@ use common::{
 };
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq, Eq)]
+use super::orphan_blocks::OrphanAddError;
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
-    #[error("Orphan")]
-    Orphan,
+    #[error("Illegal orphan that was submitted by non-local source, e.g., a peer")]
+    IllegalOrphan,
+    #[error("Orphan that was submitted legitimately through a local source")]
+    LocalOrphan,
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
     InvariantErrorInvalidTip,
     #[error("Failed to find previous block in non-genesis setting")]
@@ -132,6 +136,14 @@ impl From<blockchain_storage::Error> for BlockError {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         BlockError::StorageError(err)
+    }
+}
+
+impl From<OrphanAddError> for Result<(), BlockError> {
+    fn from(err: OrphanAddError) -> Self {
+        match err {
+            OrphanAddError::BlockAlreadyInOrphanList(_) => Ok(()),
+        }
     }
 }
 

@@ -379,7 +379,7 @@ where
             })?;
 
         if !peer.locator().iter().any(|header| header.get_id() == prev_id)
-            && self.config.genesis_block().get_id() != prev_id
+            && self.config.genesis_block_id() != prev_id
         {
             // TODO: ban peer
             log::error!(

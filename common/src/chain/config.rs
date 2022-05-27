@@ -10,6 +10,7 @@ use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
 use crate::primitives::BlockDistance;
+use crate::primitives::Idable;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 
@@ -43,6 +44,7 @@ pub struct ChainConfig {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
     genesis_block: Block,
+    genesis_block_id: Id<Block>,
     blockreward_maturity: BlockDistance,
     version: SemVer,
 }
@@ -50,6 +52,10 @@ pub struct ChainConfig {
 impl ChainConfig {
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
+    }
+
+    pub fn genesis_block_id(&self) -> Id<Block> {
+        self.genesis_block_id.clone()
     }
 
     pub fn genesis_block(&self) -> &Block {
@@ -178,6 +184,9 @@ pub fn create_mainnet() -> ChainConfig {
         ),
     ];
 
+    let genesis_block = create_mainnet_genesis();
+    let genesis_block_id = genesis_block.get_id();
+
     ChainConfig {
         chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -186,13 +195,16 @@ pub fn create_mainnet() -> ChainConfig {
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block: create_mainnet_genesis(),
+        genesis_block,
+        genesis_block_id,
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
 }
 
 pub fn create_unit_test_config() -> ChainConfig {
+    let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
+    let genesis_block_id = genesis_block.get_id();
     ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -201,7 +213,8 @@ pub fn create_unit_test_config() -> ChainConfig {
         rpc_port: 15234,
         p2p_port: 8978,
         magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
+        genesis_block,
+        genesis_block_id,
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
     }
@@ -237,6 +250,9 @@ impl TestChainConfig {
     }
 
     pub fn build(self) -> ChainConfig {
+        let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
+        let genesis_block_id = genesis_block.get_id();
+
         ChainConfig {
             chain_type: ChainType::Mainnet,
             address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -245,7 +261,8 @@ impl TestChainConfig {
             rpc_port: 15234,
             p2p_port: 8978,
             magic_bytes: self.magic_bytes,
-            genesis_block: create_unit_test_genesis(Destination::AnyoneCanSpend),
+            genesis_block,
+            genesis_block_id,
             version: SemVer::new(0, 1, 0),
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
         }
