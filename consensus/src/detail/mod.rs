@@ -145,17 +145,17 @@ impl Consensus {
 
     /// returns the new block index, which is the new tip, if any
     fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans = self.orphan_blocks.take_all_children_of(last_processed_block);
-        let orphan_processing_result = orphans
-            .into_iter()
-            .map(|blk| self.process_block(blk, BlockSource::Local))
-            .collect::<Vec<_>>();
-
         const FILTER_ERROR: fn(&Result<Option<BlockIndex>, BlockError>) -> Option<BlockError> =
             |r| match r {
                 Ok(_) => None,
                 Err(err) => Some(err.clone()),
             };
+
+        let orphans = self.orphan_blocks.take_all_children_of(last_processed_block);
+        let orphan_processing_result = orphans
+            .into_iter()
+            .map(|blk| self.process_block(blk, BlockSource::Local))
+            .collect::<Vec<_>>();
 
         let block_errors =
             orphan_processing_result.iter().filter_map(FILTER_ERROR).collect::<Vec<_>>();
