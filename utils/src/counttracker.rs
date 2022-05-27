@@ -1,5 +1,5 @@
 use atomic_traits::{Atomic, NumOps};
-use num_traits::One;
+use num_traits::{One, Zero};
 use std::sync::Arc;
 
 #[must_use = "CountTracker is useless without holding its object"]
@@ -7,6 +7,7 @@ pub struct CountTracker<T>
 where
     T: Atomic + NumOps,
     <T as Atomic>::Type: One,
+    <T as Atomic>::Type: Zero,
 {
     source: Arc<T>,
 }
@@ -15,6 +16,7 @@ impl<T> CountTracker<T>
 where
     T: Atomic + NumOps,
     <T as Atomic>::Type: One,
+    <T as Atomic>::Type: Zero,
 {
     #[must_use = "CountTracker is useless without holding its object"]
     pub fn new(source: Arc<T>) -> Self {
@@ -34,6 +36,7 @@ impl<T> Drop for CountTracker<T>
 where
     T: Atomic + NumOps,
     <T as Atomic>::Type: One,
+    <T as Atomic>::Type: Zero,
 {
     fn drop(&mut self) {
         self.source.fetch_sub(
