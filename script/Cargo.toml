@@ -9,8 +9,8 @@ crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 
-displaydoc = { default-features = false, version = "0.2" }
 parity-scale-codec = "3.1.2"
+thiserror = "1.0"
 
 [dev-dependencies]
 flate2 = "1.0.22"
