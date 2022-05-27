@@ -58,3 +58,39 @@ where
         self.wait_for_zero()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::{sync::atomic::AtomicI32, thread::JoinHandle, time::Duration};
+
+    use super::BlockUntilZero;
+
+    fn make_threads_with_counts(
+        blocker: &BlockUntilZero<AtomicI32>,
+        threads_count: usize,
+    ) -> Vec<JoinHandle<()>> {
+        (0..threads_count)
+            .into_iter()
+            .map(|_| {
+                let count = blocker.count_one();
+                std::thread::spawn(move || {
+                    let _count = count;
+                    std::thread::sleep(Duration::from_millis(10000));
+                })
+            })
+            .collect()
+    }
+
+    #[test]
+    fn basic() {
+        let blocker = BlockUntilZero::<AtomicI32>::new();
+        // make many threads, which all will increase the counter value
+        let threads_handles = make_threads_with_counts(&blocker, 10);
+        let joiner_thread =
+            std::thread::spawn(move || threads_handles.into_iter().for_each(|t| t.join().unwrap()));
+        // the two threads will join some time in the future, but the blocker will only return when the counter is zero
+        blocker.wait_for_zero();
+        assert_eq!(blocker.value(), 0);
+        joiner_thread.join().unwrap();
+    }
+}
