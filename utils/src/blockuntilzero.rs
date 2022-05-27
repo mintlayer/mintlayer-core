@@ -47,6 +47,18 @@ where
     }
 }
 
+impl<T> Default for BlockUntilZero<T>
+where
+    T: Atomic + NumOps,
+    <T as Atomic>::Type: One,
+    <T as Atomic>::Type: Zero,
+    <T as Atomic>::Type: Ord,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Drop for BlockUntilZero<T>
 where
     T: Atomic + NumOps,
