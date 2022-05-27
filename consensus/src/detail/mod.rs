@@ -65,12 +65,6 @@ pub struct Consensus {
     wait_for_events: utils::blockuntilzero::BlockUntilZero<std::sync::atomic::AtomicI32>,
 }
 
-impl Drop for Consensus {
-    fn drop(&mut self) {
-        self.wait_for_all_events();
-    }
-}
-
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
 pub enum BlockSource {
     Peer,
