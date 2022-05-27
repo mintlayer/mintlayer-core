@@ -87,7 +87,7 @@ mod test {
                 let count = blocker.count_one();
                 std::thread::spawn(move || {
                     let _count = count;
-                    std::thread::sleep(Duration::from_millis(10000));
+                    std::thread::sleep(Duration::from_millis(1000));
                 })
             })
             .collect()
