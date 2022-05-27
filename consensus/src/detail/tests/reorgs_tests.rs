@@ -40,7 +40,7 @@ fn test_reorg_simple() {
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block().get_id())
+            Some(consensus.chain_config.genesis_block_id())
         );
 
         // Process the second block
@@ -65,7 +65,7 @@ fn test_reorg_simple() {
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block().get_id())
+            Some(consensus.chain_config.genesis_block_id())
         );
         assert_eq!(
             consensus

@@ -68,9 +68,7 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![first_tx, second_tx],
-                Some(Id::new(
-                    &consensus.chain_config.genesis_block().get_id().get(),
-                )),
+                Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
                 time::get() as u32,
                 ConsensusData::None,
             )
@@ -126,9 +124,7 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![second_tx, first_tx],
-                Some(Id::new(
-                    &consensus.chain_config.genesis_block().get_id().get(),
-                )),
+                Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
                 time::get() as u32,
                 ConsensusData::None,
             )
@@ -141,7 +137,7 @@ fn spend_tx_in_the_same_block() {
                     .get_best_block_id()
                     .expect(ERR_BEST_BLOCK_NOT_FOUND)
                     .expect(ERR_STORAGE_FAIL),
-                consensus.chain_config.genesis_block().get_id()
+                consensus.chain_config.genesis_block_id()
             );
         }
     });
@@ -215,9 +211,7 @@ fn double_spend_tx_in_the_same_block() {
         // Create tx that pointing to the previous tx
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
-            Some(Id::new(
-                &consensus.chain_config.genesis_block().get_id().get(),
-            )),
+            Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
             time::get() as u32,
             ConsensusData::None,
         )
@@ -229,7 +223,7 @@ fn double_spend_tx_in_the_same_block() {
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND)
                 .expect(ERR_STORAGE_FAIL),
-            consensus.chain_config.genesis_block().get_id()
+            consensus.chain_config.genesis_block_id()
         );
     });
 }
@@ -277,9 +271,7 @@ fn double_spend_tx_in_another_block() {
         // Create tx that pointing to the previous tx
         let first_block = Block::new(
             vec![first_tx],
-            Some(Id::new(
-                &consensus.chain_config.genesis_block().get_id().get(),
-            )),
+            Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
             time::get() as u32,
             ConsensusData::None,
         )

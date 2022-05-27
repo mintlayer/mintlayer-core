@@ -56,6 +56,10 @@ impl OrphanBlocksPool {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.orphan_ids.len()
+    }
+
     fn drop_block(&mut self, block_id: &Id<Block>) {
         let block = self
             .orphan_by_id
@@ -124,7 +128,7 @@ impl OrphanBlocksPool {
     }
 
     fn prune(&mut self) {
-        if self.orphan_by_id.len() < self.max_orphans {
+        if self.len() < self.max_orphans {
             return;
         }
         let id = self.orphan_ids.choose(&mut crypto::random::make_pseudo_rng());
@@ -336,6 +340,7 @@ mod tests {
 
         // check if block was really inserted
         check_block_existence(&orphans_pool, &block);
+        assert_eq!(orphans_pool.len(), 1);
 
         // check if orphans pool is empty after clearing.
         orphans_pool.clear();
@@ -349,6 +354,7 @@ mod tests {
         // add a random block
         let block = gen_random_block();
         assert!(orphans_pool.add_block(block.clone()).is_ok());
+        assert_eq!(orphans_pool.len(), 1);
 
         check_block_existence_and_pool_length(&orphans_pool, &block, 1);
 
@@ -356,6 +362,7 @@ mod tests {
         let conn_block = gen_block_from_id(Some(block.get_id()));
         assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
+        assert_eq!(orphans_pool.len(), 2);
 
         // check that there is only 2 key-value pair in `orphans_by_prev_id`
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);

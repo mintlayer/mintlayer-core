@@ -37,7 +37,7 @@ pub(crate) fn validate_consensus(
             .expect("Block not genesis so must have a prev_block_id");
         block_index_handle
             .get_block_index(&prev_block_id)?
-            .ok_or(BlockError::Orphan)?
+            .ok_or(BlockError::IllegalOrphan)?
             .get_block_height()
             .checked_add(1)
             .expect("max block height reached")
