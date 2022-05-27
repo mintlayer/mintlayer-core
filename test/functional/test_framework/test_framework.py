@@ -564,16 +564,9 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
 
         addr_a = p2p_url(a) + "/p2p/" + id_a
         ret = self.nodes[b].p2p_connect(addr_a)
-        peers_a = self.nodes[a].p2p_get_connected_peers()
-        peers_b = self.nodes[b].p2p_get_connected_peers()
-
-        if id_a not in peers_b or id_b not in peers_a:
-            raise AssertionError(
-                "peers not connected to each other: peer a peers {}, peer b peers {}"
-            .format(
-                peers_a,
-                peers_b
-            ))
+        wait_until_helper(lambda:
+            self.nodes[b].p2p_get_connected_peers().count(id_a) != 0 and
+            self.nodes[a].p2p_get_connected_peers().count(id_b) != 0, timeout=60)
 
     def disconnect_nodes(self, a, b):
         def disconnect_nodes_helper(from_connection, node_num):
