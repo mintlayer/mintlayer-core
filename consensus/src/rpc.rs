@@ -22,6 +22,13 @@ trait ConsensusRpc {
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
     async fn submit_block(&self, block_hex: String) -> rpc::Result<()>;
+
+    /// Get block height in main chain
+    #[method(name = "block_height_in_main_chain")]
+    async fn block_height_in_main_chain(
+        &self,
+        block_id: BlockId,
+    ) -> rpc::Result<Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]
@@ -40,6 +47,13 @@ impl ConsensusRpcServer for super::ConsensusHandle {
         let block = Block::decode(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
         let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
         handle_error(res)
+    }
+
+    async fn block_height_in_main_chain(
+        &self,
+        block_id: BlockId,
+    ) -> rpc::Result<Option<BlockHeight>> {
+        handle_error(self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await)
     }
 }
 
