@@ -72,6 +72,8 @@ fn test_process_genesis_block() {
     });
 }
 
+// TODO: test the orphans' custom error hook
+
 #[test]
 fn test_orphans_chains() {
     common::concurrency::model(|| {
