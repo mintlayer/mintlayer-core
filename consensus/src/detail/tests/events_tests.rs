@@ -48,9 +48,9 @@ fn test_events_simple_subscribe() {
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
-        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
-        wait_for_threadpool_to_finish(&mut consensus);
-        assert!(events.lock().unwrap().len() == 1);
+        consensus.process_block(block, BlockSource::Local).unwrap();
+        consensus.wait_for_all_events();
+        assert_eq!(events.lock().unwrap().len(), 1);
         events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
             assert!(block_height == &expected_block_height);
             assert!(block_id == &expected_block_id);
@@ -90,8 +90,8 @@ fn test_events_with_a_bunch_of_subscribers() {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
         assert!(!consensus.event_subscribers.is_empty());
-        assert!(consensus.process_block(block, BlockSource::Local).is_ok());
-        wait_for_threadpool_to_finish(&mut consensus);
+        consensus.process_block(block, BlockSource::Local).unwrap();
+        consensus.wait_for_all_events();
         assert!(events.lock().unwrap().len() == COUNT_SUBSCRIBERS);
         events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
             assert!(block_height == &expected_block_height);
@@ -149,9 +149,15 @@ fn test_events_a_bunch_of_events() {
                 .ok()
                 .flatten()
                 .unwrap();
-            wait_for_threadpool_to_finish(&mut consensus);
-            assert!(block_index.get_block_id() == &events.lock().unwrap().last().unwrap().0);
-            assert!(block_index.get_block_height() == events.lock().unwrap().last().unwrap().1);
+            consensus.wait_for_all_events();
+            assert_eq!(
+                block_index.get_block_id(),
+                &events.lock().unwrap().last().unwrap().0
+            );
+            assert_eq!(
+                block_index.get_block_height(),
+                events.lock().unwrap().last().unwrap().1
+            );
         }
     });
 }
@@ -182,8 +188,8 @@ fn test_events_orphan_block() {
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
         assert!(!consensus.event_subscribers.is_empty());
-        assert!(consensus.process_block(block, BlockSource::Local).is_err());
-        wait_for_threadpool_to_finish(&mut consensus);
+        consensus.process_block(block, BlockSource::Local).unwrap_err();
+        consensus.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
     });
 }
