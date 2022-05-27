@@ -43,7 +43,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
             opts.p2p_addr,
         )
         .await
-        .unwrap(),
+        .expect("The p2p subsystem initialization failed"),
     );
 
     // RPC subsystem
