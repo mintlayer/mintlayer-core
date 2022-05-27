@@ -33,6 +33,7 @@ use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use utils::blockuntilzero::BlockUntilZero;
 mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
@@ -62,7 +63,7 @@ pub struct Consensus {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
-    wait_for_events: utils::blockuntilzero::BlockUntilZero<std::sync::atomic::AtomicI32>,
+    wait_for_events: BlockUntilZero<std::sync::atomic::AtomicI32>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -140,7 +141,7 @@ impl Consensus {
             custom_orphan_error_hook,
             event_subscribers: Vec::new(),
             events_broadcaster: event_broadcaster,
-            wait_for_events: utils::blockuntilzero::BlockUntilZero::new(),
+            wait_for_events: BlockUntilZero::new(),
         };
         Ok(cons)
     }
