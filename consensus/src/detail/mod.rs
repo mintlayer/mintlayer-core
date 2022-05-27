@@ -198,13 +198,15 @@ impl Consensus {
         let result = consensus_ref.activate_best_chain(block_index, best_block_id.clone())?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
 
+        let new_block_index_after_orphans = self.process_orphans(&block.get_id());
+        let result = match new_block_index_after_orphans {
+            Some(result_from_orphan) => Some(result_from_orphan),
+            None => result,
+        };
+
         self.broadcast_new_tip_event(&result);
 
-        let new_block_index_after_orphans = self.process_orphans(&block.get_id());
-        match new_block_index_after_orphans {
-            Some(result_from_orphan) => Ok(Some(result_from_orphan)),
-            None => Ok(result),
-        }
+        Ok(result)
     }
 
     // TODO: used to check block size + other preliminary check before giving the block to process_block
