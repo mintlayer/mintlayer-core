@@ -62,7 +62,7 @@ pub struct Consensus {
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
-    events_in_progress: utils::blockuntilzero::BlockUntilZero<std::sync::atomic::AtomicI32>,
+    wait_for_events: utils::blockuntilzero::BlockUntilZero<std::sync::atomic::AtomicI32>,
 }
 
 impl Drop for Consensus {
@@ -79,8 +79,8 @@ pub enum BlockSource {
 
 impl Consensus {
     pub fn wait_for_all_events(&self) {
-        self.events_in_progress.wait_for_zero();
-        assert_eq!(self.events_in_progress.value(), 0);
+        self.wait_for_events.wait_for_zero();
+        assert_eq!(self.wait_for_events.value(), 0);
     }
 
     fn make_db_tx(&mut self) -> ConsensusRef {
@@ -146,7 +146,7 @@ impl Consensus {
             custom_orphan_error_hook,
             event_subscribers: Vec::new(),
             events_broadcaster: event_broadcaster,
-            events_in_progress: utils::blockuntilzero::BlockUntilZero::new(),
+            wait_for_events: utils::blockuntilzero::BlockUntilZero::new(),
         };
         Ok(cons)
     }
@@ -156,7 +156,7 @@ impl Consensus {
             Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
-                let tracker = self.events_in_progress.count_one();
+                let tracker = self.wait_for_events.count_one();
                 self.events_broadcaster.spawn(move || {
                     let tracker = tracker;
                     assert!(tracker.value() > 0);
