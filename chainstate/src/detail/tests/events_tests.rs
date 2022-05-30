@@ -26,10 +26,10 @@ fn test_events_simple_subscribe() {
     use std::sync::Arc;
 
     common::concurrency::model(|| {
-        let mut consensus = setup_consensus();
+        let mut chainstate = setup_chainstate();
 
         // We should connect a new block
-        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
         // The event "NewTip" should return block_id and height
         let expected_block_id = block.get_id();
         let expected_block_height = BlockHeight::new(1);
@@ -37,19 +37,20 @@ fn test_events_simple_subscribe() {
         // Event handler
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
-        let subscribe_func = Arc::new(
-            move |consensus_event: ChainstateEvent| match consensus_event {
-                ChainstateEvent::NewTip(block_id, block_height) => {
-                    events_copy.lock().unwrap().push((block_id, block_height));
-                }
-            },
-        );
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: ChainstateEvent| match chainstate_event {
+                    ChainstateEvent::NewTip(block_id, block_height) => {
+                        events_copy.lock().unwrap().push((block_id, block_height));
+                    }
+                },
+            );
 
         // Subscribe and then process a new block
-        consensus.subscribe_to_events(subscribe_func);
-        assert!(!consensus.events_controller.subscribers().is_empty());
-        consensus.process_block(block, BlockSource::Local).unwrap();
-        consensus.wait_for_all_events();
+        chainstate.subscribe_to_events(subscribe_func);
+        assert!(!chainstate.events_controller.subscribers().is_empty());
+        chainstate.process_block(block, BlockSource::Local).unwrap();
+        chainstate.wait_for_all_events();
         assert_eq!(events.lock().unwrap().len(), 1);
         events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
             assert!(block_height == &expected_block_height);
@@ -65,10 +66,10 @@ fn test_events_with_a_bunch_of_subscribers() {
     const COUNT_SUBSCRIBERS: usize = 100;
 
     common::concurrency::model(|| {
-        let mut consensus = setup_consensus();
+        let mut chainstate = setup_chainstate();
 
         // We should connect a new block
-        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
 
         // The event "NewTip" should return block_id and height
         let expected_block_id = block.get_id();
@@ -77,21 +78,22 @@ fn test_events_with_a_bunch_of_subscribers() {
         // Event handler
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
-        let subscribe_func = Arc::new(
-            move |consensus_event: ChainstateEvent| match consensus_event {
-                ChainstateEvent::NewTip(block_id, block_height) => {
-                    events_copy.lock().unwrap().push((block_id, block_height));
-                }
-            },
-        );
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: ChainstateEvent| match chainstate_event {
+                    ChainstateEvent::NewTip(block_id, block_height) => {
+                        events_copy.lock().unwrap().push((block_id, block_height));
+                    }
+                },
+            );
 
         // Subscribe and then process a new block
         for _ in 0..COUNT_SUBSCRIBERS {
-            consensus.subscribe_to_events(subscribe_func.clone());
+            chainstate.subscribe_to_events(subscribe_func.clone());
         }
-        assert!(!consensus.events_controller.subscribers().is_empty());
-        consensus.process_block(block, BlockSource::Local).unwrap();
-        consensus.wait_for_all_events();
+        assert!(!chainstate.events_controller.subscribers().is_empty());
+        chainstate.process_block(block, BlockSource::Local).unwrap();
+        chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().len() == COUNT_SUBSCRIBERS);
         events.lock().unwrap().iter().for_each(|(block_id, block_height)| {
             assert!(block_height == &expected_block_height);
@@ -111,11 +113,11 @@ fn test_events_a_bunch_of_events() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
 
         let mut map_heights: BTreeMap<Id<Block>, BlockHeight> = BTreeMap::new();
         let mut blocks = Vec::new();
-        let mut rand_block = consensus.chain_config.genesis_block().clone();
+        let mut rand_block = chainstate.chain_config.genesis_block().clone();
         for height in 0..COUNT_EVENTS {
             rand_block = produce_test_block(&rand_block, false);
             blocks.push(rand_block.clone());
@@ -128,28 +130,29 @@ fn test_events_a_bunch_of_events() {
         // Event handler
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
-        let subscribe_func = Arc::new(
-            move |consensus_event: ChainstateEvent| match consensus_event {
-                ChainstateEvent::NewTip(block_id, block_height) => {
-                    events_copy.lock().unwrap().push((block_id, block_height));
-                }
-            },
-        );
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: ChainstateEvent| match chainstate_event {
+                    ChainstateEvent::NewTip(block_id, block_height) => {
+                        events_copy.lock().unwrap().push((block_id, block_height));
+                    }
+                },
+            );
 
         // Subscribe and then process a new block
         for _ in 0..COUNT_SUBSCRIBERS {
-            consensus.subscribe_to_events(subscribe_func.clone());
+            chainstate.subscribe_to_events(subscribe_func.clone());
         }
-        assert!(!consensus.events_controller.subscribers().is_empty());
+        assert!(!chainstate.events_controller.subscribers().is_empty());
 
         for block in blocks {
             // We should connect a new block
-            let block_index = consensus
+            let block_index = chainstate
                 .process_block(block.clone(), BlockSource::Local)
                 .ok()
                 .flatten()
                 .unwrap();
-            consensus.wait_for_all_events();
+            chainstate.wait_for_all_events();
             assert_eq!(
                 block_index.get_block_id(),
                 &events.lock().unwrap().last().unwrap().0
@@ -170,26 +173,27 @@ fn test_events_orphan_block() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
 
         // Let's create an orphan block
-        let block = produce_test_block(consensus.chain_config.genesis_block(), true);
+        let block = produce_test_block(chainstate.chain_config.genesis_block(), true);
 
         // Event handler
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
-        let subscribe_func = Arc::new(
-            move |consensus_event: ChainstateEvent| match consensus_event {
-                ChainstateEvent::NewTip(block_id, block_height) => {
-                    events_copy.lock().unwrap().push((block_id, block_height));
-                }
-            },
-        );
+        let subscribe_func =
+            Arc::new(
+                move |chainstate_event: ChainstateEvent| match chainstate_event {
+                    ChainstateEvent::NewTip(block_id, block_height) => {
+                        events_copy.lock().unwrap().push((block_id, block_height));
+                    }
+                },
+            );
         // Subscribe and then process a new block
-        consensus.subscribe_to_events(subscribe_func);
-        assert!(!consensus.events_controller.subscribers().is_empty());
-        consensus.process_block(block, BlockSource::Local).unwrap_err();
-        consensus.wait_for_all_events();
+        chainstate.subscribe_to_events(subscribe_func);
+        assert!(!chainstate.events_controller.subscribers().is_empty());
+        chainstate.process_block(block, BlockSource::Local).unwrap_err();
+        chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
     });
 }
