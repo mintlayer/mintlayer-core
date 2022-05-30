@@ -38,11 +38,11 @@ fn spend_tx_in_the_same_block() {
         // | +-------------------+ |
         // +-----------------------+
         {
-            let mut consensus = setup_consensus();
+            let mut chainstate = setup_chainstate();
             // Create base tx
             let receiver = anyonecanspend_address();
 
-            let prev_block_tx_id = consensus
+            let prev_block_tx_id = chainstate
                 .chain_config
                 .genesis_block()
                 .transactions()
@@ -68,16 +68,16 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![first_tx, second_tx],
-                Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
+                Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
                 time::get() as u32,
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
             let block_id = block.get_id();
 
-            assert!(consensus.process_block(block, BlockSource::Local).is_ok());
+            assert!(chainstate.process_block(block, BlockSource::Local).is_ok());
             assert_eq!(
-                consensus
+                chainstate
                     .blockchain_storage
                     .get_best_block_id()
                     .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -99,12 +99,12 @@ fn spend_tx_in_the_same_block() {
         // | +-------------------+ |
         // +-----------------------+
         {
-            let mut consensus = setup_consensus();
+            let mut chainstate = setup_chainstate();
             // Create base tx
             let receiver = anyonecanspend_address();
 
             let prev_block_tx_id =
-                consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+                chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
 
             let input = TxInput::new(
                 OutPointSourceId::Transaction(prev_block_tx_id),
@@ -124,20 +124,20 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![second_tx, first_tx],
-                Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
+                Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
                 time::get() as u32,
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
 
-            assert!(consensus.process_block(block, BlockSource::Local).is_err());
+            assert!(chainstate.process_block(block, BlockSource::Local).is_err());
             assert_eq!(
-                consensus
+                chainstate
                     .blockchain_storage
                     .get_best_block_id()
                     .expect(ERR_BEST_BLOCK_NOT_FOUND)
                     .expect(ERR_STORAGE_FAIL),
-                consensus.chain_config.genesis_block_id()
+                chainstate.chain_config.genesis_block_id()
             );
         }
     });
@@ -166,11 +166,11 @@ fn double_spend_tx_in_the_same_block() {
         // | +-------------------+ |
         // +-----------------------+
 
-        let mut consensus = setup_consensus();
+        let mut chainstate = setup_chainstate();
         let receiver = anyonecanspend_address();
 
         let prev_block_tx_id =
-            consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+            chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
 
         // Create first tx
         let first_tx = Transaction::new(
@@ -211,19 +211,19 @@ fn double_spend_tx_in_the_same_block() {
         // Create tx that pointing to the previous tx
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
-            Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
+            Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
             time::get() as u32,
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert!(consensus.process_block(block, BlockSource::Local).is_err());
+        assert!(chainstate.process_block(block, BlockSource::Local).is_err());
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND)
                 .expect(ERR_STORAGE_FAIL),
-            consensus.chain_config.genesis_block_id()
+            chainstate.chain_config.genesis_block_id()
         );
     });
 }
@@ -249,11 +249,11 @@ fn double_spend_tx_in_another_block() {
         // | +-------------------+ |
         // +-----------------------+
 
-        let mut consensus = setup_consensus();
+        let mut chainstate = setup_chainstate();
         let receiver = anyonecanspend_address();
 
         let prev_block_tx_id =
-            consensus.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+            chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
 
         // Create first tx
         let first_tx = Transaction::new(
@@ -271,15 +271,15 @@ fn double_spend_tx_in_another_block() {
         // Create tx that pointing to the previous tx
         let first_block = Block::new(
             vec![first_tx],
-            Some(Id::new(&consensus.chain_config.genesis_block_id().get())),
+            Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
             time::get() as u32,
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
         let first_block_id = first_block.get_id();
-        consensus.process_block(first_block, BlockSource::Local).unwrap();
+        chainstate.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -306,9 +306,9 @@ fn double_spend_tx_in_another_block() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert!(consensus.process_block(second_block, BlockSource::Local).is_err());
+        assert!(chainstate.process_block(second_block, BlockSource::Local).is_err());
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND)

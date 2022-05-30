@@ -16,7 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::detail::orphan_blocks::OrphanBlocksPool;
-use crate::ConsensusEvent;
+use crate::ChainstateEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
@@ -44,7 +44,7 @@ mod pow;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
-type ConsensusEventHandler = EventHandler<ConsensusEvent>;
+type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
@@ -56,12 +56,12 @@ use consensus_validator::BlockIndexHandle;
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
-pub struct Consensus {
+pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    events_controller: EventsController<ConsensusEvent>,
+    events_controller: EventsController<ChainstateEvent>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -70,30 +70,30 @@ pub enum BlockSource {
     Local,
 }
 
-impl Consensus {
+impl Chainstate {
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
 
-    fn make_db_tx(&mut self) -> ConsensusRef {
+    fn make_db_tx(&mut self) -> ChainstateRef {
         let db_tx = self.blockchain_storage.transaction_rw();
-        ConsensusRef {
+        ChainstateRef {
             chain_config: &self.chain_config,
             db_tx,
             orphan_blocks: &mut self.orphan_blocks,
         }
     }
 
-    fn make_ro_db_tx(&self) -> ConsensusRefRo {
+    fn make_ro_db_tx(&self) -> ChainstateRefRo {
         let db_tx = self.blockchain_storage.transaction_ro();
-        ConsensusRefRo {
+        ChainstateRefRo {
             chain_config: &self.chain_config,
             db_tx,
             orphan_blocks: &self.orphan_blocks,
         }
     }
 
-    pub fn subscribe_to_events(&mut self, handler: ConsensusEventHandler) {
+    pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
         self.events_controller.subscribe_to_events(handler);
     }
 
@@ -101,13 +101,13 @@ impl Consensus {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    ) -> Result<Self, crate::ConsensusError> {
-        use crate::ConsensusError;
+    ) -> Result<Self, crate::ChainstateError> {
+        use crate::ChainstateError;
 
         let mut cons =
             Self::new_no_genesis(chain_config, blockchain_storage, custom_orphan_error_hook)?;
         let best_block_id = cons.get_best_block_id().map_err(|e| {
-            ConsensusError::FailedToInitializeConsensus(format!("Database read error: {:?}", e))
+            ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
         })?;
         if best_block_id.is_none() {
             cons.process_block(
@@ -115,7 +115,7 @@ impl Consensus {
                 BlockSource::Local,
             )
             .map_err(|e| {
-                ConsensusError::FailedToInitializeConsensus(format!(
+                ChainstateError::FailedToInitializeChainstate(format!(
                     "Genesis block processing error: {:?}",
                     e
                 ))
@@ -128,7 +128,7 @@ impl Consensus {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    ) -> Result<Self, crate::ConsensusError> {
+    ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
             blockchain_storage,
@@ -144,7 +144,7 @@ impl Consensus {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
-                self.events_controller.broadcast(ConsensusEvent::NewTip(new_id, new_height))
+                self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
         }
@@ -173,18 +173,18 @@ impl Consensus {
         block: Block,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let mut consensus_ref = self.make_db_tx();
+        let mut chainstate_ref = self.make_db_tx();
 
-        let block = consensus_ref.check_legitimate_orphan(block_source, block)?;
+        let block = chainstate_ref.check_legitimate_orphan(block_source, block)?;
 
         // Reasonable reduce amount of calls to DB
-        let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
+        let best_block_id = chainstate_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
 
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
-        consensus_ref.check_block(&block, block_source)?;
-        let block_index = consensus_ref.accept_block(&block)?;
-        let result = consensus_ref.activate_best_chain(block_index, best_block_id)?;
-        consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
+        chainstate_ref.check_block(&block, block_source)?;
+        let block_index = chainstate_ref.accept_block(&block)?;
+        let result = chainstate_ref.activate_best_chain(block_index, best_block_id)?;
+        chainstate_ref.commit_db_tx().expect("Committing transactions to DB failed");
 
         let new_block_index_after_orphans = self.process_orphans(&block.get_id());
         let result = match new_block_index_after_orphans {
@@ -203,9 +203,9 @@ impl Consensus {
     }
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
+        let chainstate_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
-        let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
+        let best_block_id = chainstate_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
         Ok(best_block_id)
     }
 
@@ -213,9 +213,9 @@ impl Consensus {
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockHeight>, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
+        let chainstate_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
-        let block_index = consensus_ref.db_tx.get_block_index(id).map_err(BlockError::from)?;
+        let block_index = chainstate_ref.db_tx.get_block_index(id).map_err(BlockError::from)?;
         let block_index = block_index.ok_or(BlockError::NotFound)?;
         if block_index.get_block_id() == id {
             Ok(Some(block_index.get_block_height()))
@@ -228,17 +228,17 @@ impl Consensus {
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<Block>>, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
+        let chainstate_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
         let block_id =
-            consensus_ref.db_tx.get_block_id_by_height(height).map_err(BlockError::from)?;
+            chainstate_ref.db_tx.get_block_id_by_height(height).map_err(BlockError::from)?;
         Ok(block_id)
     }
 
     pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
+        let chainstate_ref = self.make_ro_db_tx();
         // Reasonable reduce amount of calls to DB
-        let block = consensus_ref.db_tx.get_block(id).map_err(BlockError::from)?;
+        let block = chainstate_ref.db_tx.get_block(id).map_err(BlockError::from)?;
         Ok(block)
     }
 
@@ -250,12 +250,12 @@ impl Consensus {
         &self,
         height: &BlockHeight,
     ) -> Result<Option<BlockHeader>, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
-        let id = consensus_ref
+        let chainstate_ref = self.make_ro_db_tx();
+        let id = chainstate_ref
             .db_tx
             .get_block_id_by_height(height)?
             .ok_or(BlockError::NotFound)?;
-        Ok(consensus_ref
+        Ok(chainstate_ref
             .db_tx
             .get_block_index(&id)?
             .map(|block_index| block_index.into_block_header()))
@@ -276,12 +276,12 @@ impl Consensus {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    // TODO: use `ConsensusRef::is_block_in_main_chain()` implementation instead, how?
+    // TODO: use `ChainstateRef::is_block_in_main_chain()` implementation instead, how?
     fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
-        let consensus_ref = self.make_ro_db_tx();
+        let chainstate_ref = self.make_ro_db_tx();
         let height = block_index.get_block_height();
         let id_at_height =
-            consensus_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+            chainstate_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
         Ok(id_at_height.map_or(false, |id| id == *block_index.get_block_id()))
     }
 
@@ -337,14 +337,14 @@ impl Consensus {
     }
 }
 
-pub(crate) struct ConsensusRef<'a> {
+pub(crate) struct ChainstateRef<'a> {
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
     db_tx: TxRw<'a>,
     orphan_blocks: &'a mut OrphanBlocksPool,
 }
 
-struct ConsensusRefRo<'a> {
+struct ChainstateRefRo<'a> {
     #[allow(dead_code)]
     chain_config: &'a ChainConfig,
     // TODO: make this generic over Rw and Ro
@@ -353,7 +353,7 @@ struct ConsensusRefRo<'a> {
     orphan_blocks: &'a OrphanBlocksPool,
 }
 
-impl<'a> BlockIndexHandle for ConsensusRef<'a> {
+impl<'a> BlockIndexHandle for ChainstateRef<'a> {
     fn get_block_index(
         &self,
         block_index: &Id<Block>,
@@ -369,7 +369,7 @@ impl<'a> BlockIndexHandle for ConsensusRef<'a> {
     }
 }
 
-impl<'a> ConsensusRef<'a> {
+impl<'a> ChainstateRef<'a> {
     fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,

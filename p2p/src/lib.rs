@@ -22,9 +22,9 @@ use crate::{
         PubSubService, SyncingCodecService,
     },
 };
+use chainstate::chainstate_interface;
 use common::chain::block;
 use common::chain::ChainConfig;
-use consensus::consensus_interface;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
@@ -152,7 +152,7 @@ where
     pub async fn new(
         bind_addr: String,
         config: Arc<ChainConfig>,
-        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> error::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
@@ -223,7 +223,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
-    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     bind_addr: String,
 ) -> Result<P2pInterface<T>, P2pError>
 where

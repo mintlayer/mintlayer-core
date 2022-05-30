@@ -1,6 +1,6 @@
-//! Consensus subsystem RPC handler
+//! Chainstate subsystem RPC handler
 
-use crate::ConsensusError;
+use crate::ChainstateError;
 
 use crate::{Block, BlockSource};
 use common::primitives::BlockHeight;
@@ -9,8 +9,8 @@ use subsystem::subsystem::CallError;
 
 type BlockId = common::primitives::Id<common::chain::block::Block>;
 
-#[rpc::rpc(server, namespace = "consensus")]
-trait ConsensusRpc {
+#[rpc::rpc(server, namespace = "chainstate")]
+trait ChainstateRpc {
     /// Get the best block ID
     #[method(name = "best_block_id")]
     async fn best_block_id(&self) -> rpc::Result<BlockId>;
@@ -32,7 +32,7 @@ trait ConsensusRpc {
 }
 
 #[async_trait::async_trait]
-impl ConsensusRpcServer for super::ConsensusHandle {
+impl ChainstateRpcServer for super::ChainstateHandle {
     async fn best_block_id(&self) -> rpc::Result<BlockId> {
         handle_error(self.call(|this| this.get_best_block_id()).await)
     }
@@ -57,7 +57,7 @@ impl ConsensusRpcServer for super::ConsensusHandle {
     }
 }
 
-fn handle_error<T>(e: Result<Result<T, ConsensusError>, CallError>) -> rpc::Result<T> {
+fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Result<T> {
     e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
 }
 
@@ -67,15 +67,15 @@ mod test {
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
-    async fn with_consensus<F: 'static + Send + Future<Output = ()>>(
-        proc: impl 'static + Send + FnOnce(crate::ConsensusHandle) -> F,
+    async fn with_chainstate<F: 'static + Send + Future<Output = ()>>(
+        proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
-            "consensus",
-            crate::make_consensus(cfg, storage, None).unwrap(),
+            "chainstate",
+            crate::make_chainstate(cfg, storage, None).unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",
@@ -86,10 +86,10 @@ mod test {
 
     #[tokio::test]
     async fn rpc_requests() {
-        with_consensus(|handle| async {
+        with_chainstate(|handle| async {
             let rpc = handle.into_rpc();
 
-            let res = rpc.call("consensus_best_block_id", [(); 0]).await;
+            let res = rpc.call("chainstate_best_block_id", [(); 0]).await;
             let genesis_hash = match res {
                 Ok(Value::String(hash_str)) => {
                     assert_eq!(hash_str.len(), 64);
@@ -99,10 +99,10 @@ mod test {
                 _ => panic!("expected a json object"),
             };
 
-            let res: rpc::Result<Value> = rpc.call("consensus_block_id_at_height", [0u32]).await;
+            let res: rpc::Result<Value> = rpc.call("chainstate_block_id_at_height", [0u32]).await;
             assert!(matches!(res, Ok(Value::String(hash)) if hash == genesis_hash));
 
-            let res: rpc::Result<Value> = rpc.call("consensus_block_id_at_height", [1u32]).await;
+            let res: rpc::Result<Value> = rpc.call("chainstate_block_id_at_height", [1u32]).await;
             assert!(matches!(res, Ok(Value::Null)));
         })
         .await

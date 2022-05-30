@@ -27,28 +27,28 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
-        let result = consensus.process_block(
-            consensus.chain_config.genesis_block().clone(),
+        let result = chainstate.process_block(
+            chainstate.chain_config.genesis_block().clone(),
             BlockSource::Local,
         );
         assert!(result.is_ok());
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block_id())
+            Some(chainstate.chain_config.genesis_block_id())
         );
 
         // Process the second block
-        let block_first = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block_first = produce_test_block(chainstate.chain_config.genesis_block(), false);
         let new_id = Some(block_first.get_id());
-        consensus.process_block(block_first.clone(), BlockSource::Local).unwrap();
+        chainstate.process_block(block_first.clone(), BlockSource::Local).unwrap();
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -56,19 +56,19 @@ fn test_reorg_simple() {
         );
 
         // Process the parallel block and choose the better one
-        let block_second = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block_second = produce_test_block(chainstate.chain_config.genesis_block(), false);
         assert_ne!(block_first.get_id(), block_second.get_id());
         // let new_id = Some(block.get_id());
-        consensus.process_block(block_second.clone(), BlockSource::Local).unwrap();
+        chainstate.process_block(block_second.clone(), BlockSource::Local).unwrap();
         assert_ne!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block_id())
+            Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -78,9 +78,9 @@ fn test_reorg_simple() {
         // Produce another block that cause reorg
         let new_block = produce_test_block(&block_second, false);
         let new_id = Some(new_block.get_id());
-        assert!(consensus.process_block(new_block, BlockSource::Local).is_ok());
+        assert!(chainstate.process_block(new_block, BlockSource::Local).is_ok());
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -139,7 +139,7 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventLi
     check_last_event(btf, events);
 
     let block = btf
-        .consensus
+        .chainstate
         .blockchain_storage
         .get_block(btf.block_indexes[NEW_CHAIN_END_ON - 1].get_block_id().clone())
         .unwrap()
@@ -176,7 +176,7 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
         )
         .is_ok());
     let block = btf
-        .consensus
+        .chainstate
         .blockchain_storage
         .get_block(btf.block_indexes[NEW_CHAIN_END_ON].get_block_id().clone())
         .unwrap()
@@ -205,7 +205,7 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
     // Reject a chain with a double spend, even if it is longer
     //
     let block = btf
-        .consensus
+        .chainstate
         .blockchain_storage
         .get_block(btf.block_indexes.last().unwrap().get_block_id().clone())
         .unwrap()
@@ -284,7 +284,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
     // Reorg to a longer chain
     //
     let block = btf
-        .consensus
+        .chainstate
         .blockchain_storage
         .get_block(btf.block_indexes.last().unwrap().get_block_id().clone())
         .unwrap()
@@ -367,7 +367,7 @@ fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
 
 fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
-    btf.consensus.wait_for_all_events();
+    btf.chainstate.wait_for_all_events();
     let events = events.lock().unwrap();
     assert!(!events.is_empty());
     match events.last() {
@@ -392,12 +392,12 @@ fn subscribe_to_events(btf: &mut BlockTestFramework, events: &EventList) {
     assert!(!events.lock().unwrap().is_empty());
     // Event handler
     let subscribe_func = Arc::new(
-        move |consensus_event: ConsensusEvent| match consensus_event {
-            ConsensusEvent::NewTip(block_id, block_height) => {
+        move |chainstate_event: ChainstateEvent| match chainstate_event {
+            ChainstateEvent::NewTip(block_id, block_height) => {
                 events.lock().unwrap().push((block_id, block_height));
                 assert!(!events.lock().unwrap().is_empty());
             }
         },
     );
-    btf.consensus.subscribe_to_events(subscribe_func);
+    btf.chainstate.subscribe_to_events(subscribe_func);
 }

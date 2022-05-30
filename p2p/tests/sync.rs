@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
+use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
     address::Address,
     chain::{
@@ -26,7 +27,6 @@ use common::{
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
-use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use crypto::random::Rng;
 use futures::FutureExt;
 use p2p::{
@@ -51,7 +51,7 @@ mod util;
 
 async fn make_sync_manager<T>(
     addr: T::Address,
-    handle: subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> (
     SyncManager<T>,
     T::ConnectivityHandle,
@@ -111,15 +111,15 @@ where
 
 // initialize two blockchains which have the same longest chain
 // that is `num_blocks` long
-async fn init_consensus_2(
+async fn init_chainstate_2(
     config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
-    let handle1 = util::start_consensus(Arc::clone(&config)).await;
-    let handle2 = util::start_consensus(Arc::clone(&config)).await;
+    let handle1 = util::start_chainstate(Arc::clone(&config)).await;
+    let handle2 = util::start_chainstate(Arc::clone(&config)).await;
     let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
@@ -128,17 +128,17 @@ async fn init_consensus_2(
     (handle1, handle2)
 }
 
-async fn init_consensus_3(
+async fn init_chainstate_3(
     config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
-    let handle1 = util::start_consensus(Arc::clone(&config)).await;
-    let handle2 = util::start_consensus(Arc::clone(&config)).await;
-    let handle3 = util::start_consensus(Arc::clone(&config)).await;
+    let handle1 = util::start_chainstate(Arc::clone(&config)).await;
+    let handle2 = util::start_chainstate(Arc::clone(&config)).await;
+    let handle3 = util::start_chainstate(Arc::clone(&config)).await;
     let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
     util::import_blocks(&handle1, blocks.clone()).await;
@@ -149,19 +149,19 @@ async fn init_consensus_3(
 }
 
 async fn same_tip(
-    handle1: &subsystem::Handle<Box<dyn ConsensusInterface>>,
-    handle2: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle1: &subsystem::Handle<Box<dyn ChainstateInterface>>,
+    handle2: &subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> bool {
     get_tip(handle1).await == get_tip(handle2).await
 }
 
-async fn get_tip(handle: &subsystem::Handle<Box<dyn ConsensusInterface>>) -> Id<Block> {
+async fn get_tip(handle: &subsystem::Handle<Box<dyn ChainstateInterface>>) -> Id<Block> {
     handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap()
 }
 
 async fn process_header_request<T>(
     mgr: &mut SyncManager<T>,
-    handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: &subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> Result<(), P2pError>
 where
     T: NetworkingService,
@@ -213,7 +213,7 @@ async fn local_and_remote_in_sync() {
     logging::init_logging::<&str>(None);
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -253,7 +253,7 @@ async fn local_and_remote_in_sync() {
 #[tokio::test]
 async fn remote_ahead_by_7_blocks() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -376,7 +376,7 @@ async fn remote_ahead_by_7_blocks() {
 #[tokio::test]
 async fn local_ahead_by_12_blocks() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -534,7 +534,7 @@ async fn local_ahead_by_12_blocks() {
 #[tokio::test]
 async fn remote_local_diff_chains_local_higher() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -729,7 +729,7 @@ async fn remote_local_diff_chains_local_higher() {
 #[tokio::test]
 async fn remote_local_diff_chains_remote_higher() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
@@ -922,7 +922,7 @@ async fn remote_local_diff_chains_remote_higher() {
 #[tokio::test]
 async fn two_remote_nodes_different_chains() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
+    let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -1062,7 +1062,7 @@ async fn two_remote_nodes_different_chains() {
 #[tokio::test]
 async fn two_remote_nodes_same_chains() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
+    let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -1216,7 +1216,7 @@ async fn two_remote_nodes_same_chains() {
 #[tokio::test]
 async fn two_remote_nodes_same_chains_new_blocks() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2, handle3) = init_consensus_3(Arc::clone(&config), 8).await;
+    let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
@@ -1384,7 +1384,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
 #[tokio::test]
 async fn test_connect_disconnect_resyncing() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (handle1, handle2) = init_consensus_2(Arc::clone(&config), 8).await;
+    let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 

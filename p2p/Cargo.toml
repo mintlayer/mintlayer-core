@@ -18,7 +18,7 @@ void = "1.0.2"
 
 # local dependencies
 common = { path = "../common/" }
-consensus = { path = "../consensus/" }
+chainstate = { path = "../chainstate/" }
 crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }

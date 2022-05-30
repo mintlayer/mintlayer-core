@@ -50,4 +50,10 @@ impl<E: Clone + Send + Sync + 'static> EventsController<E> {
     }
 }
 
+impl<E: Clone + Send + Sync + 'static> Default for EventsController<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // TODO: add tests for events
