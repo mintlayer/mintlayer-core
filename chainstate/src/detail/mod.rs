@@ -177,13 +177,13 @@ impl Chainstate {
         const MAX_DB_COMMIT_COUNT: usize = 10;
 
         if attempt_number >= MAX_DB_COMMIT_COUNT {
-            return Err(BlockError::DatabaseCommitError(
+            Err(BlockError::DatabaseCommitError(
                 block.get_id(),
                 MAX_DB_COMMIT_COUNT,
                 db_error,
-            ));
+            ))
         } else {
-            return self.attempt_to_process_block(block, block_source, attempt_number + 1);
+            self.attempt_to_process_block(block, block_source, attempt_number + 1)
         }
     }
 
