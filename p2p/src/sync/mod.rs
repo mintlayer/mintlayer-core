@@ -22,6 +22,9 @@ use crate::{
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
 };
+use chainstate::{
+    chainstate_interface, BlockError, BlockSource, ChainstateError::ProcessBlockError,
+};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -29,7 +32,6 @@ use common::{
     },
     primitives::{Id, Idable},
 };
-use consensus::{consensus_interface, BlockError, BlockSource, ConsensusError::ProcessBlockError};
 use futures::FutureExt;
 use logging::log;
 use std::{
@@ -65,7 +67,7 @@ impl<T> FatalError for error::Result<T> {
     fn map_fatal_err(self) -> core::result::Result<(), P2pError> {
         if let Err(err) = self {
             match err {
-                P2pError::ChannelClosed | P2pError::ConsensusError(_) => {
+                P2pError::ChannelClosed | P2pError::ChainstateError(_) => {
                     log::error!("fatal error occurred: {:#?}", err);
                     return Err(err);
                 }
@@ -135,8 +137,8 @@ where
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
-    /// Subsystem handle to Consensus
-    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    /// Subsystem handle to Chainstate
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// Pending requests
     requests: HashMap<T::RequestId, PendingRequest<T>>,
@@ -151,7 +153,7 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::SyncingCodecHandle,
-        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
         tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
@@ -162,7 +164,7 @@ where
             rx_sync,
             tx_swarm,
             tx_pubsub,
-            consensus_handle,
+            chainstate_handle,
             peers: Default::default(),
             requests: HashMap::new(),
             state: SyncState::Uninitialized,
@@ -250,7 +252,7 @@ where
                 Err(P2pError::PeerExists)
             }
             Entry::Vacant(entry) => {
-                let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
+                let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
                 entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
                 self.send_header_request(peer_id, locator, 0).await
             }
@@ -276,7 +278,7 @@ where
             locator
         );
 
-        let headers = self.consensus_handle.call(move |this| this.get_headers(locator)).await??;
+        let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
         self.handle
             .send_response(
                 request_id,
@@ -310,7 +312,7 @@ where
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let block_id = headers.get(0).expect("header to exist").clone();
         let block = self
-            .consensus_handle
+            .chainstate_handle
             .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
             .await??
             .ok_or_else(|| {
@@ -400,7 +402,7 @@ where
         }
 
         let unknown_headers = self
-            .consensus_handle
+            .chainstate_handle
             .call(|this| this.filter_already_existing_blocks(headers))
             .await??;
 
@@ -455,7 +457,7 @@ where
         let header = blocks.get(0).expect("block to exist").header().clone();
         let block = blocks.into_iter().next().expect("block to exist");
         let result = self
-            .consensus_handle
+            .chainstate_handle
             .call_mut(move |this| this.process_block(block, BlockSource::Peer))
             .await?;
 
@@ -464,7 +466,7 @@ where
             Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) => {
                 log::debug!("block {:?} already exists", id)
             }
-            Err(e) => return Err(P2pError::ConsensusError(e)),
+            Err(e) => return Err(P2pError::ChainstateError(e)),
         }
 
         let next_header = peer.register_block_response(&header);
@@ -497,7 +499,7 @@ where
             }
             Ok(None) => {
                 // last block from peer, ask if peer knows of any new headers
-                let locator = self.consensus_handle.call(|this| this.get_locator()).await??;
+                let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
                 peer.set_locator(locator.clone());
                 let request_id = self
                     .handle
@@ -624,7 +626,7 @@ where
                     match request.request_type {
                         RequestType::GetHeaders => {
                             let locator =
-                                self.consensus_handle.call(|this| this.get_locator()).await??;
+                                self.chainstate_handle.call(|this| this.get_locator()).await??;
                             self.send_header_request(peer_id, locator, request.retry_count + 1)
                                 .await?;
                         }
@@ -728,7 +730,7 @@ mod tests {
         event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
         net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
     };
-    use consensus::make_consensus;
+    use chainstate::make_chainstate;
     use libp2p::PeerId;
 
     async fn make_sync_manager<T>(
@@ -751,7 +753,7 @@ mod tests {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
-        let handle = man.add_subsystem("consensus", make_consensus(cfg, storage, None).unwrap());
+        let handle = man.add_subsystem("consensus", make_chainstate(cfg, storage, None).unwrap());
         tokio::spawn(async move { man.main().await });
 
         let config = Arc::new(common::chain::config::create_unit_test_config());

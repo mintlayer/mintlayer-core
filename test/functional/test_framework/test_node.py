@@ -237,7 +237,7 @@ class TestNode():
                     timeout=self.rpc_timeout // 2,  # Shorter timeout to allow for one retry in case of ETIMEDOUT
                     coveragedir=self.coverage_dir,
                 )
-                rpc.consensus_best_block_id()
+                rpc.chainstate_best_block_id()
                 # If the call to getblockcount() succeeds then the RPC connection is up
 
                 # TODO: Wait until mempool is loaded

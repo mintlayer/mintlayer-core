@@ -10,7 +10,7 @@ license = "MIT"
 # Local dependencies
 blockchain-storage = { path = "../blockchain_storage/" }
 common = { path = "../common/" }
-consensus = { path = "../consensus/" }
+chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
 p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }

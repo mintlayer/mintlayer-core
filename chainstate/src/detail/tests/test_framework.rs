@@ -23,32 +23,32 @@ use common::primitives::H256;
 use std::panic;
 
 pub(in crate::detail::tests) struct BlockTestFramework {
-    pub consensus: Consensus,
+    pub chainstate: Chainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
 impl<'a> BlockTestFramework {
-    pub fn with_consensus(consensus: Consensus) -> Self {
-        let genesis_index = consensus
+    pub fn with_chainstate(chainstate: Chainstate) -> Self {
+        let genesis_index = chainstate
             .blockchain_storage
-            .get_block_index(&consensus.chain_config.genesis_block_id())
+            .get_block_index(&chainstate.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
         Self {
-            consensus,
+            chainstate,
             block_indexes: vec![genesis_index],
         }
     }
 
     pub(in crate::detail::tests) fn new() -> Self {
-        let consensus = setup_consensus();
-        let genesis_index = consensus
+        let chainstate = setup_chainstate();
+        let genesis_index = chainstate
             .blockchain_storage
-            .get_block_index(&consensus.chain_config.genesis_block_id())
+            .get_block_index(&chainstate.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
         Self {
-            consensus,
+            chainstate,
             block_indexes: vec![genesis_index],
         }
     }
@@ -68,7 +68,7 @@ impl<'a> BlockTestFramework {
                 match param {
                     TestBlockParams::SpendFrom(block_id) => {
                         let block = self
-                            .consensus
+                            .chainstate
                             .blockchain_storage
                             .get_block(block_id.clone())
                             .unwrap()
@@ -97,7 +97,7 @@ impl<'a> BlockTestFramework {
     }
 
     pub(in crate::detail::tests) fn genesis(&self) -> &Block {
-        self.consensus.chain_config.genesis_block()
+        self.chainstate.chain_config.genesis_block()
     }
 
     fn get_children_blocks(
@@ -122,7 +122,7 @@ impl<'a> BlockTestFramework {
 
     #[allow(dead_code)]
     pub(in crate::detail::tests) fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
-        self.consensus.blockchain_storage.get_block_index(id).ok().flatten().unwrap()
+        self.chainstate.blockchain_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
     #[allow(dead_code)]
@@ -136,7 +136,7 @@ impl<'a> BlockTestFramework {
         } else {
             for block_id in &blocks {
                 let block_index = self
-                    .consensus
+                    .chainstate
                     .blockchain_storage
                     .get_block_index(block_id)
                     .ok()
@@ -200,7 +200,7 @@ impl<'a> BlockTestFramework {
         count_blocks: usize,
     ) -> Result<(), BlockError> {
         let mut block = self
-            .consensus
+            .chainstate
             .blockchain_storage
             .get_block(parent_block_id.clone())
             .ok()
@@ -209,9 +209,9 @@ impl<'a> BlockTestFramework {
 
         for _ in 0..count_blocks {
             block = produce_test_block(&block, false);
-            let block_index = self.consensus.process_block(block.clone(), BlockSource::Local)?;
+            let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
             self.block_indexes.push(block_index.unwrap_or_else(|| {
-                self.consensus
+                self.chainstate
                     .blockchain_storage
                     .get_block_index(&block.get_id())
                     .unwrap()
@@ -225,9 +225,9 @@ impl<'a> BlockTestFramework {
         &mut self,
         block: Block,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        let block_index = self.consensus.process_block(block.clone(), BlockSource::Local)?;
+        let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
         self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
-            self.consensus
+            self.chainstate
                 .blockchain_storage
                 .get_block_index(&block.get_id())
                 .unwrap()
@@ -242,7 +242,7 @@ impl<'a> BlockTestFramework {
         output_index: u32,
     ) -> Option<OutputSpentState> {
         let tx_index = self
-            .consensus
+            .chainstate
             .blockchain_storage
             .get_mainchain_tx_index(&OutPointSourceId::from(tx_id.clone()))
             .unwrap()?;
@@ -269,8 +269,11 @@ impl<'a> BlockTestFramework {
         expected_block_id: Option<&Id<Block>>,
     ) {
         if expected_block_id.is_some() {
-            let real_next_block_id =
-                self.consensus.blockchain_storage.get_block_id_by_height(&block_height).unwrap();
+            let real_next_block_id = self
+                .chainstate
+                .blockchain_storage
+                .get_block_id_by_height(&block_height)
+                .unwrap();
             assert_eq!(real_next_block_id.as_ref(), expected_block_id);
         }
     }
@@ -287,7 +290,7 @@ impl<'a> BlockTestFramework {
             match self.block_indexes.iter().find(|x| x.get_block_id() == block_id) {
                 Some(block_index) => {
                     let block = self
-                        .consensus
+                        .chainstate
                         .blockchain_storage
                         .get_block(block_index.get_block_id().clone())
                         .unwrap()
@@ -303,7 +306,7 @@ impl<'a> BlockTestFramework {
         }
 
         let block_index = self
-            .consensus
+            .chainstate
             .blockchain_storage
             .get_block_index(block_id)
             .ok()
@@ -316,7 +319,7 @@ impl<'a> BlockTestFramework {
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         let block_index = self
-            .consensus
+            .chainstate
             .blockchain_storage
             .get_block_index(block_id)
             .ok()
@@ -324,7 +327,7 @@ impl<'a> BlockTestFramework {
             .unwrap();
         let height = block_index.get_block_height();
         let id_at_height =
-            self.consensus.blockchain_storage.get_block_id_by_height(&height).unwrap();
+            self.chainstate.blockchain_storage.get_block_id_by_height(&height).unwrap();
         match id_at_height {
             Some(id) => id == *block_index.get_block_id(),
             None => false,
@@ -332,6 +335,6 @@ impl<'a> BlockTestFramework {
     }
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, BlockError> {
-        self.consensus.get_block(block_id)
+        self.chainstate.get_block(block_id)
     }
 }

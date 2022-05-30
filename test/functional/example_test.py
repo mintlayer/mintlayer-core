@@ -136,12 +136,12 @@ class ExampleTest(BitcoinTestFramework):
         """Main test logic"""
 
         # Get current tip hash
-        tip_hash_0 = self.nodes[0].consensus_best_block_id()
-        tip_hash_1 = self.nodes[1].consensus_best_block_id()
+        tip_hash_0 = self.nodes[0].chainstate_best_block_id()
+        tip_hash_1 = self.nodes[1].chainstate_best_block_id()
         self.log.info("bestblk: " + tip_hash_0)
 
         # Get genesis hash (hash of block at height 0)
-        genesis_hash = self.nodes[0].consensus_block_id_at_height(0)
+        genesis_hash = self.nodes[0].chainstate_block_id_at_height(0)
         self.log.info("genesis: " + genesis_hash)
 
         # Check they match

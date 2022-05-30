@@ -535,6 +535,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "chainstate"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "blockchain-storage",
+ "common",
+ "crypto",
+ "hex",
+ "itertools",
+ "jsonrpsee",
+ "logging",
+ "mockall",
+ "num",
+ "proptest",
+ "rand 0.8.5",
+ "replace_with",
+ "rpc",
+ "serde_json",
+ "serialization",
+ "static_assertions",
+ "subsystem",
+ "thiserror",
+ "tokio",
+ "utils",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -659,33 +686,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "30ed07550be01594c6026cff2a1d7fe9c8f683caa798e12b68694ac9e88286a3"
 dependencies = [
  "cache-padded",
-]
-
-[[package]]
-name = "consensus"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "blockchain-storage",
- "common",
- "crypto",
- "hex",
- "itertools",
- "jsonrpsee",
- "logging",
- "mockall",
- "num",
- "proptest",
- "rand 0.8.5",
- "replace_with",
- "rpc",
- "serde_json",
- "serialization",
- "static_assertions",
- "subsystem",
- "thiserror",
- "tokio",
- "utils",
 ]
 
 [[package]]
@@ -2200,8 +2200,8 @@ name = "mintlayer-core"
 version = "0.1.0"
 dependencies = [
  "blockchain-storage",
+ "chainstate",
  "common",
- "consensus",
  "crypto",
  "logging",
  "p2p",
@@ -2416,9 +2416,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "blockchain-storage",
+ "chainstate",
  "clap 3.1.18",
  "common",
- "consensus",
  "jsonrpsee",
  "logging",
  "p2p",
@@ -2577,8 +2577,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "blockchain-storage",
+ "chainstate",
  "common",
- "consensus",
  "crypto",
  "futures",
  "futures-timer",

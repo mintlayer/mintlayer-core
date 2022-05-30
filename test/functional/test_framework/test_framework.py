@@ -627,7 +627,7 @@ class BitcoinTestFramework(metaclass=BitcoinTestMetaClass):
         timeout = int(timeout * self.options.timeout_factor)
         stop_time = time.time() + timeout
         while time.time() <= stop_time:
-            best_hash = [x.consensus_best_block_id() for x in rpc_connections]
+            best_hash = [x.chainstate_best_block_id() for x in rpc_connections]
             if best_hash.count(best_hash[0]) == len(rpc_connections):
                 return
             # Check that each peer has at least one connection
