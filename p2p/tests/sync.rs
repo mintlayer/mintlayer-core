@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
+use chainstate::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use common::{
     address::Address,
     chain::{
@@ -26,7 +27,6 @@ use common::{
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
-use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use crypto::random::Rng;
 use futures::FutureExt;
 use p2p::{

@@ -78,7 +78,7 @@ pub enum P2pError {
     #[error("SubsystemFailure")]
     SubsystemFailure,
     #[error("ConsensusError: `{0:?}`")]
-    ConsensusError(consensus::ConsensusError),
+    ConsensusError(chainstate::ConsensusError),
     #[error("DatabaseFailure")]
     DatabaseFailure,
     #[error("InvalidPeerId")]
@@ -171,8 +171,8 @@ impl From<subsystem::subsystem::CallError> for P2pError {
     }
 }
 
-impl From<consensus::ConsensusError> for P2pError {
-    fn from(e: consensus::ConsensusError) -> P2pError {
+impl From<chainstate::ConsensusError> for P2pError {
+    fn from(e: chainstate::ConsensusError) -> P2pError {
         P2pError::ConsensusError(e)
     }
 }

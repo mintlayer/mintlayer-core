@@ -22,9 +22,9 @@ use crate::{
         PubSubService, SyncingCodecService,
     },
 };
+use chainstate::consensus_interface;
 use common::chain::block;
 use common::chain::ChainConfig;
-use consensus::consensus_interface;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
