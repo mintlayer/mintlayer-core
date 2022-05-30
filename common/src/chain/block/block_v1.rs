@@ -2,7 +2,7 @@ use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::chain::ChainConfig;
-use crate::chain::TxOutput;
+use crate::chain::{TxInput, TxOutput};
 use crate::primitives::id;
 use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
@@ -48,6 +48,13 @@ impl BlockHeader {
         match &self.consensus_data {
             ConsensusData::None => None,
             ConsensusData::PoW(pow_data) => Some(pow_data.outputs()),
+        }
+    }
+
+    pub fn block_production_inputs(&self) -> Option<&[TxInput]> {
+        match &self.consensus_data {
+            ConsensusData::None => None,
+            ConsensusData::PoW(_pow_data) => None,
         }
     }
 }

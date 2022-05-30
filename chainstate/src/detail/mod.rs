@@ -50,7 +50,7 @@ const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 mod spend_cache;
 use spend_cache::CachedInputs;
-
+use spend_cache::SpendKind;
 use consensus_validator::BlockIndexHandle;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
@@ -560,8 +560,19 @@ impl<'a> ChainstateRef<'a> {
     ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            cached_inputs.spend(block, tx_num, spend_height, blockreward_maturity)?;
+            cached_inputs.spend(
+                block,
+                SpendKind::Transaction(tx_num),
+                spend_height,
+                blockreward_maturity,
+            )?;
         }
+        cached_inputs.spend(
+            block,
+            SpendKind::BlockReward,
+            spend_height,
+            blockreward_maturity,
+        )?;
         Ok(cached_inputs)
     }
 
