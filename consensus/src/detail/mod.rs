@@ -33,7 +33,7 @@ use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use std::collections::BTreeSet;
 use std::sync::Arc;
-use utils::blockuntilzero::BlockUntilZero;
+use utils::eventhandler::{EventHandler, EventsController};
 mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
@@ -44,7 +44,6 @@ mod pow;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
-type EventHandler<T> = Arc<dyn Fn(T) + Send + Sync>;
 type ConsensusEventHandler = EventHandler<ConsensusEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
@@ -56,54 +55,13 @@ use consensus_validator::BlockIndexHandle;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
-struct EventsController {
-    event_subscribers: Vec<ConsensusEventHandler>,
-    events_broadcaster: slave_pool::ThreadPool,
-    wait_for_events: BlockUntilZero<std::sync::atomic::AtomicI32>,
-}
-
-impl EventsController {
-    pub fn new() -> Self {
-        let events_broadcaster = slave_pool::ThreadPool::new();
-        events_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
-        Self {
-            event_subscribers: Vec::new(),
-            events_broadcaster,
-            wait_for_events: BlockUntilZero::new(),
-        }
-    }
-
-    pub fn subscribers(&self) -> &Vec<ConsensusEventHandler> {
-        &self.event_subscribers
-    }
-
-    pub fn subscribe_to_events(&mut self, handler: ConsensusEventHandler) {
-        self.event_subscribers.push(handler)
-    }
-
-    pub fn wait_for_all_events(&self) {
-        self.wait_for_events.wait_for_zero();
-    }
-
-    pub fn broadcast(&self, event: ConsensusEvent) {
-        self.event_subscribers.iter().cloned().for_each(|f| {
-            let tracker = self.wait_for_events.count_one();
-            let event = event.clone();
-            self.events_broadcaster.spawn(move || {
-                let tracker = tracker;
-                assert!(tracker.value() > 0);
-                f(event)
-            })
-        })
-    }
-}
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    events_controller: EventsController,
+    events_controller: EventsController<ConsensusEvent>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
