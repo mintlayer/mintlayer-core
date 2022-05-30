@@ -33,15 +33,19 @@ impl<E: Clone + Send + Sync + 'static> EventsController<E> {
         self.wait_for_events.wait_for_zero();
     }
 
+    fn broadcast_spawn_call(&self, event: E, handler: EventHandler<E>) {
+        let tracker = self.wait_for_events.count_one();
+        self.events_broadcaster.spawn(move || {
+            let tracker = tracker;
+            assert!(tracker.value() > 0);
+            handler(event)
+        })
+    }
+
     pub fn broadcast(&self, event: E) {
         self.event_subscribers.iter().cloned().for_each(|handler| {
-            let tracker = self.wait_for_events.count_one();
             let event = event.clone();
-            self.events_broadcaster.spawn(move || {
-                let tracker = tracker;
-                assert!(tracker.value() > 0);
-                handler(event)
-            })
+            self.broadcast_spawn_call(event, handler)
         })
     }
 }
