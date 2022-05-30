@@ -45,3 +45,5 @@ impl<E: Clone + Send + Sync + 'static> EventsController<E> {
         })
     }
 }
+
+// TODO: add tests for events
