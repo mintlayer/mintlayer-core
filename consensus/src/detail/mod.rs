@@ -44,7 +44,8 @@ mod pow;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
-type ConsensusEventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
+type EventHandler<T> = Arc<dyn Fn(T) + Send + Sync>;
+type ConsensusEventHandler = EventHandler<ConsensusEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
