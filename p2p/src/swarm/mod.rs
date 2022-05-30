@@ -145,7 +145,10 @@ where
                     }
                 }
             }
-            event::SwarmEvent::Disconnect(peer_id) => self.disconnect_peer(peer_id).await,
+            // TODO: pending disconnection events
+            event::SwarmEvent::Disconnect(peer_id, response) => response
+                .send(self.handle.disconnect(peer_id).await)
+                .map_err(|_| P2pError::ChannelClosed),
             event::SwarmEvent::GetPeerCount(response) => {
                 response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
             }
@@ -268,18 +271,6 @@ where
         Ok(())
     }
 
-    /// Destroy peer information and close all connections to it
-    async fn disconnect_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
-        log::debug!("destroying peer {:?}", peer_id);
-
-        self.tx_sync
-            .send(event::SyncControlEvent::Disconnected(peer_id))
-            .await
-            .map_err(P2pError::from)?;
-        self.peers.remove(&peer_id);
-        self.handle.disconnect(peer_id).await
-    }
-
     /// Handle network event received from the network service provider
     async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
         match event {
@@ -293,14 +284,14 @@ where
 
                 if self.peers.get(&peer_id).is_some() {
                     log::error!("peer {:?} re-established connection", peer_id);
-                    return self.disconnect_peer(peer_id).await;
+                    return self.handle.disconnect(peer_id).await;
                 }
 
                 if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
                     log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
                     // TODO: save peer information for later?
                     // TODO: i.e., consider this a peer discovery event?
-                    return self.disconnect_peer(peer_id).await;
+                    return self.handle.disconnect(peer_id).await;
                 }
 
                 if peer_info.magic_bytes != *self.config.magic_bytes() {
@@ -328,14 +319,14 @@ where
 
                 if self.peers.get(&peer_id).is_some() {
                     log::error!("peer {:?} re-established connection", peer_id);
-                    return self.disconnect_peer(peer_id).await;
+                    return self.handle.disconnect(peer_id).await;
                 }
 
                 if self.peers.len() == MAX_ACTIVE_CONNECTIONS {
                     log::warn!("maximum number of connections reached, close new connection with peer {:?}", peer_id);
                     // TODO: save peer information for later?
                     // TODO: i.e., consider this a peer discovery event?
-                    return self.disconnect_peer(peer_id).await;
+                    return self.handle.disconnect(peer_id).await;
                 }
 
                 if peer_info.magic_bytes != *self.config.magic_bytes() {
@@ -356,6 +347,15 @@ where
                     .send(event::SyncControlEvent::Connected(peer_id))
                     .await
                     .map_err(P2pError::from)
+            }
+            net::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                log::debug!("connection closed for peer {:?}", peer_id);
+                self.tx_sync
+                    .send(event::SyncControlEvent::Disconnected(peer_id))
+                    .await
+                    .map_err(P2pError::from)?;
+                self.peers.remove(&peer_id);
+                Ok(())
             }
             net::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
             net::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
@@ -723,5 +723,37 @@ mod tests {
             swarm2.on_network_event(conn2_res).await,
             Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork))
         );
+    }
+
+    #[tokio::test]
+    async fn remote_closes_connection() {
+        let mut swarm1 = make_swarm_manager::<Libp2pService>(
+            test_utils::make_address("/ip6/::1/tcp/"),
+            Arc::new(config::create_mainnet()),
+        )
+        .await;
+        let mut swarm2 = make_swarm_manager::<Libp2pService>(
+            test_utils::make_address("/ip6/::1/tcp/"),
+            Arc::new(config::create_mainnet()),
+        )
+        .await;
+        let (conn1_res, conn2_res) = tokio::join!(
+            swarm1.handle.connect(swarm2.handle.local_addr().clone()),
+            swarm2.handle.poll_next()
+        );
+        let conn2_res: net::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        assert!(std::matches!(
+            conn2_res,
+            net::ConnectivityEvent::IncomingConnection { .. }
+        ));
+
+        assert_eq!(
+            swarm2.handle.disconnect(*swarm1.handle.peer_id()).await,
+            Ok(())
+        );
+        assert!(std::matches!(
+            swarm1.handle.poll_next().await,
+            Ok(net::ConnectivityEvent::ConnectionClosed { .. })
+        ));
     }
 }

@@ -2,7 +2,9 @@
 
 use crate::ConsensusError;
 
+use crate::{Block, BlockSource};
 use common::primitives::BlockHeight;
+use serialization::Decode;
 use subsystem::subsystem::CallError;
 
 type BlockId = common::primitives::Id<common::chain::block::Block>;
@@ -16,6 +18,17 @@ trait ConsensusRpc {
     /// Get block ID at given height in the mainchain
     #[method(name = "block_id_at_height")]
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<BlockId>>;
+
+    /// Submit a block to be included in the chain
+    #[method(name = "submit_block")]
+    async fn submit_block(&self, block_hex: String) -> rpc::Result<()>;
+
+    /// Get block height in main chain
+    #[method(name = "block_height_in_main_chain")]
+    async fn block_height_in_main_chain(
+        &self,
+        block_id: BlockId,
+    ) -> rpc::Result<Option<BlockHeight>>;
 }
 
 #[async_trait::async_trait]
@@ -27,11 +40,25 @@ impl ConsensusRpcServer for super::ConsensusHandle {
     async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<BlockId>> {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
     }
+
+    async fn submit_block(&self, block_hex: String) -> rpc::Result<()> {
+        // TODO there should be a generic way of decoding SCALE-encoded hex json strings
+        let block_data = hex::decode(block_hex).map_err(rpc::Error::to_call_error)?;
+        let block = Block::decode(&mut &block_data[..]).map_err(rpc::Error::to_call_error)?;
+        let res = self.call_mut(move |this| this.process_block(block, BlockSource::Local)).await;
+        handle_error(res)
+    }
+
+    async fn block_height_in_main_chain(
+        &self,
+        block_id: BlockId,
+    ) -> rpc::Result<Option<BlockHeight>> {
+        handle_error(self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await)
+    }
 }
 
 fn handle_error<T>(e: Result<Result<T, ConsensusError>, CallError>) -> rpc::Result<T> {
-    e.map_err(rpc::Error::to_call_error)
-        .and_then(|r| r.map_err(rpc::Error::to_call_error))
+    e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
 }
 
 #[cfg(test)]

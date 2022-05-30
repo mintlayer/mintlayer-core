@@ -36,7 +36,7 @@ use std::{
     collections::{hash_map::Entry, HashMap},
     sync::Arc,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 pub mod peer;
 
@@ -345,13 +345,14 @@ where
     ) -> error::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
-        log::info!(
-            "initialize peer {:?} state, headers: {:#?}",
+        log::debug!(
+            "initialize peer {:?} state, number of headers: {}",
             peer_id,
-            headers
+            headers.len(),
         );
+        log::trace!("headers: {:#?}", headers);
 
-        if headers.len() > 2000 {
+        if headers.len() > HEADER_LIMIT {
             // TODO: ban peer
             log::error!(
                 "peer sent {} headers while the maximum is {}",
@@ -612,11 +613,12 @@ where
                             peer_id
                         );
                         self.unregister_peer(peer_id);
-                        return self
-                            .tx_swarm
-                            .send(event::SwarmEvent::Disconnect(peer_id))
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_swarm
+                            .send(event::SwarmEvent::Disconnect(peer_id, tx))
                             .await
-                            .map_err(P2pError::from);
+                            .map_err(P2pError::from)?;
+                        return rx.await.map_err(P2pError::from)?;
                     }
 
                     match request.request_type {
@@ -1000,7 +1002,7 @@ mod tests {
     // receive getheaders before receiving `Connected` event from swarm manager
     // which makes the request to be rejected and to time out in the sender end
     #[tokio::test]
-    async fn test_out_of_order_events() {
+    async fn test_request_timeout_error() {
         let (mut mgr1, mut conn1, _, _, _) =
             make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
         let (mut mgr2, mut conn2, _, _, _) =
@@ -1026,18 +1028,12 @@ mod tests {
             }
         });
 
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::SyncingEvent::Request { .. })
-        ));
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::SyncingEvent::Error { .. })
-        ));
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::SyncingEvent::Request { .. })
-        ));
+        for i in 0..3 {
+            assert!(std::matches!(
+                mgr2.handle.poll_next().await,
+                Ok(net::SyncingEvent::Request { .. } | net::SyncingEvent::Error { .. })
+            ));
+        }
     }
 
     // verify that if after three retries the remote peer still
@@ -1073,10 +1069,12 @@ mod tests {
                 }
             }
 
+            let (tx, rx) = oneshot::channel();
             assert!(std::matches!(
                 swarm_rx.try_recv(),
-                Ok(SwarmEvent::Disconnect(peer2_id))
+                Ok(SwarmEvent::Disconnect(peer2_id, tx))
             ));
+            assert_eq!(rx.await, Ok(()));
         });
 
         for i in 0..4 {

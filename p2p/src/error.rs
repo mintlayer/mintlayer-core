@@ -81,6 +81,8 @@ pub enum P2pError {
     ConsensusError(consensus::ConsensusError),
     #[error("DatabaseFailure")]
     DatabaseFailure,
+    #[error("InvalidPeerId")]
+    InvalidPeerId,
 }
 
 // TODO: move this to src/lib.rs
