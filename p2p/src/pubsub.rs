@@ -22,7 +22,7 @@ use crate::{
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
 };
-use chainstate::{consensus_interface, BlockError, ConsensusError::ProcessBlockError};
+use chainstate::{chainstate_interface, BlockError, ChainstateError::ProcessBlockError};
 use common::{chain::ChainConfig, primitives::Idable};
 use futures::FutureExt;
 use logging::log;
@@ -38,7 +38,7 @@ where
 {
     config: Arc<ChainConfig>,
     pubsub_handle: T::PubSubHandle,
-    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 }
 
@@ -50,7 +50,7 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
-        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
     ) -> Self {
         Self {
@@ -131,8 +131,8 @@ where
 
         let subscribe_func =
             Arc::new(
-                move |consensus_event: chainstate::ConsensusEvent| match consensus_event {
-                    chainstate::ConsensusEvent::NewTip(block_id, _) => {
+                move |consensus_event: chainstate::ChainstateEvent| match consensus_event {
+                    chainstate::ChainstateEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
                             if let Err(e) = tx.send(block_id).await {
                                 log::error!("pubsub manager closed: {:?}", e)

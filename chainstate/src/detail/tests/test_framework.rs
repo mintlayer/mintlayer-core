@@ -23,12 +23,12 @@ use common::primitives::H256;
 use std::panic;
 
 pub(in crate::detail::tests) struct BlockTestFramework {
-    pub consensus: Consensus,
+    pub consensus: Chainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
 impl<'a> BlockTestFramework {
-    pub fn with_consensus(consensus: Consensus) -> Self {
+    pub fn with_consensus(consensus: Chainstate) -> Self {
         let genesis_index = consensus
             .blockchain_storage
             .get_block_index(&consensus.chain_config.genesis_block_id())

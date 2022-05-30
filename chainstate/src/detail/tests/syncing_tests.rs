@@ -24,7 +24,7 @@ fn test_get_locator() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(Arc::clone(&config), storage, None).unwrap();
+        let mut consensus = Chainstate::new(Arc::clone(&config), storage, None).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
         let limit = rand::thread_rng().gen::<u16>();
@@ -66,7 +66,7 @@ fn test_get_headers_same_chain() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new(config, storage, None).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
         let limit = rand::thread_rng().gen::<u16>();

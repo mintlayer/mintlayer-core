@@ -1,6 +1,6 @@
 //! Consensus subsystem RPC handler
 
-use crate::ConsensusError;
+use crate::ChainstateError;
 
 use crate::{Block, BlockSource};
 use common::primitives::BlockHeight;
@@ -32,7 +32,7 @@ trait ConsensusRpc {
 }
 
 #[async_trait::async_trait]
-impl ConsensusRpcServer for super::ConsensusHandle {
+impl ConsensusRpcServer for super::ChainstateHandle {
     async fn best_block_id(&self) -> rpc::Result<BlockId> {
         handle_error(self.call(|this| this.get_best_block_id()).await)
     }
@@ -57,7 +57,7 @@ impl ConsensusRpcServer for super::ConsensusHandle {
     }
 }
 
-fn handle_error<T>(e: Result<Result<T, ConsensusError>, CallError>) -> rpc::Result<T> {
+fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Result<T> {
     e.map_err(rpc::Error::to_call_error)?.map_err(rpc::Error::to_call_error)
 }
 
@@ -68,14 +68,14 @@ mod test {
     use std::{future::Future, sync::Arc};
 
     async fn with_consensus<F: 'static + Send + Future<Output = ()>>(
-        proc: impl 'static + Send + FnOnce(crate::ConsensusHandle) -> F,
+        proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "consensus",
-            crate::make_consensus(cfg, storage, None).unwrap(),
+            crate::make_chainstate(cfg, storage, None).unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",

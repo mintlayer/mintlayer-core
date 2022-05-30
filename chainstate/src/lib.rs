@@ -19,47 +19,47 @@ mod detail;
 
 pub mod rpc;
 
-pub mod consensus_interface_impl;
+pub mod chainstate_interface_impl;
 
-pub mod consensus_interface;
+pub mod chainstate_interface;
 
 use std::sync::Arc;
 
+pub use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
-use consensus_interface::ConsensusInterface;
-pub use consensus_interface_impl::ConsensusInterfaceImpl;
+use chainstate_interface::ChainstateInterface;
 pub use detail::BlockError;
-pub use detail::{BlockSource, Consensus};
+pub use detail::{BlockSource, Chainstate};
 
 #[derive(Debug, Clone)]
-pub enum ConsensusEvent {
+pub enum ChainstateEvent {
     NewTip(Id<Block>, BlockHeight),
 }
 
 #[derive(thiserror::Error, Debug, PartialEq, Eq)]
-pub enum ConsensusError {
+pub enum ChainstateError {
     #[error("Initialization error")]
-    FailedToInitializeConsensus(String),
+    FailedToInitializeChainstate(String),
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(BlockError),
     #[error("Property read error: `{0}`")]
     FailedToReadProperty(BlockError),
 }
 
-impl subsystem::Subsystem for Box<dyn ConsensusInterface> {}
+impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
-type ConsensusHandle = subsystem::Handle<Box<dyn ConsensusInterface>>;
+type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_consensus(
+pub fn make_chainstate(
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
-) -> Result<Box<dyn ConsensusInterface>, ConsensusError> {
-    let cons = Consensus::new(chain_config, blockchain_storage, custom_orphan_error_hook)?;
-    let cons_interface = ConsensusInterfaceImpl::new(cons);
+) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
+    let cons = Chainstate::new(chain_config, blockchain_storage, custom_orphan_error_hook)?;
+    let cons_interface = ChainstateInterfaceImpl::new(cons);
     Ok(Box::new(cons_interface))
 }
 

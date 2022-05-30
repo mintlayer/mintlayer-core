@@ -22,7 +22,9 @@ use crate::{
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
 };
-use chainstate::{consensus_interface, BlockError, BlockSource, ConsensusError::ProcessBlockError};
+use chainstate::{
+    chainstate_interface, BlockError, BlockSource, ChainstateError::ProcessBlockError,
+};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -136,7 +138,7 @@ where
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
 
     /// Subsystem handle to Consensus
-    consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// Pending requests
     requests: HashMap<T::RequestId, PendingRequest<T>>,
@@ -151,7 +153,7 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         handle: T::SyncingCodecHandle,
-        consensus_handle: subsystem::Handle<Box<dyn consensus_interface::ConsensusInterface>>,
+        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
         tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
@@ -728,7 +730,7 @@ mod tests {
         event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
         net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
     };
-    use chainstate::make_consensus;
+    use chainstate::make_chainstate;
     use libp2p::PeerId;
 
     async fn make_sync_manager<T>(
@@ -751,7 +753,7 @@ mod tests {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
-        let handle = man.add_subsystem("consensus", make_consensus(cfg, storage, None).unwrap());
+        let handle = man.add_subsystem("consensus", make_chainstate(cfg, storage, None).unwrap());
         tokio::spawn(async move { man.main().await });
 
         let config = Arc::new(common::chain::config::create_unit_test_config());
