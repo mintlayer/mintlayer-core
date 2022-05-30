@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::detail::orphan_blocks::{OrphanAddError, OrphanBlocksPool};
+use crate::detail::orphan_blocks::OrphanBlocksPool;
 use crate::ConsensusEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
@@ -30,6 +30,7 @@ use common::chain::config::ChainConfig;
 use common::chain::config::MAX_BLOCK_WEIGHT;
 use common::chain::{OutPointSourceId, Transaction};
 use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
+use itertools::Itertools;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 mod consensus_validator;
@@ -51,11 +52,14 @@ use spend_cache::CachedInputs;
 
 use consensus_validator::BlockIndexHandle;
 
+pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
+
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 pub struct Consensus {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
+    custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     event_subscribers: Vec<EventHandler>,
     events_broadcaster: slave_pool::ThreadPool,
 }
@@ -92,10 +96,12 @@ impl Consensus {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
+        custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     ) -> Result<Self, crate::ConsensusError> {
         use crate::ConsensusError;
 
-        let mut cons = Self::new_no_genesis(chain_config, blockchain_storage)?;
+        let mut cons =
+            Self::new_no_genesis(chain_config, blockchain_storage, custom_orphan_error_hook)?;
         let best_block_id = cons.get_best_block_id().map_err(|e| {
             ConsensusError::FailedToInitializeConsensus(format!("Database read error: {:?}", e))
         })?;
@@ -117,6 +123,7 @@ impl Consensus {
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
+        custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     ) -> Result<Self, crate::ConsensusError> {
         let event_broadcaster = slave_pool::ThreadPool::new();
         event_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
@@ -124,6 +131,7 @@ impl Consensus {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
+            custom_orphan_error_hook,
             event_subscribers: Vec::new(),
             events_broadcaster: event_broadcaster,
         };
@@ -142,30 +150,50 @@ impl Consensus {
         }
     }
 
+    /// returns the new block index, which is the new tip, if any
+    fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
+        let orphans = self.orphan_blocks.take_all_children_of(last_processed_block);
+        let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
+            .into_iter()
+            .map(|blk| self.process_block(blk, BlockSource::Local))
+            .partition_result();
+
+        block_errors.into_iter().for_each(|e| match &self.custom_orphan_error_hook {
+            Some(handler) => handler(&e),
+            None => logging::log::error!("Failed to process a chain of orphan blocks: {}", e),
+        });
+
+        // since we processed the blocks in order, the last one is the best tip
+        block_indexes.into_iter().flatten().rev().next()
+    }
+
+    /// returns the block index of the new tip
     pub fn process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let mut consensus_ref = self.make_db_tx();
+
+        let block = consensus_ref.check_legitimate_orphan(block_source, block)?;
+
         // Reasonable reduce amount of calls to DB
         let best_block_id = consensus_ref.db_tx.get_best_block_id().map_err(BlockError::from)?;
+
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         consensus_ref.check_block(&block, block_source)?;
-        let block_index = consensus_ref.accept_block(&block);
-        if let Err(ref block_index_err) = block_index {
-            if *block_index_err == BlockError::Orphan {
-                if BlockSource::Local == block_source {
-                    // TODO: Discuss with Sam about it later (orphans should be searched for children of any newly accepted block)
-                    consensus_ref.new_orphan_block(block)?;
-                }
-                return Err(BlockError::Orphan);
-            }
-        }
-        let result = consensus_ref.activate_best_chain(block_index?, best_block_id)?;
+        let block_index = consensus_ref.accept_block(&block)?;
+        let result = consensus_ref.activate_best_chain(block_index, best_block_id)?;
         consensus_ref.commit_db_tx().expect("Committing transactions to DB failed");
-        // TODO: after finishing, we attempt to process orphans
+
+        let new_block_index_after_orphans = self.process_orphans(&block.get_id());
+        let result = match new_block_index_after_orphans {
+            Some(result_from_orphan) => Some(result_from_orphan),
+            None => result,
+        };
+
         self.broadcast_new_tip_event(&result);
+
         Ok(result)
     }
 
@@ -342,6 +370,23 @@ impl<'a> BlockIndexHandle for ConsensusRef<'a> {
 }
 
 impl<'a> ConsensusRef<'a> {
+    fn check_legitimate_orphan(
+        &mut self,
+        block_source: BlockSource,
+        block: Block,
+    ) -> Result<Block, BlockError> {
+        if block_source == BlockSource::Local
+            && !block.is_genesis(self.chain_config)
+            && self
+                .get_block_index(&block.prev_block_id().ok_or(BlockError::PrevBlockInvalid)?)?
+                .is_none()
+        {
+            self.new_orphan_block(block)?;
+            return Err(BlockError::LocalOrphan);
+        }
+        Ok(block)
+    }
+
     fn commit_db_tx(self) -> blockchain_storage::Result<()> {
         self.db_tx.commit()
     }
@@ -645,7 +690,7 @@ impl<'a> ConsensusRef<'a> {
             // Genesis case. We should use then_some when stabilized feature(bool_to_option)
             None
         } else {
-            block.prev_block_id().map_or(Err(BlockError::Orphan), |prev_block| {
+            block.prev_block_id().map_or(Err(BlockError::IllegalOrphan), |prev_block| {
                 self.db_tx.get_block_index(&prev_block).map_err(BlockError::from)
             })?
         };
@@ -730,7 +775,7 @@ impl<'a> ConsensusRef<'a> {
                 let previous_block = self
                     .db_tx
                     .get_block_index(&Id::<Block>::new(&block_id.get()))?
-                    .ok_or(BlockError::Orphan)?;
+                    .ok_or(BlockError::IllegalOrphan)?;
                 // Time
                 let block_time = block.block_time();
                 if previous_block.get_block_time() > block_time {
@@ -811,10 +856,10 @@ impl<'a> ConsensusRef<'a> {
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
         // It can't be a genesis block
         assert!(!block.is_genesis(self.chain_config));
-        self.orphan_blocks.add_block(block).map_err(|err| match err {
-            OrphanAddError::BlockAlreadyInOrphanList(_) => BlockError::Orphan,
-        })?;
-        Ok(())
+        match self.orphan_blocks.add_block(block) {
+            Ok(_) => Ok(()),
+            Err(err) => err.into(),
+        }
     }
 
     fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {

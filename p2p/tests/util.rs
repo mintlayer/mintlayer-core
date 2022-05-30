@@ -117,7 +117,10 @@ pub async fn start_consensus(
 ) -> subsystem::Handle<Box<dyn ConsensusInterface>> {
     let storage = blockchain_storage::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
-    let handle = man.add_subsystem("consensus", crate::make_consensus(config, storage).unwrap());
+    let handle = man.add_subsystem(
+        "consensus",
+        crate::make_consensus(config, storage, None).unwrap(),
+    );
     tokio::spawn(async move { man.main().await });
     handle
 }
