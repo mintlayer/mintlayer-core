@@ -47,7 +47,7 @@ fn test_events_simple_subscribe() {
 
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
-        assert!(!consensus.event_subscribers.is_empty());
+        assert!(!consensus.events_controller.subscribers().is_empty());
         consensus.process_block(block, BlockSource::Local).unwrap();
         consensus.wait_for_all_events();
         assert_eq!(events.lock().unwrap().len(), 1);
@@ -89,7 +89,7 @@ fn test_events_with_a_bunch_of_subscribers() {
         for _ in 0..COUNT_SUBSCRIBERS {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
-        assert!(!consensus.event_subscribers.is_empty());
+        assert!(!consensus.events_controller.subscribers().is_empty());
         consensus.process_block(block, BlockSource::Local).unwrap();
         consensus.wait_for_all_events();
         assert!(events.lock().unwrap().len() == COUNT_SUBSCRIBERS);
@@ -140,7 +140,7 @@ fn test_events_a_bunch_of_events() {
         for _ in 0..COUNT_SUBSCRIBERS {
             consensus.subscribe_to_events(subscribe_func.clone());
         }
-        assert!(!consensus.event_subscribers.is_empty());
+        assert!(!consensus.events_controller.subscribers().is_empty());
 
         for block in blocks {
             // We should connect a new block
@@ -187,7 +187,7 @@ fn test_events_orphan_block() {
         );
         // Subscribe and then process a new block
         consensus.subscribe_to_events(subscribe_func);
-        assert!(!consensus.event_subscribers.is_empty());
+        assert!(!consensus.events_controller.subscribers().is_empty());
         consensus.process_block(block, BlockSource::Local).unwrap_err();
         consensus.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
