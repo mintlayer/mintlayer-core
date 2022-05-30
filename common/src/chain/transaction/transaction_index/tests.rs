@@ -244,7 +244,7 @@ fn generate_random_invalid_block() -> Block {
     let mut rng = rand::rngs::StdRng::from_entropy();
 
     let transactions = {
-        let transaction_count = rng.next_u32() % 2000;
+        let transaction_count = rng.next_u32() % 20;
         (0..transaction_count)
             .into_iter()
             .map(|_| generate_random_invalid_transaction(&mut rng))
