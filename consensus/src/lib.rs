@@ -34,7 +34,7 @@ pub use consensus_interface_impl::ConsensusInterfaceImpl;
 pub use detail::BlockError;
 pub use detail::{BlockSource, Consensus};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ConsensusEvent {
     NewTip(Id<Block>, BlockHeight),
 }
