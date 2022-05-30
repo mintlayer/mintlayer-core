@@ -33,6 +33,7 @@ use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use utils::eventhandler::{EventHandler, EventsController};
 mod consensus_validator;
 mod orphan_blocks;
 use serialization::Encode;
@@ -43,7 +44,7 @@ mod pow;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
-type EventHandler = Arc<dyn Fn(ConsensusEvent) + Send + Sync>;
+type ConsensusEventHandler = EventHandler<ConsensusEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
@@ -60,8 +61,7 @@ pub struct Consensus {
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    event_subscribers: Vec<EventHandler>,
-    events_broadcaster: slave_pool::ThreadPool,
+    events_controller: EventsController<ConsensusEvent>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -71,6 +71,10 @@ pub enum BlockSource {
 }
 
 impl Consensus {
+    pub fn wait_for_all_events(&self) {
+        self.events_controller.wait_for_all_events();
+    }
+
     fn make_db_tx(&mut self) -> ConsensusRef {
         let db_tx = self.blockchain_storage.transaction_rw();
         ConsensusRef {
@@ -89,8 +93,8 @@ impl Consensus {
         }
     }
 
-    pub fn subscribe_to_events(&mut self, handler: EventHandler) {
-        self.event_subscribers.push(handler)
+    pub fn subscribe_to_events(&mut self, handler: ConsensusEventHandler) {
+        self.events_controller.subscribe_to_events(handler);
     }
 
     pub fn new(
@@ -125,27 +129,23 @@ impl Consensus {
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     ) -> Result<Self, crate::ConsensusError> {
-        let event_broadcaster = slave_pool::ThreadPool::new();
-        event_broadcaster.set_threads(1).expect("Event thread-pool starting failed");
         let cons = Self {
             chain_config,
             blockchain_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
-            event_subscribers: Vec::new(),
-            events_broadcaster: event_broadcaster,
+            events_controller: EventsController::new(),
         };
         Ok(cons)
     }
 
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
-            Some(ref new_block_index) => self.event_subscribers.iter().cloned().for_each(|f| {
+            Some(ref new_block_index) => {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
-                self.events_broadcaster
-                    .spawn(move || f(ConsensusEvent::NewTip(new_id, new_height)))
-            }),
+                self.events_controller.broadcast(ConsensusEvent::NewTip(new_id, new_height))
+            }
             None => (),
         }
     }
