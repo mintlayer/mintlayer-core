@@ -27,7 +27,7 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let result = consensus.process_block(
@@ -392,8 +392,8 @@ fn subscribe_to_events(btf: &mut BlockTestFramework, events: &EventList) {
     assert!(!events.lock().unwrap().is_empty());
     // Event handler
     let subscribe_func = Arc::new(
-        move |consensus_event: ConsensusEvent| match consensus_event {
-            ConsensusEvent::NewTip(block_id, block_height) => {
+        move |consensus_event: ChainstateEvent| match consensus_event {
+            ChainstateEvent::NewTip(block_id, block_height) => {
                 events.lock().unwrap().push((block_id, block_height));
                 assert!(!events.lock().unwrap().is_empty());
             }

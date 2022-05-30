@@ -112,8 +112,8 @@ impl ConsensusBuilder {
             storage: Store::new_empty().unwrap(),
         }
     }
-    fn build(self) -> Consensus {
-        Consensus::new(Arc::new(self.config), self.storage, None).unwrap()
+    fn build(self) -> Chainstate {
+        Chainstate::new(Arc::new(self.config), self.storage, None).unwrap()
     }
 
     #[allow(unused)]
@@ -123,7 +123,7 @@ impl ConsensusBuilder {
     }
 }
 
-fn setup_consensus() -> Consensus {
+fn setup_consensus() -> Chainstate {
     ConsensusBuilder::new().build()
 }
 

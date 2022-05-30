@@ -38,8 +38,8 @@ fn test_events_simple_subscribe() {
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
-            move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(block_id, block_height) => {
+            move |consensus_event: ChainstateEvent| match consensus_event {
+                ChainstateEvent::NewTip(block_id, block_height) => {
                     events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
@@ -78,8 +78,8 @@ fn test_events_with_a_bunch_of_subscribers() {
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
-            move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(block_id, block_height) => {
+            move |consensus_event: ChainstateEvent| match consensus_event {
+                ChainstateEvent::NewTip(block_id, block_height) => {
                     events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
@@ -111,7 +111,7 @@ fn test_events_a_bunch_of_events() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new(config, storage, None).unwrap();
 
         let mut map_heights: BTreeMap<Id<Block>, BlockHeight> = BTreeMap::new();
         let mut blocks = Vec::new();
@@ -129,8 +129,8 @@ fn test_events_a_bunch_of_events() {
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
-            move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(block_id, block_height) => {
+            move |consensus_event: ChainstateEvent| match consensus_event {
+                ChainstateEvent::NewTip(block_id, block_height) => {
                     events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },
@@ -170,7 +170,7 @@ fn test_events_orphan_block() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new(config, storage, None).unwrap();
 
         // Let's create an orphan block
         let block = produce_test_block(consensus.chain_config.genesis_block(), true);
@@ -179,8 +179,8 @@ fn test_events_orphan_block() {
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         let events_copy = Arc::clone(&events);
         let subscribe_func = Arc::new(
-            move |consensus_event: ConsensusEvent| match consensus_event {
-                ConsensusEvent::NewTip(block_id, block_height) => {
+            move |consensus_event: ChainstateEvent| match consensus_event {
+                ChainstateEvent::NewTip(block_id, block_height) => {
                     events_copy.lock().unwrap().push((block_id, block_height));
                 }
             },

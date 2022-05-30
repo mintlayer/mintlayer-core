@@ -17,7 +17,7 @@
 
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
-use crate::make_consensus;
+use crate::make_chainstate;
 use blockchain_storage::Store;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::config::create_unit_test_config;
@@ -35,7 +35,7 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config.clone(), storage, None).unwrap();
+        let mut consensus = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
@@ -50,7 +50,7 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -79,7 +79,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new(config, storage, None).unwrap();
 
         assert_eq!(
             consensus.get_best_block_id().unwrap().unwrap(),
@@ -133,7 +133,7 @@ fn test_empty_consensus() {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
+        let consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_none());
         assert!(consensus
             .blockchain_storage
@@ -143,7 +143,7 @@ fn test_empty_consensus() {
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let consensus = Consensus::new(config, storage, None).unwrap();
+        let consensus = Chainstate::new(config, storage, None).unwrap();
         assert!(consensus.get_best_block_id().unwrap().is_some());
         assert!(
             consensus.get_best_block_id().ok().flatten().unwrap()
@@ -224,7 +224,7 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Consensus::new_no_genesis(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -653,5 +653,5 @@ fn test_pow() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _consensus = make_consensus(config, storage, None).unwrap();
+    let _consensus = make_chainstate(config, storage, None).unwrap();
 }

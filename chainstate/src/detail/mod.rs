@@ -16,7 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::detail::orphan_blocks::OrphanBlocksPool;
-use crate::ConsensusEvent;
+use crate::ChainstateEvent;
 use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::BlockchainStorageWrite;
 use blockchain_storage::TransactionRw;
@@ -44,7 +44,7 @@ mod pow;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
-type ConsensusEventHandler = EventHandler<ConsensusEvent>;
+type ConsensusEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
@@ -56,12 +56,12 @@ use consensus_validator::BlockIndexHandle;
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
-pub struct Consensus {
+pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    events_controller: EventsController<ConsensusEvent>,
+    events_controller: EventsController<ChainstateEvent>,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -70,7 +70,7 @@ pub enum BlockSource {
     Local,
 }
 
-impl Consensus {
+impl Chainstate {
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
@@ -101,13 +101,13 @@ impl Consensus {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    ) -> Result<Self, crate::ConsensusError> {
-        use crate::ConsensusError;
+    ) -> Result<Self, crate::ChainstateError> {
+        use crate::ChainstateError;
 
         let mut cons =
             Self::new_no_genesis(chain_config, blockchain_storage, custom_orphan_error_hook)?;
         let best_block_id = cons.get_best_block_id().map_err(|e| {
-            ConsensusError::FailedToInitializeConsensus(format!("Database read error: {:?}", e))
+            ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
         })?;
         if best_block_id.is_none() {
             cons.process_block(
@@ -115,7 +115,7 @@ impl Consensus {
                 BlockSource::Local,
             )
             .map_err(|e| {
-                ConsensusError::FailedToInitializeConsensus(format!(
+                ChainstateError::FailedToInitializeChainstate(format!(
                     "Genesis block processing error: {:?}",
                     e
                 ))
@@ -128,7 +128,7 @@ impl Consensus {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-    ) -> Result<Self, crate::ConsensusError> {
+    ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
             blockchain_storage,
@@ -144,7 +144,7 @@ impl Consensus {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.get_block_height();
                 let new_id = new_block_index.get_block_id().clone();
-                self.events_controller.broadcast(ConsensusEvent::NewTip(new_id, new_height))
+                self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
         }

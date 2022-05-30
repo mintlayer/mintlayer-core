@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 #![allow(unused)]
 
-use chainstate::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
+use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
     address::Address,
     chain::{
@@ -51,7 +51,7 @@ mod util;
 
 async fn make_sync_manager<T>(
     addr: T::Address,
-    handle: subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> (
     SyncManager<T>,
     T::ConnectivityHandle,
@@ -115,8 +115,8 @@ async fn init_consensus_2(
     config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
     let handle1 = util::start_consensus(Arc::clone(&config)).await;
     let handle2 = util::start_consensus(Arc::clone(&config)).await;
@@ -132,9 +132,9 @@ async fn init_consensus_3(
     config: Arc<ChainConfig>,
     num_blocks: usize,
 ) -> (
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
-    subsystem::Handle<Box<dyn ConsensusInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
+    subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
     let handle1 = util::start_consensus(Arc::clone(&config)).await;
     let handle2 = util::start_consensus(Arc::clone(&config)).await;
@@ -149,19 +149,19 @@ async fn init_consensus_3(
 }
 
 async fn same_tip(
-    handle1: &subsystem::Handle<Box<dyn ConsensusInterface>>,
-    handle2: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle1: &subsystem::Handle<Box<dyn ChainstateInterface>>,
+    handle2: &subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> bool {
     get_tip(handle1).await == get_tip(handle2).await
 }
 
-async fn get_tip(handle: &subsystem::Handle<Box<dyn ConsensusInterface>>) -> Id<Block> {
+async fn get_tip(handle: &subsystem::Handle<Box<dyn ChainstateInterface>>) -> Id<Block> {
     handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap()
 }
 
 async fn process_header_request<T>(
     mgr: &mut SyncManager<T>,
-    handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: &subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> Result<(), P2pError>
 where
     T: NetworkingService,

@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn, A. Altonen
 #![allow(unused)]
-use chainstate::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
+use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
     address::Address,
     chain::{
@@ -114,12 +114,12 @@ fn anyonecanspend_address() -> Destination {
 
 pub async fn start_consensus(
     config: Arc<ChainConfig>,
-) -> subsystem::Handle<Box<dyn ConsensusInterface>> {
+) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = blockchain_storage::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "consensus",
-        crate::make_consensus(config, storage, None).unwrap(),
+        crate::make_chainstate(config, storage, None).unwrap(),
     );
     tokio::spawn(async move { man.main().await });
     handle
@@ -143,7 +143,7 @@ pub fn create_n_blocks(config: Arc<ChainConfig>, parent: &Block, nblocks: usize)
 }
 
 pub async fn import_blocks(
-    handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: &subsystem::Handle<Box<dyn ChainstateInterface>>,
     blocks: Vec<Block>,
 ) {
     for block in blocks.into_iter() {
@@ -156,7 +156,7 @@ pub async fn import_blocks(
 
 pub async fn add_more_blocks(
     config: Arc<ChainConfig>,
-    handle: &subsystem::Handle<Box<dyn ConsensusInterface>>,
+    handle: &subsystem::Handle<Box<dyn ChainstateInterface>>,
     nblocks: usize,
 ) {
     let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
