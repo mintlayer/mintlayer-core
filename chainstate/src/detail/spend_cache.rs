@@ -15,10 +15,8 @@
 //
 // Author(s): S. Afach
 
-use common::chain::transaction::signature::verify_signature;
-use std::collections::{btree_map::Entry, BTreeMap};
-
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use common::chain::signature::verify_signature;
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -26,6 +24,7 @@ use common::{
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use crate::detail::{BlockError, TxRw};
 
@@ -214,8 +213,6 @@ impl<'a> CachedInputs<'a> {
     }
 
     fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
-        use common::chain::transaction::signature::verify_signature;
-
         for (input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
             let prev_tx_index_op = self.get_from_cached(outpoint)?;
