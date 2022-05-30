@@ -680,7 +680,6 @@ dependencies = [
  "rpc",
  "serde_json",
  "serialization",
- "slave-pool",
  "static_assertions",
  "subsystem",
  "thiserror",
@@ -4291,6 +4290,7 @@ version = "0.1.0"
 dependencies = [
  "atomic-traits",
  "num-traits",
+ "slave-pool",
 ]
 
 [[package]]

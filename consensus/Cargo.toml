@@ -24,7 +24,6 @@ rand = "0.8.4"
 thiserror = "1.0.30"
 proptest = "1.0.0"
 replace_with = "0.1.7"
-slave-pool = "0.2.3"
 
 [dev-dependencies]
 serde_json = "1.0"
