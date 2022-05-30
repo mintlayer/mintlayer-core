@@ -1,7 +1,7 @@
 //! Node initialisation routine.
 
 use crate::options::Options;
-use chainstate::rpc::ConsensusRpcServer;
+use chainstate::rpc::ChainstateRpcServer;
 use common::chain::config::ChainType;
 use p2p::rpc::P2pRpcServer;
 use std::sync::Arc;

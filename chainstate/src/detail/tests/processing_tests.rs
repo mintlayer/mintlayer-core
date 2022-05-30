@@ -35,11 +35,11 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
-        let result = consensus.process_block(config.genesis_block().clone(), block_source);
+        let result = chainstate.process_block(config.genesis_block().clone(), block_source);
         assert_eq!(result.unwrap_err(), BlockError::InvalidBlockSource);
     });
 }
@@ -50,21 +50,24 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
-        let block_index = consensus
-            .process_block(consensus.chain_config.genesis_block().clone(), block_source)
+        let block_index = chainstate
+            .process_block(
+                chainstate.chain_config.genesis_block().clone(),
+                block_source,
+            )
             .ok()
             .flatten()
             .unwrap();
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block_id())
+            Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(block_index.get_prev_block_id(), &None);
         assert_eq!(block_index.get_chain_trust(), 1);
@@ -79,15 +82,15 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
 
         assert_eq!(
-            consensus.get_best_block_id().unwrap().unwrap(),
-            consensus.chain_config.genesis_block_id()
+            chainstate.get_best_block_id().unwrap().unwrap(),
+            chainstate.chain_config.genesis_block_id()
         );
 
         // Process the orphan block
-        let genesis_block = consensus.chain_config.genesis_block().clone();
+        let genesis_block = chainstate.chain_config.genesis_block().clone();
         let missing_block = produce_test_block(&genesis_block, false);
         let mut current_block = missing_block.clone();
 
@@ -96,23 +99,23 @@ fn test_orphans_chains() {
         for orphan_count in 1..MAX_ORPHANS_COUNT_IN_TEST {
             current_block = produce_test_block(&current_block, false);
             assert_eq!(
-                consensus.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
+                chainstate.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
                 BlockError::LocalOrphan
             );
             // the best is still genesis, because we're submitting orphans
             assert_eq!(
-                consensus.get_best_block_id().unwrap().unwrap(),
-                consensus.chain_config.genesis_block_id()
+                chainstate.get_best_block_id().unwrap().unwrap(),
+                chainstate.chain_config.genesis_block_id()
             );
-            assert!(consensus.orphan_blocks.is_already_an_orphan(&current_block.get_id()));
-            assert_eq!(consensus.orphan_blocks.len(), orphan_count);
+            assert!(chainstate.orphan_blocks.is_already_an_orphan(&current_block.get_id()));
+            assert_eq!(chainstate.orphan_blocks.len(), orphan_count);
         }
 
         // now we submit the missing block (at height 1), and we expect all blocks to be processed
         let last_block_index =
-            consensus.process_block(missing_block, BlockSource::Local).unwrap().unwrap();
-        let current_best = consensus.get_best_block_id().unwrap().unwrap();
-        let last_block_index_in_db = consensus.get_block_index(&current_best).unwrap().unwrap();
+            chainstate.process_block(missing_block, BlockSource::Local).unwrap().unwrap();
+        let current_best = chainstate.get_best_block_id().unwrap().unwrap();
+        let last_block_index_in_db = chainstate.get_block_index(&current_best).unwrap().unwrap();
         assert_eq!(
             last_block_index_in_db.get_block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
@@ -123,45 +126,45 @@ fn test_orphans_chains() {
         );
 
         // no more orphan blocks left
-        assert_eq!(consensus.orphan_blocks.len(), 0);
+        assert_eq!(chainstate.orphan_blocks.len(), 0);
     });
 }
 
 #[test]
-fn test_empty_consensus() {
+fn test_empty_chainstate() {
     common::concurrency::model(|| {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
-        assert!(consensus.get_best_block_id().unwrap().is_none());
-        assert!(consensus
+        let chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        assert!(chainstate.get_best_block_id().unwrap().is_none());
+        assert!(chainstate
             .blockchain_storage
-            .get_block(consensus.chain_config.genesis_block_id())
+            .get_block(chainstate.chain_config.genesis_block_id())
             .unwrap()
             .is_none());
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let consensus = Chainstate::new(config, storage, None).unwrap();
-        assert!(consensus.get_best_block_id().unwrap().is_some());
+        let chainstate = Chainstate::new(config, storage, None).unwrap();
+        assert!(chainstate.get_best_block_id().unwrap().is_some());
         assert!(
-            consensus.get_best_block_id().ok().flatten().unwrap()
-                == consensus.chain_config.genesis_block_id()
+            chainstate.get_best_block_id().ok().flatten().unwrap()
+                == chainstate.chain_config.genesis_block_id()
         );
-        assert!(consensus
+        assert!(chainstate
             .blockchain_storage
-            .get_block(consensus.chain_config.genesis_block_id())
+            .get_block(chainstate.chain_config.genesis_block_id())
             .unwrap()
             .is_some());
         assert!(
-            consensus
+            chainstate
                 .blockchain_storage
-                .get_block(consensus.chain_config.genesis_block_id())
+                .get_block(chainstate.chain_config.genesis_block_id())
                 .unwrap()
                 .unwrap()
                 .get_id()
-                == consensus.chain_config.genesis_block_id()
+                == chainstate.chain_config.genesis_block_id()
         );
     });
 }
@@ -169,15 +172,15 @@ fn test_empty_consensus() {
 #[test]
 fn test_spend_inputs_simple() {
     common::concurrency::model(|| {
-        let mut consensus = setup_consensus();
+        let mut chainstate = setup_chainstate();
 
         // Create a new block
-        let block = produce_test_block(consensus.chain_config.genesis_block(), false);
+        let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
             assert!(
-                consensus
+                chainstate
                     .blockchain_storage
                     .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                     .expect(ERR_STORAGE_FAIL)
@@ -187,9 +190,9 @@ fn test_spend_inputs_simple() {
 
         // Process the second block
         let new_id = Some(block.get_id());
-        assert!(consensus.process_block(block.clone(), BlockSource::Local).is_ok());
+        assert!(chainstate.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
@@ -198,7 +201,7 @@ fn test_spend_inputs_simple() {
 
         // Check that tx inputs in the main chain and not spend
         for tx in block.transactions() {
-            let tx_index = consensus
+            let tx_index = chainstate
                 .blockchain_storage
                 .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                 .expect("Not found mainchain tx index")
@@ -224,35 +227,38 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
-        let mut block_index = consensus
-            .process_block(consensus.chain_config.genesis_block().clone(), block_source)
+        let mut block_index = chainstate
+            .process_block(
+                chainstate.chain_config.genesis_block().clone(),
+                block_source,
+            )
             .ok()
             .flatten()
             .expect("Unable to process genesis block");
         assert_eq!(
-            consensus
+            chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(consensus.chain_config.genesis_block_id())
+            Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(
             block_index.get_block_id(),
-            &consensus.chain_config.genesis_block_id()
+            &chainstate.chain_config.genesis_block_id()
         );
         assert_eq!(block_index.get_prev_block_id(), &None);
         // TODO: ensure that block at height is tested after removing the next
         assert_eq!(block_index.get_chain_trust(), 1);
         assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
 
-        let mut prev_block = consensus.chain_config.genesis_block().clone();
+        let mut prev_block = chainstate.chain_config.genesis_block().clone();
         for _ in 0..COUNT_BLOCKS {
             let prev_block_id = block_index.get_block_id();
-            let best_block_id = consensus
+            let best_block_id = chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .ok()
@@ -261,7 +267,7 @@ fn test_straight_chain() {
             assert_eq!(&best_block_id, block_index.get_block_id());
             let block_source = BlockSource::Peer;
             let new_block = produce_test_block(&prev_block, false);
-            let new_block_index = dbg!(consensus.process_block(new_block.clone(), block_source))
+            let new_block_index = dbg!(chainstate.process_block(new_block.clone(), block_source))
                 .ok()
                 .flatten()
                 .expect("Unable to process block");
@@ -314,7 +320,7 @@ fn test_get_ancestor() {
 
     assert_eq!(
         last_block_in_first_chain.get_block_id(),
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
@@ -326,7 +332,7 @@ fn test_get_ancestor() {
 
     assert_eq!(
         ancestor.get_block_id(),
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
@@ -338,7 +344,7 @@ fn test_get_ancestor() {
 
     assert_eq!(
         ancestor_in_first_chain.get_block_id(),
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .get_ancestor(
                 &last_block_in_first_chain,
@@ -355,7 +361,7 @@ fn test_get_ancestor() {
         btf.block_indexes.last().expect("last block in first chain").clone();
     assert_eq!(
         ancestor.get_block_id(),
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .get_ancestor(
                 &last_block_in_second_chain,
@@ -370,7 +376,7 @@ fn test_get_ancestor() {
             ancestor_height: u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into(),
             block_height: u64::try_from(SECOND_CHAIN_LENGTH).unwrap().into(),
         },
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .get_ancestor(
                 &last_block_in_second_chain,
@@ -407,7 +413,7 @@ fn test_last_common_ancestor() {
         btf.block_indexes.last().expect("last block in first chain").clone();
 
     assert_eq!(
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain)
             .unwrap()
@@ -416,7 +422,7 @@ fn test_last_common_ancestor() {
     );
 
     assert_eq!(
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain)
             .unwrap()
@@ -425,7 +431,7 @@ fn test_last_common_ancestor() {
     );
 
     assert_eq!(
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain)
             .unwrap()
@@ -434,7 +440,7 @@ fn test_last_common_ancestor() {
     );
 
     assert_eq!(
-        btf.consensus
+        btf.chainstate
             .make_db_tx()
             .last_common_ancestor(&genesis, &split)
             .unwrap()
@@ -488,9 +494,9 @@ fn test_consensus_type() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
-    let consensus = ConsensusBuilder::new().with_config(config).build();
+    let chainstate = ChainstateBuilder::new().with_config(config).build();
 
-    let mut btf = BlockTestFramework::with_consensus(consensus);
+    let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
     // The next block will have height 1. At this height, we are still under IngoreConsenssu, so
     // processing a block with PoWData will fail
@@ -617,9 +623,9 @@ fn test_pow() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
-    let consensus = ConsensusBuilder::new().with_config(config).build();
+    let chainstate = ChainstateBuilder::new().with_config(config).build();
 
-    let mut btf = BlockTestFramework::with_consensus(consensus);
+    let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
@@ -653,5 +659,5 @@ fn test_pow() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _consensus = make_chainstate(config, storage, None).unwrap();
+    let _chainstate = make_chainstate(config, storage, None).unwrap();
 }

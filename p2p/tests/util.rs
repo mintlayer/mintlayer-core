@@ -112,13 +112,13 @@ fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
-pub async fn start_consensus(
+pub async fn start_chainstate(
     config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = blockchain_storage::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
-        "consensus",
+        "chainstate",
         crate::make_chainstate(config, storage, None).unwrap(),
     );
     tokio::spawn(async move { man.main().await });

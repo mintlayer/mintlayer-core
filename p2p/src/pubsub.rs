@@ -38,7 +38,7 @@ where
 {
     config: Arc<ChainConfig>,
     pubsub_handle: T::PubSubHandle,
-    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+    chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 }
 
@@ -50,13 +50,13 @@ where
     pub fn new(
         config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
-        consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
             pubsub_handle,
-            consensus_handle,
+            chainstate_handle,
             rx_pubsub,
         }
     }
@@ -131,7 +131,7 @@ where
 
         let subscribe_func =
             Arc::new(
-                move |consensus_event: chainstate::ChainstateEvent| match consensus_event {
+                move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
                     chainstate::ChainstateEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
                             if let Err(e) = tx.send(block_id).await {
@@ -142,7 +142,7 @@ where
                 },
             );
 
-        self.consensus_handle
+        self.chainstate_handle
             .call_mut(|this| this.subscribe_to_events(subscribe_func))
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
@@ -153,14 +153,14 @@ where
                     let (peer_id, message_id, message) = self.validate_pubsub_message(event?).await?;
 
                     log::trace!(
-                        "received a pubsub message from peer {:?}, send to consensus",
+                        "received a pubsub message from peer {:?}, send to chainstate",
                         peer_id
                     );
 
                     match message {
                         PubSubMessage::Block(block) => {
                             let result = match self
-                                .consensus_handle
+                                .chainstate_handle
                                 .call_mut(move |this| {
                                     this.process_block(block, chainstate::BlockSource::Peer)
                                 })
@@ -190,7 +190,7 @@ where
                 block_id = rx.recv().fuse() => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
                     let block = self
-                        .consensus_handle
+                        .chainstate_handle
                         .call(|this| this.get_block(block_id))
                         .await??;
 

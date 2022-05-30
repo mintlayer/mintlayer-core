@@ -123,13 +123,13 @@ fn test_get_headers_different_chains() {
             let limit = rand::thread_rng().gen_range(0..10_000);
             btf.create_chain(&btf.genesis().get_id(), (limit / 10) as usize).unwrap();
 
-            let locator = btf.consensus.get_locator().unwrap();
+            let locator = btf.chainstate.get_locator().unwrap();
             btf.create_chain(&btf.genesis().get_id(), limit).unwrap();
 
             // verify that the locators are different now that the chain has more headers
-            assert!(locator.len() < btf.consensus.get_locator().unwrap().len());
+            assert!(locator.len() < btf.chainstate.get_locator().unwrap().len());
 
-            let new_headers = btf.consensus.get_headers(locator).unwrap();
+            let new_headers = btf.chainstate.get_headers(locator).unwrap();
             assert_eq!(
                 new_headers[0].get_prev_block_id(),
                 &Some(btf.genesis().get_id()),
@@ -151,14 +151,14 @@ fn test_get_headers_different_chains() {
                 limit,
             )
             .unwrap();
-            let locator = btf.consensus.get_locator().unwrap();
+            let locator = btf.chainstate.get_locator().unwrap();
             btf.create_chain(
                 &btf.block_indexes[common_height - 1].get_block_id().clone(),
                 limit * 4,
             )
             .unwrap();
 
-            let new_headers = btf.consensus.get_headers(locator).unwrap();
+            let new_headers = btf.chainstate.get_headers(locator).unwrap();
 
             // verify that the new header attaches to a block that is in
             // the set of blocks that is know by both chains (it's height <= common_height)
@@ -173,10 +173,10 @@ fn test_get_headers_different_chains() {
         // Verify that the first returned header attaches before genesis
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ConsensusBuilder::new().with_config(config).build();
-            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
-            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
+            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
+            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(100..250) {
@@ -201,15 +201,15 @@ fn test_get_headers_different_chains() {
             )
             .unwrap();
 
-            let locator = btf1.consensus.get_locator().unwrap();
-            let headers = btf2.consensus.get_headers(locator).unwrap();
+            let locator = btf1.chainstate.get_locator().unwrap();
+            let headers = btf2.chainstate.get_headers(locator).unwrap();
             let id = headers[0].get_prev_block_id().clone().unwrap();
-            assert!(btf1.consensus.blockchain_storage.get_block_index(&id).unwrap().is_some());
+            assert!(btf1.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
 
-            let locator = btf2.consensus.get_locator().unwrap();
-            let headers = btf1.consensus.get_headers(locator).unwrap();
+            let locator = btf2.chainstate.get_locator().unwrap();
+            let headers = btf1.chainstate.get_headers(locator).unwrap();
             let id = headers[0].get_prev_block_id().clone().unwrap();
-            assert!(btf2.consensus.blockchain_storage.get_block_index(&id).unwrap().is_some());
+            assert!(btf2.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
         }
     });
 }
@@ -219,10 +219,10 @@ fn test_filter_already_existing_blocks() {
     common::concurrency::model(|| {
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ConsensusBuilder::new().with_config(config).build();
-            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
-            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
+            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
+            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev1 = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {
@@ -253,24 +253,24 @@ fn test_filter_already_existing_blocks() {
                 btf2.add_special_block(prev2.clone()).unwrap();
             }
 
-            let locator = btf1.consensus.get_locator().unwrap();
-            let headers = btf2.consensus.get_headers(locator).unwrap();
-            let headers = btf1.consensus.filter_already_existing_blocks(headers).unwrap();
+            let locator = btf1.chainstate.get_locator().unwrap();
+            let headers = btf2.chainstate.get_headers(locator).unwrap();
+            let headers = btf1.chainstate.filter_already_existing_blocks(headers).unwrap();
             assert_eq!(headers, headers2);
 
-            let locator = btf2.consensus.get_locator().unwrap();
-            let headers = btf1.consensus.get_headers(locator).unwrap();
-            let headers = btf2.consensus.filter_already_existing_blocks(headers).unwrap();
+            let locator = btf2.chainstate.get_locator().unwrap();
+            let headers = btf1.chainstate.get_headers(locator).unwrap();
+            let headers = btf2.chainstate.filter_already_existing_blocks(headers).unwrap();
             assert_eq!(headers, headers1);
         }
 
         // try to offer headers that don't attach to local chain
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ConsensusBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ConsensusBuilder::new().with_config(config).build();
-            let mut btf1 = BlockTestFramework::with_consensus(consensus1);
-            let mut btf2 = BlockTestFramework::with_consensus(consensus2);
+            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
+            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
+            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();
 
             for _ in 0..rand::thread_rng().gen_range(8..16) {
@@ -291,7 +291,7 @@ fn test_filter_already_existing_blocks() {
                 })
                 .collect::<Vec<_>>();
 
-            let headers = btf1.consensus.filter_already_existing_blocks(headers[1..].to_vec());
+            let headers = btf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
             assert_eq!(headers, Err(BlockError::NotFound));
         }
     });

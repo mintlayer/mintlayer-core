@@ -14,10 +14,8 @@ pub struct ChainstateInterfaceImpl {
 }
 
 impl ChainstateInterfaceImpl {
-    pub fn new(consensus: detail::Chainstate) -> Self {
-        Self {
-            chainstate: consensus,
-        }
+    pub fn new(chainstate: detail::Chainstate) -> Self {
+        Self { chainstate }
     }
 }
 
