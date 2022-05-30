@@ -49,9 +49,9 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 mod spend_cache;
+use consensus_validator::BlockIndexHandle;
 use spend_cache::CachedInputs;
 use spend_cache::SpendKind;
-use consensus_validator::BlockIndexHandle;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 

@@ -214,6 +214,8 @@ impl<'a> CachedInputs<'a> {
     }
 
     fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
+        use common::chain::transaction::signature::verify_signature;
+
         for (input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
             let prev_tx_index_op = self.get_from_cached(outpoint)?;
