@@ -1,9 +1,8 @@
-use std::sync::Arc;
-
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{BlockHeight, Id},
 };
+use utils::eventhandler::EventHandler;
 
 use crate::{
     detail::{self, BlockSource},
@@ -21,7 +20,7 @@ impl ConsensusInterfaceImpl {
 }
 
 impl ConsensusInterface for ConsensusInterfaceImpl {
-    fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ConsensusEvent) + Send + Sync>) {
+    fn subscribe_to_events(&mut self, handler: EventHandler<ConsensusEvent>) {
         self.consensus.subscribe_to_events(handler)
     }
 
