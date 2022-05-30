@@ -596,6 +596,7 @@ impl<'a> ChainstateRef<'a> {
     ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
         transactions.iter().try_for_each(|tx| cached_inputs.unspend(tx))?;
+        // TODO: Discuss about disconnect reward
         Ok(cached_inputs)
     }
 
