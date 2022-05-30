@@ -1,8 +1,8 @@
 //! Node initialisation routine.
 
 use crate::options::Options;
+use chainstate::rpc::ConsensusRpcServer;
 use common::chain::config::ChainType;
-use consensus::rpc::ConsensusRpcServer;
 use p2p::rpc::P2pRpcServer;
 use std::sync::Arc;
 
@@ -29,10 +29,10 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     let mut manager = subsystem::Manager::new("mintlayer");
     manager.install_signal_handlers();
 
-    // Consensus subsystem
-    let consensus = manager.add_subsystem(
-        "consensus",
-        consensus::make_consensus(Arc::clone(&chain_config), storage.clone(), None)?,
+    // Chainstate subsystem
+    let chainstate = manager.add_subsystem(
+        "chainstate",
+        chainstate::make_consensus(Arc::clone(&chain_config), storage.clone(), None)?,
     );
 
     // P2P subsystem
@@ -40,7 +40,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
-            consensus.clone(),
+            chainstate.clone(),
             opts.p2p_addr,
         )
         .await
@@ -51,7 +51,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     let _rpc = manager.add_subsystem(
         "rpc",
         rpc::Builder::new(opts.rpc_addr)
-            .register(consensus.clone().into_rpc())
+            .register(chainstate.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())
             .build()

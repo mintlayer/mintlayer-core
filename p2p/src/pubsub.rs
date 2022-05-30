@@ -22,8 +22,8 @@ use crate::{
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
 };
+use chainstate::{consensus_interface, BlockError, ConsensusError::ProcessBlockError};
 use common::{chain::ChainConfig, primitives::Idable};
-use consensus::{consensus_interface, BlockError, ConsensusError::ProcessBlockError};
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -131,8 +131,8 @@ where
 
         let subscribe_func =
             Arc::new(
-                move |consensus_event: consensus::ConsensusEvent| match consensus_event {
-                    consensus::ConsensusEvent::NewTip(block_id, _) => {
+                move |consensus_event: chainstate::ConsensusEvent| match consensus_event {
+                    chainstate::ConsensusEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
                             if let Err(e) = tx.send(block_id).await {
                                 log::error!("pubsub manager closed: {:?}", e)
@@ -162,7 +162,7 @@ where
                             let result = match self
                                 .consensus_handle
                                 .call_mut(move |this| {
-                                    this.process_block(block, consensus::BlockSource::Peer)
+                                    this.process_block(block, chainstate::BlockSource::Peer)
                                 })
                                 .await?
                             {

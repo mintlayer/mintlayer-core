@@ -14,7 +14,7 @@ members = [
   "common",        # everything else, until it's moved to another crate
   "storage",       # storage abstraction layer and its implementation
   "crypto",        # cryptographic primitives and their interfaces
-  "consensus",     # code on consensus of blocks and transactions
+  "chainstate",     # code on chainstate of blocks and transactions
   "script",        # bitcoin script and its interfaces
   "logging",       # logging engine and its interfaces
   "p2p",           # p2p communication interfaces and protocols
@@ -32,7 +32,7 @@ default-members = [
   "common",
   "storage",
   "crypto",
-  "consensus",
+  "chainstate",
   "script",
   "logging",
   "p2p",
@@ -51,7 +51,7 @@ common = { path = "common"}
 storage = { path = "storage"}
 blockchain-storage = { path = "blockchain_storage"}
 crypto = { path = "crypto"}
-consensus = { path = "consensus"}
+chainstate = { path = "chainstate"}
 script = { path = "script"}
 logging = { path = "logging"}
 p2p = { path = "p2p"}

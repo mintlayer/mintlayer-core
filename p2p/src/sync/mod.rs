@@ -22,6 +22,7 @@ use crate::{
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
 };
+use chainstate::{consensus_interface, BlockError, BlockSource, ConsensusError::ProcessBlockError};
 use common::{
     chain::{
         block::{Block, BlockHeader},
@@ -29,7 +30,6 @@ use common::{
     },
     primitives::{Id, Idable},
 };
-use consensus::{consensus_interface, BlockError, BlockSource, ConsensusError::ProcessBlockError};
 use futures::FutureExt;
 use logging::log;
 use std::{
@@ -728,7 +728,7 @@ mod tests {
         event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
         net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
     };
-    use consensus::make_consensus;
+    use chainstate::make_consensus;
     use libp2p::PeerId;
 
     async fn make_sync_manager<T>(

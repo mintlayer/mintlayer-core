@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn, A. Altonen
 #![allow(unused)]
+use chainstate::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use common::{
     address::Address,
     chain::{
@@ -29,7 +30,6 @@ use common::{
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
-use consensus::{consensus_interface::ConsensusInterface, make_consensus, BlockSource};
 use crypto::{
     key::{KeyKind, PrivateKey},
     random::Rng,

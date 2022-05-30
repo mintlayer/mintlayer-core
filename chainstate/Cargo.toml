@@ -1,0 +1,33 @@
+[package]
+edition = "2021"
+license = "MIT"
+name = "chainstate"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.51"
+blockchain-storage = {path = '../blockchain_storage'}
+common = {path = '../common'}
+crypto = {path = '../crypto'}
+logging = {path = '../logging'}
+rpc = {path = '../rpc'}
+serialization = {path = "../serialization"}
+subsystem = {path = '../subsystem'}
+utils = {path = '../utils'}
+
+hex = "0.4.3"
+itertools = "0.10.3"
+jsonrpsee = {version = "0.13.1", features = ["macros"]}
+num = "0.4.0"
+proptest = "1.0.0"
+rand = "0.8.4"
+replace_with = "0.1.7"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+mockall = "0.11"
+serde_json = "1.0"
+static_assertions = "1.1"
+tokio = "1.0"
