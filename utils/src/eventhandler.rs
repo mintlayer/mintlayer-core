@@ -1,13 +1,13 @@
 use crate::blockuntilzero::BlockUntilZero;
 
-use std::sync::Arc;
+use std::sync::{atomic::AtomicI32, Arc};
 
 pub type EventHandler<E> = Arc<dyn Fn(E) + Send + Sync>;
 
 pub struct EventsController<E> {
     event_subscribers: Vec<EventHandler<E>>,
     events_broadcaster: slave_pool::ThreadPool,
-    wait_for_events: BlockUntilZero<std::sync::atomic::AtomicI32>,
+    wait_for_events: BlockUntilZero<AtomicI32>,
 }
 
 impl<E: Clone + Send + Sync + 'static> EventsController<E> {
