@@ -96,7 +96,7 @@ pub enum BlockError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
-    #[error("Signature verification failed in transaction with id: {0:?}")]
+    #[error("Signature verification failed in transaction with id: {0}")]
     SignatureVerificationFailed(Id<Transaction>),
     #[error("Transaction index found but transaction not found")]
     InvariantErrorTransactionCouldNotBeLoaded,
@@ -110,17 +110,17 @@ pub enum BlockError {
     DuplicateInputInTransaction(Id<Transaction>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
-    #[error("Transaction number `{0}` does not exist in block `{1:?}`")]
+    #[error("Transaction number `{0}` does not exist in block `{1}`")]
     TxNumWrongInBlock(usize, Id<Block>),
-    #[error("Serialization invariant failed for block `{0:?}`")]
+    #[error("Serialization invariant failed for block `{0}`")]
     SerializationInvariantError(Id<Block>),
-    #[error("Unexpected numeric type conversion error `{0:?}`")]
+    #[error("Unexpected numeric type conversion error `{0}`")]
     InternalNumTypeConversionError(Id<Block>),
     #[error("Internal block representation is invalid `{0}`")]
     BlockConsistencyError(BlockConsistencyError),
     #[error("No PoW data for block")]
     NoPowDataInPreviousBlock,
-    #[error("Block consensus type does not match our chain configuration: `{0:?}`")]
+    #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("Conversion failed: `{0:?}`")]
     Conversion(String),
@@ -128,7 +128,8 @@ pub enum BlockError {
     UnsupportedConsensusType,
     #[error("Block {0:?} already exists")]
     BlockAlreadyExists(Id<Block>),
-    // To be expanded
+    #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
+    DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
 }
 
 impl From<blockchain_storage::Error> for BlockError {

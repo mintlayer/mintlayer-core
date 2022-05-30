@@ -167,11 +167,31 @@ impl Chainstate {
         block_indexes.into_iter().flatten().rev().next()
     }
 
-    /// returns the block index of the new tip
-    pub fn process_block(
+    fn process_db_commit_error(
+        &mut self,
+        db_error: blockchain_storage::Error,
+        block: Block,
+        block_source: BlockSource,
+        attempt_number: usize,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        const MAX_DB_COMMIT_COUNT: usize = 10;
+
+        if attempt_number >= MAX_DB_COMMIT_COUNT {
+            return Err(BlockError::DatabaseCommitError(
+                block.get_id(),
+                MAX_DB_COMMIT_COUNT,
+                db_error,
+            ));
+        } else {
+            return self.attempt_to_process_block(block, block_source, attempt_number + 1);
+        }
+    }
+
+    pub fn attempt_to_process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
+        attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
         let mut chainstate_ref = self.make_db_tx();
 
@@ -184,7 +204,13 @@ impl Chainstate {
         chainstate_ref.check_block(&block, block_source)?;
         let block_index = chainstate_ref.accept_block(&block)?;
         let result = chainstate_ref.activate_best_chain(block_index, best_block_id)?;
-        chainstate_ref.commit_db_tx().expect("Committing transactions to DB failed");
+        let db_commit_result = chainstate_ref.commit_db_tx();
+        match db_commit_result {
+            Ok(_) => {}
+            Err(err) => {
+                return self.process_db_commit_error(err, block, block_source, attempt_number)
+            }
+        }
 
         let new_block_index_after_orphans = self.process_orphans(&block.get_id());
         let result = match new_block_index_after_orphans {
@@ -195,6 +221,15 @@ impl Chainstate {
         self.broadcast_new_tip_event(&result);
 
         Ok(result)
+    }
+
+    /// returns the block index of the new tip
+    pub fn process_block(
+        &mut self,
+        block: Block,
+        block_source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        self.attempt_to_process_block(block, block_source, 0)
     }
 
     // TODO: used to check block size + other preliminary check before giving the block to process_block
