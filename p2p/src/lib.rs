@@ -72,6 +72,22 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
+    async fn disconnect(&self, peer_id: String) -> error::Result<()>
+    where
+        <T as NetworkingService>::PeerId: FromStr,
+        <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
+    {
+        let (tx, rx) = oneshot::channel();
+        let peer_id = peer_id.parse::<T::PeerId>().map_err(|_| P2pError::InvalidPeerId)?;
+
+        self.p2p
+            .tx_swarm
+            .send(event::SwarmEvent::Disconnect(peer_id, tx))
+            .await
+            .map_err(|_| P2pError::ChannelClosed)?;
+        rx.await.map_err(P2pError::from)?
+    }
+
     pub async fn get_peer_count(&self) -> error::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.p2p

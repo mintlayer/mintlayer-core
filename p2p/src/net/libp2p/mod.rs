@@ -273,7 +273,6 @@ impl NetworkingService for Libp2pService {
 
         let transport = TcpConfig::new()
             .nodelay(true)
-            .port_reuse(true)
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
@@ -463,6 +462,9 @@ where
                     addr,
                     peer_info: (*peer_info).try_into()?,
                 })
+            }
+            types::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                Ok(ConnectivityEvent::ConnectionClosed { peer_id })
             }
             types::ConnectivityEvent::Discovered { peers } => Ok(ConnectivityEvent::Discovered {
                 peers: parse_peers(peers),

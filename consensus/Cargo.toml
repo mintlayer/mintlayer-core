@@ -17,6 +17,7 @@ subsystem = { path = '../subsystem' }
 rpc = { path = '../rpc' }
 utils = { path = '../utils' }
 
+hex = "0.4.3"
 itertools = "0.10.3"
 jsonrpsee = { version = "0.13.1", features = ["macros"] }
 num = "0.4.0"
