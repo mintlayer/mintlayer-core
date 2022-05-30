@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, Libp2pError, P2pError, ProtocolError},
+    error::{Libp2pError, P2pError, ProtocolError},
     net::libp2p::{
         backend::{Backend, PendingState},
         types,
@@ -25,7 +25,7 @@ use libp2p::identify::IdentifyEvent;
 use logging::log;
 
 impl Backend {
-    pub async fn on_identify_event(&mut self, event: IdentifyEvent) -> error::Result<()> {
+    pub async fn on_identify_event(&mut self, event: IdentifyEvent) -> crate::Result<()> {
         match event {
             IdentifyEvent::Error { peer_id, error } => {
                 if !self.swarm.is_connected(&peer_id) {

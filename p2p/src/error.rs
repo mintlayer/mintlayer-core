@@ -85,9 +85,6 @@ pub enum P2pError {
     InvalidPeerId,
 }
 
-// TODO: move this to src/lib.rs
-pub type Result<T> = core::result::Result<T, P2pError>;
-
 pub trait FatalError {
     fn map_fatal_err(self) -> core::result::Result<(), P2pError>;
 }

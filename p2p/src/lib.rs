@@ -33,6 +33,9 @@ pub mod rpc;
 pub mod swarm;
 pub mod sync;
 
+/// Result type with P2P errors
+pub type Result<T> = core::result::Result<T, P2pError>;
+
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
 
@@ -48,7 +51,7 @@ impl<T> P2pInterface<T>
 where
     T: NetworkingService,
 {
-    pub async fn connect(&mut self, addr: String) -> error::Result<()>
+    pub async fn connect(&mut self, addr: String) -> crate::Result<()>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
@@ -67,7 +70,7 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&self, peer_id: String) -> error::Result<()>
+    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
         <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
@@ -83,7 +86,7 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    pub async fn get_peer_count(&self) -> error::Result<usize> {
+    pub async fn get_peer_count(&self) -> crate::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -93,7 +96,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_bind_address(&self) -> error::Result<String> {
+    pub async fn get_bind_address(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -103,7 +106,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_peer_id(&self) -> error::Result<String> {
+    pub async fn get_peer_id(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -113,7 +116,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_connected_peers(&self) -> error::Result<Vec<String>> {
+    pub async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -147,7 +150,7 @@ where
         bind_addr: String,
         config: Arc<ChainConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    ) -> error::Result<Self>
+    ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
@@ -219,7 +222,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     bind_addr: String,
-) -> Result<P2pInterface<T>, P2pError>
+) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

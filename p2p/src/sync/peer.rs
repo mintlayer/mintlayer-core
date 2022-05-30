@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, net::NetworkingService, P2pError};
+use crate::{net::NetworkingService, P2pError};
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
@@ -83,7 +83,7 @@ where
     pub fn register_block_response(
         &mut self,
         header: &BlockHeader,
-    ) -> error::Result<Option<BlockHeader>> {
+    ) -> crate::Result<Option<BlockHeader>> {
         match &self.state {
             PeerSyncState::UploadingBlocks(expected) => {
                 if expected != &header.get_id() {

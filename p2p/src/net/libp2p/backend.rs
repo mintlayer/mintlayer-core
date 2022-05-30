@@ -19,7 +19,7 @@
 // TODO: think about connection management
 
 use crate::{
-    error::{self, Libp2pError, P2pError},
+    error::{Libp2pError, P2pError},
     net::libp2p::{types, SyncResponse},
 };
 use futures::StreamExt;
@@ -40,12 +40,12 @@ use tokio::sync::{mpsc, oneshot};
 pub(super) enum PendingState {
     /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
     Dialed {
-        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Connection established for outbound connection
     OutboundAccepted {
-        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Connection established for inbound connection
@@ -104,7 +104,7 @@ impl Backend {
     }
 
     // TODO: into_fatal()???
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         log::debug!("starting event loop");
 
         loop {
@@ -141,7 +141,7 @@ impl Backend {
                 ConnectionHandlerUpgrErr<std::io::Error>,
             >,
         >,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match event {
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
@@ -181,7 +181,7 @@ impl Backend {
     // TODO: into separate handlers?
     // TODO: there has to be a better way to add new commands?
     /// Handle command received from the libp2p front-end
-    async fn on_command(&mut self, cmd: types::Command) -> error::Result<()> {
+    async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
 
         match cmd {

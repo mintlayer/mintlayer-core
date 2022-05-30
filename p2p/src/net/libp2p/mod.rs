@@ -17,7 +17,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, Libp2pError, P2pError, ProtocolError},
+    error::{Libp2pError, P2pError, ProtocolError},
     message,
     net::{
         self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
@@ -248,7 +248,7 @@ impl NetworkingService for Libp2pService {
         topics: &[PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(
+    ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
         Self::SyncingCodecHandle,
@@ -377,7 +377,7 @@ where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
     IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
-    async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         // TODO: refactor error code
@@ -413,7 +413,7 @@ where
         Ok(info.try_into()?)
     }
 
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::debug!("disconnect peer {:?}", peer_id);
 
         let (tx, rx) = oneshot::channel();
@@ -435,7 +435,7 @@ where
     }
 
     // TODO: `impl TryInto<ConnectivityEvent> for types::ConnectivityEvent`??
-    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
@@ -476,7 +476,7 @@ impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
     T: NetworkingService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
-    async fn publish(&mut self, message: message::Message) -> error::Result<()> {
+    async fn publish(&mut self, message: message::Message) -> crate::Result<()> {
         // TODO: add support for transactions in the future
         let topic =
             if let message::MessageType::PubSub(message::PubSubMessage::Block(_)) = message.msg {
@@ -504,7 +504,7 @@ where
         source: T::PeerId,
         message_id: T::MessageId,
         result: net::ValidationResult,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::ReportValidationResult {
@@ -520,7 +520,7 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         match self.gossip_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::PubSubEvent::MessageReceived {
                 peer_id,
@@ -545,7 +545,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         message: message::Message,
-    ) -> error::Result<T::RequestId> {
+    ) -> crate::Result<T::RequestId> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendRequest {
@@ -564,7 +564,7 @@ where
         &mut self,
         request_id: T::RequestId,
         message: message::Message,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendResponse {
@@ -579,7 +579,7 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::SyncingEvent::Request {
                 peer_id,
@@ -722,7 +722,7 @@ mod tests {
         let (mut service2, _, _) = service2.unwrap();
         let conn_addr = service1.local_addr().clone();
 
-        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
+        let (res1, res2): (crate::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         assert!(res2.is_ok());

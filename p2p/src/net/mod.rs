@@ -235,7 +235,7 @@ pub trait NetworkingService {
         topics: &[PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(
+    ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
         Self::SyncingCodecHandle,
@@ -257,13 +257,13 @@ where
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, address: T::Address) -> error::Result<PeerInfo<T>>;
+    async fn connect(&mut self, address: T::Address) -> crate::Result<PeerInfo<T>>;
 
     /// Disconnect active connection
     ///
     /// # Arguments
     /// `peer_id` - Peer ID of the remote peer
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()>;
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider
     fn local_addr(&self) -> &T::Address;
@@ -277,7 +277,7 @@ where
     /// - incoming peer connections
     /// - new discovered peers
     /// - peer expiration events
-    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>>;
 }
 
 /// PubSubService provides an interface through which objects can send
@@ -292,7 +292,7 @@ where
     /// # Arguments
     /// `topic` - identifier for the topic
     /// `data` - generic data to send
-    async fn publish(&mut self, message: message::Message) -> error::Result<()>;
+    async fn publish(&mut self, message: message::Message) -> crate::Result<()>;
 
     /// Report message validation result back to the backend
     async fn report_validation_result(
@@ -300,10 +300,10 @@ where
         source: T::PeerId,
         msg_id: T::MessageId,
         result: ValidationResult,
-    ) -> error::Result<()>;
+    ) -> crate::Result<()>;
 
     /// Poll unvalidated gossipsub messages
-    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>>;
 }
 
 #[async_trait]
@@ -316,15 +316,15 @@ where
         &mut self,
         peer_id: T::PeerId,
         message: message::Message,
-    ) -> error::Result<T::RequestId>;
+    ) -> crate::Result<T::RequestId>;
 
     // TODO:
     async fn send_response(
         &mut self,
         request_id: T::RequestId,
         message: message::Message,
-    ) -> error::Result<()>;
+    ) -> crate::Result<()>;
 
     // TODO:
-    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>>;
 }

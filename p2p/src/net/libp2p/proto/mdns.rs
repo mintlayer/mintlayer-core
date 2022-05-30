@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::P2pError,
     net::libp2p::{backend::Backend, types},
 };
 use libp2p::{mdns::MdnsEvent, Multiaddr, PeerId};
@@ -25,7 +25,7 @@ impl Backend {
         &mut self,
         peers: Vec<(PeerId, Multiaddr)>,
         event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> types::ConnectivityEvent,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         if !self.relay_mdns || peers.is_empty() {
             return Ok(());
         }
@@ -33,7 +33,7 @@ impl Backend {
         self.conn_tx.send(event_fn(peers)).await.map_err(P2pError::from)
     }
 
-    pub async fn on_mdns_event(&mut self, event: MdnsEvent) -> error::Result<()> {
+    pub async fn on_mdns_event(&mut self, event: MdnsEvent) -> crate::Result<()> {
         match event {
             MdnsEvent::Discovered(peers) => {
                 self.send_mdns_event(peers.collect(), |peers| {

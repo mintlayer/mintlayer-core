@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, Libp2pError, P2pError, ProtocolError},
+    error::{Libp2pError, P2pError, ProtocolError},
     net::libp2p::{
         backend::{Backend, PendingState},
         types,
@@ -29,7 +29,7 @@ impl Backend {
         &mut self,
         peer_id: PeerId,
         endpoint: ConnectedPoint,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match endpoint {
             ConnectedPoint::Dialer { .. } => {
                 log::trace!("connection established (dialer), peer id {:?}", peer_id);
@@ -87,7 +87,7 @@ impl Backend {
         &mut self,
         peer_id: Option<PeerId>,
         error: DialError,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         if let Some(peer_id) = peer_id {
             match self.pending_conns.remove(&peer_id) {
                 Some(PendingState::Dialed { tx } | PendingState::OutboundAccepted { tx }) => tx
@@ -109,7 +109,7 @@ impl Backend {
         }
     }
 
-    pub async fn on_connection_closed(&mut self, peer_id: PeerId) -> error::Result<()> {
+    pub async fn on_connection_closed(&mut self, peer_id: PeerId) -> crate::Result<()> {
         self.established_conns.remove(&peer_id);
         self.conn_tx
             .send(types::ConnectivityEvent::ConnectionClosed { peer_id })

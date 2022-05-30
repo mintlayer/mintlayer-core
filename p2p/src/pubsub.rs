@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::P2pError,
     event,
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
@@ -63,7 +63,7 @@ where
     async fn validate_pubsub_message(
         &mut self,
         event: net::PubSubEvent<T>,
-    ) -> error::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
+    ) -> crate::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
         match event {
             net::PubSubEvent::MessageReceived {
                 peer_id,
@@ -95,7 +95,7 @@ where
 
     // while initial block download is in progress, ignore all incoming data
     // and wait for the completion event to be received from syncing
-    async fn node_syncing(&mut self) -> error::Result<()> {
+    async fn node_syncing(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.pubsub_handle.poll_next() => {
@@ -124,7 +124,7 @@ where
         }
     }
 
-    async fn node_active(&mut self) -> error::Result<()> {
+    async fn node_active(&mut self) -> crate::Result<()> {
         let (tx, mut rx) = mpsc::channel(CHANNEL_SIZE);
 
         let subscribe_func =
@@ -219,7 +219,7 @@ where
         }
     }
 
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         // when node is started and it connects to some peers,
         // it starts the initial block download. During this period,
         // all events from both syncing and pubsub implementation should be ignored

@@ -40,20 +40,20 @@ pub enum Command {
     /// Start listening on the network interface specified by `addr`
     Listen {
         addr: Multiaddr,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Connect to a remote peer at address `peer_addr`
     Connect {
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        response: oneshot::Sender<error::Result<IdentifyInfo>>,
+        response: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Disconnect remote peer
     Disconnect {
         peer_id: PeerId,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     // TODO: rethink this message
@@ -61,7 +61,7 @@ pub enum Command {
     SendMessage {
         topic: net::PubSubTopic,
         message: Vec<u8>,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Report validation result of a received Gossipsub
@@ -69,21 +69,21 @@ pub enum Command {
         message_id: MessageId,
         source: PeerId,
         result: MessageAcceptance,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Send block request to remote peer
     SendRequest {
         peer_id: PeerId,
         request: Box<SyncRequest>,
-        response: oneshot::Sender<error::Result<RequestId>>,
+        response: oneshot::Sender<crate::Result<RequestId>>,
     },
 
     /// Send block response to remote peer
     SendResponse {
         request_id: RequestId,
         response: Box<SyncResponse>,
-        channel: oneshot::Sender<error::Result<()>>,
+        channel: oneshot::Sender<crate::Result<()>>,
     },
 }
 

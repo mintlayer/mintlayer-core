@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, FatalError, P2pError, ProtocolError},
+    error::{FatalError, P2pError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
@@ -61,7 +61,7 @@ const RETRY_LIMIT: usize = 3;
 // for the function that tries to update peer state.
 //
 // This is just a convenience method to have access to nicer error handling
-impl<T> FatalError for error::Result<T> {
+impl<T> FatalError for crate::Result<T> {
     fn map_fatal_err(self) -> core::result::Result<(), P2pError> {
         if let Err(err) = self {
             match err {
@@ -182,7 +182,7 @@ where
         peer_id: T::PeerId,
         locator: Vec<BlockHeader>,
         retry_count: usize,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let request_id = self
             .handle
@@ -214,7 +214,7 @@ where
         peer_id: T::PeerId,
         block_id: Id<Block>,
         retry_count: usize,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let request_id = self
             .handle
@@ -241,7 +241,7 @@ where
         Ok(())
     }
 
-    pub async fn register_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    pub async fn register_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::info!("register peer {:?} to sync manager", peer_id);
 
         match self.peers.entry(peer_id) {
@@ -268,7 +268,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         locator: Vec<BlockHeader>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!(
             "received a header request from peer {:?}, locator {:#?}",
             peer_id,
@@ -294,7 +294,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         headers: Vec<Id<Block>>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!(
             "received a block request from peer {:?}, header counter {}",
             peer_id,
@@ -341,7 +341,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         headers: Vec<BlockHeader>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
 
         log::debug!(
@@ -440,7 +440,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         blocks: Vec<Block>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!("received {} blocks from peer {:?}", blocks.len(), peer_id,);
 
         if blocks.len() != 1 {
@@ -533,7 +533,7 @@ where
     }
 
     // if all peers are idling, then it means we're idling -> fully synced
-    pub async fn check_state(&mut self) -> error::Result<()> {
+    pub async fn check_state(&mut self) -> crate::Result<()> {
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
             return Ok(());
@@ -565,7 +565,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         request: SyncingRequest,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match request {
             SyncingRequest::GetHeaders { locator } => {
                 self.process_header_request(peer_id, request_id, locator).await
@@ -580,7 +580,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         response: SyncingResponse,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match response {
             SyncingResponse::Headers { headers } => {
                 self.process_header_response(peer_id, headers).await
@@ -596,7 +596,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         error: net::RequestResponseError,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match error {
             net::RequestResponseError::ConnectionClosed => {
                 self.unregister_peer(peer_id);
@@ -647,7 +647,7 @@ where
     }
 
     /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> error::Result<()> {
+    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> crate::Result<()> {
         match event {
             net::SyncingEvent::Request {
                 peer_id,
@@ -697,7 +697,7 @@ where
     }
 
     /// Handle control-related sync event from P2P/PeerManager
-    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
+    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> crate::Result<()> {
         match event {
             event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
             event::SyncControlEvent::Disconnected(peer_id) => {
@@ -708,7 +708,7 @@ where
     }
 
     /// Run SyncManager event loop
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         log::info!("starting sync manager event loop");
 
         loop {

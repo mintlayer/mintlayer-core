@@ -14,10 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{
-    error::{self, P2pError},
-    net::mock::types,
-};
+use crate::{error::P2pError, net::mock::types};
 use futures::FutureExt;
 use logging::log;
 use std::{io::ErrorKind, net::SocketAddr};
@@ -66,7 +63,7 @@ impl Backend {
         }
     }
 
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.socket.accept() => match event {
