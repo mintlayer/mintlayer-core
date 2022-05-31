@@ -106,6 +106,41 @@ pub fn signature_hash_for_outputs(
     Ok(())
 }
 
+trait Transactable {
+    fn inputs(&self) -> Option<&[TxInput]>;
+    fn outputs(&self) -> Option<&[TxOutput]>;
+}
+
+impl Transactable for Transaction {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        Some(&self.get_inputs())
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        Some(&self.get_outputs())
+    }
+}
+
+fn stream_transactable_signature_hash<T: Transactable>(
+    stream: &mut DefaultHashAlgoStream,
+    mode: sighashtype::SigHashType,
+    transactable: &T,
+    target_input: &TxInput,
+    input_num: usize,
+) -> Result<(), TransactionSigError> {
+    match transactable.inputs() {
+        Some(inputs) => signature_hash_for_inputs(stream, mode, inputs, target_input),
+        None => (),
+    }
+
+    match transactable.outputs() {
+        Some(outputs) => signature_hash_for_outputs(stream, mode, outputs, input_num)?,
+        None => (),
+    }
+
+    Ok(())
+}
+
 pub fn signature_hash(
     mode: sighashtype::SigHashType,
     tx: &Transaction,
@@ -126,9 +161,7 @@ pub fn signature_hash(
     hash_encoded_to(&tx.version_byte(), &mut stream);
     hash_encoded_to(&tx.get_flags(), &mut stream);
 
-    signature_hash_for_inputs(&mut stream, mode, tx.get_inputs(), target_input);
-
-    signature_hash_for_outputs(&mut stream, mode, tx.get_outputs(), input_num)?;
+    stream_transactable_signature_hash(&mut stream, mode, tx, target_input, input_num)?;
 
     hash_encoded_to(&tx.get_lock_time(), &mut stream);
 
