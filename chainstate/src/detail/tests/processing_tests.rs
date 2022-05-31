@@ -149,7 +149,7 @@ fn test_empty_chainstate() {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let chainstate = Chainstate::new(config, storage, None).unwrap();
-        assert!(chainstate.get_best_block_id().unwrap().is_some());
+        chainstate.get_best_block_id().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
                 == chainstate.chain_config.genesis_block_id()
@@ -541,7 +541,7 @@ fn test_consensus_type() {
             vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
         )
         .expect("Unexpected conversion error"));
-        assert!(btf.add_special_block(mined_block).unwrap().is_some());
+        btf.add_special_block(mined_block).unwrap();
     }
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
@@ -584,7 +584,7 @@ fn test_consensus_type() {
             vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
         )
         .expect("Unexpected conversion error"));
-        assert!(btf.add_special_block(mined_block).unwrap().is_some());
+        btf.add_special_block(mined_block).unwrap();
     }
 }
 
