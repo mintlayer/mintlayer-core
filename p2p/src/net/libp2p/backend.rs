@@ -15,37 +15,25 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 
 // TODO: think about connection management
 
 use crate::{
     error::{self, Libp2pError, P2pError},
-    message,
-    net::libp2p::proto::*,
-    net::{
-        self,
-        libp2p::{types, SyncResponse},
-    },
+    net::libp2p::{types, SyncResponse},
 };
 use futures::StreamExt;
 use libp2p::{
-    core::{connection::ConnectedPoint, either::EitherError},
-    gossipsub::{
-        error::GossipsubHandlerError, Gossipsub, GossipsubEvent, GossipsubMessage,
-        IdentTopic as Topic, MessageAuthenticity, MessageId, ValidationMode,
-    },
-    identify::{IdentifyEvent, IdentifyInfo},
-    mdns::MdnsEvent,
+    core::either::EitherError,
+    gossipsub::error::GossipsubHandlerError,
+    identify::IdentifyInfo,
     ping,
     request_response::*,
-    swarm::{ConnectionHandlerUpgrErr, NegotiatedSubstream, Swarm, SwarmEvent},
+    swarm::{ConnectionHandlerUpgrErr, Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
 use logging::log;
-use serialization::Decode;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
 #[derive(Debug)]
@@ -264,12 +252,18 @@ impl Backend {
                     source,
                     result
                 );
-                self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
+                match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
                     &message_id,
                     &source,
                     result,
-                );
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+                ) {
+                    Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+                    Err(e) => response
+                        .send(Err(P2pError::Libp2pError(Libp2pError::PublishError(
+                            e.to_string(),
+                        ))))
+                        .map_err(|_| P2pError::ChannelClosed),
+                }
             }
             types::Command::SendRequest {
                 peer_id,
@@ -315,10 +309,10 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{SyncRequest, SyncResponse, SyncingCodec, SyncingProtocol};
+    use crate::net::libp2p::{SyncingCodec, SyncingProtocol};
     use libp2p::{
         core::upgrade,
-        gossipsub::GossipsubConfigBuilder,
+        gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
         identify::{Identify, IdentifyConfig},
         identity,
         mdns::Mdns,
@@ -327,7 +321,7 @@ mod tests {
         tcp::TcpConfig,
         Transport,
     };
-    use std::{io, iter};
+    use std::iter;
     use tokio::sync::oneshot;
 
     // create a swarm object which is the top-level object of libp2p

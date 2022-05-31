@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused, dead_code)]
-
 use crate::{
     error::{self, FatalError, P2pError, ProtocolError},
     event,
@@ -41,7 +39,7 @@ struct PeerContext<T>
 where
     T: NetworkingService,
 {
-    info: net::PeerInfo<T>,
+    _info: net::PeerInfo<T>,
 }
 
 enum PeerAddrInfo<T>
@@ -116,9 +114,9 @@ where
                 );
 
                 match self.handle.connect(addr.clone()).await {
-                    Ok(info) => {
-                        let peer_id = info.peer_id;
-                        match self.peers.insert(peer_id, PeerContext { info }) {
+                    Ok(_info) => {
+                        let peer_id = _info.peer_id;
+                        match self.peers.insert(peer_id, PeerContext { _info }) {
                             Some(_) => {
                                 log::error!("peer already exists");
                                 response
@@ -170,6 +168,7 @@ where
     ///
     // TODO: ugly, refactor
     // TODO: move this to its own file?
+    #[allow(dead_code)]
     async fn auto_connect(&mut self) -> error::Result<()> {
         // we have enough active connections
         if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
@@ -224,9 +223,9 @@ where
             self.handle
                 .connect((*addr).clone())
                 .await
-                .map(|info| {
-                    let id = info.peer_id;
-                    match self.peers.insert(id, PeerContext { info }) {
+                .map(|_info| {
+                    let id = _info.peer_id;
+                    match self.peers.insert(id, PeerContext { _info }) {
                         Some(_) => panic!("peer already exists"),
                         None => {}
                     }
@@ -234,7 +233,7 @@ where
                 .map_err(|err| {
                     log::error!("failed to establish outbound connection: {:?}", err);
                     err
-                });
+                })?;
         }
 
         Ok(())
@@ -267,7 +266,7 @@ where
     }
 
     // TODO: implement
-    fn peer_expired(&mut self, peers: &[net::AddrInfo<T>]) -> error::Result<()> {
+    fn peer_expired(&mut self, _peers: &[net::AddrInfo<T>]) -> error::Result<()> {
         Ok(())
     }
 
@@ -307,7 +306,7 @@ where
                 // TODO: check supported protocols
                 // TODO: check version
 
-                self.peers.insert(peer_id, PeerContext { info: peer_info });
+                self.peers.insert(peer_id, PeerContext { _info: peer_info });
                 self.tx_sync
                     .send(event::SyncControlEvent::Connected(peer_id))
                     .await
@@ -342,7 +341,7 @@ where
                 // TODO: check supported protocols
                 // TODO: check version
 
-                self.peers.insert(peer_id, PeerContext { info: peer_info });
+                self.peers.insert(peer_id, PeerContext { _info: peer_info });
                 self.tx_sync
                     .send(event::SyncControlEvent::Connected(peer_id))
                     .await
@@ -386,14 +385,13 @@ where
 
 #[cfg(test)]
 mod tests {
-    #![allow(unused)]
     use super::*;
     use crate::{error::P2pError, event};
-    use common::chain::config::{self, ChainType};
+    use common::chain::config;
     use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
     use net::{libp2p::Libp2pService, mock::MockService, ConnectivityService};
     use std::net::SocketAddr;
-    use tokio::{net::TcpListener, sync::oneshot};
+    use tokio::sync::oneshot;
 
     async fn make_swarm_manager<T>(
         addr: T::Address,
@@ -469,7 +467,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_peer_discovered_libp2p() {
-        let config = Arc::new(config::create_mainnet());
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = Arc::new(config::create_mainnet());
         let mut swarm = make_swarm_manager::<Libp2pService>(addr, config).await;
@@ -626,7 +623,7 @@ mod tests {
             make_swarm_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config)
                 .await;
 
-        let (conn1_res, conn2_res) = tokio::join!(
+        let (conn1_res, _conn2_res) = tokio::join!(
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
@@ -643,7 +640,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_outbound_different_network() {
-        let mut swarm1 = make_swarm_manager::<Libp2pService>(
+        let _swarm1 = make_swarm_manager::<Libp2pService>(
             test_utils::make_address("/ip6/::1/tcp/"),
             Arc::new(config::create_mainnet()),
         )
@@ -657,7 +654,6 @@ mod tests {
             ),
         )
         .await;
-        let addr = swarm2.handle.local_addr().clone();
 
         tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
 
@@ -680,7 +676,7 @@ mod tests {
             make_swarm_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config)
                 .await;
 
-        let (conn1_res, conn2_res) = tokio::join!(
+        let (_conn1_res, conn2_res) = tokio::join!(
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
@@ -708,9 +704,8 @@ mod tests {
             ),
         )
         .await;
-        let addr = swarm2.handle.local_addr().clone();
 
-        let (conn1_res, conn2_res) = tokio::join!(
+        let (_conn1_res, conn2_res) = tokio::join!(
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
@@ -737,7 +732,7 @@ mod tests {
             Arc::new(config::create_mainnet()),
         )
         .await;
-        let (conn1_res, conn2_res) = tokio::join!(
+        let (_conn1_res, conn2_res) = tokio::join!(
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );

@@ -14,16 +14,11 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 use crate::{
     error::P2pError,
-    net::{
-        libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService,
-        PubSubService, SyncingCodecService,
-    },
+    net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
-use common::chain::block;
 use common::chain::ChainConfig;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
@@ -129,14 +124,13 @@ where
     }
 }
 
-#[allow(unused)]
 struct P2P<T: NetworkingService> {
     // TODO: add abstration for channels
     /// TX channel for sending swarm control events
     pub tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
 
     /// TX channel for sending syncing/pubsub events
-    pub tx_sync: mpsc::Sender<event::SyncEvent>,
+    pub _tx_sync: mpsc::Sender<event::SyncEvent>,
 }
 
 impl<T> P2P<T>
@@ -170,7 +164,7 @@ where
         // TODO: think about these channel sizes
         let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
-        let (tx_sync, rx_sync) = mpsc::channel(CHANNEL_SIZE);
+        let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
         let swarm_config = Arc::clone(&config);
@@ -213,7 +207,7 @@ where
             }
         });
 
-        Ok(Self { tx_swarm, tx_sync })
+        Ok(Self { tx_swarm, _tx_sync })
     }
 }
 

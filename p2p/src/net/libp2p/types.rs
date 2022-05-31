@@ -15,31 +15,23 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
 use crate::{
     error, message,
     net::{
         self,
-        libp2p::{Libp2pService, SyncRequest, SyncResponse, SyncingCodec},
+        libp2p::{SyncRequest, SyncResponse, SyncingCodec},
     },
 };
 use libp2p::{
     gossipsub::{
-        Gossipsub, GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageAcceptance,
-        MessageAuthenticity, MessageId, TopicHash, ValidationMode,
+        Gossipsub, GossipsubEvent, IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash,
     },
     identify::{Identify, IdentifyEvent, IdentifyInfo},
     mdns::{Mdns, MdnsEvent},
     ping::{self, PingEvent},
-    // TODO: do not use *
-    request_response::*,
-    swarm::NegotiatedSubstream,
-    Multiaddr,
-    NetworkBehaviour,
-    PeerId,
+    request_response::{RequestId, RequestResponse, RequestResponseEvent},
+    Multiaddr, NetworkBehaviour, PeerId,
 };
-// use std::sync::Arc;
 use tokio::sync::oneshot;
 
 // TODO: rename `response` -> `channel`
@@ -97,6 +89,7 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum ConnectivityEvent {
+    #[allow(unused)]
     /// Outbound connection accepted by remote
     ConnectionAccepted { peer_info: Box<IdentifyInfo> },
 

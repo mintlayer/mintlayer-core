@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
 use crate::{
     error::{self, P2pError},
     event,
@@ -23,7 +21,7 @@ use crate::{
     net::{self, NetworkingService, PubSubService},
 };
 use chainstate::{chainstate_interface, BlockError, ChainstateError::ProcessBlockError};
-use common::{chain::ChainConfig, primitives::Idable};
+use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -72,7 +70,7 @@ where
                 message_id,
                 message:
                     Message {
-                        magic,
+                        magic: _,
                         msg: MessageType::PubSub(PubSubMessage::Block(block)),
                     },
             } => Ok((peer_id, message_id, PubSubMessage::Block(block))),
@@ -167,7 +165,7 @@ where
                                 .await?
                             {
                                 Ok(_) => net::ValidationResult::Accept,
-                                Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) =>
+                                Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) =>
                                     net::ValidationResult::Accept, // TODO: ignore?
                                 Err(err) => {
                                     // TODO: report misbehaviour to swarm manager and close connection
@@ -219,7 +217,6 @@ where
                 }
             }
         }
-        todo!();
     }
 
     pub async fn run(&mut self) -> error::Result<()> {
@@ -236,8 +233,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[tokio::test]
     async fn it_works() {
         assert_eq!(1 + 1, 2);

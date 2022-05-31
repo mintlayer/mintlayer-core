@@ -14,21 +14,12 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 
-use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
+use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
-    address::Address,
-    chain::{
-        block::{Block, ConsensusData},
-        config::ChainConfig,
-        transaction::Transaction,
-        Destination, OutPointSourceId, TxInput, TxOutput,
-    },
-    primitives::{time, Amount, Id, Idable, H256},
+    chain::{block::Block, config::ChainConfig},
+    primitives::{Id, Idable},
 };
-use crypto::random::Rng;
-use futures::FutureExt;
 use p2p::{
     error::P2pError,
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
@@ -40,9 +31,8 @@ use p2p::{
     sync::SyncManager,
     sync::SyncState,
 };
-use rand::prelude::SliceRandom;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     sync::Arc,
 };
 use tokio::sync::mpsc;
@@ -100,10 +90,10 @@ where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (conn1_res, conn2_res) =
+    let (_conn1_res, conn2_res) =
         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
     let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let conn1_id = match conn2_res {
+    let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
@@ -169,7 +159,7 @@ where
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         net::SyncingEvent::Request {
-            peer_id,
+            peer_id: _,
             request_id,
             request:
                 Message {
@@ -274,7 +264,7 @@ async fn remote_ahead_by_7_blocks() {
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..9 {
+        for _ in 0..9 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -283,10 +273,10 @@ async fn remote_ahead_by_7_blocks() {
         mgr1
     });
 
-    for i in 0..9 {
+    for _ in 0..9 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -313,7 +303,7 @@ async fn remote_ahead_by_7_blocks() {
                     .unwrap()
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -346,15 +336,15 @@ async fn remote_ahead_by_7_blocks() {
                     .unwrap();
             }
             net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response:
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
+                                headers: _,
                             })),
-                        magic,
+                        magic: _,
                     },
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
@@ -383,7 +373,7 @@ async fn local_ahead_by_12_blocks() {
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, mut pubsub2, _) =
+    let (mut mgr2, mut conn2, _, _pubsub2, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -398,7 +388,7 @@ async fn local_ahead_by_12_blocks() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..14 {
+        for _ in 0..14 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -412,7 +402,7 @@ async fn local_ahead_by_12_blocks() {
     loop {
         match mgr2.handle_mut().poll_next().await.unwrap() {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -440,7 +430,7 @@ async fn local_ahead_by_12_blocks() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -480,7 +470,7 @@ async fn local_ahead_by_12_blocks() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -562,7 +552,7 @@ async fn remote_local_diff_chains_local_higher() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..24 {
+        for _ in 0..24 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -573,10 +563,10 @@ async fn remote_local_diff_chains_local_higher() {
 
     let mut work = VecDeque::new();
 
-    for i in 0..24 {
+    for _ in 0..24 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -603,7 +593,7 @@ async fn remote_local_diff_chains_local_higher() {
                     .unwrap()
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -637,7 +627,7 @@ async fn remote_local_diff_chains_local_higher() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -674,7 +664,7 @@ async fn remote_local_diff_chains_local_higher() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -736,7 +726,7 @@ async fn remote_local_diff_chains_remote_higher() {
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
-    let (mut mgr2, mut conn2, _, mut pubsub2, _) =
+    let (mut mgr2, mut conn2, _, _pubsub2, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
             .await;
 
@@ -757,7 +747,7 @@ async fn remote_local_diff_chains_remote_higher() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..20 {
+        for _ in 0..20 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -768,10 +758,10 @@ async fn remote_local_diff_chains_remote_higher() {
 
     let mut work = VecDeque::new();
 
-    for i in 0..20 {
+    for _ in 0..20 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -798,7 +788,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     .unwrap()
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -832,7 +822,7 @@ async fn remote_local_diff_chains_remote_higher() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -869,7 +859,7 @@ async fn remote_local_diff_chains_remote_higher() {
             }
             net::SyncingEvent::Response {
                 peer_id,
-                request_id,
+                request_id: _,
                 response:
                     Message {
                         msg:
@@ -942,7 +932,6 @@ async fn two_remote_nodes_different_chains() {
     util::add_more_blocks(Arc::clone(&config), &mgr3_handle, 7).await;
 
     // save local and remote tips so we can verify who did a reorg
-    let mgr1_tip = get_tip(&mgr1_handle).await;
     let mgr2_tip = get_tip(&mgr2_handle).await;
     let mgr3_tip = get_tip(&mgr3_handle).await;
 
@@ -956,7 +945,7 @@ async fn two_remote_nodes_different_chains() {
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..18 {
+        for _ in 0..18 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -965,7 +954,7 @@ async fn two_remote_nodes_different_chains() {
         mgr1
     });
 
-    for i in 0..18 {
+    for _ in 0..18 {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
@@ -973,7 +962,7 @@ async fn two_remote_nodes_different_chains() {
 
         match event {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1000,7 +989,7 @@ async fn two_remote_nodes_different_chains() {
                 }
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1032,15 +1021,15 @@ async fn two_remote_nodes_different_chains() {
                 }
             }
             net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response:
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
+                                headers: _,
                             })),
-                        magic,
+                        magic: _,
                     },
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
@@ -1086,7 +1075,6 @@ async fn two_remote_nodes_same_chains() {
     util::import_blocks(&mgr3_handle, blocks).await;
 
     // save local and remote tips so we can verify who did a reorg
-    let mgr1_tip = get_tip(&mgr1_handle).await;
     let mgr2_tip = get_tip(&mgr2_handle).await;
     let mgr3_tip = get_tip(&mgr3_handle).await;
 
@@ -1103,7 +1091,7 @@ async fn two_remote_nodes_same_chains() {
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
     let (tx, mut rx) = mpsc::channel(1);
-    let mut handle = tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         loop {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
@@ -1114,7 +1102,7 @@ async fn two_remote_nodes_same_chains() {
             }
         }
 
-        tx.send(());
+        tx.send(()).await.unwrap();
         mgr1
     });
 
@@ -1122,12 +1110,12 @@ async fn two_remote_nodes_same_chains() {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
-            event = rx.recv() => { break },
+            _event = rx.recv() => { break },
         };
 
         match event {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1154,7 +1142,7 @@ async fn two_remote_nodes_same_chains() {
                 }
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1186,15 +1174,15 @@ async fn two_remote_nodes_same_chains() {
                 }
             }
             net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response:
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
+                                headers: _,
                             })),
-                        magic,
+                        magic: _,
                     },
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
@@ -1252,7 +1240,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     let mut gethdr_received = HashSet::new();
     let mut blocks = vec![];
 
-    let mut handle = tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         loop {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
@@ -1263,7 +1251,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             }
         }
 
-        tx.send(());
+        tx.send(()).await.unwrap();
         mgr1
     });
 
@@ -1271,12 +1259,12 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         let (event, dest_peer_id, mgr_handle) = tokio::select! {
             event = mgr2.handle_mut().poll_next() => { (event.unwrap(), conn2.peer_id(), &mgr2_handle) },
             event = mgr3.handle_mut().poll_next() => { (event.unwrap(), conn3.peer_id(), &mgr3_handle) },
-            event = rx.recv() => { break },
+            _event = rx.recv() => { break },
         };
 
         match event {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1320,7 +1308,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                 }
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1352,15 +1340,15 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                 }
             }
             net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response:
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
+                                headers: _,
                             })),
-                        magic,
+                        magic: _,
                     },
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
@@ -1388,7 +1376,7 @@ async fn test_connect_disconnect_resyncing() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
+    let (mut mgr1, mut conn1, _, _pubsub, _) =
         make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
             .await;
     let (mut mgr2, mut conn2, _, _, _) =
@@ -1411,7 +1399,7 @@ async fn test_connect_disconnect_resyncing() {
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
 
-    assert_eq!(mgr1.unregister_peer(*conn2.peer_id()), Ok(()));
+    mgr1.unregister_peer(*conn2.peer_id());
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
     assert!(std::matches!(
         conn2.poll_next().await,
@@ -1433,7 +1421,7 @@ async fn test_connect_disconnect_resyncing() {
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
-        for i in 0..9 {
+        for _ in 0..9 {
             let event = mgr1.handle_mut().poll_next().await.unwrap();
             mgr1.on_syncing_event(event).await.unwrap();
             mgr1.check_state().await.unwrap();
@@ -1442,10 +1430,10 @@ async fn test_connect_disconnect_resyncing() {
         mgr1
     });
 
-    for i in 0..9 {
+    for _ in 0..9 {
         match mgr2.handle_mut().poll_next().await.unwrap() {
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1472,7 +1460,7 @@ async fn test_connect_disconnect_resyncing() {
                     .unwrap()
             }
             net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request:
                     Message {
@@ -1505,15 +1493,15 @@ async fn test_connect_disconnect_resyncing() {
                     .unwrap();
             }
             net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response:
                     Message {
                         msg:
                             MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
+                                headers: _,
                             })),
-                        magic,
+                        magic: _,
                     },
             } => {}
             msg => panic!("invalid message received: {:?}", msg),

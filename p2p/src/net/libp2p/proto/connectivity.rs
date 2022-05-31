@@ -21,7 +21,6 @@ use crate::{
         types,
     },
 };
-use futures::StreamExt;
 use libp2p::{core::connection::ConnectedPoint, swarm::DialError, PeerId};
 use logging::log;
 
@@ -134,7 +133,7 @@ mod tests {
             &[],
         )
         .await;
-        let (tx, rx) = oneshot::channel();
+        let (tx, _rx) = oneshot::channel();
         let peer_id = PeerId::random();
         backend.pending_conns.insert(peer_id, PendingState::Dialed { tx });
 
@@ -164,7 +163,7 @@ mod tests {
             &[],
         )
         .await;
-        let (tx, rx) = oneshot::channel();
+        let (tx, _rx) = oneshot::channel();
         let peer_id = PeerId::random();
         backend.pending_conns.insert(peer_id, PendingState::OutboundAccepted { tx });
 
@@ -286,7 +285,7 @@ mod tests {
 
     #[tokio::test]
     async fn outgoing_error_inbound_exists() {
-        let (mut backend, _, _, _, _) = util::make_libp2p(
+        let (_backend, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             test_utils::make_address("/ip6/::1/tcp/"),
             &[],

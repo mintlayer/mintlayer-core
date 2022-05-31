@@ -14,21 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
-use crate::{
-    error::{self, P2pError, ProtocolError},
-    event,
-    net::{self, NetworkingService},
-    sync,
-};
+use crate::{error, net::NetworkingService, P2pError};
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
 };
 use logging::log;
-use std::collections::{HashSet, VecDeque};
-use tokio::sync::mpsc;
+use std::collections::VecDeque;
 
 /// State of the peer
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +44,7 @@ where
     T: NetworkingService,
 {
     /// Unique peer ID
-    peer_id: T::PeerId,
+    _peer_id: T::PeerId,
 
     /// State of the peer
     state: PeerSyncState,
@@ -70,9 +62,9 @@ impl<T> PeerContext<T>
 where
     T: NetworkingService,
 {
-    pub fn new(peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+    pub fn new(_peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
         Self {
-            peer_id,
+            _peer_id,
             locator,
             state: PeerSyncState::Unknown,
             work: VecDeque::new(),
@@ -138,7 +130,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::P2pError, net::mock::MockService};
+    use crate::net::mock::MockService;
     use common::chain::block::consensus_data::ConsensusData;
     use std::net::SocketAddr;
 

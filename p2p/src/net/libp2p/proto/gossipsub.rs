@@ -17,10 +17,10 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError, ProtocolError},
-    message::{Message, MessageType, PubSubMessage},
+    message::Message,
     net::libp2p::{backend::Backend, types},
 };
-use libp2p::{gossipsub::GossipsubEvent, identify::Identify, swarm::SwarmBuilder};
+use libp2p::gossipsub::GossipsubEvent;
 use logging::log;
 use serialization::Decode;
 
@@ -91,23 +91,19 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{
-        self,
-        libp2p::{proto::util, Libp2pService},
-        NetworkingService,
+    use crate::{
+        message::{MessageType, PubSubMessage},
+        net::{self, libp2p::proto::util},
     };
     use common::chain::block::{consensus_data::ConsensusData, Block};
     use futures::{FutureExt, StreamExt};
     use libp2p::{
-        gossipsub::{
-            Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage,
-            IdentTopic as Topic, MessageAuthenticity, MessageId, TopicHash, ValidationMode,
-        },
-        swarm::SwarmEvent,
+        gossipsub::{GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageId, TopicHash},
+        identify::Identify,
+        swarm::{SwarmBuilder, SwarmEvent},
         Multiaddr, PeerId,
     };
     use serialization::Encode;
-    use std::{collections::HashSet, sync::Arc};
 
     impl PartialEq for types::PubSubEvent {
         fn eq(&self, other: &Self) -> bool {
@@ -127,7 +123,7 @@ mod tests {
     }
 
     impl PartialEq for types::ConnectivityEvent {
-        fn eq(&self, other: &Self) -> bool {
+        fn eq(&self, _other: &Self) -> bool {
             true
         }
     }
@@ -264,7 +260,7 @@ mod tests {
     #[tokio::test]
     async fn test_subscribed() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) = util::make_libp2p(
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr.clone(),
             &[net::PubSubTopic::Blocks],
@@ -272,7 +268,7 @@ mod tests {
         .await;
 
         let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend2, _, _, _, _) = util::make_libp2p(
+        let (mut backend2, _, _conn_rx2, _gossip_rx2, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr2.clone(),
             &[net::PubSubTopic::Blocks],
@@ -355,7 +351,7 @@ mod tests {
     #[tokio::test]
     async fn test_unsubscribed() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) = util::make_libp2p(
+        let (mut backend1, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr.clone(),
             &[net::PubSubTopic::Blocks],
@@ -443,7 +439,8 @@ mod tests {
             .swarm
             .behaviour_mut()
             .gossipsub
-            .unsubscribe(&Topic::new("mintlayer-gossipsub-blocks"));
+            .unsubscribe(&Topic::new("mintlayer-gossipsub-blocks"))
+            .unwrap();
         let mut needed_unsubscriptions: i32 = 2;
 
         loop {
@@ -487,7 +484,7 @@ mod tests {
     async fn test_gossipsub_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = common::chain::config::create_mainnet();
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) =
             util::make_libp2p(config.clone(), addr.clone(), &[net::PubSubTopic::Blocks]).await;
 
         let (transport, peer_id, id_keys) = util::make_transport_and_keys();
@@ -513,8 +510,8 @@ mod tests {
                     Some(_) => {},
                     None => panic!("got None"),
                 },
-                event = swarm.next() => {},
-                _ = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
+                _event = swarm.next() => {},
+                _event = tokio::time::sleep(std::time::Duration::from_secs(10)) => {
                     panic!("didn't receive subscriptions in time");
                 }
             }

@@ -14,13 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
-use crate::{error, message, net::NetworkingService};
-use common::chain::block::{Block, BlockHeader};
-use serialization::{Decode, Encode};
-use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use crate::{error, net::NetworkingService};
+use common::chain::block::Block;
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 pub enum SwarmEvent<T: NetworkingService> {
