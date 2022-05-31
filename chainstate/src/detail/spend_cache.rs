@@ -238,7 +238,7 @@ impl<'a> CachedInputs<'a> {
                         .db_tx
                         .get_block_index(block_id)
                         .map_err(BlockError::from)?
-                        .ok_or(BlockError::NotFound)?;
+                        .ok_or(BlockError::NotFound)?; // TODO: set meaningful error
 
                     if let Some(outputs) =
                         block_index.get_block_header().block_reward_destinations()
