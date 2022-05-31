@@ -14,7 +14,10 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error::P2pError, net::mock::types};
+use crate::{
+    error::{DialError, P2pError},
+    net::mock::types,
+};
 use futures::FutureExt;
 use logging::log;
 use std::{io::ErrorKind, net::SocketAddr};
@@ -73,21 +76,21 @@ impl Backend {
                     }).await?,
                     Err(e) => {
                         log::error!("accept() failed: {:?}", e);
-                        return Err(P2pError::SocketError(e.kind()));
+                        return Err(P2pError::Other("accept() failed"));
                     }
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { addr, response } => {
                         if self.addr == addr {
-                            let _ = response.send(Err(P2pError::SocketError(ErrorKind::AddrNotAvailable)));
+                            let _ = response.send(Err(P2pError::DialError(DialError::IoError(ErrorKind::AddrNotAvailable))));
                             continue;
                         }
 
                         tokio::select! {
                             _ = tokio::time::sleep(self.timeout) => {
                                 let _ = response.send(Err(
-                                    P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
-                                );
+                                    P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
+                                ));
                             }
                             res = TcpStream::connect(addr) => match res {
                                 Ok(socket) => { let _ = response.send(Ok(socket)); },

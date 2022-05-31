@@ -24,6 +24,7 @@ logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
+utils = { path = "../utils/" }
 
 [dependencies.jsonrpsee]
 version = "0.13.1"

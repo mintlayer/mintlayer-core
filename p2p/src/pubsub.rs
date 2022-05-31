@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::P2pError,
+    error::{P2pError, ProtocolError},
     event,
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
@@ -88,7 +88,7 @@ where
                 self.pubsub_handle
                     .report_validation_result(peer_id, message_id, net::ValidationResult::Reject)
                     .await?;
-                Err(P2pError::InvalidData)
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
     }

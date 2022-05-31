@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::P2pError,
+    error::{ConversionError, P2pError},
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
@@ -62,7 +62,9 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Connect(
-                addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+                addr.parse::<T::Address>().map_err(|_| {
+                    P2pError::ConversionError(ConversionError::InvalidAddress(addr))
+                })?,
                 tx,
             ))
             .await
@@ -76,7 +78,9 @@ where
         <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
     {
         let (tx, rx) = oneshot::channel();
-        let peer_id = peer_id.parse::<T::PeerId>().map_err(|_| P2pError::InvalidPeerId)?;
+        let peer_id = peer_id
+            .parse::<T::PeerId>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
 
         self.p2p
             .tx_swarm
@@ -156,7 +160,9 @@ where
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
         let (conn, pubsub, sync) = T::start(
-            bind_addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+            bind_addr.parse::<T::Address>().map_err(|_| {
+                P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
+            })?,
             &[],
             &[net::PubSubTopic::Blocks],
             Arc::clone(&config),

@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{FatalError, P2pError, ProtocolError},
+    error::{FatalError, P2pError, PeerError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
@@ -120,7 +120,7 @@ where
                             Some(_) => {
                                 log::error!("peer already exists");
                                 response
-                                    .send(Err(P2pError::PeerExists))
+                                    .send(Err(P2pError::PeerError(PeerError::PeerAlreadyExists)))
                                     .map_err(|_| P2pError::ChannelClosed)
                             }
                             None => {
@@ -183,7 +183,7 @@ where
                 self.peers.len(),
                 MAX_ACTIVE_CONNECTIONS,
             );
-            return Err(P2pError::NoPeers);
+            return Err(P2pError::PeerError(PeerError::NoPeers));
         }
 
         let npeers = std::cmp::min(
@@ -300,7 +300,10 @@ where
                         peer_info.magic_bytes,
                         self.config.chain_type()
                     );
-                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                        *self.config.magic_bytes(),
+                        peer_info.magic_bytes,
+                    )));
                 }
 
                 // TODO: check supported protocols
@@ -335,7 +338,10 @@ where
                         peer_info.magic_bytes,
                         self.config.chain_type()
                     );
-                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                        *self.config.magic_bytes(),
+                        peer_info.magic_bytes,
+                    )));
                 }
 
                 // TODO: check supported protocols
@@ -386,7 +392,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::P2pError, event};
+    use crate::{
+        error::{DialError, P2pError},
+        event,
+    };
     use common::chain::config;
     use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
     use net::{libp2p::Libp2pService, mock::MockService, ConnectivityService};
@@ -439,7 +448,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             rx.await.unwrap(),
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
     }
 
@@ -461,7 +472,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             rx.await.unwrap(),
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
     }
 
@@ -716,7 +729,10 @@ mod tests {
         ));
         assert_eq!(
             swarm2.on_network_event(conn2_res).await,
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork))
+            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                [1, 2, 3, 4],
+                *config::create_mainnet().magic_bytes(),
+            )))
         );
     }
 

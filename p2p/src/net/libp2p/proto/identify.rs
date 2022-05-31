@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{Libp2pError, P2pError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError},
     net::libp2p::{
         backend::{Backend, PendingState},
         types,
@@ -41,7 +41,7 @@ impl Backend {
                 self.conn_tx
                     .send(types::ConnectivityEvent::Error {
                         peer_id,
-                        error: P2pError::Libp2pError(Libp2pError::IdentifyError(error.to_string())),
+                        error: error.into(),
                     })
                     .await
                     .map_err(P2pError::from)
@@ -64,12 +64,15 @@ impl Backend {
                 match self.pending_conns.remove(&peer_id) {
                     None => {
                         log::error!("pending connection for peer {:?} does not exist", peer_id);
-                        Err(P2pError::PeerDoesntExist)
+                        Err(P2pError::PeerError(PeerError::PeerDoesntExist))
                     }
                     Some(PendingState::Dialed { tx: _ }) => {
                         // TODO: report peer id to swarm manager?
                         log::error!("received peer info before connection was established");
-                        Err(P2pError::ProtocolError(ProtocolError::InvalidState))
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState(
+                            "Dialed",
+                            "InboundAccepted/OutboundAccepted",
+                        )))
                     }
                     Some(PendingState::OutboundAccepted { tx }) => {
                         self.established_conns.insert(peer_id);
@@ -193,7 +196,7 @@ mod tests {
 
         if let Ok(types::ConnectivityEvent::Error { peer_id, error }) = conn_rx.try_recv() {
             assert_eq!(peer_id, *backend2.swarm.local_peer_id());
-            assert!(std::matches!(error, P2pError::Libp2pError(_)));
+            assert!(std::matches!(error, P2pError::ConnectionError(_)));
         }
     }
 
@@ -210,7 +213,7 @@ mod tests {
                     info: make_empty_info(),
                 })
                 .await,
-            Err(P2pError::PeerDoesntExist),
+            Err(P2pError::PeerError(PeerError::PeerDoesntExist)),
         );
     }
 
@@ -231,7 +234,10 @@ mod tests {
                     info: make_empty_info(),
                 })
                 .await,
-            Err(P2pError::ProtocolError(ProtocolError::InvalidState)),
+            Err(P2pError::ProtocolError(ProtocolError::InvalidState(
+                "Dialed",
+                "InboundAccepted/OutboundAccepted"
+            ))),
         );
     }
 

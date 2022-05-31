@@ -22,7 +22,7 @@ use common::chain::{
 };
 use libp2p::Multiaddr;
 use p2p::{
-    error::{Libp2pError, P2pError, ProtocolError},
+    error::{P2pError, ProtocolError, PublishError},
     message::{self, MessageType, PubSubMessage, SyncingMessage, SyncingRequest},
     net::{
         self,
@@ -31,6 +31,7 @@ use p2p::{
         PubSubTopic,
     },
 };
+use serialization::Encode;
 use std::sync::Arc;
 
 // verify that libp2p gossipsub works
@@ -80,12 +81,9 @@ async fn test_libp2p_gossipsub() {
         if res.is_ok() {
             break;
         } else {
-            // TODO: refactor error code
             assert_eq!(
                 res,
-                Err(P2pError::Libp2pError(Libp2pError::PublishError(
-                    "NoPeers".to_string()
-                )))
+                Err(P2pError::PublishError(PublishError::InsufficientPeers))
             );
         }
     }
@@ -205,12 +203,9 @@ async fn test_libp2p_gossipsub_3_peers() {
         if res.is_ok() {
             break;
         } else {
-            // TODO: refactor error code
             assert_eq!(
                 res,
-                Err(P2pError::Libp2pError(Libp2pError::PublishError(
-                    "NoPeers".to_string()
-                )))
+                Err(P2pError::PublishError(PublishError::InsufficientPeers))
             );
         }
     }
@@ -352,19 +347,21 @@ async fn test_libp2p_gossipsub_too_big_message() {
     let txs = (0..(200_000))
         .map(|_| Transaction::new(0, vec![], vec![], 0).unwrap())
         .collect::<Vec<_>>();
+    let message = message::Message {
+        magic: [0, 1, 2, 3],
+        msg: MessageType::PubSub(PubSubMessage::Block(
+            Block::new(txs, None, 1337u32, ConsensusData::None).unwrap(),
+        )),
+    };
+    let encoded_size = message.encode().len();
+    // TODO: move this to a spec.rs so it's accessible everywhere
+    const MAXIMUM_SIZE: usize = 2 * 1024 * 1024;
 
     assert_eq!(
-        pubsub1
-            .publish(message::Message {
-                magic: [0, 1, 2, 3],
-                msg: MessageType::PubSub(PubSubMessage::Block(
-                    Block::new(txs, None, 1337u32, ConsensusData::None).unwrap(),
-                )),
-            })
-            .await,
-        // TODO: refactor error code
-        Err(P2pError::Libp2pError(Libp2pError::PublishError(
-            "MessageTooLarge".to_string()
+        pubsub1.publish(message).await,
+        Err(P2pError::PublishError(PublishError::MessageTooLarge(
+            Some(encoded_size),
+            Some(MAXIMUM_SIZE)
         )))
     );
 }

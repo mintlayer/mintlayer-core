@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{FatalError, P2pError, ProtocolError},
+    error::{FatalError, P2pError, PeerError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
@@ -183,7 +183,10 @@ where
         locator: Vec<BlockHeader>,
         retry_count: usize,
     ) -> crate::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let request_id = self
             .handle
             .send_request(
@@ -215,7 +218,10 @@ where
         block_id: Id<Block>,
         retry_count: usize,
     ) -> crate::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let request_id = self
             .handle
             .send_request(
@@ -247,7 +253,7 @@ where
         match self.peers.entry(peer_id) {
             Entry::Occupied(_) => {
                 log::error!("peer {:?} already known by sync manager", peer_id);
-                Err(P2pError::PeerExists)
+                Err(P2pError::PeerError(PeerError::PeerAlreadyExists))
             }
             Entry::Vacant(entry) => {
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
@@ -306,20 +312,24 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
 
-        let _peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let _peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let block_id = headers.get(0).expect("header to exist").clone();
         let block = self
             .chainstate_handle
             .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
             .await??
             .ok_or_else(|| {
+                // TODO: handle these two errors separate
                 log::error!(
                     "peer {:?} requested block we don't have \
                         or database doesn't have a block it previously had, block id: {:?}",
                     peer_id,
                     block_id
                 );
-                P2pError::InvalidData
+                P2pError::ProtocolError(ProtocolError::InvalidMessage)
             })?;
 
         self.handle
@@ -342,7 +352,10 @@ where
         peer_id: T::PeerId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         log::debug!(
             "initialize peer {:?} state, number of headers: {}",
@@ -448,7 +461,10 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
 
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         // TODO: check error, ban peer
         let header = blocks.get(0).expect("block to exist").header().clone();
