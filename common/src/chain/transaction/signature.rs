@@ -97,7 +97,7 @@ pub fn signature_hash_for_outputs(
         }
         sighashtype::OutputsMode::None => (),
         sighashtype::OutputsMode::Single => {
-            let output = outputs.get(target_input_num).ok_or_else(|| {
+            let output = outputs.get(target_input_num).ok_or({
                 TransactionSigError::InvalidInputIndex(target_input_num, outputs.len())
             })?;
             hash_encoded_to(&output, stream);
