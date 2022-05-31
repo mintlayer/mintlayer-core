@@ -31,7 +31,7 @@ use crate::detail::{BlockError, TxRw};
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
 
-pub enum SpendKind {
+pub enum SpendSource {
     Transaction(usize),
     BlockReward,
 }
@@ -55,9 +55,9 @@ impl<'a> CachedInputs<'a> {
 
     // TODO: add block reward outputs
 
-    fn add_outputs(&mut self, block: &Block, spend_kind: SpendKind) -> Result<(), BlockError> {
+    fn add_outputs(&mut self, block: &Block, spend_kind: SpendSource) -> Result<(), BlockError> {
         let (tx_index, outpoint_source_id) = match spend_kind {
-            SpendKind::Transaction(tx_num) => {
+            SpendSource::Transaction(tx_num) => {
                 let tx_index =
                     CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?);
                 let tx = block
@@ -67,7 +67,7 @@ impl<'a> CachedInputs<'a> {
                 let tx_id = tx.get_id();
                 (tx_index, OutPointSourceId::from(tx_id))
             }
-            SpendKind::BlockReward => match block.header().block_reward_destinations() {
+            SpendSource::BlockReward => match block.header().block_reward_destinations() {
                 Some(outputs) => {
                     let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
                         SpendablePosition::from(block.get_id()),
@@ -286,7 +286,7 @@ impl<'a> CachedInputs<'a> {
     pub fn spend(
         &mut self,
         block: &Block,
-        spend_kind: SpendKind,
+        spend_kind: SpendSource,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
@@ -302,7 +302,7 @@ impl<'a> CachedInputs<'a> {
         */
 
         match spend_kind {
-            SpendKind::Transaction(tx_num) => {
+            SpendSource::Transaction(tx_num) => {
                 let tx = block
                     .transactions()
                     .get(tx_num)
@@ -323,7 +323,7 @@ impl<'a> CachedInputs<'a> {
                 let spender = Spender::from(tx.get_id());
                 self.apply_spend(tx.get_inputs(), spend_height, blockreward_maturity, spender)?;
             }
-            SpendKind::BlockReward => {
+            SpendSource::BlockReward => {
                 // TODO: test spending block rewards from chains outside the mainchain
                 match block.header().block_production_inputs() {
                     Some(inputs) => {

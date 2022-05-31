@@ -148,7 +148,7 @@ fn test_empty_chainstate() {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let chainstate = Chainstate::new(config, storage, None).unwrap();
-        chainstate.get_best_block_id().unwrap();
+        chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
                 == chainstate.chain_config.genesis_block_id()
