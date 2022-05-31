@@ -21,168 +21,7 @@ use std::{fmt::Debug, hash::Hash, sync::Arc};
 
 pub mod libp2p;
 pub mod mock;
-
-// TODO: move all these to types.rs!
-#[derive(Debug, PartialEq, Eq)]
-pub struct AddrInfo<T>
-where
-    T: NetworkingService,
-{
-    /// Unique ID of the peer
-    pub id: T::PeerId,
-
-    /// List of discovered IPv4 addresses
-    pub ip4: Vec<Arc<T::Address>>,
-
-    /// List of discovered IPv6 addresses
-    pub ip6: Vec<Arc<T::Address>>,
-}
-
-#[derive(Debug)]
-pub struct PeerInfo<T>
-where
-    T: NetworkingService,
-{
-    /// Unique ID of the peer
-    pub peer_id: T::PeerId,
-
-    /// Peer network
-    pub magic_bytes: [u8; 4],
-
-    /// Peer software version
-    pub version: primitives::version::SemVer,
-
-    /// User agent of the peer
-    pub agent: Option<String>,
-
-    // TODO: protocolid must not generic!
-    /// List of supported protocols
-    pub protocols: Vec<T::ProtocolId>,
-}
-
-// TODO: rename to `SwarmEvent`!
-#[derive(Debug)]
-pub enum ConnectivityEvent<T>
-where
-    T: NetworkingService,
-{
-    /// Outbound connection accepted
-    ConnectionAccepted {
-        /// Peer information
-        peer_info: PeerInfo<T>,
-    },
-
-    /// Inbound connection received
-    IncomingConnection {
-        /// Peer address
-        addr: T::Address,
-
-        /// Peer information
-        peer_info: PeerInfo<T>,
-    },
-
-    /// Remote closed connection
-    ConnectionClosed { peer_id: T::PeerId },
-
-    /// One or more peers discovered
-    Discovered {
-        /// Address information
-        peers: Vec<AddrInfo<T>>,
-    },
-
-    /// One one more peers have expired
-    Expired {
-        /// Address information
-        peers: Vec<AddrInfo<T>>,
-    },
-
-    /// Peer disconnected
-    Disconnected {
-        /// Unique ID of the peer
-        peer_id: T::PeerId,
-    },
-
-    /// Error occurred with peer
-    Error {
-        /// Unique ID of the peer
-        peer_id: T::PeerId,
-
-        /// Error that occurred
-        error: error::P2pError,
-    },
-
-    /// Peer misbehaved
-    Misbehaved {
-        /// Unique ID of the peer
-        peer_id: T::PeerId,
-
-        // TODO: fix
-        behaviour: u32,
-    },
-}
-
-// TODO: separate events for blocks and transactions?
-#[derive(Debug)]
-pub enum PubSubEvent<T>
-where
-    T: NetworkingService,
-{
-    /// Message received from a PubSub topic
-    MessageReceived {
-        peer_id: T::PeerId,
-        message_id: T::MessageId,
-        message: message::Message,
-    },
-}
-
-#[derive(Debug, PartialEq)]
-pub enum RequestResponseError {
-    /// Request timed out
-    Timeout,
-
-    /// Connection was closed by remote
-    ConnectionClosed,
-}
-
-#[derive(Debug)]
-pub enum SyncingEvent<T>
-where
-    T: NetworkingService,
-{
-    Request {
-        peer_id: T::PeerId,
-        request_id: T::RequestId,
-        request: message::Message,
-    },
-    Response {
-        peer_id: T::PeerId,
-        request_id: T::RequestId,
-        response: message::Message,
-    },
-    Error {
-        peer_id: T::PeerId,
-        request_id: T::RequestId,
-        error: RequestResponseError,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PubSubTopic {
-    Transactions,
-    Blocks,
-}
-
-#[derive(Debug)]
-pub enum ValidationResult {
-    /// Message was valid and can be forwarded to other peers
-    Accept,
-
-    /// Message was invalid and mustn't be forwarded to other peers
-    Reject,
-
-    /// Message is not invalid but it shouldn't be forwarded to other peers
-    Ignore,
-}
+pub mod types;
 
 /// `NetworkingService` provides the low-level network interface
 /// that each network service provider must implement
@@ -201,14 +40,14 @@ pub trait NetworkingService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Send + Copy + PartialEq + Eq + Hash + Debug + Sync + ToString;
 
-    // TODO:
+	/// Unique ID assigned to each received request
     type RequestId: Send + Debug + Eq + Hash + Sync;
 
     /// Enum of different peer discovery strategies that the implementation provides
     type DiscoveryStrategy;
 
     /// Id that identifies a protocol
-    type ProtocolId: Debug + Send + Clone + PartialEq;
+    type ProtocolId: Clone + Debug + Eq + PartialEq + Send;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;
@@ -216,7 +55,7 @@ pub trait NetworkingService {
     /// Handle for sending/receiving pubsub-related events
     type PubSubHandle: Send;
 
-    // TODO:
+	/// Handle for sending/receiving request-response events
     type SyncingCodecHandle: Send;
 
     /// Unique ID assigned to each pubsub message
@@ -232,7 +71,7 @@ pub trait NetworkingService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        topics: &[PubSubTopic],
+        topics: &[types::PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
@@ -242,7 +81,6 @@ pub trait NetworkingService {
     )>;
 }
 
-// TODO: rename this to swarmhandle!
 /// ConnectivityService provides an interface through which objects can send
 /// and receive connectivity-related events to/from the network service provider
 #[async_trait]
@@ -257,7 +95,7 @@ where
     ///
     /// # Arguments
     /// `addr` - socket address of the peer
-    async fn connect(&mut self, address: T::Address) -> crate::Result<PeerInfo<T>>;
+    async fn connect(&mut self, address: T::Address) -> crate::Result<types::PeerInfo<T>>;
 
     /// Disconnect active connection
     ///
@@ -277,7 +115,7 @@ where
     /// - incoming peer connections
     /// - new discovered peers
     /// - peer expiration events
-    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::ConnectivityEvent<T>>;
 }
 
 /// PubSubService provides an interface through which objects can send
@@ -299,11 +137,11 @@ where
         &mut self,
         source: T::PeerId,
         msg_id: T::MessageId,
-        result: ValidationResult,
+        result: types::ValidationResult,
     ) -> crate::Result<()>;
 
     /// Poll unvalidated gossipsub messages
-    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>>;
+    async fn poll_next(&mut self) -> crate::Result<types::PubSubEvent<T>>;
 }
 
 #[async_trait]
@@ -311,20 +149,28 @@ pub trait SyncingCodecService<T>
 where
     T: NetworkingService,
 {
-    // TODO:
+    /// Send block/header request to remote
+    ///
+    /// # Arguments
+    /// `peer_id` - Unique ID of the peer the request is sent to
+    /// `message` - request to be sent
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
         message: message::Message,
     ) -> crate::Result<T::RequestId>;
 
-    // TODO:
+    /// Send block/header response to remote
+    ///
+    /// # Arguments
+    /// `request_id` - ID of the request this is a response to
+    /// `message` - response to be sent
     async fn send_response(
         &mut self,
         request_id: T::RequestId,
         message: message::Message,
     ) -> crate::Result<()>;
 
-    // TODO:
-    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>>;
+	/// Poll syncing-related event from the networking service
+    async fn poll_next(&mut self) -> crate::Result<types::SyncingEvent<T>>;
 }

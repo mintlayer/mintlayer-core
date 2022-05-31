@@ -27,8 +27,8 @@ use p2p::{
     net::{
         self,
         libp2p::{Libp2pConnectivityHandle, Libp2pService},
-        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
-        PubSubTopic,
+        types::{ConnectivityEvent, PubSubEvent, PubSubTopic},
+        ConnectivityService, NetworkingService, PubSubService,
     },
 };
 use serialization::Encode;
@@ -242,7 +242,7 @@ async fn test_libp2p_gossipsub_3_peers() {
     assert_eq!(
         peer1
             .1
-            .report_validation_result(peer_id, message_id, net::ValidationResult::Accept)
+            .report_validation_result(peer_id, message_id, net::types::ValidationResult::Accept)
             .await,
         Ok(())
     );
@@ -272,7 +272,7 @@ async fn test_libp2p_gossipsub_3_peers() {
     assert_eq!(
         peer2
             .1
-            .report_validation_result(peer_id, message_id, net::ValidationResult::Accept)
+            .report_validation_result(peer_id, message_id, net::types::ValidationResult::Accept)
             .await,
         Ok(())
     );

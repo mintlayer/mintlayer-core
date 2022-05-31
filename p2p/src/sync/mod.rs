@@ -611,13 +611,13 @@ where
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
-        error: net::RequestResponseError,
+        error: net::types::RequestResponseError,
     ) -> crate::Result<()> {
         match error {
-            net::RequestResponseError::ConnectionClosed => {
+            net::types::RequestResponseError::ConnectionClosed => {
                 self.unregister_peer(peer_id);
             }
-            net::RequestResponseError::Timeout => {
+            net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
                     log::warn!(
                         "outbound request {:?} for peer {:?} timed out",
@@ -663,9 +663,12 @@ where
     }
 
     /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> crate::Result<()> {
+    pub async fn on_syncing_event(
+        &mut self,
+        event: net::types::SyncingEvent<T>,
+    ) -> crate::Result<()> {
         match event {
-            net::SyncingEvent::Request {
+            net::types::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -681,7 +684,7 @@ where
                 );
                 self.process_request(peer_id, request_id, message).await
             }
-            net::SyncingEvent::Response {
+            net::types::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -697,13 +700,13 @@ where
                 );
                 self.process_response(peer_id, message).await
             }
-            net::SyncingEvent::Error {
+            net::types::SyncingEvent::Error {
                 peer_id,
                 request_id,
                 error,
             } => self.process_error(peer_id, request_id, error).await,
-            net::SyncingEvent::Request { peer_id, .. }
-            | net::SyncingEvent::Response { peer_id, .. } => {
+            net::types::SyncingEvent::Request { peer_id, .. }
+            | net::types::SyncingEvent::Response { peer_id, .. } => {
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 // TODO: disconnect peer and ban it
                 // TODO: send `Misbehaved` event to PeerManager
@@ -747,7 +750,7 @@ mod tests {
     use super::*;
     use crate::{
         event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
-        net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
+        net::{libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService},
     };
     use chainstate::make_chainstate;
     use libp2p::PeerId;
@@ -884,7 +887,7 @@ mod tests {
             .await
             .unwrap();
 
-        if let Ok(net::SyncingEvent::Request {
+        if let Ok(net::types::SyncingEvent::Request {
             peer_id: _,
             request_id,
             request,
@@ -954,7 +957,7 @@ mod tests {
             .unwrap();
 
         for _ in 0..2 {
-            if let Ok(net::SyncingEvent::Request {
+            if let Ok(net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
                 request,
@@ -988,7 +991,7 @@ mod tests {
 
         let mut magic_seen = 0;
         for _ in 0..2 {
-            if let Ok(net::SyncingEvent::Response {
+            if let Ok(net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
                 response,
@@ -1034,12 +1037,12 @@ mod tests {
             mgr1.register_peer(peer2_id).await.unwrap();
 
             match mgr1.handle.poll_next().await.unwrap() {
-                net::SyncingEvent::Error {
+                net::types::SyncingEvent::Error {
                     peer_id,
                     request_id,
                     error,
                 } => {
-                    assert_eq!(error, net::RequestResponseError::Timeout);
+                    assert_eq!(error, net::types::RequestResponseError::Timeout);
                     mgr1.process_error(peer_id, request_id, error).await.unwrap();
                 }
                 _ => panic!("invalid event received"),
@@ -1049,7 +1052,8 @@ mod tests {
         for _ in 0..3 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Request { .. } | net::SyncingEvent::Error { .. })
+                Ok(net::types::SyncingEvent::Request { .. }
+                    | net::types::SyncingEvent::Error { .. })
             ));
         }
     }
@@ -1075,12 +1079,12 @@ mod tests {
 
             for _ in 0..4 {
                 match mgr1.handle.poll_next().await.unwrap() {
-                    net::SyncingEvent::Error {
+                    net::types::SyncingEvent::Error {
                         peer_id,
                         request_id,
                         error,
                     } => {
-                        assert_eq!(error, net::RequestResponseError::Timeout);
+                        assert_eq!(error, net::types::RequestResponseError::Timeout);
                         mgr1.process_error(peer_id, request_id, error).await.unwrap();
                     }
                     _ => panic!("invalid event received"),
@@ -1098,11 +1102,11 @@ mod tests {
         for _ in 0..4 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Request { .. })
+                Ok(net::types::SyncingEvent::Request { .. })
             ));
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Error { .. })
+                Ok(net::types::SyncingEvent::Error { .. })
             ));
         }
     }

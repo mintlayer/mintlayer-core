@@ -19,7 +19,8 @@ extern crate test_utils;
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use p2p::net::{
     libp2p::{Libp2pDiscoveryStrategy, Libp2pService},
-    ConnectivityEvent, ConnectivityService, NetworkingService,
+    types::ConnectivityEvent,
+    ConnectivityService, NetworkingService,
 };
 use std::sync::Arc;
 

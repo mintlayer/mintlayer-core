@@ -39,7 +39,7 @@ struct PeerContext<T>
 where
     T: NetworkingService,
 {
-    _info: net::PeerInfo<T>,
+    _info: net::types::PeerInfo<T>,
 }
 
 enum PeerAddrInfo<T>
@@ -240,7 +240,7 @@ where
     }
 
     /// Update the list of peers we know about or update a known peers list of addresses
-    fn peer_discovered(&mut self, peers: &[net::AddrInfo<T>]) -> crate::Result<()> {
+    fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) -> crate::Result<()> {
         log::info!("discovered {} new peers", peers.len());
 
         for info in peers.iter() {
@@ -266,14 +266,17 @@ where
     }
 
     // TODO: implement
-    fn peer_expired(&mut self, _peers: &[net::AddrInfo<T>]) -> crate::Result<()> {
+    fn peer_expired(&mut self, _peers: &[net::types::AddrInfo<T>]) -> crate::Result<()> {
         Ok(())
     }
 
     /// Handle network event received from the network service provider
-    async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> crate::Result<()> {
+    async fn on_network_event(
+        &mut self,
+        event: net::types::ConnectivityEvent<T>,
+    ) -> crate::Result<()> {
         match event {
-            net::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
+            net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
                 let peer_id = peer_info.peer_id;
                 log::debug!(
                     "incoming connection from peer {:?}, address {:?}",
@@ -315,7 +318,7 @@ where
                     .await
                     .map_err(P2pError::from)
             }
-            net::ConnectivityEvent::ConnectionAccepted { peer_info } => {
+            net::types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
                 let peer_id = peer_info.peer_id;
                 log::debug!("outbound connection accepted by peer {:?}", peer_id);
 
@@ -353,7 +356,7 @@ where
                     .await
                     .map_err(P2pError::from)
             }
-            net::ConnectivityEvent::ConnectionClosed { peer_id } => {
+            net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
                 log::debug!("connection closed for peer {:?}", peer_id);
                 self.tx_sync
                     .send(event::SyncControlEvent::Disconnected(peer_id))
@@ -362,11 +365,11 @@ where
                 self.peers.remove(&peer_id);
                 Ok(())
             }
-            net::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
-            net::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
-            net::ConnectivityEvent::Disconnected { .. } => Ok(()),
-            net::ConnectivityEvent::Misbehaved { .. } => Ok(()),
-            net::ConnectivityEvent::Error { .. } => Ok(()),
+            net::types::ConnectivityEvent::Discovered { peers } => self.peer_discovered(&peers),
+            net::types::ConnectivityEvent::Expired { peers } => self.peer_expired(&peers),
+            net::types::ConnectivityEvent::Disconnected { .. } => Ok(()),
+            net::types::ConnectivityEvent::Misbehaved { .. } => Ok(()),
+            net::types::ConnectivityEvent::Error { .. } => Ok(()),
         }
     }
 
@@ -519,12 +522,12 @@ mod tests {
         // first add two new peers, both with ipv4 and ipv6 address
         swarm
             .peer_discovered(&[
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_1,
                     ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
                     ip6: vec![Arc::new("/ip6/::1/tcp/9091".parse().unwrap())],
                 },
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_2,
                     ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9092".parse().unwrap())],
                     ip6: vec![Arc::new("/ip6/::1/tcp/9093".parse().unwrap())],
@@ -552,7 +555,7 @@ mod tests {
         // then discover one new peer and two additional ipv6 addresses for peer 1
         swarm
             .peer_discovered(&[
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_1,
                     ip4: vec![],
                     ip6: vec![
@@ -560,7 +563,7 @@ mod tests {
                         Arc::new("/ip6/::1/tcp/9095".parse().unwrap()),
                     ],
                 },
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_3,
                     ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
                     ip6: vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
@@ -614,7 +617,7 @@ mod tests {
 
         // "discover" the other libp2p service
         swarm
-            .peer_discovered(&[net::AddrInfo {
+            .peer_discovered(&[net::types::AddrInfo {
                 id,
                 ip4: vec![],
                 ip6: vec![Arc::new(addr)],
@@ -643,7 +646,7 @@ mod tests {
 
         assert_eq!(
             swarm1
-                .on_network_event(net::ConnectivityEvent::ConnectionAccepted {
+                .on_network_event(net::types::ConnectivityEvent::ConnectionAccepted {
                     peer_info: conn1_res.unwrap()
                 },)
                 .await,
@@ -693,10 +696,10 @@ mod tests {
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
-        let conn2_res: net::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         assert!(std::matches!(
             conn2_res,
-            net::ConnectivityEvent::IncomingConnection { .. }
+            net::types::ConnectivityEvent::IncomingConnection { .. }
         ));
         assert_eq!(swarm2.on_network_event(conn2_res).await, Ok(()));
     }
@@ -722,10 +725,10 @@ mod tests {
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
-        let conn2_res: net::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         assert!(std::matches!(
             conn2_res,
-            net::ConnectivityEvent::IncomingConnection { .. }
+            net::types::ConnectivityEvent::IncomingConnection { .. }
         ));
         assert_eq!(
             swarm2.on_network_event(conn2_res).await,
@@ -752,10 +755,10 @@ mod tests {
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );
-        let conn2_res: net::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+        let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         assert!(std::matches!(
             conn2_res,
-            net::ConnectivityEvent::IncomingConnection { .. }
+            net::types::ConnectivityEvent::IncomingConnection { .. }
         ));
 
         assert_eq!(
@@ -764,7 +767,7 @@ mod tests {
         );
         assert!(std::matches!(
             swarm1.handle.poll_next().await,
-            Ok(net::ConnectivityEvent::ConnectionClosed { .. })
+            Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
         ));
     }
 }

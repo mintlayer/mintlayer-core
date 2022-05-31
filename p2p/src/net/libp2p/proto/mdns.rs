@@ -256,8 +256,12 @@ mod tests {
     async fn test_mdns_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = common::chain::config::create_mainnet();
-        let (mut backend1, _, _conn_rx, _gossip_rx, _) =
-            util::make_libp2p(config.clone(), addr.clone(), &[net::PubSubTopic::Blocks]).await;
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) = util::make_libp2p(
+            config.clone(),
+            addr.clone(),
+            &[net::types::PubSubTopic::Blocks],
+        )
+        .await;
 
         let (transport, peer_id, id_keys) = util::make_transport_and_keys();
         let mut swarm =

@@ -20,8 +20,10 @@ use crate::{
     error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
     net::{
-        self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
-        PubSubEvent, PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent,
+        self,
+        libp2p::sync::*,
+        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
+        ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
 };
 use async_trait::async_trait;
@@ -151,12 +153,12 @@ fn get_addr_from_multiaddr(addr: &Multiaddr) -> Option<Protocol> {
     addr.iter().next()
 }
 
-impl<T> FromIterator<(PeerId, Multiaddr)> for net::AddrInfo<T>
+impl<T> FromIterator<(PeerId, Multiaddr)> for net::types::AddrInfo<T>
 where
     T: NetworkingService<PeerId = PeerId, Address = Multiaddr>,
 {
     fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
-        let mut entry = net::AddrInfo {
+        let mut entry = net::types::AddrInfo {
             id: PeerId::random(),
             ip4: Vec::new(),
             ip6: Vec::new(),
@@ -183,7 +185,7 @@ where
 }
 
 /// Parse all discovered addresses and group them by PeerId
-fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::AddrInfo<T>>
+fn parse_peers<T>(mut peers: Vec<(PeerId, Multiaddr)>) -> Vec<net::types::AddrInfo<T>>
 where
     T: NetworkingService<PeerId = PeerId, Address = Multiaddr>,
 {
@@ -194,17 +196,17 @@ where
         .filter_map(|(id, addr)| addr.map(|addr| (id, addr)))
         .group_by(|info| info.0)
         .into_iter()
-        .map(|(_id, addrs)| net::AddrInfo::from_iter(addrs))
-        .collect::<Vec<net::AddrInfo<T>>>()
+        .map(|(_id, addrs)| net::types::AddrInfo::from_iter(addrs))
+        .collect::<Vec<net::types::AddrInfo<T>>>()
 }
 
-impl<T> TryInto<net::PeerInfo<T>> for IdentifyInfo
+impl<T> TryInto<net::types::PeerInfo<T>> for IdentifyInfo
 where
     T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
 {
     type Error = P2pError;
 
-    fn try_into(self) -> Result<net::PeerInfo<T>, Self::Error> {
+    fn try_into(self) -> Result<net::types::PeerInfo<T>, Self::Error> {
         let proto = self.protocol_version.clone();
         let (version, magic_bytes) =
             match sscanf::scanf!(proto, "/{}/{}.{}.{}-{:x}", String, u8, u8, u16, u32) {
@@ -221,7 +223,7 @@ where
                 }
             }?;
 
-        Ok(net::PeerInfo {
+        Ok(net::types::PeerInfo {
             peer_id: PeerId::from_public_key(&self.public_key),
             magic_bytes,
             version,
@@ -379,9 +381,9 @@ impl NetworkingService for Libp2pService {
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
-    IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
+    IdentifyInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
-    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::types::PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         // TODO: add tests for both cases
@@ -491,7 +493,7 @@ where
         // TODO: add support for transactions in the future
         let topic =
             if let message::MessageType::PubSub(message::PubSubMessage::Block(_)) = message.msg {
-                net::PubSubTopic::Blocks
+                net::types::PubSubTopic::Blocks
             } else {
                 return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
             };
@@ -514,7 +516,7 @@ where
         &mut self,
         source: T::PeerId,
         message_id: T::MessageId,
-        result: net::ValidationResult,
+        result: net::types::ValidationResult,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
@@ -835,7 +837,7 @@ mod tests {
         }
     }
 
-    impl<T: NetworkingService> PartialEq for net::PeerInfo<T> {
+    impl<T: NetworkingService> PartialEq for net::types::PeerInfo<T> {
         fn eq(&self, other: &Self) -> bool {
             self.peer_id == other.peer_id
                 && self.magic_bytes == other.magic_bytes
@@ -845,7 +847,7 @@ mod tests {
         }
     }
 
-    // verify that vector of address (that all belong to one peer) parse into one `net::Peer` entry
+    // verify that vector of address (that all belong to one peer) parse into one `net::types::Peer` entry
     #[test]
     fn test_parse_peers_valid_1_peer() {
         let id = PeerId::random();
@@ -853,10 +855,10 @@ mod tests {
         let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
         let addrs = vec![(id, ip4.clone()), (id, ip6.clone())];
 
-        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        let parsed: Vec<net::types::AddrInfo<Libp2pService>> = parse_peers(addrs);
         assert_eq!(
             parsed,
-            vec![net::AddrInfo {
+            vec![net::types::AddrInfo {
                 id,
                 ip4: vec![Arc::new(ip4.with(Protocol::P2p(id.into())))],
                 ip6: vec![Arc::new(ip6.with(Protocol::P2p(id.into())))],
@@ -887,18 +889,18 @@ mod tests {
             (id_2, dns),
         ];
 
-        let mut parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        let mut parsed: Vec<net::types::AddrInfo<Libp2pService>> = parse_peers(addrs);
         parsed.sort_by(|a, b| a.id.cmp(&b.id));
 
         assert_eq!(
             parsed,
             vec![
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_2,
                     ip4: vec![Arc::new(ip4_2.with(Protocol::P2p(id_2.into())))],
                     ip6: vec![Arc::new(ip6_2.with(Protocol::P2p(id_2.into())))],
                 },
-                net::AddrInfo {
+                net::types::AddrInfo {
                     id: id_1,
                     ip4: vec![Arc::new(ip4_1.with(Protocol::P2p(id_1.into())))],
                     ip6: vec![Arc::new(ip6_1.with(Protocol::P2p(id_1.into())))],
@@ -921,11 +923,11 @@ mod tests {
         let quic: Multiaddr = "/ip4/127.0.0.1/tcp/9090/quic".parse().unwrap();
 
         let addrs = vec![(id_1, ip4.clone()), (id_2, dns), (id_3, quic)];
-        let parsed: Vec<net::AddrInfo<Libp2pService>> = parse_peers(addrs);
+        let parsed: Vec<net::types::AddrInfo<Libp2pService>> = parse_peers(addrs);
 
         assert_eq!(
             parsed,
-            vec![net::AddrInfo {
+            vec![net::types::AddrInfo {
                 id: id_1,
                 ip4: vec![Arc::new(ip4.with(Protocol::P2p(id_1.into())))],
                 ip6: vec![],
