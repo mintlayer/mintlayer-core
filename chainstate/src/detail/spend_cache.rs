@@ -231,12 +231,12 @@ impl<'a> CachedInputs<'a> {
                     verify_signature(output.get_destination(), tx, input_idx)
                         .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
                 }
-                SpendablePosition::BlockReward(reward_pos) => {
+                SpendablePosition::BlockReward(block_id) => {
                     // TODO(Roy): fill this with the block reward that the user now is spending
 
                     let block_index = self
                         .db_tx
-                        .get_block_index(reward_pos)
+                        .get_block_index(block_id)
                         .map_err(BlockError::from)?
                         .ok_or(BlockError::NotFound)?;
 
