@@ -15,14 +15,16 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
 use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
-use common::chain::config::create_unit_test_config;
+use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, Transaction, TxInput, TxOutput};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
+use common::Uint256;
 use rand::prelude::*;
 use std::sync::Mutex;
 
@@ -161,4 +163,29 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
         .collect::<Vec<(TxInput, TxOutput)>>()
+}
+
+// generate 5 regtest blocks and print them in hex
+// TODO: remove when block production is ready
+#[ignore]
+#[test]
+fn generate_blocks_for_functional_tests() {
+    let config = create_regtest();
+    let chainstate = ChainstateBuilder::new().with_config(config).build();
+    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let difficulty =
+        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
+
+    for i in 1..6 {
+        let prev_block =
+            btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
+        let mut mined_block = btf.random_block(&prev_block, None);
+        let bits = difficulty.into();
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+                .expect("Unexpected conversion error")
+        );
+        println!("{}", hex::encode(mined_block.encode()));
+        btf.add_special_block(mined_block).unwrap();
+    }
 }
