@@ -28,8 +28,7 @@ use common::chain::OutputSpentState;
 use common::chain::UpgradeVersion;
 use common::primitives::Compact;
 use common::Uint256;
-use crypto::key::KeyKind;
-use crypto::key::PrivateKey;
+use crypto::key::{KeyKind, PrivateKey};
 
 #[test]
 fn test_process_genesis_block_wrong_block_source() {
