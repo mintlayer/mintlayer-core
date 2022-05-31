@@ -16,10 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{self, P2pError},
-    net::{
-        self,
-        libp2p::{backend::Backend, types},
-    },
+    net::libp2p::{backend::Backend, types},
 };
 use libp2p::{mdns::MdnsEvent, Multiaddr, PeerId};
 
@@ -57,23 +54,18 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{
-        self,
-        libp2p::{proto::util, Libp2pService},
-        NetworkingService,
-    };
-    use futures::{FutureExt, StreamExt};
+    use crate::net::{self, libp2p::proto::util};
+    use futures::StreamExt;
     use libp2p::{
         identify::Identify,
         swarm::{SwarmBuilder, SwarmEvent},
     };
-    use std::collections::HashMap;
 
     #[ignore]
     #[tokio::test]
     async fn test_on_discovered() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, mut conn_rx, _gossip_rx, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
 
         let (mut backend2, _, _, _, _) = util::make_libp2p(
@@ -108,7 +100,7 @@ mod tests {
                     Some(_) => {},
                     None => panic!("got None"),
                 },
-                event = backend2.swarm.next() => {}
+                _ = backend2.swarm.next() => {}
             }
         }
     }
@@ -117,7 +109,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_discovered_no_relay() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, mut conn_rx, _gossip_rx, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
 
         let (mut backend2, _, _, _, _) = util::make_libp2p(
@@ -155,7 +147,7 @@ mod tests {
                     Some(_) => {},
                     None => panic!("got None"),
                 },
-                event = backend2.swarm.next() => {}
+                _ = backend2.swarm.next() => {}
             }
         }
     }
@@ -164,7 +156,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_expired() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, mut conn_rx, _, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
 
         let (mut backend2, _, _, _, _) = util::make_libp2p(
@@ -193,7 +185,7 @@ mod tests {
                         match conn_rx.try_recv() {
                             Ok(types::ConnectivityEvent::Discovered { peers }) => {
                                 if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
-                                    backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id());
+                                    backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id()).unwrap();
                                 }
                             }
                             Ok(types::ConnectivityEvent::Expired { peers }) => {
@@ -209,7 +201,7 @@ mod tests {
                     Some(_) => {}
                     None => panic!("got None"),
                 },
-                event = backend2.swarm.next() => {}
+                _event = backend2.swarm.next() => {}
             }
         }
     }
@@ -218,7 +210,7 @@ mod tests {
     #[tokio::test]
     async fn test_on_expired_no_relay() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, mut conn_rx, _gossip_rx, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
 
         let (mut backend2, _, _, _, _) = util::make_libp2p(
@@ -254,7 +246,7 @@ mod tests {
                     Some(_) => {},
                     None => panic!("got None"),
                 },
-                event = backend2.swarm.next() => {}
+                _event = backend2.swarm.next() => {}
             }
         }
     }
@@ -264,7 +256,7 @@ mod tests {
     async fn test_mdns_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = common::chain::config::create_mainnet();
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) =
             util::make_libp2p(config.clone(), addr.clone(), &[net::PubSubTopic::Blocks]).await;
 
         let (transport, peer_id, id_keys) = util::make_transport_and_keys();
@@ -282,19 +274,19 @@ mod tests {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
                     Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Discovered(peers)))) => {
-                        for (peer, addr) in peers {
+                        for (peer, _addr) in peers {
                             assert_ne!(peer, *swarm.local_peer_id());
                         }
                     }
                     Some(SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(MdnsEvent::Expired(peers)))) => {
-                        for (peer, addr) in peers {
+                        for (peer, _addr) in peers {
                             assert_ne!(peer, *swarm.local_peer_id());
                         }
                     }
                     Some(_) => {},
                     None => panic!("got None"),
                 },
-                event = swarm.next() => {},
+                _event = swarm.next() => {},
                 _ = tokio::time::sleep(std::time::Duration::from_secs(3)) => {
                     break;
                 }

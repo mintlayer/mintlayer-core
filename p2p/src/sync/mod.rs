@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
 use crate::{
     error::{self, FatalError, P2pError, ProtocolError},
     event,
@@ -87,7 +85,7 @@ enum RequestType {
 }
 
 struct PendingRequest<T: NetworkingService> {
-    peer_id: T::PeerId,
+    _peer_id: T::PeerId,
     request_type: RequestType,
     retry_count: usize,
 }
@@ -201,7 +199,7 @@ where
         self.requests.insert(
             request_id,
             PendingRequest {
-                peer_id,
+                _peer_id: peer_id,
                 request_type: RequestType::GetHeaders,
                 retry_count,
             },
@@ -233,7 +231,7 @@ where
         self.requests.insert(
             request_id,
             PendingRequest {
-                peer_id,
+                _peer_id: peer_id,
                 request_type: RequestType::GetBlocks(vec![block_id.clone()]),
                 retry_count,
             },
@@ -259,11 +257,10 @@ where
         }
     }
 
-    pub fn unregister_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    pub fn unregister_peer(&mut self, peer_id: T::PeerId) {
         log::info!("unregister peer {:?}", peer_id);
 
         self.peers.remove(&peer_id);
-        Ok(())
     }
 
     pub async fn process_header_request(
@@ -309,7 +306,7 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
 
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let _peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
         let block_id = headers.get(0).expect("header to exist").clone();
         let block = self
             .chainstate_handle
@@ -425,7 +422,7 @@ where
             self.requests.insert(
                 request_id,
                 PendingRequest {
-                    peer_id,
+                    _peer_id: peer_id,
                     request_type: RequestType::GetBlocks(vec![header.get_id()]),
                     retry_count: 0,
                 },
@@ -489,7 +486,7 @@ where
                 self.requests.insert(
                     request_id,
                     PendingRequest {
-                        peer_id,
+                        _peer_id: peer_id,
                         request_type: RequestType::GetBlocks(vec![next_block.get_id()]),
                         retry_count: 0,
                     },
@@ -516,7 +513,7 @@ where
                 self.requests.insert(
                     request_id,
                     PendingRequest {
-                        peer_id,
+                        _peer_id: peer_id,
                         request_type: RequestType::GetHeaders,
                         retry_count: 0,
                     },
@@ -526,7 +523,10 @@ where
             }
             Err(e) => {
                 // TODO: ban peer
-                log::error!("peer sent invalid or unexpected data, close connection");
+                log::error!(
+                    "peer sent invalid or unexpected data, close connection: {:?}",
+                    e
+                );
                 Ok(())
             }
         }
@@ -700,7 +700,10 @@ where
     async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
         match event {
             event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
-            event::SyncControlEvent::Disconnected(peer_id) => self.unregister_peer(peer_id),
+            event::SyncControlEvent::Disconnected(peer_id) => {
+                self.unregister_peer(peer_id);
+                Ok(())
+            }
         }
     }
 
@@ -790,10 +793,10 @@ mod tests {
         T: NetworkingService,
         T::ConnectivityHandle: ConnectivityService<T>,
     {
-        let (conn1_res, conn2_res) =
+        let (_conn1_res, conn2_res) =
             tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
         let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-        let conn1_id = match conn2_res {
+        let _conn1_id = match conn2_res {
             ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
             _ => panic!("invalid event received, expected incoming connection"),
         };
@@ -852,8 +855,7 @@ mod tests {
         // connect the two managers together so that they can exchange messages
         connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-        let req_id = mgr1
-            .handle
+        mgr1.handle
             .send_request(
                 *conn2.peer_id(),
                 Message {
@@ -867,7 +869,7 @@ mod tests {
             .unwrap();
 
         if let Ok(net::SyncingEvent::Request {
-            peer_id,
+            peer_id: _,
             request_id,
             request,
         }) = mgr2.handle.poll_next().await
@@ -909,8 +911,7 @@ mod tests {
         // connect the two managers together so that they can exchange messages
         connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-        let req_id = mgr1
-            .handle
+        mgr1.handle
             .send_request(
                 *conn2.peer_id(),
                 Message {
@@ -923,8 +924,7 @@ mod tests {
             .await
             .unwrap();
 
-        let req_id = mgr1
-            .handle
+        mgr1.handle
             .send_request(
                 *conn2.peer_id(),
                 Message {
@@ -937,9 +937,9 @@ mod tests {
             .await
             .unwrap();
 
-        for i in 0..2 {
+        for _ in 0..2 {
             if let Ok(net::SyncingEvent::Request {
-                peer_id,
+                peer_id: _,
                 request_id,
                 request,
             }) = mgr2.handle.poll_next().await
@@ -948,7 +948,7 @@ mod tests {
                     magic,
                     msg:
                         MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                            locator,
+                            locator: _,
                         })),
                 } = request
                 {
@@ -971,10 +971,10 @@ mod tests {
         }
 
         let mut magic_seen = 0;
-        for i in 0..2 {
+        for _ in 0..2 {
             if let Ok(net::SyncingEvent::Response {
-                peer_id,
-                request_id,
+                peer_id: _,
+                request_id: _,
                 response,
             }) = mgr1.handle.poll_next().await
             {
@@ -982,7 +982,7 @@ mod tests {
                     magic,
                     msg:
                         MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                            headers,
+                            headers: _,
                         })),
                 } = response
                 {
@@ -1030,7 +1030,7 @@ mod tests {
             }
         });
 
-        for i in 0..3 {
+        for _ in 0..3 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
                 Ok(net::SyncingEvent::Request { .. } | net::SyncingEvent::Error { .. })
@@ -1052,12 +1052,12 @@ mod tests {
 
         // connect the two managers together so that they can exchange messages
         connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
-        let peer2_id = *conn2.peer_id();
+        let _peer2_id = *conn2.peer_id();
 
         tokio::spawn(async move {
-            mgr1.register_peer(peer2_id).await.unwrap();
+            mgr1.register_peer(_peer2_id).await.unwrap();
 
-            for i in 0..4 {
+            for _ in 0..4 {
                 match mgr1.handle.poll_next().await.unwrap() {
                     net::SyncingEvent::Error {
                         peer_id,
@@ -1071,15 +1071,15 @@ mod tests {
                 }
             }
 
-            let (tx, rx) = oneshot::channel();
+            let (_tx, rx) = oneshot::channel();
             assert!(std::matches!(
                 swarm_rx.try_recv(),
-                Ok(SwarmEvent::Disconnect(peer2_id, tx))
+                Ok(SwarmEvent::Disconnect(_peer2_id, _tx))
             ));
             assert_eq!(rx.await, Ok(()));
         });
 
-        for i in 0..4 {
+        for _ in 0..4 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
                 Ok(net::SyncingEvent::Request { .. })

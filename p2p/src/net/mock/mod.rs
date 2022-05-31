@@ -14,28 +14,18 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
-    error::{self, P2pError},
-    message,
+    error, message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
         PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent, ValidationResult,
     },
 };
 use async_trait::async_trait;
-use futures::FutureExt;
 use logging::log;
-use serialization::{Decode, Encode};
-use std::{
-    collections::HashMap,
-    io::{Error, ErrorKind},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     sync::{mpsc, oneshot},
 };
 
@@ -65,7 +55,7 @@ where
     cmd_tx: mpsc::Sender<types::Command>,
 
     /// RX channel for receiving connectivity events from mock backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+    _conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -74,7 +64,7 @@ where
     T: NetworkingService,
 {
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    _cmd_tx: mpsc::Sender<types::Command>,
 
     /// RX channel for receiving pubsub events from mock backend
     _pubsub_rx: mpsc::Receiver<types::PubSubEvent>,
@@ -86,7 +76,7 @@ where
     T: NetworkingService,
 {
     /// TX channel for sending commands to mock backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    _cmd_tx: mpsc::Sender<types::Command>,
 
     _sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
@@ -116,7 +106,7 @@ impl NetworkingService for MockService {
         Self::SyncingCodecHandle,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (conn_tx, conn_rx) = mpsc::channel(16);
+        let (conn_tx, _conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
         let (sync_tx, _sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
@@ -131,16 +121,16 @@ impl NetworkingService for MockService {
             Self::ConnectivityHandle {
                 addr,
                 cmd_tx: cmd_tx.clone(),
-                conn_rx,
+                _conn_rx,
                 _marker: Default::default(),
             },
             Self::PubSubHandle {
-                cmd_tx: cmd_tx.clone(),
+                _cmd_tx: cmd_tx.clone(),
                 _pubsub_rx,
                 _marker: Default::default(),
             },
             Self::SyncingCodecHandle {
-                cmd_tx,
+                _cmd_tx: cmd_tx,
                 _sync_rx,
                 _marker: Default::default(),
             },
@@ -176,7 +166,7 @@ where
         // )
     }
 
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    async fn disconnect(&mut self, _peer_id: T::PeerId) -> error::Result<()> {
         todo!();
     }
 
@@ -206,15 +196,15 @@ impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkingService<PeerId = SocketAddr> + Send,
 {
-    async fn publish(&mut self, message: message::Message) -> error::Result<()> {
+    async fn publish(&mut self, _message: message::Message) -> error::Result<()> {
         todo!();
     }
 
     async fn report_validation_result(
         &mut self,
-        source: T::PeerId,
-        msg_id: T::MessageId,
-        result: ValidationResult,
+        _source: T::PeerId,
+        _msg_id: T::MessageId,
+        _result: ValidationResult,
     ) -> error::Result<()> {
         todo!();
     }
@@ -231,16 +221,16 @@ where
 {
     async fn send_request(
         &mut self,
-        peer_id: T::PeerId,
-        message: message::Message,
+        _peer_id: T::PeerId,
+        _message: message::Message,
     ) -> error::Result<T::RequestId> {
         todo!();
     }
 
     async fn send_response(
         &mut self,
-        request_id: T::RequestId,
-        message: message::Message,
+        _request_id: T::RequestId,
+        _message: message::Message,
     ) -> error::Result<()> {
         todo!();
     }

@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use common::{
     chain::block::{Block, BlockHeader},
-    primitives::{Id, Idable},
+    primitives::Id,
 };
 use serialization::{Decode, Encode};
 
@@ -59,7 +59,6 @@ pub enum MessageType {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-#[allow(unused)]
 pub struct Message {
     /// Magic number identifying mainnet, testnet
     pub magic: [u8; 4],

@@ -52,14 +52,14 @@ impl Backend {
             } => {
                 log::error!("peer {:?} doesn't support libp2p::ping", peer);
 
-                self.swarm.disconnect_peer_id(peer);
+                let _ = self.swarm.disconnect_peer_id(peer);
                 self.conn_tx
                     .send(types::ConnectivityEvent::Disconnected { peer_id: peer })
                     .await
                     .map_err(P2pError::from)
             }
             ping::Event {
-                peer,
+                peer: _,
                 result: Result::Err(ping::Failure::Other { error }),
             } => {
                 log::error!("unknown ping failure: {:?}", error);
@@ -71,7 +71,6 @@ impl Backend {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::net::libp2p::{proto::util, types};
     use futures::StreamExt;
     use libp2p::{
@@ -84,7 +83,7 @@ mod tests {
     #[tokio::test]
     async fn test_successful_ping_pong() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) =
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr.clone(), &[]).await;
 
         let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
@@ -132,7 +131,7 @@ mod tests {
     async fn test_remote_doesnt_respond() {
         // TODO: add better test utilites
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) = util::make_libp2p_with_ping(
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) = util::make_libp2p_with_ping(
             common::chain::config::create_mainnet(),
             addr.clone(),
             &[],
@@ -144,7 +143,7 @@ mod tests {
         )
         .await;
 
-        let (transport, peer_id, id_keys) = util::make_transport_and_keys();
+        let (transport, peer_id, _id_keys) = util::make_transport_and_keys();
         let mut swarm = SwarmBuilder::new(
             transport,
             util::make_ping(
@@ -191,7 +190,7 @@ mod tests {
     async fn test_ping_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = common::chain::config::create_mainnet();
-        let (mut backend1, _, mut conn_rx, mut gossip_rx, _) = util::make_libp2p_with_ping(
+        let (mut backend1, _, mut conn_rx, _gossip_rx, _) = util::make_libp2p_with_ping(
             config.clone(),
             addr.clone(),
             &[],

@@ -14,20 +14,19 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 extern crate test_utils;
 
 use common::chain::{
     block::{consensus_data::ConsensusData, Block},
     transaction::Transaction,
 };
-use libp2p::{multiaddr::Protocol, Multiaddr};
+use libp2p::Multiaddr;
 use p2p::{
     error::{Libp2pError, P2pError, ProtocolError},
     message::{self, MessageType, PubSubMessage, SyncingMessage, SyncingRequest},
     net::{
         self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pDiscoveryStrategy, Libp2pService},
+        libp2p::{Libp2pConnectivityHandle, Libp2pService},
         ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
         PubSubTopic,
     },
@@ -59,10 +58,10 @@ async fn test_libp2p_gossipsub() {
     .await
     .unwrap();
 
-    let (conn1_res, conn2_res) =
+    let (_conn1_res, conn2_res) =
         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-    let conn1_id = match conn2_res {
+    let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
@@ -111,7 +110,8 @@ async fn test_libp2p_gossipsub() {
                     Block::new(vec![], None, 1338u32, ConsensusData::None).unwrap(),
                 )),
             })
-            .await;
+            .await
+            .unwrap();
     } else {
         panic!("invalid message received");
     }
@@ -137,11 +137,11 @@ async fn connect_peers(
     peer1: &mut Libp2pConnectivityHandle<Libp2pService>,
     peer2: &mut Libp2pConnectivityHandle<Libp2pService>,
 ) {
-    let (peer1_res, peer2_res) =
+    let (_peer1_res, peer2_res) =
         tokio::join!(peer1.connect(peer2.local_addr().clone()), peer2.poll_next());
 
     let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
-    let peer1_id = match peer2_res {
+    let _peer1_id = match peer2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
@@ -294,7 +294,7 @@ async fn test_libp2p_gossipsub_3_peers() {
 async fn test_libp2p_gossipsub_invalid_data() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
+    let (_conn1, mut pubsub1, _) = Libp2pService::start(
         addr1,
         &[],
         &[PubSubTopic::Blocks],
@@ -331,7 +331,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
     .await
     .unwrap();
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+    let (mut conn2, _pubsub2, _) = Libp2pService::start(
         addr2,
         &[],
         &[PubSubTopic::Blocks],
@@ -341,10 +341,10 @@ async fn test_libp2p_gossipsub_too_big_message() {
     .await
     .unwrap();
 
-    let (conn1_res, conn2_res) =
+    let (_conn1_res, conn2_res) =
         tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-    let conn1_id = match conn2_res {
+    let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };

@@ -300,7 +300,7 @@ impl Chainstate {
 
         // get headers until either the best block or header limit is reached
         let limit = std::cmp::min(
-            (best + HEADER_LIMIT).ok_or(BlockError::Unknown)?,
+            (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
             self.get_block_height_in_main_chain(
                 &self.get_best_block_id()?.expect("best block to exist"),
             )?
@@ -318,7 +318,7 @@ impl Chainstate {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, BlockError> {
         // verify that the first block attaches to our chain
-        match headers.get(0).ok_or(BlockError::Unknown)?.get_prev_block_id() {
+        match headers.get(0).ok_or(BlockError::NotFound)?.get_prev_block_id() {
             None => return Err(BlockError::PrevBlockInvalid),
             Some(id) => {
                 if self.get_block_index(id)?.is_none() {

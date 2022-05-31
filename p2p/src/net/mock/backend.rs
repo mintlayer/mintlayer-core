@@ -14,23 +14,14 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(dead_code, unused_variables, unused_imports)]
 use crate::{
     error::{self, P2pError},
     net::mock::types,
-    net::{NetworkingService, PubSubTopic},
 };
-use async_trait::async_trait;
 use futures::FutureExt;
 use logging::log;
-use serialization::{Decode, Encode};
-use std::{
-    collections::HashMap,
-    io::{Error, ErrorKind},
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-};
+use std::{io::ErrorKind, net::SocketAddr};
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::mpsc,
 };

@@ -14,55 +14,31 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{
-    error::{self, Libp2pError, P2pError, ProtocolError},
-    message,
-    net::{
-        self,
-        libp2p::sync::*,
-        libp2p::{backend::Backend, types},
-        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
-        PubSubTopic, SyncingCodecService, SyncingEvent,
-    },
+use crate::net::{
+    self,
+    libp2p::sync::*,
+    libp2p::{backend::Backend, types},
 };
-use async_trait::async_trait;
 use futures::prelude::*;
-use itertools::*;
 use libp2p::{
-    core::{
-        muxing::StreamMuxerBox,
-        transport::Boxed,
-        upgrade::{self, read_length_prefixed, write_length_prefixed},
-        PeerId,
-    },
-    gossipsub::{
-        Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
-        MessageAuthenticity, MessageId, ValidationMode,
-    },
-    identify::{Identify, IdentifyConfig, IdentifyInfo},
+    core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
+    gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    identify::{Identify, IdentifyConfig},
     identity,
     mdns::Mdns,
-    mplex,
-    multiaddr::Protocol,
-    noise, ping,
+    mplex, noise, ping,
     request_response::*,
     swarm::NetworkBehaviour,
-    swarm::{NegotiatedSubstream, SwarmBuilder, SwarmEvent},
+    swarm::{SwarmBuilder, SwarmEvent},
     tcp::TcpConfig,
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
-use serialization::{Decode, Encode};
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    io, iter,
-    num::NonZeroU32,
-    sync::Arc,
-};
-use tokio::sync::{mpsc, oneshot};
+use std::{iter, num::NonZeroU32};
+use tokio::sync::mpsc;
 
 // TODO: add config parameters
+#[allow(dead_code)]
 pub async fn make_libp2p(
     // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
@@ -157,6 +133,7 @@ pub async fn make_libp2p(
     )
 }
 
+#[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
     // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
@@ -247,6 +224,7 @@ pub async fn make_libp2p_with_ping(
     )
 }
 
+#[allow(dead_code)]
 pub async fn connect_swarms<A, B>(addr: Multiaddr, swarm1: &mut Swarm<A>, swarm2: &mut Swarm<B>)
 where
     A: NetworkBehaviour,
@@ -272,6 +250,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, identity::Keypair) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
@@ -293,6 +272,7 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
     )
 }
 
+#[allow(dead_code)]
 pub fn make_identify(config: common::chain::ChainConfig, id_keys: identity::Keypair) -> Identify {
     // TODO: impl display for semver/magic bytes?
     let version = config.version();
@@ -311,6 +291,7 @@ pub fn make_identify(config: common::chain::ChainConfig, id_keys: identity::Keyp
     Identify::new(IdentifyConfig::new(protocol, id_keys.public()))
 }
 
+#[allow(dead_code)]
 pub fn make_ping(
     timeout: Option<std::time::Duration>,
     interval: Option<std::time::Duration>,
@@ -320,6 +301,8 @@ pub fn make_ping(
         ping::Config::new()
             .with_timeout(timeout.unwrap_or(std::time::Duration::from_secs(60)))
             .with_interval(interval.unwrap_or(std::time::Duration::from_secs(60)))
-            .with_max_failures(NonZeroU32::new(20).expect("max failures > 0")),
+            .with_max_failures(
+                NonZeroU32::new(max_failures.unwrap_or(20)).expect("max failures > 0"),
+            ),
     )
 }

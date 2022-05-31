@@ -14,31 +14,22 @@
 // limitations under the License.
 //
 // Author(s): S. Afach, A. Sinitsyn, A. Altonen
-#![allow(unused)]
 use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
-    address::Address,
     chain::{
         block::{Block, ConsensusData},
         config::ChainConfig,
-        signature::{
-            inputsig::{InputWitness, StandardInputSignature},
-            sighashtype::SigHashType,
-        },
+        signature::inputsig::InputWitness,
         transaction::Transaction,
         Destination, OutPointSourceId, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
-use crypto::{
-    key::{KeyKind, PrivateKey},
-    random::Rng,
-};
 use rand::prelude::SliceRandom;
 use std::sync::Arc;
 
 fn create_utxo_data(
-    config: &ChainConfig,
+    _config: &ChainConfig,
     tx_id: &Id<Transaction>,
     index: usize,
     output: &TxOutput,
@@ -119,7 +110,7 @@ pub async fn start_chainstate(
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",
-        crate::make_chainstate(config, storage, None).unwrap(),
+        make_chainstate(config, storage, None).unwrap(),
     );
     tokio::spawn(async move { man.main().await });
     handle
@@ -133,7 +124,7 @@ pub fn create_n_blocks(config: Arc<ChainConfig>, parent: &Block, nblocks: usize)
     let mut blocks: Vec<Block> = Vec::new();
     let mut prev = parent.clone();
 
-    for i in 0..nblocks {
+    for _ in 0..nblocks {
         let block = create_block(Arc::clone(&config), &prev);
         prev = block.clone();
         blocks.push(block.clone());
@@ -147,7 +138,7 @@ pub async fn import_blocks(
     blocks: Vec<Block>,
 ) {
     for block in blocks.into_iter() {
-        let res = handle
+        let _res = handle
             .call_mut(move |this| this.process_block(block, BlockSource::Local))
             .await
             .unwrap();

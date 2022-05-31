@@ -172,7 +172,6 @@ impl RequestResponseCodec for SyncingCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use futures::io::Cursor;
 
     #[tokio::test]
     async fn test_read_request() {
@@ -182,7 +181,7 @@ mod tests {
         // empty stream
         {
             let mut out = vec![0u8; 1];
-            let mut data = vec![];
+            let data = vec![];
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
 
@@ -193,7 +192,7 @@ mod tests {
         // 10 MB
         {
             let mut out = vec![0u8; 11 * 1024 * 1024];
-            let mut data = vec![1u8; MESSAGE_MAX_SIZE];
+            let data = vec![1u8; MESSAGE_MAX_SIZE];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
@@ -206,7 +205,7 @@ mod tests {
         // 10 MB + 1 byte
         {
             let mut out = vec![0u8; 11 * 1024 * 1024];
-            let mut data = vec![1u8; MESSAGE_MAX_SIZE + 1];
+            let data = vec![1u8; MESSAGE_MAX_SIZE + 1];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
@@ -228,7 +227,7 @@ mod tests {
         // empty stream
         {
             let mut out = vec![0u8; 1];
-            let mut data = vec![];
+            let data = vec![];
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
 
@@ -239,7 +238,7 @@ mod tests {
         // 10 MB
         {
             let mut out = vec![0u8; 11 * 1024 * 1024];
-            let mut data = vec![1u8; MESSAGE_MAX_SIZE];
+            let data = vec![1u8; MESSAGE_MAX_SIZE];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
@@ -252,7 +251,7 @@ mod tests {
         // 10 MB + 1 byte
         {
             let mut out = vec![0u8; 11 * 1024 * 1024];
-            let mut data = vec![1u8; MESSAGE_MAX_SIZE + 1];
+            let data = vec![1u8; MESSAGE_MAX_SIZE + 1];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             write_length_prefixed(&mut socket, &data).await.unwrap();
@@ -274,7 +273,7 @@ mod tests {
         // empty response
         {
             let mut out = vec![0u8; 1024];
-            let mut data = vec![];
+            let data = vec![];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             codec.write_request(&protocol, &mut socket, SyncRequest(data)).await.unwrap();
@@ -283,7 +282,7 @@ mod tests {
         // 10 MB
         {
             let mut out = vec![0u8; 20 * 1024 * 1024];
-            let mut data = vec![1u8; 10 * 1024 * 1024];
+            let data = vec![1u8; 10 * 1024 * 1024];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             codec.write_request(&protocol, &mut socket, SyncRequest(data)).await.unwrap();
@@ -292,7 +291,7 @@ mod tests {
         // 12 MB
         {
             let mut out = vec![0u8; 20 * 1024 * 1024];
-            let mut data = vec![1u8; 12 * 1024 * 1024];
+            let data = vec![1u8; 12 * 1024 * 1024];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             if let Err(e) = codec.write_request(&protocol, &mut socket, SyncRequest(data)).await {
@@ -309,7 +308,7 @@ mod tests {
         // empty response
         {
             let mut out = vec![0u8; 1024];
-            let mut data = vec![];
+            let data = vec![];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             codec.write_response(&protocol, &mut socket, SyncResponse(data)).await.unwrap();
@@ -318,7 +317,7 @@ mod tests {
         // 10 MB
         {
             let mut out = vec![0u8; 20 * 1024 * 1024];
-            let mut data = vec![1u8; 10 * 1024 * 1024];
+            let data = vec![1u8; 10 * 1024 * 1024];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             codec.write_response(&protocol, &mut socket, SyncResponse(data)).await.unwrap();
@@ -327,7 +326,7 @@ mod tests {
         // 12 MB
         {
             let mut out = vec![0u8; 20 * 1024 * 1024];
-            let mut data = vec![1u8; 12 * 1024 * 1024];
+            let data = vec![1u8; 12 * 1024 * 1024];
 
             let mut socket = futures::io::Cursor::new(&mut out[..]);
             if let Err(e) = codec.write_response(&protocol, &mut socket, SyncResponse(data)).await {

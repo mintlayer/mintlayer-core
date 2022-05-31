@@ -14,19 +14,12 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 extern crate test_utils;
 
 use libp2p::{multiaddr::Protocol, Multiaddr};
-use p2p::{
-    error::{Libp2pError, P2pError},
-    message::{self, MessageType},
-    net::{
-        self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pDiscoveryStrategy, Libp2pService},
-        ConnectivityEvent, ConnectivityService, NetworkingService, PubSubEvent, PubSubService,
-        PubSubTopic,
-    },
+use p2p::net::{
+    libp2p::{Libp2pDiscoveryStrategy, Libp2pService},
+    ConnectivityEvent, ConnectivityService, NetworkingService,
 };
 use std::sync::Arc;
 
