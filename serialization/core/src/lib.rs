@@ -18,7 +18,7 @@
 //! Blockchain data encoding and decoding tools
 
 // Re-export SCALE traits
-pub use parity_scale_codec::{Codec, Decode, DecodeAll, Encode, Input, Output};
+pub use parity_scale_codec::{Codec, Decode, DecodeAll, Encode, EncodeAsRef, Input, Output};
 
 // Re-export SCALE types
 pub use parity_scale_codec::{Compact, Error};

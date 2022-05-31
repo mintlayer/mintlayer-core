@@ -3496,6 +3496,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serialization-size-dependent"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "hex-literal",
+ "parity-scale-codec",
+ "serialization-core",
+]
+
+[[package]]
 name = "serialization-tagged"
 version = "0.1.0"
 dependencies = [
