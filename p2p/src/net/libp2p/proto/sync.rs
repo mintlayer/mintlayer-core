@@ -59,7 +59,10 @@ impl Backend {
                     .await
                     .map_err(|_| P2pError::ChannelClosed),
             },
-            RequestResponseEvent::ResponseSent { peer, request_id } => {
+            RequestResponseEvent::ResponseSent {
+                peer: _,
+                request_id,
+            } => {
                 log::debug!("response sent, request id {:?}", request_id);
                 Ok(())
             }
@@ -133,12 +136,4 @@ impl Backend {
             }
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn it_works() {}
 }

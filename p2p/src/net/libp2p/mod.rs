@@ -16,8 +16,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-
 use crate::{
     error::{self, Libp2pError, P2pError, ProtocolError},
     message,
@@ -27,16 +25,11 @@ use crate::{
     },
 };
 use async_trait::async_trait;
-use futures::prelude::*;
 use itertools::*;
 use libp2p::{
-    core::{
-        upgrade::{self, read_length_prefixed, write_length_prefixed},
-        PeerId,
-    },
+    core::{upgrade, PeerId},
     gossipsub::{
-        Gossipsub, GossipsubConfigBuilder, GossipsubEvent, GossipsubMessage, IdentTopic as Topic,
-        MessageAuthenticity, MessageId, ValidationMode,
+        Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, MessageId, ValidationMode,
     },
     identify::{Identify, IdentifyConfig, IdentifyInfo},
     identity,
@@ -45,20 +38,13 @@ use libp2p::{
     multiaddr::Protocol,
     noise, ping,
     request_response::*,
-    swarm::{NegotiatedSubstream, SwarmBuilder},
+    swarm::SwarmBuilder,
     tcp::TcpConfig,
     Multiaddr, Transport,
 };
 use logging::log;
 use serialization::{Decode, Encode};
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-    io, iter,
-    num::NonZeroU32,
-    sync::Arc,
-    time::Duration,
-};
+use std::{iter, num::NonZeroU32, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 
 mod backend;
@@ -221,7 +207,7 @@ where
         let proto = self.protocol_version.clone();
         let (version, magic_bytes) =
             match sscanf::scanf!(proto, "/{}/{}.{}.{}-{:x}", String, u8, u8, u16, u32) {
-                Err(e) => Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol)),
+                Err(_err) => Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol)),
                 Ok((proto, maj, min, pat, magic)) => {
                     if proto != "mintlayer" {
                         return Err(P2pError::ProtocolError(ProtocolError::InvalidProtocol));
@@ -290,7 +276,6 @@ impl NetworkingService for Libp2pService {
 
             // TODO: impl display for semver/magic bytes?
             let version = chain_config.version();
-            let magic = chain_config.magic_bytes();
             let protocol = format!(
                 "/mintlayer/{}.{}.{}-{:x}",
                 version.major,
@@ -601,8 +586,12 @@ where
                 request_id,
                 request,
             } => {
-                let request = message::Message::decode(&mut &(*request)[..]).map_err(|e| {
-                    log::error!("invalid request received from peer {:?}", peer_id);
+                let request = message::Message::decode(&mut &(*request)[..]).map_err(|err| {
+                    log::error!(
+                        "invalid request received from peer {:?}: {:?}",
+                        peer_id,
+                        err
+                    );
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 
@@ -617,8 +606,12 @@ where
                 request_id,
                 response,
             } => {
-                let response = message::Message::decode(&mut &(*response)[..]).map_err(|e| {
-                    log::error!("invalid response received from peer {:?}", peer_id);
+                let response = message::Message::decode(&mut &(*response)[..]).map_err(|err| {
+                    log::error!(
+                        "invalid response received from peer {:?}: {:?}",
+                        peer_id,
+                        err
+                    );
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 
@@ -843,7 +836,6 @@ mod tests {
     // verify that vector of address (that all belong to one peer) parse into one `net::Peer` entry
     #[test]
     fn test_parse_peers_valid_1_peer() {
-        let config = Arc::new(common::chain::config::create_mainnet());
         let id = PeerId::random();
         let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
         let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();

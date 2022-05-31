@@ -14,18 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused, clippy::unwrap_used)]
-
-use common::chain::ChainConfig;
-use libp2p::Multiaddr;
-use p2p::net::{
-    libp2p::Libp2pService, mock::MockService, ConnectivityEvent, ConnectivityService,
-    NetworkingService,
-};
-use std::{
-    net::{IpAddr, Ipv4Addr, SocketAddr},
-    sync::Arc,
-};
+use p2p::net::{mock::MockService, NetworkingService};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::net::{TcpListener, TcpStream};
 
 pub async fn get_tcp_socket() -> TcpStream {

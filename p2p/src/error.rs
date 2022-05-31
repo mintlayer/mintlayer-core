@@ -166,7 +166,7 @@ impl From<libp2p::gossipsub::error::PublishError> for P2pError {
 }
 
 impl From<subsystem::subsystem::CallError> for P2pError {
-    fn from(e: subsystem::subsystem::CallError) -> P2pError {
+    fn from(_e: subsystem::subsystem::CallError) -> P2pError {
         P2pError::ChannelClosed
     }
 }

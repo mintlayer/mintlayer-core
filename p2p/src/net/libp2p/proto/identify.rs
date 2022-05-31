@@ -21,7 +21,7 @@ use crate::{
         types,
     },
 };
-use libp2p::{identify::IdentifyEvent, swarm::ConnectionHandlerUpgrErr};
+use libp2p::identify::IdentifyEvent;
 use logging::log;
 
 impl Backend {
@@ -66,7 +66,7 @@ impl Backend {
                         log::error!("pending connection for peer {:?} does not exist", peer_id);
                         Err(P2pError::PeerDoesntExist)
                     }
-                    Some(PendingState::Dialed { tx }) => {
+                    Some(PendingState::Dialed { tx: _ }) => {
                         // TODO: report peer id to swarm manager?
                         log::error!("received peer info before connection was established");
                         Err(P2pError::ProtocolError(ProtocolError::InvalidState))
@@ -94,11 +94,10 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{
-        self,
-        libp2p::{backend, proto::util},
+    use crate::net::libp2p::{backend, proto::util};
+    use libp2p::{
+        identify::IdentifyInfo, identity, swarm::ConnectionHandlerUpgrErr, Multiaddr, PeerId,
     };
-    use libp2p::{identify::IdentifyInfo, identity, Multiaddr, PeerId};
     use tokio::sync::oneshot;
 
     fn make_empty_info() -> IdentifyInfo {
@@ -240,7 +239,7 @@ mod tests {
     async fn test_received_outbound_accepted() {
         let config = common::chain::config::create_mainnet();
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend, _, mut conn_rx, _, _) = util::make_libp2p(config, addr, &[]).await;
+        let (mut backend, _, _conn_rx, _, _) = util::make_libp2p(config, addr, &[]).await;
         let (tx, mut rx) = oneshot::channel();
 
         let peer_id = PeerId::random();

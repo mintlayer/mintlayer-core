@@ -16,7 +16,6 @@
 // Author(s): L. Kuklinek, A. Altonen
 
 use crate::{error::P2pError, net::NetworkingService};
-use common::chain::block;
 use std::{fmt::Debug, str::FromStr};
 use subsystem::subsystem::CallError;
 
