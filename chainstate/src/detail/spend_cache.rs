@@ -324,6 +324,7 @@ impl<'a> CachedInputs<'a> {
                 self.apply_spend(tx.get_inputs(), spend_height, blockreward_maturity, spender)?;
             }
             SpendKind::BlockReward => {
+                // TODO: test spending block rewards from chains outside the mainchain
                 match block.header().block_production_inputs() {
                     Some(inputs) => {
                         // pre-cache all inputs
