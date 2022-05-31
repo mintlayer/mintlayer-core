@@ -205,13 +205,6 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn verify_all_signatures(&self, block: &Block) -> Result<(), BlockError> {
-        for tx in block.transactions() {
-            self.verify_signatures(tx)?;
-        }
-        Ok(())
-    }
-
     fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
         for (input_idx, input) in tx.get_inputs().iter().enumerate() {
             let outpoint = input.get_outpoint();
@@ -241,13 +234,15 @@ impl<'a> CachedInputs<'a> {
                 SpendablePosition::BlockReward(reward_pos) => {
                     // TODO(Roy): fill this with the block reward that the user now is spending
 
-                    let block = self
+                    let block_index = self
                         .db_tx
-                        .get_block(reward_pos.clone())
+                        .get_block_index(reward_pos)
                         .map_err(BlockError::from)?
                         .ok_or(BlockError::NotFound)?;
 
-                    if let Some(outputs) = block.header().block_reward_destinations() {
+                    if let Some(outputs) =
+                        block_index.get_block_header().block_reward_destinations()
+                    {
                         for output in outputs {
                             verify_signature(output.get_destination(), tx, input_idx).map_err(
                                 |_| BlockError::SignatureVerificationFailed(tx.get_id()),
@@ -340,12 +335,12 @@ impl<'a> CachedInputs<'a> {
                         if let Some(outputs) = block.header().block_reward_destinations() {
                             self.check_inputs_amounts(inputs, outputs)?;
                         }
+
+                        // verify input signatures
+                        // self.verify_block_reward_signatures(inputs)?;
                     }
                     None => {}
                 }
-
-                // verify input signatures
-                self.verify_all_signatures(block)?;
 
                 // spend inputs of this block
                 if let Some(inputs) = block.header().block_production_inputs() {
