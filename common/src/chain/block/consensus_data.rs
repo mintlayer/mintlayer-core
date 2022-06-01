@@ -1,4 +1,5 @@
-use crate::chain::TxOutput;
+use crate::chain::TxInput;
+use crate::chain::{signature::Transactable, TxOutput};
 use crate::primitives::Compact;
 use serialization::{Decode, Encode};
 
@@ -8,6 +9,48 @@ pub enum ConsensusData {
     None,
     #[codec(index = 1)]
     PoW(PoWData),
+}
+
+pub struct BlockRewardTransactable<'a> {
+    inputs: Option<&'a [TxInput]>,
+    outputs: Option<&'a [TxOutput]>,
+}
+
+impl<'a> Transactable for BlockRewardTransactable<'a> {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        self.inputs
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        self.outputs
+    }
+
+    fn version_byte(&self) -> Option<u8> {
+        None
+    }
+
+    fn lock_time(&self) -> Option<u32> {
+        None
+    }
+
+    fn flags(&self) -> Option<u32> {
+        None
+    }
+}
+
+impl ConsensusData {
+    pub fn derive_transactable<'a>(&'a self) -> BlockRewardTransactable {
+        match self {
+            ConsensusData::None => BlockRewardTransactable {
+                inputs: None,
+                outputs: None,
+            },
+            ConsensusData::PoW(ref pow_data) => BlockRewardTransactable {
+                inputs: None,
+                outputs: Some(pow_data.outputs()),
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
