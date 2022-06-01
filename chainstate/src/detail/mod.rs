@@ -184,6 +184,7 @@ impl Chainstate {
                 db_error,
             ))
         } else {
+            // TODO: test reattempts using mocks of the database that emulate failure
             self.attempt_to_process_block(block, block_source, attempt_number + 1)
         }
     }
