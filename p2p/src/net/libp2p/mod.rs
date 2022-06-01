@@ -17,7 +17,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, Libp2pError, P2pError, ProtocolError},
+    error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
     net::{
         self, libp2p::sync::*, ConnectivityEvent, ConnectivityService, NetworkingService,
@@ -46,6 +46,7 @@ use logging::log;
 use serialization::{Decode, Encode};
 use std::{iter, num::NonZeroU32, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
+use utils::ensure;
 
 mod backend;
 mod proto;
@@ -248,14 +249,16 @@ impl NetworkingService for Libp2pService {
         topics: &[PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(
+    ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
         Self::SyncingCodecHandle,
     )> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new().into_authentic(&id_keys)?;
+        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+            .into_authentic(&id_keys)
+            .map_err(|_| P2pError::Other("Failed to create Noise keys"))?;
 
         let transport = TcpConfig::new()
             .nodelay(true)
@@ -346,7 +349,8 @@ impl NetworkingService for Libp2pService {
                 response: tx,
             })
             .await?;
-        rx.await?.map_err(|_| P2pError::SocketError(std::io::ErrorKind::AddrInUse))?;
+        rx.await?
+            .map_err(|_| P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse)))?;
 
         Ok((
             Self::ConnectivityHandle {
@@ -377,19 +381,17 @@ where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
     IdentifyInfo: TryInto<net::PeerInfo<T>, Error = P2pError>,
 {
-    async fn connect(&mut self, addr: T::Address) -> error::Result<net::PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
-        // TODO: refactor error code
+        // TODO: add tests for both cases
         let peer_id = match addr.iter().last() {
             Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
-                P2pError::Libp2pError(Libp2pError::DialError(
-                    "Expect peer multiaddr to contain peer ID.".into(),
-                ))
+                P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
             })?,
             _ => {
-                return Err(P2pError::Libp2pError(Libp2pError::DialError(
-                    "Expect peer multiaddr to contain peer ID.".into(),
+                return Err(P2pError::ConversionError(ConversionError::InvalidAddress(
+                    addr.to_string(),
                 )))
             }
         };
@@ -413,7 +415,7 @@ where
         Ok(info.try_into()?)
     }
 
-    async fn disconnect(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::debug!("disconnect peer {:?}", peer_id);
 
         let (tx, rx) = oneshot::channel();
@@ -435,7 +437,7 @@ where
     }
 
     // TODO: `impl TryInto<ConnectivityEvent> for types::ConnectivityEvent`??
-    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
@@ -476,7 +478,16 @@ impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
     T: NetworkingService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
-    async fn publish(&mut self, message: message::Message) -> error::Result<()> {
+    async fn publish(&mut self, message: message::Message) -> crate::Result<()> {
+        let encoded = message.encode();
+        ensure!(
+            encoded.len() <= GOSSIPSUB_MAX_TRANSMIT_SIZE,
+            P2pError::PublishError(PublishError::MessageTooLarge(
+                Some(encoded.len()),
+                Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
+            ))
+        );
+
         // TODO: add support for transactions in the future
         let topic =
             if let message::MessageType::PubSub(message::PubSubMessage::Block(_)) = message.msg {
@@ -489,7 +500,7 @@ where
         self.cmd_tx
             .send(types::Command::SendMessage {
                 topic,
-                message: message.encode(),
+                message: encoded,
                 response: tx,
             })
             .await?;
@@ -504,7 +515,7 @@ where
         source: T::PeerId,
         message_id: T::MessageId,
         result: net::ValidationResult,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::ReportValidationResult {
@@ -520,7 +531,7 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         match self.gossip_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::PubSubEvent::MessageReceived {
                 peer_id,
@@ -545,7 +556,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         message: message::Message,
-    ) -> error::Result<T::RequestId> {
+    ) -> crate::Result<T::RequestId> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendRequest {
@@ -564,7 +575,7 @@ where
         &mut self,
         request_id: T::RequestId,
         message: message::Message,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendResponse {
@@ -579,7 +590,7 @@ where
             .map_err(|e| e) // command failure
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
         match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::SyncingEvent::Request {
                 peer_id,
@@ -688,7 +699,10 @@ mod tests {
 
         match service {
             Err(e) => {
-                assert_eq!(e, P2pError::SocketError(std::io::ErrorKind::AddrInUse));
+                assert_eq!(
+                    e,
+                    P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse))
+                );
             }
             Ok(_) => panic!("address is not in use"),
         }
@@ -722,7 +736,7 @@ mod tests {
         let (mut service2, _, _) = service2.unwrap();
         let conn_addr = service1.local_addr().clone();
 
-        let (res1, res2): (error::Result<ConnectivityEvent<Libp2pService>>, _) =
+        let (res1, res2): (crate::Result<ConnectivityEvent<Libp2pService>>, _) =
             tokio::join!(service1.poll_next(), service2.connect(conn_addr));
 
         assert!(res2.is_ok());
@@ -745,14 +759,12 @@ mod tests {
         .await
         .unwrap();
 
-        match service.connect(addr).await {
+        match service.connect(addr.clone()).await {
             Ok(_) => panic!("connect succeeded without peer id"),
             Err(e) => {
                 assert_eq!(
                     e,
-                    P2pError::Libp2pError(Libp2pError::DialError(
-                        "Expect peer multiaddr to contain peer ID.".into(),
-                    ))
+                    P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
                 )
             }
         }
@@ -944,7 +956,9 @@ mod tests {
         let start = std::time::SystemTime::now();
         assert_eq!(
             service.connect(addr.clone()).await,
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
 
         let timeout = if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
@@ -964,7 +978,9 @@ mod tests {
 
         assert_eq!(
             service.connect(addr).await,
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
         assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }

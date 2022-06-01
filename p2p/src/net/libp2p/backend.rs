@@ -19,7 +19,7 @@
 // TODO: think about connection management
 
 use crate::{
-    error::{self, Libp2pError, P2pError},
+    error::{P2pError, PeerError},
     net::libp2p::{types, SyncResponse},
 };
 use futures::StreamExt;
@@ -40,12 +40,12 @@ use tokio::sync::{mpsc, oneshot};
 pub(super) enum PendingState {
     /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
     Dialed {
-        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Connection established for outbound connection
     OutboundAccepted {
-        tx: oneshot::Sender<error::Result<IdentifyInfo>>,
+        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Connection established for inbound connection
@@ -104,7 +104,7 @@ impl Backend {
     }
 
     // TODO: into_fatal()???
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         log::debug!("starting event loop");
 
         loop {
@@ -141,7 +141,7 @@ impl Backend {
                 ConnectionHandlerUpgrErr<std::io::Error>,
             >,
         >,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match event {
             SwarmEvent::ConnectionEstablished {
                 peer_id, endpoint, ..
@@ -181,12 +181,16 @@ impl Backend {
     // TODO: into separate handlers?
     // TODO: there has to be a better way to add new commands?
     /// Handle command received from the libp2p front-end
-    async fn on_command(&mut self, cmd: types::Command) -> error::Result<()> {
+    async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
 
         match cmd {
             types::Command::Listen { addr, response } => {
-                let res = self.swarm.listen_on(addr).map(|_| ()).map_err(|e| e.into());
+                let res = self
+                    .swarm
+                    .listen_on(addr)
+                    .map(|_| ())
+                    .map_err(|_| P2pError::Other("Failed to bind to address"));
                 response.send(res).map_err(|_| P2pError::ChannelClosed)
             }
             types::Command::Connect {
@@ -206,7 +210,7 @@ impl Backend {
                 if !self.swarm.is_connected(&peer_id) {
                     log::debug!("peer {:?} is not connected", peer_id);
                     return response
-                        .send(Err(P2pError::PeerDoesntExist))
+                        .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
                         .map_err(|_| P2pError::ChannelClosed);
                 }
 
@@ -216,11 +220,8 @@ impl Backend {
                         self.established_conns.remove(&peer_id);
                         response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
                     }
-                    // TODO: handle this error better
                     Err(_) => response
-                        .send(Err(P2pError::Unknown(
-                            "`Swarm::disconnect_peer_id() returned Err(())`".to_string(),
-                        )))
+                        .send(Err(P2pError::Other("`Swarm::disconnect_peer_id()` failed")))
                         .map_err(|_| P2pError::ChannelClosed),
                 }
             }
@@ -258,11 +259,7 @@ impl Backend {
                     result,
                 ) {
                     Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
-                    Err(e) => response
-                        .send(Err(P2pError::Libp2pError(Libp2pError::PublishError(
-                            e.to_string(),
-                        ))))
-                        .map_err(|_| P2pError::ChannelClosed),
+                    Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
                 }
             }
             types::Command::SendRequest {
@@ -292,13 +289,7 @@ impl Backend {
                         .sync
                         .send_response(response_channel, *response)
                         .map(|_| ())
-                        .map_err(|_| {
-                            log::error!(
-                                "failed to send response, channel closed or request timed out"
-                            );
-                            // TODO: refactor error code
-                            P2pError::Unknown("channel closed or request timed out".to_string())
-                        });
+                        .map_err(|_| P2pError::Other("Channel closed or request timed out"));
                     channel.send(res).map_err(|_| P2pError::ChannelClosed)
                 }
             },

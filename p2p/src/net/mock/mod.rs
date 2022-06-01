@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error, message,
+    message,
     net::{
         ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
         PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent, ValidationResult,
@@ -100,7 +100,7 @@ impl NetworkingService for MockService {
         _topics: &[PubSubTopic],
         _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
-    ) -> error::Result<(
+    ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
         Self::SyncingCodecHandle,
@@ -143,7 +143,7 @@ impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
     T: NetworkingService<Address = SocketAddr, PeerId = SocketAddr> + Send,
 {
-    async fn connect(&mut self, addr: T::Address) -> error::Result<PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<PeerInfo<T>> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         let (tx, rx) = oneshot::channel();
@@ -166,7 +166,7 @@ where
         // )
     }
 
-    async fn disconnect(&mut self, _peer_id: T::PeerId) -> error::Result<()> {
+    async fn disconnect(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
         todo!();
     }
 
@@ -178,7 +178,7 @@ where
         &self.addr
     }
 
-    async fn poll_next(&mut self) -> error::Result<ConnectivityEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         todo!();
         // match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
         //     types::ConnectivityEvent::IncomingConnection { peer_id, socket } => {
@@ -196,7 +196,7 @@ impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkingService<PeerId = SocketAddr> + Send,
 {
-    async fn publish(&mut self, _message: message::Message) -> error::Result<()> {
+    async fn publish(&mut self, _message: message::Message) -> crate::Result<()> {
         todo!();
     }
 
@@ -205,11 +205,11 @@ where
         _source: T::PeerId,
         _msg_id: T::MessageId,
         _result: ValidationResult,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         todo!();
     }
 
-    async fn poll_next(&mut self) -> error::Result<PubSubEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         todo!();
     }
 }
@@ -223,7 +223,7 @@ where
         &mut self,
         _peer_id: T::PeerId,
         _message: message::Message,
-    ) -> error::Result<T::RequestId> {
+    ) -> crate::Result<T::RequestId> {
         todo!();
     }
 
@@ -231,11 +231,11 @@ where
         &mut self,
         _request_id: T::RequestId,
         _message: message::Message,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         todo!();
     }
 
-    async fn poll_next(&mut self) -> error::Result<SyncingEvent<T>> {
+    async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
         todo!();
     }
 }

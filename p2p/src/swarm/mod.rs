@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, FatalError, P2pError, ProtocolError},
+    error::{FatalError, P2pError, PeerError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
@@ -105,7 +105,7 @@ where
     async fn on_swarm_control_event(
         &mut self,
         event: Option<event::SwarmEvent<T>>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match event.ok_or(P2pError::ChannelClosed)? {
             event::SwarmEvent::Connect(addr, response) => {
                 log::debug!(
@@ -120,7 +120,7 @@ where
                             Some(_) => {
                                 log::error!("peer already exists");
                                 response
-                                    .send(Err(P2pError::PeerExists))
+                                    .send(Err(P2pError::PeerError(PeerError::PeerAlreadyExists)))
                                     .map_err(|_| P2pError::ChannelClosed)
                             }
                             None => {
@@ -169,7 +169,7 @@ where
     // TODO: ugly, refactor
     // TODO: move this to its own file?
     #[allow(dead_code)]
-    async fn auto_connect(&mut self) -> error::Result<()> {
+    async fn auto_connect(&mut self) -> crate::Result<()> {
         // we have enough active connections
         if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
             return Ok(());
@@ -183,7 +183,7 @@ where
                 self.peers.len(),
                 MAX_ACTIVE_CONNECTIONS,
             );
-            return Err(P2pError::NoPeers);
+            return Err(P2pError::PeerError(PeerError::NoPeers));
         }
 
         let npeers = std::cmp::min(
@@ -240,7 +240,7 @@ where
     }
 
     /// Update the list of peers we know about or update a known peers list of addresses
-    fn peer_discovered(&mut self, peers: &[net::AddrInfo<T>]) -> error::Result<()> {
+    fn peer_discovered(&mut self, peers: &[net::AddrInfo<T>]) -> crate::Result<()> {
         log::info!("discovered {} new peers", peers.len());
 
         for info in peers.iter() {
@@ -266,12 +266,12 @@ where
     }
 
     // TODO: implement
-    fn peer_expired(&mut self, _peers: &[net::AddrInfo<T>]) -> error::Result<()> {
+    fn peer_expired(&mut self, _peers: &[net::AddrInfo<T>]) -> crate::Result<()> {
         Ok(())
     }
 
     /// Handle network event received from the network service provider
-    async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> error::Result<()> {
+    async fn on_network_event(&mut self, event: net::ConnectivityEvent<T>) -> crate::Result<()> {
         match event {
             net::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
                 let peer_id = peer_info.peer_id;
@@ -300,7 +300,10 @@ where
                         peer_info.magic_bytes,
                         self.config.chain_type()
                     );
-                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                        *self.config.magic_bytes(),
+                        peer_info.magic_bytes,
+                    )));
                 }
 
                 // TODO: check supported protocols
@@ -335,7 +338,10 @@ where
                         peer_info.magic_bytes,
                         self.config.chain_type()
                     );
-                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork));
+                    return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                        *self.config.magic_bytes(),
+                        peer_info.magic_bytes,
+                    )));
                 }
 
                 // TODO: check supported protocols
@@ -365,7 +371,7 @@ where
     }
 
     /// PeerManager event loop
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.rx_swarm.recv().fuse() => {
@@ -386,7 +392,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{error::P2pError, event};
+    use crate::{
+        error::{DialError, P2pError},
+        event,
+    };
     use common::chain::config;
     use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
     use net::{libp2p::Libp2pService, mock::MockService, ConnectivityService};
@@ -439,7 +448,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             rx.await.unwrap(),
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
     }
 
@@ -461,7 +472,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             rx.await.unwrap(),
-            Err(P2pError::SocketError(std::io::ErrorKind::ConnectionRefused))
+            Err(P2pError::DialError(DialError::IoError(
+                std::io::ErrorKind::ConnectionRefused
+            )))
         );
     }
 
@@ -716,7 +729,10 @@ mod tests {
         ));
         assert_eq!(
             swarm2.on_network_event(conn2_res).await,
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork))
+            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+                [1, 2, 3, 4],
+                *config::create_mainnet().magic_bytes(),
+            )))
         );
     }
 

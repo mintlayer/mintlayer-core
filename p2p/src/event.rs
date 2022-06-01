@@ -14,17 +14,17 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, net::NetworkingService};
+use crate::net::NetworkingService;
 use common::chain::block::Block;
 use tokio::sync::oneshot;
 
 #[derive(Debug)]
 pub enum SwarmEvent<T: NetworkingService> {
     /// Try to establish connection with a remote peer
-    Connect(T::Address, oneshot::Sender<error::Result<()>>),
+    Connect(T::Address, oneshot::Sender<crate::Result<()>>),
 
     /// Disconnect node using peer ID
-    Disconnect(T::PeerId, oneshot::Sender<error::Result<()>>),
+    Disconnect(T::PeerId, oneshot::Sender<crate::Result<()>>),
 
     /// Get the total number of peers local node has a connection with
     GetPeerCount(oneshot::Sender<usize>),

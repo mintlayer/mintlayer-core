@@ -16,7 +16,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError, ProtocolError},
+    error::{P2pError, ProtocolError},
     message::Message,
     net::libp2p::{backend::Backend, types},
 };
@@ -25,7 +25,7 @@ use logging::log;
 use serialization::Decode;
 
 impl Backend {
-    pub async fn on_gossipsub_event(&mut self, event: GossipsubEvent) -> error::Result<()> {
+    pub async fn on_gossipsub_event(&mut self, event: GossipsubEvent) -> crate::Result<()> {
         match event {
             GossipsubEvent::Unsubscribed { peer_id, topic } => {
                 log::trace!("peer {:?} unsubscribed from topic {:?}", peer_id, topic);

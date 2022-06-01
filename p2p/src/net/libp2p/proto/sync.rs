@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::P2pError,
     net::libp2p::{backend::Backend, types, SyncRequest, SyncResponse},
     net::RequestResponseError,
 };
@@ -28,7 +28,7 @@ impl Backend {
     pub async fn on_sync_event(
         &mut self,
         event: RequestResponseEvent<SyncRequest, SyncResponse>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match event {
             RequestResponseEvent::Message { peer, message } => match message {
                 RequestResponseMessage::Request {
