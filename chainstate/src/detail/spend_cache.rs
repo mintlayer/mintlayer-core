@@ -55,8 +55,8 @@ impl<'a> CachedInputs<'a> {
 
     // TODO: add block reward outputs
 
-    fn add_outputs(&mut self, block: &Block, spend_kind: SpendSource) -> Result<(), BlockError> {
-        let (tx_index, outpoint_source_id) = match spend_kind {
+    fn add_outputs(&mut self, block: &Block, spend_source: SpendSource) -> Result<(), BlockError> {
+        let (tx_index, outpoint_source_id) = match spend_source {
             SpendSource::Transaction(tx_num) => {
                 let tx_index =
                     CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?);
@@ -286,7 +286,7 @@ impl<'a> CachedInputs<'a> {
     pub fn spend(
         &mut self,
         block: &Block,
-        spend_kind: SpendSource,
+        spend_source: SpendSource,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
@@ -301,7 +301,7 @@ impl<'a> CachedInputs<'a> {
         passes; the check is down there. Feel free to move stuff around.
         */
 
-        match spend_kind {
+        match spend_source {
             SpendSource::Transaction(tx_num) => {
                 let tx = block
                     .transactions()
@@ -351,7 +351,7 @@ impl<'a> CachedInputs<'a> {
             }
         }
         // add the outputs to the cache
-        self.add_outputs(block, spend_kind)?;
+        self.add_outputs(block, spend_source)?;
 
         Ok(())
     }
