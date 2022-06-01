@@ -25,12 +25,12 @@ pub mod chainstate_interface;
 
 use std::sync::Arc;
 
+use chainstate_interface::ChainstateInterface;
 pub use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
-use chainstate_interface::ChainstateInterface;
 pub use detail::BlockError;
 pub use detail::{BlockSource, Chainstate};
 
