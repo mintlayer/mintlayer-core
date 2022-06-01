@@ -174,6 +174,7 @@ impl Chainstate {
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        // TODO: move to a configuration object that loads from command line arguments
         const MAX_DB_COMMIT_COUNT: usize = 10;
 
         if attempt_number >= MAX_DB_COMMIT_COUNT {
