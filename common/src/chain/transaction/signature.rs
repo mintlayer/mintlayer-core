@@ -258,37 +258,6 @@ pub fn signature_hash(
     Ok(result)
 }
 
-// pub fn signature_hash(
-//     mode: sighashtype::SigHashType,
-//     tx: &Transaction,
-//     input_num: usize,
-// ) -> Result<H256, TransactionSigError> {
-//     let mut stream = DefaultHashAlgoStream::new();
-
-//     // TODO: even though this works fine, we need to make this function
-//     // pull the inputs/outputs automatically through macros;
-//     // the current way is not safe and may produce issues in the future
-
-//     let target_input = tx
-//         .get_inputs()
-//         .get(input_num)
-//         .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
-
-//     hash_encoded_to(&mode.get(), &mut stream);
-//     hash_encoded_to(&tx.version_byte(), &mut stream);
-//     hash_encoded_to(&tx.get_flags(), &mut stream);
-
-//     <Transaction as Transactable>::signature_hash(tx, &mut stream, mode, target_input, input_num)?;
-
-//     hash_encoded_to(&tx.get_lock_time(), &mut stream);
-
-//     // TODO: for P2SH add OP_CODESEPARATOR position
-//     hash_encoded_to(&u32::MAX, &mut stream);
-
-//     let result = stream.finalize().into();
-//     Ok(result)
-// }
-
 fn verify_standard_input_signature(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
