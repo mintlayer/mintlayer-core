@@ -32,6 +32,13 @@ where
     pub ip6: Vec<Arc<T::Address>>,
 }
 
+/// Peer information learned during handshaking
+///
+/// When an inbound/outbound connection succeeds, the networking service handshakes with the remote
+/// peer, exchanges node information with them and verifies that the bare minimum requirements are met
+/// (both are Mintlayer nodes and that both support mandatory protocols). If those checks pass,
+/// the information is passed on to [crate::swarm::PeerManager] which decides whether it wants to keep
+/// the connection open or close it and possibly ban the peer from.
 #[derive(Debug)]
 pub struct PeerInfo<T>
 where
