@@ -173,18 +173,12 @@ fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgo
     }
 }
 
-trait Transactable {
+pub trait Transactable {
     fn inputs(&self) -> Option<&[TxInput]>;
     fn outputs(&self) -> Option<&[TxOutput]>;
     fn version_byte(&self) -> Option<u8>;
     fn lock_time(&self) -> Option<u32>;
     fn flags(&self) -> Option<u32>;
-    fn signature_hash(
-        &self,
-        stream: &mut DefaultHashAlgoStream,
-        mode: sighashtype::SigHashType,
-        target_input_num: usize,
-    ) -> Result<(), TransactionSigError>;
 }
 
 impl Transactable for Transaction {
@@ -207,52 +201,52 @@ impl Transactable for Transaction {
     fn flags(&self) -> Option<u32> {
         Some(self.get_flags())
     }
-
-    fn signature_hash(
-        &self,
-        stream: &mut DefaultHashAlgoStream,
-        mode: sighashtype::SigHashType,
-        target_input_num: usize,
-    ) -> Result<(), TransactionSigError> {
-        // TODO: even though this works fine, we need to make this function
-        // pull the inputs/outputs automatically through macros;
-        // the current way is not safe and may produce issues in the future
-
-        let inputs = match <Self as Transactable>::inputs(self) {
-            Some(ins) => ins,
-            None => return Err(TransactionSigError::SigHashRequestWithoutInputs),
-        };
-
-        let outputs = <Self as Transactable>::outputs(self).unwrap_or_default();
-
-        let target_input = inputs.get(target_input_num).ok_or(
-            TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()),
-        )?;
-
-        hash_encoded_to(&mode.get(), stream);
-
-        hash_encoded_if_some(&<Self as Transactable>::version_byte(self), stream);
-        hash_encoded_if_some(&<Self as Transactable>::flags(self), stream);
-        hash_encoded_if_some(&<Self as Transactable>::lock_time(self), stream);
-
-        inputs.signature_hash(stream, mode, target_input, target_input_num)?;
-        outputs.signature_hash(stream, mode, target_input, target_input_num)?;
-
-        // TODO: for P2SH add OP_CODESEPARATOR position
-        hash_encoded_to(&u32::MAX, stream);
-
-        Ok(())
-    }
 }
 
-pub fn signature_hash(
+fn stream_signature_hash<T: Transactable>(
+    tx: &T,
+    stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
-    tx: &Transaction,
+    target_input_num: usize,
+) -> Result<(), TransactionSigError> {
+    // TODO: even though this works fine, we need to make this function
+    // pull the inputs/outputs automatically through macros;
+    // the current way is not safe and may produce issues in the future
+
+    let inputs = match tx.inputs() {
+        Some(ins) => ins,
+        None => return Err(TransactionSigError::SigHashRequestWithoutInputs),
+    };
+
+    let outputs = tx.outputs().unwrap_or_default();
+
+    let target_input = inputs.get(target_input_num).ok_or(
+        TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()),
+    )?;
+
+    hash_encoded_to(&mode.get(), stream);
+
+    hash_encoded_if_some(&tx.version_byte(), stream);
+    hash_encoded_if_some(&tx.flags(), stream);
+    hash_encoded_if_some(&tx.lock_time(), stream);
+
+    inputs.signature_hash(stream, mode, target_input, target_input_num)?;
+    outputs.signature_hash(stream, mode, target_input, target_input_num)?;
+
+    // TODO: for P2SH add OP_CODESEPARATOR position
+    hash_encoded_to(&u32::MAX, stream);
+
+    Ok(())
+}
+
+pub fn signature_hash<T: Transactable>(
+    mode: sighashtype::SigHashType,
+    tx: &T,
     input_num: usize,
 ) -> Result<H256, TransactionSigError> {
     let mut stream = DefaultHashAlgoStream::new();
 
-    <Transaction as Transactable>::signature_hash(tx, &mut stream, mode, input_num)?;
+    stream_signature_hash(tx, &mut stream, mode, input_num)?;
 
     let result = stream.finalize().into();
     Ok(result)
