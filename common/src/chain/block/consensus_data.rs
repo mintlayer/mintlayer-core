@@ -39,7 +39,7 @@ impl<'a> Transactable for BlockRewardTransactable<'a> {
 }
 
 impl ConsensusData {
-    pub fn derive_transactable<'a>(&'a self) -> BlockRewardTransactable {
+    pub fn derive_transactable(&self) -> BlockRewardTransactable {
         match self {
             ConsensusData::None => BlockRewardTransactable {
                 inputs: None,
