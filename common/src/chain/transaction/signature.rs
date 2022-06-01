@@ -106,39 +106,61 @@ pub fn signature_hash_for_outputs(
     Ok(())
 }
 
-trait Transactable {
-    fn inputs(&self) -> Option<&[TxInput]>;
-    fn outputs(&self) -> Option<&[TxOutput]>;
+trait SignatureHashable {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        target_input: &TxInput,
+        target_input_num: usize,
+    ) -> Result<(), TransactionSigError>;
 }
 
-impl Transactable for Transaction {
-    fn inputs(&self) -> Option<&[TxInput]> {
-        Some(&self.get_inputs())
-    }
-
-    fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(&self.get_outputs())
+impl SignatureHashable for Vec<TxInput> {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        target_input: &TxInput,
+        _target_input_num: usize,
+    ) -> Result<(), TransactionSigError> {
+        match mode.inputs_mode() {
+            sighashtype::InputsMode::CommitWhoPays => {
+                hash_encoded_to(&(self.len() as u32), stream);
+                for input in self {
+                    hash_encoded_to(&input.get_outpoint(), stream);
+                }
+            }
+            sighashtype::InputsMode::AnyoneCanPay => {
+                hash_encoded_to(&target_input.get_outpoint(), stream);
+            }
+        }
+        Ok(())
     }
 }
 
-fn stream_transactable_signature_hash<T: Transactable>(
-    stream: &mut DefaultHashAlgoStream,
-    mode: sighashtype::SigHashType,
-    transactable: &T,
-    target_input: &TxInput,
-    input_num: usize,
-) -> Result<(), TransactionSigError> {
-    match transactable.inputs() {
-        Some(inputs) => signature_hash_for_inputs(stream, mode, inputs, target_input),
-        None => (),
+impl SignatureHashable for Vec<TxOutput> {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        _target_input: &TxInput,
+        target_input_num: usize,
+    ) -> Result<(), TransactionSigError> {
+        match mode.outputs_mode() {
+            sighashtype::OutputsMode::All => {
+                hash_encoded_to(self, stream);
+            }
+            sighashtype::OutputsMode::None => (),
+            sighashtype::OutputsMode::Single => {
+                let output = self.get(target_input_num).ok_or({
+                    TransactionSigError::InvalidInputIndex(target_input_num, self.len())
+                })?;
+                hash_encoded_to(&output, stream);
+            }
+        }
+        Ok(())
     }
-
-    match transactable.outputs() {
-        Some(outputs) => signature_hash_for_outputs(stream, mode, outputs, input_num)?,
-        None => (),
-    }
-
-    Ok(())
 }
 
 pub fn signature_hash(
@@ -161,7 +183,9 @@ pub fn signature_hash(
     hash_encoded_to(&tx.version_byte(), &mut stream);
     hash_encoded_to(&tx.get_flags(), &mut stream);
 
-    stream_transactable_signature_hash(&mut stream, mode, tx, target_input, input_num)?;
+    tx.get_inputs().signature_hash(&mut stream, mode, target_input, input_num)?;
+
+    tx.get_outputs().signature_hash(&mut stream, mode, target_input, input_num)?;
 
     hash_encoded_to(&tx.get_lock_time(), &mut stream);
 
