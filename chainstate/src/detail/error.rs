@@ -96,8 +96,8 @@ pub enum BlockError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
-    #[error("Signature verification failed in transaction with id: {0}")]
-    SignatureVerificationFailed(Id<Transaction>),
+    #[error("Signature verification failed in transaction")]
+    SignatureVerificationFailed,
     #[error("Transaction index found but transaction not found")]
     InvariantErrorTransactionCouldNotBeLoaded,
     #[error("Input addition error")]

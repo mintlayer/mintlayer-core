@@ -67,16 +67,18 @@ impl<'a> CachedInputs<'a> {
                 let tx_id = tx.get_id();
                 (tx_index, OutPointSourceId::from(tx_id))
             }
-            SpendSource::BlockReward => match block.header().block_reward_destinations() {
-                Some(outputs) => {
-                    let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
-                        SpendablePosition::from(block.get_id()),
-                        outputs.len().try_into().map_err(|_| BlockError::InvalidOutputCount)?,
-                    )?);
-                    (tx_index, OutPointSourceId::from(block.get_id()))
+            SpendSource::BlockReward => {
+                match block.header().block_reward_transactable().outputs() {
+                    Some(outputs) => {
+                        let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
+                            SpendablePosition::from(block.get_id()),
+                            outputs.len().try_into().map_err(|_| BlockError::InvalidOutputCount)?,
+                        )?);
+                        (tx_index, OutPointSourceId::from(block.get_id()))
+                    }
+                    None => return Ok(()),
                 }
-                None => return Ok(()),
-            },
+            }
         };
 
         match self.inputs.entry(outpoint_source_id) {
@@ -205,8 +207,13 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn verify_signatures(&self, tx: &Transaction) -> Result<(), BlockError> {
-        for (input_idx, input) in tx.get_inputs().iter().enumerate() {
+    fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), BlockError> {
+        let inputs = match tx.inputs() {
+            Some(ins) => ins,
+            None => return Ok(()),
+        };
+
+        for (input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.get_outpoint();
             let prev_tx_index_op = self.get_from_cached(outpoint)?;
 
@@ -225,11 +232,11 @@ impl<'a> CachedInputs<'a> {
                         .get_outputs()
                         .get(input.get_outpoint().get_output_index() as usize)
                         .ok_or(BlockError::OutputIndexOutOfRange {
-                            tx_id: Some(tx.get_id().into()),
+                            tx_id: None,
                             source_output_index: outpoint.get_output_index() as usize,
                         })?;
                     verify_signature(output.get_destination(), tx, input_idx)
-                        .map_err(|_| BlockError::SignatureVerificationFailed(tx.get_id()))?;
+                        .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
                     // TODO(Roy): fill this with the block reward that the user now is spending
@@ -240,14 +247,16 @@ impl<'a> CachedInputs<'a> {
                         .map_err(BlockError::from)?
                         .ok_or(BlockError::NotFound)?; // TODO: set meaningful error
 
-                    if let Some(outputs) =
-                        block_index.get_block_header().block_reward_destinations()
-                    {
-                        for output in outputs {
-                            verify_signature(output.get_destination(), tx, input_idx).map_err(
-                                |_| BlockError::SignatureVerificationFailed(tx.get_id()),
-                            )?;
-                        }
+                    let rewards_tx = block_index.get_block_header().block_reward_transactable();
+
+                    let outputs = match rewards_tx.outputs() {
+                        Some(outputs) => outputs,
+                        None => &[],
+                    };
+
+                    for output in outputs {
+                        verify_signature(output.get_destination(), tx, input_idx)
+                            .map_err(|_| BlockError::SignatureVerificationFailed)?;
                     }
                 }
             };
@@ -341,7 +350,7 @@ impl<'a> CachedInputs<'a> {
                         // }
 
                         // verify input signatures
-                        // self.verify_block_reward_signatures(inputs)?;
+                        self.verify_signatures(&reward_transactable)?;
                     }
                     None => (),
                 }
