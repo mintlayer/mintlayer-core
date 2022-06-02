@@ -266,11 +266,10 @@ impl<'a> CachedInputs<'a> {
                         .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self
-                        .db_tx
-                        .get_block_index(block_id)
-                        .map_err(BlockError::from)?
-                        .ok_or(BlockError::NotFound)?; // TODO: set meaningful error
+                    let block_index =
+                        self.db_tx.get_block_index(block_id).map_err(BlockError::from)?.ok_or(
+                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone()),
+                        )?;
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
