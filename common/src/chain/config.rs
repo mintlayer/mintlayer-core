@@ -120,7 +120,8 @@ impl ChainConfig {
     pub fn block_reward_at_height(&self, height_in: &BlockHeight) -> Amount {
         self.emission_schedule
             .iter()
-            .filter(|(height_in_map, _amount)| height_in >= height_in_map)
+            .filter(|(height_in_map, _amount)| height_in_map <= height_in)
+            .rev()
             .next()
             .expect("This can never fail")
             .1
@@ -206,7 +207,7 @@ pub fn make_mainnet_emission_schedule(
 ) -> Vec<(BlockHeight, Amount)> {
     let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
     let rewards_per_block_in_year_n_str =
-        ["202", "151", "113", "85", "64", "48", "36", "27", "20", "15"];
+        ["202", "151", "113", "85", "64", "48", "36", "27", "20", "15", "0"];
     let rewards_per_block_in_year_n = rewards_per_block_in_year_n_str
         .into_iter()
         .map(|s| Amount::from_fixedpoint_str(s, coin_decimals).unwrap())
@@ -413,6 +414,115 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
+    }
+
+    #[test]
+    fn mainnet_emission_schedule() {
+        let config = create_mainnet();
+
+        assert_eq!(config.coin_decimals(), MAINNET_COIN_DECIMALS);
+
+        let blocks_per_year = 262800;
+
+        // first year
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(1)),
+            Amount::from_fixedpoint_str("202", MAINNET_COIN_DECIMALS).unwrap()
+        );
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(2)),
+            Amount::from_fixedpoint_str("202", MAINNET_COIN_DECIMALS).unwrap()
+        );
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(5)),
+            Amount::from_fixedpoint_str("202", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(10000)),
+            Amount::from_fixedpoint_str("202", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(blocks_per_year)),
+            Amount::from_fixedpoint_str("202", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        // second year
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(blocks_per_year + 1)),
+            Amount::from_fixedpoint_str("151", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(blocks_per_year + 2)),
+            Amount::from_fixedpoint_str("151", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(blocks_per_year + blocks_per_year / 2)),
+            Amount::from_fixedpoint_str("151", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(2 * blocks_per_year)),
+            Amount::from_fixedpoint_str("151", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        // third year
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(2 * blocks_per_year + 1)),
+            Amount::from_fixedpoint_str("113", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(2 * blocks_per_year + 2)),
+            Amount::from_fixedpoint_str("113", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(
+                2 * blocks_per_year + blocks_per_year / 2
+            )),
+            Amount::from_fixedpoint_str("113", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(3 * blocks_per_year)),
+            Amount::from_fixedpoint_str("113", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        // forth year
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(3 * blocks_per_year + 1)),
+            Amount::from_fixedpoint_str("85", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        // towards the end
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(10 * blocks_per_year)),
+            Amount::from_fixedpoint_str("15", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(10 * blocks_per_year + 1)),
+            Amount::from_fixedpoint_str("0", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(10 * blocks_per_year + 2)),
+            Amount::from_fixedpoint_str("0", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(11 * blocks_per_year + 2)),
+            Amount::from_fixedpoint_str("0", MAINNET_COIN_DECIMALS).unwrap()
+        );
+
+        assert_eq!(
+            config.block_reward_at_height(&BlockHeight::new(u64::MAX)),
+            Amount::from_fixedpoint_str("0", MAINNET_COIN_DECIMALS).unwrap()
+        );
     }
 
     #[test]
