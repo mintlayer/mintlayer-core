@@ -323,17 +323,6 @@ impl<'a> CachedInputs<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        /*
-        TODO(Roy): Add consensus data's output(s) here to spendable in the database
-        Whether we want to create a separate function for that is up to you, however,
-        it seems it's a bad idea because it's the same stuff for transactions and
-        block rewards, and repeating code is bad. Maybe change tx_num to Option<usize>,
-        and then None would mean we're going for the block reward. OR... better, an enum.
-
-        Don't forget that users are not allowed to spend the block reward before blockreward_maturity
-        passes; the check is down there. Feel free to move stuff around.
-        */
-
         match spend_source {
             SpendSource::Transaction(tx_num) => {
                 let tx = block
