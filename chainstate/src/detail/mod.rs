@@ -558,7 +558,7 @@ impl<'a> ChainstateRef<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+        let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
             cached_inputs.spend(
                 block,
@@ -594,7 +594,7 @@ impl<'a> ChainstateRef<'a> {
         &mut self,
         transactions: &[Transaction],
     ) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+        let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
         transactions.iter().try_for_each(|tx| cached_inputs.unspend(tx))?;
         // TODO: Discuss about disconnect reward
         Ok(cached_inputs)

@@ -17,6 +17,7 @@
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::signature::{verify_signature, Transactable};
+use common::chain::ChainConfig;
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -42,13 +43,15 @@ pub struct ConsumedCachedInputs {
 
 pub struct CachedInputs<'a> {
     db_tx: &'a TxRw<'a>,
+    chain_config: &'a ChainConfig,
     inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
 impl<'a> CachedInputs<'a> {
-    pub fn new(db_tx: &'a TxRw<'a>) -> Self {
+    pub fn new(chain_config: &'a ChainConfig, db_tx: &'a TxRw<'a>) -> Self {
         Self {
             db_tx,
+            chain_config,
             inputs: BTreeMap::new(),
         }
     }
@@ -227,6 +230,28 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    fn check_block_reward_amounts(
+        &self,
+        inputs: &[TxInput],
+        outputs: &[TxOutput],
+        block_height: &BlockHeight,
+    ) -> Result<(), BlockError> {
+        let max_allowed_reward = self.chain_config.block_reward_at_height(block_height);
+        let inputs_total = self.calculate_total_inputs(inputs)?;
+        let outputs_total = outputs
+            .iter()
+            .try_fold(Amount::from_atoms(0), |accum, out| accum + out.get_value())
+            .ok_or(BlockError::OutputAdditionError)?;
+
+        let max_allowed_to_spend =
+            (inputs_total + max_allowed_reward).ok_or(BlockError::RewardAdditionError)?;
+
+        if outputs_total > max_allowed_to_spend {
+            return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
+        }
+        Ok(())
+    }
+
     fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), BlockError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
@@ -351,11 +376,12 @@ impl<'a> CachedInputs<'a> {
                             .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
                         // check for attempted money printing
-                        // TODO: implement coin issuance schedule
-                        // match reward_transactable.outputs() {
-                        //     Some(outputs) => self.check_inputs_amounts(inputs, outputs)?,
-                        //     None => (),
-                        // }
+                        match reward_transactable.outputs() {
+                            Some(outputs) => {
+                                self.check_block_reward_amounts(inputs, outputs, spend_height)?
+                            }
+                            None => (),
+                        }
 
                         // verify input signatures
                         self.verify_signatures(&reward_transactable)?;
@@ -419,3 +445,4 @@ impl<'a> CachedInputs<'a> {
 }
 
 // TODO: write tests for CachedInputs that covers all possible mutations
+// TODO: write tests for block rewards
