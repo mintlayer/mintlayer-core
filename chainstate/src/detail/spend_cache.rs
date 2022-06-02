@@ -179,18 +179,15 @@ impl<'a> CachedInputs<'a> {
 
             let output_amount = match tx_index.get_position() {
                 common::chain::SpendablePosition::Transaction(tx_pos) => {
-                    match self.db_tx.get_mainchain_tx_by_position(tx_pos)? {
-                        Some(tx) => Self::get_output_amount(
-                            tx.get_outputs(),
-                            output_index,
-                            tx.get_id().into(),
-                        )?,
-                        None => {
-                            return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded(
-                                tx_pos.clone(),
-                            ))
-                        }
-                    }
+                    let tx = self
+                        .db_tx
+                        .get_mainchain_tx_by_position(tx_pos)
+                        .map_err(BlockError::from)?
+                        .ok_or_else(|| {
+                            BlockError::InvariantErrorTransactionCouldNotBeLoaded(tx_pos.clone())
+                        })?;
+
+                    Self::get_output_amount(tx.get_outputs(), output_index, tx.get_id().into())?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
                     let block_index = self
