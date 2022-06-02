@@ -200,10 +200,7 @@ impl<'a> CachedInputs<'a> {
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
-                    let outputs = match rewards_tx.outputs() {
-                        Some(outputs) => outputs,
-                        None => &[],
-                    };
+                    let outputs = rewards_tx.outputs().unwrap_or(&[]);
 
                     Self::get_output_amount(outputs, output_index, block_id.clone().into())?
                 }
@@ -271,10 +268,7 @@ impl<'a> CachedInputs<'a> {
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
-                    let outputs = match rewards_tx.outputs() {
-                        Some(outputs) => outputs,
-                        None => &[],
-                    };
+                    let outputs = rewards_tx.outputs().unwrap_or(&[]);
 
                     for output in outputs {
                         verify_signature(output.get_destination(), tx, input_idx)
