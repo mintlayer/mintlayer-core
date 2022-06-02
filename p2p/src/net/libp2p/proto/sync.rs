@@ -17,7 +17,7 @@
 use crate::{
     error::P2pError,
     net::libp2p::{backend::Backend, types, SyncRequest, SyncResponse},
-    net::RequestResponseError,
+    net::types::RequestResponseError,
 };
 use libp2p::request_response::{
     InboundFailure, OutboundFailure, RequestResponseEvent, RequestResponseMessage,

@@ -133,7 +133,7 @@ mod tests {
         let config = common::chain::config::create_mainnet();
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (mut backend, _, _, mut gossip_rx, _) =
-            util::make_libp2p(config, addr, &[net::PubSubTopic::Blocks]).await;
+            util::make_libp2p(config, addr, &[net::types::PubSubTopic::Blocks]).await;
 
         let peer_id = PeerId::random();
         let message_id = MessageId::new(&[123]);
@@ -175,7 +175,7 @@ mod tests {
         let config = common::chain::config::create_mainnet();
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (mut backend, _, _, mut gossip_rx, _) =
-            util::make_libp2p(config, addr, &[net::PubSubTopic::Blocks]).await;
+            util::make_libp2p(config, addr, &[net::types::PubSubTopic::Blocks]).await;
 
         let peer_id = PeerId::random();
         let message_id = MessageId::new(&[123]);
@@ -208,14 +208,14 @@ mod tests {
         let (mut backend1, _, mut conn_rx, mut gossip_rx, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr.clone(),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
         let (mut backend2, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             test_utils::make_address("/ip6/::1/tcp/"),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -263,7 +263,7 @@ mod tests {
         let (mut backend1, _, _conn_rx, _gossip_rx, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr.clone(),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -271,7 +271,7 @@ mod tests {
         let (mut backend2, _, _conn_rx2, _gossip_rx2, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr2.clone(),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -286,7 +286,7 @@ mod tests {
         let (mut backend3, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr3,
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -354,7 +354,7 @@ mod tests {
         let (mut backend1, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr.clone(),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -362,7 +362,7 @@ mod tests {
         let (mut backend2, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr2.clone(),
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -377,7 +377,7 @@ mod tests {
         let (mut backend3, _, _, _, _) = util::make_libp2p(
             common::chain::config::create_mainnet(),
             addr3,
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
         )
         .await;
 
@@ -484,8 +484,12 @@ mod tests {
     async fn test_gossipsub_not_supported() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let config = common::chain::config::create_mainnet();
-        let (mut backend1, _, _conn_rx, _gossip_rx, _) =
-            util::make_libp2p(config.clone(), addr.clone(), &[net::PubSubTopic::Blocks]).await;
+        let (mut backend1, _, _conn_rx, _gossip_rx, _) = util::make_libp2p(
+            config.clone(),
+            addr.clone(),
+            &[net::types::PubSubTopic::Blocks],
+        )
+        .await;
 
         let (transport, peer_id, id_keys) = util::make_transport_and_keys();
         let mut swarm =

@@ -164,7 +164,7 @@ where
                 P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
             })?,
             &[],
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
             Arc::clone(&config),
             TIMEOUT,
         )

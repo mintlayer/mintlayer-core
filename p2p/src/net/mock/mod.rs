@@ -17,8 +17,10 @@
 use crate::{
     message,
     net::{
-        ConnectivityEvent, ConnectivityService, NetworkingService, PeerInfo, PubSubEvent,
-        PubSubService, PubSubTopic, SyncingCodecService, SyncingEvent, ValidationResult,
+        types::{
+            ConnectivityEvent, PeerInfo, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult,
+        },
+        ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
 };
 use async_trait::async_trait;

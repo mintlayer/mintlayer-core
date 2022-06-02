@@ -37,7 +37,7 @@ pub enum PubSubEvent {
     /// Message received from one of the pubsub topics
     MessageReceived {
         peer_id: SocketAddr,
-        topic: net::PubSubTopic,
+        topic: net::types::PubSubTopic,
         message: message::Message,
     },
 }
