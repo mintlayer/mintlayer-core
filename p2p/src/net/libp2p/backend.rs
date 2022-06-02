@@ -380,7 +380,7 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: "/ip6/::1/tcp/8890".parse().unwrap(),
+                addr: test_utils::make_address("/ip6/::1/tcp/"),
                 response: tx,
             })
             .await;
@@ -404,11 +404,11 @@ mod tests {
 
         tokio::spawn(async move { backend.run().await });
 
-        // start listening to [::1]:8890
+        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: "/ip6/::1/tcp/8891".parse().unwrap(),
+                addr: addr.clone(),
                 response: tx,
             })
             .await;
@@ -420,12 +420,7 @@ mod tests {
 
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
-        let res = cmd_tx
-            .send(types::Command::Listen {
-                addr: "/ip6/::1/tcp/8891".parse().unwrap(),
-                response: tx,
-            })
-            .await;
+        let res = cmd_tx.send(types::Command::Listen { addr, response: tx }).await;
         assert!(res.is_ok());
 
         let res = rx.await;
