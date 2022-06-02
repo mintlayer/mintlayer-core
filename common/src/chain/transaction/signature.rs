@@ -43,6 +43,8 @@ pub enum TransactionSigError {
     InvalidInputIndex(usize, usize),
     #[error("Requested signature hash without the presence of any inputs")]
     SigHashRequestWithoutInputs,
+    #[error("Attempted to verify signatures for a transaction without inputs")]
+    SignatureVerificationWithoutInputs,
     #[error("Input corresponding to output number {0} does not exist (number of inputs is {1})")]
     InvalidOutputIndexForModeSingle(usize, usize),
     #[error("Decoding witness failed ")]
@@ -252,10 +254,10 @@ pub fn signature_hash<T: Transactable>(
     Ok(result)
 }
 
-fn verify_standard_input_signature(
+fn verify_standard_input_signature<T: Transactable>(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
-    tx: &Transaction,
+    tx: &T,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
@@ -263,15 +265,15 @@ fn verify_standard_input_signature(
     Ok(())
 }
 
-pub fn verify_signature(
+pub fn verify_signature<T: Transactable>(
     outpoint_destination: &Destination,
-    tx: &Transaction,
+    tx: &T,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    let target_input = tx
-        .get_inputs()
+    let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
+    let target_input = inputs
         .get(input_num)
-        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
+        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, inputs.len()))?;
     let input_witness = target_input.get_witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
