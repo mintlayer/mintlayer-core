@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 const MAINNET_COIN_DECIMALS: u8 = 11;
-const MAINNET_COIN_PREMINE: &'static str = "400_000_000";
-const MAINNET_TOTAL_SUPPLY: &'static str = "599_990_800";
+const MAINNET_COIN_PREMINE: &str = "400_000_000";
+const MAINNET_TOTAL_SUPPLY: &str = "599_990_800";
 
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
@@ -125,7 +125,6 @@ impl ChainConfig {
             .next()
             .expect("This can never fail")
             .1
-            .clone()
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config

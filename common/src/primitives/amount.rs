@@ -73,7 +73,7 @@ impl Amount {
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
         let decimals = decimals as usize;
         let amount_str = amount_str.trim_matches(' '); // trim spaces
-        let amount_str = amount_str.replace("_", "");
+        let amount_str = amount_str.replace('_', "");
 
         // empty not allowed
         if amount_str.is_empty() {
@@ -94,7 +94,7 @@ impl Amount {
         } else if amount_str.matches('.').count() == 0 {
             // if there is no decimal point, then just add N zeros to the right and we're done
             let zeros = "0".repeat(decimals);
-            let amount_str = amount_str.to_owned() + &zeros;
+            let amount_str = amount_str + &zeros;
 
             amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         } else {
