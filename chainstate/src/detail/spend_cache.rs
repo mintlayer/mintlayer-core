@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use common::chain::signature::verify_signature;
+use common::chain::signature::{verify_signature, Transactable};
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -324,8 +324,9 @@ impl<'a> CachedInputs<'a> {
                 self.apply_spend(tx.get_inputs(), spend_height, blockreward_maturity, spender)?;
             }
             SpendSource::BlockReward => {
+                let reward_transactable = block.header().block_reward_transactable();
                 // TODO: test spending block rewards from chains outside the mainchain
-                match block.header().block_production_inputs() {
+                match reward_transactable.inputs() {
                     Some(inputs) => {
                         // pre-cache all inputs
                         inputs
@@ -333,18 +334,20 @@ impl<'a> CachedInputs<'a> {
                             .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
                         // check for attempted money printing
-                        if let Some(outputs) = block.header().block_reward_destinations() {
-                            self.check_inputs_amounts(inputs, outputs)?;
-                        }
+                        // TODO: implement coin issuance schedule
+                        // match reward_transactable.outputs() {
+                        //     Some(outputs) => self.check_inputs_amounts(inputs, outputs)?,
+                        //     None => (),
+                        // }
 
                         // verify input signatures
                         // self.verify_block_reward_signatures(inputs)?;
                     }
-                    None => {}
+                    None => (),
                 }
 
                 // spend inputs of this block
-                if let Some(inputs) = block.header().block_production_inputs() {
+                if let Some(inputs) = reward_transactable.inputs() {
                     let spender = Spender::from(block.get_id());
                     self.apply_spend(inputs, spend_height, blockreward_maturity, spender)?;
                 }

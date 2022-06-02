@@ -9,6 +9,7 @@ use crate::primitives::{Id, H256};
 
 use serialization::{Decode, Encode};
 
+use super::consensus_data::BlockRewardTransactable;
 use super::BlockVersion;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -56,6 +57,10 @@ impl BlockHeader {
             ConsensusData::None => None,
             ConsensusData::PoW(_pow_data) => None,
         }
+    }
+
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+        self.consensus_data.derive_transactable()
     }
 }
 
