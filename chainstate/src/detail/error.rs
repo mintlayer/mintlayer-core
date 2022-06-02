@@ -18,7 +18,7 @@
 use common::{
     chain::{
         block::{Block, BlockConsistencyError},
-        SpendError, Spender, Transaction, TxMainChainIndexError,
+        SpendError, Spender, Transaction, TxMainChainIndexError, TxMainChainPosition,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -99,7 +99,9 @@ pub enum BlockError {
     #[error("Signature verification failed in transaction")]
     SignatureVerificationFailed,
     #[error("Transaction index found but transaction not found")]
-    InvariantErrorTransactionCouldNotBeLoaded,
+    InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
+    #[error("Transaction index for header found but header not found")]
+    InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
     #[error("Input addition error")]
     InputAdditionError,
     #[error("Output addition error")]

@@ -187,15 +187,18 @@ impl<'a> CachedInputs<'a> {
                             output_index,
                             tx.get_id().into(),
                         )?,
-                        None => return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded),
+                        None => {
+                            return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded(
+                                tx_pos.clone(),
+                            ))
+                        }
                     }
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self
-                        .db_tx
-                        .get_block_index(block_id)
-                        .map_err(BlockError::from)?
-                        .ok_or(BlockError::NotFound)?; // TODO: set meaningful error
+                    let block_index =
+                        self.db_tx.get_block_index(block_id).map_err(BlockError::from)?.ok_or(
+                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone()),
+                        )?;
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
@@ -249,7 +252,9 @@ impl<'a> CachedInputs<'a> {
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
                         .map_err(BlockError::from)?
-                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded)?;
+                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded(
+                            tx_pos.clone(),
+                        ))?;
                     let output = prev_tx
                         .get_outputs()
                         .get(input.get_outpoint().get_output_index() as usize)
