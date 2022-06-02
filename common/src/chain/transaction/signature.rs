@@ -415,6 +415,59 @@ mod test {
                 1
             ))
         );
+        // ALL | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                1
+            ))
+        );
+        // SINGLE
+        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                1
+            ))
+        );
+        // SINGLE | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                1
+            ))
+        );
+        // NONE
+        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                1
+            ))
+        );
+        // NONE | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+        assert_eq!(
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT_INDEX,
+                1
+            ))
+        );
     }
 
     // TODO: Add checks for other sighash types
@@ -518,6 +571,4 @@ mod test {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }
-
-    
 }

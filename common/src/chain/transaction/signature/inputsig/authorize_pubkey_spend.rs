@@ -70,8 +70,7 @@ pub fn sign_pubkey_spending(
 
 #[cfg(test)]
 mod test {
-    use crypto::key::{KeyKind, PrivateKey, PublicKey};
-
+    use super::*;
     use crate::{
         address::pubkeyhash::PublicKeyHash,
         chain::{
@@ -84,8 +83,7 @@ mod test {
         },
         primitives::{Amount, Id},
     };
-
-    use super::*;
+    use crypto::key::{KeyKind, PrivateKey, PublicKey};
 
     fn generate_unsigned_tx(
         outpoint_dest: Destination,
