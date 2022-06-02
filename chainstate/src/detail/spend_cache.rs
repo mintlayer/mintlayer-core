@@ -53,8 +53,6 @@ impl<'a> CachedInputs<'a> {
         }
     }
 
-    // TODO: add block reward outputs
-
     fn add_outputs(&mut self, block: &Block, spend_source: SpendSource) -> Result<(), BlockError> {
         let (tx_index, outpoint_source_id) = match spend_source {
             SpendSource::Transaction(tx_num) => {
@@ -71,7 +69,7 @@ impl<'a> CachedInputs<'a> {
                 match block.header().block_reward_transactable().outputs() {
                     Some(outputs) => {
                         let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
-                            SpendablePosition::from(block.get_id()),
+                            block.get_id().into(),
                             outputs.len().try_into().map_err(|_| BlockError::InvalidOutputCount)?,
                         )?);
                         (tx_index, OutPointSourceId::from(block.get_id()))
