@@ -119,12 +119,12 @@ mod test {
         const INPUT_NUM: usize = 0;
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let outpoint_dest = Destination::Address(pubkey_hash.clone());
+        let outpoint_dest = Destination::Address(pubkey_hash);
         let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         let witness = StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )
@@ -138,12 +138,12 @@ mod test {
     fn prepare_data_for_wrong_destination(sighash_type: SigHashType) -> StandardInputSignature {
         const INPUT_NUM: usize = 0;
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key.clone());
+        let outpoint_dest = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )
@@ -260,7 +260,7 @@ mod test {
         let witness = StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )

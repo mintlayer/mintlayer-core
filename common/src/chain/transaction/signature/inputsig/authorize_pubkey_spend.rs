@@ -113,7 +113,7 @@ mod test {
         let witness = StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )
@@ -162,7 +162,7 @@ mod test {
         StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )
@@ -249,7 +249,7 @@ mod test {
         let witness = StandardInputSignature::produce_signature_for_input(
             &private_key,
             sighash_type,
-            outpoint_dest.clone(),
+            outpoint_dest,
             &tx,
             INPUT_NUM,
         )
