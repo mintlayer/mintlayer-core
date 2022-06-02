@@ -61,6 +61,12 @@ impl TryFrom<String> for SemVer {
     }
 }
 
+impl std::fmt::Display for SemVer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "v{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

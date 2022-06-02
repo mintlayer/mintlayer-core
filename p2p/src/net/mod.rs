@@ -17,7 +17,11 @@
 use crate::{error, message};
 use async_trait::async_trait;
 use common::primitives;
-use std::{fmt::Debug, hash::Hash, sync::Arc};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+    sync::Arc,
+};
 
 pub mod libp2p;
 pub mod mock;
@@ -35,10 +39,10 @@ pub trait NetworkingService {
     ///
     /// For an implementation built on libp2p, the address format is:
     ///     `/ip4/0.0.0.0/tcp/8888/p2p/<peer ID>`
-    type Address: Clone + Debug + Eq + Hash + Send + Sync + ToString;
+    type Address: Clone + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
     /// Unique ID assigned to a peer on the network
-    type PeerId: Copy + Debug + Eq + Hash + Send + Sync + ToString;
+    type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
     /// Unique ID assigned to each received request
     type RequestId: Debug + Eq + Hash + Send + Sync;
@@ -47,7 +51,7 @@ pub trait NetworkingService {
     type DiscoveryStrategy;
 
     /// Id that identifies a protocol
-    type ProtocolId: Clone + Debug + Eq + PartialEq + Send;
+    type ProtocolId: Clone + Debug + Display + Eq + PartialEq + Send;
 
     /// Handle for sending/receiving connecitivity-related events
     type ConnectivityHandle: Send;

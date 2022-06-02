@@ -61,6 +61,27 @@ where
     pub protocols: Vec<T::ProtocolId>,
 }
 
+impl<T: NetworkingService> Display for PeerInfo<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Peer information:")?;
+        writeln!(f, "--> Peer ID: {}", self.peer_id)?;
+        writeln!(f, "--> Magic bytes: {:x?}", self.magic_bytes)?;
+        writeln!(f, "--> Software version: {}", self.version)?;
+        writeln!(
+            f,
+            "--> User agent: {}",
+            self.agent.as_ref().unwrap_or(&"No user agent".to_string())
+        )?;
+        write!(f, "--> Protocols: ")?;
+
+        for protocol in &self.protocols {
+            write!(f, "{} ", protocol)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Connectivity-related events received from the network
 #[derive(Debug)]
 pub enum ConnectivityEvent<T>
