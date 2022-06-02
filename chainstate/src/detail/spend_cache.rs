@@ -151,6 +151,18 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    fn get_output_amount(
+        outputs: &[TxOutput],
+        output_index: usize,
+        spender_id: Spender,
+    ) -> Result<Amount, BlockError> {
+        let output = outputs.get(output_index).ok_or(BlockError::OutputIndexOutOfRange {
+            tx_id: Some(spender_id),
+            source_output_index: output_index,
+        })?;
+        Ok(output.get_value())
+    }
+
     fn calculate_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, BlockError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
@@ -165,24 +177,34 @@ impl<'a> CachedInputs<'a> {
                 },
                 None => return Err(BlockError::PreviouslyCachedInputNotFound),
             };
+            let output_index = outpoint.get_output_index() as usize;
+
             let output_amount = match tx_index.get_position() {
                 common::chain::SpendablePosition::Transaction(tx_pos) => {
                     match self.db_tx.get_mainchain_tx_by_position(tx_pos)? {
-                        Some(tx) => tx
-                            .get_outputs()
-                            .get(outpoint.get_output_index() as usize)
-                            .ok_or(BlockError::OutputIndexOutOfRange {
-                                tx_id: Some(tx.get_id().into()),
-                                source_output_index: outpoint.get_output_index() as usize,
-                            })?
-                            .get_value(),
+                        Some(tx) => Self::get_output_amount(
+                            tx.get_outputs(),
+                            output_index,
+                            tx.get_id().into(),
+                        )?,
                         None => return Err(BlockError::InvariantErrorTransactionCouldNotBeLoaded),
                     }
                 }
-                common::chain::SpendablePosition::BlockReward(_) =>
-                // TODO
-                {
-                    unimplemented!()
+                common::chain::SpendablePosition::BlockReward(block_id) => {
+                    let block_index = self
+                        .db_tx
+                        .get_block_index(block_id)
+                        .map_err(BlockError::from)?
+                        .ok_or(BlockError::NotFound)?; // TODO: set meaningful error
+
+                    let rewards_tx = block_index.get_block_header().block_reward_transactable();
+
+                    let outputs = match rewards_tx.outputs() {
+                        Some(outputs) => outputs,
+                        None => &[],
+                    };
+
+                    Self::get_output_amount(outputs, output_index, block_id.clone().into())?
                 }
             };
             total = (total + output_amount).ok_or(BlockError::InputAdditionError)?;
