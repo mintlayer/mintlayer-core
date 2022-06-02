@@ -207,12 +207,9 @@ pub fn make_mainnet_emission_schedule(
     let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
     let rewards_per_block_in_year_n_str =
         ["202", "151", "113", "85", "64", "48", "36", "27", "20", "15", "0"];
-    let rewards_per_block_in_year_n = rewards_per_block_in_year_n_str
+    let emission_schedule = rewards_per_block_in_year_n_str
         .into_iter()
         .map(|s| Amount::from_fixedpoint_str(s, coin_decimals).unwrap())
-        .collect::<Vec<_>>();
-    let emission_schedule = rewards_per_block_in_year_n
-        .into_iter()
         .enumerate()
         .map(|(idx, amount)| (BlockHeight::new(1 + (idx as u64) * year_in_blocks), amount))
         .collect::<Vec<(BlockHeight, Amount)>>();
