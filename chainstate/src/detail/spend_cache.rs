@@ -261,8 +261,6 @@ impl<'a> CachedInputs<'a> {
                         .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
-                    // TODO(Roy): fill this with the block reward that the user now is spending
-
                     let block_index = self
                         .db_tx
                         .get_block_index(block_id)
