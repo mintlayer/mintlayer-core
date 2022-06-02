@@ -193,10 +193,13 @@ impl<'a> CachedInputs<'a> {
                     }
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let block_index =
-                        self.db_tx.get_block_index(block_id).map_err(BlockError::from)?.ok_or(
-                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone()),
-                        )?;
+                    let block_index = self
+                        .db_tx
+                        .get_block_index(block_id)
+                        .map_err(BlockError::from)?
+                        .ok_or_else(|| {
+                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone())
+                        })?;
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
@@ -247,9 +250,9 @@ impl<'a> CachedInputs<'a> {
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
                         .map_err(BlockError::from)?
-                        .ok_or(BlockError::InvariantErrorTransactionCouldNotBeLoaded(
-                            tx_pos.clone(),
-                        ))?;
+                        .ok_or_else(|| {
+                            BlockError::InvariantErrorTransactionCouldNotBeLoaded(tx_pos.clone())
+                        })?;
                     let output = prev_tx
                         .get_outputs()
                         .get(input.get_outpoint().get_output_index() as usize)
@@ -261,10 +264,13 @@ impl<'a> CachedInputs<'a> {
                         .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
-                    let block_index =
-                        self.db_tx.get_block_index(block_id).map_err(BlockError::from)?.ok_or(
-                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone()),
-                        )?;
+                    let block_index = self
+                        .db_tx
+                        .get_block_index(block_id)
+                        .map_err(BlockError::from)?
+                        .ok_or_else(|| {
+                            BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone())
+                        })?;
 
                     let rewards_tx = block_index.get_block_header().block_reward_transactable();
 
