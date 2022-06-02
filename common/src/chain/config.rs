@@ -9,10 +9,18 @@ use crate::chain::upgrades::ConsensusUpgrade;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
+use crate::primitives::Amount;
 use crate::primitives::BlockDistance;
 use crate::primitives::Idable;
 use crate::primitives::{version::SemVer, BlockHeight};
 use std::collections::BTreeMap;
+use std::time::Duration;
+
+const MAINNET_COIN_DECIMALS: u8 = 11;
+const MAINNET_COIN_PREMINE: &'static str = "400_000_000";
+const MAINNET_TOTAL_SUPPLY: &'static str = "599_990_800";
+
+const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 #[derive(
     Debug,
@@ -47,6 +55,9 @@ pub struct ChainConfig {
     genesis_block_id: Id<Block>,
     blockreward_maturity: BlockDistance,
     version: SemVer,
+    target_block_spacing: Duration,
+    coin_decimals: u8,
+    emission_schedule: Vec<(BlockHeight, Amount)>,
 }
 
 impl ChainConfig {
@@ -94,6 +105,28 @@ impl ChainConfig {
         &self.height_checkpoint_data
     }
 
+    pub fn target_block_spacing(&self) -> &Duration {
+        &self.target_block_spacing
+    }
+
+    pub fn emission_schedule(&self) -> &Vec<(BlockHeight, Amount)> {
+        &self.emission_schedule
+    }
+
+    pub fn coin_decimals(&self) -> u8 {
+        self.coin_decimals
+    }
+
+    pub fn block_reward_at_height(&self, height_in: &BlockHeight) -> Amount {
+        self.emission_schedule
+            .iter()
+            .filter(|(height_in_map, _amount)| height_in >= height_in_map)
+            .next()
+            .expect("This can never fail")
+            .1
+            .clone()
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
@@ -117,7 +150,6 @@ pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
-    use crate::primitives::Amount;
 
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
@@ -152,7 +184,6 @@ fn create_mainnet_genesis() -> Block {
 
 fn create_unit_test_genesis(premine_destination: Destination) -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
-    use crate::primitives::Amount;
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
@@ -167,6 +198,39 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
 
     Block::new(vec![tx], None, 1639975460, ConsensusData::None)
         .expect("Error creating genesis block")
+}
+
+pub fn make_mainnet_emission_schedule(
+    target_block_spacing: &Duration,
+    coin_decimals: u8,
+) -> Vec<(BlockHeight, Amount)> {
+    let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
+    let rewards_per_block_in_year_n_str =
+        ["202", "151", "113", "85", "64", "48", "36", "27", "20", "15"];
+    let rewards_per_block_in_year_n = rewards_per_block_in_year_n_str
+        .into_iter()
+        .map(|s| Amount::from_fixedpoint_str(s, coin_decimals).unwrap())
+        .collect::<Vec<_>>();
+    let emission_schedule = rewards_per_block_in_year_n
+        .into_iter()
+        .enumerate()
+        .map(|(idx, amount)| (BlockHeight::new(1 + (idx as u64) * year_in_blocks), amount))
+        .collect::<Vec<(BlockHeight, Amount)>>();
+
+    let calculated_total_emission =
+        emission_schedule.iter().map(|v| v.1).fold(Amount::from_atoms(0), |init, curr| {
+            (init + (curr * (year_in_blocks as u128)).unwrap()).unwrap()
+        });
+    let nominal_total_supply =
+        Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap();
+    let nominal_premine = Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap();
+
+    assert_eq!(
+        (nominal_premine + calculated_total_emission).unwrap(),
+        nominal_total_supply
+    );
+
+    emission_schedule
 }
 
 pub fn create_mainnet() -> ChainConfig {
@@ -189,6 +253,12 @@ pub fn create_mainnet() -> ChainConfig {
     let genesis_block = create_mainnet_genesis();
     let genesis_block_id = genesis_block.get_id();
 
+    let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
+
+    let coin_decimals = MAINNET_COIN_DECIMALS;
+
+    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
     ChainConfig {
         chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -201,6 +271,9 @@ pub fn create_mainnet() -> ChainConfig {
         genesis_block_id,
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        target_block_spacing,
+        coin_decimals,
+        emission_schedule,
     }
 }
 
@@ -224,6 +297,10 @@ pub fn create_regtest() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
 
+    let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
+    let coin_decimals = MAINNET_COIN_DECIMALS;
+    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
     ChainConfig {
         chain_type,
         address_prefix: REGTEST_ADDRESS_PREFIX.to_owned(),
@@ -235,13 +312,21 @@ pub fn create_regtest() -> ChainConfig {
         genesis_block,
         genesis_block_id,
         version: SemVer::new(0, 1, 0),
+        target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        coin_decimals: MAINNET_COIN_DECIMALS,
+        emission_schedule,
     }
 }
 
 pub fn create_unit_test_config() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
+
+    let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
+    let coin_decimals = MAINNET_COIN_DECIMALS;
+    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
     ChainConfig {
         chain_type: ChainType::Mainnet,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -253,7 +338,10 @@ pub fn create_unit_test_config() -> ChainConfig {
         genesis_block,
         genesis_block_id,
         version: SemVer::new(0, 1, 0),
+        target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        coin_decimals,
+        emission_schedule,
     }
 }
 
@@ -290,6 +378,11 @@ impl TestChainConfig {
         let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
         let genesis_block_id = genesis_block.get_id();
 
+        let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
+        let coin_decimals = MAINNET_COIN_DECIMALS;
+        let emission_schedule =
+            make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
         ChainConfig {
             chain_type: ChainType::Mainnet,
             address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -301,7 +394,10 @@ impl TestChainConfig {
             genesis_block,
             genesis_block_id,
             version: SemVer::new(0, 1, 0),
+            target_block_spacing,
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+            coin_decimals,
+            emission_schedule,
         }
     }
 }

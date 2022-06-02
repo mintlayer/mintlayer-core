@@ -73,6 +73,7 @@ impl Amount {
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
         let decimals = decimals as usize;
         let amount_str = amount_str.trim_matches(' '); // trim spaces
+        let amount_str = amount_str.replace("_", "");
 
         // empty not allowed
         if amount_str.is_empty() {
