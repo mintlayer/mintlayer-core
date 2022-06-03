@@ -77,7 +77,7 @@ fn validate_pos_consensus(header: &BlockHeader) -> Result<(), BlockError> {
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(BlockError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::FakePoS(_) => return Ok(()),
+        ConsensusData::FakePoS(_) => Ok(()),
     }
 }
 
