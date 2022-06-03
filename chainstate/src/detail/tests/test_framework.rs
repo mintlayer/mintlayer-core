@@ -16,6 +16,7 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
+use blockchain_storage::BlockchainStorageRead;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::Id;
@@ -334,7 +335,7 @@ impl<'a> BlockTestFramework {
         }
     }
 
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, BlockError> {
+    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
     }
 }

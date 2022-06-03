@@ -1,5 +1,5 @@
 use crypto::key::{KeyKind, PrivateKey};
-use rand::{RngCore, SeedableRng};
+use crypto::random::RngCore;
 
 use super::*;
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
 use std::str::FromStr;
 
 #[test]
-fn invalid_output_count() {
+fn invalid_output_count_for_transaction() {
     let block_id =
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
     let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
@@ -25,6 +25,15 @@ fn invalid_output_count() {
         tx_index.unwrap_err(),
         TxMainChainIndexError::InvalidOutputCount
     );
+}
+
+#[test]
+fn invalid_output_count_ok_for_block_reward() {
+    let block_id =
+        H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
+    let pos: Id<Block> = block_id.into();
+    let tx_index = TxMainChainIndex::new(pos.into(), 0);
+    tx_index.unwrap();
 }
 
 #[test]
@@ -177,20 +186,20 @@ fn basic_spending() {
     );
 }
 
-fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
+fn generate_random_h256(g: &mut impl crypto::random::Rng) -> H256 {
     let mut bytes = [0u8; 32];
     g.fill_bytes(&mut bytes);
     H256::from(bytes)
 }
 
-fn generate_random_bytes(g: &mut impl rand::Rng, length: usize) -> Vec<u8> {
+fn generate_random_bytes(g: &mut impl crypto::random::Rng, length: usize) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.resize(length, 0);
     g.fill_bytes(&mut bytes);
     bytes
 }
 
-fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
+fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
     let witness_size = g.next_u32();
     let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
     let outpoint = if g.next_u32() % 2 == 0 {
@@ -209,7 +218,7 @@ fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
     )
 }
 
-fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
+fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TxOutput::new(
         Amount::from_atoms(g.next_u64() as u128),
@@ -217,7 +226,7 @@ fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
     )
 }
 
-fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction {
+fn generate_random_invalid_transaction(rng: &mut impl crypto::random::Rng) -> Transaction {
     let inputs = {
         let input_count = 1 + (rng.next_u32() as usize) % 10;
         (0..input_count)
@@ -241,7 +250,7 @@ fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction 
 }
 
 fn generate_random_invalid_block() -> Block {
-    let mut rng = rand::rngs::StdRng::from_entropy();
+    let mut rng = crypto::random::make_pseudo_rng();
 
     let transactions = {
         let transaction_count = rng.next_u32() % 20;

@@ -22,8 +22,8 @@ use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
 
+use super::error::ConsensusPoWError;
 use crate::detail::pow::PoW;
-use crate::BlockError;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::block::{BlockHeader, BlockIndex};
@@ -36,42 +36,37 @@ use common::Uint256;
 pub(crate) fn check_proof_of_work(
     block_hash: H256,
     block_bits: Compact,
-) -> Result<bool, BlockError> {
+) -> Result<bool, ConsensusPoWError> {
     Uint256::try_from(block_bits)
         .map(|target| {
             let hash: Uint256 = block_hash.into();
 
             hash <= target
         })
-        .map_err(|e| {
-            BlockError::Conversion(format!(
-                "conversion of {:?} to Uint256 type: {:?}",
-                block_bits, e
-            ))
-        })
+        .map_err(|_| ConsensusPoWError::DecodingBitsFailed(block_bits))
 }
 
-pub(crate) fn check_pow_consensus(
+pub(crate) fn check_pow_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pow_status: &PoWStatus,
-    block_index_handle: &dyn BlockIndexHandle,
-) -> Result<(), BlockError> {
+    block_index_handle: &H,
+) -> Result<(), ConsensusPoWError> {
     let work_required =
         calculate_work_required(chain_config, header, pow_status, block_index_handle)?;
     if check_proof_of_work(header.block_id().get(), work_required)? {
         Ok(())
     } else {
-        Err(BlockError::InvalidPoW)
+        Err(ConsensusPoWError::InvalidPoW(header.get_id()))
     }
 }
 
-fn calculate_work_required(
+fn calculate_work_required<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pow_status: &PoWStatus,
-    block_index_handle: &dyn BlockIndexHandle,
-) -> Result<Compact, BlockError> {
+    block_index_handle: &H,
+) -> Result<Compact, ConsensusPoWError> {
     match pow_status {
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
@@ -79,9 +74,22 @@ fn calculate_work_required(
                 .get_prev_block_id()
                 .clone()
                 .expect("If PoWStatus is `Onging` then we cannot be at genesis");
-            let prev_block_index = block_index_handle
-                .get_block_index(&prev_block_id)?
-                .ok_or(BlockError::NotFound)?;
+
+            let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
+                Ok(id) => id,
+                Err(err) => {
+                    return Err(ConsensusPoWError::PrevBlockLoadError(
+                        prev_block_id,
+                        header.get_id(),
+                        err,
+                    ))
+                }
+            };
+
+            let prev_block_index = prev_block_index.ok_or_else(|| {
+                ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
+            })?;
+
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
                 header.block_time(),
@@ -103,12 +111,12 @@ impl PoW {
         )
     }
 
-    fn get_work_required(
+    fn get_work_required<H: BlockIndexHandle>(
         &self,
         prev_block_index: &BlockIndex,
         new_block_time: u32,
-        db_accessor: &dyn BlockIndexHandle,
-    ) -> Result<Compact, BlockError> {
+        db_accessor: &H,
+    ) -> Result<Compact, ConsensusPoWError> {
         let prev_block_consensus_data = prev_block_index.get_block_header().consensus_data();
         // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
         // block was PoW
@@ -117,7 +125,7 @@ impl PoW {
             if let ConsensusData::PoW(pow_data) = prev_block_consensus_data {
                 pow_data.bits()
             } else {
-                return Err(BlockError::NoPowDataInPreviousBlock);
+                return Err(ConsensusPoWError::NoPowDataInPreviousBlock);
             }
         };
 
@@ -157,7 +165,7 @@ impl PoW {
         retarget_block_time: u32,
         prev_block_index: &BlockIndex,
         prev_block_bits: Compact,
-    ) -> Result<Compact, BlockError> {
+    ) -> Result<Compact, ConsensusPoWError> {
         // limit adjustment step
         let actual_timespan_of_last_interval =
             self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
@@ -196,7 +204,7 @@ pub(crate) fn mine(
     max_nonce: u128,
     bits: Compact,
     block_rewards: Vec<TxOutput>,
-) -> Result<bool, BlockError> {
+) -> Result<bool, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0, block_rewards);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922

@@ -32,6 +32,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 pub use detail::BlockError;
+use detail::PropertyQueryError;
 pub use detail::{BlockSource, Chainstate};
 
 #[derive(Debug, Clone)]
@@ -46,7 +47,7 @@ pub enum ChainstateError {
     #[error("Block processing failed: `{0}`")]
     ProcessBlockError(BlockError),
     #[error("Property read error: `{0}`")]
-    FailedToReadProperty(BlockError),
+    FailedToReadProperty(PropertyQueryError),
 }
 
 impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
