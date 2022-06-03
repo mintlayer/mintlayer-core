@@ -50,8 +50,8 @@ const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
 mod spend_cache;
 use consensus_validator::BlockIndexHandle;
+use spend_cache::BlockTransactableRef;
 use spend_cache::CachedInputs;
-use spend_cache::SpendSource;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
@@ -561,16 +561,14 @@ impl<'a> ChainstateRef<'a> {
         let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
 
         cached_inputs.spend(
-            block,
-            SpendSource::BlockReward,
+            BlockTransactableRef::BlockReward(block),
             spend_height,
             blockreward_maturity,
         )?;
 
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
             cached_inputs.spend(
-                block,
-                SpendSource::Transaction(tx_num),
+                BlockTransactableRef::Transaction(block, tx_num),
                 spend_height,
                 blockreward_maturity,
             )?;
@@ -595,9 +593,9 @@ impl<'a> ChainstateRef<'a> {
     fn disconnect_transactions_inner(&mut self, block: &Block) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
         block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            cached_inputs.unspend(block, SpendSource::Transaction(tx_num))
+            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
         })?;
-        cached_inputs.unspend(block, SpendSource::BlockReward)?;
+        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
         Ok(cached_inputs)
     }
 

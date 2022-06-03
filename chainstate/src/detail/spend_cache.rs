@@ -32,10 +32,11 @@ use crate::detail::{BlockError, TxRw};
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
 
+/// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum SpendSource {
-    Transaction(usize),
-    BlockReward,
+pub enum BlockTransactableRef<'a> {
+    Transaction(&'a Block, usize),
+    BlockReward(&'a Block),
 }
 
 pub struct ConsumedCachedInputs {
@@ -57,9 +58,9 @@ impl<'a> CachedInputs<'a> {
         }
     }
 
-    fn add_outputs(&mut self, block: &Block, spend_source: SpendSource) -> Result<(), BlockError> {
-        let (tx_index, outpoint_source_id) = match spend_source {
-            SpendSource::Transaction(tx_num) => {
+    fn add_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
+        let (tx_index, outpoint_source_id) = match spend_ref {
+            BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx_index =
                     CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?);
                 let tx = block
@@ -69,7 +70,7 @@ impl<'a> CachedInputs<'a> {
                 let tx_id = tx.get_id();
                 (tx_index, OutPointSourceId::from(tx_id))
             }
-            SpendSource::BlockReward => {
+            BlockTransactableRef::BlockReward(block) => {
                 match block.header().block_reward_transactable().outputs() {
                     Some(outputs) => {
                         let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
@@ -90,15 +91,11 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn remove_outputs(
-        &mut self,
-        block: &Block,
-        spend_source: SpendSource,
-    ) -> Result<(), BlockError> {
+    fn remove_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
         let tx_index = CachedInputsOperation::Erase;
         // TODO: Maybe below can be taken out into a function from both remove_outputs and add_outputs
-        let outpoint_source_id = match spend_source {
-            SpendSource::Transaction(tx_num) => {
+        let outpoint_source_id = match spend_ref {
+            BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block
                     .transactions()
                     .get(tx_num)
@@ -106,7 +103,7 @@ impl<'a> CachedInputs<'a> {
                 let tx_id = tx.get_id();
                 OutPointSourceId::from(tx_id)
             }
-            SpendSource::BlockReward => {
+            BlockTransactableRef::BlockReward(block) => {
                 match block.header().block_reward_transactable().outputs() {
                     Some(_outputs) => OutPointSourceId::from(block.get_id()),
                     None => return Ok(()), // no outputs to remove
@@ -359,13 +356,12 @@ impl<'a> CachedInputs<'a> {
 
     pub fn spend(
         &mut self,
-        block: &Block,
-        spend_source: SpendSource,
+        spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        match spend_source {
-            SpendSource::Transaction(tx_num) => {
+        match spend_ref {
+            BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block
                     .transactions()
                     .get(tx_num)
@@ -386,7 +382,7 @@ impl<'a> CachedInputs<'a> {
                 let spender = Spender::from(tx.get_id());
                 self.apply_spend(tx.get_inputs(), spend_height, blockreward_maturity, spender)?;
             }
-            SpendSource::BlockReward => {
+            BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.header().block_reward_transactable();
                 // TODO: test spending block rewards from chains outside the mainchain
                 match reward_transactable.inputs() {
@@ -418,17 +414,17 @@ impl<'a> CachedInputs<'a> {
             }
         }
         // add the outputs to the cache
-        self.add_outputs(block, spend_source)?;
+        self.add_outputs(spend_ref)?;
 
         Ok(())
     }
 
-    pub fn unspend(&mut self, block: &Block, spend_source: SpendSource) -> Result<(), BlockError> {
+    pub fn unspend(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
         // Delete TxMainChainIndex for the current tx
-        self.remove_outputs(block, spend_source)?;
+        self.remove_outputs(spend_ref)?;
 
-        match spend_source {
-            SpendSource::Transaction(tx_num) => {
+        match spend_ref {
+            BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block
                     .transactions()
                     .get(tx_num)
@@ -451,7 +447,7 @@ impl<'a> CachedInputs<'a> {
                         .map_err(BlockError::from)?;
                 }
             }
-            SpendSource::BlockReward => {
+            BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.header().block_reward_transactable();
                 match reward_transactable.inputs() {
                     Some(inputs) => {
