@@ -53,22 +53,31 @@ fn validate_pow_consensus(
     pow_status: &PoWStatus,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), BlockError> {
-    if let ConsensusData::PoW(..) = header.consensus_data() {
-        check_pow_consensus(chain_config, header, pow_status, block_index_handle)
-    } else {
-        Err(BlockError::ConsensusTypeMismatch(
+    match header.consensus_data() {
+        ConsensusData::None | ConsensusData::FakePoS(_) => Err(BlockError::ConsensusTypeMismatch(
             "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
-        ))
+        )),
+        ConsensusData::PoW(_) => {
+            check_pow_consensus(chain_config, header, pow_status, block_index_handle)
+        }
     }
 }
 
 fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), BlockError> {
-    if let ConsensusData::None = header.consensus_data() {
-        Ok(())
-    } else {
-        Err(BlockError::ConsensusTypeMismatch(
+    match header.consensus_data() {
+        ConsensusData::None => Ok(()),
+        ConsensusData::PoW(_)|ConsensusData::FakePoS(_) => Err(BlockError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
-        ))
+        )),
+    }
+}
+
+fn validate_pos_consensus(header: &BlockHeader) -> Result<(), BlockError> {
+    match header.consensus_data() {
+        ConsensusData::None | ConsensusData::PoW(_)=>  Err(BlockError::ConsensusTypeMismatch(
+            "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
+        )),
+        ConsensusData::FakePoS(_) => Ok(()),
     }
 }
 
@@ -83,7 +92,7 @@ fn do_validate(
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => Err(BlockError::UnsupportedConsensusType),
+        RequiredConsensus::PoS => validate_pos_consensus(header),
         RequiredConsensus::DSA => Err(BlockError::UnsupportedConsensusType),
     }
 }

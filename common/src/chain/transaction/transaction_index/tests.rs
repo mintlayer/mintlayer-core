@@ -16,7 +16,7 @@ use crate::{
 use std::str::FromStr;
 
 #[test]
-fn invalid_output_count() {
+fn invalid_output_count_for_transaction() {
     let block_id =
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
     let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
@@ -25,6 +25,15 @@ fn invalid_output_count() {
         tx_index.unwrap_err(),
         TxMainChainIndexError::InvalidOutputCount
     );
+}
+
+#[test]
+fn invalid_output_count_ok_for_block_reward() {
+    let block_id =
+        H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
+    let pos: Id<Block> = block_id.into();
+    let tx_index = TxMainChainIndex::new(pos.into(), 0);
+    tx_index.unwrap();
 }
 
 #[test]

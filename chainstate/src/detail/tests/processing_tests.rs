@@ -28,6 +28,7 @@ use common::chain::OutputSpentState;
 use common::chain::UpgradeVersion;
 use common::primitives::Compact;
 use common::Uint256;
+use crypto::key::{KeyKind, PrivateKey};
 
 #[test]
 fn test_process_genesis_block_wrong_block_source() {
@@ -147,7 +148,7 @@ fn test_empty_chainstate() {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let chainstate = Chainstate::new(config, storage, None).unwrap();
-        assert!(chainstate.get_best_block_id().unwrap().is_some());
+        chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
                 == chainstate.chain_config.genesis_block_id()
@@ -531,11 +532,15 @@ fn test_consensus_type() {
             btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
         let mut mined_block = btf.random_block(&prev_block, None);
         let bits = min_difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
-                .expect("Unexpected conversion error")
-        );
-        assert!(btf.add_special_block(mined_block).is_ok());
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        assert!(crate::detail::pow::work::mine(
+            &mut mined_block,
+            u128::MAX,
+            bits,
+            vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+        )
+        .expect("Unexpected conversion error"));
+        btf.add_special_block(mined_block).unwrap();
     }
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
@@ -570,11 +575,15 @@ fn test_consensus_type() {
             btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
         let mut mined_block = btf.random_block(&prev_block, None);
         let bits = min_difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
-                .expect("Unexpected conversion error")
-        );
-        assert!(btf.add_special_block(mined_block).is_ok());
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        assert!(crate::detail::pow::work::mine(
+            &mut mined_block,
+            u128::MAX,
+            bits,
+            vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+        )
+        .expect("Unexpected conversion error"));
+        btf.add_special_block(mined_block).unwrap();
     }
 }
 
@@ -648,10 +657,14 @@ fn test_pow() {
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
     let mut valid_block = random_invalid_block;
     let bits = difficulty.into();
-    assert!(
-        crate::detail::pow::work::mine(&mut valid_block, u128::MAX, bits, vec![])
-            .expect("Unexpected conversion error")
-    );
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    assert!(crate::detail::pow::work::mine(
+        &mut valid_block,
+        u128::MAX,
+        bits,
+        vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+    )
+    .expect("Unexpected conversion error"));
     btf.add_special_block(valid_block.clone()).unwrap();
 }
 
