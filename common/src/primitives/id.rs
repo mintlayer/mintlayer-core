@@ -18,6 +18,7 @@
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
+use std::fmt::Display;
 
 construct_fixed_hash! {
     #[derive(Encode, Decode)]
@@ -70,6 +71,12 @@ pub struct Id<T: ?Sized> {
     id: H256,
     #[serde(skip)]
     _shadow: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T> Display for Id<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.id.fmt(f)
+    }
 }
 
 // We implement Ord manually to avoid it getting inherited to T through PhantomData, because Id having Ord doesn't mean T requiring Ord

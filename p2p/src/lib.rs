@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::P2pError,
+    error::{ConversionError, P2pError},
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
@@ -33,6 +33,9 @@ pub mod rpc;
 pub mod swarm;
 pub mod sync;
 
+/// Result type with P2P errors
+pub type Result<T> = core::result::Result<T, P2pError>;
+
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
 
@@ -48,7 +51,7 @@ impl<T> P2pInterface<T>
 where
     T: NetworkingService,
 {
-    pub async fn connect(&mut self, addr: String) -> error::Result<()>
+    pub async fn connect(&mut self, addr: String) -> crate::Result<()>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
@@ -59,7 +62,9 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Connect(
-                addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+                addr.parse::<T::Address>().map_err(|_| {
+                    P2pError::ConversionError(ConversionError::InvalidAddress(addr))
+                })?,
                 tx,
             ))
             .await
@@ -67,13 +72,15 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    async fn disconnect(&self, peer_id: String) -> error::Result<()>
+    async fn disconnect(&self, peer_id: String) -> crate::Result<()>
     where
         <T as NetworkingService>::PeerId: FromStr,
         <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
     {
         let (tx, rx) = oneshot::channel();
-        let peer_id = peer_id.parse::<T::PeerId>().map_err(|_| P2pError::InvalidPeerId)?;
+        let peer_id = peer_id
+            .parse::<T::PeerId>()
+            .map_err(|_| P2pError::ConversionError(ConversionError::InvalidPeerId(peer_id)))?;
 
         self.p2p
             .tx_swarm
@@ -83,7 +90,7 @@ where
         rx.await.map_err(P2pError::from)?
     }
 
-    pub async fn get_peer_count(&self) -> error::Result<usize> {
+    pub async fn get_peer_count(&self) -> crate::Result<usize> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -93,7 +100,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_bind_address(&self) -> error::Result<String> {
+    pub async fn get_bind_address(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -103,7 +110,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_peer_id(&self) -> error::Result<String> {
+    pub async fn get_peer_id(&self) -> crate::Result<String> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -113,7 +120,7 @@ where
         rx.await.map_err(P2pError::from)
     }
 
-    pub async fn get_connected_peers(&self) -> error::Result<Vec<String>> {
+    pub async fn get_connected_peers(&self) -> crate::Result<Vec<String>> {
         let (tx, rx) = oneshot::channel();
         self.p2p
             .tx_swarm
@@ -147,15 +154,17 @@ where
         bind_addr: String,
         config: Arc<ChainConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    ) -> error::Result<Self>
+    ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
         let (conn, pubsub, sync) = T::start(
-            bind_addr.parse::<T::Address>().map_err(|_| P2pError::InvalidAddress)?,
+            bind_addr.parse::<T::Address>().map_err(|_| {
+                P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
+            })?,
             &[],
-            &[net::PubSubTopic::Blocks],
+            &[net::types::PubSubTopic::Blocks],
             Arc::clone(&config),
             TIMEOUT,
         )
@@ -219,7 +228,7 @@ pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     bind_addr: String,
-) -> Result<P2pInterface<T>, P2pError>
+) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,

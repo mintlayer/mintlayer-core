@@ -40,28 +40,28 @@ pub enum Command {
     /// Start listening on the network interface specified by `addr`
     Listen {
         addr: Multiaddr,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Connect to a remote peer at address `peer_addr`
     Connect {
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        response: oneshot::Sender<error::Result<IdentifyInfo>>,
+        response: oneshot::Sender<crate::Result<IdentifyInfo>>,
     },
 
     /// Disconnect remote peer
     Disconnect {
         peer_id: PeerId,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     // TODO: rethink this message
     /// Publish a message on the designated GossipSub topic
     SendMessage {
-        topic: net::PubSubTopic,
+        topic: net::types::PubSubTopic,
         message: Vec<u8>,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Report validation result of a received Gossipsub
@@ -69,21 +69,21 @@ pub enum Command {
         message_id: MessageId,
         source: PeerId,
         result: MessageAcceptance,
-        response: oneshot::Sender<error::Result<()>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Send block request to remote peer
     SendRequest {
         peer_id: PeerId,
         request: Box<SyncRequest>,
-        response: oneshot::Sender<error::Result<RequestId>>,
+        response: oneshot::Sender<crate::Result<RequestId>>,
     },
 
     /// Send block response to remote peer
     SendResponse {
         request_id: RequestId,
         response: Box<SyncResponse>,
-        channel: oneshot::Sender<error::Result<()>>,
+        channel: oneshot::Sender<crate::Result<()>>,
     },
 }
 
@@ -147,37 +147,37 @@ pub enum SyncingEvent {
     Error {
         peer_id: PeerId,
         request_id: RequestId,
-        error: net::RequestResponseError,
+        error: net::types::RequestResponseError,
     },
 }
 
-impl From<&net::PubSubTopic> for Topic {
-    fn from(t: &net::PubSubTopic) -> Topic {
+impl From<&net::types::PubSubTopic> for Topic {
+    fn from(t: &net::types::PubSubTopic) -> Topic {
         match t {
-            net::PubSubTopic::Transactions => Topic::new("mintlayer-gossipsub-transactions"),
-            net::PubSubTopic::Blocks => Topic::new("mintlayer-gossipsub-blocks"),
+            net::types::PubSubTopic::Transactions => Topic::new("mintlayer-gossipsub-transactions"),
+            net::types::PubSubTopic::Blocks => Topic::new("mintlayer-gossipsub-blocks"),
         }
     }
 }
 
-impl TryFrom<TopicHash> for net::PubSubTopic {
+impl TryFrom<TopicHash> for net::types::PubSubTopic {
     type Error = &'static str;
 
     fn try_from(t: TopicHash) -> Result<Self, Self::Error> {
         match t.as_str() {
-            "mintlayer-gossipsub-transactions" => Ok(net::PubSubTopic::Transactions),
-            "mintlayer-gossipsub-blocks" => Ok(net::PubSubTopic::Blocks),
+            "mintlayer-gossipsub-transactions" => Ok(net::types::PubSubTopic::Transactions),
+            "mintlayer-gossipsub-blocks" => Ok(net::types::PubSubTopic::Blocks),
             _ => Err("Invalid Gossipsub topic"),
         }
     }
 }
 
-impl From<net::ValidationResult> for MessageAcceptance {
-    fn from(t: net::ValidationResult) -> MessageAcceptance {
+impl From<net::types::ValidationResult> for MessageAcceptance {
+    fn from(t: net::types::ValidationResult) -> MessageAcceptance {
         match t {
-            net::ValidationResult::Accept => MessageAcceptance::Accept,
-            net::ValidationResult::Reject => MessageAcceptance::Reject,
-            net::ValidationResult::Ignore => MessageAcceptance::Ignore,
+            net::types::ValidationResult::Accept => MessageAcceptance::Accept,
+            net::types::ValidationResult::Reject => MessageAcceptance::Reject,
+            net::types::ValidationResult::Ignore => MessageAcceptance::Ignore,
         }
     }
 }

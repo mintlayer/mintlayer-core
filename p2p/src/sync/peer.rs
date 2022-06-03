@@ -14,7 +14,10 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, net::NetworkingService, P2pError};
+use crate::{
+    error::{P2pError, ProtocolError},
+    net::NetworkingService,
+};
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
@@ -44,7 +47,7 @@ where
     T: NetworkingService,
 {
     /// Unique peer ID
-    _peer_id: T::PeerId,
+    peer_id: T::PeerId,
 
     /// State of the peer
     state: PeerSyncState,
@@ -62,9 +65,9 @@ impl<T> PeerContext<T>
 where
     T: NetworkingService,
 {
-    pub fn new(_peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+    pub fn new(peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
         Self {
-            _peer_id,
+            peer_id,
             locator,
             state: PeerSyncState::Unknown,
             work: VecDeque::new(),
@@ -83,21 +86,27 @@ where
     pub fn register_block_response(
         &mut self,
         header: &BlockHeader,
-    ) -> error::Result<Option<BlockHeader>> {
+    ) -> crate::Result<Option<BlockHeader>> {
         match &self.state {
             PeerSyncState::UploadingBlocks(expected) => {
                 if expected != &header.get_id() {
                     log::error!(
-                        "peer sent us the wrong header, expected {:?}, got {:?}",
+                        "peer {:?} sent us the wrong header, expected {:?}, got {:?}",
+                        self.peer_id,
                         expected,
                         header
                     );
-                    return Err(P2pError::InvalidData);
+                    // TODO: this is a protocol error
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 }
             }
             _ => {
-                log::error!("received a header from peer while not expecting it");
-                return Err(P2pError::InvalidData);
+                // TODO: this is a protocol error
+                log::error!(
+                    "received a header from peer {:?} while not expecting it",
+                    self.peer_id
+                );
+                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
             }
         }
 

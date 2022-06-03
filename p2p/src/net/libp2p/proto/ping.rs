@@ -15,14 +15,14 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::P2pError,
     net::libp2p::{backend::Backend, types},
 };
 use libp2p::ping::{self, PingEvent};
 use logging::log;
 
 impl Backend {
-    pub async fn on_ping_event(&mut self, event: PingEvent) -> error::Result<()> {
+    pub async fn on_ping_event(&mut self, event: PingEvent) -> crate::Result<()> {
         match event {
             ping::Event {
                 peer,

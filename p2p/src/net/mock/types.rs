@@ -14,14 +14,14 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, message, net};
+use crate::{message, net};
 use std::net::SocketAddr;
 use tokio::{net::TcpStream, sync::oneshot};
 
 pub enum Command {
     Connect {
         addr: SocketAddr,
-        response: oneshot::Sender<error::Result<TcpStream>>,
+        response: oneshot::Sender<crate::Result<TcpStream>>,
     },
 }
 
@@ -37,7 +37,7 @@ pub enum PubSubEvent {
     /// Message received from one of the pubsub topics
     MessageReceived {
         peer_id: SocketAddr,
-        topic: net::PubSubTopic,
+        topic: net::types::PubSubTopic,
         message: message::Message,
     },
 }

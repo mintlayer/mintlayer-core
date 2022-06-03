@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, P2pError},
+    error::{P2pError, ProtocolError},
     event,
     message::{self, Message, MessageType, PubSubMessage},
     net::{self, NetworkingService, PubSubService},
@@ -62,10 +62,10 @@ where
     // TODO: remove one global message type and create multiple message types so we can get rid of this check
     async fn validate_pubsub_message(
         &mut self,
-        event: net::PubSubEvent<T>,
-    ) -> error::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
+        event: net::types::PubSubEvent<T>,
+    ) -> crate::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
         match event {
-            net::PubSubEvent::MessageReceived {
+            net::types::PubSubEvent::MessageReceived {
                 peer_id,
                 message_id,
                 message:
@@ -74,7 +74,7 @@ where
                         msg: MessageType::PubSub(PubSubMessage::Block(block)),
                     },
             } => Ok((peer_id, message_id, PubSubMessage::Block(block))),
-            net::PubSubEvent::MessageReceived {
+            net::types::PubSubEvent::MessageReceived {
                 peer_id,
                 message_id,
                 message:
@@ -86,16 +86,20 @@ where
                 // TODO: report misbehaviour to swarm manager
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 self.pubsub_handle
-                    .report_validation_result(peer_id, message_id, net::ValidationResult::Reject)
+                    .report_validation_result(
+                        peer_id,
+                        message_id,
+                        net::types::ValidationResult::Reject,
+                    )
                     .await?;
-                Err(P2pError::InvalidData)
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
             }
         }
     }
 
     // while initial block download is in progress, ignore all incoming data
     // and wait for the completion event to be received from syncing
-    async fn node_syncing(&mut self) -> error::Result<()> {
+    async fn node_syncing(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
                 event = self.pubsub_handle.poll_next() => {
@@ -110,7 +114,7 @@ where
                         .report_validation_result(
                             peer_id,
                             message_id,
-                            net::ValidationResult::Ignore,
+                            net::types::ValidationResult::Ignore,
                         )
                         .await?;
                 }
@@ -124,7 +128,7 @@ where
         }
     }
 
-    async fn node_active(&mut self) -> error::Result<()> {
+    async fn node_active(&mut self) -> crate::Result<()> {
         let (tx, mut rx) = mpsc::channel(CHANNEL_SIZE);
 
         let subscribe_func =
@@ -164,9 +168,9 @@ where
                                 })
                                 .await?
                             {
-                                Ok(_) => net::ValidationResult::Accept,
+                                Ok(_) => net::types::ValidationResult::Accept,
                                 Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) =>
-                                    net::ValidationResult::Accept, // TODO: ignore?
+                                    net::types::ValidationResult::Accept, // TODO: ignore?
                                 Err(err) => {
                                     // TODO: report misbehaviour to swarm manager and close connection
                                     log::error!(
@@ -176,7 +180,7 @@ where
                                     err
                                 );
 
-                                net::ValidationResult::Reject
+                                net::types::ValidationResult::Reject
                                 }
                             };
                             self.pubsub_handle
@@ -219,7 +223,7 @@ where
         }
     }
 
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         // when node is started and it connects to some peers,
         // it starts the initial block download. During this period,
         // all events from both syncing and pubsub implementation should be ignored

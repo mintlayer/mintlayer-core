@@ -43,7 +43,7 @@ pub async fn make_libp2p(
     // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
     addr: Multiaddr,
-    topics: &[net::PubSubTopic],
+    topics: &[net::types::PubSubTopic],
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -138,7 +138,7 @@ pub async fn make_libp2p_with_ping(
     // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
     addr: Multiaddr,
-    topics: &[net::PubSubTopic],
+    topics: &[net::types::PubSubTopic],
     ping: ping::Behaviour,
 ) -> (
     Backend,

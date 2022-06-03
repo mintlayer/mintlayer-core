@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{self, FatalError, P2pError, ProtocolError},
+    error::{FatalError, P2pError, PeerError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, NetworkingService, SyncingCodecService},
@@ -61,7 +61,7 @@ const RETRY_LIMIT: usize = 3;
 // for the function that tries to update peer state.
 //
 // This is just a convenience method to have access to nicer error handling
-impl<T> FatalError for error::Result<T> {
+impl<T> FatalError for crate::Result<T> {
     fn map_fatal_err(self) -> core::result::Result<(), P2pError> {
         if let Err(err) = self {
             match err {
@@ -182,8 +182,11 @@ where
         peer_id: T::PeerId,
         locator: Vec<BlockHeader>,
         retry_count: usize,
-    ) -> error::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+    ) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let request_id = self
             .handle
             .send_request(
@@ -214,8 +217,11 @@ where
         peer_id: T::PeerId,
         block_id: Id<Block>,
         retry_count: usize,
-    ) -> error::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+    ) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let request_id = self
             .handle
             .send_request(
@@ -241,13 +247,13 @@ where
         Ok(())
     }
 
-    pub async fn register_peer(&mut self, peer_id: T::PeerId) -> error::Result<()> {
+    pub async fn register_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::info!("register peer {:?} to sync manager", peer_id);
 
         match self.peers.entry(peer_id) {
             Entry::Occupied(_) => {
                 log::error!("peer {:?} already known by sync manager", peer_id);
-                Err(P2pError::PeerExists)
+                Err(P2pError::PeerError(PeerError::PeerAlreadyExists))
             }
             Entry::Vacant(entry) => {
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
@@ -268,7 +274,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         locator: Vec<BlockHeader>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!(
             "received a header request from peer {:?}, locator {:#?}",
             peer_id,
@@ -294,7 +300,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         headers: Vec<Id<Block>>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!(
             "received a block request from peer {:?}, header counter {}",
             peer_id,
@@ -306,20 +312,24 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
 
-        let _peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let _peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let block_id = headers.get(0).expect("header to exist").clone();
         let block = self
             .chainstate_handle
             .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
             .await??
             .ok_or_else(|| {
+                // TODO: handle these two errors separate
                 log::error!(
                     "peer {:?} requested block we don't have \
                         or database doesn't have a block it previously had, block id: {:?}",
                     peer_id,
                     block_id
                 );
-                P2pError::InvalidData
+                P2pError::ProtocolError(ProtocolError::InvalidMessage)
             })?;
 
         self.handle
@@ -341,8 +351,11 @@ where
         &mut self,
         peer_id: T::PeerId,
         headers: Vec<BlockHeader>,
-    ) -> error::Result<()> {
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+    ) -> crate::Result<()> {
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         log::debug!(
             "initialize peer {:?} state, number of headers: {}",
@@ -440,7 +453,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         blocks: Vec<Block>,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         log::trace!("received {} blocks from peer {:?}", blocks.len(), peer_id,);
 
         if blocks.len() != 1 {
@@ -448,7 +461,10 @@ where
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
 
-        let peer = self.peers.get_mut(&peer_id).ok_or(P2pError::PeerDoesntExist)?;
+        let peer = self
+            .peers
+            .get_mut(&peer_id)
+            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         // TODO: check error, ban peer
         let header = blocks.get(0).expect("block to exist").header().clone();
@@ -533,7 +549,7 @@ where
     }
 
     // if all peers are idling, then it means we're idling -> fully synced
-    pub async fn check_state(&mut self) -> error::Result<()> {
+    pub async fn check_state(&mut self) -> crate::Result<()> {
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
             return Ok(());
@@ -565,7 +581,7 @@ where
         peer_id: T::PeerId,
         request_id: T::RequestId,
         request: SyncingRequest,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match request {
             SyncingRequest::GetHeaders { locator } => {
                 self.process_header_request(peer_id, request_id, locator).await
@@ -580,7 +596,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         response: SyncingResponse,
-    ) -> error::Result<()> {
+    ) -> crate::Result<()> {
         match response {
             SyncingResponse::Headers { headers } => {
                 self.process_header_response(peer_id, headers).await
@@ -595,13 +611,13 @@ where
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
-        error: net::RequestResponseError,
-    ) -> error::Result<()> {
+        error: net::types::RequestResponseError,
+    ) -> crate::Result<()> {
         match error {
-            net::RequestResponseError::ConnectionClosed => {
+            net::types::RequestResponseError::ConnectionClosed => {
                 self.unregister_peer(peer_id);
             }
-            net::RequestResponseError::Timeout => {
+            net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
                     log::warn!(
                         "outbound request {:?} for peer {:?} timed out",
@@ -647,9 +663,12 @@ where
     }
 
     /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(&mut self, event: net::SyncingEvent<T>) -> error::Result<()> {
+    pub async fn on_syncing_event(
+        &mut self,
+        event: net::types::SyncingEvent<T>,
+    ) -> crate::Result<()> {
         match event {
-            net::SyncingEvent::Request {
+            net::types::SyncingEvent::Request {
                 peer_id,
                 request_id,
                 request:
@@ -665,7 +684,7 @@ where
                 );
                 self.process_request(peer_id, request_id, message).await
             }
-            net::SyncingEvent::Response {
+            net::types::SyncingEvent::Response {
                 peer_id,
                 request_id,
                 response:
@@ -681,13 +700,13 @@ where
                 );
                 self.process_response(peer_id, message).await
             }
-            net::SyncingEvent::Error {
+            net::types::SyncingEvent::Error {
                 peer_id,
                 request_id,
                 error,
             } => self.process_error(peer_id, request_id, error).await,
-            net::SyncingEvent::Request { peer_id, .. }
-            | net::SyncingEvent::Response { peer_id, .. } => {
+            net::types::SyncingEvent::Request { peer_id, .. }
+            | net::types::SyncingEvent::Response { peer_id, .. } => {
                 log::error!("received an invalid message from peer {:?}", peer_id);
                 // TODO: disconnect peer and ban it
                 // TODO: send `Misbehaved` event to PeerManager
@@ -697,7 +716,7 @@ where
     }
 
     /// Handle control-related sync event from P2P/PeerManager
-    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> error::Result<()> {
+    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> crate::Result<()> {
         match event {
             event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
             event::SyncControlEvent::Disconnected(peer_id) => {
@@ -708,7 +727,7 @@ where
     }
 
     /// Run SyncManager event loop
-    pub async fn run(&mut self) -> error::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<()> {
         log::info!("starting sync manager event loop");
 
         loop {
@@ -731,7 +750,7 @@ mod tests {
     use super::*;
     use crate::{
         event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
-        net::{libp2p::Libp2pService, ConnectivityEvent, ConnectivityService},
+        net::{libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService},
     };
     use chainstate::make_chainstate;
     use libp2p::PeerId;
@@ -868,7 +887,7 @@ mod tests {
             .await
             .unwrap();
 
-        if let Ok(net::SyncingEvent::Request {
+        if let Ok(net::types::SyncingEvent::Request {
             peer_id: _,
             request_id,
             request,
@@ -938,7 +957,7 @@ mod tests {
             .unwrap();
 
         for _ in 0..2 {
-            if let Ok(net::SyncingEvent::Request {
+            if let Ok(net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
                 request,
@@ -972,7 +991,7 @@ mod tests {
 
         let mut magic_seen = 0;
         for _ in 0..2 {
-            if let Ok(net::SyncingEvent::Response {
+            if let Ok(net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
                 response,
@@ -1018,12 +1037,12 @@ mod tests {
             mgr1.register_peer(peer2_id).await.unwrap();
 
             match mgr1.handle.poll_next().await.unwrap() {
-                net::SyncingEvent::Error {
+                net::types::SyncingEvent::Error {
                     peer_id,
                     request_id,
                     error,
                 } => {
-                    assert_eq!(error, net::RequestResponseError::Timeout);
+                    assert_eq!(error, net::types::RequestResponseError::Timeout);
                     mgr1.process_error(peer_id, request_id, error).await.unwrap();
                 }
                 _ => panic!("invalid event received"),
@@ -1033,7 +1052,8 @@ mod tests {
         for _ in 0..3 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Request { .. } | net::SyncingEvent::Error { .. })
+                Ok(net::types::SyncingEvent::Request { .. }
+                    | net::types::SyncingEvent::Error { .. })
             ));
         }
     }
@@ -1059,12 +1079,12 @@ mod tests {
 
             for _ in 0..4 {
                 match mgr1.handle.poll_next().await.unwrap() {
-                    net::SyncingEvent::Error {
+                    net::types::SyncingEvent::Error {
                         peer_id,
                         request_id,
                         error,
                     } => {
-                        assert_eq!(error, net::RequestResponseError::Timeout);
+                        assert_eq!(error, net::types::RequestResponseError::Timeout);
                         mgr1.process_error(peer_id, request_id, error).await.unwrap();
                     }
                     _ => panic!("invalid event received"),
@@ -1082,11 +1102,11 @@ mod tests {
         for _ in 0..4 {
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Request { .. })
+                Ok(net::types::SyncingEvent::Request { .. })
             ));
             assert!(std::matches!(
                 mgr2.handle.poll_next().await,
-                Ok(net::SyncingEvent::Error { .. })
+                Ok(net::types::SyncingEvent::Error { .. })
             ));
         }
     }
