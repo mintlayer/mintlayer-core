@@ -377,7 +377,7 @@ impl<'a> CachedInputs<'a> {
                 self.verify_signatures(tx)?;
 
                 // spend inputs of this transaction
-                let spender = Spender::from(tx.get_id());
+                let spender = tx.get_id().into();
                 self.apply_spend(tx.get_inputs(), spend_height, blockreward_maturity, spender)?;
             }
             BlockTransactableRef::BlockReward(block) => {
@@ -394,7 +394,7 @@ impl<'a> CachedInputs<'a> {
                         // verify input signatures
                         self.verify_signatures(&reward_transactable)?;
 
-                        let spender = Spender::from(block.get_id());
+                        let spender = block.get_id().into();
                         self.apply_spend(ins, spend_height, blockreward_maturity, spender)?;
                     }
                     None => (),
