@@ -151,7 +151,6 @@ pub fn verify_signature(
     }
     Ok(())
 }
-// TODO: write tests
 
 #[cfg(test)]
 mod test {

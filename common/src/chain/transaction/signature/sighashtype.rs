@@ -93,8 +93,6 @@ pub enum OutputsMode {
     Single,
 }
 
-// TODO: test
-
 #[cfg(test)]
 mod test {
     use super::*;

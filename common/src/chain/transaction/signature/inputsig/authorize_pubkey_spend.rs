@@ -66,8 +66,6 @@ pub fn sign_pubkey_spending(
     Ok(AuthorizedPublicKeySpend::new(signature))
 }
 
-// TODO: tests
-
 #[cfg(test)]
 mod test {
     use super::*;

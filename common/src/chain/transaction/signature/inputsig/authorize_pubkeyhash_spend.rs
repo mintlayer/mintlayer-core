@@ -77,8 +77,6 @@ pub fn sign_address_spending(
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
 }
 
-// TODO: tests
-
 #[cfg(test)]
 mod test {
     use crypto::key::{KeyKind, PrivateKey};
