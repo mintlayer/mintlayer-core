@@ -58,31 +58,40 @@ impl<'a> CachedInputs<'a> {
         }
     }
 
-    fn add_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
-        let (tx_index, outpoint_source_id) = match spend_ref {
+    fn outpoint_source_id_from_spend_ref(
+        spend_ref: BlockTransactableRef,
+    ) -> Result<OutPointSourceId, BlockError> {
+        let outpoint_source_id = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx_index =
-                    CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?);
                 let tx = block
                     .transactions()
                     .get(tx_num)
                     .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
                 let tx_id = tx.get_id();
-                (tx_index, OutPointSourceId::from(tx_id))
+                OutPointSourceId::from(tx_id)
+            }
+            BlockTransactableRef::BlockReward(block) => OutPointSourceId::from(block.get_id()),
+        };
+        Ok(outpoint_source_id)
+    }
+
+    fn add_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
+        let tx_index = match spend_ref {
+            BlockTransactableRef::Transaction(block, tx_num) => {
+                CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
             }
             BlockTransactableRef::BlockReward(block) => {
                 match block.header().block_reward_transactable().outputs() {
-                    Some(outputs) => {
-                        let tx_index = CachedInputsOperation::Write(TxMainChainIndex::new(
-                            block.get_id().into(),
-                            outputs.len().try_into().map_err(|_| BlockError::InvalidOutputCount)?,
-                        )?);
-                        (tx_index, OutPointSourceId::from(block.get_id()))
-                    }
+                    Some(outputs) => CachedInputsOperation::Write(TxMainChainIndex::new(
+                        block.get_id().into(),
+                        outputs.len().try_into().map_err(|_| BlockError::InvalidOutputCount)?,
+                    )?),
                     None => return Ok(()), // no outputs to add
                 }
             }
         };
+
+        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
         match self.inputs.entry(outpoint_source_id) {
             Entry::Occupied(_) => return Err(BlockError::OutputAlreadyPresentInInputsCache),
@@ -93,23 +102,7 @@ impl<'a> CachedInputs<'a> {
 
     fn remove_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), BlockError> {
         let tx_index = CachedInputsOperation::Erase;
-        // TODO: Maybe below can be taken out into a function from both remove_outputs and add_outputs
-        let outpoint_source_id = match spend_ref {
-            BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block
-                    .transactions()
-                    .get(tx_num)
-                    .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
-                let tx_id = tx.get_id();
-                OutPointSourceId::from(tx_id)
-            }
-            BlockTransactableRef::BlockReward(block) => {
-                match block.header().block_reward_transactable().outputs() {
-                    Some(_outputs) => OutPointSourceId::from(block.get_id()),
-                    None => return Ok(()), // no outputs to remove
-                }
-            }
-        };
+        let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
         self.inputs.insert(outpoint_source_id, tx_index);
         Ok(())
