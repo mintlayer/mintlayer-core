@@ -559,6 +559,14 @@ impl<'a> ChainstateRef<'a> {
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
+
+        cached_inputs.spend(
+            block,
+            SpendSource::BlockReward,
+            spend_height,
+            blockreward_maturity,
+        )?;
+
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
             cached_inputs.spend(
                 block,
@@ -567,12 +575,6 @@ impl<'a> ChainstateRef<'a> {
                 blockreward_maturity,
             )?;
         }
-        cached_inputs.spend(
-            block,
-            SpendSource::BlockReward,
-            spend_height,
-            blockreward_maturity,
-        )?;
         Ok(cached_inputs)
     }
 
@@ -590,18 +592,19 @@ impl<'a> ChainstateRef<'a> {
         Ok(())
     }
 
-    fn disconnect_transactions_inner(
-        &mut self,
-        transactions: &[Transaction],
-    ) -> Result<CachedInputs, BlockError> {
+    fn disconnect_transactions_inner(&mut self, block: &Block) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
-        transactions.iter().try_for_each(|tx| cached_inputs.unspend(tx))?;
+        block
+            .transactions()
+            .iter()
+            .enumerate()
+            .try_for_each(|(tx_num, _tx)| cached_inputs.unspend(block, tx_num))?;
         // TODO: Discuss about disconnect reward
         Ok(cached_inputs)
     }
 
-    fn disconnect_transactions(&mut self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        let cached_inputs = self.disconnect_transactions_inner(transactions)?;
+    fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
+        let cached_inputs = self.disconnect_transactions_inner(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
@@ -677,7 +680,7 @@ impl<'a> ChainstateRef<'a> {
             .expect("Also only genesis fails at this");
         let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
         // Disconnect transactions
-        self.disconnect_transactions(block.transactions())?;
+        self.disconnect_transactions(&block)?;
         self.db_tx.set_best_block_id(
             block_index
                 .get_prev_block_id()

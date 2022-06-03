@@ -21,7 +21,7 @@ use common::chain::ChainConfig;
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
-        Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
+        Spender, TxInput, TxMainChainIndex, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -89,11 +89,14 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn remove_outputs(&mut self, tx: &Transaction) -> Result<(), BlockError> {
-        self.inputs.insert(
-            OutPointSourceId::from(tx.get_id()),
-            CachedInputsOperation::Erase,
-        );
+    fn remove_outputs(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
+        let tx_index = CachedInputsOperation::Erase;
+        let tx = block
+            .transactions()
+            .get(tx_num)
+            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+
+        self.inputs.insert(OutPointSourceId::from(tx.get_id()), tx_index);
         Ok(())
     }
 
@@ -402,9 +405,14 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    pub fn unspend(&mut self, tx: &Transaction) -> Result<(), BlockError> {
+    pub fn unspend(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
         // Delete TxMainChainIndex for the current tx
-        self.remove_outputs(tx)?;
+        self.remove_outputs(block, tx_num)?;
+
+        let tx = block
+            .transactions()
+            .get(tx_num)
+            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
 
         // pre-cache all inputs
         tx.get_inputs()
