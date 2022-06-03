@@ -224,7 +224,7 @@ impl<'a> CachedInputs<'a> {
         Ok(total)
     }
 
-    fn check_inputs_amounts(
+    fn check_transferred_amounts(
         &self,
         inputs: &[TxInput],
         outputs: &[TxOutput],
@@ -371,7 +371,7 @@ impl<'a> CachedInputs<'a> {
                     .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
                 // check for attempted money printing
-                self.check_inputs_amounts(tx.get_inputs(), tx.get_outputs())?;
+                self.check_transferred_amounts(tx.get_inputs(), tx.get_outputs())?;
 
                 // verify input signatures
                 self.verify_signatures(tx)?;
