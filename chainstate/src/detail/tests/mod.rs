@@ -21,11 +21,12 @@ use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, Transaction, TxInput, TxOutput};
+use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
 use common::Uint256;
 use rand::prelude::*;
+use serialization::Encode;
 use std::sync::Mutex;
 
 pub(in crate::detail::tests) type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;

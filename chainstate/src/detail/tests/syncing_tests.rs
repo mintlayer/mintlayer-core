@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![allow(warnings)]
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
+use blockchain_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
 use rand::Rng;
 
@@ -291,8 +292,14 @@ fn test_filter_already_existing_blocks() {
                 })
                 .collect::<Vec<_>>();
 
-            let headers = btf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
-            assert_eq!(headers, Err(BlockError::NotFound));
+            let headers_filtered =
+                btf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
+            assert_eq!(
+                headers_filtered,
+                Err(PropertyQueryError::BlockNotFound(
+                    headers[1].get_prev_block_id().clone().expect("to have a prev")
+                ))
+            );
         }
     });
 }

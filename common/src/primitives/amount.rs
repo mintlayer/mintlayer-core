@@ -73,6 +73,7 @@ impl Amount {
     pub fn from_fixedpoint_str(amount_str: &str, decimals: u8) -> Option<Self> {
         let decimals = decimals as usize;
         let amount_str = amount_str.trim_matches(' '); // trim spaces
+        let amount_str = amount_str.replace('_', "");
 
         // empty not allowed
         if amount_str.is_empty() {
@@ -93,7 +94,7 @@ impl Amount {
         } else if amount_str.matches('.').count() == 0 {
             // if there is no decimal point, then just add N zeros to the right and we're done
             let zeros = "0".repeat(decimals);
-            let amount_str = amount_str.to_owned() + &zeros;
+            let amount_str = amount_str + &zeros;
 
             amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         } else {
@@ -236,6 +237,20 @@ impl Sum<Amount> for Option<Amount> {
     }
 }
 
+#[macro_export]
+macro_rules! amount_sum {
+    ($arg_1:expr, $($arg_n:expr),+) => {{
+        let result = Some($arg_1);
+        $(
+            let result = match result {
+                Some(v) => v + $arg_n,
+                None => None,
+            };
+        )*
+        result
+    }}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -350,6 +365,52 @@ mod tests {
         assert_eq!(y >> 2, Some(Amount { val: 32 }));
         assert_eq!(y >> 4, Some(Amount { val: 8 }));
         assert_eq!(y >> 6, Some(Amount { val: 2 }));
+    }
+
+    #[test]
+    fn variadic_sum() {
+        assert_eq!(
+            amount_sum!(Amount::from_atoms(1), Amount::from_atoms(2)),
+            Some(Amount::from_atoms(3))
+        );
+
+        assert_eq!(
+            amount_sum!(
+                Amount::from_atoms(1),
+                Amount::from_atoms(2),
+                Amount::from_atoms(3)
+            ),
+            Some(Amount::from_atoms(6))
+        );
+
+        assert_eq!(
+            amount_sum!(
+                Amount::from_atoms(1),
+                Amount::from_atoms(2),
+                Amount::from_atoms(3),
+                Amount::from_atoms(4)
+            ),
+            Some(Amount::from_atoms(10))
+        );
+
+        assert_eq!(
+            amount_sum!(Amount::from_atoms(IntType::MAX), Amount::from_atoms(0)),
+            Some(Amount::from_atoms(IntType::MAX))
+        );
+
+        assert_eq!(
+            amount_sum!(Amount::from_atoms(IntType::MAX), Amount::from_atoms(1)),
+            None
+        );
+
+        assert_eq!(
+            amount_sum!(
+                Amount::from_atoms(IntType::MAX - 1),
+                Amount::from_atoms(1),
+                Amount::from_atoms(1)
+            ),
+            None
+        );
     }
 
     #[rustfmt::skip]

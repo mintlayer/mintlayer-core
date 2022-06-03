@@ -15,9 +15,8 @@
 //
 // Author(s): S. Afach
 
+use super::error::StateUpdateError;
 use common::chain::{Spender, TxMainChainIndex};
-
-use crate::detail::BlockError;
 
 pub enum CachedInputsOperation {
     Write(TxMainChainIndex),
@@ -26,14 +25,14 @@ pub enum CachedInputsOperation {
 }
 
 impl CachedInputsOperation {
-    pub fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), BlockError> {
+    pub fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), StateUpdateError> {
         // spend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.spend(output_index, spender).map_err(BlockError::from)?
+                tx_index.spend(output_index, spender).map_err(StateUpdateError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(BlockError::MissingOutputOrSpentOutputErased)
+                return Err(StateUpdateError::MissingOutputOrSpentOutputErased)
             }
         }
 
@@ -42,14 +41,14 @@ impl CachedInputsOperation {
         Ok(())
     }
 
-    pub fn unspend(&mut self, output_index: u32) -> Result<(), BlockError> {
+    pub fn unspend(&mut self, output_index: u32) -> Result<(), StateUpdateError> {
         // unspend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.unspend(output_index).map_err(BlockError::from)?
+                tx_index.unspend(output_index).map_err(StateUpdateError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(BlockError::MissingOutputOrSpentOutputErased)
+                return Err(StateUpdateError::MissingOutputOrSpentOutputErased)
             }
         }
 
