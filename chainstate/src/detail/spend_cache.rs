@@ -395,14 +395,11 @@ impl<'a> CachedInputs<'a> {
 
                         // verify input signatures
                         self.verify_signatures(&reward_transactable)?;
+
+                        let spender = Spender::from(block.get_id());
+                        self.apply_spend(inputs, spend_height, blockreward_maturity, spender)?;
                     }
                     None => (),
-                }
-
-                // spend inputs of this block
-                if let Some(inputs) = reward_transactable.inputs() {
-                    let spender = Spender::from(block.get_id());
-                    self.apply_spend(inputs, spend_height, blockreward_maturity, spender)?;
                 }
             }
         }
