@@ -9,6 +9,8 @@ pub enum ConsensusData {
     None,
     #[codec(index = 1)]
     PoW(PoWData),
+    #[codec(index = 2)]
+    FakePoS(FakePoSData),
 }
 
 pub struct BlockRewardTransactable<'a> {
@@ -49,6 +51,26 @@ impl ConsensusData {
                 inputs: None,
                 outputs: Some(pow_data.outputs()),
             },
+            ConsensusData::FakePoS(pos_data) => BlockRewardTransactable {
+                inputs: Some(&pos_data.kernel_inputs),
+                outputs: Some(&pos_data.reward_outputs),
+            },
+        }
+    }
+}
+
+/// Fake PoS just to test spending block rewards; will be removed at some point in the future
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+pub struct FakePoSData {
+    kernel_inputs: Vec<TxInput>,
+    reward_outputs: Vec<TxOutput>,
+}
+
+impl FakePoSData {
+    pub fn new(kernel_inputs: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Self {
+        Self {
+            kernel_inputs,
+            reward_outputs,
         }
     }
 }
