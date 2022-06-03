@@ -594,12 +594,10 @@ impl<'a> ChainstateRef<'a> {
 
     fn disconnect_transactions_inner(&mut self, block: &Block) -> Result<CachedInputs, BlockError> {
         let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
-        block
-            .transactions()
-            .iter()
-            .enumerate()
-            .try_for_each(|(tx_num, _tx)| cached_inputs.unspend(block, tx_num))?;
-        // TODO: Discuss about disconnect reward
+        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
+            cached_inputs.unspend(block, SpendSource::Transaction(tx_num))
+        })?;
+        cached_inputs.unspend(block, SpendSource::BlockReward)?;
         Ok(cached_inputs)
     }
 

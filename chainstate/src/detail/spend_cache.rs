@@ -32,6 +32,7 @@ use crate::detail::{BlockError, TxRw};
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum SpendSource {
     Transaction(usize),
     BlockReward,
@@ -77,7 +78,7 @@ impl<'a> CachedInputs<'a> {
                         )?);
                         (tx_index, OutPointSourceId::from(block.get_id()))
                     }
-                    None => return Ok(()),
+                    None => return Ok(()), // no outputs to add
                 }
             }
         };
@@ -89,14 +90,31 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    fn remove_outputs(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
+    fn remove_outputs(
+        &mut self,
+        block: &Block,
+        spend_source: SpendSource,
+    ) -> Result<(), BlockError> {
         let tx_index = CachedInputsOperation::Erase;
-        let tx = block
-            .transactions()
-            .get(tx_num)
-            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+        // TODO: Maybe below can be taken out into a function from both remove_outputs and add_outputs
+        let outpoint_source_id = match spend_source {
+            SpendSource::Transaction(tx_num) => {
+                let tx = block
+                    .transactions()
+                    .get(tx_num)
+                    .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+                let tx_id = tx.get_id();
+                OutPointSourceId::from(tx_id)
+            }
+            SpendSource::BlockReward => {
+                match block.header().block_reward_transactable().outputs() {
+                    Some(_outputs) => OutPointSourceId::from(block.get_id()),
+                    None => return Ok(()), // no outputs to remove
+                }
+            }
+        };
 
-        self.inputs.insert(OutPointSourceId::from(tx.get_id()), tx_index);
+        self.inputs.insert(outpoint_source_id, tx_index);
         Ok(())
     }
 
@@ -378,7 +396,7 @@ impl<'a> CachedInputs<'a> {
                             .iter()
                             .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
-                        // check for attempted money printing
+                        // check for attempted money printing beyond the block reward
                         match reward_transactable.outputs() {
                             Some(outputs) => {
                                 self.check_block_reward_amounts(inputs, outputs, spend_height)?
@@ -405,29 +423,60 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
-    pub fn unspend(&mut self, block: &Block, tx_num: usize) -> Result<(), BlockError> {
+    pub fn unspend(&mut self, block: &Block, spend_source: SpendSource) -> Result<(), BlockError> {
         // Delete TxMainChainIndex for the current tx
-        self.remove_outputs(block, tx_num)?;
+        self.remove_outputs(block, spend_source)?;
 
-        let tx = block
-            .transactions()
-            .get(tx_num)
-            .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+        match spend_source {
+            SpendSource::Transaction(tx_num) => {
+                let tx = block
+                    .transactions()
+                    .get(tx_num)
+                    .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
 
-        // pre-cache all inputs
-        tx.get_inputs()
-            .iter()
-            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+                // pre-cache all inputs
+                tx.get_inputs()
+                    .iter()
+                    .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
-        // unspend inputs
-        for input in tx.get_inputs() {
-            let outpoint = input.get_outpoint();
+                // unspend inputs
+                for input in tx.get_inputs() {
+                    let outpoint = input.get_outpoint();
 
-            let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
+                    let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
 
-            // Mark input as unspend
-            input_tx_id_op.unspend(outpoint.get_output_index()).map_err(BlockError::from)?;
+                    // Mark input as unspend
+                    input_tx_id_op
+                        .unspend(outpoint.get_output_index())
+                        .map_err(BlockError::from)?;
+                }
+            }
+            SpendSource::BlockReward => {
+                let reward_transactable = block.header().block_reward_transactable();
+                match reward_transactable.inputs() {
+                    Some(inputs) => {
+                        // pre-cache all inputs
+                        inputs
+                            .iter()
+                            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+
+                        // unspend inputs
+                        for input in inputs {
+                            let outpoint = input.get_outpoint();
+
+                            let input_tx_id_op = self.get_from_cached_mut(outpoint)?;
+
+                            // Mark input as unspend
+                            input_tx_id_op
+                                .unspend(outpoint.get_output_index())
+                                .map_err(BlockError::from)?;
+                        }
+                    }
+                    None => (),
+                }
+            }
         }
+
         Ok(())
     }
 
@@ -454,3 +503,4 @@ impl<'a> CachedInputs<'a> {
 
 // TODO: write tests for CachedInputs that covers all possible mutations
 // TODO: write tests for block rewards
+// TODO: test attempting to spend the block reward at the same block
