@@ -15,7 +15,7 @@ ripemd = "0.1.0"
 blake2 = "0.10.2"
 generic-array = "0.14.5"
 hex = "0.4.3"
-rand = "0.8.4"
+rand = "0.8.5"
 tari_crypto = "0.11.2"
 parity-scale-codec = "3.1.2"
 serialization = { path = "../serialization" }

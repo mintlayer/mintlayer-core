@@ -112,7 +112,9 @@ fn populate_cache<'a>(
     (cache, outps)
 }
 
-// #[test]
+// TODO: Fix the test (https://github.com/mintlayer/mintlayer-core/issues/219).
+#[ignore]
+#[test]
 fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 

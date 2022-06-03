@@ -61,7 +61,7 @@ pub enum TransactionCreationError {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TransactionUpdateError {
     Unknown,
 }
@@ -139,12 +139,12 @@ impl Transaction {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crypto::random::{RngCore, SeedableRng};
+    use crypto::random::RngCore;
 
     #[test]
     #[allow(clippy::eq_op)]
     fn version_byte() {
-        let mut rng = rand::rngs::StdRng::from_entropy();
+        let mut rng = crypto::random::make_pseudo_rng();
         let flags = rng.next_u32();
         let lock_time = rng.next_u32();
 

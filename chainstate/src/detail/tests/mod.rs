@@ -21,11 +21,12 @@ use blockchain_storage::Store;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, Transaction, TxInput, TxOutput};
+use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
 use common::Uint256;
-use rand::prelude::*;
+use crypto::random::{Rng, SliceRandom};
+use serialization::Encode;
 use std::sync::Mutex;
 
 pub(in crate::detail::tests) type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
@@ -68,7 +69,7 @@ pub(in crate::detail::tests) enum TestSpentStatus {
 }
 
 fn empty_witness() -> InputWitness {
-    let mut rng = rand::thread_rng();
+    let mut rng = crypto::random::make_pseudo_rng();
     let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(&mut rng);
     InputWitness::NoSignature(Some(msg))
@@ -83,7 +84,7 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    let mut rng = thread_rng();
+    let mut rng = crypto::random::make_pseudo_rng();
     let spent_value = rng.gen_range(0..output.get_value().into_atoms());
     if output.get_value() > Amount::from_atoms(spent_value) {
         Some((

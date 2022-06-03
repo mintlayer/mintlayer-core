@@ -18,168 +18,142 @@
 use common::{
     chain::{
         block::{Block, BlockConsistencyError},
-        SpendError, Spender, Transaction, TxMainChainIndexError,
+        Transaction,
     },
-    primitives::{Amount, BlockHeight, Id},
+    primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
 
-use super::orphan_blocks::OrphanAddError;
+use super::{
+    orphan_blocks::OrphanAddError, pow::error::ConsensusPoWError,
+    spend_cache::error::StateUpdateError,
+};
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
-    #[error("Illegal orphan that was submitted by non-local source, e.g., a peer")]
-    IllegalOrphan,
-    #[error("Orphan that was submitted legitimately through a local source")]
-    LocalOrphan,
+    #[error("Block storage error `{0}`")]
+    StorageError(#[from] blockchain_storage::Error),
+    #[error("Error while checking the previous block")]
+    OrphanCheckFailed(#[from] OrphanCheckError),
+    #[error("Check block failed: {0}")]
+    CheckBlockFailed(#[from] CheckBlockError),
+    #[error("Failed to update the internal blockchain state: {0}")]
+    StateUpdateFailed(#[from] StateUpdateError),
+    #[error("Failed to load best block")]
+    BestBlockLoadError(PropertyQueryError),
+    #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
+    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<Block>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
     InvariantErrorInvalidTip,
     #[error("Failed to find previous block in non-genesis setting")]
     InvariantErrorPrevBlockNotFound,
-    #[error("Only genesis can have no previous block")]
-    InvalidBlockNoPrevBlock,
-    #[error("Block has an invalid merkle root")]
-    MerkleRootMismatch,
-    #[error("Block has an invalid witness merkle root")]
-    WitnessMerkleRootMismatch,
-    #[error("Previous block time must be equal or lower")]
-    BlockTimeOrderInvalid,
-    #[error("Block from the future")]
-    BlockFromTheFuture,
-    #[error("Block size is too large")]
-    BlockTooLarge,
-    #[error("Block storage error `{0}`")]
-    StorageError(blockchain_storage::Error),
-    #[error("Invalid block height `{0}`")]
-    InvalidBlockHeight(BlockHeight),
-    #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
-    InvalidAncestorHeight {
-        block_height: BlockHeight,
-        ancestor_height: BlockHeight,
-    },
-    #[error("Invalid Proof of Work")]
-    InvalidPoW,
-    #[error("The previous block invalid")]
-    PrevBlockInvalid,
-    #[error("The storage cause failure `{0}`")]
-    StorageFailure(blockchain_storage::Error),
-    #[error("The block not found")]
-    NotFound,
+    #[error("The previous block not found")]
+    PrevBlockNotFound,
     #[error("Invalid block source")]
     InvalidBlockSource,
-    #[error("Duplicate transaction found in block")]
-    DuplicatedTransactionInBlock,
-    #[error("Outputs already in the inputs cache")]
-    OutputAlreadyPresentInInputsCache,
-    #[error("Output is not found in the cache or database")]
-    MissingOutputOrSpent,
-    #[error("Input of tx {tx_id:?} has an out-of-range output index {source_output_index}")]
-    OutputIndexOutOfRange {
-        tx_id: Option<Spender>,
-        source_output_index: usize,
-    },
-    #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
-    MissingOutputOrSpentOutputErased,
-    #[error("Double-spend attempt")]
-    DoubleSpendAttempt(Spender),
-    #[error("Block disconnect already-unspent (invaraint broken)")]
-    InvariantBrokenAlreadyUnspent,
-    #[error("Source block index for block reward output not found")]
-    InvariantBrokenSourceBlockIndexNotFound,
-    #[error("Block distance calculation for maturity failed")]
-    BlockHeightArithmeticError,
-    #[error("Block reward spent immaturely")]
-    ImmatureBlockRewardSpend,
-    #[error("Invalid output count")]
-    InvalidOutputCount,
-    #[error("Input was cached, but could not be found")]
-    PreviouslyCachedInputNotFound,
-    #[error("Input was cached, but it is erased")]
-    PreviouslyCachedInputWasErased,
-    #[error("Signature verification failed in transaction with id: {0}")]
-    SignatureVerificationFailed(Id<Transaction>),
-    #[error("Transaction index found but transaction not found")]
-    InvariantErrorTransactionCouldNotBeLoaded,
-    #[error("Input addition error")]
-    InputAdditionError,
-    #[error("Output addition error")]
-    OutputAdditionError,
-    #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
-    AttemptToPrintMoney(Amount, Amount),
-    #[error("Duplicate input in transaction")]
-    DuplicateInputInTransaction(Id<Transaction>),
-    #[error("Duplicate input in block")]
-    DuplicateInputInBlock(Id<Block>),
-    #[error("Transaction number `{0}` does not exist in block `{1}`")]
-    TxNumWrongInBlock(usize, Id<Block>),
-    #[error("Serialization invariant failed for block `{0}`")]
-    SerializationInvariantError(Id<Block>),
-    #[error("Unexpected numeric type conversion error `{0}`")]
-    InternalNumTypeConversionError(Id<Block>),
-    #[error("Internal block representation is invalid `{0}`")]
-    BlockConsistencyError(BlockConsistencyError),
-    #[error("No PoW data for block")]
-    NoPowDataInPreviousBlock,
-    #[error("Block consensus type does not match our chain configuration: {0}")]
-    ConsensusTypeMismatch(String),
-    #[error("Conversion failed: `{0:?}`")]
-    Conversion(String),
-    #[error("Unsupported consensus type")]
-    UnsupportedConsensusType,
     #[error("Block {0:?} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
     DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
 }
 
-impl From<blockchain_storage::Error> for BlockError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        BlockError::StorageError(err)
-    }
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum ConsensusVerificationError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] blockchain_storage::Error),
+    #[error("Error while loading previous block {0} of block {1} with error {2}")]
+    PrevBlockLoadError(Id<Block>, Id<Block>, PropertyQueryError),
+    #[error("Previous block {0} of block {1} not found in database")]
+    PrevBlockNotFound(Id<Block>, Id<Block>),
+    #[error("Block consensus type does not match our chain configuration: {0}")]
+    ConsensusTypeMismatch(String),
+    #[error("PoW error: {0}")]
+    PoWError(ConsensusPoWError),
+    #[error("Unsupported consensus type")]
+    UnsupportedConsensusType,
 }
 
-impl From<OrphanAddError> for Result<(), BlockError> {
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum CheckBlockError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] blockchain_storage::Error),
+    #[error("Block has an invalid merkle root")]
+    MerkleRootMismatch,
+    #[error("Block has an invalid witness merkle root")]
+    WitnessMerkleRootMismatch,
+    #[error("Internal block representation is invalid `{0}`")]
+    BlockConsistencyError(#[from] BlockConsistencyError),
+    #[error("Only genesis can have no previous block")]
+    InvalidBlockNoPrevBlock,
+    #[error("Previous block {0} of block {1} not found in database")]
+    PrevBlockNotFound(Id<Block>, Id<Block>),
+    #[error("Previous block time must be equal or lower")]
+    BlockTimeOrderInvalid,
+    #[error("Block from the future")]
+    BlockFromTheFuture,
+    #[error("Block size is too large")]
+    BlockTooLarge,
+    #[error("Check transaction failed: {0}")]
+    CheckTransactionFailed(CheckBlockTransactionsError),
+    #[error("Check transaction failed: {0}")]
+    ConsensusVerificationFailed(ConsensusVerificationError),
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum CheckBlockTransactionsError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(blockchain_storage::Error),
+    #[error("Duplicate input in transaction {0} in block {1}")]
+    DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
+    #[error("Duplicate input in block")]
+    DuplicateInputInBlock(Id<Block>),
+    #[error("Duplicate transaction found in block")]
+    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum PropertyQueryError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] blockchain_storage::Error),
+    #[error("Best block not found")]
+    BestBlockNotFound,
+    #[error("Best block index not found")]
+    BestBlockIndexNotFound,
+    #[error("Block not found {0}")]
+    BlockNotFound(Id<Block>),
+    #[error("Previous block index not found {0}")]
+    PrevBlockIndexNotFound(Id<Block>),
+    #[error("Block index {0} has no previous block entry in it")]
+    BlockIndexHasNoPrevBlock(Id<Block>),
+    #[error("Block for height {0} not found")]
+    BlockForHeightNotFound(BlockHeight),
+    #[error("Invalid previous block value")]
+    InvalidInputForPrevBlock,
+    #[error("Provided an empty list")]
+    InvalidInputEmpty,
+    #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
+    InvalidAncestorHeight {
+        block_height: BlockHeight,
+        ancestor_height: BlockHeight,
+    },
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum OrphanCheckError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(#[from] blockchain_storage::Error),
+    #[error("Previous block not found")]
+    PrevBlockIdNotFound,
+    #[error("Block index not found")]
+    PrevBlockIndexNotFound(PropertyQueryError),
+    #[error("Orphan that was submitted legitimately through a local source")]
+    LocalOrphan,
+}
+
+impl From<OrphanAddError> for Result<(), OrphanCheckError> {
     fn from(err: OrphanAddError) -> Self {
         match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => Ok(()),
-        }
-    }
-}
-
-impl From<SpendError> for BlockError {
-    fn from(err: SpendError) -> Self {
-        match err {
-            SpendError::AlreadySpent(spender) => BlockError::DoubleSpendAttempt(spender),
-            SpendError::AlreadyUnspent => BlockError::InvariantBrokenAlreadyUnspent,
-            SpendError::OutOfRange {
-                tx_id,
-                source_output_index,
-            } => BlockError::OutputIndexOutOfRange {
-                tx_id,
-                source_output_index,
-            },
-        }
-    }
-}
-
-impl From<BlockConsistencyError> for BlockError {
-    fn from(err: BlockConsistencyError) -> Self {
-        BlockError::BlockConsistencyError(err)
-    }
-}
-
-impl From<TxMainChainIndexError> for BlockError {
-    fn from(err: TxMainChainIndexError) -> Self {
-        match err {
-            TxMainChainIndexError::InvalidOutputCount => BlockError::InvalidOutputCount,
-            TxMainChainIndexError::SerializationInvariantError(block_id) => {
-                BlockError::SerializationInvariantError(block_id)
-            }
-            TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
-                BlockError::TxNumWrongInBlock(tx_num, block_id)
-            }
         }
     }
 }

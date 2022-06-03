@@ -230,7 +230,12 @@ impl TxMainChainIndex {
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
         if output_count == 0 {
-            return Err(TxMainChainIndexError::InvalidOutputCount);
+            match position {
+                SpendablePosition::Transaction(_) => {
+                    return Err(TxMainChainIndexError::InvalidOutputCount)
+                }
+                SpendablePosition::BlockReward(_) => (), // Block rewards can be forfeited
+            };
         }
 
         let spent_vec = std::iter::repeat_with(|| OutputSpentState::Unspent)
