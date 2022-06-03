@@ -254,10 +254,10 @@ impl<'a> CachedInputs<'a> {
         let max_allowed_reward = self.chain_config.block_reward_at_height(block_height);
         let inputs_total = inputs
             .map(|ins| self.calculate_total_inputs(ins))
-            .unwrap_or(Ok(Amount::from_atoms(0)))?;
+            .unwrap_or_else(|| Ok(Amount::from_atoms(0)))?;
         let outputs_total = outputs
-            .map(|outs| Self::calculate_total_outputs(outs))
-            .unwrap_or(Ok(Amount::from_atoms(0)))?;
+            .map(Self::calculate_total_outputs)
+            .unwrap_or_else(|| Ok(Amount::from_atoms(0)))?;
 
         let max_allowed_to_spend =
             (inputs_total + max_allowed_reward).ok_or(BlockError::RewardAdditionError)?;
