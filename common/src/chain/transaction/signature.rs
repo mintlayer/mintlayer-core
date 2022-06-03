@@ -470,43 +470,51 @@ mod test {
         );
     }
 
-    // TODO: Add checks for other sighash types
-    #[test]
-    fn sign_modify_then_verify() {
+    fn sign_modify_then_verify(
+        private_key: &PrivateKey,
+        sighash_type: SigHashType,
+        outpoint_dest: &Destination,
+    ) -> Transaction {
         // Create and sign tx, and then modify and verify it.
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key);
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         let mut original_tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
         sign_tx(
             &mut original_tx,
-            &private_key,
+            private_key,
             sighash_type,
             outpoint_dest.clone(),
         );
-        assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
+        assert_eq!(verify_signed_tx(&original_tx, outpoint_dest), Ok(()));
 
-        // Should failed due to changed flags
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        check_change_flags(&original_tx, outpoint_dest);
+        check_change_locktime(&original_tx, outpoint_dest);
+        check_change_witness(&original_tx, outpoint_dest);
+        original_tx
+    }
+
+    fn check_change_flags(original_tx: &Transaction, outpoint_dest: &Destination) {
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         tx_updater.flags = 1234567890;
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
-        // Should failed due to changed lock_time
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+    }
+
+    fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination) {
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         tx_updater.lock_time = 1234567890;
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
-        // Should failed due to add a new input
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+    }
+
+    fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination) {
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         let outpoinr_source_id =
             OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
-
         tx_updater.inputs.push(TxInput::new(
             outpoinr_source_id,
             1,
@@ -514,11 +522,14 @@ mod test {
         ));
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
+    }
+
+    fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
         // Should failed due to change in witness
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         let signature = match tx_updater.inputs[0].get_witness() {
             InputWitness::Standard(signature) => {
                 // Let's change around 20ish last bytes, it's also avoided SCALE errors
@@ -544,11 +555,13 @@ mod test {
         tx_updater.inputs[0].update_witness(InputWitness::Standard(signature));
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
-        // Should failed due to add a new output
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+    }
+
+    fn check_insert_output(original_tx: &Transaction, outpoint_dest: &Destination) {
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_updater.outputs.push(TxOutput::new(
             Amount::from_atoms(1234567890),
@@ -556,19 +569,85 @@ mod test {
         ));
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
+    }
+
+    fn check_change_output(original_tx: &Transaction, outpoint_dest: &Destination) {
         // Should failed due to change in output value
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
         tx_updater.outputs[0] = TxOutput::new(
             (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
             tx_updater.outputs[0].get_destination().clone(),
         );
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(outpoint_dest, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
+    }
+
+    fn check_change_input(original_tx: &Transaction, outpoint_dest: &Destination) {
+        // Should failed due to change in output value
+        let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+        tx_updater.inputs[0] = TxInput::new(
+            OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
+            9999,
+            tx_updater.inputs[0].get_witness().clone(),
+        );
+        let tx = tx_updater.generate_tx().unwrap();
+        assert_eq!(
+            verify_signature(outpoint_dest, &tx, 0),
+            Err(TransactionSigError::SignatureVerificationFailed)
+        );
+    }
+
+    #[test]
+    fn test_sign_modify_then_verify() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let outpoint_dest = Destination::PublicKey(public_key);
+
+        // ALL - It signs every input and output, and any change to the transaction will render the signature invalid.
+        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_insert_input(&original_tx, &outpoint_dest);
+        check_insert_output(&original_tx, &outpoint_dest);
+        check_change_output(&original_tx, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
+
+        // ALL | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_insert_output(&original_tx, &outpoint_dest);
+        check_change_output(&original_tx, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
+
+        // NONE -  This signs all the inputs to the transaction, but none of the outputs.
+        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
+        check_insert_input(&original_tx, &outpoint_dest);
+
+        // NONE | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
+
+        // SINGLE
+        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_insert_input(&original_tx, &outpoint_dest);
+        check_change_output(&original_tx, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
+
+        // SINGLE | ANYONECANPAY
+        let sighash_type =
+            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+        check_change_output(&original_tx, &outpoint_dest);
+        check_change_input(&original_tx, &outpoint_dest);
     }
 }
