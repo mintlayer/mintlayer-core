@@ -106,8 +106,8 @@ pub enum BlockError {
     InputAdditionError,
     #[error("Output addition error")]
     OutputAdditionError,
-    #[error("Block reward addition error")]
-    RewardAdditionError,
+    #[error("Block reward addition error for block {0}")]
+    RewardAdditionError(Id<Block>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]

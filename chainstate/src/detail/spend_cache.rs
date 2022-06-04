@@ -249,12 +249,26 @@ impl<'a> CachedInputs<'a> {
             .ok_or(BlockError::OutputAdditionError)
     }
 
-    fn check_block_reward_amounts<T: Transactable>(
+    fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, BlockError> {
+        let total_fees = block
+            .transactions()
+            .iter()
+            .try_fold(Amount::from_atoms(0), |init, tx| {
+                init + self.check_transferred_amounts_and_get_fee(tx).ok()?
+            })
+            .ok_or(BlockError::FailedToAddAllFeesOfBlock(block.get_id()))?;
+        Ok(total_fees)
+    }
+
+    pub fn check_block_reward(
         &self,
-        block_reward_transactable: &T,
-        total_fees: Amount,
+        block: &Block,
         block_height: &BlockHeight,
     ) -> Result<(), BlockError> {
+        let total_fees = self.calculate_block_total_fees(block)?;
+
+        let block_reward_transactable = block.header().block_reward_transactable();
+
         let inputs = block_reward_transactable.inputs();
         let outputs = block_reward_transactable.outputs();
 
@@ -266,11 +280,11 @@ impl<'a> CachedInputs<'a> {
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
 
-        let max_allowed_to_spend_before_fees =
-            (inputs_total + max_allowed_reward).ok_or(BlockError::RewardAdditionError)?;
+        let max_allowed_to_spend_before_fees = (inputs_total + max_allowed_reward)
+            .ok_or(BlockError::RewardAdditionError(block.get_id()))?;
 
         let max_allowed_to_spend = (max_allowed_to_spend_before_fees + total_fees)
-            .ok_or(BlockError::RewardAdditionError)?;
+            .ok_or(BlockError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_to_spend {
             return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
@@ -358,26 +372,6 @@ impl<'a> CachedInputs<'a> {
                 .spend(outpoint.get_output_index(), spender.clone())
                 .map_err(BlockError::from)?;
         }
-
-        Ok(())
-    }
-
-    pub fn check_block_reward(
-        &self,
-        block: &Block,
-        block_height: &BlockHeight,
-    ) -> Result<(), BlockError> {
-        let total_fees = block
-            .transactions()
-            .iter()
-            .try_fold(Amount::from_atoms(0), |init, tx| {
-                init + self.check_transferred_amounts_and_get_fee(tx).ok()?
-            })
-            .ok_or(BlockError::FailedToAddAllFeesOfBlock(block.get_id()))?;
-
-        let block_reward_transactable = block.header().block_reward_transactable();
-
-        self.check_block_reward_amounts(&block_reward_transactable, total_fees, block_height)?;
 
         Ok(())
     }
