@@ -239,7 +239,10 @@ impl<'a> CachedInputs<'a> {
         }
 
         let paid_fee = inputs_total - outputs_total;
-        paid_fee.ok_or_else(|| BlockError::TxFeeTotalCalcFailed(inputs_total, outputs_total))
+        paid_fee.ok_or(BlockError::TxFeeTotalCalcFailed(
+            inputs_total,
+            outputs_total,
+        ))
     }
 
     fn calculate_total_outputs(outputs: &[TxOutput]) -> Result<Amount, BlockError> {
@@ -256,7 +259,7 @@ impl<'a> CachedInputs<'a> {
             .try_fold(Amount::from_atoms(0), |init, tx| {
                 init + self.check_transferred_amounts_and_get_fee(tx).ok()?
             })
-            .ok_or(BlockError::FailedToAddAllFeesOfBlock(block.get_id()))?;
+            .ok_or_else(|| BlockError::FailedToAddAllFeesOfBlock(block.get_id()))?;
         Ok(total_fees)
     }
 
@@ -281,10 +284,10 @@ impl<'a> CachedInputs<'a> {
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
 
         let max_allowed_to_spend_before_fees = (inputs_total + max_allowed_reward)
-            .ok_or(BlockError::RewardAdditionError(block.get_id()))?;
+            .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
 
         let max_allowed_to_spend = (max_allowed_to_spend_before_fees + total_fees)
-            .ok_or(BlockError::RewardAdditionError(block.get_id()))?;
+            .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_to_spend {
             return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
