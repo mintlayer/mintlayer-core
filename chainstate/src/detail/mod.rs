@@ -574,7 +574,7 @@ impl<'a> ChainstateRef<'a> {
             )?;
         }
 
-        let block_subsidy = self.chain_config.block_reward_at_height(spend_height);
+        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
         cached_inputs.check_block_reward(block, block_subsidy)?;
 
         Ok(cached_inputs)
