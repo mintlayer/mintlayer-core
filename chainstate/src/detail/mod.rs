@@ -573,6 +573,9 @@ impl<'a> ChainstateRef<'a> {
                 blockreward_maturity,
             )?;
         }
+
+        cached_inputs.check_block_reward(block, spend_height)?;
+
         Ok(cached_inputs)
     }
 

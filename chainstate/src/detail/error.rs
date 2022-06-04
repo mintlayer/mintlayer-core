@@ -110,6 +110,10 @@ pub enum BlockError {
     RewardAdditionError,
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
+    #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
+    TxFeeTotalCalcFailed(Amount, Amount),
+    #[error("Addition of all fees in block `{0}` failed")]
+    FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Duplicate input in transaction")]
     DuplicateInputInTransaction(Id<Transaction>),
     #[error("Duplicate input in block")]

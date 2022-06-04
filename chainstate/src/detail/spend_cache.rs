@@ -17,7 +17,7 @@
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::signature::{verify_signature, Transactable};
-use common::chain::ChainConfig;
+use common::chain::{ChainConfig, Transaction};
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -224,18 +224,22 @@ impl<'a> CachedInputs<'a> {
         Ok(total)
     }
 
-    fn check_transferred_amounts(
+    fn check_transferred_amounts_and_get_fee(
         &self,
-        inputs: &[TxInput],
-        outputs: &[TxOutput],
-    ) -> Result<(), BlockError> {
+        tx: &Transaction,
+    ) -> Result<Amount, BlockError> {
+        let inputs = tx.get_inputs();
+        let outputs = tx.get_outputs();
+
         let inputs_total = self.calculate_total_inputs(inputs)?;
         let outputs_total = Self::calculate_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
             return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
         }
-        Ok(())
+
+        let paid_fee = inputs_total - outputs_total;
+        paid_fee.ok_or_else(|| BlockError::TxFeeTotalCalcFailed(inputs_total, outputs_total))
     }
 
     fn calculate_total_outputs(outputs: &[TxOutput]) -> Result<Amount, BlockError> {
@@ -245,12 +249,15 @@ impl<'a> CachedInputs<'a> {
             .ok_or(BlockError::OutputAdditionError)
     }
 
-    fn check_block_reward_amounts(
+    fn check_block_reward_amounts<T: Transactable>(
         &self,
-        inputs: Option<&[TxInput]>,
-        outputs: Option<&[TxOutput]>,
+        block_reward_transactable: &T,
+        total_fees: Amount,
         block_height: &BlockHeight,
     ) -> Result<(), BlockError> {
+        let inputs = block_reward_transactable.inputs();
+        let outputs = block_reward_transactable.outputs();
+
         let max_allowed_reward = self.chain_config.block_reward_at_height(block_height);
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
@@ -259,8 +266,11 @@ impl<'a> CachedInputs<'a> {
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
 
-        let max_allowed_to_spend =
+        let max_allowed_to_spend_before_fees =
             (inputs_total + max_allowed_reward).ok_or(BlockError::RewardAdditionError)?;
+
+        let max_allowed_to_spend = (max_allowed_to_spend_before_fees + total_fees)
+            .ok_or(BlockError::RewardAdditionError)?;
 
         if outputs_total > max_allowed_to_spend {
             return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
@@ -352,6 +362,26 @@ impl<'a> CachedInputs<'a> {
         Ok(())
     }
 
+    pub fn check_block_reward(
+        &self,
+        block: &Block,
+        block_height: &BlockHeight,
+    ) -> Result<(), BlockError> {
+        let total_fees = block
+            .transactions()
+            .iter()
+            .try_fold(Amount::from_atoms(0), |init, tx| {
+                init + self.check_transferred_amounts_and_get_fee(tx).ok()?
+            })
+            .ok_or(BlockError::FailedToAddAllFeesOfBlock(block.get_id()))?;
+
+        let block_reward_transactable = block.header().block_reward_transactable();
+
+        self.check_block_reward_amounts(&block_reward_transactable, total_fees, block_height)?;
+
+        Ok(())
+    }
+
     pub fn spend(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -371,7 +401,7 @@ impl<'a> CachedInputs<'a> {
                     .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
 
                 // check for attempted money printing
-                self.check_transferred_amounts(tx.get_inputs(), tx.get_outputs())?;
+                self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
                 self.verify_signatures(tx)?;
@@ -383,7 +413,6 @@ impl<'a> CachedInputs<'a> {
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.header().block_reward_transactable();
                 let inputs = reward_transactable.inputs();
-                let outputs = reward_transactable.outputs();
                 // TODO: test spending block rewards from chains outside the mainchain
                 match inputs {
                     Some(ins) => {
@@ -399,8 +428,6 @@ impl<'a> CachedInputs<'a> {
                     }
                     None => (),
                 }
-
-                self.check_block_reward_amounts(inputs, outputs, spend_height)?
             }
         }
         // add the outputs to the cache
@@ -490,3 +517,4 @@ impl<'a> CachedInputs<'a> {
 // TODO: write tests for CachedInputs that covers all possible mutations
 // TODO: write tests for block rewards
 // TODO: test attempting to spend the block reward at the same block
+// TODO: test that total_block_reward = total_tx_fees + consensus_block_reward
