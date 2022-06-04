@@ -229,7 +229,7 @@ impl TxMainChainIndex {
         position: SpendablePosition,
         output_count: u32,
     ) -> Result<Self, TxMainChainIndexError> {
-        if output_count == 0 && matches!(position, SpendablePosition::Transaction(_)) {
+        if output_count == 0 {
             match position {
                 SpendablePosition::Transaction(_) => {
                     return Err(TxMainChainIndexError::InvalidOutputCount)
