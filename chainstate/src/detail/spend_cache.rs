@@ -412,7 +412,6 @@ impl<'a> CachedInputs<'a> {
                 match inputs {
                     Some(ins) => {
                         // pre-cache all inputs
-                        // pre-cache all inputs
                         self.precache_inputs(ins)?;
 
                         // verify input signatures
