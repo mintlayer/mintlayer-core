@@ -314,6 +314,7 @@ impl<'a> CachedInputs<'a> {
                         .ok_or_else(|| {
                             BlockError::InvariantErrorTransactionCouldNotBeLoaded(tx_pos.clone())
                         })?;
+
                     let output = prev_tx
                         .get_outputs()
                         .get(input.get_outpoint().get_output_index() as usize)
@@ -321,6 +322,7 @@ impl<'a> CachedInputs<'a> {
                             tx_id: None,
                             source_output_index: outpoint.get_output_index() as usize,
                         })?;
+
                     verify_signature(output.get_destination(), tx, input_idx)
                         .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
@@ -333,14 +335,19 @@ impl<'a> CachedInputs<'a> {
                             BlockError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone())
                         })?;
 
-                    let rewards_tx = block_index.get_block_header().block_reward_transactable();
+                    let reward_tx = block_index.get_block_header().block_reward_transactable();
 
-                    let outputs = rewards_tx.outputs().unwrap_or(&[]);
+                    let output = reward_tx
+                        .outputs()
+                        .unwrap_or(&[])
+                        .get(input.get_outpoint().get_output_index() as usize)
+                        .ok_or(BlockError::OutputIndexOutOfRange {
+                            tx_id: None,
+                            source_output_index: outpoint.get_output_index() as usize,
+                        })?;
 
-                    for output in outputs {
-                        verify_signature(output.get_destination(), tx, input_idx)
-                            .map_err(|_| BlockError::SignatureVerificationFailed)?;
-                    }
+                    verify_signature(output.get_destination(), tx, input_idx)
+                        .map_err(|_| BlockError::SignatureVerificationFailed)?;
                 }
             };
         }
