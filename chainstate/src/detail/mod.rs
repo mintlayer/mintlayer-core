@@ -558,7 +558,7 @@ impl<'a> ChainstateRef<'a> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
 
         cached_inputs.spend(
             BlockTransactableRef::BlockReward(block),
@@ -574,7 +574,8 @@ impl<'a> ChainstateRef<'a> {
             )?;
         }
 
-        cached_inputs.check_block_reward(block, spend_height)?;
+        let block_subsidy = self.chain_config.block_reward_at_height(spend_height);
+        cached_inputs.check_block_reward(block, block_subsidy)?;
 
         Ok(cached_inputs)
     }
@@ -594,7 +595,7 @@ impl<'a> ChainstateRef<'a> {
     }
 
     fn disconnect_transactions_inner(&mut self, block: &Block) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(self.chain_config, &self.db_tx);
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
         block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
             cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
         })?;

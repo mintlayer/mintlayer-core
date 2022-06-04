@@ -17,7 +17,7 @@
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::signature::{verify_signature, Transactable};
-use common::chain::{ChainConfig, Transaction};
+use common::chain::Transaction;
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -45,15 +45,13 @@ pub struct ConsumedCachedInputs {
 
 pub struct CachedInputs<'a> {
     db_tx: &'a TxRw<'a>,
-    chain_config: &'a ChainConfig,
     inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
 impl<'a> CachedInputs<'a> {
-    pub fn new(chain_config: &'a ChainConfig, db_tx: &'a TxRw<'a>) -> Self {
+    pub fn new(db_tx: &'a TxRw<'a>) -> Self {
         Self {
             db_tx,
-            chain_config,
             inputs: BTreeMap::new(),
         }
     }
@@ -266,7 +264,7 @@ impl<'a> CachedInputs<'a> {
     pub fn check_block_reward(
         &self,
         block: &Block,
-        block_height: &BlockHeight,
+        block_subsidy_at_height: Amount,
     ) -> Result<(), BlockError> {
         let total_fees = self.calculate_block_total_fees(block)?;
 
@@ -275,7 +273,6 @@ impl<'a> CachedInputs<'a> {
         let inputs = block_reward_transactable.inputs();
         let outputs = block_reward_transactable.outputs();
 
-        let max_allowed_reward = self.chain_config.block_reward_at_height(block_height);
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
             |ins| self.calculate_total_inputs(ins),
@@ -283,7 +280,7 @@ impl<'a> CachedInputs<'a> {
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
 
-        let max_allowed_to_spend_before_fees = (inputs_total + max_allowed_reward)
+        let max_allowed_to_spend_before_fees = (inputs_total + block_subsidy_at_height)
             .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
 
         let max_allowed_to_spend = (max_allowed_to_spend_before_fees + total_fees)
