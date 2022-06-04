@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use common::amount_sum;
 use common::chain::signature::{verify_signature, Transactable};
 use common::chain::Transaction;
 use common::{
@@ -280,13 +281,11 @@ impl<'a> CachedInputs<'a> {
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
 
-        let max_allowed_to_spend_before_fees = (inputs_total + block_subsidy_at_height)
-            .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
+        let max_allowed_outputs_total =
+            amount_sum!(inputs_total, block_subsidy_at_height, total_fees)
+                .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
 
-        let max_allowed_to_spend = (max_allowed_to_spend_before_fees + total_fees)
-            .ok_or_else(|| BlockError::RewardAdditionError(block.get_id()))?;
-
-        if outputs_total > max_allowed_to_spend {
+        if outputs_total > max_allowed_outputs_total {
             return Err(BlockError::AttemptToPrintMoney(inputs_total, outputs_total));
         }
         Ok(())
