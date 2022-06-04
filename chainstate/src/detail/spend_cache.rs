@@ -393,9 +393,7 @@ impl<'a> CachedInputs<'a> {
                     .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
 
                 // pre-cache all inputs
-                tx.get_inputs()
-                    .iter()
-                    .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+                self.precache_inputs(tx.get_inputs())?;
 
                 // check for attempted money printing
                 self.check_transferred_amounts_and_get_fee(tx)?;
@@ -414,8 +412,8 @@ impl<'a> CachedInputs<'a> {
                 match inputs {
                     Some(ins) => {
                         // pre-cache all inputs
-                        ins.iter()
-                            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+                        // pre-cache all inputs
+                        self.precache_inputs(ins)?;
 
                         // verify input signatures
                         self.verify_signatures(&reward_transactable)?;
@@ -445,9 +443,7 @@ impl<'a> CachedInputs<'a> {
                     .ok_or_else(|| BlockError::TxNumWrongInBlock(tx_num, block.get_id()))?;
 
                 // pre-cache all inputs
-                tx.get_inputs()
-                    .iter()
-                    .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+                self.precache_inputs(tx.get_inputs())?;
 
                 // unspend inputs
                 for input in tx.get_inputs() {
@@ -466,9 +462,7 @@ impl<'a> CachedInputs<'a> {
                 match reward_transactable.inputs() {
                     Some(inputs) => {
                         // pre-cache all inputs
-                        inputs
-                            .iter()
-                            .try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))?;
+                        self.precache_inputs(inputs)?;
 
                         // unspend inputs
                         for input in inputs {
@@ -488,6 +482,10 @@ impl<'a> CachedInputs<'a> {
         }
 
         Ok(())
+    }
+
+    fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), BlockError> {
+        inputs.iter().try_for_each(|input| self.fetch_and_cache(input.get_outpoint()))
     }
 
     pub fn consume(self) -> Result<ConsumedCachedInputs, BlockError> {
