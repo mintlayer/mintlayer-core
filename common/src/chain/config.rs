@@ -207,7 +207,7 @@ fn reward_in_year_to_reward_in_block<S: AsRef<str>>(
 ) -> Vec<(BlockHeight, Amount)> {
     let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
     let emission_schedule = input
-        .into_iter()
+        .iter()
         .map(|(year, s)| {
             (
                 BlockHeight::new(1 + (*year as u64) * year_in_blocks),
