@@ -239,11 +239,11 @@ impl Sum<Amount> for Option<Amount> {
 
 #[macro_export]
 macro_rules! amount_sum {
-    ($arg1:expr, $($args:expr),+) => {{
-        let result = Some($arg1);
+    ($arg_1:expr, $($arg_n:expr),+) => {{
+        let result = Some($arg_1);
         $(
             let result = match result {
-                Some(v) => v + $args,
+                Some(v) => v + $arg_n,
                 None => None,
             };
         )*
