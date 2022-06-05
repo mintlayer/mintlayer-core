@@ -230,7 +230,7 @@ fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
     assert!(!schedule.is_empty());
     // the first block subsidy must be for block of height 1
     assert_eq!(schedule.first().unwrap().0, BlockHeight::new(1));
-    // the last reward must always be zero, otherwise the total is infinite
+    // the last block subsidy must always be zero, otherwise the total is infinite
     assert_eq!(schedule.last().unwrap().1, Amount::from_atoms(0));
     // the heights must be sorted
     assert_emission_schedule_is_sorted(schedule);
@@ -238,7 +238,7 @@ fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
     schedule
         .iter()
         .rfold((schedule[0].0, Amount::from_atoms(0)), |init, curr| {
-            // blocks that have the same reward
+            // blocks that have the same subsidy
             let block_count_in_segment: i64 = (init.0 - curr.0).unwrap().into();
             let total_amount_so_far = init.1;
             let subsidy_in_this_segment = curr.1;
