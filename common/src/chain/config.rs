@@ -218,11 +218,21 @@ fn reward_in_year_to_reward_in_block<S: AsRef<str>>(
     emission_schedule
 }
 
-fn calculate_total_rewards(schedule: &[(BlockHeight, Amount)]) -> Amount {
+fn assert_emission_schedule_is_sorted(schedule: &[(BlockHeight, Amount)]) {
+    let mut schedule_clone = schedule.to_vec();
+    schedule_clone.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(schedule_clone, schedule.to_vec());
+}
+
+fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
     // the schedule cannot be empty
     assert!(!schedule.is_empty());
+    // the first block subsidy must be for block of height 1
+    assert_eq!(schedule.first().unwrap().0, BlockHeight::new(1));
     // the last reward must always be zero, otherwise the total is infinite
     assert_eq!(schedule.last().unwrap().1, Amount::from_atoms(0));
+    // the heights must be sorted
+    assert_emission_schedule_is_sorted(schedule);
 
     schedule
         .iter()
@@ -267,7 +277,7 @@ pub fn make_mainnet_emission_schedule(
     );
 
     if let Some(expected_total_block_subsidy) = total_block_subsidy_to_check {
-        let calculated_total_emission = calculate_total_rewards(&emission_schedule);
+        let calculated_total_emission = calculate_total_emission(&emission_schedule);
 
         assert_eq!(calculated_total_emission, expected_total_block_subsidy);
     }
@@ -603,6 +613,64 @@ mod tests {
             config.block_subsidy_at_height(&BlockHeight::new(u64::MAX)),
             Amount::from_fixedpoint_str("0", MAINNET_COIN_DECIMALS).unwrap()
         );
+    }
+
+    #[test]
+    fn total_emission() {
+        {
+            let schedule = [(BlockHeight::new(1), Amount::from_atoms(0))];
+            assert_eq!(calculate_total_emission(&schedule), Amount::from_atoms(0));
+        }
+
+        {
+            let schedule = [
+                (BlockHeight::new(1), Amount::from_atoms(20)),
+                (BlockHeight::new(11), Amount::from_atoms(0)),
+            ];
+            assert_eq!(calculate_total_emission(&schedule), Amount::from_atoms(200));
+        }
+
+        {
+            let schedule = [
+                (BlockHeight::new(1), Amount::from_atoms(20)),
+                (BlockHeight::new(11), Amount::from_atoms(10)),
+                (BlockHeight::new(51), Amount::from_atoms(0)),
+            ];
+            assert_eq!(
+                calculate_total_emission(&schedule),
+                Amount::from_atoms(200 + 400)
+            );
+        }
+
+        {
+            let schedule = [
+                (BlockHeight::new(1), Amount::from_atoms(20)),
+                (BlockHeight::new(11), Amount::from_atoms(10)),
+                (BlockHeight::new(51), Amount::from_atoms(5)),
+                (BlockHeight::new(101), Amount::from_atoms(0)),
+            ];
+            assert_eq!(
+                calculate_total_emission(&schedule),
+                Amount::from_atoms(200 + 400 + 250)
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn total_emission_last_subsidy_must_be_zero() {
+        {
+            let schedule = [(BlockHeight::new(1), Amount::from_atoms(10))];
+            assert_eq!(calculate_total_emission(&schedule), Amount::from_atoms(0));
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn total_emission_schedule_cannot_be_empty() {
+        {
+            assert_eq!(calculate_total_emission(&[]), Amount::from_atoms(0));
+        }
     }
 
     #[test]
