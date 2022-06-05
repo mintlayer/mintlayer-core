@@ -200,7 +200,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
         .expect("Error creating genesis block")
 }
 
-fn reward_in_year_to_reward_in_block<S: AsRef<str>>(
+fn subsidy_in_year_to_subsidy_in_height<S: AsRef<str>>(
     target_block_spacing: &Duration,
     coin_decimals: u8,
     input: &[(u64, S)],
@@ -271,7 +271,7 @@ pub fn make_mainnet_emission_schedule(
         (10, "0"),
     ];
 
-    let emission_schedule = reward_in_year_to_reward_in_block(
+    let emission_schedule = subsidy_in_year_to_subsidy_in_height(
         target_block_spacing,
         coin_decimals,
         &subsidy_per_block_in_year_n_str,
