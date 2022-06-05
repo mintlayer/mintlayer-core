@@ -57,6 +57,7 @@ pub struct ChainConfig {
     version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
+    // TODO: use an isolated type for emission schedule that contains everything related
     emission_schedule: Vec<(BlockHeight, Amount)>,
 }
 
