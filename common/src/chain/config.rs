@@ -218,12 +218,34 @@ fn reward_in_year_to_reward_in_block<S: AsRef<str>>(
     emission_schedule
 }
 
+fn calculate_total_rewards(schedule: &[(BlockHeight, Amount)]) -> Amount {
+    // the schedule cannot be empty
+    assert!(!schedule.is_empty());
+    // the last reward must always be zero, otherwise the total is infinite
+    assert_eq!(schedule.last().unwrap().1, Amount::from_atoms(0));
+
+    schedule
+        .iter()
+        .rfold((schedule[0].0, Amount::from_atoms(0)), |init, curr| {
+            // blocks that have the same reward
+            let block_count_in_segment: i64 = (init.0 - curr.0).unwrap().into();
+            let total_amount_so_far = init.1;
+            let subsidy_in_this_segment = curr.1;
+            (
+                curr.0,
+                (total_amount_so_far
+                    + (subsidy_in_this_segment * (block_count_in_segment as u128)).unwrap())
+                .unwrap(),
+            )
+        })
+        .1
+}
+
 pub fn make_mainnet_emission_schedule(
     target_block_spacing: &Duration,
     coin_decimals: u8,
     total_block_subsidy_to_check: Option<Amount>,
 ) -> Vec<(BlockHeight, Amount)> {
-    let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
     let subsidy_per_block_in_year_n_str = [
         (0, "202"),
         (1, "151"),
@@ -245,10 +267,7 @@ pub fn make_mainnet_emission_schedule(
     );
 
     if let Some(expected_total_block_subsidy) = total_block_subsidy_to_check {
-        let calculated_total_emission =
-            emission_schedule.iter().map(|v| v.1).fold(Amount::from_atoms(0), |init, curr| {
-                (init + (curr * (year_in_blocks as u128)).unwrap()).unwrap()
-            });
+        let calculated_total_emission = calculate_total_rewards(&emission_schedule);
 
         assert_eq!(calculated_total_emission, expected_total_block_subsidy);
     }
