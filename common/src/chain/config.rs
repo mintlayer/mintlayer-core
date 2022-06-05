@@ -224,6 +224,7 @@ fn assert_emission_schedule_is_sorted(schedule: &[(BlockHeight, Amount)]) {
     assert_eq!(schedule_clone, schedule.to_vec());
 }
 
+#[must_use]
 fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
     // the schedule cannot be empty
     assert!(!schedule.is_empty());
@@ -658,10 +659,24 @@ mod tests {
 
     #[test]
     #[should_panic]
+    fn total_emission_heights_must_be_sorted() {
+        {
+            let schedule = [
+                (BlockHeight::new(1), Amount::from_atoms(20)),
+                (BlockHeight::new(51), Amount::from_atoms(10)),
+                (BlockHeight::new(11), Amount::from_atoms(5)),
+                (BlockHeight::new(101), Amount::from_atoms(0)),
+            ];
+            let _ = calculate_total_emission(&schedule);
+        }
+    }
+
+    #[test]
+    #[should_panic]
     fn total_emission_last_subsidy_must_be_zero() {
         {
             let schedule = [(BlockHeight::new(1), Amount::from_atoms(10))];
-            assert_eq!(calculate_total_emission(&schedule), Amount::from_atoms(0));
+            let _ = calculate_total_emission(&schedule);
         }
     }
 
@@ -669,7 +684,7 @@ mod tests {
     #[should_panic]
     fn total_emission_schedule_cannot_be_empty() {
         {
-            assert_eq!(calculate_total_emission(&[]), Amount::from_atoms(0));
+            let _ = calculate_total_emission(&[]);
         }
     }
 
