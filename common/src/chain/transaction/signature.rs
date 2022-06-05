@@ -235,6 +235,9 @@ fn stream_signature_hash<T: Transactable>(
     inputs.signature_hash(stream, mode, target_input, target_input_num)?;
     outputs.signature_hash(stream, mode, target_input, target_input_num)?;
 
+    // TODO: consider doing just like taproot, and hash in all outputs that come from the outpoints of inputs,
+    //       this would be a good solution to avoid having to download full trasactions to verify inputs
+
     // TODO: for P2SH add OP_CODESEPARATOR position
     hash_encoded_to(&u32::MAX, stream);
 
@@ -271,9 +274,10 @@ pub fn verify_signature<T: Transactable>(
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
-    let target_input = inputs
-        .get(input_num)
-        .ok_or(TransactionSigError::InvalidInputIndex(input_num, inputs.len()))?;
+    let target_input = inputs.get(input_num).ok_or(TransactionSigError::InvalidInputIndex(
+        input_num,
+        inputs.len(),
+    ))?;
     let input_witness = target_input.get_witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
