@@ -239,8 +239,8 @@ impl Sum<Amount> for Option<Amount> {
 
 #[macro_export]
 macro_rules! amount_sum {
-    ($($args:expr),+) => {{
-        let result = Some(Amount::from_atoms(0));
+    ($arg1:expr, $($args:expr),+) => {{
+        let result = Some($arg1);
         $(
             let result = match result {
                 Some(v) => v + $args,
@@ -394,7 +394,7 @@ mod tests {
         );
 
         assert_eq!(
-            amount_sum!(Amount::from_atoms(IntType::MAX)),
+            amount_sum!(Amount::from_atoms(IntType::MAX), Amount::from_atoms(0)),
             Some(Amount::from_atoms(IntType::MAX))
         );
 
