@@ -16,15 +16,19 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::hash::StreamHasher;
+use parity_scale_codec::Encode;
 
-use crate::primitives::{
-    id::{hash_encoded_to, DefaultHashAlgoStream},
-    H256,
+use crate::{
+    chain::TxInput,
+    primitives::{
+        id::{hash_encoded_to, DefaultHashAlgoStream},
+        H256,
+    },
 };
 
 use self::inputsig::StandardInputSignature;
 
-use super::{Destination, Transaction};
+use super::{Destination, Transaction, TxOutput};
 
 pub mod inputsig;
 pub mod sighashtype;
@@ -37,6 +41,10 @@ pub enum TransactionSigError {
     InvalidSigHashValue(u8),
     #[error("Invalid input index was provided (provided: `{0}` vs available: `{1}`")]
     InvalidInputIndex(usize, usize),
+    #[error("Requested signature hash without the presence of any inputs")]
+    SigHashRequestWithoutInputs,
+    #[error("Attempted to verify signatures for a transaction without inputs")]
+    SignatureVerificationWithoutInputs,
     #[error("Input corresponding to output number {0} does not exist (number of inputs is {1})")]
     InvalidOutputIndexForModeSingle(usize, usize),
     #[error("Decoding witness failed ")]
@@ -63,64 +71,196 @@ pub enum TransactionSigError {
     Unsupported,
 }
 
-pub fn signature_hash(
+pub fn signature_hash_for_inputs(
+    stream: &mut DefaultHashAlgoStream,
     mode: sighashtype::SigHashType,
-    tx: &Transaction,
-    input_num: usize,
-) -> Result<H256, TransactionSigError> {
-    let mut stream = DefaultHashAlgoStream::new();
+    inputs: &[TxInput],
+    target_input: &TxInput,
+) {
+    match mode.inputs_mode() {
+        sighashtype::InputsMode::CommitWhoPays => {
+            hash_encoded_to(&(inputs.len() as u32), stream);
+            for input in inputs {
+                hash_encoded_to(&input.get_outpoint(), stream);
+            }
+        }
+        sighashtype::InputsMode::AnyoneCanPay => {
+            hash_encoded_to(&target_input.get_outpoint(), stream);
+        }
+    }
+}
 
+pub fn signature_hash_for_outputs(
+    stream: &mut DefaultHashAlgoStream,
+    mode: sighashtype::SigHashType,
+    outputs: &[TxOutput],
+    target_input_num: usize,
+) -> Result<(), TransactionSigError> {
+    match mode.outputs_mode() {
+        sighashtype::OutputsMode::All => {
+            hash_encoded_to(&outputs, stream);
+        }
+        sighashtype::OutputsMode::None => (),
+        sighashtype::OutputsMode::Single => {
+            let output = outputs.get(target_input_num).ok_or({
+                TransactionSigError::InvalidInputIndex(target_input_num, outputs.len())
+            })?;
+            hash_encoded_to(&output, stream);
+        }
+    }
+    Ok(())
+}
+
+trait SignatureHashableElement {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        target_input: &TxInput,
+        target_input_num: usize,
+    ) -> Result<(), TransactionSigError>;
+}
+
+impl SignatureHashableElement for &[TxInput] {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        target_input: &TxInput,
+        _target_input_num: usize,
+    ) -> Result<(), TransactionSigError> {
+        match mode.inputs_mode() {
+            sighashtype::InputsMode::CommitWhoPays => {
+                hash_encoded_to(&(self.len() as u32), stream);
+                for input in *self {
+                    hash_encoded_to(&input.get_outpoint(), stream);
+                }
+            }
+            sighashtype::InputsMode::AnyoneCanPay => {
+                hash_encoded_to(&target_input.get_outpoint(), stream);
+            }
+        }
+        Ok(())
+    }
+}
+
+impl SignatureHashableElement for &[TxOutput] {
+    fn signature_hash(
+        &self,
+        stream: &mut DefaultHashAlgoStream,
+        mode: sighashtype::SigHashType,
+        _target_input: &TxInput,
+        target_input_num: usize,
+    ) -> Result<(), TransactionSigError> {
+        match mode.outputs_mode() {
+            sighashtype::OutputsMode::All => {
+                hash_encoded_to(self, stream);
+            }
+            sighashtype::OutputsMode::None => (),
+            sighashtype::OutputsMode::Single => {
+                let output = self.get(target_input_num).ok_or({
+                    TransactionSigError::InvalidInputIndex(target_input_num, self.len())
+                })?;
+                hash_encoded_to(&output, stream);
+            }
+        }
+        Ok(())
+    }
+}
+
+fn hash_encoded_if_some<T: Encode>(val: &Option<T>, stream: &mut DefaultHashAlgoStream) {
+    match val {
+        Some(ref v) => hash_encoded_to(&v, stream),
+        None => (),
+    }
+}
+
+pub trait Transactable {
+    fn inputs(&self) -> Option<&[TxInput]>;
+    fn outputs(&self) -> Option<&[TxOutput]>;
+    fn version_byte(&self) -> Option<u8>;
+    fn lock_time(&self) -> Option<u32>;
+    fn flags(&self) -> Option<u32>;
+}
+
+impl Transactable for Transaction {
+    fn inputs(&self) -> Option<&[TxInput]> {
+        Some(self.get_inputs())
+    }
+
+    fn outputs(&self) -> Option<&[TxOutput]> {
+        Some(self.get_outputs())
+    }
+
+    fn version_byte(&self) -> Option<u8> {
+        Some(self.version_byte())
+    }
+
+    fn lock_time(&self) -> Option<u32> {
+        Some(self.get_lock_time())
+    }
+
+    fn flags(&self) -> Option<u32> {
+        Some(self.get_flags())
+    }
+}
+
+fn stream_signature_hash<T: Transactable>(
+    tx: &T,
+    stream: &mut DefaultHashAlgoStream,
+    mode: sighashtype::SigHashType,
+    target_input_num: usize,
+) -> Result<(), TransactionSigError> {
     // TODO: even though this works fine, we need to make this function
     // pull the inputs/outputs automatically through macros;
     // the current way is not safe and may produce issues in the future
 
-    let target_input = tx
-        .get_inputs()
-        .get(input_num)
-        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
+    let inputs = match tx.inputs() {
+        Some(ins) => ins,
+        None => return Err(TransactionSigError::SigHashRequestWithoutInputs),
+    };
 
-    hash_encoded_to(&mode.get(), &mut stream);
-    hash_encoded_to(&tx.version_byte(), &mut stream);
-    hash_encoded_to(&tx.get_flags(), &mut stream);
+    let outputs = tx.outputs().unwrap_or_default();
 
-    match mode.inputs_mode() {
-        sighashtype::InputsMode::CommitWhoPays => {
-            hash_encoded_to(&(tx.get_inputs().len() as u32), &mut stream);
-            for input in tx.get_inputs() {
-                hash_encoded_to(&input.get_outpoint(), &mut stream);
-            }
-        }
-        sighashtype::InputsMode::AnyoneCanPay => {
-            hash_encoded_to(&target_input.get_outpoint(), &mut stream);
-        }
-    }
+    let target_input = inputs.get(target_input_num).ok_or(
+        TransactionSigError::InvalidInputIndex(target_input_num, inputs.len()),
+    )?;
 
-    match mode.outputs_mode() {
-        sighashtype::OutputsMode::All => {
-            hash_encoded_to(tx.get_outputs(), &mut stream);
-        }
-        sighashtype::OutputsMode::None => (),
-        sighashtype::OutputsMode::Single => {
-            let output = tx.get_outputs().get(input_num).ok_or_else(|| {
-                TransactionSigError::InvalidInputIndex(input_num, tx.get_outputs().len())
-            })?;
-            hash_encoded_to(&output, &mut stream);
-        }
-    }
+    hash_encoded_to(&mode.get(), stream);
 
-    hash_encoded_to(&tx.get_lock_time(), &mut stream);
+    hash_encoded_if_some(&tx.version_byte(), stream);
+    hash_encoded_if_some(&tx.flags(), stream);
+    hash_encoded_if_some(&tx.lock_time(), stream);
+
+    inputs.signature_hash(stream, mode, target_input, target_input_num)?;
+    outputs.signature_hash(stream, mode, target_input, target_input_num)?;
+
+    // TODO: consider doing just like taproot, and hash in all outputs that come from the outpoints of inputs,
+    //       this would be a good solution to avoid having to download full trasactions to verify inputs
 
     // TODO: for P2SH add OP_CODESEPARATOR position
-    hash_encoded_to(&u32::MAX, &mut stream);
+    hash_encoded_to(&u32::MAX, stream);
+
+    Ok(())
+}
+
+pub fn signature_hash<T: Transactable>(
+    mode: sighashtype::SigHashType,
+    tx: &T,
+    input_num: usize,
+) -> Result<H256, TransactionSigError> {
+    let mut stream = DefaultHashAlgoStream::new();
+
+    stream_signature_hash(tx, &mut stream, mode, input_num)?;
 
     let result = stream.finalize().into();
     Ok(result)
 }
 
-fn verify_standard_input_signature(
+fn verify_standard_input_signature<T: Transactable>(
     outpoint_destination: &Destination,
     witness: &StandardInputSignature,
-    tx: &Transaction,
+    tx: &T,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
     let sighash = signature_hash(witness.sighash_type(), tx, input_num)?;
@@ -128,15 +268,16 @@ fn verify_standard_input_signature(
     Ok(())
 }
 
-pub fn verify_signature(
+pub fn verify_signature<T: Transactable>(
     outpoint_destination: &Destination,
-    tx: &Transaction,
+    tx: &T,
     input_num: usize,
 ) -> Result<(), TransactionSigError> {
-    let target_input = tx
-        .get_inputs()
-        .get(input_num)
-        .ok_or_else(|| TransactionSigError::InvalidInputIndex(input_num, tx.get_inputs().len()))?;
+    let inputs = tx.inputs().ok_or(TransactionSigError::SignatureVerificationWithoutInputs)?;
+    let target_input = inputs.get(input_num).ok_or(TransactionSigError::InvalidInputIndex(
+        input_num,
+        inputs.len(),
+    ))?;
     let input_witness = target_input.get_witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {

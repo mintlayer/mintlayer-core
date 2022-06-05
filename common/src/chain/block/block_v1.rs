@@ -2,13 +2,13 @@ use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::transaction::Transaction;
 use crate::chain::ChainConfig;
-use crate::chain::TxOutput;
 use crate::primitives::id;
 use crate::primitives::id::Idable;
 use crate::primitives::{Id, H256};
 
 use serialization::{Decode, Encode};
 
+use super::consensus_data::BlockRewardTransactable;
 use super::BlockVersion;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
@@ -44,11 +44,8 @@ impl BlockHeader {
         self.time
     }
 
-    pub fn block_reward_destinations(&self) -> Option<&[TxOutput]> {
-        match &self.consensus_data {
-            ConsensusData::None => None,
-            ConsensusData::PoW(pow_data) => Some(pow_data.outputs()),
-        }
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+        self.consensus_data.derive_transactable()
     }
 }
 

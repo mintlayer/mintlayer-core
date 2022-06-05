@@ -18,7 +18,7 @@
 use common::{
     chain::{
         block::{Block, BlockConsistencyError},
-        SpendError, Spender, Transaction, TxMainChainIndexError,
+        SpendError, Spender, Transaction, TxMainChainIndexError, TxMainChainPosition,
     },
     primitives::{Amount, BlockHeight, Id},
 };
@@ -96,16 +96,24 @@ pub enum BlockError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
-    #[error("Signature verification failed in transaction with id: {0}")]
-    SignatureVerificationFailed(Id<Transaction>),
+    #[error("Signature verification failed in transaction")]
+    SignatureVerificationFailed,
     #[error("Transaction index found but transaction not found")]
-    InvariantErrorTransactionCouldNotBeLoaded,
+    InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
+    #[error("Transaction index for header found but header not found")]
+    InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
     #[error("Input addition error")]
     InputAdditionError,
     #[error("Output addition error")]
     OutputAdditionError,
+    #[error("Block reward addition error for block {0}")]
+    RewardAdditionError(Id<Block>),
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
+    #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
+    TxFeeTotalCalcFailed(Amount, Amount),
+    #[error("Addition of all fees in block `{0}` failed")]
+    FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Duplicate input in transaction")]
     DuplicateInputInTransaction(Id<Transaction>),
     #[error("Duplicate input in block")]
