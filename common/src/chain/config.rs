@@ -200,32 +200,58 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
         .expect("Error creating genesis block")
 }
 
+fn reward_in_year_to_reward_in_block<S: AsRef<str>>(
+    target_block_spacing: &Duration,
+    coin_decimals: u8,
+    input: &[(u64, S)],
+) -> Vec<(BlockHeight, Amount)> {
+    let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
+    let emission_schedule = input
+        .into_iter()
+        .map(|(year, s)| {
+            (
+                BlockHeight::new(1 + (*year as u64) * year_in_blocks),
+                Amount::from_fixedpoint_str(s.as_ref(), coin_decimals).unwrap(),
+            )
+        })
+        .collect::<Vec<(BlockHeight, Amount)>>();
+    emission_schedule
+}
+
 pub fn make_mainnet_emission_schedule(
     target_block_spacing: &Duration,
     coin_decimals: u8,
+    total_block_subsidy_to_check: Option<Amount>,
 ) -> Vec<(BlockHeight, Amount)> {
     let year_in_blocks = (365 * 24 * 60 * 60) / target_block_spacing.as_secs();
-    let subsidy_per_block_in_year_n_str =
-        ["202", "151", "113", "85", "64", "48", "36", "27", "20", "15", "0"];
-    let emission_schedule = subsidy_per_block_in_year_n_str
-        .into_iter()
-        .map(|s| Amount::from_fixedpoint_str(s, coin_decimals).unwrap())
-        .enumerate()
-        .map(|(idx, amount)| (BlockHeight::new(1 + (idx as u64) * year_in_blocks), amount))
-        .collect::<Vec<(BlockHeight, Amount)>>();
+    let subsidy_per_block_in_year_n_str = [
+        (0, "202"),
+        (1, "151"),
+        (2, "113"),
+        (3, "85"),
+        (4, "64"),
+        (5, "48"),
+        (6, "36"),
+        (7, "27"),
+        (8, "20"),
+        (9, "15"),
+        (10, "0"),
+    ];
 
-    let calculated_total_emission =
-        emission_schedule.iter().map(|v| v.1).fold(Amount::from_atoms(0), |init, curr| {
-            (init + (curr * (year_in_blocks as u128)).unwrap()).unwrap()
-        });
-    let nominal_total_supply =
-        Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap();
-    let nominal_premine = Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap();
-
-    assert_eq!(
-        (nominal_premine + calculated_total_emission).unwrap(),
-        nominal_total_supply
+    let emission_schedule = reward_in_year_to_reward_in_block(
+        target_block_spacing,
+        coin_decimals,
+        &subsidy_per_block_in_year_n_str,
     );
+
+    if let Some(expected_total_block_subsidy) = total_block_subsidy_to_check {
+        let calculated_total_emission =
+            emission_schedule.iter().map(|v| v.1).fold(Amount::from_atoms(0), |init, curr| {
+                (init + (curr * (year_in_blocks as u128)).unwrap()).unwrap()
+            });
+
+        assert_eq!(calculated_total_emission, expected_total_block_subsidy);
+    }
 
     emission_schedule
 }
@@ -254,7 +280,16 @@ pub fn create_mainnet() -> ChainConfig {
 
     let coin_decimals = MAINNET_COIN_DECIMALS;
 
-    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+    let expected_total_block_subsidy =
+        (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
+            - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
+        .unwrap();
+
+    let emission_schedule = make_mainnet_emission_schedule(
+        &target_block_spacing,
+        coin_decimals,
+        Some(expected_total_block_subsidy),
+    );
 
     ChainConfig {
         chain_type,
@@ -296,7 +331,17 @@ pub fn create_regtest() -> ChainConfig {
 
     let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
     let coin_decimals = MAINNET_COIN_DECIMALS;
-    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
+    let expected_total_block_subsidy =
+        (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
+            - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
+        .unwrap();
+
+    let emission_schedule = make_mainnet_emission_schedule(
+        &target_block_spacing,
+        coin_decimals,
+        Some(expected_total_block_subsidy),
+    );
 
     ChainConfig {
         chain_type,
@@ -322,7 +367,17 @@ pub fn create_unit_test_config() -> ChainConfig {
 
     let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
     let coin_decimals = MAINNET_COIN_DECIMALS;
-    let emission_schedule = make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
+    let expected_total_block_subsidy =
+        (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
+            - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
+        .unwrap();
+
+    let emission_schedule = make_mainnet_emission_schedule(
+        &target_block_spacing,
+        coin_decimals,
+        Some(expected_total_block_subsidy),
+    );
 
     ChainConfig {
         chain_type: ChainType::Mainnet,
@@ -377,8 +432,17 @@ impl TestChainConfig {
 
         let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
         let coin_decimals = MAINNET_COIN_DECIMALS;
-        let emission_schedule =
-            make_mainnet_emission_schedule(&target_block_spacing, coin_decimals);
+
+        let expected_total_block_subsidy =
+            (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
+                - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
+            .unwrap();
+
+        let emission_schedule = make_mainnet_emission_schedule(
+            &target_block_spacing,
+            coin_decimals,
+            Some(expected_total_block_subsidy),
+        );
 
         ChainConfig {
             chain_type: ChainType::Mainnet,
