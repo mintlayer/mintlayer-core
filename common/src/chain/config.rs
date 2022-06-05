@@ -259,7 +259,7 @@ pub fn emission_schedule_from_yearly<S: AsRef<str>>(
     total_block_subsidy_to_check: Option<Amount>,
 ) -> Vec<(BlockHeight, Amount)> {
     let emission_schedule =
-        subsidy_in_year_to_subsidy_in_height(target_block_spacing, coin_decimals, &yearly_schedule);
+        subsidy_in_year_to_subsidy_in_height(target_block_spacing, coin_decimals, yearly_schedule);
 
     if let Some(expected_total_block_subsidy) = total_block_subsidy_to_check {
         let calculated_total_emission = calculate_total_emission(&emission_schedule);
