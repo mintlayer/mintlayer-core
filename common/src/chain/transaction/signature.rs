@@ -393,46 +393,54 @@ mod test {
     fn sign_and_verify_different_sighash_types() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        // ALL
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        {
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // ALL
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // NONE
+            let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // SINGLE
+            let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
     }
 
     #[test]
@@ -441,173 +449,197 @@ mod test {
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        // Try verify sign for tx with InputWitness::NoSignature and some data
-        tx.update_witness(
-            0,
-            InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::SignatureNotFound)
-        );
-
-        // SigHashType ALL - must fail because there are no bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
-                vec![],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-
-        // SigHashType ALL - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-
-        // SigHashType NONE - must fail because there are no bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::NONE).unwrap(),
-                vec![],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-
-        // SigHashType NONE - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-
-        // SigHashType SINGLE - must fail because there are no bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::SINGLE).unwrap(),
-                vec![],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-
-        // SigHashType SINGLE - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
+        {
+            // Try verify sign for tx with InputWitness::NoSignature and some data
+            tx.update_witness(
+                0,
+                InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::SignatureNotFound)
+            );
+        }
+        {
+            // SigHashType ALL - must fail because there are no bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::ALL).unwrap(),
+                    vec![],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
+        {
+            // SigHashType ALL - must fail because there are wrong bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
+                    vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
+        {
+            // SigHashType NONE - must fail because there are no bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::NONE).unwrap(),
+                    vec![],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
+        {
+            // SigHashType NONE - must fail because there are wrong bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
+                    vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
+        {
+            // SigHashType SINGLE - must fail because there are no bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::SINGLE).unwrap(),
+                    vec![],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
+        {
+            // SigHashType SINGLE - must fail because there are wrong bytes in raw_signature
+            tx.update_witness(
+                0,
+                InputWitness::Standard(StandardInputSignature::new(
+                    SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
+                    vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
+                )),
+            )
+            .unwrap();
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, 0),
+                Err(TransactionSigError::InvalidSignatureEncoding)
+            );
+        }
     }
 
     #[test]
     #[allow(clippy::eq_op)]
     fn check_invalid_input_index_for_verify_signature() {
         const INVALID_INPUT_INDEX: usize = 1234567890;
-
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        // input index out of range
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
-        // ALL | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
-        // SINGLE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
-        // NONE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                1
-            ))
-        );
+        {
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            // input index out of range
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
+        {
+            // ALL | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
+        {
+            // SINGLE
+            let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
+        {
+            // SINGLE | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
+        {
+            // NONE
+            let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
+        {
+            // NONE | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            assert_eq!(
+                verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+                Err(TransactionSigError::InvalidInputIndex(
+                    INVALID_INPUT_INDEX,
+                    1
+                ))
+            );
+        }
     }
 
     fn sign_modify_then_verify(
@@ -747,47 +779,53 @@ mod test {
     fn test_sign_modify_then_verify() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-
-        // ALL - It signs every input and output, and any change to the transaction will render the signature invalid.
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-
-        // ALL | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-
-        // NONE -  This signs all the inputs to the transaction, but none of the outputs.
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-
-        // NONE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-
-        // SINGLE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
+        {
+            // ALL - It signs every input and output, and any change to the transaction will render the signature invalid.
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_insert_input(&original_tx, &outpoint_dest);
+            check_insert_output(&original_tx, &outpoint_dest);
+            check_change_output(&original_tx, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+        }
+        {
+            // ALL | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_insert_output(&original_tx, &outpoint_dest);
+            check_change_output(&original_tx, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+        }
+        {
+            // NONE -  This signs all the inputs to the transaction, but none of the outputs.
+            let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+            check_insert_input(&original_tx, &outpoint_dest);
+        }
+        {
+            // NONE | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+        }
+        {
+            // SINGLE
+            let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_insert_input(&original_tx, &outpoint_dest);
+            check_change_output(&original_tx, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+        }
+        {
+            // SINGLE | ANYONECANPAY
+            let sighash_type =
+                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+            let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+            check_change_output(&original_tx, &outpoint_dest);
+            check_change_input(&original_tx, &outpoint_dest);
+        }
     }
 }
