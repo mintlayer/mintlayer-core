@@ -150,74 +150,59 @@ mod test {
 
     #[test]
     fn test_wrong_destination() {
-        use std::mem::discriminant;
         // Destination = Address, but we try to use here AuthorizedPublicKeyHashSpend
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        // Compare Err(TransactionSigError) without inner message
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
-
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let witness = prepare_data_for_wrong_destination(sighash_type);
-        assert_eq!(
-            discriminant(&AuthorizedPublicKeyHashSpend::from_data(
-                witness.get_raw_signature()
-            )),
-            discriminant(&Err(TransactionSigError::AddressAuthDecodingFailed(
-                String::new()
-            )))
-        );
+        {
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            // Compare Err(TransactionSigError) without inner message
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
+        {
+            let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
+        {
+            let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
+        {
+            let sighash_type =
+                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+            let witness = prepare_data_for_wrong_destination(sighash_type);
+            assert!(matches!(
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
+                TransactionSigError::AddressAuthDecodingFailed(_)
+            ));
+        }
     }
 
     #[test]
