@@ -28,7 +28,7 @@ use common::{
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 
-use crate::detail::{BlockError, TxRw};
+use crate::detail::BlockError;
 
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
@@ -44,19 +44,21 @@ pub struct ConsumedCachedInputs {
     data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
-pub struct CachedInputs<'a> {
-    db_tx: &'a TxRw<'a>,
+pub struct CachedInputs<'a, S> {
+    db_tx: &'a S,
     inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
-impl<'a> CachedInputs<'a> {
-    pub fn new(db_tx: &'a TxRw<'a>) -> Self {
+impl<'a, S> CachedInputs<'a, S> {
+    pub fn new(db_tx: &'a S) -> Self {
         Self {
             db_tx,
             inputs: BTreeMap::new(),
         }
     }
+}
 
+impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn outpoint_source_id_from_spend_ref(
         spend_ref: BlockTransactableRef,
     ) -> Result<OutPointSourceId, BlockError> {
@@ -493,9 +495,11 @@ impl<'a> CachedInputs<'a> {
     pub fn consume(self) -> Result<ConsumedCachedInputs, BlockError> {
         Ok(ConsumedCachedInputs { data: self.inputs })
     }
+}
 
+impl<'a, S: BlockchainStorageWrite> CachedInputs<'a, S> {
     pub fn flush_to_storage(
-        db_tx: &mut TxRw<'a>,
+        db_tx: &mut S,
         input_data: ConsumedCachedInputs,
     ) -> Result<(), BlockError> {
         for (tx_id, tx_index_op) in input_data.data {
