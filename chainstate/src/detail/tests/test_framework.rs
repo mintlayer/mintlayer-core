@@ -16,6 +16,7 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
+use blockchain_storage::BlockchainStorageRead;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::Id;

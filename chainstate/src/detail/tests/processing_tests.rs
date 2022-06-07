@@ -18,6 +18,7 @@
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use crate::make_chainstate;
+use blockchain_storage::BlockchainStorageRead;
 use blockchain_storage::Store;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::config::create_unit_test_config;
