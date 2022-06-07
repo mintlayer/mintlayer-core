@@ -75,21 +75,21 @@ impl Chainstate {
         self.events_controller.wait_for_all_events();
     }
 
-    fn make_db_tx(&mut self) -> ChainstateRef {
+    fn make_db_tx(&mut self) -> ChainstateRef<TxRw> {
         let db_tx = self.blockchain_storage.transaction_rw();
         ChainstateRef {
             chain_config: &self.chain_config,
             db_tx,
-            orphan_blocks: &mut self.orphan_blocks,
+            orphan_blocks: Some(&mut self.orphan_blocks),
         }
     }
 
-    fn make_ro_db_tx(&self) -> ChainstateRefRo {
+    fn make_ro_db_tx(&self) -> ChainstateRef<TxRo> {
         let db_tx = self.blockchain_storage.transaction_ro();
-        ChainstateRefRo {
+        ChainstateRef {
             chain_config: &self.chain_config,
             db_tx,
-            orphan_blocks: &self.orphan_blocks,
+            orphan_blocks: None,
         }
     }
 
@@ -313,22 +313,14 @@ impl Chainstate {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    // TODO: use `ChainstateRef::is_block_in_main_chain()` implementation instead, how?
-    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
-        let chainstate_ref = self.make_ro_db_tx();
-        let height = block_index.get_block_height();
-        let id_at_height =
-            chainstate_ref.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
-        Ok(id_at_height.map_or(false, |id| id == *block_index.get_block_id()))
-    }
-
     pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
         // use genesis block if no common ancestor with better block height is found
+        let chainstate_ref = self.make_ro_db_tx();
         let mut best = BlockHeight::new(0);
 
         for header in locator.iter() {
-            if let Some(block_index) = self.get_block_index(&header.get_id())? {
-                if self.is_block_in_main_chain(&block_index)? {
+            if let Some(block_index) = chainstate_ref.db_tx.get_block_index(&header.get_id())? {
+                if chainstate_ref.is_block_in_main_chain(&block_index)? {
                     best = block_index.get_block_height();
                     break;
                 }
@@ -374,23 +366,14 @@ impl Chainstate {
     }
 }
 
-pub(crate) struct ChainstateRef<'a> {
+pub(crate) struct ChainstateRef<'a, S> {
     chain_config: &'a ChainConfig,
-    // TODO: make this generic over Rw and Ro
-    db_tx: TxRw<'a>,
-    orphan_blocks: &'a mut OrphanBlocksPool,
+    db_tx: S,
+    // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
+    orphan_blocks: Option<&'a mut OrphanBlocksPool>,
 }
 
-struct ChainstateRefRo<'a> {
-    #[allow(dead_code)]
-    chain_config: &'a ChainConfig,
-    // TODO: make this generic over Rw and Ro
-    db_tx: TxRo<'a>,
-    #[allow(dead_code)]
-    orphan_blocks: &'a OrphanBlocksPool,
-}
-
-impl<'a> BlockIndexHandle for ChainstateRef<'a> {
+impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
     fn get_block_index(
         &self,
         block_index: &Id<Block>,
@@ -406,26 +389,20 @@ impl<'a> BlockIndexHandle for ChainstateRef<'a> {
     }
 }
 
-impl<'a> ChainstateRef<'a> {
-    fn check_legitimate_orphan(
-        &mut self,
-        block_source: BlockSource,
-        block: Block,
-    ) -> Result<Block, BlockError> {
-        if block_source == BlockSource::Local
-            && !block.is_genesis(self.chain_config)
-            && self
-                .get_block_index(&block.prev_block_id().ok_or(BlockError::PrevBlockInvalid)?)?
-                .is_none()
-        {
-            self.new_orphan_block(block)?;
-            return Err(BlockError::LocalOrphan);
-        }
-        Ok(block)
-    }
-
+impl<'a, S: TransactionRw<Error = blockchain_storage::Error>> ChainstateRef<'a, S> {
     fn commit_db_tx(self) -> blockchain_storage::Result<()> {
         self.db_tx.commit()
+    }
+}
+
+impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
+    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
+        let height = block_index.get_block_height();
+        let id_at_height = self.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
+        match id_at_height {
+            Some(id) => Ok(id == *block_index.get_block_id()),
+            None => Ok(false),
+        }
     }
 
     /// Allow to read from storage the previous block and return itself BlockIndex
@@ -507,6 +484,205 @@ impl<'a> ChainstateRef<'a> {
         Ok(result)
     }
 
+    fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
+        // BlockIndex is already known or block exists
+        if self.db_tx.get_block_index(block_index.get_block_id())?.is_some() {
+            return Err(BlockError::BlockAlreadyExists(
+                block_index.get_block_id().clone(),
+            ));
+        }
+        // TODO: Will be expanded
+        Ok(())
+    }
+
+    fn check_block_detail(
+        &self,
+        block: &Block,
+        block_source: BlockSource,
+    ) -> Result<(), BlockError> {
+        block.check_version()?;
+
+        // Allows the previous block to be None only if the block hash is genesis
+        if !block.is_genesis(self.chain_config) && block.prev_block_id().is_none() {
+            return Err(BlockError::InvalidBlockNoPrevBlock);
+        }
+
+        // MerkleTree root
+        let merkle_tree_root = block.merkle_root();
+        calculate_tx_merkle_root(block.transactions()).map_or(
+            Err(BlockError::MerkleRootMismatch),
+            |merkle_tree| {
+                if merkle_tree_root != merkle_tree {
+                    Err(BlockError::MerkleRootMismatch)
+                } else {
+                    Ok(())
+                }
+            },
+        )?;
+
+        // Witness merkle root
+        let witness_merkle_root = block.witness_merkle_root();
+        calculate_witness_merkle_root(block.transactions()).map_or(
+            Err(BlockError::WitnessMerkleRootMismatch),
+            |witness_merkle| {
+                if witness_merkle_root != witness_merkle {
+                    Err(BlockError::WitnessMerkleRootMismatch)
+                } else {
+                    Ok(())
+                }
+            },
+        )?;
+
+        match &block.prev_block_id() {
+            Some(block_id) => {
+                let previous_block = self
+                    .db_tx
+                    .get_block_index(&Id::<Block>::new(&block_id.get()))?
+                    .ok_or(BlockError::IllegalOrphan)?;
+                // Time
+                let block_time = block.block_time();
+                if previous_block.get_block_time() > block_time {
+                    return Err(BlockError::BlockTimeOrderInvalid);
+                }
+                if i64::from(block_time) > time::get() {
+                    return Err(BlockError::BlockFromTheFuture);
+                }
+            }
+            None => {
+                // This is only for genesis, AND should never come from a peer
+                if block_source != BlockSource::Local {
+                    return Err(BlockError::InvalidBlockSource);
+                };
+            }
+        }
+
+        self.check_transactions(block)?;
+        Ok(())
+    }
+
+    fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
+        // check for duplicate inputs (see CVE-2018-17144)
+        {
+            let mut block_inputs = BTreeSet::new();
+            for tx in block.transactions() {
+                let mut tx_inputs = BTreeSet::new();
+                for input in tx.get_inputs() {
+                    if !block_inputs.insert(input.get_outpoint()) {
+                        return Err(BlockError::DuplicateInputInBlock(block.get_id()));
+                    }
+                    if !tx_inputs.insert(input.get_outpoint()) {
+                        return Err(BlockError::DuplicateInputInTransaction(tx.get_id()));
+                    }
+                }
+            }
+        }
+
+        {
+            // check duplicate transactions
+            let mut txs_ids = BTreeSet::new();
+            for tx in block.transactions() {
+                let tx_id = tx.get_id();
+                let already_in_tx_id = txs_ids.get(&tx_id);
+                match already_in_tx_id {
+                    Some(_) => return Err(BlockError::DuplicatedTransactionInBlock),
+                    None => txs_ids.insert(tx_id),
+                };
+            }
+        }
+
+        // TODO: Size limits
+        if block.encoded_size() > MAX_BLOCK_WEIGHT {
+            return Err(BlockError::BlockTooLarge);
+        }
+        // TODO: Check signatures will be added when BLS is ready
+        Ok(())
+    }
+
+    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
+        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
+    }
+
+    fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
+        // TODO: The parts that check the block in isolation without the knowledge of the state should not take
+        //      storage as an argument (either directly or indirectly as done here through self)
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
+        self.check_block_detail(block, block_source)?;
+        Ok(())
+    }
+
+    fn get_block_proof(&self, _block: &Block) -> u128 {
+        // TODO: Make correct block proof calculation based on consensus
+        1
+    }
+
+    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
+        for tx in transactions {
+            for _output in tx.get_outputs() {
+                // TODO: Check tx outputs to prevent the overwriting of the transaction
+            }
+        }
+        Ok(())
+    }
+
+    fn make_cache_with_connected_transactions(
+        &self,
+        block: &Block,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<CachedInputs<S>, BlockError> {
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+
+        cached_inputs.spend(
+            BlockTransactableRef::BlockReward(block),
+            spend_height,
+            blockreward_maturity,
+        )?;
+
+        for (tx_num, _tx) in block.transactions().iter().enumerate() {
+            cached_inputs.spend(
+                BlockTransactableRef::Transaction(block, tx_num),
+                spend_height,
+                blockreward_maturity,
+            )?;
+        }
+
+        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
+        cached_inputs.check_block_reward(block, block_subsidy)?;
+
+        Ok(cached_inputs)
+    }
+
+    fn make_cache_with_disconnected_transactions(
+        &self,
+        block: &Block,
+    ) -> Result<CachedInputs<S>, BlockError> {
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
+            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
+        })?;
+        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
+        Ok(cached_inputs)
+    }
+}
+
+impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
+    fn check_legitimate_orphan(
+        &mut self,
+        block_source: BlockSource,
+        block: Block,
+    ) -> Result<Block, BlockError> {
+        if block_source == BlockSource::Local
+            && !block.is_genesis(self.chain_config)
+            && self
+                .get_block_index(&block.prev_block_id().ok_or(BlockError::PrevBlockInvalid)?)?
+                .is_none()
+        {
+            self.new_orphan_block(block)?;
+            return Err(BlockError::LocalOrphan);
+        }
+        Ok(block)
+    }
+
     fn disconnect_until(
         &mut self,
         to_disconnect: &BlockIndex,
@@ -552,34 +728,6 @@ impl<'a> ChainstateRef<'a> {
         Ok(())
     }
 
-    fn connect_transactions_inner(
-        &self,
-        block: &Block,
-        spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
-    ) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
-
-        cached_inputs.spend(
-            BlockTransactableRef::BlockReward(block),
-            spend_height,
-            blockreward_maturity,
-        )?;
-
-        for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            cached_inputs.spend(
-                BlockTransactableRef::Transaction(block, tx_num),
-                spend_height,
-                blockreward_maturity,
-            )?;
-        }
-
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        cached_inputs.check_block_reward(block, block_subsidy)?;
-
-        Ok(cached_inputs)
-    }
-
     fn connect_transactions(
         &mut self,
         block: &Block,
@@ -587,36 +735,18 @@ impl<'a> ChainstateRef<'a> {
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
         let cached_inputs =
-            self.connect_transactions_inner(block, spend_height, blockreward_maturity)?;
+            self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
         Ok(())
-    }
-
-    fn disconnect_transactions_inner(&mut self, block: &Block) -> Result<CachedInputs, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
-        })?;
-        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
-        Ok(cached_inputs)
     }
 
     fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        let cached_inputs = self.disconnect_transactions_inner(block)?;
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
-        Ok(())
-    }
-
-    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        for tx in transactions {
-            for _output in tx.get_outputs() {
-                // TODO: Check tx outputs to prevent the overwriting of the transaction
-            }
-        }
         Ok(())
     }
 
@@ -732,11 +862,6 @@ impl<'a> ChainstateRef<'a> {
         Ok(None)
     }
 
-    fn get_block_proof(&self, _block: &Block) -> u128 {
-        //TODO: We have to make correct one
-        1
-    }
-
     fn add_to_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         let prev_block_index = if block.is_genesis(self.chain_config) {
             // Genesis case. We should use then_some when stabilized feature(bool_to_option)
@@ -773,149 +898,17 @@ impl<'a> ChainstateRef<'a> {
         Ok(block_index)
     }
 
-    fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
-        // BlockIndex is already known or block exists
-        if self.db_tx.get_block_index(block_index.get_block_id())?.is_some() {
-            return Err(BlockError::BlockAlreadyExists(
-                block_index.get_block_id().clone(),
-            ));
-        }
-        // TODO: Will be expanded
-        Ok(())
-    }
-
-    fn check_block_detail(
-        &self,
-        block: &Block,
-        block_source: BlockSource,
-    ) -> Result<(), BlockError> {
-        block.check_version()?;
-
-        // Allows the previous block to be None only if the block hash is genesis
-        if !block.is_genesis(self.chain_config) && block.prev_block_id().is_none() {
-            return Err(BlockError::InvalidBlockNoPrevBlock);
-        }
-
-        // MerkleTree root
-        let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.transactions()).map_or(
-            Err(BlockError::MerkleRootMismatch),
-            |merkle_tree| {
-                if merkle_tree_root != merkle_tree {
-                    Err(BlockError::MerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
-            },
-        )?;
-
-        // Witness merkle root
-        let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.transactions()).map_or(
-            Err(BlockError::WitnessMerkleRootMismatch),
-            |witness_merkle| {
-                if witness_merkle_root != witness_merkle {
-                    Err(BlockError::WitnessMerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
-            },
-        )?;
-
-        match &block.prev_block_id() {
-            Some(block_id) => {
-                let previous_block = self
-                    .db_tx
-                    .get_block_index(&Id::<Block>::new(&block_id.get()))?
-                    .ok_or(BlockError::IllegalOrphan)?;
-                // Time
-                let block_time = block.block_time();
-                if previous_block.get_block_time() > block_time {
-                    return Err(BlockError::BlockTimeOrderInvalid);
-                }
-                if i64::from(block_time) > time::get() {
-                    return Err(BlockError::BlockFromTheFuture);
-                }
-            }
-            None => {
-                // This is only for genesis, AND should never come from a peer
-                if block_source != BlockSource::Local {
-                    return Err(BlockError::InvalidBlockSource);
-                };
-            }
-        }
-
-        self.check_transactions(block)?;
-        Ok(())
-    }
-
-    fn check_transactions(&self, block: &Block) -> Result<(), BlockError> {
-        // check for duplicate inputs (see CVE-2018-17144)
-        {
-            let mut block_inputs = BTreeSet::new();
-            for tx in block.transactions() {
-                let mut tx_inputs = BTreeSet::new();
-                for input in tx.get_inputs() {
-                    if !block_inputs.insert(input.get_outpoint()) {
-                        return Err(BlockError::DuplicateInputInBlock(block.get_id()));
-                    }
-                    if !tx_inputs.insert(input.get_outpoint()) {
-                        return Err(BlockError::DuplicateInputInTransaction(tx.get_id()));
-                    }
-                }
-            }
-        }
-
-        {
-            // check duplicate transactions
-            let mut txs_ids = BTreeSet::new();
-            for tx in block.transactions() {
-                let tx_id = tx.get_id();
-                let already_in_tx_id = txs_ids.get(&tx_id);
-                match already_in_tx_id {
-                    Some(_) => return Err(BlockError::DuplicatedTransactionInBlock),
-                    None => txs_ids.insert(tx_id),
-                };
-            }
-        }
-
-        //TODO: Size limits
-        if block.encoded_size() > MAX_BLOCK_WEIGHT {
-            return Err(BlockError::BlockTooLarge);
-        }
-        //TODO: Check signatures will be added when BLS is ready
-        Ok(())
-    }
-
-    fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
-        //TODO: The parts that check the block in isolation without the knowledge of the state should not take
-        //      storage as an argument (either directly or indirectly as done here through self)
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
-        self.check_block_detail(block, block_source)?;
-        Ok(())
-    }
-
-    fn is_block_in_main_chain(&self, block_index: &BlockIndex) -> Result<bool, BlockError> {
-        let height = block_index.get_block_height();
-        let id_at_height = self.db_tx.get_block_id_by_height(&height).map_err(BlockError::from)?;
-        match id_at_height {
-            Some(id) => Ok(id == *block_index.get_block_id()),
-            None => Ok(false),
-        }
-    }
-
     /// Mark new block as an orphan
     fn new_orphan_block(&mut self, block: Block) -> Result<(), BlockError> {
         // It can't be a genesis block
         assert!(!block.is_genesis(self.chain_config));
-        match self.orphan_blocks.add_block(block) {
-            Ok(_) => Ok(()),
-            Err(err) => err.into(),
+        match self.orphan_blocks {
+            Some(ref mut orphans) => match orphans.add_block(block) {
+                Ok(_) => Ok(()),
+                Err(err) => err.into(),
+            },
+            None => Ok(()),
         }
-    }
-
-    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
-        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
     }
 }
 
