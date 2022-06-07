@@ -590,11 +590,11 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
             }
         }
 
-        //TODO: Size limits
+        // TODO: Size limits
         if block.encoded_size() > MAX_BLOCK_WEIGHT {
             return Err(BlockError::BlockTooLarge);
         }
-        //TODO: Check signatures will be added when BLS is ready
+        // TODO: Check signatures will be added when BLS is ready
         Ok(())
     }
 
@@ -603,7 +603,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
-        //TODO: The parts that check the block in isolation without the knowledge of the state should not take
+        // TODO: The parts that check the block in isolation without the knowledge of the state should not take
         //      storage as an argument (either directly or indirectly as done here through self)
         consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
         self.check_block_detail(block, block_source)?;
@@ -611,7 +611,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     fn get_block_proof(&self, _block: &Block) -> u128 {
-        //TODO: Make correct block proof calculation based on consensus
+        // TODO: Make correct block proof calculation based on consensus
         1
     }
 
