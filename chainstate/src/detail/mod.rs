@@ -369,7 +369,7 @@ impl Chainstate {
 pub(crate) struct ChainstateRef<'a, S> {
     chain_config: &'a ChainConfig,
     db_tx: S,
-    // TODO: get rid of the option. The option is here because mutability abstraction wasn't done for orphans
+    // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
     orphan_blocks: Option<&'a mut OrphanBlocksPool>,
 }
 
