@@ -3,7 +3,9 @@ use std::collections::BTreeSet;
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use common::{
     chain::{
-        block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockIndex},
+        block::{
+            calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
+        },
         calculate_tx_index_from_block,
         config::MAX_BLOCK_WEIGHT,
         ChainConfig, OutPointSourceId, Transaction,
@@ -159,6 +161,36 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
             second_block_index.get_block_id()
         );
         Ok(first_block_index)
+    }
+
+    pub fn get_best_block_index(&self) -> Result<Option<BlockIndex>, BlockError> {
+        let best_block_id = match self.get_best_block_id()? {
+            Some(id) => id,
+            None => return Ok(None),
+        };
+        self.get_block_index(&best_block_id)
+    }
+
+    pub fn get_header_from_height(
+        &self,
+        height: &BlockHeight,
+    ) -> Result<Option<BlockHeader>, BlockError> {
+        let id = self.get_block_id_by_height(height)?.ok_or(BlockError::NotFound)?;
+        Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
+    }
+
+    pub fn get_block_height_in_main_chain(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockHeight>, BlockError> {
+        // Reasonable reduce amount of calls to DB
+        let block_index = self.get_block_index(id)?;
+        let block_index = block_index.ok_or(BlockError::NotFound)?;
+        if block_index.get_block_id() == id {
+            Ok(Some(block_index.get_block_height()))
+        } else {
+            Ok(None)
+        }
     }
 
     // Get indexes for a new longest chain
