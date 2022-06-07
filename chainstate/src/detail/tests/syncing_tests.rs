@@ -16,6 +16,7 @@
 // Author(s): A. Altonen
 #![allow(warnings)]
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
+use blockchain_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
 use rand::Rng;
 
