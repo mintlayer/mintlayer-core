@@ -225,9 +225,7 @@ impl Chainstate {
     }
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        let best_block_id = chainstate_ref.get_best_block_id()?;
-        Ok(best_block_id)
+        self.make_db_tx_ro().get_best_block_id()
     }
 
     pub fn get_header_from_height(
@@ -241,8 +239,7 @@ impl Chainstate {
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<Block>>, BlockError> {
-        let block_id = self.make_db_tx_ro().get_block_id_by_height(height)?;
-        Ok(block_id)
+        self.make_db_tx_ro().get_block_id_by_height(height)
     }
 
     pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
@@ -276,8 +273,7 @@ impl Chainstate {
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockHeight>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        chainstate_ref.get_block_height_in_main_chain(id)
+        self.make_db_tx_ro().get_block_height_in_main_chain(id)
     }
 
     pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
