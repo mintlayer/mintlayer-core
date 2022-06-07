@@ -373,7 +373,7 @@ pub(crate) struct ChainstateRef<'a, S> {
     orphan_blocks: Option<&'a mut OrphanBlocksPool>,
 }
 
-impl<'a, S: BlockchainStorageWrite> BlockIndexHandle for ChainstateRef<'a, S> {
+impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
     fn get_block_index(
         &self,
         block_index: &Id<Block>,
@@ -597,6 +597,72 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         //TODO: Check signatures will be added when BLS is ready
         Ok(())
     }
+
+    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
+        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
+    }
+
+    fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
+        //TODO: The parts that check the block in isolation without the knowledge of the state should not take
+        //      storage as an argument (either directly or indirectly as done here through self)
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
+        self.check_block_detail(block, block_source)?;
+        Ok(())
+    }
+
+    fn get_block_proof(&self, _block: &Block) -> u128 {
+        //TODO: Make correct block proof calculation based on consensus
+        1
+    }
+
+    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
+        for tx in transactions {
+            for _output in tx.get_outputs() {
+                // TODO: Check tx outputs to prevent the overwriting of the transaction
+            }
+        }
+        Ok(())
+    }
+
+    fn make_cache_with_connected_transactions(
+        &self,
+        block: &Block,
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+    ) -> Result<CachedInputs<S>, BlockError> {
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+
+        cached_inputs.spend(
+            BlockTransactableRef::BlockReward(block),
+            spend_height,
+            blockreward_maturity,
+        )?;
+
+        for (tx_num, _tx) in block.transactions().iter().enumerate() {
+            cached_inputs.spend(
+                BlockTransactableRef::Transaction(block, tx_num),
+                spend_height,
+                blockreward_maturity,
+            )?;
+        }
+
+        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
+        cached_inputs.check_block_reward(block, block_subsidy)?;
+
+        Ok(cached_inputs)
+    }
+
+    fn make_cache_with_disconnected_transactions(
+        &self,
+        block: &Block,
+    ) -> Result<CachedInputs<S>, BlockError> {
+        let mut cached_inputs = CachedInputs::new(&self.db_tx);
+        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
+            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
+        })?;
+        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
+        Ok(cached_inputs)
+    }
 }
 
 impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
@@ -662,34 +728,6 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
         Ok(())
     }
 
-    fn connect_transactions_inner(
-        &self,
-        block: &Block,
-        spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
-    ) -> Result<CachedInputs<S>, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
-
-        cached_inputs.spend(
-            BlockTransactableRef::BlockReward(block),
-            spend_height,
-            blockreward_maturity,
-        )?;
-
-        for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            cached_inputs.spend(
-                BlockTransactableRef::Transaction(block, tx_num),
-                spend_height,
-                blockreward_maturity,
-            )?;
-        }
-
-        let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        cached_inputs.check_block_reward(block, block_subsidy)?;
-
-        Ok(cached_inputs)
-    }
-
     fn connect_transactions(
         &mut self,
         block: &Block,
@@ -697,39 +735,18 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
         let cached_inputs =
-            self.connect_transactions_inner(block, spend_height, blockreward_maturity)?;
+            self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
         Ok(())
-    }
-
-    fn disconnect_transactions_inner(
-        &mut self,
-        block: &Block,
-    ) -> Result<CachedInputs<S>, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx);
-        block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
-        })?;
-        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
-        Ok(cached_inputs)
     }
 
     fn disconnect_transactions(&mut self, block: &Block) -> Result<(), BlockError> {
-        let cached_inputs = self.disconnect_transactions_inner(block)?;
+        let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
         CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
-        Ok(())
-    }
-
-    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        for tx in transactions {
-            for _output in tx.get_outputs() {
-                // TODO: Check tx outputs to prevent the overwriting of the transaction
-            }
-        }
         Ok(())
     }
 
@@ -845,11 +862,6 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
         Ok(None)
     }
 
-    fn get_block_proof(&self, _block: &Block) -> u128 {
-        //TODO: Make correct block proof calculation based on consensus
-        1
-    }
-
     fn add_to_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
         let prev_block_index = if block.is_genesis(self.chain_config) {
             // Genesis case. We should use then_some when stabilized feature(bool_to_option)
@@ -897,18 +909,6 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
             },
             None => Ok(()),
         }
-    }
-
-    fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
-        Ok(self.db_tx.get_block(block_index.get_block_id().clone())?)
-    }
-
-    fn check_block(&self, block: &Block, block_source: BlockSource) -> Result<(), BlockError> {
-        //TODO: The parts that check the block in isolation without the knowledge of the state should not take
-        //      storage as an argument (either directly or indirectly as done here through self)
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)?;
-        self.check_block_detail(block, block_source)?;
-        Ok(())
     }
 }
 
