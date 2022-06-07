@@ -23,10 +23,10 @@ pub(crate) trait BlockIndexHandle {
     ) -> Result<BlockIndex, BlockError>;
 }
 
-pub(crate) fn validate_consensus(
+pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
-    block_index_handle: &dyn BlockIndexHandle,
+    block_index_handle: &H,
 ) -> Result<(), BlockError> {
     let block_height = if header.is_genesis(chain_config) {
         BlockHeight::from(0)
@@ -47,11 +47,11 @@ pub(crate) fn validate_consensus(
     Ok(())
 }
 
-fn validate_pow_consensus(
+fn validate_pow_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pow_status: &PoWStatus,
-    block_index_handle: &dyn BlockIndexHandle,
+    block_index_handle: &H,
 ) -> Result<(), BlockError> {
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::FakePoS(_) => Err(BlockError::ConsensusTypeMismatch(
@@ -81,11 +81,11 @@ fn validate_pos_consensus(header: &BlockHeader) -> Result<(), BlockError> {
     }
 }
 
-fn do_validate(
+fn do_validate<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     consensus_status: &RequiredConsensus,
-    block_index_handle: &dyn BlockIndexHandle,
+    block_index_handle: &H,
 ) -> Result<(), BlockError> {
     match consensus_status {
         RequiredConsensus::PoW(pow_status) => {
