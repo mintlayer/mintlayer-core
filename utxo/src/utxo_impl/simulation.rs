@@ -112,6 +112,7 @@ fn populate_cache<'a>(
     (cache, outps)
 }
 
+// TODO: Fix the test (https://github.com/mintlayer/mintlayer-core/issues/219).
 #[ignore]
 #[test]
 fn stack_flush_test() {
