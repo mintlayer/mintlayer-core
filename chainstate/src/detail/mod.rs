@@ -226,40 +226,27 @@ impl Chainstate {
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, BlockError> {
         let chainstate_ref = self.make_db_tx_ro();
-        // Reasonable reduce amount of calls to DB
         let best_block_id = chainstate_ref.get_best_block_id()?;
         Ok(best_block_id)
     }
 
-    pub fn get_block_height_in_main_chain(
+    pub fn get_header_from_height(
         &self,
-        id: &Id<Block>,
-    ) -> Result<Option<BlockHeight>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        // Reasonable reduce amount of calls to DB
-        let block_index = chainstate_ref.get_block_index(id)?;
-        let block_index = block_index.ok_or(BlockError::NotFound)?;
-        if block_index.get_block_id() == id {
-            Ok(Some(block_index.get_block_height()))
-        } else {
-            Ok(None)
-        }
+        height: &BlockHeight,
+    ) -> Result<Option<BlockHeader>, BlockError> {
+        self.make_db_tx_ro().get_header_from_height(height)
     }
 
     pub fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<Block>>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        // Reasonable reduce amount of calls to DB
-        let block_id = chainstate_ref.get_block_id_by_height(height)?;
+        let block_id = self.make_db_tx_ro().get_block_id_by_height(height)?;
         Ok(block_id)
     }
 
     pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        // Reasonable reduce amount of calls to DB
-        let block = chainstate_ref.get_block(id)?;
+        let block = self.make_db_tx_ro().get_block(id)?;
         Ok(block)
     }
 
@@ -267,30 +254,30 @@ impl Chainstate {
         self.make_db_tx_ro().get_block_index(id)
     }
 
-    pub fn get_header_from_height(
-        &self,
-        height: &BlockHeight,
-    ) -> Result<Option<BlockHeader>, BlockError> {
-        let chainstate_ref = self.make_db_tx_ro();
-        let id = chainstate_ref.get_block_id_by_height(height)?.ok_or(BlockError::NotFound)?;
-        Ok(chainstate_ref
-            .get_block_index(&id)?
-            .map(|block_index| block_index.into_block_header()))
-    }
-
     pub fn get_locator(&self) -> Result<Vec<BlockHeader>, BlockError> {
-        let id = self.get_best_block_id()?.ok_or(BlockError::NotFound)?;
-        let height = self.get_block_height_in_main_chain(&id)?.ok_or(BlockError::NotFound)?;
+        let chainstate_ref = self.make_db_tx_ro();
+        let id = chainstate_ref.get_best_block_id()?.ok_or(BlockError::NotFound)?;
+        let height = chainstate_ref
+            .get_block_height_in_main_chain(&id)?
+            .ok_or(BlockError::NotFound)?;
 
         let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
             .take_while(|i| (height - BlockDistance::new(*i)).is_some())
             .map(|i| {
-                self.get_header_from_height(
+                chainstate_ref.get_header_from_height(
                     &(height - BlockDistance::new(i)).expect("distance to be valid"),
                 )
             });
 
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+    }
+
+    pub fn get_block_height_in_main_chain(
+        &self,
+        id: &Id<Block>,
+    ) -> Result<Option<BlockHeight>, BlockError> {
+        let chainstate_ref = self.make_db_tx_ro();
+        chainstate_ref.get_block_height_in_main_chain(id)
     }
 
     pub fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, BlockError> {
@@ -308,17 +295,19 @@ impl Chainstate {
         }
 
         // get headers until either the best block or header limit is reached
+        let best_height = chainstate_ref
+            .get_best_block_index()?
+            .expect("best block's height to exist")
+            .get_block_height();
+
         let limit = std::cmp::min(
             (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
-            self.get_block_height_in_main_chain(
-                &self.get_best_block_id()?.expect("best block to exist"),
-            )?
-            .expect("best block's height to exist"),
+            best_height,
         );
 
         let headers = itertools::iterate(best.next_height(), |iter| iter.next_height())
             .take_while(|height| height <= &limit)
-            .map(|height| self.get_header_from_height(&height));
+            .map(|height| chainstate_ref.get_header_from_height(&height));
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
