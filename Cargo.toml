@@ -24,7 +24,7 @@ members = [
   "node",          # node executable
   "wallet",        # wallet executable
   "utils",         # various utilities
-  "utxo",          # various utilities
+  "utxo",          # utxo and related utilities (cache, undo, etc.)
   "test",          # integration tests
 ]
 

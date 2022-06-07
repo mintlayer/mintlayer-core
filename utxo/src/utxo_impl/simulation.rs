@@ -112,7 +112,8 @@ fn populate_cache<'a>(
     (cache, outps)
 }
 
-// #[test]
+#[ignore]
+#[test]
 fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 
