@@ -846,7 +846,7 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
     }
 
     fn get_block_proof(&self, _block: &Block) -> u128 {
-        //TODO: We have to make correct one
+        //TODO: Make correct block proof calculation based on consensus
         1
     }
 
