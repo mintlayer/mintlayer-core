@@ -51,10 +51,9 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
         };
 
         prev_block_index
-            .ok_or(ConsensusVerificationError::PrevBlockNotFound(
-                prev_block_id,
-                header.get_id(),
-            ))?
+            .ok_or_else(|| {
+                ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())
+            })?
             .get_block_height()
             .checked_add(1)
             .expect("max block height reached")
