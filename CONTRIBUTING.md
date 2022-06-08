@@ -16,10 +16,10 @@ Mintlayer accepts improvement proposals in [this repo](https://github.com/mintla
 The first thing to do, once you know what you want to do, is to open an issue. If you think you'd found a bug open an issue so it can be discussed with the wider
 community. If you think you've got a snazzy new idea for a feature, open an issue and we'll discuss it as a community; maybe someone else is already working on it...
 
-Whatever it is you're working on you'll want to create a branch for your bug fix or feature from staging
+Whatever it is you're working on you'll want to create a branch for your bug fix or feature from master
  
  
-    git checkout staging
+    git checkout master
     git checkout -b my_new_branch
    
    
@@ -28,7 +28,7 @@ sure that the existing functional tests and unit tests still work. If you've bro
 it's time for you to add your own. Even for small bug fixes adding a unit test is worth the effort to ensure the bug isn't reintroduced later. For new features, functional tests
 are a hard requirement. Make life as easy as possible for the reviewer when they have to look at the actual code. What testing have you done? Have you run any benchmarks?
 
-Once you've created a set of tests that prove out your code create a PR to merge your branch into staging. Make sure you write a good PR. Explain what you're doing, 
+Once you've created a set of tests that prove out your code create a PR to merge your branch into master. Make sure you write a good PR. Explain what you're doing,
 explain why you're doing it, explain how this interacts with the existing codebase and explain how it works. Make sure to link to the open issue too. When you pick
 reviewers GitHub will likely recommend some people. If not tag anyone and they can help get the right people involved. Your code will either be merged or changes will be requested.
 Before you open the PR, think about what else you can do to make the reviewer's life easier… Can you run cargo-audit to find known issues in libraries? Could you run a fuzzer or static analyser? Have you checked the licenses of any libraries you’re using?
