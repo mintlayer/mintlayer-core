@@ -335,7 +335,7 @@ impl<'a> BlockTestFramework {
         }
     }
 
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, BlockError> {
+    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
     }
 }
