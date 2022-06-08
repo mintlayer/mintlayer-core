@@ -86,10 +86,9 @@ fn calculate_work_required<H: BlockIndexHandle>(
                 }
             };
 
-            let prev_block_index = prev_block_index.ok_or(ConsensusPoWError::PrevBlockNotFound(
-                prev_block_id,
-                header.get_id(),
-            ))?;
+            let prev_block_index = prev_block_index.ok_or_else(|| {
+                ConsensusPoWError::PrevBlockNotFound(prev_block_id, header.get_id())
+            })?;
 
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
