@@ -16,8 +16,9 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
+use blockchain_storage::BlockchainStorageRead;
 use common::chain::block::{Block, ConsensusData};
-use common::chain::{Transaction, TxInput, TxOutput};
+use common::chain::{OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{time, Amount, Id};
 
 #[test]
