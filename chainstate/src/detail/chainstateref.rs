@@ -113,12 +113,12 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         &self,
         block_index: &BlockIndex,
     ) -> Result<BlockIndex, PropertyQueryError> {
-        let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or(
-            PropertyQueryError::BlockIndexHasNoPrevBlock(block_index.get_block_id().clone()),
-        )?;
-        self.db_tx.get_block_index(prev_block_id)?.ok_or(
-            PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.clone()),
-        )
+        let prev_block_id = block_index.get_prev_block_id().as_ref().ok_or_else(|| {
+            PropertyQueryError::BlockIndexHasNoPrevBlock(block_index.get_block_id().clone())
+        })?;
+        self.db_tx
+            .get_block_index(prev_block_id)?
+            .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.clone()))
     }
 
     // TODO improve using pskip
@@ -192,7 +192,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     ) -> Result<Option<BlockHeader>, PropertyQueryError> {
         let id = self
             .get_block_id_by_height(height)?
-            .ok_or(PropertyQueryError::BlockForHeightNotFound(height.clone()))?;
+            .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))?;
         Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
     }
 
@@ -201,7 +201,8 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         id: &Id<Block>,
     ) -> Result<Option<BlockHeight>, PropertyQueryError> {
         let block_index = self.get_block_index(id)?;
-        let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id.clone()))?;
+        let block_index =
+            block_index.ok_or_else(|| PropertyQueryError::BlockNotFound(id.clone()))?;
         if block_index.get_block_id() == id {
             Ok(Some(block_index.get_block_height()))
         } else {
@@ -267,10 +268,12 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
         match &block.prev_block_id() {
             Some(prev_block_id) => {
-                let previous_block =
-                    self.db_tx.get_block_index(&Id::<Block>::new(&prev_block_id.get()))?.ok_or(
-                        CheckBlockError::PrevBlockNotFound(prev_block_id.clone(), block.get_id()),
-                    )?;
+                let previous_block = self
+                    .db_tx
+                    .get_block_index(&Id::<Block>::new(&prev_block_id.get()))?
+                    .ok_or_else(|| {
+                        CheckBlockError::PrevBlockNotFound(prev_block_id.clone(), block.get_id())
+                    })?;
                 // Time
                 let block_time = block.block_time();
                 if previous_block.get_block_time() > block_time {

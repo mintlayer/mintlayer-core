@@ -194,7 +194,7 @@ impl Chainstate {
             Err(err) => {
                 return Err(err
                     .into_err_if_storage_error()?
-                    .into_err(|e| BlockError::BestBlockLoadError(e)))
+                    .into_err(BlockError::BestBlockLoadError))
             }
         };
 
