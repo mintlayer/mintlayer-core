@@ -138,33 +138,6 @@ pub enum PropertyQueryError {
     },
 }
 
-impl PropertyQueryError {
-    // TODO: use a trait to cover this
-    pub fn into_err_if_storage_error(
-        self,
-    ) -> Result<PropertyQueryError, blockchain_storage::Error> {
-        match self {
-            PropertyQueryError::StorageError(e) => Err(e),
-            PropertyQueryError::BestBlockNotFound => Ok(self),
-            PropertyQueryError::BlockNotFound(_) => Ok(self),
-            PropertyQueryError::BlockForHeightNotFound(_) => Ok(self),
-            PropertyQueryError::BestBlockIndexNotFound => Ok(self),
-            PropertyQueryError::InvalidInputForPrevBlock => Ok(self),
-            PropertyQueryError::InvalidInputEmpty => Ok(self),
-            PropertyQueryError::PrevBlockIndexNotFound(_) => Ok(self),
-            PropertyQueryError::BlockIndexHasNoPrevBlock(_) => Ok(self),
-            PropertyQueryError::InvalidAncestorHeight {
-                block_height: _,
-                ancestor_height: _,
-            } => Ok(self),
-        }
-    }
-
-    pub fn into_err<T>(self, f: fn(Self) -> T) -> T {
-        f(self)
-    }
-}
-
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
@@ -172,7 +145,7 @@ pub enum OrphanCheckError {
     #[error("Previous block not found")]
     PrevBlockNotFound,
     #[error("Block index not found")]
-    PrevBlockIndexNotFound,
+    PrevBlockIndexNotFound(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
 }

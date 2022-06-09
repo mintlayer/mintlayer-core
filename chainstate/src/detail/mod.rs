@@ -188,15 +188,8 @@ impl Chainstate {
 
         let block = chainstate_ref.check_legitimate_orphan(block_source, block)?;
 
-        // Reasonable reduce amount of calls to DB
-        let best_block_id = match chainstate_ref.get_best_block_id() {
-            Ok(id) => id,
-            Err(err) => {
-                return Err(err
-                    .into_err_if_storage_error()?
-                    .into_err(BlockError::BestBlockLoadError))
-            }
-        };
+        let best_block_id =
+            chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
 
         // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         chainstate_ref.check_block(&block).map_err(BlockError::CheckBlockFailed)?;

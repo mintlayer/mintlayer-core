@@ -431,14 +431,11 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
             }
         };
 
-        let block_index_found = match self.get_block_index(prev_block_id) {
-            Ok(bi) => bi.is_some(),
-            Err(err) => {
-                return Err(err
-                    .into_err_if_storage_error()?
-                    .into_err(|_| OrphanCheckError::PrevBlockIndexNotFound))
-            }
-        };
+        let block_index_found = self
+            .get_block_index(prev_block_id)
+            .map_err(OrphanCheckError::PrevBlockIndexNotFound)?
+            .is_some();
+
         if block_source == BlockSource::Local
             && !block.is_genesis(self.chain_config)
             && !block_index_found
