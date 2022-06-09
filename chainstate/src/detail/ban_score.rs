@@ -5,7 +5,7 @@ use super::{
     CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 
-trait BanScore {
+pub trait BanScore {
     fn ban_score(&self) -> u32;
 }
 
