@@ -1,33 +1,24 @@
-use common::chain::block::Block;
 use common::chain::block::BlockHeader;
-use common::chain::block::BlockIndex;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
 use common::chain::RequiredConsensus;
 use common::primitives::BlockHeight;
-use common::primitives::Id;
+use common::primitives::Idable;
 
 use crate::detail::pow::work::check_pow_consensus;
-use crate::BlockError;
 
-pub(crate) trait BlockIndexHandle {
-    fn get_block_index(
-        &self,
-        block_index: &Id<Block>,
-    ) -> blockchain_storage::Result<Option<BlockIndex>>;
-    fn get_ancestor(
-        &self,
-        block_index: &BlockIndex,
-        ancestor_height: BlockHeight,
-    ) -> Result<BlockIndex, BlockError>;
-}
+pub use self::block_index_handle::BlockIndexHandle;
+
+use super::ConsensusVerificationError;
+
+mod block_index_handle;
 
 pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     block_index_handle: &H,
-) -> Result<(), BlockError> {
+) -> Result<(), ConsensusVerificationError> {
     let block_height = if header.is_genesis(chain_config) {
         BlockHeight::from(0)
     } else {
@@ -35,9 +26,22 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
             .get_prev_block_id()
             .clone()
             .expect("Block not genesis so must have a prev_block_id");
-        block_index_handle
-            .get_block_index(&prev_block_id)?
-            .ok_or(BlockError::IllegalOrphan)?
+
+        let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
+            Ok(bi) => bi,
+            Err(err) => {
+                return Err(ConsensusVerificationError::PrevBlockLoadError(
+                    prev_block_id,
+                    header.get_id(),
+                    err,
+                ))
+            }
+        };
+
+        prev_block_index
+            .ok_or_else(|| {
+                ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())
+            })?
             .get_block_height()
             .checked_add(1)
             .expect("max block height reached")
@@ -52,29 +56,32 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
     header: &BlockHeader,
     pow_status: &PoWStatus,
     block_index_handle: &H,
-) -> Result<(), BlockError> {
+) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
-        ConsensusData::None | ConsensusData::FakePoS(_) => Err(BlockError::ConsensusTypeMismatch(
-            "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
-        )),
+        ConsensusData::None | ConsensusData::FakePoS(_) => {
+            Err(ConsensusVerificationError::ConsensusTypeMismatch(
+                "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
+            ))
+        }
         ConsensusData::PoW(_) => {
             check_pow_consensus(chain_config, header, pow_status, block_index_handle)
+                .map_err(ConsensusVerificationError::PoWError)
         }
     }
 }
 
-fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), BlockError> {
+fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(()),
-        ConsensusData::PoW(_)|ConsensusData::FakePoS(_) => Err(BlockError::ConsensusTypeMismatch(
+        ConsensusData::PoW(_)|ConsensusData::FakePoS(_) => Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
     }
 }
 
-fn validate_pos_consensus(header: &BlockHeader) -> Result<(), BlockError> {
+fn validate_pos_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
-        ConsensusData::None | ConsensusData::PoW(_)=>  Err(BlockError::ConsensusTypeMismatch(
+        ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
         ConsensusData::FakePoS(_) => Ok(()),
@@ -86,13 +93,13 @@ fn do_validate<H: BlockIndexHandle>(
     header: &BlockHeader,
     consensus_status: &RequiredConsensus,
     block_index_handle: &H,
-) -> Result<(), BlockError> {
+) -> Result<(), ConsensusVerificationError> {
     match consensus_status {
         RequiredConsensus::PoW(pow_status) => {
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
         RequiredConsensus::PoS => validate_pos_consensus(header),
-        RequiredConsensus::DSA => Err(BlockError::UnsupportedConsensusType),
+        RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
     }
 }
