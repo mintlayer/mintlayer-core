@@ -5,6 +5,8 @@ use super::{
     CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 
+// TODO: use a ban_score macro in a form similar to thiserror in order to define the ban score value of an error
+
 pub trait BanScore {
     fn ban_score(&self) -> u32;
 }
