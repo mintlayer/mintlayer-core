@@ -51,10 +51,6 @@ pub enum BlockError {
     PrevBlockNotFound,
     #[error("Invalid block source")]
     InvalidBlockSource,
-    #[error("Unexpected numeric type conversion error `{0}`")]
-    InternalNumTypeConversionError(Id<Block>),
-    #[error("Conversion failed: `{0:?}`")]
-    Conversion(String),
     #[error("Block {0:?} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
