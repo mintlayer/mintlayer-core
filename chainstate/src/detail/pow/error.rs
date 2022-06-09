@@ -8,8 +8,6 @@ use crate::detail::PropertyQueryError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoWError {
-    #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
     #[error("Invalid Proof of Work for block {0}")]
     InvalidPoW(Id<Block>),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
