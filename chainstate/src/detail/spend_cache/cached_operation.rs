@@ -15,9 +15,8 @@
 //
 // Author(s): S. Afach
 
+use super::error::StateUpdateError;
 use common::chain::{Spender, TxMainChainIndex};
-
-use crate::detail::StateUpdateError;
 
 pub enum CachedInputsOperation {
     Write(TxMainChainIndex),
