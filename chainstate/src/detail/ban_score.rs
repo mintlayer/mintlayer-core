@@ -5,7 +5,8 @@ use super::{
     CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 
-// TODO: use a ban_score macro in a form similar to thiserror in order to define the ban score value of an error
+// TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
+//       value of an error on the error enum arms instead of separately like in this file
 
 pub trait BanScore {
     fn ban_score(&self) -> u32;
