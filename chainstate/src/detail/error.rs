@@ -32,13 +32,13 @@ use super::{
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
     #[error("Block storage error `{0}`")]
-    StorageError(blockchain_storage::Error),
+    StorageError(#[from] blockchain_storage::Error),
     #[error("Error while checking the previous block")]
-    OrphanCheckFailed(OrphanCheckError),
+    OrphanCheckFailed(#[from] OrphanCheckError),
     #[error("Check block failed: {0}")]
-    CheckBlockFailed(CheckBlockError),
+    CheckBlockFailed(#[from] CheckBlockError),
     #[error("Failed to update the internal blockchain state: {0}")]
-    StateUpdateFailed(StateUpdateError),
+    StateUpdateFailed(#[from] StateUpdateError),
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
@@ -60,7 +60,7 @@ pub enum BlockError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusVerificationError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(#[from] blockchain_storage::Error),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
     PrevBlockLoadError(Id<Block>, Id<Block>, PropertyQueryError),
     #[error("Previous block {0} of block {1} not found in database")]
@@ -76,13 +76,13 @@ pub enum ConsensusVerificationError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(#[from] blockchain_storage::Error),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
     #[error("Internal block representation is invalid `{0}`")]
-    BlockConsistencyError(BlockConsistencyError),
+    BlockConsistencyError(#[from] BlockConsistencyError),
     #[error("Only genesis can have no previous block")]
     InvalidBlockNoPrevBlock,
     #[error("Previous block {0} of block {1} not found in database")]
@@ -114,7 +114,7 @@ pub enum CheckBlockTransactionsError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PropertyQueryError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(#[from] blockchain_storage::Error),
     #[error("Best block not found")]
     BestBlockNotFound,
     #[error("Best block index not found")]
@@ -141,7 +141,7 @@ pub enum PropertyQueryError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(#[from] blockchain_storage::Error),
     #[error("Previous block not found")]
     PrevBlockIdNotFound,
     #[error("Block index not found")]
@@ -150,68 +150,10 @@ pub enum OrphanCheckError {
     LocalOrphan,
 }
 
-impl From<blockchain_storage::Error> for ConsensusVerificationError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        ConsensusVerificationError::StorageError(err)
-    }
-}
-
-impl From<blockchain_storage::Error> for CheckBlockError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        CheckBlockError::StorageError(err)
-    }
-}
-
-impl From<blockchain_storage::Error> for OrphanCheckError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        OrphanCheckError::StorageError(err)
-    }
-}
-
-impl From<OrphanCheckError> for BlockError {
-    fn from(err: OrphanCheckError) -> Self {
-        BlockError::OrphanCheckFailed(err)
-    }
-}
-
-impl From<blockchain_storage::Error> for PropertyQueryError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        PropertyQueryError::StorageError(err)
-    }
-}
-
-impl From<blockchain_storage::Error> for BlockError {
-    fn from(err: blockchain_storage::Error) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
-        BlockError::StorageError(err)
-    }
-}
-
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {
     fn from(err: OrphanAddError) -> Self {
         match err {
             OrphanAddError::BlockAlreadyInOrphanList(_) => Ok(()),
         }
-    }
-}
-
-impl From<StateUpdateError> for BlockError {
-    fn from(err: StateUpdateError) -> Self {
-        BlockError::StateUpdateFailed(err)
-    }
-}
-
-impl From<BlockConsistencyError> for CheckBlockError {
-    fn from(err: BlockConsistencyError) -> Self {
-        CheckBlockError::BlockConsistencyError(err)
     }
 }
