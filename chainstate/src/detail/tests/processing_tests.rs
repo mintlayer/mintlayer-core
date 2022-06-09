@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use crate::detail::pow::error::ConsensusPoWError;
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use crate::make_chainstate;
