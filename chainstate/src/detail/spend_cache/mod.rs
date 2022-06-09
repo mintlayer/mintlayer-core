@@ -66,10 +66,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     ) -> Result<OutPointSourceId, StateUpdateError> {
         let outpoint_source_id = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block
-                    .transactions()
-                    .get(tx_num)
-                    .ok_or_else(|| StateUpdateError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+                let tx = block.transactions().get(tx_num).ok_or_else(|| {
+                    StateUpdateError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
+                })?;
                 let tx_id = tx.get_id();
                 OutPointSourceId::from(tx_id)
             }
@@ -410,10 +409,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     ) -> Result<(), StateUpdateError> {
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block
-                    .transactions()
-                    .get(tx_num)
-                    .ok_or_else(|| StateUpdateError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+                let tx = block.transactions().get(tx_num).ok_or_else(|| {
+                    StateUpdateError::TxNumWrongInBlockOnConnect(tx_num, block.get_id())
+                })?;
 
                 // pre-cache all inputs
                 self.precache_inputs(tx.get_inputs())?;
@@ -459,10 +457,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
-                let tx = block
-                    .transactions()
-                    .get(tx_num)
-                    .ok_or_else(|| StateUpdateError::TxNumWrongInBlock(tx_num, block.get_id()))?;
+                let tx = block.transactions().get(tx_num).ok_or_else(|| {
+                    StateUpdateError::TxNumWrongInBlockOnDisconnect(tx_num, block.get_id())
+                })?;
 
                 // pre-cache all inputs
                 self.precache_inputs(tx.get_inputs())?;

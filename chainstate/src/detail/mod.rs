@@ -33,6 +33,7 @@ mod error;
 pub use error::*;
 mod pow;
 
+pub mod ban_score;
 mod block_index_history_iter;
 
 mod chainstateref;
