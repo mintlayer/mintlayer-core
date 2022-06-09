@@ -29,8 +29,11 @@ use common::{
 use std::collections::{btree_map::Entry, BTreeMap};
 
 mod cached_operation;
-use super::StateUpdateError;
 use cached_operation::CachedInputsOperation;
+
+use self::error::StateUpdateError;
+
+pub mod error;
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
