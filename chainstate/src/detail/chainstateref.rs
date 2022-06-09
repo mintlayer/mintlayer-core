@@ -526,7 +526,8 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
         for (num, tx) in block.transactions().iter().enumerate() {
             self.db_tx.set_mainchain_tx_index(
                 &OutPointSourceId::from(tx.get_id()),
-                &calculate_tx_index_from_block(block, num)?,
+                &calculate_tx_index_from_block(block, num)
+                    .expect("Index calculation for genesis failed"),
             )?;
         }
         Ok(())
