@@ -1,30 +1,18 @@
-use common::chain::block::Block;
 use common::chain::block::BlockHeader;
-use common::chain::block::BlockIndex;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
 use common::chain::RequiredConsensus;
 use common::primitives::BlockHeight;
-use common::primitives::Id;
 use common::primitives::Idable;
 
 use crate::detail::pow::work::check_pow_consensus;
 
-use super::ConsensusVerificationError;
-use super::PropertyQueryError;
+pub use self::block_index_handle::BlockIndexHandle;
 
-pub(crate) trait BlockIndexHandle {
-    fn get_block_index(
-        &self,
-        block_index: &Id<Block>,
-    ) -> Result<Option<BlockIndex>, PropertyQueryError>;
-    fn get_ancestor(
-        &self,
-        block_index: &BlockIndex,
-        ancestor_height: BlockHeight,
-    ) -> Result<BlockIndex, PropertyQueryError>;
-}
+use super::ConsensusVerificationError;
+
+mod block_index_handle;
 
 pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
