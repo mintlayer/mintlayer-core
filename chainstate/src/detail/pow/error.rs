@@ -20,10 +20,6 @@ pub enum ConsensusPoWError {
     AncestorAtHeightNotFound(Id<Block>, BlockHeight, PropertyQueryError),
     #[error("No PoW data for block for block")]
     NoPowDataInPreviousBlock,
-    #[error("Actual time span of value {0} conversion to uint256 failed")]
-    ActualTimeSpanConversionFailed(u64),
-    #[error("Target time span of value {0} conversion to uint256 failed")]
-    TargetTimeSpanConversionFailed(u64),
     #[error("Decoding bits of block failed: `{0:?}`")]
     DecodingBitsFailed(Compact),
     #[error("Previous bits conversion failed: `{0:?}`")]

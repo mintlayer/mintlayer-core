@@ -69,13 +69,11 @@ pub fn calculate_new_target(
     old_target: Compact,
     difficulty_limit: Uint256,
 ) -> Result<Compact, ConsensusPoWError> {
-    let actual_timespan = Uint256::from_u64(actual_timespan_of_last_interval).ok_or({
-        ConsensusPoWError::ActualTimeSpanConversionFailed(actual_timespan_of_last_interval)
-    })?;
+    let actual_timespan = Uint256::from_u64(actual_timespan_of_last_interval)
+        .expect("conversion from u64 to Uin256 to always succeed");
 
-    let target_timespan = Uint256::from_u64(target_timespan).ok_or(
-        ConsensusPoWError::TargetTimeSpanConversionFailed(target_timespan),
-    )?;
+    let target_timespan = Uint256::from_u64(target_timespan)
+        .expect("conversion from u64 to Uin256 to always succeed");
 
     let old_target = Uint256::try_from(old_target)
         .map_err(|_| ConsensusPoWError::PreviousBitsDecodingFailed(old_target))?;

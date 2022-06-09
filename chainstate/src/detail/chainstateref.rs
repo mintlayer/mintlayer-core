@@ -426,7 +426,7 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
                 if block.is_genesis(self.chain_config) {
                     return Ok(block);
                 } else {
-                    return Err(OrphanCheckError::PrevBlockNotFound);
+                    return Err(OrphanCheckError::PrevBlockIdNotFound);
                 }
             }
         };

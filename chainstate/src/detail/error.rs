@@ -143,7 +143,7 @@ pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
     StorageError(blockchain_storage::Error),
     #[error("Previous block not found")]
-    PrevBlockNotFound,
+    PrevBlockIdNotFound,
     #[error("Block index not found")]
     PrevBlockIndexNotFound(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
