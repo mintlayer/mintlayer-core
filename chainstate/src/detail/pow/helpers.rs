@@ -15,8 +15,8 @@
 //
 // Author(s): C. Yap
 
+use super::error::ConsensusPoWError;
 use crate::detail::consensus_validator::BlockIndexHandle;
-use crate::detail::ConsensusPoWError;
 use common::chain::block::BlockIndex;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
@@ -73,8 +73,9 @@ pub fn calculate_new_target(
         ConsensusPoWError::ActualTimeSpanConversionFailed(actual_timespan_of_last_interval)
     })?;
 
-    let target_timespan = Uint256::from_u64(target_timespan)
-        .ok_or(ConsensusPoWError::TargetTimeSpanConversionFailed(target_timespan))?;
+    let target_timespan = Uint256::from_u64(target_timespan).ok_or(
+        ConsensusPoWError::TargetTimeSpanConversionFailed(target_timespan),
+    )?;
 
     let old_target = Uint256::try_from(old_target)
         .map_err(|_| ConsensusPoWError::PreviousBitsDecodingFailed(old_target))?;

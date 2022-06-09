@@ -21,8 +21,8 @@ use crate::detail::consensus_validator::BlockIndexHandle;
 use crate::detail::pow::helpers::{
     calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
 };
-use crate::detail::ConsensusPoWError;
 
+use super::error::ConsensusPoWError;
 use crate::detail::pow::PoW;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::{Block, ConsensusData};

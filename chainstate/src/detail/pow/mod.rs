@@ -19,6 +19,7 @@ use common::chain::{ChainConfig, PoWChainConfig};
 use common::Uint256;
 use std::time::Duration;
 
+pub mod error;
 mod helpers;
 pub mod work;
 
