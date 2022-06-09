@@ -5,11 +5,11 @@ use super::{
     CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 
-trait BanScoreFromError {
+trait BanScore {
     fn ban_score(&self) -> u32;
 }
 
-impl BanScoreFromError for BlockError {
+impl BanScore for BlockError {
     fn ban_score(&self) -> u32 {
         match self {
             BlockError::StorageError(_) => 0,
@@ -29,7 +29,7 @@ impl BanScoreFromError for BlockError {
     }
 }
 
-impl BanScoreFromError for OrphanCheckError {
+impl BanScore for OrphanCheckError {
     fn ban_score(&self) -> u32 {
         match self {
             OrphanCheckError::StorageError(_) => 0,
@@ -40,7 +40,7 @@ impl BanScoreFromError for OrphanCheckError {
     }
 }
 
-impl BanScoreFromError for StateUpdateError {
+impl BanScore for StateUpdateError {
     fn ban_score(&self) -> u32 {
         match self {
             StateUpdateError::StorageError(_) => 0,
@@ -82,7 +82,7 @@ impl BanScoreFromError for StateUpdateError {
     }
 }
 
-impl BanScoreFromError for CheckBlockError {
+impl BanScore for CheckBlockError {
     fn ban_score(&self) -> u32 {
         match self {
             CheckBlockError::StorageError(_) => 0,
@@ -101,7 +101,7 @@ impl BanScoreFromError for CheckBlockError {
     }
 }
 
-impl BanScoreFromError for CheckBlockTransactionsError {
+impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
             CheckBlockTransactionsError::StorageError(_) => 0,
@@ -112,7 +112,7 @@ impl BanScoreFromError for CheckBlockTransactionsError {
     }
 }
 
-impl BanScoreFromError for ConsensusVerificationError {
+impl BanScore for ConsensusVerificationError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusVerificationError::StorageError(_) => 0,
@@ -125,7 +125,7 @@ impl BanScoreFromError for ConsensusVerificationError {
     }
 }
 
-impl BanScoreFromError for ConsensusPoWError {
+impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
             ConsensusPoWError::StorageError(_) => 0,
