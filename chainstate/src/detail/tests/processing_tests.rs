@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use crate::detail::pow::error::ConsensusPoWError;
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use crate::make_chainstate;
@@ -102,7 +103,7 @@ fn test_orphans_chains() {
             current_block = produce_test_block(&current_block, false);
             assert_eq!(
                 chainstate.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
-                BlockError::LocalOrphan
+                BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
             );
             // the best is still genesis, because we're submitting orphans
             assert_eq!(
@@ -374,7 +375,7 @@ fn test_get_ancestor() {
     );
 
     assert_eq!(
-        BlockError::InvalidAncestorHeight {
+        PropertyQueryError::InvalidAncestorHeight {
             ancestor_height: u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into(),
             block_height: u64::try_from(SECOND_CHAIN_LENGTH).unwrap().into(),
         },
@@ -507,9 +508,12 @@ fn test_consensus_type() {
         false,
         ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])),
     );
+
     assert!(matches!(
-        btf.add_special_block(pow_block),
-        Err(BlockError::ConsensusTypeMismatch(..))
+        btf.add_special_block(pow_block).unwrap_err(),
+        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
+            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ))
     ));
 
     // Create 4 more blocks with Consensus Nonw
@@ -522,9 +526,12 @@ fn test_consensus_type() {
         false,
         ConsensusData::None,
     );
+
     assert!(matches!(
-        btf.add_special_block(block_without_consensus_data),
-        Err(BlockError::ConsensusTypeMismatch(..))
+        btf.add_special_block(block_without_consensus_data).unwrap_err(),
+        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
+            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ))
     ));
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
@@ -553,9 +560,12 @@ fn test_consensus_type() {
         crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
             .expect("Unexpected conversion error")
     );
+
     assert!(matches!(
-        btf.add_special_block(mined_block),
-        Err(BlockError::ConsensusTypeMismatch(..))
+        btf.add_special_block(mined_block).unwrap_err(),
+        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
+            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ))
     ));
 
     // Create blocks 10-14 without consensus data as required by net_upgrades
@@ -565,9 +575,12 @@ fn test_consensus_type() {
     let prev_block = btf.get_block(btf.block_indexes[14].get_block_id().clone()).unwrap().unwrap();
     let block_without_consensus_data =
         produce_test_block_with_consensus_data(&prev_block, false, ConsensusData::None);
+
     assert!(matches!(
-        btf.add_special_block(block_without_consensus_data),
-        Err(BlockError::ConsensusTypeMismatch(..))
+        btf.add_special_block(block_without_consensus_data).unwrap_err(),
+        BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
+            ConsensusVerificationError::ConsensusTypeMismatch(..)
+        ))
     ));
 
     // Mining should work
@@ -592,7 +605,7 @@ fn make_invalid_pow_block(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
-) -> Result<bool, BlockError> {
+) -> Result<bool, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0, vec![]);
     for nonce in 0..max_nonce {
         data.update_nonce(nonce);
@@ -653,7 +666,14 @@ fn test_pow() {
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
     let res = btf.add_special_block(random_invalid_block.clone());
-    assert!(matches!(res, Err(BlockError::InvalidPoW)));
+    assert!(matches!(
+        res,
+        Err(BlockError::CheckBlockFailed(
+            CheckBlockError::ConsensusVerificationFailed(ConsensusVerificationError::PoWError(
+                ConsensusPoWError::InvalidPoW(_)
+            ))
+        ))
+    ));
 
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
     let mut valid_block = random_invalid_block;
