@@ -452,6 +452,8 @@ macro_rules! impl_byteorder_for_fixed_hash {
 #[doc(hidden)]
 macro_rules! impl_rand_for_fixed_hash {
     ( $name:ident ) => {
+        use crypto::random as rand;
+
         impl rand::distributions::Distribution<$name> for rand::distributions::Standard {
             fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> $name {
                 let mut ret = $name::zero();
