@@ -2,9 +2,7 @@ use super::*;
 use bech32::CheckBase32;
 use bech32::ToBase32;
 use bitcoin_bech32::WitnessProgram;
-use crypto::random::make_pseudo_rng;
-use crypto::random::Alphanumeric;
-use crypto::random::Rng;
+use crypto::random::{distributions::Alphanumeric, make_pseudo_rng, Rng};
 use hex::FromHex;
 use logging::log;
 
