@@ -1,11 +1,8 @@
 use super::super::sighashtype::SigHashType;
 use super::utils::*;
 use crate::chain::signature::sighashtype::OutputsMode;
-use crate::chain::signature::tests::check_change_flags;
 use crate::chain::signature::tests::check_change_input;
-use crate::chain::signature::tests::check_change_locktime;
 use crate::chain::signature::tests::check_change_output;
-use crate::chain::signature::tests::check_change_witness;
 use crate::chain::signature::tests::check_insert_input;
 use crate::chain::signature::tests::check_insert_output;
 use crate::chain::signature::tests::sign_modify_then_verify;
@@ -75,12 +72,7 @@ fn test_mutate_tx_internal_data() {
                 let mut tx =
                     generate_unsigned_tx(outpoint_dest.clone(), *inputs_count, *outputs_count)
                         .unwrap();
-                match sign_whole_tx(
-                    &mut tx,
-                    &private_key,
-                    sighash_type.clone(),
-                    outpoint_dest.clone(),
-                ) {
+                match sign_whole_tx(&mut tx, &private_key, *sighash_type, outpoint_dest.clone()) {
                     Ok(_) => {
                         // Test flags change
                         let updated_tx = change_flags(&tx, 1234567890);
