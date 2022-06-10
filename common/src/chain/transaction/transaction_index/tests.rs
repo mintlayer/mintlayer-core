@@ -1,5 +1,5 @@
 use crypto::key::{KeyKind, PrivateKey};
-use rand::{RngCore, SeedableRng};
+use crypto::random::RngCore;
 
 use super::*;
 use crate::{
@@ -186,20 +186,20 @@ fn basic_spending() {
     );
 }
 
-fn generate_random_h256(g: &mut impl rand::Rng) -> H256 {
+fn generate_random_h256(g: &mut impl crypto::random::Rng) -> H256 {
     let mut bytes = [0u8; 32];
     g.fill_bytes(&mut bytes);
     H256::from(bytes)
 }
 
-fn generate_random_bytes(g: &mut impl rand::Rng, length: usize) -> Vec<u8> {
+fn generate_random_bytes(g: &mut impl crypto::random::Rng, length: usize) -> Vec<u8> {
     let mut bytes = Vec::new();
     bytes.resize(length, 0);
     g.fill_bytes(&mut bytes);
     bytes
 }
 
-fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
+fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
     let witness_size = g.next_u32();
     let witness = generate_random_bytes(g, (1 + witness_size % 1000) as usize);
     let outpoint = if g.next_u32() % 2 == 0 {
@@ -218,7 +218,7 @@ fn generate_random_invalid_input(g: &mut impl rand::Rng) -> TxInput {
     )
 }
 
-fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
+fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TxOutput::new(
         Amount::from_atoms(g.next_u64() as u128),
@@ -226,7 +226,7 @@ fn generate_random_invalid_output(g: &mut impl rand::Rng) -> TxOutput {
     )
 }
 
-fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction {
+fn generate_random_invalid_transaction(rng: &mut impl crypto::random::Rng) -> Transaction {
     let inputs = {
         let input_count = 1 + (rng.next_u32() as usize) % 10;
         (0..input_count)
@@ -250,7 +250,7 @@ fn generate_random_invalid_transaction(rng: &mut impl rand::Rng) -> Transaction 
 }
 
 fn generate_random_invalid_block() -> Block {
-    let mut rng = rand::rngs::StdRng::from_entropy();
+    let mut rng = crypto::random::make_pseudo_rng();
 
     let transactions = {
         let transaction_count = rng.next_u32() % 20;

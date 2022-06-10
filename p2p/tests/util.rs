@@ -25,7 +25,7 @@ use common::{
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
-use rand::prelude::SliceRandom;
+use crypto::random::SliceRandom;
 use std::sync::Arc;
 
 fn create_utxo_data(
@@ -92,7 +92,7 @@ fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, T
 }
 
 fn nosig_random_witness() -> InputWitness {
-    let mut rng = rand::thread_rng();
+    let mut rng = crypto::random::make_pseudo_rng();
     let mut data: Vec<u8> = (1..100).collect();
     data.shuffle(&mut rng);
 
