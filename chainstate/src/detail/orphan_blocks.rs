@@ -17,7 +17,7 @@
 
 use common::chain::block::Block;
 use common::primitives::{Id, Idable};
-use rand::seq::SliceRandom;
+use crypto::random::SliceRandom;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -202,14 +202,13 @@ mod tests {
     use common::chain::block::Block;
     use common::primitives::Id;
     use helpers::*;
-    use rand::seq::SliceRandom;
 
     mod helpers {
         use super::*;
         use common::chain::block::ConsensusData;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
-        use rand::Rng;
+        use crypto::random::Rng;
 
         pub fn gen_random_blocks(count: u32) -> Vec<Block> {
             (0..count).into_iter().map(|_| gen_random_block()).collect::<Vec<_>>()
@@ -220,7 +219,7 @@ mod tests {
         }
 
         pub fn gen_block_from_id(prev_block_id: Option<Id<Block>>) -> Block {
-            let mut rng = rand::thread_rng();
+            let mut rng = crypto::random::make_pseudo_rng();
 
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
@@ -259,7 +258,7 @@ mod tests {
             count: u32,
             prev_block_id: Option<Id<Block>>,
         ) -> Vec<Block> {
-            let mut rng = rand::thread_rng();
+            let mut rng = crypto::random::make_pseudo_rng();
 
             let prev_block_id =
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into());
@@ -366,11 +365,13 @@ mod tests {
         // check that there is only 2 key-value pair in `orphans_by_prev_id`
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);
 
+        let mut rng = crypto::random::make_pseudo_rng();
+
         // add another block with the parent id of any of the 2 blocks above
         let rand_block = {
             let rand_id = orphans_pool
                 .orphan_ids
-                .choose(&mut rand::thread_rng())
+                .choose(&mut rng)
                 .expect("it should return any id of the 2 blocks above");
             orphans_pool
                 .orphan_by_id
@@ -414,8 +415,9 @@ mod tests {
             assert!(orphans_pool.add_block(block.clone()).is_ok());
         });
 
-        let rand_block =
-            blocks.choose(&mut rand::thread_rng()).expect("this should return any block");
+        let mut rng = crypto::random::make_pseudo_rng();
+
+        let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
         assert_eq!(
             orphans_pool.add_block(rand_block.clone()).unwrap_err(),
@@ -433,8 +435,9 @@ mod tests {
         });
         check_pool_length(&orphans_pool, blocks.len());
 
-        let rand_block =
-            blocks.choose(&mut rand::thread_rng()).expect("this should return any block");
+        let mut rng = crypto::random::make_pseudo_rng();
+
+        let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
         // dropping the rand_block
         orphans_pool.drop_block(&rand_block.get_id());
@@ -535,8 +538,10 @@ mod tests {
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 1);
         assert_eq!(orphans_pool.orphan_ids.len(), blocks.len());
 
+        let mut rng = crypto::random::make_pseudo_rng();
+
         // delete a random block
-        let random_block = blocks.choose(&mut rand::thread_rng()).expect("returns any block");
+        let random_block = blocks.choose(&mut rng).expect("returns any block");
         orphans_pool.del_one_deepest_child(&random_block.get_id());
 
         // make sure that the same random_block is deleted.
@@ -695,7 +700,7 @@ mod tests {
         // ]
         for _ in 0..2 {
             let rand_block_id = sim_blocks
-                .choose(&mut rand::thread_rng())
+                .choose(&mut crypto::random::make_pseudo_rng())
                 .expect("should return any block in sim_blocks")
                 .get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
