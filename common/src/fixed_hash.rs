@@ -452,10 +452,10 @@ macro_rules! impl_byteorder_for_fixed_hash {
 #[doc(hidden)]
 macro_rules! impl_rand_for_fixed_hash {
     ( $name:ident ) => {
-        use crypto::random as rand;
-
-        impl rand::distributions::Distribution<$name> for rand::distributions::Standard {
-            fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> $name {
+        impl crypto::random::distributions::Distribution<$name>
+            for crypto::random::distributions::Standard
+        {
+            fn sample<R: crypto::random::Rng + ?Sized>(&self, rng: &mut R) -> $name {
                 let mut ret = $name::zero();
                 for byte in ret.as_bytes_mut().iter_mut() {
                     *byte = rng.gen();
@@ -470,15 +470,15 @@ macro_rules! impl_rand_for_fixed_hash {
             /// given random number generator.
             pub fn randomize_using<R>(&mut self, rng: &mut R)
             where
-                R: rand::Rng + ?Sized,
+                R: crypto::random::Rng + ?Sized,
             {
-                use rand::distributions::Distribution;
-                *self = rand::distributions::Standard.sample(rng);
+                use crypto::random::distributions::Distribution;
+                *self = crypto::random::distributions::Standard.sample(rng);
             }
 
             /// Assign `self` to a cryptographically random value.
             pub fn randomize(&mut self) {
-                let mut rng = rand::rngs::OsRng;
+                let mut rng = crypto::random::rngs::OsRng;
                 self.randomize_using(&mut rng);
             }
 
@@ -486,7 +486,7 @@ macro_rules! impl_rand_for_fixed_hash {
             /// given random number generator.
             pub fn random_using<R>(rng: &mut R) -> Self
             where
-                R: rand::Rng + ?Sized,
+                R: crypto::random::Rng + ?Sized,
             {
                 let mut ret = Self::zero();
                 ret.randomize_using(rng);
