@@ -300,6 +300,7 @@ mod test {
         sighashtype::SigHashType,
     };
     use crate::{
+        address::pubkeyhash::PublicKeyHash,
         chain::{
             signature::{verify_signature, TransactionSigError},
             Destination, OutPointSourceId, Transaction, TransactionCreationError, TxInput,
@@ -308,6 +309,7 @@ mod test {
         primitives::{Amount, Id, H256},
     };
     use crypto::key::{KeyKind, PrivateKey};
+    use script::Script;
     use std::vec;
 
     // This is required because we can't access private fields of the Transaction class
@@ -345,37 +347,53 @@ mod test {
 
     fn generate_unsigned_tx(
         outpoint_dest: Destination,
+        inputs_amount: u32,
     ) -> Result<Transaction, TransactionCreationError> {
+        let mut inputs = Vec::new();
+        for output_index in 0..inputs_amount {
+            inputs.push(TxInput::new(
+                Id::<Transaction>::new(&H256::random()).into(),
+                output_index,
+                InputWitness::NoSignature(None),
+            ));
+        }
         let tx = Transaction::new(
             0,
-            vec![TxInput::new(
-                Id::<Transaction>::new(&H256::zero()).into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
+            inputs,
             vec![TxOutput::new(Amount::from_atoms(100), outpoint_dest)],
             0,
         )?;
         Ok(tx)
     }
 
-    fn sign_tx(
+    fn sign_whole_tx(
         tx: &mut Transaction,
         private_key: &PrivateKey,
         sighash_type: SigHashType,
         outpoint_dest: Destination,
-    ) {
+    ) -> Result<(), TransactionSigError> {
         for i in 0..tx.get_inputs().len() {
-            let input_sign = StandardInputSignature::produce_signature_for_input(
-                private_key,
-                sighash_type,
-                outpoint_dest.clone(),
-                tx,
-                i,
-            )
-            .unwrap();
-            tx.update_witness(i, InputWitness::Standard(input_sign)).unwrap();
+            update_signature(tx, i, private_key, sighash_type, outpoint_dest.clone())?;
         }
+        Ok(())
+    }
+
+    fn update_signature(
+        tx: &mut Transaction,
+        input_num: usize,
+        private_key: &PrivateKey,
+        sighash_type: SigHashType,
+        outpoint_dest: Destination,
+    ) -> Result<(), TransactionSigError> {
+        let input_sign = StandardInputSignature::produce_signature_for_input(
+            private_key,
+            sighash_type,
+            outpoint_dest.clone(),
+            tx,
+            input_num,
+        )?;
+        tx.update_witness(input_num, InputWitness::Standard(input_sign)).unwrap();
+        Ok(())
     }
 
     fn verify_signed_tx(
@@ -389,56 +407,139 @@ mod test {
     }
 
     #[test]
+    fn sign_and_verify_sighash_all() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        {
+            // Sign 20 inputs as SigHashType::ALL and verify them all
+            // Destination = PubKey
+            let outpoint_dest = Destination::PublicKey(public_key.clone());
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL | SigHashType::ANYONECANPAY and verify them all
+            // - Destination = PubKey
+            let outpoint_dest = Destination::PublicKey(public_key.clone());
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL and verify them all
+            // - Destination = Address
+            let outpoint_dest = Destination::Address(PublicKeyHash::from(&public_key));
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL | SigHashType::ANYONECANPAY and verify them all
+            // - Destination = Address
+            let outpoint_dest = Destination::Address(PublicKeyHash::from(&public_key));
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL and verify them all
+            // - Destination = AnyoneCanSpend
+            let outpoint_dest = Destination::AnyoneCanSpend;
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL | SigHashType::ANYONECANPAY and verify them all
+            // - Destination = AnyoneCanSpend
+            let outpoint_dest = Destination::AnyoneCanSpend;
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL and verify them all
+            // - Destination = ScriptHash
+            let outpoint_dest = Destination::ScriptHash(Id::<Script>::from(H256::random()));
+            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+
+            // TODO: if ScriptHash works fine, we should update this test
+            assert_eq!(
+                sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()),
+                Err(TransactionSigError::Unsupported)
+            );
+        }
+        {
+            // Sign 20 inputs as SigHashType::ALL | SigHashType::ANYONECANPAY and verify them all
+            // - Destination = ScriptHash
+            let outpoint_dest = Destination::ScriptHash(Id::<Script>::from(H256::random()));
+            let sighash_type =
+                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 20).unwrap();
+
+            // TODO: if ScriptHash works fine, we should update this test
+            assert_eq!(
+                sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()),
+                Err(TransactionSigError::Unsupported)
+            );
+        }
+    }
+
+    #[test]
     #[allow(clippy::eq_op)]
     fn sign_and_verify_different_sighash_types() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
         {
-            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
-            assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-        }
-        {
             // ALL
             let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
         {
             let sighash_type =
                 SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
         {
             // NONE
             let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
         {
             let sighash_type =
                 SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
         {
             // SINGLE
             let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
         {
             let sighash_type =
                 SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
         }
     }
@@ -448,7 +549,7 @@ mod test {
     fn check_verify_fails_different_sighash_types() {
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
         {
             // Try verify sign for tx with InputWitness::NoSignature and some data
             tx.update_witness(
@@ -561,8 +662,8 @@ mod test {
         let outpoint_dest = Destination::PublicKey(public_key);
         {
             let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             // input index out of range
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
@@ -576,8 +677,8 @@ mod test {
             // ALL | ANYONECANPAY
             let sighash_type =
                 SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
                 Err(TransactionSigError::InvalidInputIndex(
@@ -589,8 +690,8 @@ mod test {
         {
             // SINGLE
             let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
                 Err(TransactionSigError::InvalidInputIndex(
@@ -603,8 +704,8 @@ mod test {
             // SINGLE | ANYONECANPAY
             let sighash_type =
                 SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
                 Err(TransactionSigError::InvalidInputIndex(
@@ -616,8 +717,8 @@ mod test {
         {
             // NONE
             let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
                 Err(TransactionSigError::InvalidInputIndex(
@@ -630,8 +731,8 @@ mod test {
             // NONE | ANYONECANPAY
             let sighash_type =
                 SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-            let mut tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-            sign_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
+            let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+            sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone());
             assert_eq!(
                 verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
                 Err(TransactionSigError::InvalidInputIndex(
@@ -648,8 +749,8 @@ mod test {
         outpoint_dest: &Destination,
     ) -> Transaction {
         // Create and sign tx, and then modify and verify it.
-        let mut original_tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        sign_tx(
+        let mut original_tx = generate_unsigned_tx(outpoint_dest.clone(), 3).unwrap();
+        sign_whole_tx(
             &mut original_tx,
             private_key,
             sighash_type,
