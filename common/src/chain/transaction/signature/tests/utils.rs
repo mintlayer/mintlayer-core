@@ -12,6 +12,7 @@ use crate::{
 use crypto::key::PrivateKey;
 use rand::Rng;
 
+
 // This is required because we can't access private fields of the Transaction class
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MutableTransaction {

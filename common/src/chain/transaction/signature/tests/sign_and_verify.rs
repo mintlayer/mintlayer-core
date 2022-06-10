@@ -1,5 +1,5 @@
-use super::super::sighashtype::SigHashType;
 use super::utils::*;
+use super::{super::sighashtype::SigHashType, TestData};
 use crate::{
     address::pubkeyhash::PublicKeyHash,
     chain::{signature::TransactionSigError, Destination},
@@ -7,14 +7,6 @@ use crate::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use script::Script;
-
-type TestData = Vec<(
-    Destination,
-    SigHashType,
-    u32,
-    u32,
-    Result<(), TransactionSigError>,
-)>;
 
 #[test]
 fn sign_and_verify_sighash_all() {
