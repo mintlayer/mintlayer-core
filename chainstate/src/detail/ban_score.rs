@@ -131,7 +131,6 @@ impl BanScore for ConsensusVerificationError {
 impl BanScore for ConsensusPoWError {
     fn ban_score(&self) -> u32 {
         match self {
-            ConsensusPoWError::StorageError(_) => 0,
             ConsensusPoWError::InvalidPoW(_) => 100,
             ConsensusPoWError::PrevBlockLoadError(_, _, _) => 0,
             ConsensusPoWError::PrevBlockNotFound(_, _) => 100,
