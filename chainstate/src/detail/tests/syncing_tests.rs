@@ -18,7 +18,7 @@
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use blockchain_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
-use rand::Rng;
+use crypto::random::Rng;
 
 #[test]
 fn test_get_locator() {
@@ -28,7 +28,7 @@ fn test_get_locator() {
         let mut consensus = Chainstate::new(Arc::clone(&config), storage, None).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
-        let limit = rand::thread_rng().gen::<u16>();
+        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
 
         for _ in 0..limit {
             let new_block = produce_test_block(&prev_block, false);
@@ -70,7 +70,7 @@ fn test_get_headers_same_chain() {
         let mut consensus = Chainstate::new(config, storage, None).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
-        let limit = rand::thread_rng().gen::<u16>();
+        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
 
         for _ in 0..limit {
             let new_block = produce_test_block(&prev_block, false);
@@ -88,7 +88,7 @@ fn test_get_headers_same_chain() {
 
         // then add some blocks while keeping the old locator and verify that
         // that only headers of the new blocks are returned
-        let limit = rand::thread_rng().gen::<u16>();
+        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
         let mut headers = vec![];
 
         for _ in 0..limit {
@@ -121,7 +121,7 @@ fn test_get_headers_different_chains() {
         // verify that the first header attaches to genesis
         {
             let mut btf = BlockTestFramework::new();
-            let limit = rand::thread_rng().gen_range(0..10_000);
+            let limit = crypto::random::make_pseudo_rng().gen_range(0..10_000);
             btf.create_chain(&btf.genesis().get_id(), (limit / 10) as usize).unwrap();
 
             let locator = btf.chainstate.get_locator().unwrap();
@@ -143,10 +143,10 @@ fn test_get_headers_different_chains() {
         // Verify that the first returned header attaches to the other chain
         {
             let mut btf = BlockTestFramework::new();
-            let common_height = rand::thread_rng().gen_range(100..10_000);
+            let common_height = crypto::random::make_pseudo_rng().gen_range(100..10_000);
             btf.create_chain(&btf.genesis().get_id(), common_height).unwrap();
 
-            let limit = rand::thread_rng().gen_range(100..2500);
+            let limit = crypto::random::make_pseudo_rng().gen_range(100..2500);
             btf.create_chain(
                 &btf.block_indexes[common_height - 1].get_block_id().clone(),
                 limit,
@@ -180,7 +180,7 @@ fn test_get_headers_different_chains() {
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();
 
-            for _ in 0..rand::thread_rng().gen_range(100..250) {
+            for _ in 0..crypto::random::make_pseudo_rng().gen_range(100..250) {
                 prev = btf1.random_block(&prev, None);
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
@@ -190,7 +190,7 @@ fn test_get_headers_different_chains() {
                 );
             }
 
-            let limit = rand::thread_rng().gen_range(32..256);
+            let limit = crypto::random::make_pseudo_rng().gen_range(32..256);
             btf1.create_chain(
                 &btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id().clone(),
                 limit,
@@ -226,7 +226,7 @@ fn test_filter_already_existing_blocks() {
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev1 = btf1.genesis().clone();
 
-            for _ in 0..rand::thread_rng().gen_range(8..16) {
+            for _ in 0..crypto::random::make_pseudo_rng().gen_range(8..16) {
                 prev1 = btf1.random_block(&prev1, None);
                 btf1.add_special_block(prev1.clone()).unwrap();
                 btf2.add_special_block(prev1.clone()).unwrap();
@@ -236,7 +236,7 @@ fn test_filter_already_existing_blocks() {
                 );
             }
 
-            let limit = rand::thread_rng().gen_range(32..256);
+            let limit = crypto::random::make_pseudo_rng().gen_range(32..256);
             let mut prev2 = prev1.clone();
             let mut headers1 = vec![];
             let mut headers2 = vec![];
@@ -274,7 +274,7 @@ fn test_filter_already_existing_blocks() {
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();
 
-            for _ in 0..rand::thread_rng().gen_range(8..16) {
+            for _ in 0..crypto::random::make_pseudo_rng().gen_range(8..16) {
                 prev = btf1.random_block(&prev, None);
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
@@ -284,7 +284,7 @@ fn test_filter_already_existing_blocks() {
                 );
             }
 
-            let headers = (0..rand::thread_rng().gen_range(3..10))
+            let headers = (0..crypto::random::make_pseudo_rng().gen_range(3..10))
                 .map(|_| {
                     prev = btf2.random_block(&prev, None);
                     btf2.add_special_block(prev.clone()).unwrap();
