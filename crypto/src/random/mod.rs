@@ -1,3 +1,4 @@
+pub use rand::prelude::SliceRandom;
 pub use rand::{seq, Rng, RngCore, SeedableRng};
 
 pub fn make_true_rng() -> impl rand::Rng + rand::CryptoRng {

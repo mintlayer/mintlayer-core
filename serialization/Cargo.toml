@@ -10,4 +10,6 @@ license = "MIT"
 arraytools = "0.1.5"
 hex-literal = "0.3.4"
 parity-scale-codec = {version = "3.1.2", features = ["derive", "chain-error"]}
+
+[dev-dependencies]
 rand = "0.8.4"
