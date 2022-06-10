@@ -3,10 +3,10 @@ use bech32::CheckBase32;
 use bech32::ToBase32;
 use bitcoin_bech32::WitnessProgram;
 use crypto::random::make_pseudo_rng;
+use crypto::random::Alphanumeric;
+use crypto::random::Rng;
 use hex::FromHex;
 use logging::log;
-use rand::distributions::Alphanumeric;
-use rand::Rng;
 
 #[test]
 fn check_encode() {
