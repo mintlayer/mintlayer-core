@@ -368,7 +368,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE).unwrap(),
             21u32,
             3u32,
-            Err(TransactionSigError::InvalidInputIndex(3, 3)),
+            Ok(()),
         ),
         // SigHashType::NONE | SigHashType::ANYONECANPAY. Destination = PubKey
         (
@@ -383,7 +383,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
             21u32,
             3u32,
-            Err(TransactionSigError::InvalidInputIndex(3, 3)),
+            Ok(()),
         ),
         // SigHashType::NONE. Destination = Address
         (
@@ -398,7 +398,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE).unwrap(),
             21u32,
             3u32,
-            Err(TransactionSigError::InvalidInputIndex(3, 3)),
+            Ok(()),
         ),
         // SigHashType::NONE | SigHashType::ANYONECANPAY. Destination = Address
         (
@@ -413,7 +413,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
             21u32,
             3u32,
-            Err(TransactionSigError::InvalidInputIndex(3, 3)),
+            Ok(()),
         ),
         // SigHashType::NONE. Destination = AnyoneCanSpend
         (
@@ -437,7 +437,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE).unwrap(),
             21u32,
             33u32,
-            Err(TransactionSigError::Unsupported),
+            Err(TransactionSigError::Unsupported), // TODO:We have to add tests as soon as it will support
         ),
         // SigHashType::NONE | SigHashType::ANYONECANPAY. Destination = AnyoneCanSpend
         (
@@ -445,7 +445,7 @@ fn sign_and_verify_sighash_none() {
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
             21u32,
             33u32,
-            Err(TransactionSigError::Unsupported),
+            Err(TransactionSigError::Unsupported), // TODO:We have to add tests as soon as it will support
         ),
     ];
 
