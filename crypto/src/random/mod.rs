@@ -1,3 +1,4 @@
+pub use rand::distributions::Alphanumeric;
 pub use rand::prelude::SliceRandom;
 pub use rand::{seq, Rng, RngCore, SeedableRng};
 
