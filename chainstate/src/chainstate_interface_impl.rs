@@ -95,4 +95,13 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
             .filter_already_existing_blocks(headers)
             .map_err(ChainstateError::FailedToReadProperty)
     }
+
+    fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError> {
+        let best_block_index = self
+            .chainstate
+            .get_best_block_index()
+            .map_err(ChainstateError::FailedToReadProperty)?
+            .expect("Best block index could not be found");
+        Ok(best_block_index.get_block_height())
+    }
 }
