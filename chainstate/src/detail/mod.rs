@@ -258,6 +258,10 @@ impl Chainstate {
         self.make_db_tx_ro().get_block_index(id)
     }
 
+    pub fn get_best_block_index(&self) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        self.make_db_tx_ro().get_best_block_index()
+    }
+
     pub fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         let best_block_index = chainstate_ref

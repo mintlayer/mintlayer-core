@@ -51,7 +51,7 @@ pub enum BlockError {
     PrevBlockNotFound,
     #[error("Invalid block source")]
     InvalidBlockSource,
-    #[error("Block {0:?} already exists")]
+    #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
     DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
