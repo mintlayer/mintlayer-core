@@ -648,6 +648,7 @@ dependencies = [
  "loom",
  "merkletree",
  "parity-scale-codec",
+ "rand 0.8.5",
  "rustc-hex",
  "script",
  "serde",
