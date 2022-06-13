@@ -20,6 +20,7 @@ pub trait ChainstateInterface: Send {
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockHeight>, ChainstateError>;
+    fn get_best_block_height(&self) -> Result<BlockHeight, ChainstateError>;
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,

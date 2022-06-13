@@ -29,6 +29,10 @@ trait ChainstateRpc {
         &self,
         block_id: BlockId,
     ) -> rpc::Result<Option<BlockHeight>>;
+
+    /// Get best block height in main chain
+    #[method(name = "best_block_height")]
+    async fn best_block_height(&self) -> rpc::Result<BlockHeight>;
 }
 
 #[async_trait::async_trait]
@@ -54,6 +58,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         block_id: BlockId,
     ) -> rpc::Result<Option<BlockHeight>> {
         handle_error(self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await)
+    }
+
+    async fn best_block_height(&self) -> rpc::Result<BlockHeight> {
+        handle_error(self.call(move |this| this.get_best_block_height()).await)
     }
 }
 
@@ -89,6 +97,13 @@ mod test {
         with_chainstate(|handle| async {
             let rpc = handle.into_rpc();
 
+            let res = rpc.call("chainstate_best_block_height", [(); 0]).await;
+            let best_height = match res {
+                Ok(Value::Number(height)) => height,
+                _ => panic!("expected a json value with a number"),
+            };
+            assert_eq!(best_height, 0.into());
+
             let res = rpc.call("chainstate_best_block_id", [(); 0]).await;
             let genesis_hash = match res {
                 Ok(Value::String(hash_str)) => {
@@ -96,7 +111,7 @@ mod test {
                     assert!(hash_str.chars().all(|ch| ch.is_ascii_hexdigit()));
                     hash_str
                 }
-                _ => panic!("expected a json object"),
+                _ => panic!("expected a json value with a string"),
             };
 
             let res: rpc::Result<Value> = rpc.call("chainstate_block_id_at_height", [0u32]).await;

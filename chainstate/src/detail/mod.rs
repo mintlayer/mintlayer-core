@@ -23,6 +23,7 @@ use common::chain::block::{Block, BlockHeader};
 use common::chain::config::ChainConfig;
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
+use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
 mod consensus_validator;
@@ -180,6 +181,8 @@ impl Chainstate {
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
+        log::info!("Processing block: {}", block.get_id());
+
         if block.is_genesis(&self.chain_config) && block_source != BlockSource::Local {
             return Err(BlockError::InvalidBlockSource);
         }
@@ -211,6 +214,14 @@ impl Chainstate {
         };
 
         self.broadcast_new_tip_event(&result);
+
+        if let Some(ref bi) = result {
+            log::info!(
+                "New tip in chainstate {} with height {}",
+                bi.get_block_id(),
+                bi.get_block_height()
+            );
+        }
 
         Ok(result)
     }
@@ -256,6 +267,10 @@ impl Chainstate {
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_index(id)
+    }
+
+    pub fn get_best_block_index(&self) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        self.make_db_tx_ro().get_best_block_index()
     }
 
     pub fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {

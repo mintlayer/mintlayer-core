@@ -31,9 +31,9 @@ use super::{
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
-    #[error("Block storage error `{0}`")]
+    #[error("Block storage error: `{0}`")]
     StorageError(#[from] blockchain_storage::Error),
-    #[error("Error while checking the previous block")]
+    #[error("Error while checking the previous block: {0}")]
     OrphanCheckFailed(#[from] OrphanCheckError),
     #[error("Check block failed: {0}")]
     CheckBlockFailed(#[from] CheckBlockError),
@@ -51,7 +51,7 @@ pub enum BlockError {
     PrevBlockNotFound,
     #[error("Invalid block source")]
     InvalidBlockSource,
-    #[error("Block {0:?} already exists")]
+    #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
     DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
