@@ -22,7 +22,7 @@ use crate::{
     address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,
 };
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedPublicKeyHashSpend {
     public_key: PublicKey,
     signature: Signature,

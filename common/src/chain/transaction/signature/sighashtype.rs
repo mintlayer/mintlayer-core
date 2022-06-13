@@ -68,7 +68,7 @@ impl TryFrom<u8> for SigHashType {
 }
 
 /// How inputs should be hashed
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum InputsMode {
     /// Commit to all inputs
     CommitWhoPays,
@@ -83,7 +83,7 @@ impl Default for SigHashType {
 }
 
 /// How outputs should be hashed
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum OutputsMode {
     /// Commit to all outputs
     All,
