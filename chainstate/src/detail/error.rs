@@ -31,9 +31,9 @@ use super::{
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
-    #[error("Block storage error `{0}`")]
+    #[error("Block storage error: `{0}`")]
     StorageError(#[from] blockchain_storage::Error),
-    #[error("Error while checking the previous block")]
+    #[error("Error while checking the previous block: {0}")]
     OrphanCheckFailed(#[from] OrphanCheckError),
     #[error("Check block failed: {0}")]
     CheckBlockFailed(#[from] CheckBlockError),
