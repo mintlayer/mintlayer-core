@@ -1,15 +1,56 @@
 mod utils;
 
 use rand::Rng;
-use serialization::{Decode, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 use std::collections::BTreeMap;
 use utils::{OptionWrapper, SimpleWrapper};
+
+#[test]
+fn test_enum_codec_index() {
+    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
+    enum TestEnum {
+        #[codec(index = 5)]
+        First(String),
+        #[codec(index = 8)]
+        Second(u64),
+        #[codec(index = 42)]
+        Third(Vec<u32>),
+    }
+
+    {
+        let the_string = "Hello there!".to_owned();
+        let e = TestEnum::First(the_string.clone());
+        let encoded = e.encode();
+        assert_eq!(encoded[0], 5); // from codec index
+        let to_decode = &encoded[1..];
+        let decoded = String::decode_all(&mut &*to_decode);
+        assert_eq!(decoded.unwrap(), the_string);
+    }
+    {
+        let the_num = 42123442u64;
+        let e = TestEnum::Second(the_num);
+        let encoded = e.encode();
+        assert_eq!(encoded[0], 8); // from codec index
+        let to_decode = &encoded[1..];
+        let decoded = u64::decode_all(&mut &*to_decode);
+        assert_eq!(decoded.unwrap(), the_num);
+    }
+    {
+        let the_vec = vec![1, 2, 7, 8, 42, 420];
+        let e = TestEnum::Third(the_vec.clone());
+        let encoded = e.encode();
+        assert_eq!(encoded[0], 42); // from codec index
+        let to_decode = &encoded[1..];
+        let decoded = Vec::<u32>::decode_all(&mut &*to_decode);
+        assert_eq!(decoded.unwrap(), the_vec);
+    }
+}
 
 #[test]
 fn test_scale_structures() {
     let mut rng = rand::thread_rng();
 
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
+    #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
     enum TestEnum {
         Numbers((i8, u8, i16, u16, i32, u32, i64, u64, i128, u128)),
         Strings(
@@ -26,7 +67,7 @@ fn test_scale_structures() {
         Containers((Vec<u8>, BTreeMap<String, String>)),
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Encode, Decode)]
+    #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
     struct TestStruct {
         field_enum_number: TestEnum,
         field_enum_strings: TestEnum,
