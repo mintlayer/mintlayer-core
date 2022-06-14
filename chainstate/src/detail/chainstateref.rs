@@ -12,9 +12,11 @@ use common::{
     },
     primitives::{time, BlockDistance, BlockHeight, Id, Idable},
 };
+use itertools::Itertools;
+use logging::log;
 use serialization::Encode;
 
-use crate::{BlockError, BlockSource};
+use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
@@ -73,6 +75,19 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         }
     }
 
+    pub fn calculate_median_time_past(&self, starting_block: &Id<Block>) -> u32 {
+        const MEDIAN_TIME_SPAN: usize = 11;
+
+        let iter = BlockIndexHistoryIterator::new(starting_block.clone(), self);
+        let time_values = iter
+            .take(MEDIAN_TIME_SPAN)
+            .map(|bi| bi.get_block_time())
+            .sorted()
+            .collect::<Vec<_>>();
+
+        time_values[time_values.len() / 2]
+    }
+
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
         self.db_tx.get_best_block_id().map_err(PropertyQueryError::from)
     }
@@ -81,6 +96,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
+        log::trace!("Loading block index of id: {}", block_id);
         self.db_tx.get_block_index(block_id).map_err(PropertyQueryError::from)
     }
 
@@ -268,18 +284,14 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
         match &block.prev_block_id() {
             Some(prev_block_id) => {
-                let previous_block = self
-                    .db_tx
-                    .get_block_index(&Id::<Block>::new(&prev_block_id.get()))?
-                    .ok_or_else(|| {
-                        CheckBlockError::PrevBlockNotFound(prev_block_id.clone(), block.get_id())
-                    })?;
-                // Time
-                let block_time = block.block_time();
-                if previous_block.get_block_time() > block_time {
+                let median_time_past = self.calculate_median_time_past(prev_block_id);
+                if block.block_time() < median_time_past {
+                    // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockTimeOrderInvalid);
                 }
-                if i64::from(block_time) > time::get() {
+
+                if i64::from(block.block_time()) > time::get() {
+                    // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockFromTheFuture);
                 }
             }

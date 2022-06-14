@@ -33,6 +33,8 @@ mod error;
 pub use error::*;
 mod pow;
 
+mod block_index_history_iter;
+
 mod chainstateref;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
