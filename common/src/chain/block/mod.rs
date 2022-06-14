@@ -25,10 +25,14 @@ pub use block_index::*;
 mod block_v1;
 pub mod consensus_data;
 
+pub mod block_size;
+
 pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
 use serialization::{Decode, Encode};
+
+use self::block_size::BlockSize;
 
 use super::ChainConfig;
 
@@ -85,49 +89,6 @@ pub enum BlockCreationError {
 impl From<MerkleTreeFormError> for BlockCreationError {
     fn from(e: MerkleTreeFormError) -> Self {
         BlockCreationError::MerkleTreeError(e)
-    }
-}
-
-pub struct BlockSize {
-    header: usize,
-    from_txs: usize,
-    from_smart_contracts: usize,
-}
-
-impl BlockSize {
-    pub fn new_from_block(block: &Block) -> Self {
-        block.transactions().iter().map(|tx| tx.transaction_data_size()).fold(
-            BlockSize::new_with_header_size(block.header().encoded_size()),
-            |mut total, curr| {
-                match curr {
-                    super::TransactionSize::ScriptedTransaction(size) => total.from_txs += size,
-                    super::TransactionSize::SmartContractTransaction(size) => {
-                        total.from_smart_contracts += size
-                    }
-                };
-                total
-            },
-        )
-    }
-
-    fn new_with_header_size(header_size: usize) -> Self {
-        BlockSize {
-            header: header_size,
-            from_txs: 0,
-            from_smart_contracts: 0,
-        }
-    }
-
-    pub fn size_from_txs(&self) -> usize {
-        self.from_txs
-    }
-
-    pub fn size_from_smart_contracts(&self) -> usize {
-        self.from_smart_contracts
-    }
-
-    pub fn size_from_header(&self) -> usize {
-        self.header
     }
 }
 
