@@ -98,7 +98,6 @@ mod test {
     use super::*;
 
     #[test]
-    #[allow(clippy::eq_op)]
     fn check_sighashtype_conversion() {
         // Check inputs and outputs mode
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
