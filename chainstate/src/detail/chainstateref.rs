@@ -76,6 +76,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     pub fn calculate_median_time_past(&self, starting_block: &Id<Block>) -> u32 {
+        // TODO: add tests for this function
         const MEDIAN_TIME_SPAN: usize = 11;
 
         let iter = BlockIndexHistoryIterator::new(starting_block.clone(), self);
