@@ -364,8 +364,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        // TODO: The parts that check the block in isolation without the knowledge of the state should not take
-        //      storage as an argument (either directly or indirectly as done here through self)
         consensus_validator::validate_consensus(self.chain_config, block.header(), self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
