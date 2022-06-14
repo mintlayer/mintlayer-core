@@ -196,7 +196,6 @@ impl Chainstate {
         let best_block_id =
             chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
 
-        // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         chainstate_ref.check_block(&block).map_err(BlockError::CheckBlockFailed)?;
 
         let block_index = chainstate_ref.accept_block(&block)?;
