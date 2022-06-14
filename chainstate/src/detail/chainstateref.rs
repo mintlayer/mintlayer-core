@@ -6,15 +6,12 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
         },
-        calculate_tx_index_from_block,
-        config::MAX_BLOCK_WEIGHT,
-        ChainConfig, OutPointSourceId, Transaction,
+        calculate_tx_index_from_block, ChainConfig, OutPointSourceId, Transaction,
     },
     primitives::{time, BlockDistance, BlockHeight, Id, Idable},
 };
 use itertools::Itertools;
 use logging::log;
-use serialization::Encode;
 
 use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
 
@@ -309,8 +306,25 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
-        // TODO: Size limits
-        if block.encoded_size() > MAX_BLOCK_WEIGHT {
+        self.check_block_size(block)?;
+
+        Ok(())
+    }
+
+    fn check_block_size(&self, block: &Block) -> Result<(), CheckBlockError> {
+        let block_size = block.block_size();
+
+        if block_size.size_from_header() > self.chain_config.max_block_header_size() {
+            return Err(CheckBlockError::BlockTooLarge);
+        }
+
+        if block_size.size_from_txs() > self.chain_config.max_block_size_from_txs() {
+            return Err(CheckBlockError::BlockTooLarge);
+        }
+
+        if block_size.size_from_smart_contracts()
+            > self.chain_config.max_block_size_from_smart_contracts()
+        {
             return Err(CheckBlockError::BlockTooLarge);
         }
 

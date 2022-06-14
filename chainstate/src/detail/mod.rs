@@ -240,8 +240,9 @@ impl Chainstate {
         self.attempt_to_process_block(block, block_source, 0)
     }
 
-    // TODO: used to check block size + other preliminary check before giving the block to process_block
-    pub fn preliminary_block_check(&self, _block: Block) -> Result<(), BlockError> {
+    pub fn preliminary_block_check(&self, block: Block) -> Result<(), BlockError> {
+        let chainstate_ref = self.make_db_tx_ro();
+        chainstate_ref.check_block(&block)?;
         Ok(())
     }
 
