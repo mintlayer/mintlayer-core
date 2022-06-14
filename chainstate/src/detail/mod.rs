@@ -33,6 +33,8 @@ mod error;
 pub use error::*;
 mod pow;
 
+mod block_index_history_iter;
+
 mod chainstateref;
 
 type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
@@ -46,6 +48,7 @@ mod spend_cache;
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
 // TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
+#[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
@@ -65,6 +68,7 @@ impl Chainstate {
         self.events_controller.wait_for_all_events();
     }
 
+    #[must_use]
     fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw> {
         let db_tx = self.blockchain_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
@@ -74,6 +78,7 @@ impl Chainstate {
         )
     }
 
+    #[must_use]
     fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo> {
         let db_tx = self.blockchain_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(&self.chain_config, db_tx)
@@ -194,7 +199,6 @@ impl Chainstate {
         let best_block_id =
             chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
 
-        // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         chainstate_ref.check_block(&block).map_err(BlockError::CheckBlockFailed)?;
 
         let block_index = chainstate_ref.accept_block(&block)?;
