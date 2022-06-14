@@ -6,6 +6,8 @@ use logging::log;
 
 use super::consensus_validator::BlockIndexHandle;
 
+/// An iterator that starts at some block starting from a given it, and at every `next()` member call will provide the previous block index,
+/// The last viable block index is of the genesis block
 pub struct BlockIndexHistoryIterator<'a, H> {
     next_id: Id<Block>,
     block_index_handle: &'a H,
