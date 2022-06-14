@@ -230,7 +230,7 @@ impl Block {
     }
 
     pub fn block_size(&self) -> BlockSize {
-        BlockSize::new_from_block(&self)
+        BlockSize::new_from_block(self)
     }
 }
 
