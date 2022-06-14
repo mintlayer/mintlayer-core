@@ -281,9 +281,9 @@ pub fn verify_signature<T: Transactable>(
     let input_witness = target_input.get_witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
-            Destination::Address(_) => return Err(TransactionSigError::SignatureNotFound),
-            Destination::PublicKey(_) => return Err(TransactionSigError::SignatureNotFound),
-            Destination::ScriptHash(_) => return Err(TransactionSigError::SignatureNotFound),
+            Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {
+                return Err(TransactionSigError::SignatureNotFound)
+            }
             Destination::AnyoneCanSpend => {}
         },
         inputsig::InputWitness::Standard(witness) => {
@@ -292,6 +292,3 @@ pub fn verify_signature<T: Transactable>(
     }
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

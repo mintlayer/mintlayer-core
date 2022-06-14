@@ -337,7 +337,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     let output = prev_tx
                         .get_outputs()
-                        .get(input.get_outpoint().get_output_index() as usize)
+                        .get(outpoint.get_output_index() as usize)
                         .ok_or(StateUpdateError::OutputIndexOutOfRange {
                             tx_id: None,
                             source_output_index: outpoint.get_output_index() as usize,

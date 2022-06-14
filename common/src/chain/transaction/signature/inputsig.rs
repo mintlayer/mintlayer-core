@@ -171,8 +171,6 @@ impl Encode for StandardInputSignature {
     }
 }
 
-// TODO: write tests
-
 #[cfg(test)]
 mod test {
     use crate::{
