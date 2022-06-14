@@ -91,7 +91,6 @@ impl BanScore for CheckBlockError {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
             CheckBlockError::WitnessMerkleRootMismatch => 100,
-            CheckBlockError::BlockConsistencyError(_) => 100,
             CheckBlockError::InvalidBlockNoPrevBlock => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,

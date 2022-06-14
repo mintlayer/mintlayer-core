@@ -22,8 +22,11 @@ pub mod derive_support;
 
 pub mod tagged;
 
-// Re-export traits
+// Re-export items for tagless encoding mode.
+pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
+
+// Re-export SCALE traits
 pub use parity_scale_codec::{Codec, Decode, DecodeAll, Encode, Input, Output};
 
-// Re-export types
+// Re-export SCALE types
 pub use parity_scale_codec::{Compact, Error};

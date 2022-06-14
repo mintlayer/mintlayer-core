@@ -14,7 +14,17 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use serialization::{Decode, Encode};
+use serialization::{Decode, Encode, Tagged};
+
+/// Version tag for SCALE-encoded values
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Encode, Decode, Copy, Clone, Tagged)]
+pub struct Version<const V: u8>(serialization::Tag<V>);
+
+impl<const V: u8> Default for Version<V> {
+    fn default() -> Self {
+        Version(Default::default())
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
 pub struct SemVer {
@@ -64,6 +74,15 @@ impl TryFrom<String> for SemVer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_encodes_to_correct_byte() {
+        assert_eq!(Version::<0>::default().encode(), vec![0]);
+        assert_eq!(Version::<1>::default().encode(), vec![1]);
+        assert_eq!(Version::<2>::default().encode(), vec![2]);
+        assert_eq!(Version::<42>::default().encode(), vec![42]);
+        assert_eq!(Version::<255>::default().encode(), vec![255]);
+    }
 
     #[test]
     fn vertest_string() {

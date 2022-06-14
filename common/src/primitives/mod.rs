@@ -32,3 +32,4 @@ pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
 pub use height::{BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
+pub use version::Version;

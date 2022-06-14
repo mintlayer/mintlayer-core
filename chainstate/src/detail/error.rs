@@ -16,10 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use common::{
-    chain::{
-        block::{Block, BlockConsistencyError},
-        Transaction,
-    },
+    chain::{block::Block, Transaction},
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
@@ -81,8 +78,6 @@ pub enum CheckBlockError {
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
-    #[error("Internal block representation is invalid `{0}`")]
-    BlockConsistencyError(#[from] BlockConsistencyError),
     #[error("Only genesis can have no previous block")]
     InvalidBlockNoPrevBlock,
     #[error("Previous block {0} of block {1} not found in database")]
