@@ -29,7 +29,7 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
     fn next(&mut self) -> Option<Self::Item> {
         let result = match &self.next_id {
             Some(next_id) => {
-                self.block_index_handle.get_block_index(&next_id).expect("Database error")
+                self.block_index_handle.get_block_index(next_id).expect("Database error")
             }
             None => return None,
         };
