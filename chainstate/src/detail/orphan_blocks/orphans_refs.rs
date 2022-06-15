@@ -1,6 +1,5 @@
-use common::{chain::block::Block, primitives::Id};
-
 use super::{OrphanAddError, OrphanBlocksPool};
+use common::{chain::block::Block, primitives::Id};
 
 pub trait OrphansReadOnly {
     fn len(&self) -> usize;
