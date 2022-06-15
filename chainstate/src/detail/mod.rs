@@ -50,7 +50,6 @@ mod spend_cache;
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 pub type TimeGetter = dyn Fn() -> i64 + Send + Sync;
 
-// TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
 #[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
