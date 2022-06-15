@@ -144,7 +144,7 @@ mod test {
             {
                 let current_height: u64 =
                     chainstate.get_best_block_index().unwrap().unwrap().get_block_height().into();
-                assert_eq!(current_height, 5 as u64);
+                assert_eq!(current_height, 5);
             }
 
             {
