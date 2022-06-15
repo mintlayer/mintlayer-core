@@ -10,7 +10,7 @@ p2p = { path = "../" }
 common = { path = "../../common/" }
 
 [dependencies.libp2p]
-version = "0.44.0"
+version = "0.45.1"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
 

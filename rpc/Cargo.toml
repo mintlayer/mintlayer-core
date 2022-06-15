@@ -14,7 +14,7 @@ logging = { path = "../logging" }
 # External dependencies
 anyhow = "1.0.56"
 async-trait = "0.1.51"
-jsonrpsee = { version = "0.13.1", features = ["full"] }
+jsonrpsee = { version = "0.14.0", features = ["full"] }
 
 [dev-dependencies]
 async-trait = "0.1.51"
