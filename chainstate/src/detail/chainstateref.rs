@@ -18,7 +18,7 @@ use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockEr
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
-    orphan_blocks::{OrphanReadWrite, OrphansReadOnly},
+    orphan_blocks::{OrphansReadOnly, OrphansReadWrite},
     spend_cache::{BlockTransactableRef, CachedInputs},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
@@ -459,7 +459,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> ChainstateRef<'a, S, O> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphanReadWrite> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageWrite, O: OrphansReadWrite> ChainstateRef<'a, S, O> {
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,

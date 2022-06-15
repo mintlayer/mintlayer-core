@@ -32,7 +32,7 @@ mod orphan_blocks;
 mod error;
 pub use error::*;
 
-use self::orphan_blocks::{OrphanReadOnlyRef, OrphansReadWriteRef};
+use self::orphan_blocks::{OrphansReadOnlyRef, OrphansReadWriteRef};
 mod pow;
 
 pub mod ban_score;
@@ -82,7 +82,7 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanReadOnlyRef> {
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphansReadOnlyRef> {
         let db_tx = self.blockchain_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,

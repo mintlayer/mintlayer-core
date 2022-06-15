@@ -7,23 +7,23 @@ pub trait OrphansReadOnly {
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
 }
 
-pub trait OrphanReadWrite: OrphansReadOnly {
+pub trait OrphansReadWrite: OrphansReadOnly {
     fn clear(&mut self);
     fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError>;
     fn take_all_children_of(&mut self, block_id: &Id<Block>) -> Vec<Block>;
 }
 
-pub struct OrphanReadOnlyRef<'a> {
+pub struct OrphansReadOnlyRef<'a> {
     inner: &'a OrphanBlocksPool,
 }
 
-impl<'a> OrphanReadOnlyRef<'a> {
+impl<'a> OrphansReadOnlyRef<'a> {
     pub fn new(inner: &'a OrphanBlocksPool) -> Self {
         Self { inner }
     }
 }
 
-impl<'a> OrphansReadOnly for OrphanReadOnlyRef<'a> {
+impl<'a> OrphansReadOnly for OrphansReadOnlyRef<'a> {
     fn len(&self) -> usize {
         self.inner.len()
     }
@@ -53,7 +53,7 @@ impl<'a> OrphansReadOnly for OrphansReadWriteRef<'a> {
     }
 }
 
-impl<'a> OrphanReadWrite for OrphansReadWriteRef<'a> {
+impl<'a> OrphansReadWrite for OrphansReadWriteRef<'a> {
     fn clear(&mut self) {
         self.inner.clear()
     }

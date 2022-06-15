@@ -197,8 +197,8 @@ impl OrphanBlocksPool {
         res
     }
 
-    pub fn as_ro_ref(&self) -> OrphanReadOnlyRef {
-        OrphanReadOnlyRef::new(self)
+    pub fn as_ro_ref(&self) -> OrphansReadOnlyRef {
+        OrphansReadOnlyRef::new(self)
     }
 
     pub fn as_rw_ref(&mut self) -> OrphansReadWriteRef {
