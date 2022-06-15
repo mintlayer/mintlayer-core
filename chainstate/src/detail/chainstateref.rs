@@ -18,20 +18,21 @@ use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockEr
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
-    orphan_blocks::OrphanBlocksPool,
+    orphan_blocks::{OrphanReadWrite, OrphansReadOnly},
     spend_cache::{BlockTransactableRef, CachedInputs},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
 };
 
-pub(crate) struct ChainstateRef<'a, S> {
+pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
     db_tx: S,
-    // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
-    orphan_blocks: Option<&'a mut OrphanBlocksPool>,
+    orphan_blocks: O,
 }
 
-impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
+impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> BlockIndexHandle
+    for ChainstateRef<'a, S, O>
+{
     fn get_block_index(
         &self,
         block_index: &Id<Block>,
@@ -47,18 +48,18 @@ impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
     }
 }
 
-impl<'a, S: TransactionRw<Error = blockchain_storage::Error>> ChainstateRef<'a, S> {
+impl<'a, S: TransactionRw<Error = blockchain_storage::Error>, O> ChainstateRef<'a, S, O> {
     pub fn commit_db_tx(self) -> blockchain_storage::Result<()> {
         self.db_tx.commit()
     }
 }
 
-impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
+impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> ChainstateRef<'a, S, O> {
     pub fn new_rw(
         chain_config: &'a ChainConfig,
         db_tx: S,
-        orphan_blocks: Option<&'a mut OrphanBlocksPool>,
-    ) -> ChainstateRef<'a, S> {
+        orphan_blocks: O,
+    ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
             db_tx,
@@ -66,11 +67,15 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         }
     }
 
-    pub fn new_ro(chain_config: &'a ChainConfig, db_tx: S) -> ChainstateRef<'a, S> {
+    pub fn new_ro(
+        chain_config: &'a ChainConfig,
+        db_tx: S,
+        orphan_blocks: O,
+    ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
             db_tx,
-            orphan_blocks: None,
+            orphan_blocks,
         }
     }
 
@@ -454,7 +459,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
+impl<'a, S: BlockchainStorageWrite, O: OrphanReadWrite> ChainstateRef<'a, S, O> {
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,
@@ -714,12 +719,9 @@ impl<'a, S: BlockchainStorageWrite> ChainstateRef<'a, S> {
     fn new_orphan_block(&mut self, block: Block) -> Result<(), OrphanCheckError> {
         // It can't be a genesis block
         assert!(!block.is_genesis(self.chain_config));
-        match self.orphan_blocks {
-            Some(ref mut orphans) => match orphans.add_block(block) {
-                Ok(_) => Ok(()),
-                Err(err) => err.into(),
-            },
-            None => Ok(()),
+        match self.orphan_blocks.add_block(block) {
+            Ok(_) => Ok(()),
+            Err(err) => err.into(),
         }
     }
 }

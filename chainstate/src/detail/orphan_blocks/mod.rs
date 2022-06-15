@@ -21,6 +21,9 @@ use crypto::random::SliceRandom;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+mod orphans_refs;
+pub use orphans_refs::*;
+
 pub const DEFAULT_MAX_ORPHAN_BLOCKS: usize = 512;
 
 // FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
@@ -192,6 +195,14 @@ impl OrphanBlocksPool {
             })
             .collect();
         res
+    }
+
+    pub fn as_ro_ref(&self) -> OrphanReadOnlyRef {
+        OrphanReadOnlyRef::new(&self)
+    }
+
+    pub fn as_rw_ref(&mut self) -> OrphansReadWriteRef {
+        OrphansReadWriteRef::new(self)
     }
 }
 
