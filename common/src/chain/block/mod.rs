@@ -25,10 +25,14 @@ pub use block_index::*;
 mod block_v1;
 pub mod consensus_data;
 
+pub mod block_size;
+
 pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
 use serialization::{Decode, Encode};
+
+use self::block_size::BlockSize;
 
 use super::ChainConfig;
 
@@ -223,6 +227,10 @@ impl Block {
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.header().is_genesis(chain_config)
+    }
+
+    pub fn block_size(&self) -> BlockSize {
+        BlockSize::new_from_block(self)
     }
 }
 

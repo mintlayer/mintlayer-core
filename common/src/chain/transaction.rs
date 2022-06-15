@@ -35,6 +35,11 @@ use self::signature::inputsig::InputWitness;
 
 mod transaction_v1;
 
+pub enum TransactionSize {
+    ScriptedTransaction(usize),
+    SmartContractTransaction(usize),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum Transaction {
     #[codec(index = 1)]
@@ -122,6 +127,18 @@ impl Transaction {
     pub fn get_serialized_hash(&self) -> Id<Transaction> {
         match &self {
             Transaction::V1(tx) => tx.get_serialized_hash(),
+        }
+    }
+
+    pub fn has_smart_contracts(&self) -> bool {
+        false
+    }
+
+    pub fn transaction_data_size(&self) -> TransactionSize {
+        if self.has_smart_contracts() {
+            TransactionSize::SmartContractTransaction(self.encoded_size())
+        } else {
+            TransactionSize::ScriptedTransaction(self.encoded_size())
         }
     }
 

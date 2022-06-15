@@ -91,8 +91,8 @@ pub enum CheckBlockError {
     BlockTimeOrderInvalid,
     #[error("Block from the future")]
     BlockFromTheFuture,
-    #[error("Block size is too large")]
-    BlockTooLarge,
+    #[error("Block size is too large: {0}")]
+    BlockSizeError(#[from] BlockSizeError),
     #[error("Check transaction failed: {0}")]
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
@@ -148,6 +148,16 @@ pub enum OrphanCheckError {
     PrevBlockIndexNotFound(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum BlockSizeError {
+    #[error("Block header too large (current: {0}, limit: {1})")]
+    Header(usize, usize),
+    #[error("Block transactions component size too large (current: {0}, limit: {1})")]
+    SizeOfTxs(usize, usize),
+    #[error("Block smart contracts component size too large (current: {0}, limit: {1})")]
+    SizeOfSmartContracts(usize, usize),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

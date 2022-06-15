@@ -6,15 +6,13 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
         },
-        calculate_tx_index_from_block,
-        config::MAX_BLOCK_WEIGHT,
-        ChainConfig, OutPointSourceId, Transaction,
+        calculate_tx_index_from_block, ChainConfig, OutPointSourceId, Transaction,
     },
     primitives::{time, BlockDistance, BlockHeight, Id, Idable},
 };
 use itertools::Itertools;
 use logging::log;
-use serialization::Encode;
+use utils::ensure;
 
 use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
 
@@ -22,7 +20,8 @@ use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::OrphanBlocksPool,
     spend_cache::{BlockTransactableRef, CachedInputs},
-    CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, PropertyQueryError,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
+    PropertyQueryError,
 };
 
 pub(crate) struct ChainstateRef<'a, S> {
@@ -309,10 +308,38 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
-        // TODO: Size limits
-        if block.encoded_size() > MAX_BLOCK_WEIGHT {
-            return Err(CheckBlockError::BlockTooLarge);
-        }
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        Ok(())
+    }
+
+    fn check_block_size(&self, block: &Block) -> Result<(), BlockSizeError> {
+        let block_size = block.block_size();
+
+        ensure!(
+            block_size.size_from_header() <= self.chain_config.max_block_header_size(),
+            BlockSizeError::Header(
+                block_size.size_from_header(),
+                self.chain_config.max_block_header_size()
+            )
+        );
+
+        ensure!(
+            block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
+            BlockSizeError::SizeOfTxs(
+                block_size.size_from_txs(),
+                self.chain_config.max_block_size_from_txs()
+            )
+        );
+
+        ensure!(
+            block_size.size_from_smart_contracts()
+                <= self.chain_config.max_block_size_from_smart_contracts(),
+            BlockSizeError::SizeOfSmartContracts(
+                block_size.size_from_smart_contracts(),
+                self.chain_config.max_block_size_from_smart_contracts()
+            )
+        );
 
         Ok(())
     }
