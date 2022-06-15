@@ -207,3 +207,8 @@ impl<const N: u8> Decode for Tag<N> {
         Some(1)
     }
 }
+
+/// Query the tag of given value
+pub const fn tag_of<T: Tagged>(_: &T) -> u8 {
+    <T as Tagged>::TAG
+}
