@@ -32,7 +32,7 @@ mod test {
         chain::{block::ConsensusData, config::create_unit_test_config},
         primitives::{time, Idable},
     };
-    use std::sync::Arc;
+    use std::sync::{atomic::Ordering, Arc};
 
     fn make_block(prev_block: Id<Block>, time: u32) -> Block {
         Block::new(vec![], Some(prev_block), time, ConsensusData::None)
@@ -98,9 +98,98 @@ mod test {
 
             for n in MEDIAN_TIME_SPAN..block_count {
                 // median time for block of height n
+                // starting from the median span
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &blocks[n].get_id());
                 assert_eq!(median, blocks[n - MEDIAN_TIME_SPAN / 2].block_time());
+            }
+        });
+    }
+
+    #[test]
+    fn blocks_median_time_unordered_blocks_in_time() {
+        common::concurrency::model(|| {
+            let chain_config = Arc::new(create_unit_test_config());
+
+            let current_time = Arc::new(std::sync::atomic::AtomicI64::new(
+                chain_config.genesis_block().block_time() as i64,
+            ));
+
+            let chainstate_current_time = Arc::clone(&current_time);
+            let time_getter = Arc::new(move || chainstate_current_time.load(Ordering::SeqCst));
+
+            let storage = Store::new_empty().unwrap();
+            let mut chainstate =
+                Chainstate::new(chain_config, storage, None, Some(time_getter)).unwrap();
+
+            // we use unordered block times, and ensure that the median will be in the right spot
+            let block1_time = current_time.load(Ordering::SeqCst) as u32 + 1;
+            let block2_time = current_time.load(Ordering::SeqCst) as u32 + 20;
+            let block3_time = current_time.load(Ordering::SeqCst) as u32 + 10;
+            let block4_time = current_time.load(Ordering::SeqCst) as u32 + 18;
+            let block5_time = current_time.load(Ordering::SeqCst) as u32 + 17;
+
+            let block1 = make_block(chainstate.chain_config.genesis_block_id(), block1_time);
+            let block2 = make_block(block1.get_id(), block2_time);
+            let block3 = make_block(block2.get_id(), block3_time);
+            let block4 = make_block(block3.get_id(), block4_time);
+            let block5 = make_block(block4.get_id(), block5_time);
+
+            chainstate.process_block(block1.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block2.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block3.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block4.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block5.clone(), BlockSource::Local).unwrap();
+
+            {
+                let current_height: u64 =
+                    chainstate.get_best_block_index().unwrap().unwrap().get_block_height().into();
+                assert_eq!(current_height, 5 as u64);
+            }
+
+            {
+                // median time for genesis block
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(
+                    &chainstate_ref,
+                    &chainstate.chain_config.genesis_block_id(),
+                );
+                assert_eq!(median, chainstate.chain_config.genesis_block().block_time());
+            }
+
+            {
+                // median time for block of height 1
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(&chainstate_ref, &block1.get_id());
+                assert_eq!(median, block1_time);
+            }
+
+            {
+                // median time for block of height 2
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(&chainstate_ref, &block2.get_id());
+                assert_eq!(median, block1_time);
+            }
+
+            {
+                // median time for block of height 3
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(&chainstate_ref, &block3.get_id());
+                assert_eq!(median, block3_time);
+            }
+
+            {
+                // median time for block of height 4
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(&chainstate_ref, &block4.get_id());
+                assert_eq!(median, block3_time);
+            }
+
+            {
+                // median time for block of height 5
+                let chainstate_ref = chainstate.make_db_tx_ro();
+                let median = calculate_median_time_past(&chainstate_ref, &block5.get_id());
+                assert_eq!(median, block5_time);
             }
         });
     }
