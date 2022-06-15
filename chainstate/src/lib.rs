@@ -23,6 +23,8 @@ pub mod chainstate_interface_impl;
 
 pub mod chainstate_interface;
 
+pub use detail::ban_score;
+
 use std::sync::Arc;
 
 use chainstate_interface::ChainstateInterface;

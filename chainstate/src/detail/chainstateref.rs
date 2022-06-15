@@ -291,7 +291,9 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                     return Err(CheckBlockError::BlockTimeOrderInvalid);
                 }
 
-                if i64::from(block.block_time()) > time::get() {
+                let max_future_offset = self.chain_config.max_future_block_time_offset();
+                if i64::from(block.block_time()) > time::get() + max_future_offset.as_secs() as i64
+                {
                     // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockFromTheFuture);
                 }
