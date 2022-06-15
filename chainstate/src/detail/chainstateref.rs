@@ -285,7 +285,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
             Some(prev_block_id) => {
                 let median_time_past = calculate_median_time_past(self, prev_block_id);
                 if block.block_time() < median_time_past {
-                    // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockTimeOrderInvalid);
                 }
 
@@ -293,7 +292,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                 let current_time = self.current_time();
                 if i64::from(block.block_time()) > current_time + max_future_offset.as_secs() as i64
                 {
-                    // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockFromTheFuture);
                 }
             }
