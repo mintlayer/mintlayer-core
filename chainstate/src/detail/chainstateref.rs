@@ -10,7 +10,7 @@ use common::{
         config::MAX_BLOCK_WEIGHT,
         ChainConfig, OutPointSourceId, Transaction,
     },
-    primitives::{time, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 use itertools::Itertools;
 use logging::log;
@@ -22,7 +22,7 @@ use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::OrphanBlocksPool,
     spend_cache::{BlockTransactableRef, CachedInputs},
-    CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, PropertyQueryError,
+    CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, PropertyQueryError, TimeGetter,
 };
 
 pub(crate) struct ChainstateRef<'a, S> {
@@ -30,6 +30,7 @@ pub(crate) struct ChainstateRef<'a, S> {
     db_tx: S,
     // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
     orphan_blocks: Option<&'a mut OrphanBlocksPool>,
+    time_getter: &'a TimeGetter,
 }
 
 impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
@@ -59,20 +60,31 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         chain_config: &'a ChainConfig,
         db_tx: S,
         orphan_blocks: Option<&'a mut OrphanBlocksPool>,
+        time_getter: &'a TimeGetter,
     ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,
             db_tx,
             orphan_blocks,
+            time_getter,
         }
     }
 
-    pub fn new_ro(chain_config: &'a ChainConfig, db_tx: S) -> ChainstateRef<'a, S> {
+    pub fn new_ro(
+        chain_config: &'a ChainConfig,
+        db_tx: S,
+        time_getter: &'a TimeGetter,
+    ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,
             db_tx,
             orphan_blocks: None,
+            time_getter,
         }
+    }
+
+    pub fn current_time(&self) -> i64 {
+        (self.time_getter)()
     }
 
     pub fn calculate_median_time_past(&self, starting_block: &Id<Block>) -> u32 {
@@ -292,7 +304,8 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                 }
 
                 let max_future_offset = self.chain_config.max_future_block_time_offset();
-                if i64::from(block.block_time()) > time::get() + max_future_offset.as_secs() as i64
+                let current_time = self.current_time();
+                if i64::from(block.block_time()) > current_time + max_future_offset.as_secs() as i64
                 {
                     // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockFromTheFuture);
