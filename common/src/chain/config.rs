@@ -20,6 +20,8 @@ const MAINNET_COIN_DECIMALS: u8 = 11;
 const MAINNET_COIN_PREMINE: &str = "400_000_000";
 const MAINNET_TOTAL_SUPPLY: &str = "599_990_800";
 
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
+
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 #[derive(
@@ -54,6 +56,7 @@ pub struct ChainConfig {
     genesis_block: Block,
     genesis_block_id: Id<Block>,
     blockreward_maturity: BlockDistance,
+    max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
@@ -116,6 +119,10 @@ impl ChainConfig {
 
     pub fn coin_decimals(&self) -> u8 {
         self.coin_decimals
+    }
+
+    pub fn max_future_block_time_offset(&self) -> &Duration {
+        &self.max_future_block_time_offset
     }
 
     pub fn block_subsidy_at_height(&self, height_in: &BlockHeight) -> Amount {
@@ -333,6 +340,7 @@ pub fn create_mainnet() -> ChainConfig {
         genesis_block_id,
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         target_block_spacing,
         coin_decimals,
         emission_schedule,
@@ -401,6 +409,7 @@ pub fn create_regtest() -> ChainConfig {
         version: SemVer::new(0, 1, 0),
         target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         coin_decimals: MAINNET_COIN_DECIMALS,
         emission_schedule,
     }
@@ -452,6 +461,7 @@ pub fn create_unit_test_config() -> ChainConfig {
         version: SemVer::new(0, 1, 0),
         target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         coin_decimals,
         emission_schedule,
     }
@@ -532,6 +542,7 @@ impl TestChainConfig {
             version: SemVer::new(0, 1, 0),
             target_block_spacing,
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+            max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             coin_decimals,
             emission_schedule,
         }
