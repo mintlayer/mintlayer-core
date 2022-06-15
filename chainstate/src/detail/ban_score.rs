@@ -145,9 +145,9 @@ impl BanScore for ConsensusPoWError {
 impl BanScore for BlockSizeError {
     fn ban_score(&self) -> u32 {
         match self {
-            BlockSizeError::BlockHeaderTooLarge(_, _) => 100,
-            BlockSizeError::BlockSizeOfTxsTooLarge(_, _) => 100,
-            BlockSizeError::BlockSizeOfSmartContractsTooLarge(_, _) => 100,
+            BlockSizeError::Header(_, _) => 100,
+            BlockSizeError::SizeOfTxs(_, _) => 100,
+            BlockSizeError::SizeOfSmartContracts(_, _) => 100,
         }
     }
 }

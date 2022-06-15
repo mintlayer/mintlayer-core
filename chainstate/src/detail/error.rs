@@ -153,11 +153,11 @@ pub enum OrphanCheckError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockSizeError {
     #[error("Block header too large (current: {0}, limit: {1})")]
-    BlockHeaderTooLarge(usize, usize),
+    Header(usize, usize),
     #[error("Block transactions component size too large (current: {0}, limit: {1})")]
-    BlockSizeOfTxsTooLarge(usize, usize),
+    SizeOfTxs(usize, usize),
     #[error("Block smart contracts component size too large (current: {0}, limit: {1})")]
-    BlockSizeOfSmartContractsTooLarge(usize, usize),
+    SizeOfSmartContracts(usize, usize),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

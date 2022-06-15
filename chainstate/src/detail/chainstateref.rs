@@ -318,7 +318,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
         ensure!(
             block_size.size_from_header() <= self.chain_config.max_block_header_size(),
-            BlockSizeError::BlockHeaderTooLarge(
+            BlockSizeError::Header(
                 block_size.size_from_header(),
                 self.chain_config.max_block_header_size()
             )
@@ -326,7 +326,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
         ensure!(
             block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
-            BlockSizeError::BlockSizeOfTxsTooLarge(
+            BlockSizeError::SizeOfTxs(
                 block_size.size_from_txs(),
                 self.chain_config.max_block_size_from_txs()
             )
@@ -335,7 +335,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         ensure!(
             block_size.size_from_smart_contracts()
                 <= self.chain_config.max_block_size_from_smart_contracts(),
-            BlockSizeError::BlockSizeOfSmartContractsTooLarge(
+            BlockSizeError::SizeOfSmartContracts(
                 block_size.size_from_smart_contracts(),
                 self.chain_config.max_block_size_from_smart_contracts()
             )
