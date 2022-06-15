@@ -163,6 +163,46 @@ where
         self.peerdb.is_id_banned(peer_id)
     }
 
+    /// Verify protocol compatibility
+    ///
+    /// Make sure that remote peer supports protocols same protocols that we do and that
+    /// they support the mandatory protocols which for now are configured to be:
+    ///
+    /// - `/meshsub/1.1.0`
+    /// - `/meshsub/1.0.0`
+    /// - `/ipfs/ping/1.0.0`
+    /// - `/ipfs/id/1.0.0`
+    /// - `/ipfs/id/push/1.0.0`
+    /// - `/mintlayer/sync/0.1.0`
+    ///
+    /// If any of the procols are missing or if any of them have a different version,
+    /// the validation fails and connection must be closed.
+    ///
+    /// Either peer may support additional protocols which are not known to the other
+    /// peer and that is totally fine. As long as the aforementioned protocols with
+    /// matching versions are found, the protocol set has been validated successfully.
+    // TODO: create generic versions of the protocols when mock interface is supported again
+    // TODO: convert `protocols` to a hashset
+    fn validate_supported_protocols(&self, protocols: &[T::ProtocolId]) -> bool {
+        const REQUIRED: &[&'static str] = &[
+            "/meshsub/1.1.0",
+            "/meshsub/1.0.0",
+            "/ipfs/ping/1.0.0",
+            "/ipfs/id/1.0.0",
+            "/ipfs/id/push/1.0.0",
+            "/mintlayer/sync/0.1.0",
+        ];
+
+        // TODO: zzz
+        for required_proto in REQUIRED {
+            if !protocols.iter().find(|proto| &proto.to_string() == required_proto).is_some() {
+                return false;
+            }
+        }
+
+        true
+    }
+
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
@@ -744,62 +784,52 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn connect_inbound_same_network() {
+    async fn test_validate_supported_protocols() {
         let config = Arc::new(config::create_mainnet());
-        let mut swarm1 = make_swarm_manager::<Libp2pService>(
-            test_utils::make_address("/ip6/::1/tcp/"),
-            config.clone(),
-        )
-        .await;
-        let mut swarm2 =
+        let swarm =
             make_swarm_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config)
                 .await;
 
-        let (_conn1_res, conn2_res) = tokio::join!(
-            swarm1.handle.connect(swarm2.handle.local_addr().clone()),
-            swarm2.handle.poll_next()
-        );
-        let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-        assert!(std::matches!(
-            conn2_res,
-            net::types::ConnectivityEvent::IncomingConnection { .. }
-        ));
-        assert_eq!(swarm2.on_network_event(conn2_res).await, Ok(()));
-    }
+        // all needed protocols
+        assert!(swarm.validate_supported_protocols(&[
+            "/meshsub/1.1.0".to_string(),
+            "/meshsub/1.0.0".to_string(),
+            "/ipfs/ping/1.0.0".to_string(),
+            "/ipfs/id/1.0.0".to_string(),
+            "/ipfs/id/push/1.0.0".to_string(),
+            "/mintlayer/sync/0.1.0".to_string(),
+        ]));
 
-    #[tokio::test]
-    async fn connect_inbound_different_network() {
-        let mut swarm1 = make_swarm_manager::<Libp2pService>(
-            test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(config::create_mainnet()),
-        )
-        .await;
-        let mut swarm2 = make_swarm_manager::<Libp2pService>(
-            test_utils::make_address("/ip6/::1/tcp/"),
-            Arc::new(
-                common::chain::config::TestChainConfig::new()
-                    .with_magic_bytes([1, 2, 3, 4])
-                    .build(),
-            ),
-        )
-        .await;
+        // all needed protocols + 2 extra
+        assert!(swarm.validate_supported_protocols(&[
+            "/meshsub/1.1.0".to_string(),
+            "/meshsub/1.0.0".to_string(),
+            "/ipfs/ping/1.0.0".to_string(),
+            "/ipfs/id/1.0.0".to_string(),
+            "/ipfs/id/push/1.0.0".to_string(),
+            "/mintlayer/sync/0.1.0".to_string(),
+            "/mintlayer/extra/0.1.0".to_string(),
+            "/mintlayer/extra-test/0.2.0".to_string(),
+        ]));
 
-        let (_conn1_res, conn2_res) = tokio::join!(
-            swarm1.handle.connect(swarm2.handle.local_addr().clone()),
-            swarm2.handle.poll_next()
-        );
-        let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-        assert!(std::matches!(
-            conn2_res,
-            net::types::ConnectivityEvent::IncomingConnection { .. }
-        ));
-        assert_eq!(
-            swarm2.on_network_event(conn2_res).await,
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                [1, 2, 3, 4],
-                *config::create_mainnet().magic_bytes(),
-            )))
-        );
+        // all needed protocols but wrong version for sync
+        assert!(!swarm.validate_supported_protocols(&[
+            "/meshsub/1.1.0".to_string(),
+            "/meshsub/1.0.0".to_string(),
+            "/ipfs/ping/1.0.0".to_string(),
+            "/ipfs/id/1.0.0".to_string(),
+            "/ipfs/id/push/1.0.0".to_string(),
+            "/mintlayer/sync/0.2.0".to_string(),
+        ]));
+
+        // ping protocol missing
+        assert!(!swarm.validate_supported_protocols(&[
+            "/meshsub/1.1.0".to_string(),
+            "/meshsub/1.0.0".to_string(),
+            "/ipfs/id/1.0.0".to_string(),
+            "/ipfs/id/push/1.0.0".to_string(),
+            "/mintlayer/sync/0.1.0".to_string(),
+        ]));
     }
 
     // #[tokio::test]
