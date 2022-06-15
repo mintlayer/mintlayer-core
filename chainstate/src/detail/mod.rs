@@ -138,7 +138,7 @@ impl Chainstate {
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
-            time_getter: custom_time_getter.unwrap_or(Arc::new(time::get)),
+            time_getter: custom_time_getter.unwrap_or_else(|| Arc::new(time::get)),
         };
         Ok(cons)
     }
