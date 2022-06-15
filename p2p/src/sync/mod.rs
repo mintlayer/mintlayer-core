@@ -775,7 +775,10 @@ mod tests {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
-        let handle = man.add_subsystem("consensus", make_chainstate(cfg, storage, None).unwrap());
+        let handle = man.add_subsystem(
+            "consensus",
+            make_chainstate(cfg, storage, None, None).unwrap(),
+        );
         tokio::spawn(async move { man.main().await });
 
         let config = Arc::new(common::chain::config::create_unit_test_config());

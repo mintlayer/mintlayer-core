@@ -32,7 +32,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Chainstate subsystem
     let chainstate = manager.add_subsystem(
         "chainstate",
-        chainstate::make_chainstate(Arc::clone(&chain_config), storage.clone(), None)?,
+        chainstate::make_chainstate(Arc::clone(&chain_config), storage.clone(), None, None)?,
     );
 
     // P2P subsystem

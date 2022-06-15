@@ -116,7 +116,7 @@ impl ChainstateBuilder {
         }
     }
     fn build(self) -> Chainstate {
-        Chainstate::new(Arc::new(self.config), self.storage, None).unwrap()
+        Chainstate::new(Arc::new(self.config), self.storage, None, None).unwrap()
     }
 
     #[allow(unused)]

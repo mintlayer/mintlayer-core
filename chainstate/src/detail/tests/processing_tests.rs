@@ -38,7 +38,8 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config.clone(), storage, None, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
@@ -53,7 +54,7 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -85,7 +86,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, None).unwrap();
 
         assert_eq!(
             chainstate.get_best_block_id().unwrap().unwrap(),
@@ -139,7 +140,7 @@ fn test_empty_chainstate() {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
         assert!(chainstate.get_best_block_id().unwrap().is_none());
         assert!(chainstate
             .blockchain_storage
@@ -149,7 +150,7 @@ fn test_empty_chainstate() {
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new(config, storage, None).unwrap();
+        let chainstate = Chainstate::new(config, storage, None, None).unwrap();
         chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
@@ -230,7 +231,7 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -693,5 +694,5 @@ fn test_pow() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _chainstate = make_chainstate(config, storage, None).unwrap();
+    let _chainstate = make_chainstate(config, storage, None, None).unwrap();
 }
