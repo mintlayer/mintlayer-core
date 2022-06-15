@@ -12,6 +12,7 @@ use common::{
 };
 use itertools::Itertools;
 use logging::log;
+use utils::ensure;
 
 use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
 
@@ -314,19 +315,21 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     fn check_block_size(&self, block: &Block) -> Result<(), CheckBlockError> {
         let block_size = block.block_size();
 
-        if block_size.size_from_header() > self.chain_config.max_block_header_size() {
-            return Err(CheckBlockError::BlockTooLarge);
-        }
+        ensure!(
+            block_size.size_from_header() <= self.chain_config.max_block_header_size(),
+            CheckBlockError::BlockTooLarge
+        );
 
-        if block_size.size_from_txs() > self.chain_config.max_block_size_from_txs() {
-            return Err(CheckBlockError::BlockTooLarge);
-        }
+        ensure!(
+            block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
+            CheckBlockError::BlockTooLarge
+        );
 
-        if block_size.size_from_smart_contracts()
-            > self.chain_config.max_block_size_from_smart_contracts()
-        {
-            return Err(CheckBlockError::BlockTooLarge);
-        }
+        ensure!(
+            block_size.size_from_smart_contracts()
+                <= self.chain_config.max_block_size_from_smart_contracts(),
+            CheckBlockError::BlockTooLarge
+        );
 
         Ok(())
     }
