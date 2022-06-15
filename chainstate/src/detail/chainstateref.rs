@@ -20,7 +20,8 @@ use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::OrphanBlocksPool,
     spend_cache::{BlockTransactableRef, CachedInputs},
-    CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, PropertyQueryError,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
+    PropertyQueryError,
 };
 
 pub(crate) struct ChainstateRef<'a, S> {
@@ -307,28 +308,37 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
-        self.check_block_size(block)?;
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
 
         Ok(())
     }
 
-    fn check_block_size(&self, block: &Block) -> Result<(), CheckBlockError> {
+    fn check_block_size(&self, block: &Block) -> Result<(), BlockSizeError> {
         let block_size = block.block_size();
 
         ensure!(
             block_size.size_from_header() <= self.chain_config.max_block_header_size(),
-            CheckBlockError::BlockTooLarge
+            BlockSizeError::BlockHeaderTooLarge(
+                block_size.size_from_header(),
+                self.chain_config.max_block_header_size()
+            )
         );
 
         ensure!(
             block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
-            CheckBlockError::BlockTooLarge
+            BlockSizeError::BlockSizeOfTxsTooLarge(
+                block_size.size_from_txs(),
+                self.chain_config.max_block_size_from_txs()
+            )
         );
 
         ensure!(
             block_size.size_from_smart_contracts()
                 <= self.chain_config.max_block_size_from_smart_contracts(),
-            CheckBlockError::BlockTooLarge
+            BlockSizeError::BlockSizeOfSmartContractsTooLarge(
+                block_size.size_from_smart_contracts(),
+                self.chain_config.max_block_size_from_smart_contracts()
+            )
         );
 
         Ok(())
