@@ -11,7 +11,7 @@ use crate::utxo_impl::test_helper::{
 use crate::utxo_impl::{UtxoSource, UtxoStatus};
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxInput};
 use crypto::random::{make_pseudo_rng, seq};
-use iter_tools::Itertools;
+use itertools::Itertools;
 use std::collections::BTreeMap;
 
 /// Checks `add_utxo` method behaviour.
