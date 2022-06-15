@@ -35,6 +35,7 @@ mod pow;
 
 pub mod ban_score;
 mod block_index_history_iter;
+mod median_time;
 
 mod chainstateref;
 

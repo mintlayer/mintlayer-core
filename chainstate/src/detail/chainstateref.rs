@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use super::median_time::calculate_median_time_past;
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use common::{
     chain::{
@@ -10,11 +11,10 @@ use common::{
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
-use itertools::Itertools;
 use logging::log;
 use utils::ensure;
 
-use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
+use crate::{BlockError, BlockSource};
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
@@ -84,20 +84,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
     pub fn current_time(&self) -> i64 {
         (self.time_getter)()
-    }
-
-    pub fn calculate_median_time_past(&self, starting_block: &Id<Block>) -> u32 {
-        // TODO: add tests for this function
-        const MEDIAN_TIME_SPAN: usize = 11;
-
-        let iter = BlockIndexHistoryIterator::new(starting_block.clone(), self);
-        let time_values = iter
-            .take(MEDIAN_TIME_SPAN)
-            .map(|bi| bi.get_block_time())
-            .sorted()
-            .collect::<Vec<_>>();
-
-        time_values[time_values.len() / 2]
     }
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
@@ -294,7 +280,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
 
         match &block.prev_block_id() {
             Some(prev_block_id) => {
-                let median_time_past = self.calculate_median_time_past(prev_block_id);
+                let median_time_past = calculate_median_time_past(self, prev_block_id);
                 if block.block_time() < median_time_past {
                     // TODO: test submitting a block that fails this
                     return Err(CheckBlockError::BlockTimeOrderInvalid);
