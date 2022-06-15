@@ -171,7 +171,7 @@ const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
 const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
-const MAX_BLOCK_CONSTRACTS_SIZE: usize = 524_288;
+const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
@@ -363,7 +363,7 @@ pub fn create_mainnet() -> ChainConfig {
         emission_schedule,
         max_block_header_size: MAX_BLOCK_HEADER_SIZE,
         max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONSTRACTS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -434,7 +434,7 @@ pub fn create_regtest() -> ChainConfig {
         emission_schedule,
         max_block_header_size: MAX_BLOCK_HEADER_SIZE,
         max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONSTRACTS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -489,7 +489,7 @@ pub fn create_unit_test_config() -> ChainConfig {
         emission_schedule,
         max_block_header_size: MAX_BLOCK_HEADER_SIZE,
         max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONSTRACTS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -573,7 +573,7 @@ impl TestChainConfig {
             emission_schedule,
             max_block_header_size: MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-            max_block_size_with_smart_contracts: MAX_BLOCK_CONSTRACTS_SIZE,
+            max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
         }
     }
 }
