@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use common::primitives::version::SemVer;
 use libp2p::{
     gossipsub::error::PublishError as GossipsubPublishError,
     swarm::{handler::ConnectionHandlerUpgrErr, DialError::*},
@@ -24,8 +25,8 @@ use thiserror::Error;
 pub enum ProtocolError {
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
     DifferentNetwork([u8; 4], [u8; 4]),
-    #[error("Peer has an unsupported version")]
-    InvalidVersion,
+    #[error("Peer has an unsupported version. Our version {0}, their version {1}")]
+    InvalidVersion(SemVer, SemVer),
     #[error("Peer sent an invalid message")]
     InvalidMessage,
     #[error("Peer is incompatible")] // TODO: remove?
@@ -48,6 +49,10 @@ pub enum PeerError {
     PeerDoesntExist,
     #[error("Peer already exists")]
     PeerAlreadyExists,
+    #[error("Address {0} is banned")]
+    BannedAddress(String),
+    #[error("Peer {0} is banned")]
+    BannedPeer(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
