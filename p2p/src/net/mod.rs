@@ -99,12 +99,13 @@ where
 {
     /// Connect to a remote node
     ///
-    /// If the connection succeeds, the socket object is returned
-    /// which can be used to exchange messages with the remote peer
+    /// This function doens't block on the connection but returns immediately
+    /// after dialing the remote peer. The connection success/failure event
+    /// is returned through the [`ConnectivityService::poll_next()`] function.
     ///
     /// # Arguments
     /// `address` - socket address of the peer
-    async fn connect(&mut self, address: T::Address) -> crate::Result<types::PeerInfo<T>>;
+    async fn connect(&mut self, address: T::Address) -> crate::Result<()>;
 
     /// Disconnect active connection
     ///

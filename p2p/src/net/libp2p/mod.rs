@@ -383,7 +383,7 @@ where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
     IdentifyInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
-    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::types::PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         // TODO: add tests for both cases
@@ -408,13 +408,7 @@ where
             })
             .await?;
 
-        // read peer information
-        let info = rx
-            .await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e)?; // command failure
-
-        Ok(info.try_into()?)
+        rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
@@ -445,6 +439,9 @@ where
                 Ok(ConnectivityEvent::ConnectionAccepted {
                     peer_info: (*peer_info).try_into()?,
                 })
+            }
+            types::ConnectivityEvent::ConnectionError { addr, error } => {
+                Ok(ConnectivityEvent::ConnectionError { addr, error })
             }
             types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
                 Ok(ConnectivityEvent::IncomingConnection {
@@ -956,12 +953,16 @@ mod tests {
         // first try to connect to address nobody is listening to
         // and verify that the connection is refused immediately
         let start = std::time::SystemTime::now();
-        assert_eq!(
-            service.connect(addr.clone()).await,
-            Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::ConnectionRefused
-            )))
-        );
+        assert_eq!(service.connect(addr.clone()).await, Ok(()));
+        assert!(std::matches!(
+            service.poll_next().await,
+            Ok(net::types::ConnectivityEvent::ConnectionError {
+                addr: _,
+                error: P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::ConnectionRefused
+                ))
+            })
+        ));
 
         let timeout = if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
             0
@@ -978,12 +979,16 @@ mod tests {
         let _service = TcpListener::bind(format!("[::1]:{}", port)).await.unwrap();
         let start = std::time::SystemTime::now();
 
-        assert_eq!(
-            service.connect(addr).await,
-            Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::ConnectionRefused
-            )))
-        );
+        assert_eq!(service.connect(addr).await, Ok(()),);
+        assert!(std::matches!(
+            service.poll_next().await,
+            Ok(net::types::ConnectivityEvent::ConnectionError {
+                addr: _,
+                error: P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::ConnectionRefused
+                ))
+            })
+        ));
         assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }

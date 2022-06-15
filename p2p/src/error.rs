@@ -53,6 +53,10 @@ pub enum PeerError {
     BannedAddress(String),
     #[error("Peer {0} is banned")]
     BannedPeer(String),
+    #[error("PeerManager has too many peers")]
+    TooManyPeers,
+    #[error("Connection to address {0} already pending")]
+    Pending(String),
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]

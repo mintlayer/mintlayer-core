@@ -66,7 +66,7 @@ impl Backend {
                         log::error!("pending connection for peer {:?} does not exist", peer_id);
                         Err(P2pError::PeerError(PeerError::PeerDoesntExist))
                     }
-                    Some(PendingState::Dialed { tx: _ }) => {
+                    Some(PendingState::Dialed(_addr)) => {
                         // TODO: report peer id to swarm manager?
                         log::error!("received peer info before connection was established");
                         Err(P2pError::ProtocolError(ProtocolError::InvalidState(
@@ -74,11 +74,16 @@ impl Backend {
                             "InboundAccepted/OutboundAccepted",
                         )))
                     }
-                    Some(PendingState::OutboundAccepted { tx }) => {
+                    Some(PendingState::OutboundAccepted(_)) => {
                         self.established_conns.insert(peer_id);
-                        tx.send(Ok(info)).map_err(|_| P2pError::ChannelClosed)
+                        self.conn_tx
+                            .send(types::ConnectivityEvent::ConnectionAccepted {
+                                peer_info: Box::new(info),
+                            })
+                            .await
+                            .map_err(|_| P2pError::ChannelClosed)
                     }
-                    Some(PendingState::InboundAccepted { addr }) => {
+                    Some(PendingState::InboundAccepted(addr)) => {
                         self.established_conns.insert(peer_id);
                         self.conn_tx
                             .send(types::ConnectivityEvent::IncomingConnection {
@@ -97,7 +102,7 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{backend, proto::util};
+    use crate::net::libp2p::{backend, proto::util, types::ConnectivityEvent};
     use libp2p::{
         identify::IdentifyInfo, identity, swarm::ConnectionHandlerUpgrErr, Multiaddr, PeerId,
     };
@@ -222,10 +227,11 @@ mod tests {
         let config = common::chain::config::create_mainnet();
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (mut backend, _, _, _, _) = util::make_libp2p(config, addr, &[]).await;
-        let (tx, _) = oneshot::channel();
 
         let peer_id = PeerId::random();
-        backend.pending_conns.insert(peer_id, backend::PendingState::Dialed { tx });
+        backend
+            .pending_conns
+            .insert(peer_id, backend::PendingState::Dialed(Multiaddr::empty()));
 
         assert_eq!(
             backend
@@ -245,13 +251,14 @@ mod tests {
     async fn test_received_outbound_accepted() {
         let config = common::chain::config::create_mainnet();
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let (mut backend, _, _conn_rx, _, _) = util::make_libp2p(config, addr, &[]).await;
-        let (tx, mut rx) = oneshot::channel();
+        let (mut backend, _cmd_tx, mut conn_rx, _pubsub_rx, _sync_rx) =
+            util::make_libp2p(config, addr, &[]).await;
 
         let peer_id = PeerId::random();
-        backend
-            .pending_conns
-            .insert(peer_id, backend::PendingState::OutboundAccepted { tx });
+        backend.pending_conns.insert(
+            peer_id,
+            backend::PendingState::OutboundAccepted(Multiaddr::empty()),
+        );
 
         assert_eq!(
             backend
@@ -263,14 +270,14 @@ mod tests {
             Ok(())
         );
 
-        if let Ok(inner) = rx.try_recv().unwrap() {
+        if let Ok(ConnectivityEvent::ConnectionAccepted { peer_info }) = conn_rx.try_recv() {
             let other = make_empty_info();
             assert!(
-                inner.protocol_version == other.protocol_version
-                    && inner.agent_version == other.agent_version
-                    && inner.listen_addrs == other.listen_addrs
-                    && inner.protocols == other.protocols
-                    && inner.observed_addr == other.observed_addr
+                peer_info.protocol_version == other.protocol_version
+                    && peer_info.agent_version == other.agent_version
+                    && peer_info.listen_addrs == other.listen_addrs
+                    && peer_info.protocols == other.protocols
+                    && peer_info.observed_addr == other.observed_addr
             );
         }
     }
@@ -284,9 +291,7 @@ mod tests {
         let peer_id = PeerId::random();
         backend.pending_conns.insert(
             peer_id,
-            backend::PendingState::InboundAccepted {
-                addr: Multiaddr::empty(),
-            },
+            backend::PendingState::InboundAccepted(Multiaddr::empty()),
         );
 
         assert_eq!(

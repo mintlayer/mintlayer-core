@@ -47,7 +47,7 @@ pub enum Command {
     Connect {
         peer_id: PeerId,
         peer_addr: Multiaddr,
-        response: oneshot::Sender<crate::Result<IdentifyInfo>>,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 
     /// Disconnect remote peer
@@ -97,6 +97,12 @@ pub enum ConnectivityEvent {
     IncomingConnection {
         addr: Multiaddr,
         peer_info: Box<IdentifyInfo>,
+    },
+
+    /// Outbound connection failed
+    ConnectionError {
+        addr: Multiaddr,
+        error: error::P2pError,
     },
 
     /// Remote closed connection

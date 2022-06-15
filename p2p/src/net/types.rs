@@ -103,6 +103,15 @@ where
         peer_info: PeerInfo<T>,
     },
 
+    /// Outbound connection failed
+    ConnectionError {
+        /// Address that was dialed
+        addr: T::Address,
+
+        /// Error that occurred
+        error: error::P2pError,
+    },
+
     /// Remote closed connection
     ConnectionClosed {
         /// Unique ID of the peer
