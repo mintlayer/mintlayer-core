@@ -32,6 +32,8 @@ mod orphan_blocks;
 mod error;
 pub use error::*;
 
+use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
+
 mod pow;
 
 pub mod ban_score;
@@ -75,20 +77,25 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw> {
+    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
         let db_tx = self.blockchain_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             db_tx,
-            Some(&mut self.orphan_blocks),
+            self.orphan_blocks.as_rw_ref(),
             self.time_getter.getter(),
         )
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo> {
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
         let db_tx = self.blockchain_storage.transaction_ro();
-        chainstateref::ChainstateRef::new_ro(&self.chain_config, db_tx, self.time_getter.getter())
+        chainstateref::ChainstateRef::new_ro(
+            &self.chain_config,
+            db_tx,
+            self.orphan_blocks.as_ro_ref(),
+            self.time_getter.getter(),
+        )
     }
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
