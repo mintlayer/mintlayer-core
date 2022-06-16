@@ -257,9 +257,12 @@ mod test {
         }
     }
 
+    // TODO: Move somewhere and reuse.
     fn generate_unsigned_tx(
         outpoint_dest: Destination,
     ) -> Result<Transaction, TransactionCreationError> {
+        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let second_outpoint = Destination::Address(PublicKeyHash::from(&public_key));
         let tx = Transaction::new(
             0,
             vec![TxInput::new(
@@ -267,7 +270,10 @@ mod test {
                 0,
                 InputWitness::NoSignature(None),
             )],
-            vec![TxOutput::new(Amount::from_atoms(100), outpoint_dest)],
+            vec![
+                TxOutput::new(Amount::from_atoms(100), outpoint_dest),
+                TxOutput::new(Amount::from_atoms(200), second_outpoint),
+            ],
             0,
         )?;
         Ok(tx)
