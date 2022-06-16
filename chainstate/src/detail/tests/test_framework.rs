@@ -247,7 +247,7 @@ impl<'a> BlockTestFramework {
             .blockchain_storage
             .get_mainchain_tx_index(&OutPointSourceId::from(tx_id.clone()))
             .unwrap()?;
-        tx_index.spent_state(output_index).ok()
+        tx_index.get_spent_state(output_index).ok()
     }
 
     fn check_spend_status(&self, tx: &Transaction, spend_status: &TestSpentStatus) {

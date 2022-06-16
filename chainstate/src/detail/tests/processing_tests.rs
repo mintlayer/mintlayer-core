@@ -218,7 +218,7 @@ fn test_spend_inputs_simple() {
 
             for input in tx.inputs() {
                 if tx_index
-                    .spent_state(input.outpoint().output_index())
+                    .get_spent_state(input.outpoint().output_index())
                     .expect("Unable to get spent state")
                     != OutputSpentState::Unspent
                 {

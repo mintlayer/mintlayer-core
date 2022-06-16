@@ -207,7 +207,7 @@ impl TxMainChainIndex {
         &self.position
     }
 
-    pub fn spent_state(&self, output_index: u32) -> Result<OutputSpentState, SpendError> {
+    pub fn get_spent_state(&self, output_index: u32) -> Result<OutputSpentState, SpendError> {
         match self.spent.get(output_index as usize) {
             None => Err(SpendError::OutOfRange {
                 tx_id: None,
