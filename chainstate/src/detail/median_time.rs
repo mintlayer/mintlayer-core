@@ -32,7 +32,10 @@ mod test {
         chain::{block::ConsensusData, config::create_unit_test_config},
         primitives::{time, Idable},
     };
-    use std::sync::{atomic::Ordering, Arc};
+    use std::{
+        sync::{atomic::Ordering, Arc},
+        time::Duration,
+    };
 
     fn make_block(prev_block: Id<Block>, time: u32) -> Block {
         Block::new(vec![], Some(prev_block), time, ConsensusData::None)
@@ -65,7 +68,7 @@ mod test {
             let blocks = chain_blocks(
                 block_count,
                 chainstate.chain_config.genesis_block_id(),
-                time::get() as u32,
+                time::get().as_secs() as u32,
             );
 
             for block in &blocks {
@@ -111,12 +114,14 @@ mod test {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
 
-            let current_time = Arc::new(std::sync::atomic::AtomicI64::new(
-                chain_config.genesis_block().block_time() as i64,
+            let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
+                chain_config.genesis_block().block_time() as u64,
             ));
 
             let chainstate_current_time = Arc::clone(&current_time);
-            let time_getter = Arc::new(move || chainstate_current_time.load(Ordering::SeqCst));
+            let time_getter = Arc::new(move || {
+                Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
+            });
 
             let storage = Store::new_empty().unwrap();
             let mut chainstate =

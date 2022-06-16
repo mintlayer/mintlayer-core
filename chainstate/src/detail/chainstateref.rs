@@ -84,7 +84,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         }
     }
 
-    pub fn current_time(&self) -> i64 {
+    pub fn current_time(&self) -> std::time::Duration {
         (self.time_getter)()
     }
 
@@ -290,11 +290,10 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                     CheckBlockError::BlockTimeOrderInvalid
                 );
 
-                let max_future_offset =
-                    self.chain_config.max_future_block_time_offset().as_secs() as i64;
-                let current_time = self.current_time();
+                let max_future_offset = self.chain_config.max_future_block_time_offset().as_secs();
+                let current_time = self.current_time().as_secs();
                 ensure!(
-                    i64::from(block.block_time()) <= current_time + max_future_offset,
+                    u64::from(block.block_time()) <= current_time + max_future_offset,
                     CheckBlockError::BlockFromTheFuture
                 );
             }

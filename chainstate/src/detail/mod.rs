@@ -25,6 +25,7 @@ use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
+use std::time::Duration;
 use utils::eventhandler::{EventHandler, EventsController};
 mod consensus_validator;
 mod orphan_blocks;
@@ -48,7 +49,7 @@ const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 mod spend_cache;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
-pub type TimeGetter = dyn Fn() -> i64 + Send + Sync;
+pub type TimeGetter = dyn Fn() -> Duration + Send + Sync;
 
 #[must_use]
 pub struct Chainstate {
