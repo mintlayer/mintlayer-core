@@ -17,7 +17,7 @@
 use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
     chain::{
-        block::{Block, ConsensusData},
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
         transaction::Transaction,
@@ -77,7 +77,7 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(&prev_block.get_id().get()))
         },
-        time::get().as_secs() as u32,
+        BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
         consensus_data,
     )
     .expect("not to fail")

@@ -17,7 +17,7 @@
 extern crate test_utils;
 
 use common::chain::{
-    block::{consensus_data::ConsensusData, Block},
+    block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block},
     transaction::Transaction,
 };
 use libp2p::Multiaddr;
@@ -73,7 +73,13 @@ async fn test_libp2p_gossipsub() {
             .publish(message::Message {
                 magic: [0, 1, 2, 3],
                 msg: MessageType::PubSub(PubSubMessage::Block(
-                    Block::new(vec![], None, 1337u32, ConsensusData::None).unwrap(),
+                    Block::new(
+                        vec![],
+                        None,
+                        BlockTimestamp::from_int_seconds(1337u32),
+                        ConsensusData::None,
+                    )
+                    .unwrap(),
                 )),
             })
             .await;
@@ -100,12 +106,18 @@ async fn test_libp2p_gossipsub() {
         message_id: _,
     } = res2.unwrap()
     {
-        assert_eq!(block.block_time(), 1337u32);
+        assert_eq!(block.timestamp().as_int_seconds(), 1337u32);
         pubsub2
             .publish(message::Message {
                 magic: [0, 1, 2, 3],
                 msg: MessageType::PubSub(PubSubMessage::Block(
-                    Block::new(vec![], None, 1338u32, ConsensusData::None).unwrap(),
+                    Block::new(
+                        vec![],
+                        None,
+                        BlockTimestamp::from_int_seconds(1338u32),
+                        ConsensusData::None,
+                    )
+                    .unwrap(),
                 )),
             })
             .await
@@ -125,7 +137,7 @@ async fn test_libp2p_gossipsub() {
         message_id: _,
     } = res1.unwrap()
     {
-        assert_eq!(block.block_time(), 1338u32);
+        assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u32));
     } else {
         panic!("invalid message received");
     }
@@ -195,7 +207,13 @@ async fn test_libp2p_gossipsub_3_peers() {
             .publish(message::Message {
                 magic: [0, 1, 2, 3],
                 msg: MessageType::PubSub(PubSubMessage::Block(
-                    Block::new(vec![], None, 1337u32, ConsensusData::None).unwrap(),
+                    Block::new(
+                        vec![],
+                        None,
+                        BlockTimestamp::from_int_seconds(1337u32),
+                        ConsensusData::None,
+                    )
+                    .unwrap(),
                 )),
             })
             .await;
@@ -350,7 +368,13 @@ async fn test_libp2p_gossipsub_too_big_message() {
     let message = message::Message {
         magic: [0, 1, 2, 3],
         msg: MessageType::PubSub(PubSubMessage::Block(
-            Block::new(txs, None, 1337u32, ConsensusData::None).unwrap(),
+            Block::new(
+                txs,
+                None,
+                BlockTimestamp::from_int_seconds(1337u32),
+                ConsensusData::None,
+            )
+            .unwrap(),
         )),
     };
     let encoded_size = message.encode().len();

@@ -9,6 +9,7 @@ use crate::primitives::{Id, VersionTag, H256};
 use serialization::{Decode, Encode};
 
 use super::consensus_data::BlockRewardTransactable;
+use super::timestamp::BlockTimestamp;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
@@ -16,8 +17,7 @@ pub struct BlockHeader {
     pub(super) prev_block_hash: Option<Id<Block>>,
     pub(super) tx_merkle_root: Option<H256>,
     pub(super) witness_merkle_root: Option<H256>,
-    #[codec(compact)]
-    pub(super) time: u32,
+    pub(super) timestamp: BlockTimestamp,
     pub(super) consensus_data: ConsensusData,
 }
 
@@ -38,8 +38,8 @@ impl BlockHeader {
         &self.prev_block_hash
     }
 
-    pub fn block_time(&self) -> u32 {
-        self.time
+    pub fn timestamp(&self) -> BlockTimestamp {
+        self.timestamp
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
@@ -88,8 +88,8 @@ impl BlockV1 {
         &self.header.consensus_data
     }
 
-    pub fn block_time(&self) -> u32 {
-        self.header.time
+    pub fn timestamp(&self) -> BlockTimestamp {
+        self.header.timestamp()
     }
 
     pub fn transactions(&self) -> &Vec<Transaction> {

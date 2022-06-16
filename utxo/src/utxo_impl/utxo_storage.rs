@@ -174,6 +174,7 @@ mod test {
         UtxosView,
     };
     use crate::ConsumedUtxoCache;
+    use common::chain::block::timestamp::BlockTimestamp;
     use common::chain::config::create_mainnet;
     use common::chain::signature::inputsig::InputWitness;
     use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
@@ -216,8 +217,12 @@ mod test {
         num_of_txs: usize,
     ) -> Block {
         let txs = create_transactions(inputs, max_num_of_outputs, num_of_txs);
-        Block::new_with_no_consensus(txs, Some(prev_block_id), 1)
-            .expect("should be able to create a block")
+        Block::new_with_no_consensus(
+            txs,
+            Some(prev_block_id),
+            BlockTimestamp::from_int_seconds(1),
+        )
+        .expect("should be able to create a block")
     }
 
     /// populate the db with random values, for testing.

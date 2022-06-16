@@ -417,7 +417,10 @@ pub(crate) mod test {
     #[cfg(not(loom))]
     fn test_storage_manipulation() {
         use common::{
-            chain::{block::ConsensusData, SpendablePosition},
+            chain::{
+                block::{timestamp::BlockTimestamp, ConsensusData},
+                SpendablePosition,
+            },
             primitives::H256,
         };
 
@@ -427,14 +430,14 @@ pub(crate) mod test {
         let block0 = Block::new(
             vec![tx0.clone()],
             Some(Id::new(&H256::default())),
-            12,
+            BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
         )
         .unwrap();
         let block1 = Block::new(
             vec![tx1.clone()],
             Some(Id::new(&block0.get_id().get())),
-            34,
+            BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
         .unwrap();

@@ -704,7 +704,7 @@ fn test_blocks_from_the_future() {
 
         // current time is genesis time
         let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
-            config.genesis_block().block_time() as u64,
+            config.genesis_block().timestamp().as_int_seconds() as u64,
         ));
         let chainstate_current_time = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
@@ -729,7 +729,7 @@ fn test_blocks_from_the_future() {
                     &chainstate_ref,
                     &chainstate.chain_config.genesis_block_id()
                 ),
-                chainstate.chain_config.genesis_block().block_time()
+                chainstate.chain_config.genesis_block().timestamp()
             );
         }
 
@@ -741,7 +741,9 @@ fn test_blocks_from_the_future() {
             let good_block = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
-                current_time.load(Ordering::SeqCst) as u32 + max_future_offset,
+                BlockTimestamp::from_int_seconds(
+                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset,
+                ),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -757,7 +759,9 @@ fn test_blocks_from_the_future() {
             let bad_block_in_future = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
-                current_time.load(Ordering::SeqCst) as u32 + max_future_offset + 1,
+                BlockTimestamp::from_int_seconds(
+                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset + 1,
+                ),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -773,7 +777,7 @@ fn test_blocks_from_the_future() {
             let bad_block_from_past = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
-                current_time.load(Ordering::SeqCst) as u32 - 1,
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32 - 1),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);

@@ -27,12 +27,15 @@ pub mod consensus_data;
 
 pub mod block_size;
 
+pub mod timestamp;
+
 pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
 use serialization::{DirectDecode, DirectEncode};
 
 use self::block_size::BlockSize;
+use self::timestamp::BlockTimestamp;
 
 use super::ChainConfig;
 
@@ -88,7 +91,7 @@ impl Block {
     pub fn new(
         transactions: Vec<Transaction>,
         prev_block_hash: Option<Id<Block>>,
-        time: u32,
+        timestamp: BlockTimestamp,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
@@ -96,7 +99,7 @@ impl Block {
 
         let header = BlockHeader {
             version: VersionTag::default(),
-            time,
+            timestamp,
             consensus_data,
             prev_block_hash,
             tx_merkle_root,
@@ -115,14 +118,14 @@ impl Block {
     pub fn new_with_no_consensus(
         transactions: Vec<Transaction>,
         prev_block_hash: Option<Id<Block>>,
-        time: u32,
+        timestamp: BlockTimestamp,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
         let header = BlockHeader {
             version: VersionTag::default(),
-            time,
+            timestamp,
             consensus_data: ConsensusData::None,
             prev_block_hash,
             tx_merkle_root,
@@ -167,9 +170,9 @@ impl Block {
         }
     }
 
-    pub fn block_time(&self) -> u32 {
+    pub fn timestamp(&self) -> BlockTimestamp {
         match &self {
-            Block::V1(blk) => blk.block_time(),
+            Block::V1(blk) => blk.timestamp(),
         }
     }
 
@@ -235,7 +238,7 @@ mod tests {
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             prev_block_hash: None,
-            time: rng.gen(),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
         let block = Block::V1(BlockV1 {
@@ -258,7 +261,7 @@ mod tests {
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             prev_block_hash: None,
-            time: rng.gen(),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
         let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
@@ -300,7 +303,7 @@ mod tests {
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             prev_block_hash: None,
-            time: rng.gen(),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
         let block = Block::V1(BlockV1 {

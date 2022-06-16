@@ -17,6 +17,7 @@
 
 use crate::detail::tests::*;
 use blockchain_storage::BlockchainStorageRead;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{time, Amount, Id};
@@ -70,7 +71,7 @@ fn spend_tx_in_the_same_block() {
             let block = Block::new(
                 vec![first_tx, second_tx],
                 Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
-                time::get().as_secs() as u32,
+                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -126,7 +127,7 @@ fn spend_tx_in_the_same_block() {
             let block = Block::new(
                 vec![second_tx, first_tx],
                 Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
-                time::get().as_secs() as u32,
+                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -213,7 +214,7 @@ fn double_spend_tx_in_the_same_block() {
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
             Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
-            time::get().as_secs() as u32,
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -273,7 +274,7 @@ fn double_spend_tx_in_another_block() {
         let first_block = Block::new(
             vec![first_tx],
             Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
-            time::get().as_secs() as u32,
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -303,7 +304,7 @@ fn double_spend_tx_in_another_block() {
         let second_block = Block::new(
             vec![second_tx],
             Some(first_block_id.clone()),
-            time::get().as_secs() as u32,
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
