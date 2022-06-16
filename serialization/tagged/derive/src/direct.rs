@@ -80,7 +80,7 @@ fn tag_disjoint_check(variants: &[VariantInfo<'_>]) -> TokenStream {
     }
     let tag_tys = variants.iter().map(|v| v.first_ty());
     quote! {
-        ::serialization::derive_support::sa::assert_type_ne_all!(
+        ::serialization::tagged::derive_support::sa::assert_type_ne_all!(
             #(::serialization::tagged::Tag<{<#tag_tys as ::serialization::tagged::Tagged>::TAG}>),*
         );
     }
@@ -147,7 +147,7 @@ pub fn derive_decode(the_enum: &syn::ItemEnum) -> TokenStream {
                 fn decode<I: ::serialization::Input>(
                     input: &mut I
                 ) -> ::core::result::Result<Self, ::serialization::Error> {
-                    let mut input = ::serialization::derive_support::Peekable::new(input);
+                    let mut input = ::serialization::tagged::derive_support::Peekable::new(input);
                     let tag = input.peek()?;
                     let result = #(#if_clauses else)* {
                         ::serialization::Input::read_byte(&mut input)?;

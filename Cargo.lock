@@ -3481,17 +3481,34 @@ dependencies = [
 name = "serialization"
 version = "0.1.0"
 dependencies = [
+ "serialization-core",
+ "serialization-tagged",
+]
+
+[[package]]
+name = "serialization-core"
+version = "0.1.0"
+dependencies = [
  "arraytools",
  "hex-literal",
  "parity-scale-codec",
- "proptest",
  "rand 0.8.5",
- "serialization-derive",
+]
+
+[[package]]
+name = "serialization-tagged"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "proptest",
+ "serialization",
+ "serialization-core",
+ "serialization-tagged-derive",
  "static_assertions",
 ]
 
 [[package]]
-name = "serialization-derive"
+name = "serialization-tagged-derive"
 version = "0.1.0"
 dependencies = [
  "itertools",
