@@ -32,7 +32,7 @@ mod orphan_blocks;
 mod error;
 pub use error::*;
 
-use self::orphan_blocks::{OrphansReadOnlyRef, OrphansReadWriteRef};
+use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
 mod pow;
 
 pub mod ban_score;
@@ -72,7 +72,7 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphansReadWriteRef> {
+    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
         let db_tx = self.blockchain_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
@@ -82,7 +82,7 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphansReadOnlyRef> {
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
         let db_tx = self.blockchain_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,

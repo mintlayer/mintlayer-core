@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use super::{OrphansReadOnlyRef, OrphansReadWriteRef};
+use super::{OrphanBlocksRef, OrphanBlocksRefMut};
 use common::chain::block::Block;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
@@ -195,12 +195,12 @@ impl OrphanBlocksPool {
         res
     }
 
-    pub fn as_ro_ref(&self) -> OrphansReadOnlyRef {
-        OrphansReadOnlyRef::new(self)
+    pub fn as_ro_ref(&self) -> OrphanBlocksRef {
+        OrphanBlocksRef::new(self)
     }
 
-    pub fn as_rw_ref(&mut self) -> OrphansReadWriteRef {
-        OrphansReadWriteRef::new(self)
+    pub fn as_rw_ref(&mut self) -> OrphanBlocksRefMut {
+        OrphanBlocksRefMut::new(self)
     }
 }
 

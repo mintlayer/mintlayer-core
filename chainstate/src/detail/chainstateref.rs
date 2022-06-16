@@ -18,7 +18,7 @@ use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockEr
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
-    orphan_blocks::{OrphansReadOnly, OrphansReadWrite},
+    orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     spend_cache::{BlockTransactableRef, CachedInputs},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
@@ -30,9 +30,7 @@ pub(crate) struct ChainstateRef<'a, S, O> {
     orphan_blocks: O,
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> BlockIndexHandle
-    for ChainstateRef<'a, S, O>
-{
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for ChainstateRef<'a, S, O> {
     fn get_block_index(
         &self,
         block_index: &Id<Block>,
@@ -54,7 +52,7 @@ impl<'a, S: TransactionRw<Error = blockchain_storage::Error>, O> ChainstateRef<'
     }
 }
 
-impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn new_rw(
         chain_config: &'a ChainConfig,
         db_tx: S,
@@ -459,7 +457,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphansReadOnly> ChainstateRef<'a, S, O> {
     }
 }
 
-impl<'a, S: BlockchainStorageWrite, O: OrphansReadWrite> ChainstateRef<'a, S, O> {
+impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> {
     pub fn check_legitimate_orphan(
         &mut self,
         block_source: BlockSource,

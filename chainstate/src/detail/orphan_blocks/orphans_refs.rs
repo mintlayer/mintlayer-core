@@ -18,28 +18,28 @@
 use super::{OrphanAddError, OrphanBlocksPool};
 use common::{chain::block::Block, primitives::Id};
 
-pub trait OrphansReadOnly {
+pub trait OrphanBlocks {
     fn len(&self) -> usize;
     fn is_already_an_orphan(&self, block_id: &Id<Block>) -> bool;
 }
 
-pub trait OrphansReadWrite: OrphansReadOnly {
+pub trait OrphanBlocksMut: OrphanBlocks {
     fn clear(&mut self);
     fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError>;
     fn take_all_children_of(&mut self, block_id: &Id<Block>) -> Vec<Block>;
 }
 
-pub struct OrphansReadOnlyRef<'a> {
+pub struct OrphanBlocksRef<'a> {
     inner: &'a OrphanBlocksPool,
 }
 
-impl<'a> OrphansReadOnlyRef<'a> {
+impl<'a> OrphanBlocksRef<'a> {
     pub fn new(inner: &'a OrphanBlocksPool) -> Self {
         Self { inner }
     }
 }
 
-impl<'a> OrphansReadOnly for OrphansReadOnlyRef<'a> {
+impl<'a> OrphanBlocks for OrphanBlocksRef<'a> {
     fn len(&self) -> usize {
         self.inner.len()
     }
@@ -49,17 +49,17 @@ impl<'a> OrphansReadOnly for OrphansReadOnlyRef<'a> {
     }
 }
 
-pub struct OrphansReadWriteRef<'a> {
+pub struct OrphanBlocksRefMut<'a> {
     inner: &'a mut OrphanBlocksPool,
 }
 
-impl<'a> OrphansReadWriteRef<'a> {
+impl<'a> OrphanBlocksRefMut<'a> {
     pub fn new(inner: &'a mut OrphanBlocksPool) -> Self {
         Self { inner }
     }
 }
 
-impl<'a> OrphansReadOnly for OrphansReadWriteRef<'a> {
+impl<'a> OrphanBlocks for OrphanBlocksRefMut<'a> {
     fn len(&self) -> usize {
         self.inner.len()
     }
@@ -69,7 +69,7 @@ impl<'a> OrphansReadOnly for OrphansReadWriteRef<'a> {
     }
 }
 
-impl<'a> OrphansReadWrite for OrphansReadWriteRef<'a> {
+impl<'a> OrphanBlocksMut for OrphanBlocksRefMut<'a> {
     fn clear(&mut self) {
         self.inner.clear()
     }
