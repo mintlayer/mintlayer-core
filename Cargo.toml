@@ -19,8 +19,10 @@ members = [
   "logging",       # logging engine and its interfaces
   "p2p",           # p2p communication interfaces and protocols
   "rpc",           # rpc abstraction and implementation
-  "serialization", # serialization interfaces and implementations
-  "serialization/derive",  # serialization procedural macros
+  "serialization", # full featured serialization interfaces and implementations
+  "serialization/core",    # serialization core tools
+  "serialization/tagged",  # serialization for direct/tagged encoding style
+  "serialization/tagged/derive",  # direct/tagged encoding style derive macros
   "subsystem",     # Utilities for working with concurrent subsystems
   "node",          # node executable
   "wallet",        # wallet executable

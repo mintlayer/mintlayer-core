@@ -120,20 +120,22 @@
 //! enum Example { X(Tag<5>), Y(Tag<5>) }
 //! ```
 
+pub mod derive_support;
+
 /// Derive the [Tagged] trait
 ///
 /// * An `enum` with just one variant always starts with the variant index and can be made [Tagged].
 ///   The `#[codec(index = X)]` or enum discriminant has to be provided explicitly.
 /// * A struct where the first element implements [Tagged] can be made Tagged.
-pub use serialization_derive::Tagged;
+pub use serialization_tagged_derive::Tagged;
 
 /// Derive [Encode] that does not add the discriminant byte
-pub use serialization_derive::DirectEncode;
+pub use serialization_tagged_derive::DirectEncode;
 
 /// Derive [Decode] for decoding without the initial discriminant byte
-pub use serialization_derive::DirectDecode;
+pub use serialization_tagged_derive::DirectDecode;
 
-use crate::{Decode, Encode, Input};
+use serialization_core::{Decode, Encode, Error, Input};
 
 /// Types whose encoding starts with a fixed byte (tag)
 pub trait Tagged {

@@ -2,7 +2,7 @@ mod utils;
 
 use arraytools::ArrayTools;
 use hex_literal::hex;
-use serialization::{Decode, Encode};
+use serialization_core::{Decode, Encode};
 use std::collections::BTreeMap;
 use utils::{OptionWrapper, SimpleWrapper};
 

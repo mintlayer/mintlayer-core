@@ -1,6 +1,7 @@
 #![allow(clippy::unnecessary_cast)]
 
-use serialization::{tagged::*, *};
+use serialization_core::*;
+use serialization_tagged::*;
 
 use proptest::prelude::*;
 
