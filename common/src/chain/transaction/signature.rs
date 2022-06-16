@@ -292,3 +292,6 @@ pub fn verify_signature<T: Transactable>(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

@@ -11,7 +11,6 @@ use crate::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 use std::vec;
-mod utils;
 use utils::*;
 
 type TestData = Vec<(
@@ -26,6 +25,7 @@ type TestData = Vec<(
 mod sign_and_mutate;
 #[cfg(test)]
 mod sign_and_verify;
+pub mod utils;
 
 #[test]
 fn sign_and_verify_different_sighash_types() {

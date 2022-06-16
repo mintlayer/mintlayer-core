@@ -81,16 +81,10 @@ pub fn sign_address_spending(
 mod test {
     use crypto::key::{KeyKind, PrivateKey};
 
-    use crate::{
-        chain::{
-            signature::{
-                inputsig::{InputWitness, StandardInputSignature},
-                sighashtype::SigHashType,
-                signature_hash,
-            },
-            Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
-        },
-        primitives::{Amount, Id},
+    use crate::chain::{
+        signature::{inputsig::StandardInputSignature, signature_hash},
+        transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        Destination,
     };
 
     use super::*;
@@ -102,7 +96,7 @@ mod test {
     fn wrong_destination() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -128,7 +122,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let outpoint_dest = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -157,7 +151,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let outpoint_dest = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -182,7 +176,7 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let outpoint_dest = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
+        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -198,40 +192,5 @@ mod test {
             sign_address_spending(&private_key, &pubkey_hash, &sighash)
                 .expect(&format!("{sighash_type:X?}"));
         }
-    }
-
-    // TODO: Move somewhere and reuse.
-    fn generate_unsigned_tx(
-        outpoint_dest: Destination,
-    ) -> Result<Transaction, TransactionCreationError> {
-        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let second_outpoint = Destination::Address(PublicKeyHash::from(&public_key));
-        let tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                Id::<Transaction>::new(&H256::zero()).into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
-            vec![
-                TxOutput::new(Amount::from_atoms(100), outpoint_dest),
-                TxOutput::new(Amount::from_atoms(200), second_outpoint),
-            ],
-            0,
-        )?;
-        Ok(tx)
-    }
-
-    fn sig_hash_types() -> impl Iterator<Item = SigHashType> {
-        [
-            SigHashType::try_from(SigHashType::ALL),
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY),
-            SigHashType::try_from(SigHashType::NONE),
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY),
-            SigHashType::try_from(SigHashType::SINGLE),
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY),
-        ]
-        .into_iter()
-        .map(Result::unwrap)
     }
 }

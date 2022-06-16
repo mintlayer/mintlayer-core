@@ -51,21 +51,25 @@ pub fn generate_unsigned_tx(
     outputs_count: u32,
 ) -> Result<Transaction, TransactionCreationError> {
     let mut rng = rand::thread_rng();
-    let mut inputs = Vec::new();
-    for input_index in 0..inputs_count {
-        inputs.push(TxInput::new(
-            Id::<Transaction>::new(&H256::random()).into(),
-            input_index,
-            InputWitness::NoSignature(None),
-        ));
-    }
-    let mut outputs = Vec::new();
-    for _ in 0..outputs_count {
-        outputs.push(TxOutput::new(
+
+    let inputs = (0u32..inputs_count)
+        .map(|input_index| {
+            TxInput::new(
+                Id::<Transaction>::new(&H256::random()).into(),
+                input_index,
+                InputWitness::NoSignature(None),
+            )
+        })
+        .collect();
+
+    let outputs = std::iter::from_fn(|| {
+        Some(TxOutput::new(
             Amount::from_atoms(rng.gen::<IntType>()),
             outpoint_dest.clone(),
-        ));
-    }
+        ))
+    })
+    .take(outputs_count as usize)
+    .collect();
 
     let tx = Transaction::new(0, inputs, outputs, 0)?;
     Ok(tx)
@@ -109,4 +113,17 @@ pub fn verify_signed_tx(
         verify_signature(outpoint_dest, tx, i)?
     }
     Ok(())
+}
+
+pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> {
+    [
+        SigHashType::try_from(SigHashType::ALL),
+        SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY),
+        SigHashType::try_from(SigHashType::NONE),
+        SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY),
+        SigHashType::try_from(SigHashType::SINGLE),
+        SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY),
+    ]
+    .into_iter()
+    .map(Result::unwrap)
 }
