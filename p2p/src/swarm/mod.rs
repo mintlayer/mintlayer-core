@@ -29,22 +29,18 @@ use crate::{
 use common::{chain::ChainConfig, primitives::version};
 use futures::FutureExt;
 use logging::log;
-use std::{
-    collections::HashMap,
-    fmt::Debug,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod peerdb;
 
-const MAX_ACTIVE_CONNECTIONS: usize = 32;
+/// The absolute maximum number of connections the [`PeerManager`] is willing to have open
+///
+const MAX_ACTIVE_CONNECTIONS: usize = 128;
+
+/// Lower bound for how often [`PeerManager::heartbeat()`] is called
 const PEER_MGR_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
-
-
 
 pub struct PeerManager<T>
 where
@@ -106,18 +102,14 @@ where
         self.peerdb.expire_peers(peers)
     }
 
-    /// Validate address
-    ///
-    /// Verify that the IP address is not banned
+    /// Check is the IP address banned
     fn validate_address(&self, address: &T::Address) -> bool {
-        self.peerdb.is_address_banned(address)
+        !self.peerdb.is_address_banned(address)
     }
 
-    /// Validate peer ID
-    ///
-    /// Verify that the peer ID is not banned
+    /// Check is the peer ID banned
     fn validate_peer_id(&self, peer_id: &T::PeerId) -> bool {
-        self.peerdb.is_id_banned(peer_id)
+        !self.peerdb.is_id_banned(peer_id)
     }
 
     /// Verify protocol compatibility
@@ -140,8 +132,9 @@ where
     /// matching versions are found, the protocol set has been validated successfully.
     // TODO: create generic versions of the protocols when mock interface is supported again
     // TODO: convert `protocols` to a hashset
+    // TODO: define better protocol id type
     fn validate_supported_protocols(&self, protocols: &[T::ProtocolId]) -> bool {
-        const REQUIRED: &[&'static str] = &[
+        const REQUIRED: &[&str] = &[
             "/meshsub/1.1.0",
             "/meshsub/1.0.0",
             "/ipfs/ping/1.0.0",
@@ -150,9 +143,8 @@ where
             "/mintlayer/sync/0.1.0",
         ];
 
-        // TODO: zzz
         for required_proto in REQUIRED {
-            if !protocols.iter().find(|proto| &proto.to_string() == required_proto).is_some() {
+            if !protocols.iter().any(|proto| &proto.to_string().as_str() == required_proto) {
                 return false;
             }
         }
@@ -213,7 +205,8 @@ where
     /// through the same validation as outbound connections.
     ///
     /// This function verify that neither address the nor the peer ID are on the
-    /// list of banned IPs/peer IDs.
+    /// list of banned IPs/peer IDs. It also checks that the maximum number of
+    /// connections `PeerManager` is configured to have has not been reached.
     async fn validate_inbound_connection(
         &mut self,
         address: T::Address,
@@ -229,6 +222,20 @@ where
             self.validate_peer_id(&info.peer_id),
             P2pError::PeerError(PeerError::BannedPeer(info.peer_id.to_string())),
         );
+
+        // if the maximum number of connections is reached, the connection cannot be
+        // accepted even if it's valid. The peer is still reported to the PeerDb which
+        // knows of all peers and later on if the number of connections falls below
+        // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
+        if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
+            // TODO: report this peer to peerdb
+            // TODO: close some other connection in favor of this if peerdb knows this
+            //       peer and it has higher reputation than some other peer we're currently
+            //       connected to?
+            self.peerdb.register_peer_info(info);
+            // self.handle.reject_connection(info.peer_id).await?;
+            return Err(P2pError::PeerError(PeerError::TooManyPeers));
+        }
 
         self.validate_connection(info).await
     }
@@ -258,7 +265,7 @@ where
             channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
         }
 
-        // TODO: report error to peerdb
+        self.peerdb.report_outbound_failure(address);
         Ok(())
     }
 
@@ -281,99 +288,49 @@ where
         self.handle.connect(address).await
     }
 
-    /// Try to establish new outbound connections if the total number of
-    /// active connections the local node has is below threshold
-    ///
-    // TODO: ugly, refactor
-    // TODO: move this to its own file?
-    #[allow(dead_code)]
-    async fn auto_connect(&mut self) -> crate::Result<()> {
-        // we have enough active connections
-        if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
-            return Ok(());
-        }
-        log::debug!("try to establish more outbound connections");
-
-        // we don't know of any peers
-        // if self.discovered.is_empty() {
-        //     log::error!(
-        //         "# of connections below threshold ({} < {}) but no peers",
-        //         self.peers.len(),
-        //         MAX_ACTIVE_CONNECTIONS,
-        //     );
-        //     return Err(P2pError::PeerError(PeerError::NoPeers));
-        // }
-
-        // let npeers = std::cmp::min(
-        //     self.discovered.len(),
-        //     MAX_ACTIVE_CONNECTIONS - self.peers.len(),
-        // );
-
-        // // TODO: improve peer selection
-        // let mut iter = self.discovered.iter();
-
-        // #[allow(clippy::needless_collect)]
-        // let _peers: Vec<(T::PeerId, Arc<T::Address>)> = (0..npeers)
-        //     .map(|i| {
-        //         let peer_info = iter.nth(i).expect("Peer to exist");
-
-        //         let (ip4, ip6) = match peer_info.1 {
-        //             PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
-        //         };
-        //         assert!(!ip4.is_empty() || !ip6.is_empty());
-
-        //         // TODO: let user specify their preference?
-        //         let addr = if ip6.is_empty() {
-        //             Arc::clone(ip4.iter().next().expect("ip4 empty"))
-        //         } else {
-        //             Arc::clone(ip6.iter().next().expect("ip6 empty"))
-        //         };
-
-        //         (*peer_info.0, addr)
-        //     })
-        //     .collect::<_>();
-
-        // for (id, addr) in peers {
-        //     log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
-        //     // TODO: don't remove entry but modify it
-        //     self.discovered.remove(&id);
-        //     self.handle
-        //         .connect((*addr).clone())
-        //         .await
-        //         .map(|_info| {
-        //             let id = _info.peer_id;
-        //             match self.peers.insert(id, PeerContext { _info }) {
-        //                 Some(_) => panic!("peer already exists"),
-        //                 None => {}
-        //             }
-        //         })
-        //         .map_err(|err| {
-        //             log::error!("failed to establish outbound connection: {:?}", err);
-        //             err
-        //         })?;
-        // }
-
-        Ok(())
-    }
-
     /// Maintain the swarm state
     ///
     /// [`PeerManager::heartbeat()`] is called every time a network/control event is received
-    /// or the heartbeat interval of the event loop expires. In other words, the swarm state
+    /// or the heartbeat timer of the event loop expires. In other words, the swarm state
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound.
     ///
     /// This function maintains the overall connectivity state of the swarm by culling
     /// low-reputation peers and establishing new connections with peers that have higher
-    /// reputation. It also checks if there are outbound connections whose timer has run out,
-    /// meaning they have failed. It also updates peer scores and forgets those peers that are
-    /// no longer needed.
+    /// reputation. It also updates peer scores and forgets those peers that are no longer needed.
     ///
     /// TODO: IP address diversity check?
-    /// TODO: clamp update interval
+    /// TODO: exploratory peer connections?
+    /// TODO: close connection with low-score peers in favor of peers with higher score?
     ///
-    /// The process starts by first checking if there
+    /// The process starts by first checking if the number of active connections is less than
+    /// the number of desired connections and there are available peers, the function tries to
+    /// establish new connections. Finally it updates the peer scores and discards any records
+    /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
+        // TODO: check when was the last update and exit early if this update is to soon
+
+        let npeers = std::cmp::min(
+            self.peerdb.idle_peer_count(),
+            MAX_ACTIVE_CONNECTIONS
+                .saturating_sub(self.peers.len())
+                .saturating_sub(self.pending.len()),
+        );
+
+        for _ in 0..npeers {
+            if let Some(addr) = self.peerdb.best_peer_addr() {
+                match self.connect(addr.clone()).await {
+                    Ok(_) => {
+                        self.pending.insert(addr.clone(), None);
+                    }
+                    Err(err) => {
+                        self.peerdb.report_outbound_failure(addr.clone());
+                        self.handle_error(Err(err))?;
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -382,7 +339,7 @@ where
     /// Currently only subsystem/channel-related errors are considered fatal.
     /// Other errors are logged as warnings and `Ok(())` is returned as they should
     /// not distrub the operation of [`PeerManager`].
-    async fn handle_error(&mut self, result: crate::Result<()>) -> crate::Result<()> {
+    fn handle_error(&mut self, result: crate::Result<()>) -> crate::Result<()> {
         match result {
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed | P2pError::SubsystemFailure) => {
@@ -404,7 +361,13 @@ where
     /// - listening to network events
     /// - updating internal state
     ///
+    /// After handling an event from one of the aforementioned sources, the event loop
+    /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
+    /// to perform swarm maintenance. If the `PeerManager` doesn't receive any events,
+    /// [`PEER_MGR_HEARTBEAT_INTERVAL`] defines how often the heartbeat function is called.
     ///
+    /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
+    /// have any events.
     pub async fn run(&mut self) -> crate::Result<()> {
         loop {
             let result = tokio::select! {
@@ -487,7 +450,7 @@ where
             };
 
             // handle error, exit on fatal errors and finally update peer manager state
-            self.handle_error(result).await?;
+            self.handle_error(result)?;
             self.heartbeat().await?;
         }
     }
@@ -560,7 +523,7 @@ mod tests {
         assert!(std::matches!(
             swarm.handle.poll_next().await,
             Ok(net::types::ConnectivityEvent::ConnectionError {
-                addr,
+                addr: _,
                 error: P2pError::DialError(DialError::IoError(
                     std::io::ErrorKind::ConnectionRefused
                 ))
@@ -568,10 +531,10 @@ mod tests {
         ));
     }
 
-    // verify that if the node is aware of any peers on the network,
-    // call to `auto_connect()` will establish a connection with them
+    // verify that the auto-connect functionality works if the number of active connections
+    // is below the desired threshold and there are idle peers in the peerdb
     #[tokio::test]
-    async fn test_auto_connect_mock() {
+    async fn test_auto_connect_libp2p() {
         let config = Arc::new(config::create_mainnet());
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let mut swarm = make_swarm_manager::<Libp2pService>(addr, config.clone()).await;
@@ -597,10 +560,14 @@ mod tests {
         swarm.peer_discovered(&[net::types::AddrInfo {
             id,
             ip4: vec![],
-            ip6: vec![Arc::new(addr)],
+            ip6: vec![addr],
         }]);
-        swarm.auto_connect().await.unwrap();
-        assert_eq!(swarm.peers.len(), 1);
+        swarm.heartbeat().await.unwrap();
+        assert_eq!(swarm.pending.len(), 1);
+        assert!(std::matches!(
+            swarm.handle.poll_next().await,
+            Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info: _ })
+        ));
     }
 
     #[tokio::test]
@@ -615,7 +582,7 @@ mod tests {
             make_swarm_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config)
                 .await;
 
-        let (conn1_res, _conn2_res) = tokio::join!(
+        let (_conn1_res, _conn2_res) = tokio::join!(
             swarm1.handle.connect(swarm2.handle.local_addr().clone()),
             swarm2.handle.poll_next()
         );

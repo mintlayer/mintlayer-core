@@ -18,18 +18,15 @@ use super::*;
 
 /// Discovered peer address information
 #[derive(Debug, PartialEq, Eq)]
-pub struct AddrInfo<T>
-where
-    T: NetworkingService,
-{
+pub struct AddrInfo<T: NetworkingService> {
     /// Unique ID of the peer
     pub id: T::PeerId,
 
     /// List of discovered IPv4 addresses
-    pub ip4: Vec<Arc<T::Address>>,
+    pub ip4: Vec<T::Address>,
 
     /// List of discovered IPv6 addresses
-    pub ip6: Vec<Arc<T::Address>>,
+    pub ip6: Vec<T::Address>,
 }
 
 /// Peer information learned during handshaking

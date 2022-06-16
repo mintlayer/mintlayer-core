@@ -167,8 +167,8 @@ where
         iter.into_iter().for_each(|(id, addr)| {
             entry.id = id;
             match get_addr_from_multiaddr(&addr) {
-                Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(addr)),
-                Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(addr)),
+                Some(Protocol::Ip4(_)) => entry.ip4.push(addr),
+                Some(Protocol::Ip6(_)) => entry.ip6.push(addr),
                 _ => panic!("parse_discovered_addr() failed!"),
             }
         });
@@ -857,8 +857,8 @@ mod tests {
             parsed,
             vec![net::types::AddrInfo {
                 id,
-                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id.into())))],
-                ip6: vec![Arc::new(ip6.with(Protocol::P2p(id.into())))],
+                ip4: vec![ip4.with(Protocol::P2p(id.into()))],
+                ip6: vec![ip6.with(Protocol::P2p(id.into()))],
             }]
         );
     }
@@ -894,13 +894,13 @@ mod tests {
             vec![
                 net::types::AddrInfo {
                     id: id_2,
-                    ip4: vec![Arc::new(ip4_2.with(Protocol::P2p(id_2.into())))],
-                    ip6: vec![Arc::new(ip6_2.with(Protocol::P2p(id_2.into())))],
+                    ip4: vec![ip4_2.with(Protocol::P2p(id_2.into()))],
+                    ip6: vec![ip6_2.with(Protocol::P2p(id_2.into()))],
                 },
                 net::types::AddrInfo {
                     id: id_1,
-                    ip4: vec![Arc::new(ip4_1.with(Protocol::P2p(id_1.into())))],
-                    ip6: vec![Arc::new(ip6_1.with(Protocol::P2p(id_1.into())))],
+                    ip4: vec![ip4_1.with(Protocol::P2p(id_1.into()))],
+                    ip6: vec![ip6_1.with(Protocol::P2p(id_1.into()))],
                 },
             ]
         );
@@ -926,7 +926,7 @@ mod tests {
             parsed,
             vec![net::types::AddrInfo {
                 id: id_1,
-                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id_1.into())))],
+                ip4: vec![ip4.with(Protocol::P2p(id_1.into()))],
                 ip6: vec![],
             }]
         );
