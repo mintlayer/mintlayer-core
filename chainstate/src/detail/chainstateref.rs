@@ -286,11 +286,11 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                     CheckBlockError::BlockTimeOrderInvalid
                 );
 
-                let max_future_offset = self.chain_config.max_future_block_time_offset();
+                let max_future_offset =
+                    self.chain_config.max_future_block_time_offset().as_secs() as i64;
                 let current_time = self.current_time();
                 ensure!(
-                    i64::from(block.block_time())
-                        <= current_time + max_future_offset.as_secs() as i64,
+                    i64::from(block.block_time()) <= current_time + max_future_offset,
                     CheckBlockError::BlockFromTheFuture
                 );
             }
