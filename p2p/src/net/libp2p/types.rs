@@ -91,7 +91,10 @@ pub enum Command {
 pub enum ConnectivityEvent {
     #[allow(unused)]
     /// Outbound connection accepted by remote
-    ConnectionAccepted { peer_info: Box<IdentifyInfo> },
+    ConnectionAccepted {
+        addr: Multiaddr,
+        peer_info: Box<IdentifyInfo>,
+    },
 
     /// Inbound connection incoming
     IncomingConnection {

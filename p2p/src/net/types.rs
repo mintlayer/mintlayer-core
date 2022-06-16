@@ -81,12 +81,12 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
 
 /// Connectivity-related events received from the network
 #[derive(Debug)]
-pub enum ConnectivityEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection accepted
     ConnectionAccepted {
+        /// Peer address
+        addr: T::Address,
+
         /// Peer information
         peer_info: PeerInfo<T>,
     },

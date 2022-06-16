@@ -435,8 +435,9 @@ where
     // TODO: `impl TryInto<ConnectivityEvent> for types::ConnectivityEvent`??
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
+            types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
+                    addr,
                     peer_info: (*peer_info).try_into()?,
                 })
             }

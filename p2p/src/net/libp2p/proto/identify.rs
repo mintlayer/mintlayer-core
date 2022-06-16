@@ -74,10 +74,11 @@ impl Backend {
                             "InboundAccepted/OutboundAccepted",
                         )))
                     }
-                    Some(PendingState::OutboundAccepted(_)) => {
+                    Some(PendingState::OutboundAccepted(addr)) => {
                         self.established_conns.insert(peer_id);
                         self.conn_tx
                             .send(types::ConnectivityEvent::ConnectionAccepted {
+                                addr,
                                 peer_info: Box::new(info),
                             })
                             .await
@@ -269,7 +270,8 @@ mod tests {
             Ok(())
         );
 
-        if let Ok(ConnectivityEvent::ConnectionAccepted { peer_info }) = conn_rx.try_recv() {
+        if let Ok(ConnectivityEvent::ConnectionAccepted { peer_info, addr: _ }) = conn_rx.try_recv()
+        {
             let other = make_empty_info();
             assert!(
                 peer_info.protocol_version == other.protocol_version
@@ -302,11 +304,12 @@ mod tests {
                 .await,
             Ok(())
         );
-        assert_eq!(
+        assert!(std::matches!(
             conn_rx.try_recv(),
-            Ok(types::ConnectivityEvent::ConnectionAccepted {
-                peer_info: Box::new(make_empty_info()),
-            }),
-        );
+            Ok(types::ConnectivityEvent::IncomingConnection {
+                peer_info: _,
+                addr: _,
+            })
+        ));
     }
 }

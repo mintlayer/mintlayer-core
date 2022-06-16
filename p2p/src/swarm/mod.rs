@@ -164,7 +164,7 @@ where
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of swarm maintenance.
-    async fn validate_connection(&mut self, info: net::types::PeerInfo<T>) -> crate::Result<()> {
+    async fn accept_connection(&mut self, info: net::types::PeerInfo<T>) -> crate::Result<()> {
         log::debug!("{}", info);
 
         ensure!(
@@ -187,7 +187,7 @@ where
         );
         ensure!(
             self.peers.get(&info.peer_id).is_none(),
-            P2pError::PeerError(PeerError::PeerAlreadyExists)
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
         let peer_id = info.peer_id;
@@ -207,7 +207,7 @@ where
     /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
-    async fn validate_inbound_connection(
+    async fn accept_inbound_connection(
         &mut self,
         address: T::Address,
         info: net::types::PeerInfo<T>,
@@ -237,7 +237,7 @@ where
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.validate_connection(info).await
+        self.accept_connection(info).await
     }
 
     /// Close connection to a remote peer
@@ -279,7 +279,7 @@ where
         // TODO: verify that the peer is not already part of our swarm (needs peerdb)
         ensure!(
             !self.pending.contains_key(&address),
-            P2pError::PeerError(PeerError::Pending(address.to_string()))
+            P2pError::PeerError(PeerError::Pending(address.to_string())),
         );
         ensure!(
             self.validate_address(&address),
@@ -294,7 +294,9 @@ where
     /// `PeerManager::heartbeat()` is called every time a network/control event is received
     /// or the heartbeat timer of the event loop expires. In other words, the swarm state
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
-    /// update interval is clamped to a sensible lower bound.
+    /// update interval is clamped to a sensible lower bound. `PeerManager` will keep track of
+    /// when it last update its own state and if the time since last update is less than the
+    /// configured lower bound, it exits early from the function.
     ///
     /// This function maintains the overall connectivity state of the swarm by culling
     /// low-reputation peers and establishing new connections with peers that have higher
@@ -322,7 +324,7 @@ where
             if let Some(addr) = self.peerdb.best_peer_addr() {
                 match self.connect(addr.clone()).await {
                     Ok(_) => {
-                        self.pending.insert(addr.clone(), None);
+                        self.pending.insert(addr, None);
                     }
                     Err(err) => {
                         self.peerdb.report_outbound_failure(addr.clone());
@@ -370,7 +372,7 @@ where
     /// [`PEER_MGR_HEARTBEAT_INTERVAL`] defines how often the heartbeat function is called.
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<void::Void> {
         loop {
             let result = tokio::select! {
                 event = self.rx_swarm.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
@@ -414,10 +416,19 @@ where
                     Ok(event) => match event {
                         net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
                             // TODO: report rejection to networking backend
-                            self.validate_inbound_connection(addr, peer_info).await
+                            self.accept_inbound_connection(addr, peer_info).await
                         }
-                        net::types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
-                            self.validate_connection(peer_info).await
+                        net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
+                            self.accept_connection(peer_info).await?;
+
+                            match self.pending.remove(&addr) {
+                                Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+                                Some(None) => Ok(()),
+                                None => {
+                                    log::error!("connection accepted but it's not pending?");
+                                    Ok(())
+                                }
+                            }
                         }
                         net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
                             self.close_connection(peer_id).await
@@ -568,7 +579,7 @@ mod tests {
         assert_eq!(swarm.pending.len(), 1);
         assert!(std::matches!(
             swarm.handle.poll_next().await,
-            Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info: _ })
+            Ok(net::types::ConnectivityEvent::ConnectionAccepted { .. })
         ));
     }
 
@@ -591,7 +602,7 @@ mod tests {
 
         assert!(std::matches!(
             swarm1.handle.poll_next().await,
-            Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info: _ })
+            Ok(net::types::ConnectivityEvent::ConnectionAccepted { .. })
         ));
     }
 
@@ -666,7 +677,7 @@ mod tests {
         tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
         swarm1.handle.connect(addr).await.unwrap();
 
-        if let Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info }) =
+        if let Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info, addr: _ }) =
             swarm1.handle.poll_next().await
         {
             assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
@@ -692,7 +703,7 @@ mod tests {
         let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
         if let net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } = conn2_res {
             assert_eq!(
-                swarm2.validate_inbound_connection(addr, peer_info).await,
+                swarm2.accept_inbound_connection(addr, peer_info).await,
                 Ok(())
             );
         } else {
@@ -725,7 +736,7 @@ mod tests {
 
         if let net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } = conn2_res {
             assert_eq!(
-                swarm2.validate_inbound_connection(addr, peer_info).await,
+                swarm2.accept_inbound_connection(addr, peer_info).await,
                 Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                     [1, 2, 3, 4],
                     *config::create_mainnet().magic_bytes(),
