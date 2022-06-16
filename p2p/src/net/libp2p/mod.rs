@@ -51,26 +51,10 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
+mod constants;
 mod proto;
 mod sync;
 mod types;
-
-/// Gossipsub configuration
-// TODO: config or spec?
-const GOSSIPSUB_HEARTBEAT: Duration = Duration::from_secs(10);
-const GOSSIPSUB_MAX_TRANSMIT_SIZE: usize = 2 * 1024 * 1024;
-
-/// Ping configuration
-/// NOTE: these are not from config but part of Mintlayer's protocol spec
-const PING_TIMEOUT: Duration = Duration::from_secs(60);
-const PING_INTERVAL: Duration = Duration::from_secs(60);
-const PING_MAX_RETRIES: u32 = 3;
-
-/// Request-response configuration
-const REQ_RESP_TIMEOUT: Duration = Duration::from_secs(10);
-
-// TODO: think about channel sizes
-const CHANNEL_SIZE: usize = 64;
 
 /// libp2p-specifc peer discovery strategies
 #[derive(Debug, PartialEq, Eq)]
@@ -323,10 +307,10 @@ impl NetworkingService for Libp2pService {
             SwarmBuilder::new(transport, behaviour, peer_id).build()
         };
 
-        let (cmd_tx, cmd_rx) = mpsc::channel(CHANNEL_SIZE);
-        let (gossip_tx, gossip_rx) = mpsc::channel(CHANNEL_SIZE);
-        let (conn_tx, conn_rx) = mpsc::channel(CHANNEL_SIZE);
-        let (sync_tx, sync_rx) = mpsc::channel(CHANNEL_SIZE);
+        let (cmd_tx, cmd_rx) = mpsc::channel(constants::CHANNEL_SIZE);
+        let (gossip_tx, gossip_rx) = mpsc::channel(constants::CHANNEL_SIZE);
+        let (conn_tx, conn_rx) = mpsc::channel(constants::CHANNEL_SIZE);
+        let (sync_tx, sync_rx) = mpsc::channel(constants::CHANNEL_SIZE);
 
         // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
         // pass that information to the backend so it knows to relay the mDNS events to P2P
@@ -481,10 +465,10 @@ where
     async fn publish(&mut self, message: message::Message) -> crate::Result<()> {
         let encoded = message.encode();
         ensure!(
-            encoded.len() <= GOSSIPSUB_MAX_TRANSMIT_SIZE,
+            encoded.len() <= constants::GOSSIPSUB_MAX_TRANSMIT_SIZE,
             P2pError::PublishError(PublishError::MessageTooLarge(
                 Some(encoded.len()),
-                Some(GOSSIPSUB_MAX_TRANSMIT_SIZE),
+                Some(constants::GOSSIPSUB_MAX_TRANSMIT_SIZE),
             ))
         );
 
