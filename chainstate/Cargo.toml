@@ -19,7 +19,7 @@ utils = {path = '../utils'}
 
 hex = "0.4.3"
 itertools = "0.10.3"
-jsonrpsee = {version = "0.13.1", features = ["macros"]}
+jsonrpsee = {version = "0.14.0", features = ["macros"]}
 num = "0.4.0"
 proptest = "1.0.0"
 replace_with = "0.1.7"

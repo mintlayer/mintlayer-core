@@ -62,6 +62,9 @@ pub struct ChainConfig {
     coin_decimals: u8,
     // TODO: use an isolated type for emission schedule that contains everything related
     emission_schedule: Vec<(BlockHeight, Amount)>,
+    max_block_header_size: usize,
+    max_block_size_with_standard_txs: usize,
+    max_block_size_with_smart_contracts: usize,
 }
 
 impl ChainConfig {
@@ -135,6 +138,18 @@ impl ChainConfig {
             .1
     }
 
+    pub fn max_block_header_size(&self) -> usize {
+        self.max_block_header_size
+    }
+
+    pub fn max_block_size_from_txs(&self) -> usize {
+        self.max_block_size_with_standard_txs
+    }
+
+    pub fn max_block_size_from_smart_contracts(&self) -> usize {
+        self.max_block_size_with_smart_contracts
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
@@ -154,7 +169,9 @@ const REGTEST_ADDRESS_PREFIX: &str = "rmt";
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
-pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
+const MAX_BLOCK_HEADER_SIZE: usize = 1024;
+const MAX_BLOCK_TXS_SIZE: usize = 524_288;
+const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
@@ -344,6 +361,9 @@ pub fn create_mainnet() -> ChainConfig {
         target_block_spacing,
         coin_decimals,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -412,6 +432,9 @@ pub fn create_regtest() -> ChainConfig {
         max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         coin_decimals: MAINNET_COIN_DECIMALS,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -464,6 +487,9 @@ pub fn create_unit_test_config() -> ChainConfig {
         max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         coin_decimals,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -545,6 +571,9 @@ impl TestChainConfig {
             max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             coin_decimals,
             emission_schedule,
+            max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+            max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+            max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
         }
     }
 }

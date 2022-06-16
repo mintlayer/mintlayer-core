@@ -42,7 +42,7 @@ fn test_process_genesis_block_wrong_block_source() {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new_no_genesis(config.clone(), storage, None, None).unwrap();
+            Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
@@ -57,7 +57,8 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -89,7 +90,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         assert_eq!(
             chainstate.get_best_block_id().unwrap().unwrap(),
@@ -143,7 +144,8 @@ fn test_empty_chainstate() {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
+        let chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
         assert!(chainstate.get_best_block_id().unwrap().is_none());
         assert!(chainstate
             .blockchain_storage
@@ -153,7 +155,7 @@ fn test_empty_chainstate() {
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new(config, storage, None, None).unwrap();
+        let chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
         chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
@@ -234,7 +236,8 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -704,11 +707,12 @@ fn test_blocks_from_the_future() {
             config.genesis_block().block_time() as u64,
         ));
         let chainstate_current_time = Arc::clone(&current_time);
-        let time_getter =
-            Arc::new(move || Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst)));
+        let time_getter = TimeGetter::new(Arc::new(move || {
+            Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
+        }));
 
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None, Some(time_getter)).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, time_getter).unwrap();
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
@@ -786,5 +790,5 @@ fn test_blocks_from_the_future() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _chainstate = make_chainstate(config, storage, None, None).unwrap();
+    let _chainstate = make_chainstate(config, storage, None, Default::default()).unwrap();
 }

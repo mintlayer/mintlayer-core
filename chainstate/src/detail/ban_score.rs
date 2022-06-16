@@ -1,8 +1,8 @@
 use crate::BlockError;
 
 use super::{
-    pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError, CheckBlockError,
-    CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
+    pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError, BlockSizeError,
+    CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -91,13 +91,12 @@ impl BanScore for CheckBlockError {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
             CheckBlockError::WitnessMerkleRootMismatch => 100,
-            CheckBlockError::BlockConsistencyError(_) => 100,
             CheckBlockError::InvalidBlockNoPrevBlock => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
             CheckBlockError::BlockTimeOrderInvalid => 100,
             CheckBlockError::BlockFromTheFuture => 100,
-            CheckBlockError::BlockTooLarge => 100,
+            CheckBlockError::BlockSizeError(err) => err.ban_score(),
             CheckBlockError::CheckTransactionFailed(err) => err.ban_score(),
             CheckBlockError::ConsensusVerificationFailed(err) => err.ban_score(),
         }
@@ -138,6 +137,16 @@ impl BanScore for ConsensusPoWError {
             ConsensusPoWError::NoPowDataInPreviousBlock => 100,
             ConsensusPoWError::DecodingBitsFailed(_) => 100,
             ConsensusPoWError::PreviousBitsDecodingFailed(_) => 0,
+        }
+    }
+}
+
+impl BanScore for BlockSizeError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            BlockSizeError::Header(_, _) => 100,
+            BlockSizeError::SizeOfTxs(_, _) => 100,
+            BlockSizeError::SizeOfSmartContracts(_, _) => 100,
         }
     }
 }

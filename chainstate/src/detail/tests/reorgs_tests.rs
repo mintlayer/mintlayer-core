@@ -27,7 +27,8 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let result = chainstate.process_block(

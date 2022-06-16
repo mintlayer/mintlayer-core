@@ -24,7 +24,7 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
 
 #[cfg(test)]
 mod test {
-    use crate::{BlockSource, Chainstate};
+    use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate};
 
     use super::*;
     use blockchain_storage::Store;
@@ -61,7 +61,8 @@ mod test {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let storage = Store::new_empty().unwrap();
-            let mut chainstate = Chainstate::new(chain_config, storage, None, None).unwrap();
+            let mut chainstate =
+                Chainstate::new(chain_config, storage, None, Default::default()).unwrap();
 
             let block_count = 500;
 
@@ -119,13 +120,12 @@ mod test {
             ));
 
             let chainstate_current_time = Arc::clone(&current_time);
-            let time_getter = Arc::new(move || {
+            let time_getter = TimeGetter::new(Arc::new(move || {
                 Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
-            });
+            }));
 
             let storage = Store::new_empty().unwrap();
-            let mut chainstate =
-                Chainstate::new(chain_config, storage, None, Some(time_getter)).unwrap();
+            let mut chainstate = Chainstate::new(chain_config, storage, None, time_getter).unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
             let block1_time = current_time.load(Ordering::SeqCst) as u32 + 1;

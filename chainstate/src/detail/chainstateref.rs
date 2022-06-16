@@ -1,20 +1,17 @@
 use std::collections::BTreeSet;
 
-use super::median_time::calculate_median_time_past;
+use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use common::{
     chain::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
         },
-        calculate_tx_index_from_block,
-        config::MAX_BLOCK_WEIGHT,
-        ChainConfig, OutPointSourceId, Transaction,
+        calculate_tx_index_from_block, ChainConfig, OutPointSourceId, Transaction,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
-use serialization::Encode;
 use utils::ensure;
 
 use crate::{BlockError, BlockSource};
@@ -23,7 +20,8 @@ use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::OrphanBlocksPool,
     spend_cache::{BlockTransactableRef, CachedInputs},
-    CheckBlockError, CheckBlockTransactionsError, OrphanCheckError, PropertyQueryError, TimeGetter,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
+    PropertyQueryError,
 };
 
 pub(crate) struct ChainstateRef<'a, S> {
@@ -31,7 +29,7 @@ pub(crate) struct ChainstateRef<'a, S> {
     db_tx: S,
     // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
     orphan_blocks: Option<&'a mut OrphanBlocksPool>,
-    time_getter: &'a TimeGetter,
+    time_getter: &'a TimeGetterFn,
 }
 
 impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
@@ -61,7 +59,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         chain_config: &'a ChainConfig,
         db_tx: S,
         orphan_blocks: Option<&'a mut OrphanBlocksPool>,
-        time_getter: &'a TimeGetter,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,
@@ -74,7 +72,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     pub fn new_ro(
         chain_config: &'a ChainConfig,
         db_tx: S,
-        time_getter: &'a TimeGetter,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,
@@ -254,8 +252,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block.check_version()?;
-
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.transactions()).map_or(
@@ -276,7 +272,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
             |witness_merkle| {
                 ensure!(
                     witness_merkle_root == witness_merkle,
-                    CheckBlockError::WitnessMerkleRootMismatch
+                    CheckBlockError::WitnessMerkleRootMismatch,
                 );
                 Ok(())
             },
@@ -287,21 +283,22 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                 let median_time_past = calculate_median_time_past(self, prev_block_id);
                 ensure!(
                     block.block_time() >= median_time_past,
-                    CheckBlockError::BlockTimeOrderInvalid
+                    CheckBlockError::BlockTimeOrderInvalid,
                 );
 
-                let max_future_offset = self.chain_config.max_future_block_time_offset().as_secs();
+                let max_future_offset =
+                    self.chain_config.max_future_block_time_offset().as_secs() as u64;
                 let current_time = self.current_time().as_secs();
                 ensure!(
                     u64::from(block.block_time()) <= current_time + max_future_offset,
-                    CheckBlockError::BlockFromTheFuture
+                    CheckBlockError::BlockFromTheFuture,
                 );
             }
             None => {
                 // This is only for genesis, AND should never come from a peer
                 ensure!(
                     block.is_genesis(self.chain_config),
-                    CheckBlockError::InvalidBlockNoPrevBlock
+                    CheckBlockError::InvalidBlockNoPrevBlock,
                 );
             }
         }
@@ -309,10 +306,38 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         self.check_transactions(block)
             .map_err(CheckBlockError::CheckTransactionFailed)?;
 
-        // TODO: Size limits
-        if block.encoded_size() > MAX_BLOCK_WEIGHT {
-            return Err(CheckBlockError::BlockTooLarge);
-        }
+        self.check_block_size(block).map_err(CheckBlockError::BlockSizeError)?;
+
+        Ok(())
+    }
+
+    fn check_block_size(&self, block: &Block) -> Result<(), BlockSizeError> {
+        let block_size = block.block_size();
+
+        ensure!(
+            block_size.size_from_header() <= self.chain_config.max_block_header_size(),
+            BlockSizeError::Header(
+                block_size.size_from_header(),
+                self.chain_config.max_block_header_size()
+            )
+        );
+
+        ensure!(
+            block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
+            BlockSizeError::SizeOfTxs(
+                block_size.size_from_txs(),
+                self.chain_config.max_block_size_from_txs()
+            )
+        );
+
+        ensure!(
+            block_size.size_from_smart_contracts()
+                <= self.chain_config.max_block_size_from_smart_contracts(),
+            BlockSizeError::SizeOfSmartContracts(
+                block_size.size_from_smart_contracts(),
+                self.chain_config.max_block_size_from_smart_contracts()
+            )
+        );
 
         Ok(())
     }

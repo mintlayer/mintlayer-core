@@ -4,17 +4,15 @@ use crate::chain::transaction::Transaction;
 use crate::chain::ChainConfig;
 use crate::primitives::id;
 use crate::primitives::id::Idable;
-use crate::primitives::{Id, H256};
+use crate::primitives::{Id, VersionTag, H256};
 
 use serialization::{Decode, Encode};
 
 use super::consensus_data::BlockRewardTransactable;
-use super::BlockVersion;
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
-    #[codec(compact)]
-    pub(super) block_version: u32,
+    pub(super) version: VersionTag<1>,
     pub(super) prev_block_hash: Option<Id<Block>>,
     pub(super) tx_merkle_root: Option<H256>,
     pub(super) witness_merkle_root: Option<H256>,
@@ -49,16 +47,6 @@ impl BlockHeader {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub struct BlockV1 {
-    pub(super) header: BlockHeader,
-    pub(super) transactions: Vec<Transaction>,
-}
-
-impl BlockVersion for BlockV1 {
-    const BLOCK_VERSION: u32 = 1;
-}
-
 impl Idable for BlockHeader {
     type Tag = Block;
     fn get_id(&self) -> Id<Block> {
@@ -66,20 +54,20 @@ impl Idable for BlockHeader {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
+pub struct BlockV1 {
+    pub(super) header: BlockHeader,
+    pub(super) transactions: Vec<Transaction>,
+}
+
+impl Idable for BlockV1 {
+    type Tag = Block;
+    fn get_id(&self) -> Id<Block> {
+        Id::new(&id::hash_encoded(self.header()))
+    }
+}
+
 impl BlockV1 {
-    pub fn check_version(&self) -> Result<(), super::BlockConsistencyError> {
-        let a = self.header.block_version;
-        let b = <Self as BlockVersion>::static_version(self);
-        if a != b {
-            return Err(super::BlockConsistencyError::VersionMismatch(a, b));
-        }
-        Ok(())
-    }
-
-    pub fn version(&self) -> u32 {
-        self.header.block_version
-    }
-
     pub fn tx_merkle_root(&self) -> Option<H256> {
         self.header.tx_merkle_root
     }

@@ -777,7 +777,7 @@ mod tests {
         let mut man = subsystem::Manager::new("TODO");
         let handle = man.add_subsystem(
             "consensus",
-            make_chainstate(cfg, storage, None, None).unwrap(),
+            make_chainstate(cfg, storage, None, Default::default()).unwrap(),
         );
         tokio::spawn(async move { man.main().await });
 

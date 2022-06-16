@@ -26,11 +26,11 @@ subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
 
 [dependencies.jsonrpsee]
-version = "0.13.1"
+version = "0.14.0"
 features = ["macros"]
 
 [dependencies.libp2p]
-version = "0.44.0"
+version = "0.45.1"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io"]
 
