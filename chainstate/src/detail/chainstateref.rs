@@ -272,7 +272,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
             |witness_merkle| {
                 ensure!(
                     witness_merkle_root == witness_merkle,
-                    CheckBlockError::WitnessMerkleRootMismatch
+                    CheckBlockError::WitnessMerkleRootMismatch,
                 );
                 Ok(())
             },
@@ -283,7 +283,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                 let median_time_past = calculate_median_time_past(self, prev_block_id);
                 ensure!(
                     block.block_time() >= median_time_past,
-                    CheckBlockError::BlockTimeOrderInvalid
+                    CheckBlockError::BlockTimeOrderInvalid,
                 );
 
                 let max_future_offset =
@@ -291,14 +291,14 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
                 let current_time = self.current_time();
                 ensure!(
                     i64::from(block.block_time()) <= current_time + max_future_offset,
-                    CheckBlockError::BlockFromTheFuture
+                    CheckBlockError::BlockFromTheFuture,
                 );
             }
             None => {
                 // This is only for genesis, AND should never come from a peer
                 ensure!(
                     block.is_genesis(self.chain_config),
-                    CheckBlockError::InvalidBlockNoPrevBlock
+                    CheckBlockError::InvalidBlockNoPrevBlock,
                 );
             }
         }
