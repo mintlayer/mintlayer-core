@@ -41,7 +41,7 @@ impl BlockIndex {
     }
 
     pub fn prev_block_id(&self) -> &Option<Id<Block>> {
-        &self.block_header.prev_block_hash
+        &self.block_header.prev_block_id()
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
@@ -49,7 +49,7 @@ impl BlockIndex {
     }
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
-        self.block_header.timestamp
+        self.block_header.timestamp()
     }
 
     pub fn chain_timestamps_max(&self) -> BlockTimestamp {

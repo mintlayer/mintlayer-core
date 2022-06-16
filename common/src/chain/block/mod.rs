@@ -101,7 +101,7 @@ impl Block {
             version: VersionTag::default(),
             timestamp,
             consensus_data,
-            prev_block_hash,
+            prev_block_id: prev_block_hash,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -127,7 +127,7 @@ impl Block {
             version: VersionTag::default(),
             timestamp,
             consensus_data: ConsensusData::None,
-            prev_block_hash,
+            prev_block_id: prev_block_hash,
             tx_merkle_root,
             witness_merkle_root,
         };
@@ -237,7 +237,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_hash: None,
+            prev_block_id: None,
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
@@ -260,7 +260,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_hash: None,
+            prev_block_id: None,
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
@@ -302,7 +302,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_hash: None,
+            prev_block_id: None,
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
