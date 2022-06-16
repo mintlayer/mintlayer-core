@@ -41,7 +41,7 @@ impl BlockIndex {
     }
 
     pub fn prev_block_id(&self) -> &Option<Id<Block>> {
-        &self.block_header.prev_block_id()
+        self.block_header.prev_block_id()
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
