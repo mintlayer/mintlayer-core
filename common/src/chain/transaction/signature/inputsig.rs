@@ -193,8 +193,6 @@ mod test {
         let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
 
         for sighash_type in sig_hash_types() {
-            println!("{sighash_type:X?}");
-
             assert_eq!(
                 Err(TransactionSigError::PublicKeyToAddressMismatch),
                 StandardInputSignature::produce_signature_for_input(
@@ -203,7 +201,8 @@ mod test {
                     outpoint_destination.clone(),
                     &tx,
                     INPUT_NUM,
-                )
+                ),
+                "{sighash_type:X?}"
             );
         }
     }
@@ -216,8 +215,6 @@ mod test {
         let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
 
         for sighash_type in sig_hash_types() {
-            println!("{sighash_type:X?}");
-
             assert_eq!(
                 Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
                 StandardInputSignature::produce_signature_for_input(
@@ -226,7 +223,8 @@ mod test {
                     outpoint_destination.clone(),
                     &tx,
                     INPUT_NUM,
-                )
+                ),
+                "{sighash_type:X?}"
             );
         }
     }
@@ -242,8 +240,6 @@ mod test {
         for (sighash_type, outpoint_destination) in
             sig_hash_types().cartesian_product(outpoints.into_iter())
         {
-            println!("{sighash_type:X?} {outpoint_destination:?}");
-
             let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
@@ -255,7 +251,9 @@ mod test {
             .unwrap();
 
             let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-            witness.verify_signature(&outpoint_destination, &sighash).unwrap();
+            witness
+                .verify_signature(&outpoint_destination, &sighash)
+                .expect(&format!("{sighash_type:X?} {outpoint_destination:?}"));
         }
     }
 
