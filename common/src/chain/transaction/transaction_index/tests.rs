@@ -273,8 +273,8 @@ fn test_indices_calculations() {
     let serialized_header = block.header().encode();
     let serialized_transactions = block.transactions().encode();
     assert_eq!(
-        // +1 for the enum arm byte
-        1 + serialized_header.len() + serialized_transactions.len(),
+        // no need to add enum arm byte, the version is already a part of the header data
+        serialized_header.len() + serialized_transactions.len(),
         serialized_block.len(),
     );
     // TODO: calculate block reward position

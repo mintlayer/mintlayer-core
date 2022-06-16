@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use common::{
     chain::{
@@ -8,13 +9,12 @@ use common::{
         },
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId, Transaction,
     },
-    primitives::{time, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
-use itertools::Itertools;
 use logging::log;
 use utils::ensure;
 
-use crate::{detail::block_index_history_iter::BlockIndexHistoryIterator, BlockError, BlockSource};
+use crate::{BlockError, BlockSource};
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
@@ -28,6 +28,7 @@ pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
     db_tx: S,
     orphan_blocks: O,
+    time_getter: &'a TimeGetterFn,
 }
 
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for ChainstateRef<'a, S, O> {
@@ -57,11 +58,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         chain_config: &'a ChainConfig,
         db_tx: S,
         orphan_blocks: O,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
             db_tx,
             orphan_blocks,
+            time_getter,
         }
     }
 
@@ -69,26 +72,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         chain_config: &'a ChainConfig,
         db_tx: S,
         orphan_blocks: O,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
             db_tx,
             orphan_blocks,
+            time_getter,
         }
     }
 
-    pub fn calculate_median_time_past(&self, starting_block: &Id<Block>) -> u32 {
-        // TODO: add tests for this function
-        const MEDIAN_TIME_SPAN: usize = 11;
-
-        let iter = BlockIndexHistoryIterator::new(starting_block.clone(), self);
-        let time_values = iter
-            .take(MEDIAN_TIME_SPAN)
-            .map(|bi| bi.get_block_time())
-            .sorted()
-            .collect::<Vec<_>>();
-
-        time_values[time_values.len() / 2]
+    pub fn current_time(&self) -> i64 {
+        (self.time_getter)()
     }
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
@@ -257,18 +252,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block.check_version()?;
-
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.transactions()).map_or(
             Err(CheckBlockError::MerkleRootMismatch),
             |merkle_tree| {
-                if merkle_tree_root != merkle_tree {
-                    Err(CheckBlockError::MerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
+                ensure!(
+                    merkle_tree_root == merkle_tree,
+                    CheckBlockError::MerkleRootMismatch
+                );
+                Ok(())
             },
         )?;
 
@@ -277,34 +270,36 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         calculate_witness_merkle_root(block.transactions()).map_or(
             Err(CheckBlockError::WitnessMerkleRootMismatch),
             |witness_merkle| {
-                if witness_merkle_root != witness_merkle {
-                    Err(CheckBlockError::WitnessMerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
+                ensure!(
+                    witness_merkle_root == witness_merkle,
+                    CheckBlockError::WitnessMerkleRootMismatch,
+                );
+                Ok(())
             },
         )?;
 
         match &block.prev_block_id() {
             Some(prev_block_id) => {
-                let median_time_past = self.calculate_median_time_past(prev_block_id);
-                if block.block_time() < median_time_past {
-                    // TODO: test submitting a block that fails this
-                    return Err(CheckBlockError::BlockTimeOrderInvalid);
-                }
+                let median_time_past = calculate_median_time_past(self, prev_block_id);
+                ensure!(
+                    block.block_time() >= median_time_past,
+                    CheckBlockError::BlockTimeOrderInvalid,
+                );
 
-                let max_future_offset = self.chain_config.max_future_block_time_offset();
-                if i64::from(block.block_time()) > time::get() + max_future_offset.as_secs() as i64
-                {
-                    // TODO: test submitting a block that fails this
-                    return Err(CheckBlockError::BlockFromTheFuture);
-                }
+                let max_future_offset =
+                    self.chain_config.max_future_block_time_offset().as_secs() as i64;
+                let current_time = self.current_time();
+                ensure!(
+                    i64::from(block.block_time()) <= current_time + max_future_offset,
+                    CheckBlockError::BlockFromTheFuture,
+                );
             }
             None => {
                 // This is only for genesis, AND should never come from a peer
-                if !block.is_genesis(self.chain_config) {
-                    return Err(CheckBlockError::InvalidBlockNoPrevBlock);
-                }
+                ensure!(
+                    block.is_genesis(self.chain_config),
+                    CheckBlockError::InvalidBlockNoPrevBlock,
+                );
             }
         }
 

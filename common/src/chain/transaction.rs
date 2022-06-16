@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use crate::primitives::{Id, Idable};
-use serialization::{Decode, Encode};
+use serialization::{DirectDecode, DirectEncode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 
@@ -40,16 +40,9 @@ pub enum TransactionSize {
     SmartContractTransaction(usize),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
 pub enum Transaction {
-    #[codec(index = 1)]
     V1(TransactionV1),
-}
-
-impl From<Id<TransactionV1>> for Id<Transaction> {
-    fn from(id_tx_v1: Id<TransactionV1>) -> Id<Transaction> {
-        Id::new(&id_tx_v1.get())
-    }
 }
 
 impl Idable for Transaction {
@@ -83,14 +76,9 @@ impl Transaction {
     }
 
     pub fn version_byte(&self) -> u8 {
-        let result = match &self {
-            Transaction::V1(_) => 1,
-        };
-        debug_assert_eq!(
-            result,
-            *self.encode().get(0).expect("Unexpected version byte")
-        );
-        result
+        match &self {
+            Transaction::V1(tx) => serialization::tagged::tag_of(&tx),
+        }
     }
 
     pub fn is_replaceable(&self) -> bool {
@@ -157,6 +145,7 @@ impl Transaction {
 mod test {
     use super::*;
     use crypto::random::RngCore;
+    use serialization::Decode;
 
     #[test]
     #[allow(clippy::eq_op)]
