@@ -579,7 +579,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             self.connect_transactions(
                 &block,
                 &new_tip_block_index.block_height(),
-                self.chain_config.get_blockreward_maturity(),
+                self.chain_config.blockreward_maturity(),
             )?;
         }
 

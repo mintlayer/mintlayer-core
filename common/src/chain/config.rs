@@ -156,7 +156,7 @@ impl ChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
 
-    pub const fn get_blockreward_maturity(&self) -> &BlockDistance {
+    pub const fn blockreward_maturity(&self) -> &BlockDistance {
         &self.blockreward_maturity
     }
 }
