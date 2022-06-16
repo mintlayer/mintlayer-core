@@ -4,16 +4,6 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-serialization-derive = { path = 'derive' }
-
-arraytools = "0.1.5"
-hex-literal = "0.3.4"
-parity-scale-codec = {version = "3.1.2", features = ["derive", "chain-error"]}
-static_assertions = "1.1"
-
-[dev-dependencies]
-proptest = "1.0"
-rand = "0.8.5"
+serialization-core = { path = 'core' }
+serialization-tagged = { path = 'tagged' }

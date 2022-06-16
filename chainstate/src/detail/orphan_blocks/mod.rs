@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): L. Kuklinek
+// Author(s): S. Afach
 
-//! Blockchain data encoding and decoding tools
+mod orphans_refs;
+pub use orphans_refs::*;
 
-// Re-export all the constituent parts
-pub use serialization_core::*;
-pub use serialization_tagged as tagged;
-pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
+mod pool;
+pub use pool::*;
