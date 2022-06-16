@@ -99,7 +99,7 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-        custom_time_getter: TimeGetter,
+        time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
@@ -107,7 +107,7 @@ impl Chainstate {
             chain_config,
             blockchain_storage,
             custom_orphan_error_hook,
-            custom_time_getter,
+            time_getter,
         )?;
 
         let best_block_id = cons.get_best_block_id().map_err(|e| {
@@ -133,7 +133,7 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-        custom_time_getter: TimeGetter,
+        time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
@@ -141,7 +141,7 @@ impl Chainstate {
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
-            time_getter: custom_time_getter,
+            time_getter,
         };
         Ok(cons)
     }
