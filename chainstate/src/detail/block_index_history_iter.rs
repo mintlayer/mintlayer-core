@@ -64,11 +64,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mainnet_creation() {
+    fn history_iteration() {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
             let storage = Store::new_empty().unwrap();
-            let mut chainstate = Chainstate::new(chain_config.clone(), storage, None).unwrap();
+            let mut chainstate =
+                Chainstate::new(chain_config.clone(), storage, None, Default::default()).unwrap();
 
             // put three blocks in a chain after genesis
             let block1 = Block::new(

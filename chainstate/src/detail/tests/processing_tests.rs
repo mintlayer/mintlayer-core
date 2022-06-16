@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use crate::detail::median_time::calculate_median_time_past;
 use crate::detail::pow::error::ConsensusPoWError;
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
@@ -31,6 +32,7 @@ use common::chain::UpgradeVersion;
 use common::primitives::Compact;
 use common::Uint256;
 use crypto::key::{KeyKind, PrivateKey};
+use std::sync::atomic::Ordering;
 
 #[test]
 fn test_process_genesis_block_wrong_block_source() {
@@ -38,7 +40,8 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
@@ -53,7 +56,8 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -85,7 +89,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         assert_eq!(
             chainstate.get_best_block_id().unwrap().unwrap(),
@@ -139,7 +143,8 @@ fn test_empty_chainstate() {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
         assert!(chainstate.get_best_block_id().unwrap().is_none());
         assert!(chainstate
             .blockchain_storage
@@ -149,7 +154,7 @@ fn test_empty_chainstate() {
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new(config, storage, None).unwrap();
+        let chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
         chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
@@ -230,7 +235,8 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -690,8 +696,98 @@ fn test_pow() {
 }
 
 #[test]
+fn test_blocks_from_the_future() {
+    common::concurrency::model(|| {
+        // In this test, processing a few correct blocks in a single chain
+        let config = Arc::new(create_unit_test_config());
+
+        // current time is genesis time
+        let current_time = Arc::new(std::sync::atomic::AtomicI64::new(
+            config.genesis_block().block_time() as i64,
+        ));
+        let chainstate_current_time = Arc::clone(&current_time);
+        let time_getter = TimeGetter::new(Arc::new(move || {
+            chainstate_current_time.load(Ordering::SeqCst)
+        }));
+
+        let storage = Store::new_empty().unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, time_getter).unwrap();
+
+        {
+            // ensure no blocks are in chain, so that median time can be the genesis time
+            let current_height: u64 =
+                chainstate.get_best_block_index().unwrap().unwrap().get_block_height().into();
+            assert_eq!(current_height, 0);
+        }
+
+        {
+            // constrain the test to protect this test becoming legacy by changing the definition of median time for genesis
+            let chainstate_ref = chainstate.make_db_tx_ro();
+            assert_eq!(
+                calculate_median_time_past(
+                    &chainstate_ref,
+                    &chainstate.chain_config.genesis_block_id()
+                ),
+                chainstate.chain_config.genesis_block().block_time()
+            );
+        }
+
+        {
+            // submit a block on the threshold of being rejected for being from the future
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+
+            let good_block = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                current_time.load(Ordering::SeqCst) as u32 + max_future_offset,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            chainstate.process_block(good_block, BlockSource::Local).unwrap().unwrap();
+        }
+
+        {
+            // submit a block a second after the allowed threshold in the future
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+
+            let bad_block_in_future = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                current_time.load(Ordering::SeqCst) as u32 + max_future_offset + 1,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            assert_eq!(
+                chainstate.process_block(bad_block_in_future, BlockSource::Local).unwrap_err(),
+                BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
+            );
+        }
+
+        {
+            // submit a block one second before genesis in time
+            let bad_block_from_past = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                current_time.load(Ordering::SeqCst) as u32 - 1,
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            assert_eq!(
+                chainstate.process_block(bad_block_from_past, BlockSource::Local).unwrap_err(),
+                BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+            );
+        }
+    });
+}
+
+#[test]
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _chainstate = make_chainstate(config, storage, None).unwrap();
+    let _chainstate = make_chainstate(config, storage, None, Default::default()).unwrap();
 }

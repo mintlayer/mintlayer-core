@@ -113,7 +113,7 @@ fn test_events_a_bunch_of_events() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         let mut map_heights: BTreeMap<Id<Block>, BlockHeight> = BTreeMap::new();
         let mut blocks = Vec::new();
@@ -173,7 +173,7 @@ fn test_events_orphan_block() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         // Let's create an orphan block
         let block = produce_test_block(chainstate.chain_config.genesis_block(), true);
