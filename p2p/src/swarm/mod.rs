@@ -30,7 +30,7 @@ use common::{chain::ChainConfig, primitives::version};
 use futures::FutureExt;
 use logging::log;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fmt::Debug,
     str::FromStr,
     sync::Arc,
@@ -44,29 +44,7 @@ mod peerdb;
 const MAX_ACTIVE_CONNECTIONS: usize = 32;
 const PEER_MGR_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
 
-// TODO: store active address
-// TODO: store other discovered addresses
-#[derive(Debug)]
-struct PeerContext<T>
-where
-    T: NetworkingService,
-{
-    _info: net::types::PeerInfo<T>,
-}
 
-#[allow(unused)]
-enum PeerAddrInfo<T>
-where
-    T: NetworkingService,
-{
-    Raw {
-        /// Hashset of IPv4 addresses
-        ip4: HashSet<Arc<T::Address>>,
-
-        /// Hashset of IPv6 addresses
-        ip6: HashSet<Arc<T::Address>>,
-    },
-}
 
 pub struct PeerManager<T>
 where
@@ -79,10 +57,7 @@ where
     handle: T::ConnectivityHandle,
 
     /// Hashmap for peer information
-    peers: HashMap<T::PeerId, PeerContext<T>>,
-
-    /// Hashmap of discovered peers we don't have an active connection with
-    discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
+    peers: HashMap<T::PeerId, peerdb::PeerContext<T>>,
 
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
@@ -118,39 +93,17 @@ where
             peerdb: peerdb::PeerDb::new(),
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             pending: HashMap::new(),
-            discovered: HashMap::new(),
         }
     }
 
-    /// Update the list of peers we know about or update a known peers list of addresses
-    fn peer_discovered(&mut self, _peers: &[net::types::AddrInfo<T>]) {
-        // self.peerdb.discover_peers(peers);
-        // log::info!("discovered {} new peers", peers.len());
-
-        // for info in peers.iter() {
-        //     // TODO: update peer stats
-        //     if self.peers.contains_key(&info.id) {
-        //         continue;
-        //     }
-
-        //     match self.discovered.entry(info.id).or_insert_with(|| PeerAddrInfo::Raw {
-        //         ip4: HashSet::new(),
-        //         ip6: HashSet::new(),
-        //     }) {
-        //         PeerAddrInfo::Raw { ip4, ip6 } => {
-        //             log::trace!("discovered ipv4 {:#?}, ipv6 {:#?}", ip4, ip6);
-
-        //             ip4.extend(info.ip4.clone());
-        //             ip6.extend(info.ip6.clone());
-        //         }
-        //     }
-        // }
-
-        // Ok(())
+    /// Update the list of known peers or known peer's list of addresses
+    fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) {
+        self.peerdb.discover_peers(peers)
     }
 
+    /// Update the list of known peers or known peer's list of addresses
     fn peer_expired(&mut self, peers: &[net::types::AddrInfo<T>]) {
-        self.peerdb._expire_peers(peers)
+        self.peerdb.expire_peers(peers)
     }
 
     /// Validate address
@@ -246,7 +199,7 @@ where
         );
 
         let peer_id = info.peer_id;
-        self.peers.insert(info.peer_id, PeerContext { _info: info });
+        self.peers.insert(info.peer_id, peerdb::PeerContext { _info: info });
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
             .await
@@ -342,43 +295,43 @@ where
         log::debug!("try to establish more outbound connections");
 
         // we don't know of any peers
-        if self.discovered.is_empty() {
-            log::error!(
-                "# of connections below threshold ({} < {}) but no peers",
-                self.peers.len(),
-                MAX_ACTIVE_CONNECTIONS,
-            );
-            return Err(P2pError::PeerError(PeerError::NoPeers));
-        }
+        // if self.discovered.is_empty() {
+        //     log::error!(
+        //         "# of connections below threshold ({} < {}) but no peers",
+        //         self.peers.len(),
+        //         MAX_ACTIVE_CONNECTIONS,
+        //     );
+        //     return Err(P2pError::PeerError(PeerError::NoPeers));
+        // }
 
-        let npeers = std::cmp::min(
-            self.discovered.len(),
-            MAX_ACTIVE_CONNECTIONS - self.peers.len(),
-        );
+        // let npeers = std::cmp::min(
+        //     self.discovered.len(),
+        //     MAX_ACTIVE_CONNECTIONS - self.peers.len(),
+        // );
 
-        // TODO: improve peer selection
-        let mut iter = self.discovered.iter();
+        // // TODO: improve peer selection
+        // let mut iter = self.discovered.iter();
 
-        #[allow(clippy::needless_collect)]
-        let _peers: Vec<(T::PeerId, Arc<T::Address>)> = (0..npeers)
-            .map(|i| {
-                let peer_info = iter.nth(i).expect("Peer to exist");
+        // #[allow(clippy::needless_collect)]
+        // let _peers: Vec<(T::PeerId, Arc<T::Address>)> = (0..npeers)
+        //     .map(|i| {
+        //         let peer_info = iter.nth(i).expect("Peer to exist");
 
-                let (ip4, ip6) = match peer_info.1 {
-                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
-                };
-                assert!(!ip4.is_empty() || !ip6.is_empty());
+        //         let (ip4, ip6) = match peer_info.1 {
+        //             PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
+        //         };
+        //         assert!(!ip4.is_empty() || !ip6.is_empty());
 
-                // TODO: let user specify their preference?
-                let addr = if ip6.is_empty() {
-                    Arc::clone(ip4.iter().next().expect("ip4 empty"))
-                } else {
-                    Arc::clone(ip6.iter().next().expect("ip6 empty"))
-                };
+        //         // TODO: let user specify their preference?
+        //         let addr = if ip6.is_empty() {
+        //             Arc::clone(ip4.iter().next().expect("ip4 empty"))
+        //         } else {
+        //             Arc::clone(ip6.iter().next().expect("ip6 empty"))
+        //         };
 
-                (*peer_info.0, addr)
-            })
-            .collect::<_>();
+        //         (*peer_info.0, addr)
+        //     })
+        //     .collect::<_>();
 
         // for (id, addr) in peers {
         //     log::trace!("try to connect to peer {:?}, address {:?}", id, addr);
@@ -543,10 +496,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        error::{DialError, P2pError},
-        event,
-    };
+    use crate::error::{DialError, P2pError};
     use common::chain::config;
     use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
     use net::{libp2p::Libp2pService, mock::MockService, ConnectivityService};
@@ -616,111 +566,6 @@ mod tests {
                 ))
             })
         ));
-    }
-
-    #[tokio::test]
-    async fn test_peer_discovered_libp2p() {
-        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-        let config = Arc::new(config::create_mainnet());
-        let mut swarm = make_swarm_manager::<Libp2pService>(addr, config).await;
-
-        let id_1: libp2p::PeerId =
-            "12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ".parse().unwrap();
-        let id_2: libp2p::PeerId =
-            "12D3KooWE3kBRAnn6jxZMdK1JMWx1iHtR1NKzXSRv5HLTmfD9u9c".parse().unwrap();
-        let id_3: libp2p::PeerId =
-            "12D3KooWGK4RzvNeioS9aXdzmYXU3mgDrRPjQd8SVyXCkHNxLbWN".parse().unwrap();
-
-        // check that peer with `id` has the correct ipv4 and ipv6 addresses
-        let check_peer =
-            |discovered: &HashMap<
-                <Libp2pService as NetworkingService>::PeerId,
-                PeerAddrInfo<Libp2pService>,
-            >,
-             id: libp2p::PeerId,
-             ip4: Vec<Arc<<Libp2pService as NetworkingService>::Address>>,
-             ip6: Vec<Arc<<Libp2pService as NetworkingService>::Address>>| {
-                let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
-                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
-                };
-
-                assert_eq!(ip4.len(), p_ip4.len());
-                assert_eq!(ip6.len(), p_ip6.len());
-
-                for ip in ip4.iter() {
-                    assert!(p_ip4.contains(ip));
-                }
-
-                for ip in ip6.iter() {
-                    assert!(p_ip6.contains(ip));
-                }
-            };
-
-        // first add two new peers, both with ipv4 and ipv6 address
-        swarm.peer_discovered(&[
-            net::types::AddrInfo {
-                id: id_1,
-                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
-                ip6: vec![Arc::new("/ip6/::1/tcp/9091".parse().unwrap())],
-            },
-            net::types::AddrInfo {
-                id: id_2,
-                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9092".parse().unwrap())],
-                ip6: vec![Arc::new("/ip6/::1/tcp/9093".parse().unwrap())],
-            },
-        ]);
-
-        assert_eq!(swarm.peers.len(), 0);
-        assert_eq!(swarm.discovered.len(), 2);
-
-        check_peer(
-            &swarm.discovered,
-            id_1,
-            vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
-            vec![Arc::new("/ip6/::1/tcp/9091".parse().unwrap())],
-        );
-
-        check_peer(
-            &swarm.discovered,
-            id_2,
-            vec![Arc::new("/ip4/127.0.0.1/tcp/9092".parse().unwrap())],
-            vec![Arc::new("/ip6/::1/tcp/9093".parse().unwrap())],
-        );
-
-        // then discover one new peer and two additional ipv6 addresses for peer 1
-        swarm.peer_discovered(&[
-            net::types::AddrInfo {
-                id: id_1,
-                ip4: vec![],
-                ip6: vec![
-                    Arc::new("/ip6/::1/tcp/9094".parse().unwrap()),
-                    Arc::new("/ip6/::1/tcp/9095".parse().unwrap()),
-                ],
-            },
-            net::types::AddrInfo {
-                id: id_3,
-                ip4: vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
-                ip6: vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
-            },
-        ]);
-
-        check_peer(
-            &swarm.discovered,
-            id_1,
-            vec![Arc::new("/ip4/127.0.0.1/tcp/9090".parse().unwrap())],
-            vec![
-                Arc::new("/ip6/::1/tcp/9091".parse().unwrap()),
-                Arc::new("/ip6/::1/tcp/9094".parse().unwrap()),
-                Arc::new("/ip6/::1/tcp/9095".parse().unwrap()),
-            ],
-        );
-
-        check_peer(
-            &swarm.discovered,
-            id_3,
-            vec![Arc::new("/ip4/127.0.0.1/tcp/9096".parse().unwrap())],
-            vec![Arc::new("/ip6/::1/tcp/9097".parse().unwrap())],
-        );
     }
 
     // verify that if the node is aware of any peers on the network,

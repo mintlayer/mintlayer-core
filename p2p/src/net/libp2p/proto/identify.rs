@@ -106,7 +106,6 @@ mod tests {
     use libp2p::{
         identify::IdentifyInfo, identity, swarm::ConnectionHandlerUpgrErr, Multiaddr, PeerId,
     };
-    use tokio::sync::oneshot;
 
     fn make_empty_info() -> IdentifyInfo {
         IdentifyInfo {
