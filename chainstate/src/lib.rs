@@ -33,9 +33,10 @@ use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
+use detail::time_getter::TimeGetter;
 pub use detail::BlockError;
+use detail::PropertyQueryError;
 pub use detail::{BlockSource, Chainstate};
-use detail::{PropertyQueryError, TimeGetter};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -60,7 +61,7 @@ pub fn make_chainstate(
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
-    custom_time_getter: Option<Arc<TimeGetter>>,
+    custom_time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
     let cons = Chainstate::new(
         chain_config,

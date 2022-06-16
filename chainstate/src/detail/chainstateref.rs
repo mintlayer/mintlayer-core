@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use super::median_time::calculate_median_time_past;
+use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use common::{
     chain::{
@@ -21,7 +21,7 @@ use super::{
     orphan_blocks::OrphanBlocksPool,
     spend_cache::{BlockTransactableRef, CachedInputs},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
-    PropertyQueryError, TimeGetter,
+    PropertyQueryError,
 };
 
 pub(crate) struct ChainstateRef<'a, S> {
@@ -29,7 +29,7 @@ pub(crate) struct ChainstateRef<'a, S> {
     db_tx: S,
     // TODO: get rid of the Option<>. The Option is here because mutability abstraction wasn't done for orphans while it was done for db transaction
     orphan_blocks: Option<&'a mut OrphanBlocksPool>,
-    time_getter: &'a TimeGetter,
+    time_getter: &'a TimeGetterFn,
 }
 
 impl<'a, S: BlockchainStorageRead> BlockIndexHandle for ChainstateRef<'a, S> {
@@ -59,7 +59,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         chain_config: &'a ChainConfig,
         db_tx: S,
         orphan_blocks: Option<&'a mut OrphanBlocksPool>,
-        time_getter: &'a TimeGetter,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,
@@ -72,7 +72,7 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     pub fn new_ro(
         chain_config: &'a ChainConfig,
         db_tx: S,
-        time_getter: &'a TimeGetter,
+        time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S> {
         ChainstateRef {
             chain_config,

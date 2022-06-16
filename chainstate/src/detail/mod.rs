@@ -21,7 +21,7 @@ use blockchain_storage::Transactional;
 use common::chain::block::block_index::BlockIndex;
 use common::chain::block::{Block, BlockHeader};
 use common::chain::config::ChainConfig;
-use common::primitives::{time, BlockDistance, BlockHeight, Id, Idable};
+use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
@@ -31,6 +31,7 @@ mod orphan_blocks;
 
 mod error;
 pub use error::*;
+
 mod pow;
 
 pub mod ban_score;
@@ -48,7 +49,9 @@ const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 mod spend_cache;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
-pub type TimeGetter = dyn Fn() -> i64 + Send + Sync;
+
+pub mod time_getter;
+use time_getter::TimeGetter;
 
 #[must_use]
 pub struct Chainstate {
@@ -57,7 +60,7 @@ pub struct Chainstate {
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
-    time_getter: Arc<TimeGetter>,
+    time_getter: TimeGetter,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -78,14 +81,14 @@ impl Chainstate {
             &self.chain_config,
             db_tx,
             Some(&mut self.orphan_blocks),
-            &*self.time_getter,
+            self.time_getter.getter(),
         )
     }
 
     #[must_use]
     fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo> {
         let db_tx = self.blockchain_storage.transaction_ro();
-        chainstateref::ChainstateRef::new_ro(&self.chain_config, db_tx, &*self.time_getter)
+        chainstateref::ChainstateRef::new_ro(&self.chain_config, db_tx, self.time_getter.getter())
     }
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
@@ -96,7 +99,7 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-        custom_time_getter: Option<Arc<TimeGetter>>,
+        custom_time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
@@ -130,7 +133,7 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
-        custom_time_getter: Option<Arc<TimeGetter>>,
+        custom_time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
@@ -138,7 +141,7 @@ impl Chainstate {
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
-            time_getter: custom_time_getter.unwrap_or_else(|| Arc::new(time::get)),
+            time_getter: custom_time_getter,
         };
         Ok(cons)
     }
