@@ -257,11 +257,11 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         calculate_tx_merkle_root(block.transactions()).map_or(
             Err(CheckBlockError::MerkleRootMismatch),
             |merkle_tree| {
-                if merkle_tree_root != merkle_tree {
-                    Err(CheckBlockError::MerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
+                ensure!(
+                    merkle_tree_root == merkle_tree,
+                    CheckBlockError::MerkleRootMismatch
+                );
+                Ok(())
             },
         )?;
 
@@ -270,33 +270,36 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
         calculate_witness_merkle_root(block.transactions()).map_or(
             Err(CheckBlockError::WitnessMerkleRootMismatch),
             |witness_merkle| {
-                if witness_merkle_root != witness_merkle {
-                    Err(CheckBlockError::WitnessMerkleRootMismatch)
-                } else {
-                    Ok(())
-                }
+                ensure!(
+                    witness_merkle_root == witness_merkle,
+                    CheckBlockError::WitnessMerkleRootMismatch
+                );
+                Ok(())
             },
         )?;
 
         match &block.prev_block_id() {
             Some(prev_block_id) => {
                 let median_time_past = calculate_median_time_past(self, prev_block_id);
-                if block.block_time() < median_time_past {
-                    return Err(CheckBlockError::BlockTimeOrderInvalid);
-                }
+                ensure!(
+                    block.block_time() >= median_time_past,
+                    CheckBlockError::BlockTimeOrderInvalid
+                );
 
                 let max_future_offset = self.chain_config.max_future_block_time_offset();
                 let current_time = self.current_time();
-                if i64::from(block.block_time()) > current_time + max_future_offset.as_secs() as i64
-                {
-                    return Err(CheckBlockError::BlockFromTheFuture);
-                }
+                ensure!(
+                    i64::from(block.block_time())
+                        <= current_time + max_future_offset.as_secs() as i64,
+                    CheckBlockError::BlockFromTheFuture
+                );
             }
             None => {
                 // This is only for genesis, AND should never come from a peer
-                if !block.is_genesis(self.chain_config) {
-                    return Err(CheckBlockError::InvalidBlockNoPrevBlock);
-                }
+                ensure!(
+                    block.is_genesis(self.chain_config),
+                    CheckBlockError::InvalidBlockNoPrevBlock
+                );
             }
         }
 
