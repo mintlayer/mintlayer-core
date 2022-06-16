@@ -4,7 +4,7 @@ use crate::chain::transaction::Transaction;
 use crate::chain::ChainConfig;
 use crate::primitives::id;
 use crate::primitives::id::Idable;
-use crate::primitives::{Id, Version, H256};
+use crate::primitives::{Id, VersionTag, H256};
 
 use serialization::{Decode, Encode};
 
@@ -12,7 +12,7 @@ use super::consensus_data::BlockRewardTransactable;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
-    pub(super) version: Version<1>,
+    pub(super) version: VersionTag<1>,
     pub(super) prev_block_hash: Option<Id<Block>>,
     pub(super) tx_merkle_root: Option<H256>,
     pub(super) witness_merkle_root: Option<H256>,

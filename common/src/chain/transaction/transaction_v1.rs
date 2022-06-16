@@ -1,7 +1,7 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
-use crate::primitives::{id, Id, Idable, Version};
+use crate::primitives::{id, Id, Idable, VersionTag};
 use crypto::hash::StreamHasher;
 use serialization::{Decode, Encode, Tagged};
 
@@ -11,7 +11,7 @@ use super::TransactionUpdateError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
-    version: Version<1>,
+    version: VersionTag<1>,
     flags: u32,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
@@ -26,7 +26,7 @@ impl TransactionV1 {
         lock_time: u32,
     ) -> Result<Self, TransactionCreationError> {
         let tx = TransactionV1 {
-            version: Version::default(),
+            version: VersionTag::default(),
             flags,
             inputs,
             outputs,

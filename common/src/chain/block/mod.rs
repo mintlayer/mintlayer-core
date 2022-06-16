@@ -19,7 +19,7 @@ use crate::chain::transaction::Transaction;
 
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
-use crate::primitives::{Id, Idable, Version, H256};
+use crate::primitives::{Id, Idable, VersionTag, H256};
 pub mod block_index;
 pub use block_index::*;
 mod block_v1;
@@ -95,7 +95,7 @@ impl Block {
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
         let header = BlockHeader {
-            version: Version::default(),
+            version: VersionTag::default(),
             time,
             consensus_data,
             prev_block_hash,
@@ -121,7 +121,7 @@ impl Block {
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
         let header = BlockHeader {
-            version: Version::default(),
+            version: VersionTag::default(),
             time,
             consensus_data: ConsensusData::None,
             prev_block_hash,
