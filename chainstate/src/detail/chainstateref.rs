@@ -254,8 +254,6 @@ impl<'a, S: BlockchainStorageRead> ChainstateRef<'a, S> {
     }
 
     fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
-        block.check_version()?;
-
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
         calculate_tx_merkle_root(block.transactions()).map_or(

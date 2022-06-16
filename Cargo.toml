@@ -20,6 +20,7 @@ members = [
   "p2p",           # p2p communication interfaces and protocols
   "rpc",           # rpc abstraction and implementation
   "serialization", # serialization interfaces and implementations
+  "serialization/derive",  # serialization procedural macros
   "subsystem",     # Utilities for working with concurrent subsystems
   "node",          # node executable
   "wallet",        # wallet executable

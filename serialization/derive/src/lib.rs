@@ -15,18 +15,22 @@
 //
 // Author(s): L. Kuklinek
 
-//! Blockchain data encoding and decoding tools
+mod direct;
+mod tagged;
 
-#[doc(hidden)]
-pub mod derive_support;
+use proc_macro::TokenStream;
 
-pub mod tagged;
+#[proc_macro_derive(Tagged)]
+pub fn derive_tagged(input: TokenStream) -> TokenStream {
+    tagged::derive_tagged(&syn::parse(input).expect("not a derivable item")).into()
+}
 
-// Re-export items for tagless encoding mode.
-pub use tagged::{DirectDecode, DirectEncode, Tag, Tagged};
+#[proc_macro_derive(DirectEncode)]
+pub fn derive_direct_encode(input: TokenStream) -> TokenStream {
+    direct::derive_encode(&syn::parse(input).expect("not an enum")).into()
+}
 
-// Re-export SCALE traits
-pub use parity_scale_codec::{Codec, Decode, DecodeAll, Encode, Input, Output};
-
-// Re-export SCALE types
-pub use parity_scale_codec::{Compact, Error};
+#[proc_macro_derive(DirectDecode)]
+pub fn derive_direct_decode(input: TokenStream) -> TokenStream {
+    direct::derive_decode(&syn::parse(input).expect("not an enum")).into()
+}

@@ -19,7 +19,7 @@ use crate::chain::transaction::Transaction;
 
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
-use crate::primitives::{Id, Idable, H256};
+use crate::primitives::{Id, Idable, VersionTag, H256};
 pub mod block_index;
 pub use block_index::*;
 mod block_v1;
@@ -30,17 +30,11 @@ pub mod block_size;
 pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
-use serialization::{Decode, Encode};
+use serialization::{DirectDecode, DirectEncode};
 
 use self::block_size::BlockSize;
 
 use super::ChainConfig;
-
-#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq, Eq)]
-pub enum BlockConsistencyError {
-    #[error("Block version in serialization doesn't match header `{0}` != `{1}`")]
-    VersionMismatch(u32, u32),
-}
 
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
@@ -65,20 +59,13 @@ fn calculate_generic_merkle_root(
     }
 
     if transactions.len() == 1 {
-        // using bitcoin's way, blocks that only have the coinbase (or a single tx in general) use their coinbase as the merkleroot
+        // using bitcoin's way, blocks that only have the coinbase (or a single tx in general)
+        // use their coinbase as the merkleroot
         return Ok(Some(tx_hasher(&transactions[0])));
     }
     let hashes: Vec<H256> = transactions.iter().map(tx_hasher).collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
     Ok(Some(t.root()))
-}
-
-trait BlockVersion {
-    const BLOCK_VERSION: u32;
-    // self is not required in implementations, but unfortunately, we need it because rust doesn't have a decltype operator
-    fn static_version(&self) -> u32 {
-        Self::BLOCK_VERSION
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -92,9 +79,8 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
 pub enum Block {
-    #[codec(index = 1)]
     V1(BlockV1),
 }
 
@@ -105,15 +91,11 @@ impl Block {
         time: u32,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
-        type BlockWithVersion = BlockV1;
-
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
-        let version_value = <BlockWithVersion as BlockVersion>::BLOCK_VERSION;
-
         let header = BlockHeader {
-            block_version: version_value,
+            version: VersionTag::default(),
             time,
             consensus_data,
             prev_block_hash,
@@ -121,7 +103,7 @@ impl Block {
             witness_merkle_root,
         };
 
-        let block = Block::V1(BlockWithVersion {
+        let block = Block::V1(BlockV1 {
             header,
             transactions,
         });
@@ -135,15 +117,11 @@ impl Block {
         prev_block_hash: Option<Id<Block>>,
         time: u32,
     ) -> Result<Self, BlockCreationError> {
-        type BlockWithVersion = BlockV1;
-
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
 
-        let version_value = <BlockWithVersion as BlockVersion>::BLOCK_VERSION;
-
         let header = BlockHeader {
-            block_version: version_value,
+            version: VersionTag::default(),
             time,
             consensus_data: ConsensusData::None,
             prev_block_hash,
@@ -168,24 +146,6 @@ impl Block {
     pub fn consensus_data(&self) -> &ConsensusData {
         match self {
             Block::V1(blk) => blk.consensus_data(),
-        }
-    }
-
-    pub fn static_version(&self) -> u32 {
-        match &self {
-            Block::V1(blk) => blk.static_version(),
-        }
-    }
-
-    pub fn check_version(&self) -> Result<(), BlockConsistencyError> {
-        match &self {
-            Block::V1(blk) => blk.check_version(),
-        }
-    }
-
-    pub fn version(&self) -> u32 {
-        match &self {
-            Block::V1(blk) => blk.version(),
         }
     }
 
@@ -251,13 +211,26 @@ mod tests {
 
     use super::*;
     use crypto::random::{make_pseudo_rng, Rng};
+    use serialization::Encode;
+
+    fn check_block_tag(block: &Block) {
+        let encoded_block = block.encode();
+        let first_byte = *encoded_block.get(0).unwrap();
+        assert_eq!(1, first_byte);
+
+        let Block::V1(blockv1) = block;
+
+        // Check serialization and ID of BlockV1 and Block are identical
+        assert_eq!(encoded_block, blockv1.encode());
+        assert_eq!(block.get_id(), blockv1.get_id());
+    }
 
     #[test]
     fn empty_block_merkleroot() {
         let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
-            block_version: 1,
+            version: Default::default(),
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
@@ -271,6 +244,8 @@ mod tests {
         });
         let _res = calculate_tx_merkle_root(block.transactions());
         assert_eq!(_res.unwrap(), None);
+
+        check_block_tag(&block);
     }
 
     #[test]
@@ -278,7 +253,7 @@ mod tests {
         let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
-            block_version: 1,
+            version: Default::default(),
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
@@ -295,6 +270,8 @@ mod tests {
         let res = calculate_tx_merkle_root(block.transactions()).unwrap();
         let res = res.unwrap();
         assert_eq!(res, one_transaction.get_id().get());
+
+        check_block_tag(&block);
     }
 
     #[test]
@@ -314,34 +291,11 @@ mod tests {
     }
 
     #[test]
-    fn version_consistency_error() {
-        let mut rng = make_pseudo_rng();
-
-        let header = BlockHeader {
-            block_version: 666,
-            consensus_data: ConsensusData::None,
-            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_hash: None,
-            time: rng.gen(),
-        };
-
-        let block = Block::V1(BlockV1 {
-            header,
-            transactions: Vec::new(),
-        });
-        assert_eq!(
-            block.check_version().unwrap_err(),
-            BlockConsistencyError::VersionMismatch(666, 1)
-        )
-    }
-
-    #[test]
     fn ensure_serialized_version_is_valid() {
         let mut rng = make_pseudo_rng();
 
         let header = BlockHeader {
-            block_version: 1,
+            version: Default::default(),
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
@@ -354,9 +308,6 @@ mod tests {
             transactions: Vec::new(),
         });
 
-        let encoded_block = block.encode();
-        let first_byte = *encoded_block.get(0).unwrap();
-
-        assert_eq!(1, first_byte)
+        check_block_tag(&block);
     }
 }

@@ -24,11 +24,12 @@ pub mod height;
 pub mod id;
 pub mod merkle;
 pub mod time;
-
 pub mod version;
+pub mod version_tag;
 
 pub use amount::Amount;
 pub use compact::Compact;
 pub use encoding::{Bech32Error, DecodedArbitraryDataFromBech32};
 pub use height::{BlockDistance, BlockHeight};
 pub use id::{Id, Idable, H256};
+pub use version_tag::VersionTag;

@@ -3484,7 +3484,20 @@ dependencies = [
  "arraytools",
  "hex-literal",
  "parity-scale-codec",
+ "proptest",
  "rand 0.8.5",
+ "serialization-derive",
+ "static_assertions",
+]
+
+[[package]]
+name = "serialization-derive"
+version = "0.1.0"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
