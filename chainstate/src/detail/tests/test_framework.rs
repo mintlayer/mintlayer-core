@@ -91,7 +91,7 @@ impl<'a> BlockTestFramework {
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
             hash_prev_block,
-            time::get() as u32,
+            time::get().as_secs() as u32,
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)

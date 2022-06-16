@@ -33,6 +33,7 @@ use common::primitives::Compact;
 use common::Uint256;
 use crypto::key::{KeyKind, PrivateKey};
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 #[test]
 fn test_process_genesis_block_wrong_block_source() {
@@ -702,12 +703,12 @@ fn test_blocks_from_the_future() {
         let config = Arc::new(create_unit_test_config());
 
         // current time is genesis time
-        let current_time = Arc::new(std::sync::atomic::AtomicI64::new(
-            config.genesis_block().block_time() as i64,
+        let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
+            config.genesis_block().block_time() as u64,
         ));
         let chainstate_current_time = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
-            chainstate_current_time.load(Ordering::SeqCst)
+            Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
         }));
 
         let storage = Store::new_empty().unwrap();

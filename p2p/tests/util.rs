@@ -77,7 +77,7 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(&prev_block.get_id().get()))
         },
-        time::get() as u32,
+        time::get().as_secs() as u32,
         consensus_data,
     )
     .expect("not to fail")
