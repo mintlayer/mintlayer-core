@@ -81,11 +81,11 @@ pub fn signature_hash_for_inputs(
         sighashtype::InputsMode::CommitWhoPays => {
             hash_encoded_to(&(inputs.len() as u32), stream);
             for input in inputs {
-                hash_encoded_to(&input.get_outpoint(), stream);
+                hash_encoded_to(&input.outpoint(), stream);
             }
         }
         sighashtype::InputsMode::AnyoneCanPay => {
-            hash_encoded_to(&target_input.get_outpoint(), stream);
+            hash_encoded_to(&target_input.outpoint(), stream);
         }
     }
 }
@@ -133,11 +133,11 @@ impl SignatureHashableElement for &[TxInput] {
             sighashtype::InputsMode::CommitWhoPays => {
                 hash_encoded_to(&(self.len() as u32), stream);
                 for input in *self {
-                    hash_encoded_to(&input.get_outpoint(), stream);
+                    hash_encoded_to(&input.outpoint(), stream);
                 }
             }
             sighashtype::InputsMode::AnyoneCanPay => {
-                hash_encoded_to(&target_input.get_outpoint(), stream);
+                hash_encoded_to(&target_input.outpoint(), stream);
             }
         }
         Ok(())
@@ -185,11 +185,11 @@ pub trait Transactable {
 
 impl Transactable for Transaction {
     fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.get_inputs())
+        Some(self.inputs())
     }
 
     fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.get_outputs())
+        Some(self.outputs())
     }
 
     fn version_byte(&self) -> Option<u8> {
@@ -197,11 +197,11 @@ impl Transactable for Transaction {
     }
 
     fn lock_time(&self) -> Option<u32> {
-        Some(self.get_lock_time())
+        Some(self.lock_time())
     }
 
     fn flags(&self) -> Option<u32> {
-        Some(self.get_flags())
+        Some(self.flags())
     }
 }
 
@@ -278,7 +278,7 @@ pub fn verify_signature<T: Transactable>(
         input_num,
         inputs.len(),
     ))?;
-    let input_witness = target_input.get_witness();
+    let input_witness = target_input.witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
             Destination::Address(_) => return Err(TransactionSigError::SignatureNotFound),
@@ -325,10 +325,10 @@ mod test {
 
         fn try_from(tx: &Transaction) -> Result<Self, Self::Error> {
             Ok(Self {
-                flags: tx.get_flags(),
-                inputs: tx.get_inputs().clone(),
-                outputs: tx.get_outputs().clone(),
-                lock_time: tx.get_lock_time(),
+                flags: tx.flags(),
+                inputs: tx.inputs().clone(),
+                outputs: tx.outputs().clone(),
+                lock_time: tx.lock_time(),
             })
         }
     }
@@ -366,7 +366,7 @@ mod test {
         sighash_type: SigHashType,
         outpoint_dest: Destination,
     ) {
-        for i in 0..tx.get_inputs().len() {
+        for i in 0..tx.inputs().len() {
             let input_sign = StandardInputSignature::produce_signature_for_input(
                 private_key,
                 sighash_type,
@@ -383,7 +383,7 @@ mod test {
         tx: &Transaction,
         outpoint_dest: &Destination,
     ) -> Result<(), TransactionSigError> {
-        for i in 0..tx.get_inputs().len() {
+        for i in 0..tx.inputs().len() {
             verify_signature(outpoint_dest, tx, i)?
         }
         Ok(())
@@ -606,12 +606,12 @@ mod test {
         );
         // Should failed due to change in witness
         let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
-        let signature = match tx_updater.inputs[0].get_witness() {
+        let signature = match tx_updater.inputs[0].witness() {
             InputWitness::Standard(signature) => {
                 // Let's change around 20ish last bytes, it's also avoided SCALE errors
-                let mut raw_signature = (&signature.get_raw_signature()[0..60]).to_vec();
+                let mut raw_signature = (&signature.raw_signature()[0..60]).to_vec();
                 let body_signature: Vec<u8> = signature
-                    .get_raw_signature()
+                    .raw_signature()
                     .iter()
                     .skip(60)
                     .map(|item| {
@@ -649,8 +649,8 @@ mod test {
         // Should failed due to change in output value
         let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
         tx_updater.outputs[0] = TxOutput::new(
-            (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
-            tx_updater.outputs[0].get_destination().clone(),
+            (tx_updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+            tx_updater.outputs[0].destination().clone(),
         );
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(

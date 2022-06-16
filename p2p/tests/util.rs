@@ -34,7 +34,7 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    if output.get_value() > Amount::from_atoms(1) {
+    if output.value() > Amount::from_atoms(1) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -42,7 +42,7 @@ fn create_utxo_data(
                 nosig_random_witness(),
             ),
             TxOutput::new(
-                (output.get_value() - Amount::from_atoms(1)).unwrap(),
+                (output.value() - Amount::from_atoms(1)).unwrap(),
                 anyonecanspend_address(),
             ),
         ))
@@ -84,7 +84,7 @@ fn produce_test_block_with_consensus_data(
 }
 
 fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
-    tx.get_outputs()
+    tx.outputs()
         .iter()
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(config, &tx.get_id(), index, output))

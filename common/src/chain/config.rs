@@ -156,6 +156,7 @@ impl ChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
 
+    // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_blockreward_maturity(&self) -> &BlockDistance {
         &self.blockreward_maturity
     }

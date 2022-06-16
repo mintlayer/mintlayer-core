@@ -72,7 +72,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
             let prev_block_id = header
-                .get_prev_block_id()
+                .prev_block_id()
                 .clone()
                 .expect("If PoWStatus is `Onging` then we cannot be at genesis");
 
@@ -119,7 +119,7 @@ impl PoW {
         new_block_time: BlockTimestamp,
         db_accessor: &H,
     ) -> Result<Compact, ConsensusPoWError> {
-        let prev_block_consensus_data = prev_block_index.get_block_header().consensus_data();
+        let prev_block_consensus_data = prev_block_index.block_header().consensus_data();
         // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
         // block was PoW
         debug_assert!(matches!(prev_block_consensus_data, ConsensusData::PoW(..)));
@@ -136,7 +136,7 @@ impl PoW {
         }
 
         let current_height = prev_block_index
-            .get_block_height()
+            .block_height()
             .checked_add(1)
             .expect("max block height has been reached.");
 
@@ -170,7 +170,7 @@ impl PoW {
     ) -> Result<Compact, ConsensusPoWError> {
         // limit adjustment step
         let actual_timespan_of_last_interval = self.actual_timespan(
-            prev_block_index.get_block_timestamp().as_int_seconds(),
+            prev_block_index.block_timestamp().as_int_seconds(),
             retarget_block_time.as_int_seconds(),
         );
 
@@ -194,7 +194,7 @@ impl PoW {
         if special_rules::block_production_stalled(
             self.target_spacing().as_secs(),
             new_block_time,
-            prev_block_index.get_block_timestamp().as_int_seconds(),
+            prev_block_index.block_timestamp().as_int_seconds(),
         ) {
             Compact::from(self.difficulty_limit())
         } else {

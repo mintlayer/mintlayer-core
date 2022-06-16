@@ -49,7 +49,7 @@ pub fn calculate_tx_merkle_root(
 pub fn calculate_witness_merkle_root(
     transactions: &[Transaction],
 ) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
-    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.get_serialized_hash().get();
+    const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.serialized_hash().get();
     calculate_generic_merkle_root(&TX_HASHER, transactions)
 }
 
@@ -184,7 +184,7 @@ impl Block {
 
     pub fn prev_block_id(&self) -> Option<Id<Block>> {
         match &self {
-            Block::V1(blk) => blk.get_prev_block_id().clone(),
+            Block::V1(blk) => blk.prev_block_id().clone(),
         }
     }
 

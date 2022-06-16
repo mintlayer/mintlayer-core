@@ -18,7 +18,7 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
     let iter = BlockIndexHistoryIterator::new(starting_block.clone(), block_index_handle);
     let time_values = iter
         .take(MEDIAN_TIME_SPAN)
-        .map(|bi| bi.get_block_timestamp())
+        .map(|bi| bi.block_timestamp())
         .sorted()
         .collect::<Vec<_>>();
 
@@ -89,7 +89,7 @@ mod test {
 
             {
                 let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().get_block_height().into();
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
                 assert_eq!(current_height, block_count as u64);
             }
 
@@ -159,7 +159,7 @@ mod test {
 
             {
                 let current_height: u64 =
-                    chainstate.get_best_block_index().unwrap().unwrap().get_block_height().into();
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
                 assert_eq!(current_height, 5);
             }
 

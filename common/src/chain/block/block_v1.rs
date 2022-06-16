@@ -34,7 +34,7 @@ impl BlockHeader {
         self.prev_block_hash == None && chain_config.genesis_block_id() == self.block_id()
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
         &self.prev_block_hash
     }
 
@@ -96,7 +96,7 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
         &self.header.prev_block_hash
     }
 }

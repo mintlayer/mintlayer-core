@@ -448,7 +448,7 @@ fn multiple_update_utxos_test() {
     assert!(cache.add_utxos(&tx, UtxoSource::BlockChain(BlockHeight::new(2)), false).is_ok());
 
     // check that the outputs of tx are added in the cache.
-    tx.get_outputs().iter().enumerate().for_each(|(i, x)| {
+    tx.outputs().iter().enumerate().for_each(|(i, x)| {
         let id = OutPointSourceId::from(tx.get_id());
         let outpoint = OutPoint::new(id, i as u32);
 
@@ -460,7 +460,7 @@ fn multiple_update_utxos_test() {
     let mut rng = make_pseudo_rng();
     // randomly take half of the outputs to spend.
     let results =
-        seq::index::sample(&mut rng, tx.get_outputs().len(), tx.get_outputs().len() / 2).into_vec();
+        seq::index::sample(&mut rng, tx.outputs().len(), tx.outputs().len() / 2).into_vec();
     let to_spend = results
         .into_iter()
         .map(|idx| {
@@ -476,11 +476,11 @@ fn multiple_update_utxos_test() {
 
     // check that these utxos came from the tx's output
     tx_undo.inner().iter().for_each(|x| {
-        assert!(tx.get_outputs().contains(x.output()));
+        assert!(tx.outputs().contains(x.output()));
     });
 
     // check that the spent utxos should not exist in the cache anymore.
     to_spend.iter().for_each(|input| {
-        assert!(cache.get_utxo(input.get_outpoint()).is_none());
+        assert!(cache.get_utxo(input.outpoint()).is_none());
     });
 }

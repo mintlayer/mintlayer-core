@@ -156,8 +156,8 @@ impl Chainstate {
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => {
-                let new_height = new_block_index.get_block_height();
-                let new_id = new_block_index.get_block_id().clone();
+                let new_height = new_block_index.block_height();
+                let new_id = new_block_index.block_id().clone();
                 self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
@@ -245,8 +245,8 @@ impl Chainstate {
         if let Some(ref bi) = result {
             log::info!(
                 "New tip in chainstate {} with height {}",
-                bi.get_block_id(),
-                bi.get_block_height()
+                bi.block_id(),
+                bi.block_height()
             );
         }
 
@@ -306,7 +306,7 @@ impl Chainstate {
         let best_block_index = chainstate_ref
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
-        let height = best_block_index.get_block_height();
+        let height = best_block_index.block_height();
 
         let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
             .take_while(|i| (height - BlockDistance::new(*i)).is_some())
@@ -337,7 +337,7 @@ impl Chainstate {
         for header in locator.iter() {
             if let Some(block_index) = chainstate_ref.get_block_index(&header.get_id())? {
                 if chainstate_ref.is_block_in_main_chain(&block_index)? {
-                    best = block_index.get_block_height();
+                    best = block_index.block_height();
                     break;
                 }
             }
@@ -347,7 +347,7 @@ impl Chainstate {
         let best_height = chainstate_ref
             .get_best_block_index()?
             .expect("best block's height to exist")
-            .get_block_height();
+            .block_height();
 
         let limit = std::cmp::min(
             (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
@@ -366,7 +366,7 @@ impl Chainstate {
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
         // verify that the first block attaches to our chain
-        match first_block.get_prev_block_id() {
+        match first_block.prev_block_id() {
             None => return Err(PropertyQueryError::InvalidInputForPrevBlock),
             Some(id) => {
                 if self.get_block_index(id)?.is_none() {

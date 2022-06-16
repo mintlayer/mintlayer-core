@@ -47,24 +47,24 @@ fn basic_spending() {
     let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
     // ensure index accesses are correct
-    assert!(tx_index.get_spent_state(0).is_ok());
-    assert!(tx_index.get_spent_state(1).is_ok());
-    assert!(tx_index.get_spent_state(2).is_ok());
+    assert!(tx_index.spent_state(0).is_ok());
+    assert!(tx_index.spent_state(1).is_ok());
+    assert!(tx_index.spent_state(2).is_ok());
     assert_eq!(
-        tx_index.get_spent_state(3).unwrap_err(),
+        tx_index.spent_state(3).unwrap_err(),
         SpendError::OutOfRange {
             tx_id: None,
             source_output_index: 3
         }
     );
     assert_eq!(
-        tx_index.get_spent_state(4).unwrap_err(),
+        tx_index.spent_state(4).unwrap_err(),
         SpendError::OutOfRange {
             tx_id: None,
             source_output_index: 4
         }
     );
-    assert_eq!(tx_index.get_output_count(), 3);
+    assert_eq!(tx_index.output_count(), 3);
 
     let p = match tx_index.position {
         SpendablePosition::Transaction(ref p) => p,
@@ -80,11 +80,8 @@ fn basic_spending() {
     }
     assert!(!tx_index.all_outputs_spent());
 
-    for i in 0..tx_index.get_output_count() {
-        assert_eq!(
-            tx_index.get_spent_state(i).unwrap(),
-            OutputSpentState::Unspent
-        );
+    for i in 0..tx_index.output_count() {
+        assert_eq!(tx_index.spent_state(i).unwrap(), OutputSpentState::Unspent);
     }
 
     let tx_spending_output_0 = Id::<Transaction>::new(
@@ -106,17 +103,11 @@ fn basic_spending() {
 
     // check state
     assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
+        tx_index.spent_state(0).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_0.clone().into())
     );
-    assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
-        OutputSpentState::Unspent
-    );
+    assert_eq!(tx_index.spent_state(1).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.spent_state(2).unwrap(), OutputSpentState::Unspent);
 
     assert!(!tx_index.all_outputs_spent());
 
@@ -134,15 +125,15 @@ fn basic_spending() {
     assert!(tx_index.all_outputs_spent());
 
     assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
+        tx_index.spent_state(0).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_0.into())
     );
     assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
+        tx_index.spent_state(1).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_1.clone().into())
     );
     assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
+        tx_index.spent_state(2).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_2.clone().into())
     );
 
@@ -154,16 +145,13 @@ fn basic_spending() {
 
     // check the new unspent state
     assert!(!tx_index.all_outputs_spent());
+    assert_eq!(tx_index.spent_state(0).unwrap(), OutputSpentState::Unspent);
     assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
+        tx_index.spent_state(1).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_1.into())
     );
     assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
+        tx_index.spent_state(2).unwrap(),
         OutputSpentState::SpentBy(tx_spending_output_2.into())
     );
 
@@ -173,18 +161,9 @@ fn basic_spending() {
 
     // check the new unspent state
     assert!(!tx_index.all_outputs_spent());
-    assert_eq!(
-        tx_index.get_spent_state(0).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(1).unwrap(),
-        OutputSpentState::Unspent
-    );
-    assert_eq!(
-        tx_index.get_spent_state(2).unwrap(),
-        OutputSpentState::Unspent
-    );
+    assert_eq!(tx_index.spent_state(0).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.spent_state(1).unwrap(), OutputSpentState::Unspent);
+    assert_eq!(tx_index.spent_state(2).unwrap(), OutputSpentState::Unspent);
 }
 
 fn generate_random_h256(g: &mut impl crypto::random::Rng) -> H256 {
@@ -287,15 +266,14 @@ fn test_indices_calculations() {
     for (tx_num, tx) in block.transactions().iter().enumerate() {
         let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
         assert!(!tx_index.all_outputs_spent());
-        assert_eq!(tx_index.get_output_count(), tx.get_outputs().len() as u32);
+        assert_eq!(tx_index.output_count(), tx.outputs().len() as u32);
 
-        let pos = match tx_index.get_position() {
+        let pos = match tx_index.position() {
             SpendablePosition::Transaction(pos) => pos,
             SpendablePosition::BlockReward(_) => unreachable!(),
         };
-        let tx_start_pos = pos.get_byte_offset_in_block() as usize;
-        let tx_end_pos =
-            pos.get_byte_offset_in_block() as usize + pos.get_serialized_size() as usize;
+        let tx_start_pos = pos.byte_offset_in_block() as usize;
+        let tx_end_pos = pos.byte_offset_in_block() as usize + pos.serialized_size() as usize;
         let tx_serialized_in_block = &serialized_block[tx_start_pos..tx_end_pos];
         let tx_serialized = tx.encode();
         assert_eq!(tx_serialized_in_block, tx_serialized);

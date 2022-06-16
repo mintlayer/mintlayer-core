@@ -87,34 +87,34 @@ impl Transaction {
         }
     }
 
-    pub fn get_flags(&self) -> u32 {
+    pub fn flags(&self) -> u32 {
         match &self {
-            Transaction::V1(tx) => tx.get_flags(),
+            Transaction::V1(tx) => tx.flags(),
         }
     }
 
-    pub fn get_inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &Vec<TxInput> {
         match &self {
-            Transaction::V1(tx) => tx.get_inputs(),
+            Transaction::V1(tx) => tx.inputs(),
         }
     }
 
-    pub fn get_outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &Vec<TxOutput> {
         match &self {
-            Transaction::V1(tx) => tx.get_outputs(),
+            Transaction::V1(tx) => tx.outputs(),
         }
     }
 
-    pub fn get_lock_time(&self) -> u32 {
+    pub fn lock_time(&self) -> u32 {
         match &self {
-            Transaction::V1(tx) => tx.get_lock_time(),
+            Transaction::V1(tx) => tx.lock_time(),
         }
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn get_serialized_hash(&self) -> Id<Transaction> {
+    pub fn serialized_hash(&self) -> Id<Transaction> {
         match &self {
-            Transaction::V1(tx) => tx.get_serialized_hash(),
+            Transaction::V1(tx) => tx.serialized_hash(),
         }
     }
 

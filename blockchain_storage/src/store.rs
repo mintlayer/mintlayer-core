@@ -228,13 +228,13 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         &self,
         tx_index: &TxMainChainPosition,
     ) -> crate::Result<Option<Transaction>> {
-        let block_id = tx_index.get_block_id();
+        let block_id = tx_index.block_id();
         match self.0.get::<DBBlock, _>().get(block_id.as_ref()) {
             Err(e) => Err(e.into()),
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
-                let begin = tx_index.get_byte_offset_in_block() as usize;
-                let end = begin + tx_index.get_serialized_size() as usize;
+                let begin = tx_index.byte_offset_in_block() as usize;
+                let end = begin + tx_index.serialized_size() as usize;
                 let encoded_tx = block.get(begin..end).expect("Transaction outside of block range");
                 let tx =
                     Transaction::decode_all(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
@@ -283,7 +283,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()> {
-        self.write::<DBBlockIndex, _, _>(block_index.get_block_id().encode(), block_index)
+        self.write::<DBBlockIndex, _, _>(block_index.block_id().encode(), block_index)
     }
 
     fn set_mainchain_tx_index(
@@ -511,7 +511,7 @@ pub(crate) mod test {
             Ok(None)
         );
         if let Ok(Some(index)) = store.get_mainchain_tx_index(&out_id_tx0) {
-            if let SpendablePosition::Transaction(ref p) = index.get_position() {
+            if let SpendablePosition::Transaction(ref p) = index.position() {
                 assert_eq!(store.get_mainchain_tx_by_position(p), Ok(Some(tx0)));
             } else {
                 unreachable!();

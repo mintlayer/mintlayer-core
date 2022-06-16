@@ -154,11 +154,11 @@ fn test_events_a_bunch_of_events() {
                 .unwrap();
             chainstate.wait_for_all_events();
             assert_eq!(
-                block_index.get_block_id(),
+                block_index.block_id(),
                 &events.lock().unwrap().last().unwrap().0
             );
             assert_eq!(
-                block_index.get_block_height(),
+                block_index.block_height(),
                 events.lock().unwrap().last().unwrap().1
             );
         }

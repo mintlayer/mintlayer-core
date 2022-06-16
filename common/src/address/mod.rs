@@ -7,17 +7,17 @@ use serialization::Encode;
 
 pub trait AddressableData<T: AsRef<[u8]>> {
     fn encode(&self) -> Result<String, Bech32Error> {
-        encoding::encode(self.get_hrp(), self.get_data())
+        encoding::encode(self.hrp(), self.data())
     }
 
     fn decode(&mut self, addr: &str) -> Result<DecodedArbitraryDataFromBech32, Bech32Error> {
         encoding::decode(addr)
     }
 
-    fn get_hrp(&self) -> &str;
+    fn hrp(&self) -> &str;
     fn set_hrp(&mut self, hrp: String);
 
-    fn get_data(&self) -> T;
+    fn data(&self) -> T;
     fn set_data(&mut self, data: &[u8]);
 }
 
