@@ -15,12 +15,13 @@
 //
 // Author(s): A. Altonen
 
-//! Mintlayer peer manager
+//! Peer manager
 //!
 //! TODO
 //!
 //!
 
+#![allow(rustdoc::private_intra_doc_links)]
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
@@ -33,10 +34,9 @@ use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Durat
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
-mod peerdb;
+pub mod peerdb;
 
-/// The absolute maximum number of connections the [`PeerManager`] is willing to have open
-///
+/// Maximum number of connections the [`PeerManager`] is allowed to have open
 const MAX_ACTIVE_CONNECTIONS: usize = 128;
 
 /// Lower bound for how often [`PeerManager::heartbeat()`] is called
@@ -114,8 +114,8 @@ where
 
     /// Verify protocol compatibility
     ///
-    /// Make sure that remote peer supports protocols same protocols that we do and that
-    /// they support the mandatory protocols which for now are configured to be:
+    /// Make sure that remote peer supports the same versions of the protocols that we do
+    /// and that they support the mandatory protocols which for now are configured to be:
     ///
     /// - `/meshsub/1.1.0`
     /// - `/meshsub/1.0.0`
@@ -162,8 +162,8 @@ where
     /// Handle connection established event
     ///
     /// The event is received from the networking backend and it's either a result of an incoming
-    /// connection from a remote peer or a response to a outbound connection that was initiated
-    /// by the node as result of swarm mai
+    /// connection from a remote peer or a response to an outbound connection that was initiated
+    /// by the node as result of swarm maintenance.
     async fn validate_connection(&mut self, info: net::types::PeerInfo<T>) -> crate::Result<()> {
         log::debug!("{}", info);
 
@@ -204,7 +204,7 @@ where
     /// on to the generic connection validator as these connections haven't gone
     /// through the same validation as outbound connections.
     ///
-    /// This function verify that neither address the nor the peer ID are on the
+    /// This function verifies that neither address the nor the peer ID are on the
     /// list of banned IPs/peer IDs. It also checks that the maximum number of
     /// connections `PeerManager` is configured to have has not been reached.
     async fn validate_inbound_connection(
@@ -240,7 +240,7 @@ where
         self.validate_connection(info).await
     }
 
-    /// Close connection to a remote node
+    /// Close connection to a remote peer
     ///
     /// The decision to close the connection is made either by the user via RPC
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
@@ -255,11 +255,12 @@ where
 
     /// Handle outbound connection error
     ///
-    /// The outbound connection was dialed successfully but the remote either didn't not respond
+    /// The outbound connection was dialed successfully but the remote either did not respond
     /// (at all or in time) or it didn't support the handshaking which forced the connection closed.
     ///
     /// If the connection was initiated by the user via RPC, inform them that the connection failed.
-    /// Inform the [`PeerDb`] about the address failure.
+    /// Inform the [`crate::swarm::peerdb::PeerDb`] about the address failure so it knows to update its
+    /// own records.
     fn handle_outbound_error(&mut self, address: T::Address, error: P2pError) -> crate::Result<()> {
         if let Some(Some(channel)) = self.pending.remove(&address) {
             channel.send(Err(error)).map_err(|_| P2pError::ChannelClosed)?;
@@ -290,7 +291,7 @@ where
 
     /// Maintain the swarm state
     ///
-    /// [`PeerManager::heartbeat()`] is called every time a network/control event is received
+    /// `PeerManager::heartbeat()` is called every time a network/control event is received
     /// or the heartbeat timer of the event loop expires. In other words, the swarm state
     /// is checked and updated at least once every 30 seconds. In high-traffic scenarios the
     /// update interval is clamped to a sensible lower bound.
@@ -305,7 +306,7 @@ where
     ///
     /// The process starts by first checking if the number of active connections is less than
     /// the number of desired connections and there are available peers, the function tries to
-    /// establish new connections. Finally it updates the peer scores and discards any records
+    /// establish new connections. After that it updates the peer scores and discards any records
     /// that no longer need to be stored.
     async fn heartbeat(&mut self) -> crate::Result<()> {
         // TODO: check when was the last update and exit early if this update is to soon
@@ -331,6 +332,8 @@ where
             }
         }
 
+        // TODO: update peer scores
+
         Ok(())
     }
 
@@ -338,7 +341,7 @@ where
     ///
     /// Currently only subsystem/channel-related errors are considered fatal.
     /// Other errors are logged as warnings and `Ok(())` is returned as they should
-    /// not distrub the operation of [`PeerManager`].
+    /// not distrub the operation of `PeerManager`.
     fn handle_error(&mut self, result: crate::Result<()>) -> crate::Result<()> {
         match result {
             Ok(_) => Ok(()),
@@ -365,7 +368,6 @@ where
     /// handles the error (if any) and runs the [`PeerManager::heartbeat()`] function
     /// to perform swarm maintenance. If the `PeerManager` doesn't receive any events,
     /// [`PEER_MGR_HEARTBEAT_INTERVAL`] defines how often the heartbeat function is called.
-    ///
     /// This is done to prevent the `PeerManager` from stalling in case the network doesn't
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<()> {

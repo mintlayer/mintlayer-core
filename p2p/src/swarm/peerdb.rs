@@ -22,11 +22,11 @@
 //! - idle peers
 //! - reserved peers (not implemented)
 //!
-//! Active peers are those peers that the [`PeerManager`] has an active connection with
+//! Active peers are those peers that the [`crate::swarm::PeerManager`] has an active connection with
 //! whereas idle peers are the peers that are known to `PeerDb` but are not part of our swarm.
 //! Idle peers are discovered through various peer discovery mechanisms and they are used by
-//! [`PeerManager::heartbeat()`] to establish new outbound connections if the actual number of
-//! active connectios is less than the desired number of connections.
+//! [`crate::swarm::PeerManager::heartbeat()`] to establish new outbound connections if the actual
+//! number of active connectios is less than the desired number of connections.
 //!
 //! TODO: reserved peers
 
@@ -145,10 +145,10 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Report outbound connection failure
     ///
-    /// When [`PeerManager::heartbeat()`] has initiated an outbound connection and
-    /// the connection is refused, it's reported back to the `PeerDb` so it knows
-    /// to update the peer information accordingly by forgetting the address and
-    /// adjusting the peer score appropriately.
+    /// When [`crate::swarm::PeerManager::heartbeat()`] has initiated an outbound connection
+    /// and the connection is refused, it's reported back to the `PeerDb` so it knows to update
+    /// the peer information accordingly by forgetting the address and adjusting the peer score
+    /// appropriately.
     pub fn report_outbound_failure(&mut self, _address: T::Address) {
         // TODO: implement
     }
