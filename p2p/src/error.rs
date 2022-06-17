@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use common::primitives::version::SemVer;
+use common::primitives::semver::SemVer;
 use libp2p::{
     gossipsub::error::PublishError as GossipsubPublishError,
     swarm::{handler::ConnectionHandlerUpgrErr, DialError::*},

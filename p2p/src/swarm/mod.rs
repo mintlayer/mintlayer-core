@@ -27,7 +27,7 @@ use crate::{
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
-use common::{chain::ChainConfig, primitives::version};
+use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
@@ -155,7 +155,7 @@ where
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
-    fn validate_version(&self, version: &version::SemVer) -> bool {
+    fn validate_version(&self, version: &semver::SemVer) -> bool {
         version == self.config.version()
     }
 

@@ -13,7 +13,7 @@ use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
 use crate::primitives::BlockDistance;
 use crate::primitives::Idable;
-use crate::primitives::{version::SemVer, BlockHeight};
+use crate::primitives::{semver::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 use std::time::Duration;
 

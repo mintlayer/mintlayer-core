@@ -48,7 +48,7 @@ where
     pub magic_bytes: [u8; 4],
 
     /// Peer software version
-    pub version: primitives::version::SemVer,
+    pub version: primitives::semver::SemVer,
 
     /// User agent of the peer
     pub agent: Option<String>,

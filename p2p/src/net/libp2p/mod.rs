@@ -217,7 +217,7 @@ where
                     }
 
                     Ok((
-                        common::primitives::version::SemVer::new(maj, min, pat),
+                        common::primitives::semver::SemVer::new(maj, min, pat),
                         magic.to_le_bytes(),
                     ))
                 }
