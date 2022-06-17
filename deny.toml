@@ -50,6 +50,7 @@ skip = [
     {name = "windows_x86_64_gnu" },
     {name = "windows_x86_64_msvc" },
     {name = "curve25519-dalek"},
+    {name = "hashbrown"},
 ]
 
 [licenses]
