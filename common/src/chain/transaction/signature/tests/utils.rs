@@ -1,4 +1,10 @@
+use rand::Rng;
+
+use crypto::key::{PrivateKey, PublicKey};
+use script::Script;
+
 use crate::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
@@ -9,8 +15,6 @@ use crate::{
     },
     primitives::{amount::IntType, Amount, Id, H256},
 };
-use crypto::key::PrivateKey;
-use rand::Rng;
 
 // This is required because we can't access private fields of the Transaction class
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,4 +129,15 @@ pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> {
     ]
     .into_iter()
     .map(Result::unwrap)
+}
+
+/// Returns an iterator over all possible destinations.
+pub fn destinations(public_key: PublicKey) -> impl Iterator<Item = Destination> {
+    [
+        Destination::Address(PublicKeyHash::from(&public_key)),
+        Destination::PublicKey(public_key),
+        Destination::AnyoneCanSpend,
+        Destination::ScriptHash(Id::<Script>::from(H256::random())),
+    ]
+    .into_iter()
 }

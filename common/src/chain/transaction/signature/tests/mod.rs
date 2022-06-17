@@ -1,3 +1,9 @@
+use std::vec;
+
+use itertools::Itertools;
+
+use crypto::key::{KeyKind, PrivateKey};
+
 use super::{
     inputsig::{InputWitness, StandardInputSignature},
     sighashtype::SigHashType,
@@ -9,8 +15,6 @@ use crate::{
     },
     primitives::{Amount, Id, H256},
 };
-use crypto::key::{KeyKind, PrivateKey};
-use std::vec;
 use utils::*;
 
 type TestData = Vec<(
@@ -21,255 +25,201 @@ type TestData = Vec<(
     Result<(), TransactionSigError>,
 )>;
 
-#[cfg(test)]
+mod mixed_sighash_types;
 mod sign_and_mutate;
-#[cfg(test)]
 mod sign_and_verify;
+
 pub mod utils;
 
 #[test]
 fn sign_and_verify_different_sighash_types() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
-    {
-        // ALL
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+
+    for sighash_type in sig_hash_types() {
         let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
         sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-    }
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-    }
-    {
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-    }
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-    }
-    {
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
-    }
-    {
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(verify_signed_tx(&tx, &outpoint_dest), Ok(()));
+        assert_eq!(
+            verify_signed_tx(&tx, &outpoint_dest),
+            Ok(()),
+            "{sighash_type:?}"
+        );
     }
 }
 
+// Trying to verify a transaction without signature should produce the corresponding error.
 #[test]
-fn check_verify_fails_different_sighash_types() {
+fn verify_no_signature() {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint_dest = Destination::PublicKey(public_key);
-    let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-    {
-        // Try verify sign for tx with InputWitness::NoSignature and some data
+
+    for destination in destinations(public_key).filter(|d| d != &Destination::AnyoneCanSpend) {
+        let mut tx = generate_unsigned_tx(destination.clone(), 3, 3).unwrap();
         tx.update_witness(
             0,
             InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
         )
         .unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::SignatureNotFound)
+            verify_signature(&destination, &tx, 0),
+            Err(TransactionSigError::SignatureNotFound),
+            "{destination:?}"
         );
     }
+}
+
+// Try to verify empty and invalid signatures.
+#[test]
+fn verify_invalid_signature() {
+    let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+
+    for (sighash_type, raw_signature) in
+        sig_hash_types().cartesian_product([vec![], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]])
     {
-        // SigHashType ALL - must fail because there are no bytes in raw_signature
+        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
         tx.update_witness(
             0,
             InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL).unwrap(),
-                vec![],
+                sighash_type,
+                raw_signature.clone(),
             )),
         )
         .unwrap();
+
         assert_eq!(
             verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-    }
-    {
-        // SigHashType ALL - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-    }
-    {
-        // SigHashType NONE - must fail because there are no bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::NONE).unwrap(),
-                vec![],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-    }
-    {
-        // SigHashType NONE - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-    }
-    {
-        // SigHashType SINGLE - must fail because there are no bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::SINGLE).unwrap(),
-                vec![],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
-        );
-    }
-    {
-        // SigHashType SINGLE - must fail because there are wrong bytes in raw_signature
-        tx.update_witness(
-            0,
-            InputWitness::Standard(StandardInputSignature::new(
-                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
-                vec![1, 2, 3, 4, 5, 6, 7, 8, 9],
-            )),
-        )
-        .unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
-            Err(TransactionSigError::InvalidSignatureEncoding)
+            Err(TransactionSigError::InvalidSignatureEncoding),
+            "{sighash_type:?}, signature = {raw_signature:?}"
         );
     }
 }
 
 #[test]
-fn check_invalid_input_index_for_verify_signature() {
+fn verify_signature_invalid_input_index() {
     const INVALID_INPUT_INDEX: usize = 1234567890;
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
-    {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+
+    for sighash_type in sig_hash_types() {
         let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
         sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        // input index out of range
+
         assert_eq!(
             verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
             Err(TransactionSigError::InvalidInputIndex(
                 INVALID_INPUT_INDEX,
                 3
-            ))
+            )),
+            "{sighash_type:?}"
         );
     }
-    {
-        // ALL | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+}
+
+#[test]
+fn verify_signature_wrong_destination() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint = Destination::PublicKey(public_key);
+
+    let (_, public_key_2) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let different_outpoint = Destination::PublicKey(public_key_2);
+
+    for sighash_type in sig_hash_types() {
+        let mut tx = generate_unsigned_tx(outpoint.clone(), 3, 3).unwrap();
+        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint.clone()).unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                3
-            ))
+            verify_signature(&different_outpoint, &tx, 0),
+            Err(TransactionSigError::SignatureVerificationFailed),
+            "{sighash_type:?}"
         );
     }
-    {
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                3
-            ))
-        );
-    }
-    {
-        // SINGLE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                3
-            ))
-        );
-    }
-    {
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                3
-            ))
-        );
-    }
-    {
-        // NONE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-        assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
-            Err(TransactionSigError::InvalidInputIndex(
-                INVALID_INPUT_INDEX,
-                3
-            ))
-        );
-    }
+}
+
+// ALL applies to all inputs and outputs, so changing or adding anything makes it invalid.
+#[test]
+fn mutate_all() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, true);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, true);
+    check_change_output(&original_tx, &outpoint_dest, true);
+}
+
+// ALL|ANYONECANPAY applies to one input and all outputs, so adding input is ok, but anything else isn't.
+#[test]
+fn mutate_all_anyonecanpay() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, false);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, true);
+    check_change_output(&original_tx, &outpoint_dest, true);
+}
+
+// NONE is applied to all inputs and none of the outputs, so the latter can be changed in any way.
+#[test]
+fn mutate_none() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, true);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_change_output(&original_tx, &outpoint_dest, false);
+}
+
+// NONE|ANYONECANPAY is applied to only one input, so changing everything else is OK.
+#[test]
+fn mutate_none_anyonecanpay() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type =
+        SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, false);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_change_output(&original_tx, &outpoint_dest, false);
+}
+
+// SINGLE is applied to all inputs and one output, so only adding an output is OK.
+#[test]
+fn mutate_single() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, true);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_change_output(&original_tx, &outpoint_dest, true);
+}
+
+// SINGLE|ANYONECANPAY is applied to one input and one output so adding inputs and outputs is OK.
+#[test]
+fn mutate_single_anyonecanpay() {
+    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let outpoint_dest = Destination::PublicKey(public_key);
+    let sighash_type =
+        SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
+    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+
+    check_insert_input(&original_tx, &outpoint_dest, false);
+    check_change_input(&original_tx, &outpoint_dest, true);
+    check_insert_output(&original_tx, &outpoint_dest, false);
+    check_change_output(&original_tx, &outpoint_dest, true);
 }
 
 fn sign_modify_then_verify(
@@ -295,7 +245,7 @@ fn sign_modify_then_verify(
 }
 
 fn check_change_flags(original_tx: &Transaction, outpoint_dest: &Destination) {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = 1234567890;
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.get_inputs().iter().enumerate() {
@@ -307,7 +257,7 @@ fn check_change_flags(original_tx: &Transaction, outpoint_dest: &Destination) {
 }
 
 fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination) {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = 1234567890;
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.get_inputs().iter().enumerate() {
@@ -318,8 +268,8 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
     }
 }
 
-fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination) {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+    let mut tx_updater = MutableTransaction::from(original_tx);
     let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
     tx_updater.inputs.push(TxInput::new(
         outpoinr_source_id,
@@ -327,15 +277,12 @@ fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination) {
         InputWitness::NoSignature(None),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_eq!(
-        verify_signature(outpoint_dest, &tx, 0),
-        Err(TransactionSigError::SignatureVerificationFailed)
-    );
+    assert_verify_signature(outpoint_dest, &tx, should_fail);
 }
 
 fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
     // Should failed due to change in witness
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     for (input_num, _) in original_tx.get_inputs().iter().enumerate() {
         let signature = match tx_updater.inputs[0].get_witness() {
             InputWitness::Standard(signature) => {
@@ -368,99 +315,45 @@ fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) 
     }
 }
 
-fn check_insert_output(original_tx: &Transaction, outpoint_dest: &Destination) {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+fn check_insert_output(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+    let mut tx_updater = MutableTransaction::from(original_tx);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
         Amount::from_atoms(1234567890),
         Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_eq!(
-        verify_signature(outpoint_dest, &tx, 0),
-        Err(TransactionSigError::SignatureVerificationFailed)
-    );
+    assert_verify_signature(outpoint_dest, &tx, should_fail);
 }
 
-fn check_change_output(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_change_output(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
     // Should failed due to change in output value
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
         (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
         tx_updater.outputs[0].get_destination().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_eq!(
-        verify_signature(outpoint_dest, &tx, 0),
-        Err(TransactionSigError::SignatureVerificationFailed)
-    );
+    assert_verify_signature(outpoint_dest, &tx, should_fail);
 }
 
-fn check_change_input(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_change_input(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
     // Should failed due to change in output value
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
         9999,
         tx_updater.inputs[0].get_witness().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_eq!(
-        verify_signature(outpoint_dest, &tx, 0),
-        Err(TransactionSigError::SignatureVerificationFailed)
-    );
+    assert_verify_signature(outpoint_dest, &tx, should_fail);
 }
 
-#[test]
-fn test_sign_mutate_then_verify() {
-    let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint_dest = Destination::PublicKey(public_key);
-    {
-        // ALL - It signs every input and output, and any change to the transaction will render the signature invalid.
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-    }
-    {
-        // ALL | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-    }
-    {
-        // NONE -  This signs all the inputs to the transaction, but none of the outputs.
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-    }
-    {
-        // NONE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-    }
-    {
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
-    }
-    {
-        // SINGLE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
+fn assert_verify_signature(outpoint: &Destination, tx: &Transaction, should_fail: bool) {
+    let res = verify_signature(outpoint, tx, 0);
+    if should_fail {
+        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+    } else {
+        res.unwrap();
     }
 }

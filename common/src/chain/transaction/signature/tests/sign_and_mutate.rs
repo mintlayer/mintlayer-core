@@ -569,18 +569,18 @@ fn test_sign_mutate_then_verify_all() {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         // ALL - It signs every input and output, and any change to the transaction will render the signature invalid.
         let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_input(&original_tx, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
+        check_insert_input(&original_tx, &outpoint_dest, true);
+        check_insert_output(&original_tx, &outpoint_dest, true);
+        check_change_output(&original_tx, &outpoint_dest, true);
+        check_change_input(&original_tx, &outpoint_dest, true);
     }
     {
         // ALL | ANYONECANPAY
         let sighash_type =
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
         let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
-        check_insert_output(&original_tx, &outpoint_dest);
-        check_change_output(&original_tx, &outpoint_dest);
-        check_change_input(&original_tx, &outpoint_dest);
+        check_insert_output(&original_tx, &outpoint_dest, true);
+        check_change_output(&original_tx, &outpoint_dest, true);
+        check_change_input(&original_tx, &outpoint_dest, true);
     }
 }
