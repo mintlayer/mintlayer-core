@@ -180,7 +180,7 @@ mod test {
     use common::primitives::{Amount, BlockHeight, Idable};
     use common::primitives::{Id, H256};
     use crypto::random::{make_pseudo_rng, seq, Rng};
-    use itertools::Itertools;
+    use iter_tools::Itertools;
     use std::collections::BTreeMap;
 
     fn create_transactions(

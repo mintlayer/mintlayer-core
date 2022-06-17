@@ -4,7 +4,7 @@ use common::chain::{Destination, OutPoint, OutPointSourceId, Transaction, TxInpu
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::{make_pseudo_rng, seq, Rng};
-use itertools::Itertools;
+use iter_tools::Itertools;
 
 pub const FRESH: u8 = 1;
 pub const DIRTY: u8 = 2;
