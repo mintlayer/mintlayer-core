@@ -5,6 +5,8 @@ use crate::primitives::{BlockHeight, Id, Idable};
 // use crate::Uint256;
 use serialization::{Decode, Encode};
 
+use super::timestamp::BlockTimestamp;
+
 #[derive(Debug, Clone, Encode, Decode)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
@@ -14,13 +16,16 @@ pub struct BlockIndex {
     //  pub chain_trust: Uint256,
     chain_trust: u128,
     height: BlockHeight,
-    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
-    // TODO: Discuss with Sam
-    time_max: u32,
+    time_max: BlockTimestamp,
 }
 
 impl BlockIndex {
-    pub fn new(block: &Block, chain_trust: u128, height: BlockHeight, time_max: u32) -> Self {
+    pub fn new(
+        block: &Block,
+        chain_trust: u128,
+        height: BlockHeight,
+        time_max: BlockTimestamp,
+    ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
             block_header: block.header().clone(),
@@ -43,13 +48,11 @@ impl BlockIndex {
         self.block_header.is_genesis(chain_config)
     }
 
-    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
-    pub fn get_block_time(&self) -> u32 {
-        self.block_header.time
+    pub fn get_block_timestamp(&self) -> BlockTimestamp {
+        self.block_header.timestamp
     }
 
-    // TODO: Make a type for block time. ISSUE: https://github.com/mintlayer/mintlayer-core/issues/127
-    pub fn get_block_time_max(&self) -> u32 {
+    pub fn get_block_timestamps_max(&self) -> BlockTimestamp {
         self.time_max
     }
 

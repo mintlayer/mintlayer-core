@@ -2,6 +2,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::RngCore;
 
 use super::*;
+use crate::chain::block::timestamp::BlockTimestamp;
 use crate::{
     chain::{
         block::ConsensusData,
@@ -262,8 +263,13 @@ fn generate_random_invalid_block() -> Block {
     let time = rng.next_u32();
     let prev_id = Some(Id::new(&generate_random_h256(&mut rng)));
 
-    Block::new(transactions, prev_id, time, ConsensusData::None)
-        .expect("Creating block caused fail")
+    Block::new(
+        transactions,
+        prev_id,
+        BlockTimestamp::from_int_seconds(time),
+        ConsensusData::None,
+    )
+    .expect("Creating block caused fail")
 }
 
 #[test]

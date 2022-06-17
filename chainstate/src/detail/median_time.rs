@@ -1,4 +1,7 @@
-use common::{chain::block::Block, primitives::Id};
+use common::{
+    chain::block::{timestamp::BlockTimestamp, Block},
+    primitives::Id,
+};
 use itertools::Itertools;
 
 use crate::detail::block_index_history_iter::BlockIndexHistoryIterator;
@@ -11,11 +14,11 @@ const MEDIAN_TIME_SPAN: usize = 11;
 pub fn calculate_median_time_past<H: BlockIndexHandle>(
     block_index_handle: &H,
     starting_block: &Id<Block>,
-) -> u32 {
+) -> BlockTimestamp {
     let iter = BlockIndexHistoryIterator::new(starting_block.clone(), block_index_handle);
     let time_values = iter
         .take(MEDIAN_TIME_SPAN)
-        .map(|bi| bi.get_block_time())
+        .map(|bi| bi.get_block_timestamp())
         .sorted()
         .collect::<Vec<_>>();
 
@@ -29,7 +32,10 @@ mod test {
     use super::*;
     use blockchain_storage::Store;
     use common::{
-        chain::{block::ConsensusData, config::create_unit_test_config},
+        chain::{
+            block::{timestamp::BlockTimestamp, ConsensusData},
+            config::create_unit_test_config,
+        },
         primitives::{time, Idable},
     };
     use std::{
@@ -38,8 +44,13 @@ mod test {
     };
 
     fn make_block(prev_block: Id<Block>, time: u32) -> Block {
-        Block::new(vec![], Some(prev_block), time, ConsensusData::None)
-            .expect("Block creation failed")
+        Block::new(
+            vec![],
+            Some(prev_block),
+            BlockTimestamp::from_int_seconds(time),
+            ConsensusData::None,
+        )
+        .expect("Block creation failed")
     }
 
     fn chain_blocks(count: usize, initial_prev: Id<Block>, initial_time: u32) -> Vec<Block> {
@@ -49,7 +60,7 @@ mod test {
         for _ in 0..count {
             let block = make_block(prev, time);
             prev = block.get_id().clone();
-            time = block.block_time() + 1;
+            time = block.timestamp().as_int_seconds() + 1;
             res.push(block);
         }
         assert_eq!(res.len(), count);
@@ -89,7 +100,7 @@ mod test {
                     &chainstate_ref,
                     &chainstate.chain_config.genesis_block_id(),
                 );
-                assert_eq!(median, chainstate.chain_config.genesis_block().block_time());
+                assert_eq!(median, chainstate.chain_config.genesis_block().timestamp());
             }
 
             for n in 0..MEDIAN_TIME_SPAN {
@@ -97,7 +108,7 @@ mod test {
                 // up to the median span
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &blocks[n].get_id());
-                assert_eq!(median, blocks[n / 2].block_time());
+                assert_eq!(median, blocks[n / 2].timestamp());
             }
 
             for n in MEDIAN_TIME_SPAN..block_count {
@@ -105,7 +116,7 @@ mod test {
                 // starting from the median span
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &blocks[n].get_id());
-                assert_eq!(median, blocks[n - MEDIAN_TIME_SPAN / 2].block_time());
+                assert_eq!(median, blocks[n - MEDIAN_TIME_SPAN / 2].timestamp());
             }
         });
     }
@@ -116,7 +127,7 @@ mod test {
             let chain_config = Arc::new(create_unit_test_config());
 
             let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
-                chain_config.genesis_block().block_time() as u64,
+                chain_config.genesis_block().timestamp().as_int_seconds() as u64,
             ));
 
             let chainstate_current_time = Arc::clone(&current_time);
@@ -159,42 +170,42 @@ mod test {
                     &chainstate_ref,
                     &chainstate.chain_config.genesis_block_id(),
                 );
-                assert_eq!(median, chainstate.chain_config.genesis_block().block_time());
+                assert_eq!(median, chainstate.chain_config.genesis_block().timestamp());
             }
 
             {
                 // median time for block of height 1
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &block1.get_id());
-                assert_eq!(median, block1_time);
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block1_time));
             }
 
             {
                 // median time for block of height 2
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &block2.get_id());
-                assert_eq!(median, block1_time);
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block1_time));
             }
 
             {
                 // median time for block of height 3
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &block3.get_id());
-                assert_eq!(median, block3_time);
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 4
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &block4.get_id());
-                assert_eq!(median, block3_time);
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block3_time));
             }
 
             {
                 // median time for block of height 5
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let median = calculate_median_time_past(&chainstate_ref, &block5.get_id());
-                assert_eq!(median, block5_time);
+                assert_eq!(median, BlockTimestamp::from_int_seconds(block5_time));
             }
         });
     }

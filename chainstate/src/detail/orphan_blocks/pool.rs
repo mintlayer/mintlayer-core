@@ -214,6 +214,7 @@ mod tests {
 
     mod helpers {
         use super::*;
+        use common::chain::block::timestamp::BlockTimestamp;
         use common::chain::block::ConsensusData;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
@@ -235,7 +236,7 @@ mod tests {
             Block::new(
                 vec![tx],
                 Some(prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into())),
-                rng.gen(),
+                BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,
             )
             .unwrap()

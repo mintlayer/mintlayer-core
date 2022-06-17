@@ -18,6 +18,7 @@
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
 use blockchain_storage::Store;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
@@ -158,7 +159,7 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(&prev_block.get_id().get()))
         },
-        time::get().as_secs() as u32,
+        BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
         consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)

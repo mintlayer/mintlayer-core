@@ -282,15 +282,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             Some(prev_block_id) => {
                 let median_time_past = calculate_median_time_past(self, prev_block_id);
                 ensure!(
-                    block.block_time() >= median_time_past,
+                    block.timestamp() >= median_time_past,
                     CheckBlockError::BlockTimeOrderInvalid,
                 );
 
-                let max_future_offset =
-                    self.chain_config.max_future_block_time_offset().as_secs() as u64;
-                let current_time = self.current_time().as_secs();
+                let max_future_offset = self.chain_config.max_future_block_time_offset();
+                let current_time = self.current_time();
+                let block_timestamp = block.timestamp();
                 ensure!(
-                    u64::from(block.block_time()) <= current_time + max_future_offset,
+                    block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
                     CheckBlockError::BlockFromTheFuture,
                 );
             }
@@ -687,8 +687,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         });
 
         // Set Time Max
-        let time_max = prev_block_index.as_ref().map_or(block.block_time(), |prev_block_index| {
-            std::cmp::max(prev_block_index.get_block_time_max(), block.block_time())
+        let time_max = prev_block_index.as_ref().map_or(block.timestamp(), |prev_block_index| {
+            std::cmp::max(
+                prev_block_index.get_block_timestamps_max(),
+                block.timestamp(),
+            )
         });
 
         // Set Chain Trust

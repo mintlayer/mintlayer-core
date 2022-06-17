@@ -159,7 +159,7 @@ mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
     use common::{
-        chain::block::ConsensusData,
+        chain::block::{timestamp::BlockTimestamp, ConsensusData},
         primitives::{Idable, H256},
     };
     use storage::traits::{TransactionRo, TransactionRw};
@@ -288,11 +288,17 @@ mod tests {
     fn sample_data() -> (Block, Block) {
         let tx0 = Transaction::new(0xaabbccdd, vec![], vec![], 12).unwrap();
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
-        let block0 = Block::new(vec![tx0], None, 12, ConsensusData::None).unwrap();
+        let block0 = Block::new(
+            vec![tx0],
+            None,
+            BlockTimestamp::from_int_seconds(12),
+            ConsensusData::None,
+        )
+        .unwrap();
         let block1 = Block::new(
             vec![tx1],
             Some(Id::new(&block0.get_id().get())),
-            34,
+            BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
         .unwrap();

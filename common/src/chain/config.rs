@@ -1,5 +1,6 @@
 use hex::FromHex;
 
+use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
@@ -203,8 +204,13 @@ fn create_mainnet_genesis() -> Block {
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
-        .expect("Error creating genesis block")
+    Block::new(
+        vec![tx],
+        None,
+        BlockTimestamp::from_int_seconds(1639975460),
+        ConsensusData::None,
+    )
+    .expect("Error creating genesis block")
 }
 
 fn create_unit_test_genesis(premine_destination: Destination) -> Block {
@@ -221,8 +227,13 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
-        .expect("Error creating genesis block")
+    Block::new(
+        vec![tx],
+        None,
+        BlockTimestamp::from_int_seconds(1639975460),
+        ConsensusData::None,
+    )
+    .expect("Error creating genesis block")
 }
 
 fn subsidy_in_year_to_subsidy_in_height<S: AsRef<str>>(

@@ -140,7 +140,7 @@ where
 mod tests {
     use super::*;
     use crate::net::mock::MockService;
-    use common::chain::block::consensus_data::ConsensusData;
+    use common::chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp};
     use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
@@ -157,8 +157,15 @@ mod tests {
     #[test]
     fn test_set_state() {
         let mut peer = new_mock_peersyncstate();
-        let header =
-            Block::new(vec![], None, 1337u32, ConsensusData::None).unwrap().header().clone();
+        let header = Block::new(
+            vec![],
+            None,
+            BlockTimestamp::from_int_seconds(1337u32),
+            ConsensusData::None,
+        )
+        .unwrap()
+        .header()
+        .clone();
 
         assert_eq!(peer.state, PeerSyncState::Unknown);
         peer.set_state(PeerSyncState::UploadingBlocks(header.get_id()));
