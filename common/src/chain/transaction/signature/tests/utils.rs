@@ -21,16 +21,14 @@ pub struct MutableTransaction {
     pub lock_time: u32,
 }
 
-impl TryFrom<&Transaction> for MutableTransaction {
-    type Error = &'static str;
-
-    fn try_from(tx: &Transaction) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<&Transaction> for MutableTransaction {
+    fn from(tx: &Transaction) -> Self {
+        Self {
             flags: tx.get_flags(),
             inputs: tx.get_inputs().clone(),
             outputs: tx.get_outputs().clone(),
             lock_time: tx.get_lock_time(),
-        })
+        }
     }
 }
 
@@ -115,6 +113,7 @@ pub fn verify_signed_tx(
     Ok(())
 }
 
+/// Returns an iterator over all possible signature hash types.
 pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> {
     [
         SigHashType::try_from(SigHashType::ALL),

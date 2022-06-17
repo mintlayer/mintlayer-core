@@ -21,13 +21,13 @@ use crypto::key::{KeyKind, PrivateKey};
 use script::Script;
 
 fn change_flags(original_tx: &Transaction, new_flags: u32) -> Transaction {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = new_flags;
     tx_updater.generate_tx().unwrap()
 }
 
 fn change_locktime(original_tx: &Transaction, new_lock_time: u32) -> Transaction {
-    let mut tx_updater = MutableTransaction::try_from(original_tx).unwrap();
+    let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = new_lock_time;
     tx_updater.generate_tx().unwrap()
 }
@@ -148,7 +148,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -177,7 +177,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -197,7 +197,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -226,7 +226,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -249,7 +249,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -278,7 +278,7 @@ fn test_sign_mutate_add_inputs() {
             &outpoint_dest,
             &private_key,
         );
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -309,7 +309,7 @@ fn test_sign_mutate_then_verify_all() {
         .unwrap();
         assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
         // Add the new input and then verify
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.outputs.push(tx_updater.outputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
         assert_eq!(
@@ -345,7 +345,7 @@ fn test_sign_mutate_then_verify_all() {
 
         {
             // Remove the first input
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.inputs.remove(0);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -367,7 +367,7 @@ fn test_sign_mutate_then_verify_all() {
         }
         {
             // Remove the input in the middle
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.inputs.remove(7);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -389,7 +389,7 @@ fn test_sign_mutate_then_verify_all() {
         }
         {
             // Remove the last input
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.inputs.remove(13);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -425,7 +425,7 @@ fn test_sign_mutate_then_verify_all() {
         // Add the new input and then verify
         {
             // Remove the first output
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.outputs.remove(0);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -447,7 +447,7 @@ fn test_sign_mutate_then_verify_all() {
         }
         {
             // Remove output in the middle
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.outputs.remove(7);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -469,7 +469,7 @@ fn test_sign_mutate_then_verify_all() {
         }
         {
             // Remove the last output
-            let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+            let mut tx_updater = MutableTransaction::from(&original_tx);
             tx_updater.outputs.remove(13);
             let tx = tx_updater.generate_tx().unwrap();
             assert_eq!(
@@ -503,7 +503,7 @@ fn test_sign_mutate_then_verify_all() {
         .unwrap();
         assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
         // Add the new input and then verify
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs[0] = TxInput::new(
             OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
             9999,
@@ -540,7 +540,7 @@ fn test_sign_mutate_then_verify_all() {
         .unwrap();
         assert_eq!(verify_signed_tx(&original_tx, &outpoint_dest), Ok(()));
         // Add the new input and then verify
-        let mut tx_updater = MutableTransaction::try_from(&original_tx).unwrap();
+        let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.outputs[0] = TxOutput::new(
             (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
             tx_updater.outputs[0].get_destination().clone(),
