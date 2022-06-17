@@ -383,7 +383,7 @@ where
         let mut prev_id = headers
             .get(0)
             .expect("first header to exist")
-            .get_prev_block_id()
+            .prev_block_id()
             .clone()
             .ok_or_else(|| {
                 // TODO: ban peer
@@ -404,7 +404,7 @@ where
         }
 
         for header in &headers {
-            if header.get_prev_block_id() != &Some(prev_id) {
+            if header.prev_block_id() != &Some(prev_id) {
                 log::error!("peer {:?} sent headers that are out of order", peer_id);
                 return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
             }

@@ -36,35 +36,35 @@ impl BlockIndex {
         }
     }
 
-    pub fn get_block_id(&self) -> &Id<Block> {
+    pub fn block_id(&self) -> &Id<Block> {
         &self.block_id
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
-        &self.block_header.prev_block_hash
+    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+        self.block_header.prev_block_id()
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
         self.block_header.is_genesis(chain_config)
     }
 
-    pub fn get_block_timestamp(&self) -> BlockTimestamp {
-        self.block_header.timestamp
+    pub fn block_timestamp(&self) -> BlockTimestamp {
+        self.block_header.timestamp()
     }
 
-    pub fn get_block_timestamps_max(&self) -> BlockTimestamp {
+    pub fn chain_timestamps_max(&self) -> BlockTimestamp {
         self.time_max
     }
 
-    pub fn get_block_height(&self) -> BlockHeight {
+    pub fn block_height(&self) -> BlockHeight {
         self.height
     }
 
-    pub fn get_chain_trust(&self) -> u128 {
+    pub fn chain_trust(&self) -> u128 {
         self.chain_trust
     }
 
-    pub fn get_block_header(&self) -> &BlockHeader {
+    pub fn block_header(&self) -> &BlockHeader {
         &self.block_header
     }
 

@@ -43,8 +43,8 @@ pub fn create_tx_inputs(outpoints: &[OutPoint]) -> Vec<TxInput> {
         .map(|idx| {
             let outpoint = outpoints.get(idx).expect("should return an outpoint");
             TxInput::new(
-                outpoint.get_tx_id(),
-                outpoint.get_output_index(),
+                outpoint.tx_id(),
+                outpoint.output_index(),
                 InputWitness::NoSignature(None),
             )
         })

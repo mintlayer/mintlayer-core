@@ -43,7 +43,7 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
             }
         };
 
-        self.next_id = bi.get_prev_block_id().clone();
+        self.next_id = bi.prev_block_id().clone();
 
         Some(bi)
     }
@@ -106,11 +106,11 @@ mod tests {
             {
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let mut iter = BlockIndexHistoryIterator::new(block3.get_id(), &chainstate_ref);
-                assert_eq!(iter.next().unwrap().get_block_id(), &block3.get_id());
-                assert_eq!(iter.next().unwrap().get_block_id(), &block2.get_id());
-                assert_eq!(iter.next().unwrap().get_block_id(), &block1.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), &block3.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), &block2.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), &block1.get_id());
                 assert_eq!(
-                    iter.next().unwrap().get_block_id(),
+                    iter.next().unwrap().block_id(),
                     &chain_config.genesis_block_id()
                 );
                 assert!(iter.next().is_none());
@@ -124,7 +124,7 @@ mod tests {
                     &chainstate_ref,
                 );
                 assert_eq!(
-                    iter.next().unwrap().get_block_id(),
+                    iter.next().unwrap().block_id(),
                     &chain_config.genesis_block_id()
                 );
                 assert!(iter.next().is_none());

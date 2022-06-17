@@ -23,7 +23,7 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
         BlockHeight::from(0)
     } else {
         let prev_block_id = header
-            .get_prev_block_id()
+            .prev_block_id()
             .clone()
             .expect("Block not genesis so must have a prev_block_id");
 
@@ -42,7 +42,7 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
             .ok_or_else(|| {
                 ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())
             })?
-            .get_block_height()
+            .block_height()
             .checked_add(1)
             .expect("max block height reached")
     };

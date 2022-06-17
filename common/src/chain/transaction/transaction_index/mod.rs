@@ -53,15 +53,15 @@ impl TxMainChainPosition {
         }
     }
 
-    pub fn get_block_id(&self) -> &Id<Block> {
+    pub fn block_id(&self) -> &Id<Block> {
         &self.block_id
     }
 
-    pub fn get_byte_offset_in_block(&self) -> u32 {
+    pub fn byte_offset_in_block(&self) -> u32 {
         self.byte_offset_in_block
     }
 
-    pub fn get_serialized_size(&self) -> u32 {
+    pub fn serialized_size(&self) -> u32 {
         self.serialized_size
     }
 }
@@ -148,7 +148,7 @@ pub fn calculate_tx_index_from_block(
 
     TxMainChainIndex::new(
         SpendablePosition::from(tx_position),
-        tx.get_outputs()
+        tx.outputs()
             .len()
             .try_into()
             .expect("Number conversion from usize to u32 should not fail here (3)"),
@@ -203,7 +203,7 @@ impl TxMainChainIndex {
         }
     }
 
-    pub fn get_position(&self) -> &SpendablePosition {
+    pub fn position(&self) -> &SpendablePosition {
         &self.position
     }
 
@@ -221,7 +221,7 @@ impl TxMainChainIndex {
         self.spent.iter().all(|s| matches!(s, OutputSpentState::SpentBy(_)))
     }
 
-    pub fn get_output_count(&self) -> u32 {
+    pub fn output_count(&self) -> u32 {
         self.spent.len() as u32
     }
 

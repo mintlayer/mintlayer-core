@@ -14,7 +14,7 @@ use super::timestamp::BlockTimestamp;
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
     pub(super) version: VersionTag<1>,
-    pub(super) prev_block_hash: Option<Id<Block>>,
+    pub(super) prev_block_id: Option<Id<Block>>,
     pub(super) tx_merkle_root: Option<H256>,
     pub(super) witness_merkle_root: Option<H256>,
     pub(super) timestamp: BlockTimestamp,
@@ -31,11 +31,11 @@ impl BlockHeader {
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.prev_block_hash == None && chain_config.genesis_block_id() == self.block_id()
+        self.prev_block_id == None && chain_config.genesis_block_id() == self.block_id()
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
-        &self.prev_block_hash
+    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+        &self.prev_block_id
     }
 
     pub fn timestamp(&self) -> BlockTimestamp {
@@ -96,7 +96,7 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn get_prev_block_id(&self) -> &Option<Id<Block>> {
-        &self.header.prev_block_hash
+    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+        &self.header.prev_block_id
     }
 }
