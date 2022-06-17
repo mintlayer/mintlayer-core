@@ -17,9 +17,7 @@
 use crate::{
     message,
     net::{
-        types::{
-            ConnectivityEvent, PeerInfo, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult,
-        },
+        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
 };
@@ -145,7 +143,7 @@ impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
     T: NetworkingService<Address = SocketAddr, PeerId = SocketAddr> + Send,
 {
-    async fn connect(&mut self, addr: T::Address) -> crate::Result<PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         let (tx, rx) = oneshot::channel();

@@ -167,8 +167,8 @@ where
         iter.into_iter().for_each(|(id, addr)| {
             entry.id = id;
             match get_addr_from_multiaddr(&addr) {
-                Some(Protocol::Ip4(_)) => entry.ip4.push(Arc::new(addr)),
-                Some(Protocol::Ip6(_)) => entry.ip6.push(Arc::new(addr)),
+                Some(Protocol::Ip4(_)) => entry.ip4.push(addr),
+                Some(Protocol::Ip6(_)) => entry.ip6.push(addr),
                 _ => panic!("parse_discovered_addr() failed!"),
             }
         });
@@ -217,7 +217,7 @@ where
                     }
 
                     Ok((
-                        common::primitives::version::SemVer::new(maj, min, pat),
+                        common::primitives::semver::SemVer::new(maj, min, pat),
                         magic.to_le_bytes(),
                     ))
                 }
@@ -383,7 +383,7 @@ where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
     IdentifyInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
-    async fn connect(&mut self, addr: T::Address) -> crate::Result<net::types::PeerInfo<T>> {
+    async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
 
         // TODO: add tests for both cases
@@ -408,13 +408,7 @@ where
             })
             .await?;
 
-        // read peer information
-        let info = rx
-            .await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e)?; // command failure
-
-        Ok(info.try_into()?)
+        rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
@@ -441,10 +435,14 @@ where
     // TODO: `impl TryInto<ConnectivityEvent> for types::ConnectivityEvent`??
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::ConnectionAccepted { peer_info } => {
+            types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
+                    addr,
                     peer_info: (*peer_info).try_into()?,
                 })
+            }
+            types::ConnectivityEvent::ConnectionError { addr, error } => {
+                Ok(ConnectivityEvent::ConnectionError { addr, error })
             }
             types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
                 Ok(ConnectivityEvent::IncomingConnection {
@@ -860,8 +858,8 @@ mod tests {
             parsed,
             vec![net::types::AddrInfo {
                 id,
-                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id.into())))],
-                ip6: vec![Arc::new(ip6.with(Protocol::P2p(id.into())))],
+                ip4: vec![ip4.with(Protocol::P2p(id.into()))],
+                ip6: vec![ip6.with(Protocol::P2p(id.into()))],
             }]
         );
     }
@@ -897,13 +895,13 @@ mod tests {
             vec![
                 net::types::AddrInfo {
                     id: id_2,
-                    ip4: vec![Arc::new(ip4_2.with(Protocol::P2p(id_2.into())))],
-                    ip6: vec![Arc::new(ip6_2.with(Protocol::P2p(id_2.into())))],
+                    ip4: vec![ip4_2.with(Protocol::P2p(id_2.into()))],
+                    ip6: vec![ip6_2.with(Protocol::P2p(id_2.into()))],
                 },
                 net::types::AddrInfo {
                     id: id_1,
-                    ip4: vec![Arc::new(ip4_1.with(Protocol::P2p(id_1.into())))],
-                    ip6: vec![Arc::new(ip6_1.with(Protocol::P2p(id_1.into())))],
+                    ip4: vec![ip4_1.with(Protocol::P2p(id_1.into()))],
+                    ip6: vec![ip6_1.with(Protocol::P2p(id_1.into()))],
                 },
             ]
         );
@@ -929,7 +927,7 @@ mod tests {
             parsed,
             vec![net::types::AddrInfo {
                 id: id_1,
-                ip4: vec![Arc::new(ip4.with(Protocol::P2p(id_1.into())))],
+                ip4: vec![ip4.with(Protocol::P2p(id_1.into()))],
                 ip6: vec![],
             }]
         );
@@ -956,12 +954,16 @@ mod tests {
         // first try to connect to address nobody is listening to
         // and verify that the connection is refused immediately
         let start = std::time::SystemTime::now();
-        assert_eq!(
-            service.connect(addr.clone()).await,
-            Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::ConnectionRefused
-            )))
-        );
+        assert_eq!(service.connect(addr.clone()).await, Ok(()));
+        assert!(std::matches!(
+            service.poll_next().await,
+            Ok(net::types::ConnectivityEvent::ConnectionError {
+                addr: _,
+                error: P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::ConnectionRefused
+                ))
+            })
+        ));
 
         let timeout = if cfg!(target_os = "linux") || cfg!(target_os = "macos") {
             0
@@ -978,12 +980,16 @@ mod tests {
         let _service = TcpListener::bind(format!("[::1]:{}", port)).await.unwrap();
         let start = std::time::SystemTime::now();
 
-        assert_eq!(
-            service.connect(addr).await,
-            Err(P2pError::DialError(DialError::IoError(
-                std::io::ErrorKind::ConnectionRefused
-            )))
-        );
+        assert_eq!(service.connect(addr).await, Ok(()),);
+        assert!(std::matches!(
+            service.poll_next().await,
+            Ok(net::types::ConnectivityEvent::ConnectionError {
+                addr: _,
+                error: P2pError::DialError(DialError::IoError(
+                    std::io::ErrorKind::ConnectionRefused
+                ))
+            })
+        ));
         assert!(std::time::SystemTime::now().duration_since(start).unwrap().as_secs() >= 2);
     }
 }

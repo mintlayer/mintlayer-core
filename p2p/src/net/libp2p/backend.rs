@@ -26,7 +26,6 @@ use futures::StreamExt;
 use libp2p::{
     core::either::EitherError,
     gossipsub::error::GossipsubHandlerError,
-    identify::IdentifyInfo,
     ping,
     request_response::*,
     swarm::{ConnectionHandlerUpgrErr, Swarm, SwarmEvent},
@@ -34,22 +33,18 @@ use libp2p::{
 };
 use logging::log;
 use std::collections::{HashMap, HashSet};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 #[derive(Debug)]
 pub(super) enum PendingState {
     /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed {
-        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
-    },
+    Dialed(Multiaddr),
 
     /// Connection established for outbound connection
-    OutboundAccepted {
-        tx: oneshot::Sender<crate::Result<IdentifyInfo>>,
-    },
+    OutboundAccepted(Multiaddr),
 
     /// Connection established for inbound connection
-    InboundAccepted { addr: Multiaddr },
+    InboundAccepted(Multiaddr),
 }
 
 pub struct Backend {
@@ -197,12 +192,12 @@ impl Backend {
                 peer_id,
                 peer_addr,
                 response,
-            } => match self.swarm.dial(peer_addr) {
+            } => match self.swarm.dial(peer_addr.clone()) {
                 Ok(_) => {
-                    self.pending_conns.insert(peer_id, PendingState::Dialed { tx: response });
-                    Ok(())
+                    self.pending_conns.insert(peer_id, PendingState::Dialed(peer_addr));
+                    response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
                 }
-                Err(e) => Err(e.into()),
+                Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
             },
             types::Command::Disconnect { peer_id, response } => {
                 log::debug!("disconnect peer {:?}", peer_id);

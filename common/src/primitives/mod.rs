@@ -23,8 +23,8 @@ mod hash_encoded;
 pub mod height;
 pub mod id;
 pub mod merkle;
+pub mod semver;
 pub mod time;
-pub mod version;
 pub mod version_tag;
 
 pub use amount::Amount;
