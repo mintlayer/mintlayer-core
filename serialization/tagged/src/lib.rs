@@ -72,7 +72,7 @@
 //! #[derive(DirectEncode, DirectDecode)]
 //! enum Header {
 //!     V1(HeaderV1),
-//!     v2(HeaderV2),
+//!     V2(HeaderV2),
 //! }
 //!
 //! // Create a PoW header
