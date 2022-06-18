@@ -49,16 +49,16 @@ impl MutableTransaction {
 
 pub fn generate_unsigned_tx(
     outpoint_dest: Destination,
-    inputs_count: u32,
-    outputs_count: u32,
+    inputs_count: usize,
+    outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
     let mut rng = rand::thread_rng();
 
-    let inputs = (0u32..inputs_count)
+    let inputs = (0..inputs_count)
         .map(|input_index| {
             TxInput::new(
                 Id::<Transaction>::new(&H256::random()).into(),
-                input_index,
+                input_index as u32,
                 InputWitness::NoSignature(None),
             )
         })
@@ -70,7 +70,7 @@ pub fn generate_unsigned_tx(
             outpoint_dest.clone(),
         ))
     })
-    .take(outputs_count as usize)
+    .take(outputs_count)
     .collect();
 
     let tx = Transaction::new(0, inputs, outputs, 0)?;
@@ -118,7 +118,7 @@ pub fn verify_signed_tx(
 }
 
 /// Returns an iterator over all possible signature hash types.
-pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> {
+pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> + Clone {
     [
         SigHashType::try_from(SigHashType::ALL),
         SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY),

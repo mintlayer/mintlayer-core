@@ -20,8 +20,8 @@ use utils::*;
 type TestData = Vec<(
     Destination,
     SigHashType,
-    u32,
-    u32,
+    usize,
+    usize,
     Result<(), TransactionSigError>,
 )>;
 

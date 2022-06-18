@@ -35,7 +35,7 @@ pub mod sighashtype;
 
 use thiserror::Error;
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TransactionSigError {
     #[error("Invalid sighash value provided")]
     InvalidSigHashValue(u8),

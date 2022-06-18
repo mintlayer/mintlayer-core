@@ -1,149 +1,85 @@
-use super::super::sighashtype::SigHashType;
-use super::utils::*;
-use crate::chain::signature::sighashtype::OutputsMode;
-use crate::chain::signature::tests::check_change_input;
-use crate::chain::signature::tests::check_change_output;
-use crate::chain::signature::tests::check_insert_input;
-use crate::chain::signature::tests::check_insert_output;
-use crate::chain::signature::tests::sign_modify_then_verify;
-use crate::chain::signature::verify_signature;
-use crate::chain::OutPointSourceId;
-use crate::chain::Transaction;
-use crate::chain::TxInput;
-use crate::chain::TxOutput;
-use crate::primitives::Amount;
-use crate::{
-    address::pubkeyhash::PublicKeyHash,
-    chain::{signature::TransactionSigError, Destination},
-    primitives::{Id, H256},
-};
 use crypto::key::{KeyKind, PrivateKey};
-use script::Script;
 
-fn change_flags(original_tx: &Transaction, new_flags: u32) -> Transaction {
-    let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.flags = new_flags;
-    tx_updater.generate_tx().unwrap()
-}
+use super::utils::*;
+use crate::{
+    chain::{
+        signature::{
+            sighashtype::{OutputsMode, SigHashType},
+            tests::{
+                check_change_input, check_change_output, check_insert_input, check_insert_output,
+                sign_modify_then_verify,
+            },
+            verify_signature, TransactionSigError,
+        },
+        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+    },
+    primitives::{Amount, Id, H256},
+};
 
-fn change_locktime(original_tx: &Transaction, new_lock_time: u32) -> Transaction {
-    let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.lock_time = new_lock_time;
-    tx_updater.generate_tx().unwrap()
-}
+use itertools::Itertools;
 
 #[test]
 fn test_mutate_tx_internal_data() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
-    let destinations = vec![
-        Destination::PublicKey(public_key.clone()),
-        Destination::Address(PublicKeyHash::from(&public_key)),
-        Destination::AnyoneCanSpend,
-        Destination::ScriptHash(Id::<Script>::from(H256::random())),
-    ];
-    let sighash_types = vec![
-        SigHashType::try_from(SigHashType::ALL).unwrap(),
-        SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
-        SigHashType::try_from(SigHashType::NONE).unwrap(),
-        SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
-        SigHashType::try_from(SigHashType::SINGLE).unwrap(),
-        SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
-    ];
-
-    let test_data = vec![
-        (0u32, 31u32, Ok(())),
+    let test_data = [
+        (0, 31, Ok(())),
+        (31, 0, Err(TransactionSigError::SignatureVerificationFailed)),
         (
-            31u32,
-            0u32,
-            Err(TransactionSigError::SignatureVerificationFailed),
-        ),
-        (
-            31u32,
-            31u32,
+            31,
+            31,
             Err(TransactionSigError::SignatureVerificationFailed),
         ),
     ];
 
-    // Multiply variants in nested loops - destinations * sighash_types * test_data
-    for outpoint_dest in destinations {
-        for sighash_type in &sighash_types {
-            test_data.iter().for_each(|(inputs_count, outputs_count, expected_result)| {
-                let mut tx =
-                    generate_unsigned_tx(outpoint_dest.clone(), *inputs_count, *outputs_count)
-                        .unwrap();
-                match sign_whole_tx(&mut tx, &private_key, *sighash_type, outpoint_dest.clone()) {
-                    Ok(_) => {
-                        // Test flags change
-                        let updated_tx = change_flags(&tx, 1234567890);
-                        assert_eq!(
-                            verify_signed_tx(&updated_tx, &outpoint_dest),
-                            *expected_result
-                        );
-                        // Test locktime change
-                        let updated_tx = change_locktime(&tx, 1234567890);
-                        assert_eq!(
-                            verify_signed_tx(&updated_tx, &outpoint_dest),
-                            *expected_result
-                        )
+    for ((destination, sighash_type), (inputs, outputs, expected)) in destinations(public_key)
+        .cartesian_product(sig_hash_types())
+        .cartesian_product(test_data)
+    {
+        let mut tx = generate_unsigned_tx(destination.clone(), inputs, outputs).unwrap();
+        match sign_whole_tx(&mut tx, &private_key, sighash_type, destination.clone()) {
+            Ok(()) => {
+                // Test flags change.
+                let updated_tx = change_flags(&tx, 1234567890);
+                assert_eq!(verify_signed_tx(&updated_tx, &destination), expected);
+                // Test locktime change.
+                let updated_tx = change_locktime(&tx, 1234567890);
+                assert_eq!(verify_signed_tx(&updated_tx, &destination), expected)
+            }
+            Err(err) => {
+                match err {
+                    // Not implemented.
+                    TransactionSigError::Unsupported => {
+                        assert!(matches!(destination, Destination::ScriptHash(_)))
                     }
-                    Err(err) => {
-                        let mut skip = false;
-                        if matches!(
-                            err,
-                            TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend
-                                | TransactionSigError::Unsupported
-                        ) {
-                            // TODO: Add tests for AnyoneCanSpend and ScriptHash
-                            skip = true;
-                        }
-                        if matches!(sighash_type.outputs_mode(), OutputsMode::Single)
-                            && err == TransactionSigError::InvalidInputIndex(0, 0)
-                        {
-                            skip = true;
-                        }
-
-                        if !skip {
-                            assert_eq!(Err(err), *expected_result)
-                        }
+                    TransactionSigError::AttemptedToProduceSignatureForAnyoneCanSpend => {
+                        assert_eq!(destination, Destination::AnyoneCanSpend)
                     }
+                    TransactionSigError::InvalidInputIndex(0, 0) => {
+                        assert_eq!(sighash_type.outputs_mode(), OutputsMode::Single)
+                    }
+                    e => assert_eq!(Err(e), expected),
                 }
-            });
+            }
         }
     }
 }
 
-fn create_tx(
-    input_count: u32,
-    output_count: u32,
-    sighash_type: SigHashType,
-    outpoint_dest: &Destination,
-    private_key: &PrivateKey,
-) -> Transaction {
-    let mut original_tx =
-        generate_unsigned_tx(outpoint_dest.clone(), input_count, output_count).unwrap();
-    sign_whole_tx(
-        &mut original_tx,
-        private_key,
-        sighash_type,
-        outpoint_dest.clone(),
-    )
-    .unwrap();
-    assert_eq!(verify_signed_tx(&original_tx, outpoint_dest), Ok(()));
-    original_tx
-}
-
+// Add a new input into a signed transaction.
 #[test]
-fn test_sign_mutate_add_inputs() {
+fn sign_mutate_add_inputs() {
+    const INPUTS: usize = 15;
+    const OUTPUTS: usize = 15;
+    const INVALID_INPUT: usize = 1235466;
+
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
 
-    // Add a new input into a signed tx
+    // ALL.
     {
-        // SigHashType::ALL
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::ALL).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -151,12 +87,16 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 15),
+            verify_signature(&outpoint_dest, &tx, INPUTS),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         assert_eq!(
@@ -168,11 +108,13 @@ fn test_sign_mutate_add_inputs() {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }
+
+    // ALL | ANYONECANPAY is applied to one input only, so signature verification should pass for
+    // any input except the invalid one.
     {
-        // SigHashType::ALL | SigHashType::ANYONECANPAY
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -180,19 +122,24 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
-        assert_eq!(verify_signature(&outpoint_dest, &tx, 15), Ok(()));
+        assert_eq!(verify_signature(&outpoint_dest, &tx, INPUTS), Ok(()));
         assert_eq!(verify_signature(&outpoint_dest, &tx, 0), Ok(()));
         assert_eq!(verify_signature(&outpoint_dest, &tx, 10), Ok(()));
     }
+
+    // SINGLE.
     {
-        // SigHashType::SINGLE
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::SINGLE).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -200,13 +147,17 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 15),
-            Err(TransactionSigError::InvalidInputIndex(15, 15))
+            verify_signature(&outpoint_dest, &tx, INPUTS),
+            Err(TransactionSigError::InvalidInputIndex(INPUTS, INPUTS))
         );
         assert_eq!(
             verify_signature(&outpoint_dest, &tx, 0),
@@ -217,11 +168,12 @@ fn test_sign_mutate_add_inputs() {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }
+
+    // SINGLE | ANYONECANPAY.
     {
-        // SigHashType::SINGLE | SigHashType::ANYONECANPAY
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -229,22 +181,27 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 15),
-            Err(TransactionSigError::InvalidInputIndex(15, 15))
+            verify_signature(&outpoint_dest, &tx, INPUTS),
+            Err(TransactionSigError::InvalidInputIndex(INPUTS, INPUTS))
         );
         assert_eq!(verify_signature(&outpoint_dest, &tx, 0), Ok(()));
         assert_eq!(verify_signature(&outpoint_dest, &tx, 10), Ok(()));
     }
+
+    // NONE.
     {
-        // SigHashType::NONE
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::NONE).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -252,12 +209,16 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 15),
+            verify_signature(&outpoint_dest, &tx, INPUTS),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
         assert_eq!(
@@ -269,11 +230,12 @@ fn test_sign_mutate_add_inputs() {
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }
+
+    // NONE | ANYONECANPAY.
     {
-        // SigHashType::NONE | SigHashType::ANYONECANPAY
         let original_tx = create_tx(
-            15,
-            15,
+            INPUTS,
+            OUTPUTS,
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap(),
             &outpoint_dest,
             &private_key,
@@ -281,18 +243,23 @@ fn test_sign_mutate_add_inputs() {
         let mut tx_updater = MutableTransaction::from(&original_tx);
         tx_updater.inputs.push(tx_updater.inputs[0].clone());
         let tx = tx_updater.generate_tx().unwrap();
+
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 1235466),
-            Err(TransactionSigError::InvalidInputIndex(1235466, 16))
+            verify_signature(&outpoint_dest, &tx, INVALID_INPUT),
+            Err(TransactionSigError::InvalidInputIndex(
+                INVALID_INPUT,
+                INPUTS + 1
+            ))
         );
-        assert_eq!(verify_signature(&outpoint_dest, &tx, 15), Ok(()));
+        assert_eq!(verify_signature(&outpoint_dest, &tx, INPUTS), Ok(()));
         assert_eq!(verify_signature(&outpoint_dest, &tx, 0), Ok(()));
         assert_eq!(verify_signature(&outpoint_dest, &tx, 10), Ok(()));
     }
 }
 
+// TODO: FIXME:
 #[test]
-fn test_sign_mutate_then_verify_all() {
+fn sign_mutate_then_verify_all() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
 
@@ -583,4 +550,36 @@ fn test_sign_mutate_then_verify_all() {
         check_change_output(&original_tx, &outpoint_dest, true);
         check_change_input(&original_tx, &outpoint_dest, true);
     }
+}
+
+fn change_flags(original_tx: &Transaction, new_flags: u32) -> Transaction {
+    let mut tx_updater = MutableTransaction::from(original_tx);
+    tx_updater.flags = new_flags;
+    tx_updater.generate_tx().unwrap()
+}
+
+fn change_locktime(original_tx: &Transaction, new_lock_time: u32) -> Transaction {
+    let mut tx_updater = MutableTransaction::from(original_tx);
+    tx_updater.lock_time = new_lock_time;
+    tx_updater.generate_tx().unwrap()
+}
+
+fn create_tx(
+    input_count: usize,
+    output_count: usize,
+    sighash_type: SigHashType,
+    outpoint_dest: &Destination,
+    private_key: &PrivateKey,
+) -> Transaction {
+    let mut original_tx =
+        generate_unsigned_tx(outpoint_dest.clone(), input_count, output_count).unwrap();
+    sign_whole_tx(
+        &mut original_tx,
+        private_key,
+        sighash_type,
+        outpoint_dest.clone(),
+    )
+    .unwrap();
+    assert_eq!(verify_signed_tx(&original_tx, outpoint_dest), Ok(()));
+    original_tx
 }
