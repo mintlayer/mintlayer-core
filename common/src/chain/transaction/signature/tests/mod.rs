@@ -17,14 +17,6 @@ use crate::{
 };
 use utils::*;
 
-type TestData = Vec<(
-    Destination,
-    SigHashType,
-    usize,
-    usize,
-    Result<(), TransactionSigError>,
-)>;
-
 mod mixed_sighash_types;
 mod sign_and_mutate;
 mod sign_and_verify;
