@@ -54,7 +54,10 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{self, libp2p::proto::util};
+    use crate::net::{
+        self,
+        libp2p::{behaviour, proto::util},
+    };
     use futures::StreamExt;
     use libp2p::{
         identify::Identify,
@@ -75,7 +78,7 @@ mod tests {
         )
         .await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -122,7 +125,7 @@ mod tests {
         backend1.relay_mdns = false;
         backend2.relay_mdns = false;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -166,7 +169,7 @@ mod tests {
         )
         .await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -223,7 +226,7 @@ mod tests {
         backend1.relay_mdns = false;
         backend2.relay_mdns = false;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -267,7 +270,7 @@ mod tests {
         let mut swarm =
             SwarmBuilder::new(transport, util::make_identify(config, id_keys), peer_id).build();
 
-        util::connect_swarms::<types::ComposedBehaviour, Identify>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, Identify>(
             addr,
             &mut backend1.swarm,
             &mut swarm,

@@ -17,7 +17,7 @@
 use crate::net::{
     self,
     libp2p::sync::*,
-    libp2p::{backend::Backend, types},
+    libp2p::{backend::Backend, behaviour, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -88,7 +88,7 @@ pub async fn make_libp2p(
                 | (magic[3] as u32)
         );
 
-        let mut behaviour = types::ComposedBehaviour {
+        let mut behaviour = behaviour::Libp2pBehaviour {
             mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping: ping::Behaviour::new(
                 ping::Config::new()
@@ -184,7 +184,7 @@ pub async fn make_libp2p_with_ping(
                 | (magic[3] as u32)
         );
 
-        let mut behaviour = types::ComposedBehaviour {
+        let mut behaviour = behaviour::Libp2pBehaviour {
             mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),

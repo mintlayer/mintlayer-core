@@ -103,7 +103,7 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{backend, proto::util, types::ConnectivityEvent};
+    use crate::net::libp2p::{backend, behaviour, proto::util, types::ConnectivityEvent};
     use libp2p::{
         identify::IdentifyInfo, identity, swarm::ConnectionHandlerUpgrErr, Multiaddr, PeerId,
     };
@@ -182,7 +182,7 @@ mod tests {
         let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (mut backend2, _, _, _, _) = util::make_libp2p(config, addr2, &[]).await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,

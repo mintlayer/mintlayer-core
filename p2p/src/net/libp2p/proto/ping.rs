@@ -71,7 +71,7 @@ impl Backend {
 
 #[cfg(test)]
 mod tests {
-    use crate::net::libp2p::{proto::util, types};
+    use crate::net::libp2p::{behaviour, proto::util, types};
     use futures::StreamExt;
     use libp2p::{
         ping,
@@ -90,7 +90,7 @@ mod tests {
         let (mut backend2, _, _, _, _) =
             util::make_libp2p(common::chain::config::create_mainnet(), addr2.clone(), &[]).await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -155,7 +155,7 @@ mod tests {
         )
         .build();
 
-        util::connect_swarms::<types::ComposedBehaviour, ping::Behaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, ping::Behaviour>(
             addr,
             &mut backend1.swarm,
             &mut swarm,
@@ -206,7 +206,7 @@ mod tests {
         let mut swarm =
             SwarmBuilder::new(transport, util::make_identify(config, id_keys), peer_id).build();
 
-        util::connect_swarms::<types::ComposedBehaviour, libp2p::identify::Identify>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, libp2p::identify::Identify>(
             addr,
             &mut backend1.swarm,
             &mut swarm,

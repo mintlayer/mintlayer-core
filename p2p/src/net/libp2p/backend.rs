@@ -16,11 +16,11 @@
 //
 // Author(s): A. Altonen
 
-// TODO: think about connection management
+//! Libp2p backend service
 
 use crate::{
     error::{P2pError, PeerError},
-    net::libp2p::{types, SyncResponse},
+    net::libp2p::{behaviour, types, SyncResponse},
 };
 use futures::StreamExt;
 use libp2p::{
@@ -49,7 +49,7 @@ pub(super) enum PendingState {
 
 pub struct Backend {
     /// Created libp2p swarm object
-    pub(super) swarm: Swarm<types::ComposedBehaviour>,
+    pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
 
     /// Receiver for incoming commands
     cmd_rx: mpsc::Receiver<types::Command>,
@@ -78,7 +78,7 @@ pub struct Backend {
 
 impl Backend {
     pub fn new(
-        swarm: Swarm<types::ComposedBehaviour>,
+        swarm: Swarm<behaviour::Libp2pBehaviour>,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         gossip_tx: mpsc::Sender<types::PubSubEvent>,
@@ -99,76 +99,47 @@ impl Backend {
     }
 
     // TODO: into_fatal()???
-    pub async fn run(&mut self) -> crate::Result<()> {
+    pub async fn run(&mut self) -> crate::Result<void::Void> {
         log::debug!("starting event loop");
 
         loop {
             tokio::select! {
-                event = self.swarm.next() => match event {
-                    Some(event) => match self.on_event(event).await {
-                        Ok(_) => {}
-                        Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
-                        Err(e) => {
-                            log::error!("error occurred when processing the event: {:?}", e);
-                        }
+                event = self.swarm.select_next_some() => match event {
+                    SwarmEvent::ConnectionEstablished {
+                        peer_id, endpoint, ..
+                    } => self.on_connection_established(peer_id, endpoint).await?,
+                    SwarmEvent::OutgoingConnectionError { peer_id, error } => {
+                        self.on_outgoing_connection_error(peer_id, error).await;
                     }
-                    None => return Err(P2pError::ChannelClosed)
+                    SwarmEvent::ConnectionClosed { peer_id, .. } => {
+                        self.on_connection_closed(peer_id).await;
+                    }
+                    SwarmEvent::NewListenAddr { address, .. } => {
+                        log::trace!("new listen address {:?}", address);
+                    }
+                    SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event)) => {
+                        self.on_mdns_event(event).await;
+                    }
+                    SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(event)) => {
+                        self.on_gossipsub_event(event).await;
+                    }
+                    SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(event)) => {
+                        self.on_ping_event(event).await;
+                    }
+                    SwarmEvent::Behaviour(types::ComposedEvent::IdentifyEvent(event)) => {
+                        self.on_identify_event(event).await;
+                    }
+                    SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(event)) => {
+                        self.on_sync_event(event).await;
+                    }
+                    _ => {
+                        log::warn!("unhandled event {:?}", event);
+                    }
                 },
                 command = self.cmd_rx.recv() => match command {
                     Some(cmd) => self.on_command(cmd).await?,
                     None => return Err(P2pError::ChannelClosed),
                 },
-            }
-        }
-    }
-
-    /// Handle event received from the swarm object
-    #[allow(clippy::type_complexity)]
-    async fn on_event(
-        &mut self,
-        event: SwarmEvent<
-            types::ComposedEvent,
-            EitherError<
-                EitherError<
-                    EitherError<EitherError<void::Void, GossipsubHandlerError>, ping::Failure>,
-                    std::io::Error,
-                >,
-                ConnectionHandlerUpgrErr<std::io::Error>,
-            >,
-        >,
-    ) -> crate::Result<()> {
-        match event {
-            SwarmEvent::ConnectionEstablished {
-                peer_id, endpoint, ..
-            } => self.on_connection_established(peer_id, endpoint).await,
-            SwarmEvent::OutgoingConnectionError { peer_id, error } => {
-                self.on_outgoing_connection_error(peer_id, error).await
-            }
-            SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                self.on_connection_closed(peer_id).await
-            }
-            SwarmEvent::NewListenAddr { address, .. } => {
-                log::trace!("new listen address {:?}", address);
-                Ok(())
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event)) => {
-                self.on_mdns_event(event).await
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(event)) => {
-                self.on_gossipsub_event(event).await
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(event)) => {
-                self.on_ping_event(event).await
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::IdentifyEvent(event)) => {
-                self.on_identify_event(event).await
-            }
-            SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(event)) => {
-                self.on_sync_event(event).await
-            }
-            _ => {
-                log::warn!("unhandled event {:?}", event);
-                Ok(())
             }
         }
     }
@@ -295,7 +266,7 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{SyncingCodec, SyncingProtocol};
+    use crate::net::libp2p::{behaviour, SyncingCodec, SyncingProtocol};
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
@@ -314,7 +285,7 @@ mod tests {
     //
     // it contains the selected transport for the swarm (in this case TCP + Noise)
     // and any custom network behaviour such as streaming or mDNS support
-    async fn make_swarm() -> Swarm<types::ComposedBehaviour> {
+    async fn make_swarm() -> Swarm<behaviour::Libp2pBehaviour> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys =
@@ -349,7 +320,7 @@ mod tests {
         let cfg = RequestResponseConfig::default();
         let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
 
-        let behaviour = types::ComposedBehaviour {
+        let behaviour = behaviour::Libp2pBehaviour {
             mdns: Mdns::new(Default::default()).await.unwrap(),
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,

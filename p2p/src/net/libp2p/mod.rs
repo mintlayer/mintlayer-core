@@ -16,6 +16,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
 use crate::{
     error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
@@ -40,7 +41,7 @@ use libp2p::{
     multiaddr::Protocol,
     noise, ping,
     request_response::*,
-    swarm::SwarmBuilder,
+    swarm::{NetworkBehaviour, SwarmBuilder},
     tcp::TcpConfig,
     Multiaddr, Transport,
 };
@@ -55,6 +56,8 @@ mod constants;
 mod proto;
 mod sync;
 mod types;
+
+pub mod behaviour;
 
 /// libp2p-specifc peer discovery strategies
 #[derive(Debug, PartialEq, Eq)]
@@ -254,58 +257,12 @@ impl NetworkingService for Libp2pService {
             .outbound_timeout(timeout)
             .boxed();
 
-        let swarm = {
-            let gossipsub_config = GossipsubConfigBuilder::default()
-                .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
-                .validation_mode(ValidationMode::Strict)
-                .max_transmit_size(GOSSIPSUB_MAX_TRANSMIT_SIZE)
-                .validate_messages()
-                .build()
-                .expect("configuration to be valid");
-
-            // TODO: impl display for semver/magic bytes?
-            let version = chain_config.version();
-            let protocol = format!(
-                "/mintlayer/{}.{}.{}-{:x}",
-                version.major,
-                version.minor,
-                version.patch,
-                chain_config.magic_bytes_as_u32(),
-            );
-            let mut req_cfg = RequestResponseConfig::default();
-            req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
-
-            let mut behaviour = types::ComposedBehaviour {
-                mdns: Mdns::new(Default::default()).await?,
-                ping: ping::Behaviour::new(
-                    ping::Config::new()
-                        .with_timeout(PING_TIMEOUT)
-                        .with_interval(PING_INTERVAL)
-                        .with_max_failures(
-                            NonZeroU32::new(PING_MAX_RETRIES).expect("max failures > 0"),
-                        ),
-                ),
-                identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
-                sync: RequestResponse::new(
-                    SyncingCodec(),
-                    iter::once((SyncingProtocol(), ProtocolSupport::Full)),
-                    req_cfg,
-                ),
-                gossipsub: Gossipsub::new(
-                    MessageAuthenticity::Signed(id_keys.clone()),
-                    gossipsub_config,
-                )
-                .expect("configuration to be valid"),
-            };
-
-            for topic in topics.iter() {
-                log::debug!("subscribing to gossipsub topic {:?}", topic);
-                behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
-            }
-
-            // subscribes to our topic
-            SwarmBuilder::new(transport, behaviour, peer_id).build()
-        };
+        let swarm = SwarmBuilder::new(
+            transport,
+            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, topics).await,
+            peer_id,
+        )
+        .build();
 
         let (cmd_tx, cmd_rx) = mpsc::channel(constants::CHANNEL_SIZE);
         let (gossip_tx, gossip_rx) = mpsc::channel(constants::CHANNEL_SIZE);

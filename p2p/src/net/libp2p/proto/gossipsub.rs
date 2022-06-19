@@ -93,7 +93,10 @@ mod tests {
     use super::*;
     use crate::{
         message::{MessageType, PubSubMessage},
-        net::{self, libp2p::proto::util},
+        net::{
+            self,
+            libp2p::{behaviour, proto::util},
+        },
     };
     use common::chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block};
     use futures::{FutureExt, StreamExt};
@@ -225,7 +228,7 @@ mod tests {
         )
         .await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -281,7 +284,7 @@ mod tests {
         )
         .await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr,
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -300,7 +303,7 @@ mod tests {
         while backend2.swarm.next().now_or_never().is_some() {}
 
         // util::connect_swarms(addr2, &mut backend2.swarm, &mut backend3.swarm).await;
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr2,
             &mut backend2.swarm,
             &mut backend3.swarm,
@@ -372,7 +375,7 @@ mod tests {
         )
         .await;
 
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr.clone(),
             &mut backend1.swarm,
             &mut backend2.swarm,
@@ -389,7 +392,7 @@ mod tests {
 
         // discard all unhandled events for backend2
         while backend2.swarm.next().now_or_never().is_some() {}
-        util::connect_swarms::<types::ComposedBehaviour, types::ComposedBehaviour>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
             addr2,
             &mut backend2.swarm,
             &mut backend3.swarm,
@@ -501,7 +504,7 @@ mod tests {
         let mut swarm =
             SwarmBuilder::new(transport, util::make_identify(config, id_keys), peer_id).build();
 
-        util::connect_swarms::<types::ComposedBehaviour, Identify>(
+        util::connect_swarms::<behaviour::Libp2pBehaviour, Identify>(
             addr,
             &mut backend1.swarm,
             &mut swarm,

@@ -191,16 +191,6 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
     }
 }
 
-#[derive(NetworkBehaviour)]
-#[behaviour(out_event = "ComposedEvent")]
-pub struct ComposedBehaviour {
-    pub mdns: Mdns,
-    pub gossipsub: Gossipsub,
-    pub ping: ping::Behaviour,
-    pub identify: Identify,
-    pub sync: RequestResponse<SyncingCodec>,
-}
-
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum ComposedEvent {
