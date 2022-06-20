@@ -11,7 +11,7 @@ time = [ "tokio/time" ]
 [dependencies]
 
 # External dependencies
-async-trait = "0.1.51"
+async-trait = "0.1"
 cfg-if = "1.0"
 thiserror = "1.0"
 

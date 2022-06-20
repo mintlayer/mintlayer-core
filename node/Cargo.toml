@@ -19,7 +19,7 @@ subsystem = { path = "../subsystem/" }
 # External dependencies
 anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
-jsonrpsee = { version = "0.14.0", features = ["macros"] }
+jsonrpsee = { version = "0.14", features = ["macros"] }
 strum = "0.24"
-tokio = { version = "1.17", default-features = false }
+tokio = { version = "1.19", default-features = false }
 thiserror = "1.0"

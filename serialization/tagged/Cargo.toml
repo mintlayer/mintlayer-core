@@ -15,5 +15,5 @@ static_assertions = "1.1"
 
 serialization = { path = '..' }
 
-parity-scale-codec = {version = "3.1.2", features = ["derive", "chain-error"]}
+parity-scale-codec = {version = "3.1", features = ["derive", "chain-error"]}
 proptest = "1.0"
