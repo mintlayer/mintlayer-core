@@ -102,7 +102,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(
                         ping::Event { result: Result::Ok(_), .. }
                     ))) => {
                         needed_events -= 1;
@@ -111,7 +111,7 @@ mod tests {
                     None => panic!("channel closed"),
                 },
                 event = backend2.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(
                         ping::Event { result: Result::Ok(_), .. }
                     ))) => {
                         needed_events -= 1;
@@ -166,7 +166,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(
                         ping::Event { result: Result::Err(e), .. }
                     ))) => {
                         if let ping::Failure::Timeout = e {
@@ -217,7 +217,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(inner))) => {
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(inner))) => {
                         if let ping::Event { result: Result::Err(ping::Failure::Unsupported), peer } = inner {
                             assert_eq!(
                                 backend1.on_ping_event(inner).await,

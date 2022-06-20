@@ -257,9 +257,15 @@ impl NetworkingService for Libp2pService {
             .outbound_timeout(timeout)
             .boxed();
 
+        // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
+        // pass that information to the backend so it knows to relay the mDNS events to P2P
+        let relay_mdns = strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns);
+        log::trace!("multicast dns enabled {}", relay_mdns);
+
         let swarm = SwarmBuilder::new(
             transport,
-            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, topics).await,
+            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, topics, relay_mdns)
+                .await,
             peer_id,
         )
         .build();
@@ -269,17 +275,11 @@ impl NetworkingService for Libp2pService {
         let (conn_tx, conn_rx) = mpsc::channel(constants::CHANNEL_SIZE);
         let (sync_tx, sync_rx) = mpsc::channel(constants::CHANNEL_SIZE);
 
-        // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
-        // pass that information to the backend so it knows to relay the mDNS events to P2P
-        let relay_mdns = strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns);
-        log::trace!("multicast dns enabled {}", relay_mdns);
-
         // run the libp2p backend in a background task
         log::debug!("spawning libp2p backend to background");
 
         tokio::spawn(async move {
-            let mut backend =
-                backend::Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, relay_mdns);
+            let mut backend = backend::Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
             backend.run().await
         });
 

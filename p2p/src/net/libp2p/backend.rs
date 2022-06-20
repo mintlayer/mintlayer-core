@@ -71,9 +71,6 @@ pub struct Backend {
 
     /// Set of pending requests
     pub(super) pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
-
-    /// Whether mDNS peer events should be relayed to P2P manager
-    pub(super) relay_mdns: bool,
 }
 
 impl Backend {
@@ -83,7 +80,6 @@ impl Backend {
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         gossip_tx: mpsc::Sender<types::PubSubEvent>,
         sync_tx: mpsc::Sender<types::SyncingEvent>,
-        relay_mdns: bool,
     ) -> Self {
         Self {
             swarm,
@@ -94,7 +90,6 @@ impl Backend {
             pending_conns: HashMap::new(),
             established_conns: HashSet::new(),
             pending_reqs: HashMap::new(),
-            relay_mdns,
         }
     }
 
@@ -117,19 +112,16 @@ impl Backend {
                     SwarmEvent::NewListenAddr { address, .. } => {
                         log::trace!("new listen address {:?}", address);
                     }
-                    SwarmEvent::Behaviour(types::ComposedEvent::MdnsEvent(event)) => {
-                        self.on_mdns_event(event).await;
-                    }
-                    SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(event)) => {
+                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(event)) => {
                         self.on_gossipsub_event(event).await;
                     }
-                    SwarmEvent::Behaviour(types::ComposedEvent::PingEvent(event)) => {
+                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(event)) => {
                         self.on_ping_event(event).await;
                     }
-                    SwarmEvent::Behaviour(types::ComposedEvent::IdentifyEvent(event)) => {
+                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::IdentifyEvent(event)) => {
                         self.on_identify_event(event).await;
                     }
-                    SwarmEvent::Behaviour(types::ComposedEvent::SyncingEvent(event)) => {
+                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::SyncingEvent(event)) => {
                         self.on_sync_event(event).await;
                     }
                     _ => {
@@ -326,6 +318,7 @@ mod tests {
             gossipsub,
             identify,
             sync,
+            relay_mdns: false,
         };
 
         SwarmBuilder::new(transport, behaviour, peer_id).build()

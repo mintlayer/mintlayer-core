@@ -34,7 +34,7 @@ use libp2p::{
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
-use std::{iter, num::NonZeroU32};
+use std::{collections::VecDeque, iter, num::NonZeroU32};
 use tokio::sync::mpsc;
 
 // TODO: add config parameters
@@ -107,6 +107,9 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            relay_mdns: true,
+            events: VecDeque::new(),
+            waker: None,
         };
 
         for topic in topics.iter() {
@@ -125,7 +128,7 @@ pub async fn make_libp2p(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, true),
+        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
@@ -198,6 +201,9 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            relay_mdns: true,
+            events: VecDeque::new(),
+            waker: None,
         };
 
         for topic in topics.iter() {
@@ -216,7 +222,7 @@ pub async fn make_libp2p_with_ping(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, true),
+        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,

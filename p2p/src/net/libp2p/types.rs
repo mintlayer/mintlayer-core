@@ -193,40 +193,44 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum ComposedEvent {
+pub enum Libp2pBehaviourEvent {
     MdnsEvent(MdnsEvent),
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
     IdentifyEvent(IdentifyEvent),
     SyncingEvent(RequestResponseEvent<SyncRequest, SyncResponse>),
+
+    /// One or more peers were discovered by one of the discovery strategies
+    Discovered {
+        peers: Vec<(PeerId, Multiaddr)>,
+    },
+
+    /// One or more peers that were previously discovered have expired
+    Expired {
+        peers: Vec<(PeerId, Multiaddr)>,
+    },
 }
 
-impl From<MdnsEvent> for ComposedEvent {
-    fn from(event: MdnsEvent) -> Self {
-        ComposedEvent::MdnsEvent(event)
-    }
-}
-
-impl From<GossipsubEvent> for ComposedEvent {
+impl From<GossipsubEvent> for Libp2pBehaviourEvent {
     fn from(event: GossipsubEvent) -> Self {
-        ComposedEvent::GossipsubEvent(event)
+        Libp2pBehaviourEvent::GossipsubEvent(event)
     }
 }
 
-impl From<PingEvent> for ComposedEvent {
+impl From<PingEvent> for Libp2pBehaviourEvent {
     fn from(event: PingEvent) -> Self {
-        ComposedEvent::PingEvent(event)
+        Libp2pBehaviourEvent::PingEvent(event)
     }
 }
 
-impl From<IdentifyEvent> for ComposedEvent {
+impl From<IdentifyEvent> for Libp2pBehaviourEvent {
     fn from(event: IdentifyEvent) -> Self {
-        ComposedEvent::IdentifyEvent(event)
+        Libp2pBehaviourEvent::IdentifyEvent(event)
     }
 }
 
-impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for ComposedEvent {
+impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for Libp2pBehaviourEvent {
     fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
-        ComposedEvent::SyncingEvent(event)
+        Libp2pBehaviourEvent::SyncingEvent(event)
     }
 }

@@ -26,7 +26,7 @@ use crate::{
         libp2p::{
             constants::*,
             sync::*,
-            types::{self, ComposedEvent},
+            types::{self, Libp2pBehaviourEvent},
         },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
@@ -45,25 +45,45 @@ use libp2p::{
     noise, ping,
     request_response::*,
     swarm::{
-        NetworkBehaviour as Libp2pNetworkBehaviour, NetworkBehaviourEventProcess, SwarmBuilder,
+        ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
+        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, SwarmBuilder,
     },
     tcp::TcpConfig,
     Multiaddr, NetworkBehaviour, Transport,
 };
 use logging::log;
 use serialization::{Decode, Encode};
-use std::{iter, num::NonZeroU32, sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque,
+    iter,
+    num::NonZeroU32,
+    sync::Arc,
+    task::{Context, Poll, Waker},
+    time::Duration,
+};
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 #[derive(NetworkBehaviour)]
-#[behaviour(out_event = "ComposedEvent")]
+#[behaviour(
+    out_event = "Libp2pBehaviourEvent",
+    event_process = true,
+    poll_method = "poll"
+)]
 pub struct Libp2pBehaviour {
     pub mdns: mdns::Mdns,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
     pub identify: identify::Identify,
     pub sync: RequestResponse<SyncingCodec>,
+
+    /// Should mDNS events be relayed to front-end
+    #[behaviour(ignore)]
+    pub relay_mdns: bool,
+    #[behaviour(ignore)]
+    pub events: VecDeque<Libp2pBehaviourEvent>,
+    #[behaviour(ignore)]
+    pub waker: Option<Waker>,
 }
 
 impl Libp2pBehaviour {
@@ -71,6 +91,7 @@ impl Libp2pBehaviour {
         config: Arc<ChainConfig>,
         id_keys: identity::Keypair,
         topics: &[PubSubTopic],
+        relay_mdns: bool,
     ) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()
             .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
@@ -116,15 +137,55 @@ impl Libp2pBehaviour {
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            relay_mdns,
+            events: VecDeque::new(),
+            waker: None,
         };
 
         // subscribes to our topic
+        // TODO: subscribe only after initial block download is done
         for topic in topics.iter() {
             log::debug!("subscribing to gossipsub topic {:?}", topic);
             behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
         }
 
         behaviour
+    }
+
+    fn add_event(&mut self, event: Libp2pBehaviourEvent) {
+        self.events.push_back(event);
+
+        if let Some(waker) = self.waker.take() {
+            waker.wake_by_ref();
+        }
+    }
+
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+        params: &mut impl PollParameters
+    ) -> Poll<NetworkBehaviourAction<
+        <Libp2pBehaviour as Libp2pNetworkBehaviour>::OutEvent,
+        <Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler,
+        <<<Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler
+            as IntoConnectionHandler>::Handler
+                as ConnectionHandler>::InEvent>
+        >
+    {
+        match &self.waker {
+            Some(waker) => {
+                if waker.will_wake(cx.waker()) {
+                    self.waker = Some(cx.waker().clone());
+                }
+            }
+            None => self.waker = Some(cx.waker().clone()),
+        }
+
+        if let Some(event) = self.events.pop_front() {
+            return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
+        }
+
+        Poll::Pending
     }
 }
 
@@ -156,6 +217,22 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
 
 impl NetworkBehaviourEventProcess<mdns::MdnsEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: mdns::MdnsEvent) {
-        println!("mdns");
+        // TODO: remove this ugly hack
+        if !self.relay_mdns {
+            return;
+        }
+
+        match event {
+            mdns::MdnsEvent::Discovered(peers) => {
+                self.add_event(Libp2pBehaviourEvent::Discovered {
+                    peers: peers.collect(),
+                });
+            }
+            mdns::MdnsEvent::Expired(expired) => {
+                self.add_event(Libp2pBehaviourEvent::Expired {
+                    peers: expired.collect(),
+                });
+            }
+        }
     }
 }

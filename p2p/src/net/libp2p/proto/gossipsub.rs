@@ -315,7 +315,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -325,7 +325,7 @@ mod tests {
                     None => panic!("got None"),
                 },
                 event = backend2.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         if peer_id != *backend3.swarm.local_peer_id() {
@@ -337,7 +337,7 @@ mod tests {
                     None => panic!("got None"),
                 },
                 event = backend3.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -403,7 +403,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -413,7 +413,7 @@ mod tests {
                     None => panic!("got None"),
                 },
                 event = backend2.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         if peer_id != *backend3.swarm.local_peer_id() {
@@ -425,7 +425,7 @@ mod tests {
                     None => panic!("got None"),
                 },
                 event = backend3.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Subscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -455,7 +455,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Unsubscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -469,7 +469,7 @@ mod tests {
                     None => panic!("got None"),
                 },
                 event = backend3.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::Unsubscribed { peer_id, .. })))
                     => {
                         assert_eq!(peer_id, *backend2.swarm.local_peer_id());
@@ -514,7 +514,7 @@ mod tests {
         loop {
             tokio::select! {
                 event = backend1.swarm.next() => match event {
-                    Some(SwarmEvent::Behaviour(types::ComposedEvent::GossipsubEvent(
+                    Some(SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(
                         GossipsubEvent::GossipsubNotSupported { peer_id })))
                     => {
                         assert_eq!(peer_id, *swarm.local_peer_id());

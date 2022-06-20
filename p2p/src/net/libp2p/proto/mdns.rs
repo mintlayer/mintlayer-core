@@ -20,37 +20,6 @@ use crate::{
 };
 use libp2p::{mdns::MdnsEvent, Multiaddr, PeerId};
 
-impl Backend {
-    async fn send_mdns_event(
-        &mut self,
-        peers: Vec<(PeerId, Multiaddr)>,
-        event_fn: impl FnOnce(Vec<(PeerId, Multiaddr)>) -> types::ConnectivityEvent,
-    ) -> crate::Result<()> {
-        if !self.relay_mdns || peers.is_empty() {
-            return Ok(());
-        }
-
-        self.conn_tx.send(event_fn(peers)).await.map_err(P2pError::from)
-    }
-
-    pub async fn on_mdns_event(&mut self, event: MdnsEvent) -> crate::Result<()> {
-        match event {
-            MdnsEvent::Discovered(peers) => {
-                self.send_mdns_event(peers.collect(), |peers| {
-                    types::ConnectivityEvent::Discovered { peers }
-                })
-                .await
-            }
-            MdnsEvent::Expired(expired) => {
-                self.send_mdns_event(expired.collect(), |peers| {
-                    types::ConnectivityEvent::Expired { peers }
-                })
-                .await
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,7 +33,7 @@ mod tests {
         swarm::{SwarmBuilder, SwarmEvent},
     };
 
-    #[ignore]
+    // #[ignore]
     #[tokio::test]
     async fn test_on_discovered() {
         let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
