@@ -48,7 +48,7 @@ impl MutableTransaction {
 }
 
 pub fn generate_unsigned_tx(
-    outpoint_dest: Destination,
+    destination: &Destination,
     inputs_count: usize,
     outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
@@ -67,7 +67,7 @@ pub fn generate_unsigned_tx(
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::new(
             Amount::from_atoms(rng.gen::<IntType>()),
-            outpoint_dest.clone(),
+            destination.clone(),
         ))
     })
     .take(outputs_count)
@@ -81,12 +81,24 @@ pub fn sign_whole_tx(
     tx: &mut Transaction,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
-    outpoint_dest: Destination,
+    destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.get_inputs().len() {
-        update_signature(tx, i, private_key, sighash_type, outpoint_dest.clone())?;
+        update_signature(tx, i, private_key, sighash_type, destination.clone())?;
     }
     Ok(())
+}
+
+pub fn generate_and_sigh_tx(
+    destination: &Destination,
+    inputs: usize,
+    outputs: usize,
+    private_key: &PrivateKey,
+    sighash_type: SigHashType,
+) -> Result<Transaction, TransactionCreationError> {
+    let mut tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
+    sign_whole_tx(&mut tx, private_key, sighash_type, destination).unwrap();
+    Ok(tx)
 }
 
 pub fn update_signature(
@@ -109,10 +121,10 @@ pub fn update_signature(
 
 pub fn verify_signed_tx(
     tx: &Transaction,
-    outpoint_dest: &Destination,
+    destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.get_inputs().len() {
-        verify_signature(outpoint_dest, tx, i)?
+        verify_signature(destination, tx, i)?
     }
     Ok(())
 }

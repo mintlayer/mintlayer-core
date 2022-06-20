@@ -188,8 +188,8 @@ mod test {
     fn produce_signature_address_missmatch() {
         let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_destination = Destination::Address(PublicKeyHash::from(&public_key));
-        let tx = generate_unsigned_tx(outpoint_destination.clone(), 1, 2).unwrap();
+        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -197,7 +197,7 @@ mod test {
                 StandardInputSignature::produce_signature_for_input(
                     &private_key,
                     sighash_type,
-                    outpoint_destination.clone(),
+                    destination.clone(),
                     &tx,
                     INPUT_NUM,
                 ),
@@ -210,8 +210,8 @@ mod test {
     fn produce_signature_key_missmatch() {
         let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_destination.clone(), 1, 2).unwrap();
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             assert_eq!(
@@ -219,7 +219,7 @@ mod test {
                 StandardInputSignature::produce_signature_for_input(
                     &private_key,
                     sighash_type,
-                    outpoint_destination.clone(),
+                    destination.clone(),
                     &tx,
                     INPUT_NUM,
                 ),
@@ -236,14 +236,13 @@ mod test {
             Destination::PublicKey(public_key),
         ];
 
-        for (sighash_type, outpoint_destination) in
-            sig_hash_types().cartesian_product(outpoints.into_iter())
+        for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
         {
-            let tx = generate_unsigned_tx(outpoint_destination.clone(), 1, 2).unwrap();
+            let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
-                outpoint_destination.clone(),
+                destination.clone(),
                 &tx,
                 INPUT_NUM,
             )
@@ -251,8 +250,8 @@ mod test {
 
             let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
             witness
-                .verify_signature(&outpoint_destination, &sighash)
-                .expect(&format!("{sighash_type:X?} {outpoint_destination:?}"));
+                .verify_signature(&destination, &sighash)
+                .expect(&format!("{sighash_type:X?} {destination:?}"));
         }
     }
 }

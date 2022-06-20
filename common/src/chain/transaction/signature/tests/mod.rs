@@ -26,13 +26,12 @@ pub mod utils;
 #[test]
 fn sign_and_verify_different_sighash_types() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint_dest = Destination::PublicKey(public_key);
+    let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
+        let tx = generate_and_sigh_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
-            verify_signed_tx(&tx, &outpoint_dest),
+            verify_signed_tx(&tx, &destination),
             Ok(()),
             "{sighash_type:?}"
         );
@@ -45,7 +44,7 @@ fn verify_no_signature() {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
     for destination in destinations(public_key).filter(|d| d != &Destination::AnyoneCanSpend) {
-        let mut tx = generate_unsigned_tx(destination.clone(), 3, 3).unwrap();
+        let mut tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
         tx.update_witness(
             0,
             InputWitness::NoSignature(Some(vec![1, 2, 3, 4, 5, 6, 7, 8, 9])),
@@ -63,12 +62,12 @@ fn verify_no_signature() {
 #[test]
 fn verify_invalid_signature() {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint_dest = Destination::PublicKey(public_key);
+    let destination = Destination::PublicKey(public_key);
 
     for (sighash_type, raw_signature) in
         sig_hash_types().cartesian_product([vec![], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]])
     {
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
+        let mut tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
         tx.update_witness(
             0,
             InputWitness::Standard(StandardInputSignature::new(
@@ -79,7 +78,7 @@ fn verify_invalid_signature() {
         .unwrap();
 
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, 0),
+            verify_signature(&destination, &tx, 0),
             Err(TransactionSigError::InvalidSignatureEncoding),
             "{sighash_type:?}, signature = {raw_signature:?}"
         );
@@ -91,14 +90,12 @@ fn verify_signature_invalid_input_index() {
     const INVALID_INPUT_INDEX: usize = 1234567890;
 
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    let outpoint_dest = Destination::PublicKey(public_key);
+    let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let mut tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint_dest.clone()).unwrap();
-
+        let tx = generate_and_sigh_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
-            verify_signature(&outpoint_dest, &tx, INVALID_INPUT_INDEX),
+            verify_signature(&destination, &tx, INVALID_INPUT_INDEX),
             Err(TransactionSigError::InvalidInputIndex(
                 INVALID_INPUT_INDEX,
                 3
@@ -117,9 +114,7 @@ fn verify_signature_wrong_destination() {
     let different_outpoint = Destination::PublicKey(public_key_2);
 
     for sighash_type in sig_hash_types() {
-        let mut tx = generate_unsigned_tx(outpoint.clone(), 3, 3).unwrap();
-        sign_whole_tx(&mut tx, &private_key, sighash_type, outpoint.clone()).unwrap();
-
+        let tx = generate_and_sigh_tx(&outpoint, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signature(&different_outpoint, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -217,32 +212,25 @@ fn mutate_single_anyonecanpay() {
 fn sign_modify_then_verify(
     private_key: &PrivateKey,
     sighash_type: SigHashType,
-    outpoint_dest: &Destination,
+    destination: &Destination,
 ) -> Transaction {
     // Create and sign tx, and then modify and verify it.
-    let mut original_tx = generate_unsigned_tx(outpoint_dest.clone(), 3, 3).unwrap();
-    sign_whole_tx(
-        &mut original_tx,
-        private_key,
-        sighash_type,
-        outpoint_dest.clone(),
-    )
-    .unwrap();
-    assert_eq!(verify_signed_tx(&original_tx, outpoint_dest), Ok(()));
+    let original_tx = generate_and_sigh_tx(destination, 3, 3, private_key, sighash_type).unwrap();
+    assert_eq!(verify_signed_tx(&original_tx, destination), Ok(()));
 
-    check_change_flags(&original_tx, outpoint_dest);
-    check_change_locktime(&original_tx, outpoint_dest);
-    check_change_witness(&original_tx, outpoint_dest);
+    check_change_flags(&original_tx, destination);
+    check_change_locktime(&original_tx, destination);
+    check_change_witness(&original_tx, destination);
     original_tx
 }
 
-fn check_change_flags(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = 1234567890;
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.get_inputs().iter().enumerate() {
         assert_eq!(
-            verify_signature(outpoint_dest, &tx, input_num),
+            verify_signature(destination, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
         );
     }
@@ -260,7 +248,7 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
     }
 }
 
-fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+fn check_insert_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
     tx_updater.inputs.push(TxInput::new(
@@ -269,7 +257,7 @@ fn check_insert_input(original_tx: &Transaction, outpoint_dest: &Destination, sh
         InputWitness::NoSignature(None),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(outpoint_dest, &tx, should_fail);
+    assert_verify_signature(destination, &tx, should_fail);
 }
 
 fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
@@ -307,7 +295,7 @@ fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) 
     }
 }
 
-fn check_insert_output(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+fn check_insert_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
@@ -315,10 +303,10 @@ fn check_insert_output(original_tx: &Transaction, outpoint_dest: &Destination, s
         Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(outpoint_dest, &tx, should_fail);
+    assert_verify_signature(destination, &tx, should_fail);
 }
 
-fn check_change_output(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+fn check_change_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
@@ -326,10 +314,10 @@ fn check_change_output(original_tx: &Transaction, outpoint_dest: &Destination, s
         tx_updater.outputs[0].get_destination().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(outpoint_dest, &tx, should_fail);
+    assert_verify_signature(destination, &tx, should_fail);
 }
 
-fn check_change_input(original_tx: &Transaction, outpoint_dest: &Destination, should_fail: bool) {
+fn check_change_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::new(
@@ -338,7 +326,7 @@ fn check_change_input(original_tx: &Transaction, outpoint_dest: &Destination, sh
         tx_updater.inputs[0].get_witness().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(outpoint_dest, &tx, should_fail);
+    assert_verify_signature(destination, &tx, should_fail);
 }
 
 fn assert_verify_signature(outpoint: &Destination, tx: &Transaction, should_fail: bool) {

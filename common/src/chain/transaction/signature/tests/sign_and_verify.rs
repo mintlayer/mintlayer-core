@@ -28,8 +28,8 @@ fn sign_and_verify_all() {
         .cartesian_product(sig_hash_types().filter(|t| t.outputs_mode() != OutputsMode::Single))
         .cartesian_product(test_data)
     {
-        let mut tx = generate_unsigned_tx(destination.clone(), inputs, outputs).unwrap();
-        let res = sign_whole_tx(&mut tx, &private_key, sighash_type, destination.clone());
+        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
+        let res = sign_whole_tx(&mut tx, &private_key, sighash_type, &destination);
         // `sign_whole_tx` does nothing if there no inputs.
         if destination == Destination::AnyoneCanSpend && inputs > 0 {
             assert_eq!(
@@ -207,8 +207,8 @@ fn sign_and_verify_single() {
     ];
 
     for (destination, sighash_type, inputs, outputs, expected) in test_data.into_iter() {
-        let mut tx = generate_unsigned_tx(destination.clone(), inputs, outputs).unwrap();
-        match sign_whole_tx(&mut tx, &private_key, sighash_type, destination.clone()) {
+        let mut tx = generate_unsigned_tx(&destination, inputs, outputs).unwrap();
+        match sign_whole_tx(&mut tx, &private_key, sighash_type, &destination) {
             Ok(_) => assert_eq!(
                 verify_signed_tx(&tx, &destination),
                 expected,

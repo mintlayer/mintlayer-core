@@ -85,14 +85,14 @@ mod test {
     #[test]
     fn wrong_destination() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::Address(PublicKeyHash::from(&public_key));
-        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
+        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
-                outpoint_dest.clone(),
+                destination.clone(),
                 &tx,
                 INPUT_NUM,
             )
@@ -109,14 +109,14 @@ mod test {
     #[test]
     fn invalid_signature() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key.clone());
-        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
+        let destination = Destination::PublicKey(public_key.clone());
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
-                outpoint_dest.clone(),
+                destination.clone(),
                 &tx,
                 INPUT_NUM,
             )
@@ -135,14 +135,14 @@ mod test {
     #[test]
     fn test_verify_public_key_spending() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key.clone());
-        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
+        let destination = Destination::PublicKey(public_key.clone());
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
-                outpoint_dest.clone(),
+                destination.clone(),
                 &tx,
                 INPUT_NUM,
             )
@@ -158,14 +158,14 @@ mod test {
     #[test]
     fn test_sign_pubkey_spending() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key.clone());
-        let tx = generate_unsigned_tx(outpoint_dest.clone(), 1, 2).unwrap();
+        let destination = Destination::PublicKey(public_key.clone());
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
-                outpoint_dest.clone(),
+                destination.clone(),
                 &tx,
                 INPUT_NUM,
             )
