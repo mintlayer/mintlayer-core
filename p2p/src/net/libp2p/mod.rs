@@ -22,7 +22,7 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::sync::*,
+        libp2p::sync::{SyncRequest, SyncResponse},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },

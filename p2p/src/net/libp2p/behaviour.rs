@@ -54,7 +54,7 @@ use libp2p::{
 use logging::log;
 use serialization::{Decode, Encode};
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
@@ -80,8 +80,13 @@ pub struct Libp2pBehaviour {
     /// Should mDNS events be relayed to front-end
     #[behaviour(ignore)]
     pub relay_mdns: bool,
+
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
+
+    #[behaviour(ignore)]
+    pub pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
+
     #[behaviour(ignore)]
     pub waker: Option<Waker>,
 }
@@ -139,6 +144,7 @@ impl Libp2pBehaviour {
             .expect("configuration to be valid"),
             relay_mdns,
             events: VecDeque::new(),
+            pending_reqs: HashMap::new(),
             waker: None,
         };
 
@@ -247,7 +253,107 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
     for Libp2pBehaviour
 {
     fn inject_event(&mut self, event: RequestResponseEvent<SyncRequest, SyncResponse>) {
-        println!("syncing");
+        match event {
+            RequestResponseEvent::Message { peer, message } => match message {
+                RequestResponseMessage::Request {
+                    request_id,
+                    request,
+                    channel,
+                } => {
+                    self.pending_reqs.insert(request_id, channel);
+                    self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                        types::SyncingEvent::Request {
+                            peer_id: peer,
+                            request_id,
+                            request: Box::new(request),
+                        },
+                    ));
+                }
+                RequestResponseMessage::Response {
+                    request_id,
+                    response,
+                } => {
+                    self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                        types::SyncingEvent::Response {
+                            peer_id: peer,
+                            request_id,
+                            response: Box::new(response),
+                        },
+                    ));
+                }
+            },
+            RequestResponseEvent::ResponseSent {
+                peer: _,
+                request_id,
+            } => {
+                log::debug!("response sent, request id {:?}", request_id);
+            }
+            RequestResponseEvent::OutboundFailure {
+                peer,
+                request_id,
+                error,
+            } => {
+                match error {
+                    OutboundFailure::Timeout => {
+                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                            types::SyncingEvent::Error {
+                                peer_id: peer,
+                                request_id,
+                                error: net::types::RequestResponseError::Timeout,
+                            },
+                        ));
+                    }
+                    OutboundFailure::ConnectionClosed => {
+                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                            types::SyncingEvent::Error {
+                                peer_id: peer,
+                                request_id,
+                                // TODO: connection manager
+                                error: net::types::RequestResponseError::ConnectionClosed,
+                            },
+                        ));
+                    }
+                    OutboundFailure::DialFailure => {
+                        log::error!("CRITICAL: syncing code tried to dial peer");
+                    }
+                    OutboundFailure::UnsupportedProtocols => {
+                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                    }
+                }
+            }
+            RequestResponseEvent::InboundFailure {
+                peer,
+                request_id,
+                error,
+            } => {
+                match error {
+                    InboundFailure::Timeout => {
+                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                            types::SyncingEvent::Error {
+                                peer_id: peer,
+                                request_id,
+                                error: net::types::RequestResponseError::Timeout,
+                            },
+                        ));
+                    }
+                    InboundFailure::ConnectionClosed => {
+                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                            types::SyncingEvent::Error {
+                                peer_id: peer,
+                                request_id,
+                                error: net::types::RequestResponseError::ConnectionClosed,
+                            },
+                        ));
+                    }
+                    InboundFailure::ResponseOmission => {
+                        log::error!("CRITICAL(??): response omitted!");
+                    }
+                    InboundFailure::UnsupportedProtocols => {
+                        log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
+                    }
+                }
+            }
+        }
     }
 }
 

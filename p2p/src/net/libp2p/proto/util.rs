@@ -34,7 +34,11 @@ use libp2p::{
     Multiaddr, Swarm, Transport,
 };
 use logging::log;
-use std::{collections::VecDeque, iter, num::NonZeroU32};
+use std::{
+    collections::{HashMap, VecDeque},
+    iter,
+    num::NonZeroU32,
+};
 use tokio::sync::mpsc;
 
 // TODO: add config parameters
@@ -109,6 +113,7 @@ pub async fn make_libp2p(
             .expect("configuration to be valid"),
             relay_mdns: true,
             events: VecDeque::new(),
+            pending_reqs: HashMap::new(),
             waker: None,
         };
 
@@ -203,6 +208,7 @@ pub async fn make_libp2p_with_ping(
             .expect("configuration to be valid"),
             relay_mdns: true,
             events: VecDeque::new(),
+            pending_reqs: HashMap::new(),
             waker: None,
         };
 

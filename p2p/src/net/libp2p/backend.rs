@@ -20,7 +20,7 @@
 
 use crate::{
     error::{P2pError, PeerError},
-    net::libp2p::{behaviour, types, SyncResponse},
+    net::libp2p::{behaviour, sync::SyncResponse, types},
 };
 use futures::StreamExt;
 use libp2p::{
@@ -68,9 +68,6 @@ pub struct Backend {
 
     /// Set of established connections
     pub(super) established_conns: HashSet<PeerId>,
-
-    /// Set of pending requests
-    pub(super) pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
 }
 
 impl Backend {
@@ -89,7 +86,6 @@ impl Backend {
             sync_tx,
             pending_conns: HashMap::new(),
             established_conns: HashSet::new(),
-            pending_reqs: HashMap::new(),
         }
     }
 
@@ -117,9 +113,6 @@ impl Backend {
                     }
                     SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::IdentifyEvent(event)) => {
                         self.on_identify_event(event).await;
-                    }
-                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::SyncingEvent(event)) => {
-                        self.on_sync_event(event).await;
                     }
                     _ => {
                         log::warn!("unhandled event {:?}", event);
@@ -232,7 +225,8 @@ impl Backend {
                 request_id,
                 response,
                 channel,
-            } => match self.pending_reqs.remove(&request_id) {
+                // TODO: better API for requests/responses + extensibility
+            } => match self.swarm.behaviour_mut().pending_reqs.remove(&request_id) {
                 None => {
                     log::error!("pending request ({:?}) doesn't exist", request_id);
                     channel.send(Err(P2pError::ChannelClosed)).map_err(|_| P2pError::ChannelClosed)

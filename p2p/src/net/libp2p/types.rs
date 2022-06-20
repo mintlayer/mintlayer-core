@@ -19,7 +19,7 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::{SyncRequest, SyncResponse, SyncingCodec},
+        libp2p::sync::{SyncRequest, SyncResponse, SyncingCodec},
     },
 };
 use libp2p::{
@@ -142,6 +142,7 @@ pub enum PubSubEvent {
     },
 }
 
+#[derive(Debug)]
 pub enum SyncingEvent {
     Request {
         peer_id: PeerId,
@@ -198,7 +199,7 @@ pub enum Libp2pBehaviourEvent {
     GossipsubEvent(GossipsubEvent),
     PingEvent(PingEvent),
     IdentifyEvent(IdentifyEvent),
-    SyncingEvent(RequestResponseEvent<SyncRequest, SyncResponse>),
+    SyncingEvent(SyncingEvent),
 
     /// One or more peers were discovered by one of the discovery strategies
     Discovered {
@@ -213,6 +214,12 @@ pub enum Libp2pBehaviourEvent {
     /// Peer disconnected from the swarm
     Disconnected {
         peer_id: PeerId,
+    },
+
+    /// Peer misbehaved
+    Misbehaved {
+        peer_id: PeerId,
+        behaviour: u32,
     },
 }
 
@@ -234,8 +241,8 @@ impl From<IdentifyEvent> for Libp2pBehaviourEvent {
     }
 }
 
-impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for Libp2pBehaviourEvent {
-    fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
-        Libp2pBehaviourEvent::SyncingEvent(event)
-    }
-}
+// impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for Libp2pBehaviourEvent {
+//     fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
+//         Libp2pBehaviourEvent::SyncingEvent(event)
+//     }
+// }
