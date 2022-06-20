@@ -21,54 +21,6 @@ use crate::{
 use libp2p::ping::{self, PingEvent};
 use logging::log;
 
-impl Backend {
-    pub async fn on_ping_event(&mut self, event: PingEvent) -> crate::Result<()> {
-        match event {
-            ping::Event {
-                peer,
-                result: Result::Ok(ping::Success::Ping { rtt }),
-            } => {
-                // TODO: report rtt to swarm manager?
-                log::debug!("peer {:?} responded to ping, rtt {:?}", peer, rtt);
-                Ok(())
-            }
-            ping::Event {
-                peer,
-                result: Result::Ok(ping::Success::Pong),
-            } => {
-                log::debug!("peer {:?} responded to pong", peer);
-                Ok(())
-            }
-            ping::Event {
-                peer,
-                result: Result::Err(ping::Failure::Timeout),
-            } => {
-                log::warn!("ping timeout for peer {:?}", peer);
-                Ok(())
-            }
-            ping::Event {
-                peer,
-                result: Result::Err(ping::Failure::Unsupported),
-            } => {
-                log::error!("peer {:?} doesn't support libp2p::ping", peer);
-
-                let _ = self.swarm.disconnect_peer_id(peer);
-                self.conn_tx
-                    .send(types::ConnectivityEvent::Disconnected { peer_id: peer })
-                    .await
-                    .map_err(P2pError::from)
-            }
-            ping::Event {
-                peer: _,
-                result: Result::Err(ping::Failure::Other { error }),
-            } => {
-                log::error!("unknown ping failure: {:?}", error);
-                Ok(())
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::net::libp2p::{behaviour, proto::util, types};

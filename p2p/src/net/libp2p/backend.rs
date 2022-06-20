@@ -115,9 +115,6 @@ impl Backend {
                     SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(event)) => {
                         self.on_gossipsub_event(event).await;
                     }
-                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::PingEvent(event)) => {
-                        self.on_ping_event(event).await;
-                    }
                     SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::IdentifyEvent(event)) => {
                         self.on_identify_event(event).await;
                     }

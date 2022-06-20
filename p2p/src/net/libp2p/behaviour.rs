@@ -189,15 +189,51 @@ impl Libp2pBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
-    fn inject_event(&mut self, event: ping::PingEvent) {
-        println!("ping");
-    }
-}
-
 impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: identify::IdentifyEvent) {
         println!("identify");
+    }
+}
+
+impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
+    fn inject_event(&mut self, event: ping::PingEvent) {
+        match event {
+            ping::Event {
+                peer,
+                result: Result::Ok(ping::Success::Ping { rtt }),
+            } => {
+                // TODO: report rtt to swarm manager?
+                log::debug!("peer {:?} responded to ping, rtt {:?}", peer, rtt);
+            }
+            ping::Event {
+                peer,
+                result: Result::Ok(ping::Success::Pong),
+            } => {
+                log::debug!("peer {:?} responded to pong", peer);
+            }
+            ping::Event {
+                peer,
+                result: Result::Err(ping::Failure::Timeout),
+            } => {
+                log::warn!("ping timeout for peer {:?}", peer);
+
+                self.add_event(Libp2pBehaviourEvent::Disconnected { peer_id: peer });
+            }
+            ping::Event {
+                peer,
+                result: Result::Err(ping::Failure::Unsupported),
+            } => {
+                log::error!("peer {:?} doesn't support libp2p::ping", peer);
+
+                self.add_event(Libp2pBehaviourEvent::Disconnected { peer_id: peer });
+            }
+            ping::Event {
+                peer: _,
+                result: Result::Err(ping::Failure::Other { error }),
+            } => {
+                log::error!("unknown ping failure: {:?}", error);
+            }
+        }
     }
 }
 

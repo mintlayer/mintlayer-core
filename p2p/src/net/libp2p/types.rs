@@ -209,6 +209,11 @@ pub enum Libp2pBehaviourEvent {
     Expired {
         peers: Vec<(PeerId, Multiaddr)>,
     },
+
+    /// Peer disconnected from the swarm
+    Disconnected {
+        peer_id: PeerId,
+    },
 }
 
 impl From<GossipsubEvent> for Libp2pBehaviourEvent {
