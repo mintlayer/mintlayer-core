@@ -9,14 +9,14 @@ crypto = { path = '../crypto' }
 serialization = { path = "../serialization" }
 utils = { path = '../utils' }
 
-parity-scale-codec = "3.1.2"
+parity-scale-codec = "3.1"
 thiserror = "1.0"
 
 [dev-dependencies]
-flate2 = "1.0.22"
-hex = "0.4.3"
-hex-literal = "0.3.1"
-proptest = "1.0.0"
+flate2 = "1.0"
+hex = "0.4"
+hex-literal = "0.3"
+proptest = "1.0"
 logging = { path = '../logging' }
 
 [features]

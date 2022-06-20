@@ -5,6 +5,6 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-atomic-traits = "0.3.0"
-num-traits = "0.2.15"
-slave-pool = "0.2.3"
+atomic-traits = "0.3"
+num-traits = "0.2"
+slave-pool = "0.2"
