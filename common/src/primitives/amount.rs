@@ -43,7 +43,9 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 }
 
 impl Amount {
-    pub fn from_atoms(v: IntType) -> Self {
+    pub const MAX: Self = Self::from_atoms(IntType::MAX);
+
+    pub const fn from_atoms(v: IntType) -> Self {
         Amount { val: v }
     }
 

@@ -132,6 +132,10 @@ impl BlockHeight {
     pub fn next_height(&self) -> BlockHeight {
         BlockHeight(self.0.checked_add(1).expect("Block height overflow"))
     }
+
+    pub fn prev_height(&self) -> Option<BlockHeight> {
+        self.0.checked_sub(1).map(Self)
+    }
 }
 
 /////////////////////////////
