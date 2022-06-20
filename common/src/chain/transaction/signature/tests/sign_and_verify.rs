@@ -20,7 +20,7 @@ use crate::{
 // For `ALL`, `ALL | ANYONECANPAY`, `NONE` and `NONE | ANYONECANPAY` it should succeed in all cases
 // except for `ScriptHash` and `AnyoneCanSpend` destinations.
 #[test]
-fn sign_and_verify_all() {
+fn sign_and_verify_all_and_none() {
     let test_data = [(0, 31), (31, 0), (20, 3), (3, 20)];
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
@@ -50,6 +50,8 @@ fn sign_and_verify_all() {
     }
 }
 
+// Same as `sign_and_verify_all_and_none` but for `SINGLE` and `SINGLE | ANYONECANPAY` signature
+// hash types.
 #[test]
 fn sign_and_verify_single() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);

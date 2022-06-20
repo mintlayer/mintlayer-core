@@ -98,6 +98,7 @@ pub fn generate_and_sigh_tx(
 ) -> Result<Transaction, TransactionCreationError> {
     let mut tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
     sign_whole_tx(&mut tx, private_key, sighash_type, destination).unwrap();
+    assert_eq!(verify_signed_tx(&tx, &destination), Ok(()));
     Ok(tx)
 }
 
