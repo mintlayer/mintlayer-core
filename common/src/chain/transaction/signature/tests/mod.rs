@@ -58,14 +58,16 @@ fn verify_no_signature() {
     }
 }
 
-// Try to verify empty and invalid signatures.
+// Try to verify empty and wrong (arbitrary bytes) signatures.
 #[test]
 fn verify_invalid_signature() {
     let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
+    let empty_signature = vec![];
+    let invalid_signature = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     for (sighash_type, raw_signature) in
-        sig_hash_types().cartesian_product([vec![], vec![1, 2, 3, 4, 5, 6, 7, 8, 9]])
+        sig_hash_types().cartesian_product([empty_signature, invalid_signature])
     {
         let mut tx = generate_unsigned_tx(&destination, 3, 3).unwrap();
         tx.update_witness(
