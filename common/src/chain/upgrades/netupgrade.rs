@@ -84,7 +84,6 @@ impl From<ConsensusUpgrade> for RequiredConsensus {
 impl Activate for UpgradeVersion {}
 
 impl<T: Ord + Copy> NetUpgrades<T> {
-    #[allow(dead_code)]
     pub fn initialize(upgrades: Vec<(BlockHeight, T)>) -> anyhow::Result<Self> {
         let mut upgrades = upgrades;
         upgrades.sort_unstable();
