@@ -228,28 +228,33 @@ pub enum Libp2pBehaviourEvent {
         message_id: MessageId,
         message: message::Message,
     },
+
+    ConnectivityError {
+        peer_id: PeerId,
+        error: error::P2pError,
+    },
+
+    ConnectionAccepted {
+        addr: Multiaddr,
+        peer_info: Box<IdentifyInfo>,
+    },
+
+    /// Inbound connection incoming
+    IncomingConnection {
+        addr: Multiaddr,
+        peer_info: Box<IdentifyInfo>,
+    },
 }
 
-impl From<GossipsubEvent> for Libp2pBehaviourEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        Libp2pBehaviourEvent::GossipsubEvent(event)
-    }
-}
+// TODO: connection manager
+#[derive(Debug)]
+pub enum PendingState {
+    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
+    Dialed(Multiaddr),
 
-impl From<PingEvent> for Libp2pBehaviourEvent {
-    fn from(event: PingEvent) -> Self {
-        Libp2pBehaviourEvent::PingEvent(event)
-    }
-}
+    /// Connection established for outbound connection
+    OutboundAccepted(Multiaddr),
 
-impl From<IdentifyEvent> for Libp2pBehaviourEvent {
-    fn from(event: IdentifyEvent) -> Self {
-        Libp2pBehaviourEvent::IdentifyEvent(event)
-    }
+    /// Connection established for inbound connection
+    InboundAccepted(Multiaddr),
 }
-
-// impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for Libp2pBehaviourEvent {
-//     fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
-//         Libp2pBehaviourEvent::SyncingEvent(event)
-//     }
-// }

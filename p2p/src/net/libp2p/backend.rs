@@ -35,18 +35,6 @@ use logging::log;
 use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 
-#[derive(Debug)]
-pub(super) enum PendingState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed(Multiaddr),
-
-    /// Connection established for outbound connection
-    OutboundAccepted(Multiaddr),
-
-    /// Connection established for inbound connection
-    InboundAccepted(Multiaddr),
-}
-
 pub struct Backend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
@@ -62,12 +50,6 @@ pub struct Backend {
 
     /// Sender for outgoing syncing events
     pub(super) sync_tx: mpsc::Sender<types::SyncingEvent>,
-
-    /// Set of pending connections
-    pub(super) pending_conns: HashMap<PeerId, PendingState>,
-
-    /// Set of established connections
-    pub(super) established_conns: HashSet<PeerId>,
 }
 
 impl Backend {
@@ -84,8 +66,6 @@ impl Backend {
             conn_tx,
             gossip_tx,
             sync_tx,
-            pending_conns: HashMap::new(),
-            established_conns: HashSet::new(),
         }
     }
 
@@ -107,9 +87,6 @@ impl Backend {
                     }
                     SwarmEvent::NewListenAddr { address, .. } => {
                         log::trace!("new listen address {:?}", address);
-                    }
-                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::IdentifyEvent(event)) => {
-                        self.on_identify_event(event).await;
                     }
                     _ => {
                         log::warn!("unhandled event {:?}", event);
@@ -144,7 +121,10 @@ impl Backend {
                 response,
             } => match self.swarm.dial(peer_addr.clone()) {
                 Ok(_) => {
-                    self.pending_conns.insert(peer_id, PendingState::Dialed(peer_addr));
+                    self.swarm
+                        .behaviour_mut()
+                        .pending_conns
+                        .insert(peer_id, types::PendingState::Dialed(peer_addr));
                     response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
                 }
                 Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
@@ -162,7 +142,7 @@ impl Backend {
                 match self.swarm.disconnect_peer_id(peer_id) {
                     Ok(_) => {
                         log::trace!("peer {:?} disconnected", peer_id);
-                        self.established_conns.remove(&peer_id);
+                        self.swarm.behaviour_mut().established_conns.remove(&peer_id);
                         response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
                     }
                     Err(_) => response

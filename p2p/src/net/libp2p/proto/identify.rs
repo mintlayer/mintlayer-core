@@ -16,89 +16,10 @@
 // Author(s): A. Altonen
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    net::libp2p::{
-        backend::{Backend, PendingState},
-        types,
-    },
+    net::libp2p::{backend::Backend, types},
 };
 use libp2p::identify::IdentifyEvent;
 use logging::log;
-
-impl Backend {
-    pub async fn on_identify_event(&mut self, event: IdentifyEvent) -> crate::Result<()> {
-        match event {
-            IdentifyEvent::Error { peer_id, error } => {
-                if !self.swarm.is_connected(&peer_id) {
-                    return Ok(());
-                }
-
-                log::error!(
-                    "libp2p-identify error occurred with connected peer ({:?}): {:?}",
-                    peer_id,
-                    error
-                );
-
-                self.conn_tx
-                    .send(types::ConnectivityEvent::Error {
-                        peer_id,
-                        error: error.into(),
-                    })
-                    .await
-                    .map_err(P2pError::from)
-            }
-            IdentifyEvent::Sent { peer_id } => {
-                log::debug!("identify info sent to peer {:?}", peer_id);
-                Ok(())
-            }
-            IdentifyEvent::Pushed { peer_id } => {
-                log::debug!("identify info pushed to peer {:?}", peer_id);
-                Ok(())
-            }
-            IdentifyEvent::Received { peer_id, info } => {
-                // TODO: update swarm manager?
-                if self.established_conns.contains(&peer_id) {
-                    log::trace!("peer {:?} resent their info: {:#?}", peer_id, info);
-                    return Ok(());
-                }
-
-                match self.pending_conns.remove(&peer_id) {
-                    None => {
-                        log::error!("pending connection for peer {:?} does not exist", peer_id);
-                        Err(P2pError::PeerError(PeerError::PeerDoesntExist))
-                    }
-                    Some(PendingState::Dialed(_addr)) => {
-                        // TODO: report peer id to swarm manager?
-                        log::error!("received peer info before connection was established");
-                        Err(P2pError::ProtocolError(ProtocolError::InvalidState(
-                            "Dialed",
-                            "InboundAccepted/OutboundAccepted",
-                        )))
-                    }
-                    Some(PendingState::OutboundAccepted(addr)) => {
-                        self.established_conns.insert(peer_id);
-                        self.conn_tx
-                            .send(types::ConnectivityEvent::ConnectionAccepted {
-                                addr,
-                                peer_info: Box::new(info),
-                            })
-                            .await
-                            .map_err(|_| P2pError::ChannelClosed)
-                    }
-                    Some(PendingState::InboundAccepted(addr)) => {
-                        self.established_conns.insert(peer_id);
-                        self.conn_tx
-                            .send(types::ConnectivityEvent::IncomingConnection {
-                                addr,
-                                peer_info: Box::new(info),
-                            })
-                            .await
-                            .map_err(|_| P2pError::ChannelClosed)
-                    }
-                }
-            }
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

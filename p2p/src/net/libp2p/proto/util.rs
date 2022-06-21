@@ -35,7 +35,7 @@ use libp2p::{
 };
 use logging::log;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     iter,
     num::NonZeroU32,
 };
@@ -114,6 +114,8 @@ pub async fn make_libp2p(
             relay_mdns: true,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
+            established_conns: HashSet::new(),
+            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -209,6 +211,8 @@ pub async fn make_libp2p_with_ping(
             relay_mdns: true,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
+            established_conns: HashSet::new(),
+            pending_conns: HashMap::new(),
             waker: None,
         };
 

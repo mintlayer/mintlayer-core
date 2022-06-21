@@ -54,7 +54,7 @@ use libp2p::{
 use logging::log;
 use serialization::{Decode, Encode};
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{HashMap, HashSet, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
@@ -86,6 +86,14 @@ pub struct Libp2pBehaviour {
 
     #[behaviour(ignore)]
     pub pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
+
+    // TODO: connectionmanager
+    #[behaviour(ignore)]
+    pub(super) established_conns: HashSet<PeerId>,
+
+    // TODO: connectionmanager
+    #[behaviour(ignore)]
+    pub pending_conns: HashMap<PeerId, types::PendingState>,
 
     #[behaviour(ignore)]
     pub waker: Option<Waker>,
@@ -145,6 +153,8 @@ impl Libp2pBehaviour {
             relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
+            established_conns: HashSet::new(),
+            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -197,7 +207,60 @@ impl Libp2pBehaviour {
 
 impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: identify::IdentifyEvent) {
-        println!("identify");
+        match event {
+            identify::IdentifyEvent::Error { peer_id, error } => {
+                log::error!(
+                    "libp2p-identify error occurred with connected peer ({:?}): {:?}",
+                    peer_id,
+                    error
+                );
+
+                self.add_event(Libp2pBehaviourEvent::ConnectivityError {
+                    peer_id,
+                    error: error.into(),
+                });
+            }
+            identify::IdentifyEvent::Sent { peer_id } => {
+                log::debug!("identify info sent to peer {:?}", peer_id);
+            }
+            identify::IdentifyEvent::Pushed { peer_id } => {
+                log::debug!("identify info pushed to peer {:?}", peer_id);
+            }
+            identify::IdentifyEvent::Received { peer_id, info } => {
+                // TODO: update swarm manager?
+                // TODO: connection manager
+                if self.established_conns.contains(&peer_id) {
+                    log::trace!("peer {:?} resent their info: {:#?}", peer_id, info);
+                    return;
+                }
+
+                // TODO: implement connection manager
+                match self.pending_conns.remove(&peer_id) {
+                    None => {
+                        // TODO: report peer id to swarm manager
+                        log::error!("pending connection for peer {:?} does not exist", peer_id);
+                    }
+                    Some(types::PendingState::Dialed(_addr)) => {
+                        // TODO: report peer id to swarm manager
+                        log::error!("received peer info before connection was established");
+                    }
+                    Some(types::PendingState::OutboundAccepted(addr)) => {
+                        self.established_conns.insert(peer_id);
+                        self.add_event(Libp2pBehaviourEvent::ConnectionAccepted {
+                            addr,
+                            peer_info: Box::new(info),
+                        });
+                    }
+                    Some(types::PendingState::InboundAccepted(addr)) => {
+                        self.established_conns.insert(peer_id);
+                        self.add_event(Libp2pBehaviourEvent::IncomingConnection {
+                            addr,
+                            peer_info: Box::new(info),
+                        });
+                    }
+                }
+            }
+        }
     }
 }
 

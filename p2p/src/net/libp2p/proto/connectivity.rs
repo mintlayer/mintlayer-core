@@ -17,8 +17,9 @@
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::libp2p::{
-        backend::{Backend, PendingState},
-        types, DialError,
+        backend::Backend,
+        types::{self, PendingState},
+        DialError,
     },
 };
 use libp2p::{core::connection::ConnectedPoint, swarm::DialError as Libp2pDialError, PeerId};
@@ -34,9 +35,12 @@ impl Backend {
             ConnectedPoint::Dialer { .. } => {
                 log::trace!("connection established (dialer), peer id {:?}", peer_id);
 
-                match self.pending_conns.remove(&peer_id) {
+                match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
                     Some(PendingState::Dialed(addr)) => {
-                        self.pending_conns.insert(peer_id, PendingState::OutboundAccepted(addr));
+                        self.swarm
+                            .behaviour_mut()
+                            .pending_conns
+                            .insert(peer_id, PendingState::OutboundAccepted(addr));
                         Ok(())
                     }
                     Some(PendingState::InboundAccepted(_addr)) => {
@@ -71,7 +75,7 @@ impl Backend {
             } => {
                 log::trace!("connection established (listener), peer id {:?}", peer_id);
 
-                match self.pending_conns.remove(&peer_id) {
+                match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
                     Some(state) => {
                         // TODO: is this an actual error?
                         log::error!(
@@ -82,7 +86,9 @@ impl Backend {
                         Err(P2pError::ProtocolError(ProtocolError::InvalidState("", "")))
                     }
                     None => {
-                        self.pending_conns
+                        self.swarm
+                            .behaviour_mut()
+                            .pending_conns
                             .insert(peer_id, PendingState::InboundAccepted(send_back_addr));
                         Ok(())
                     }
@@ -97,7 +103,7 @@ impl Backend {
         error: Libp2pDialError,
     ) -> crate::Result<()> {
         if let Some(peer_id) = peer_id {
-            match self.pending_conns.remove(&peer_id) {
+            match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
                 Some(PendingState::Dialed(addr) | PendingState::OutboundAccepted(addr)) => self
                     .conn_tx
                     .send(types::ConnectivityEvent::ConnectionError {
@@ -121,7 +127,7 @@ impl Backend {
     }
 
     pub async fn on_connection_closed(&mut self, peer_id: PeerId) -> crate::Result<()> {
-        self.established_conns.remove(&peer_id);
+        self.swarm.behaviour_mut().established_conns.remove(&peer_id);
         self.conn_tx
             .send(types::ConnectivityEvent::ConnectionClosed { peer_id })
             .await
