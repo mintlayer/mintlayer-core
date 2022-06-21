@@ -26,7 +26,7 @@ use libp2p::{
     identify::{Identify, IdentifyConfig},
     identity,
     mdns::Mdns,
-    mplex, noise, ping,
+    mplex, noise, ping as libp2p_ping,
     request_response::*,
     swarm::NetworkBehaviour,
     swarm::{SwarmBuilder, SwarmEvent},
@@ -41,13 +41,25 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-// TODO: add config parameters
+#[cfg(test)]
+mod connectivity;
+#[cfg(test)]
+mod frontend;
+#[cfg(test)]
+mod gossipsub;
+#[cfg(test)]
+mod identify;
+#[cfg(test)]
+mod mdns;
+#[cfg(test)]
+mod ping;
+
 #[allow(dead_code)]
 pub async fn make_libp2p(
-    // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
+    relay_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -78,7 +90,6 @@ pub async fn make_libp2p(
             .build()
             .expect("configuration to be valid");
 
-        // TODO: impl display for semver/magic bytes?
         let version = config.version();
         let magic = config.magic_bytes();
         let protocol = format!(
@@ -94,8 +105,8 @@ pub async fn make_libp2p(
 
         let mut behaviour = behaviour::Libp2pBehaviour {
             mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
-            ping: ping::Behaviour::new(
-                ping::Config::new()
+            ping: libp2p_ping::Behaviour::new(
+                libp2p_ping::Config::new()
                     .with_timeout(std::time::Duration::from_secs(60))
                     .with_interval(std::time::Duration::from_secs(60))
                     .with_max_failures(NonZeroU32::new(3).expect("max failures > 0")),
@@ -111,7 +122,7 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            relay_mdns: true,
+            relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             established_conns: HashSet::new(),
@@ -145,11 +156,11 @@ pub async fn make_libp2p(
 
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
-    // TODO: convert these into `Option<T> + unwrap_or()`
     config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
-    ping: ping::Behaviour,
+    ping: libp2p_ping::Behaviour,
+    relay_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -180,7 +191,6 @@ pub async fn make_libp2p_with_ping(
             .build()
             .expect("configuration to be valid");
 
-        // TODO: impl display for semver/magic bytes?
         let version = config.version();
         let magic = config.magic_bytes();
         let protocol = format!(
@@ -208,7 +218,7 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            relay_mdns: true,
+            relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             established_conns: HashSet::new(),
@@ -290,7 +300,6 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 
 #[allow(dead_code)]
 pub fn make_identify(config: common::chain::ChainConfig, id_keys: identity::Keypair) -> Identify {
-    // TODO: impl display for semver/magic bytes?
     let version = config.version();
     let magic = config.magic_bytes();
     let protocol = format!(
@@ -312,9 +321,9 @@ pub fn make_ping(
     timeout: Option<std::time::Duration>,
     interval: Option<std::time::Duration>,
     max_failures: Option<u32>,
-) -> ping::Behaviour {
-    ping::Behaviour::new(
-        ping::Config::new()
+) -> libp2p_ping::Behaviour {
+    libp2p_ping::Behaviour::new(
+        libp2p_ping::Config::new()
             .with_timeout(timeout.unwrap_or(std::time::Duration::from_secs(60)))
             .with_interval(interval.unwrap_or(std::time::Duration::from_secs(60)))
             .with_max_failures(

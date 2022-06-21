@@ -19,18 +19,14 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse, SyncingCodec},
+        libp2p::sync::{SyncRequest, SyncResponse},
     },
 };
 use libp2p::{
-    gossipsub::{
-        Gossipsub, GossipsubEvent, IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash,
-    },
-    identify::{Identify, IdentifyEvent, IdentifyInfo},
-    mdns::{Mdns, MdnsEvent},
-    ping::{self, PingEvent},
-    request_response::{RequestId, RequestResponse, RequestResponseEvent},
-    Multiaddr, NetworkBehaviour, PeerId,
+    gossipsub::{IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash},
+    identify::IdentifyInfo,
+    request_response::RequestId,
+    Multiaddr, PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -89,7 +85,6 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum ConnectivityEvent {
-    #[allow(unused)]
     /// Outbound connection accepted by remote
     ConnectionAccepted {
         addr: Multiaddr,
@@ -195,55 +190,9 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
 pub enum Libp2pBehaviourEvent {
-    MdnsEvent(MdnsEvent),
-    GossipsubEvent(GossipsubEvent),
-    PingEvent(PingEvent),
-    IdentifyEvent(IdentifyEvent),
-    SyncingEvent(SyncingEvent),
-
-    /// One or more peers were discovered by one of the discovery strategies
-    Discovered {
-        peers: Vec<(PeerId, Multiaddr)>,
-    },
-
-    /// One or more peers that were previously discovered have expired
-    Expired {
-        peers: Vec<(PeerId, Multiaddr)>,
-    },
-
-    /// Peer disconnected from the swarm
-    Disconnected {
-        peer_id: PeerId,
-    },
-
-    /// Peer misbehaved
-    Misbehaved {
-        peer_id: PeerId,
-        behaviour: u32,
-    },
-
-    /// Gossipsub message received
-    MessageReceived {
-        peer_id: PeerId,
-        message_id: MessageId,
-        message: message::Message,
-    },
-
-    ConnectivityError {
-        peer_id: PeerId,
-        error: error::P2pError,
-    },
-
-    ConnectionAccepted {
-        addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
-    },
-
-    /// Inbound connection incoming
-    IncomingConnection {
-        addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
-    },
+    Connectivity(ConnectivityEvent),
+    Syncing(SyncingEvent),
+    PubSub(PubSubEvent),
 }
 
 // TODO: connection manager

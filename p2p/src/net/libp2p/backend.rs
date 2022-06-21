@@ -19,20 +19,19 @@
 //! Libp2p backend service
 
 use crate::{
-    error::{P2pError, PeerError},
-    net::libp2p::{behaviour, sync::SyncResponse, types},
+    error::{DialError, P2pError, PeerError, ProtocolError},
+    net::libp2p::{
+        behaviour,
+        types::{self, Libp2pBehaviourEvent, PendingState},
+    },
 };
 use futures::StreamExt;
 use libp2p::{
-    core::either::EitherError,
-    gossipsub::error::GossipsubHandlerError,
-    ping,
-    request_response::*,
-    swarm::{ConnectionHandlerUpgrErr, Swarm, SwarmEvent},
-    Multiaddr, PeerId,
+    core::connection::ConnectedPoint,
+    swarm::{DialError as Libp2pDialError, Swarm, SwarmEvent},
+    PeerId,
 };
 use logging::log;
-use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 
 pub struct Backend {
@@ -69,7 +68,114 @@ impl Backend {
         }
     }
 
-    // TODO: into_fatal()???
+    pub async fn on_connection_established(
+        &mut self,
+        peer_id: PeerId,
+        endpoint: ConnectedPoint,
+    ) -> crate::Result<()> {
+        match endpoint {
+            ConnectedPoint::Dialer { .. } => {
+                log::trace!("connection established (dialer), peer id {:?}", peer_id);
+
+                match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
+                    Some(PendingState::Dialed(addr)) => {
+                        self.swarm
+                            .behaviour_mut()
+                            .pending_conns
+                            .insert(peer_id, PendingState::OutboundAccepted(addr));
+                        Ok(())
+                    }
+                    Some(PendingState::InboundAccepted(_addr)) => {
+                        // TODO: ban peer?
+                        log::error!(
+                            "connection state is invalid. Expected `Dialed`, got `OutboundAccepted`",
+                        );
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState(
+                            "InboundAccepted",
+                            "Dialed",
+                        )))
+                    }
+                    Some(PendingState::OutboundAccepted(_addr)) => {
+                        // TODO: ban peer?
+                        log::error!(
+                            "connection state is invalid. Expected `Dialed`, got `OutboundAccepted`",
+                        );
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState(
+                            "OutboundAccepted",
+                            "Dialed",
+                        )))
+                    }
+                    None => {
+                        log::error!("peer {} does not exist", peer_id);
+                        Err(P2pError::PeerError(PeerError::PeerDoesntExist))
+                    }
+                }
+            }
+            ConnectedPoint::Listener {
+                local_addr: _,
+                send_back_addr,
+            } => {
+                log::trace!("connection established (listener), peer id {:?}", peer_id);
+
+                match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
+                    Some(state) => {
+                        // TODO: connection manager
+                        log::error!(
+                            "peer {:?} already has active connection, state: {:?}!",
+                            peer_id,
+                            state
+                        );
+                        Err(P2pError::ProtocolError(ProtocolError::InvalidState("", "")))
+                    }
+                    None => {
+                        self.swarm
+                            .behaviour_mut()
+                            .pending_conns
+                            .insert(peer_id, PendingState::InboundAccepted(send_back_addr));
+                        Ok(())
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn on_outgoing_connection_error(
+        &mut self,
+        peer_id: Option<PeerId>,
+        error: Libp2pDialError,
+    ) -> crate::Result<()> {
+        if let Some(peer_id) = peer_id {
+            match self.swarm.behaviour_mut().pending_conns.remove(&peer_id) {
+                Some(PendingState::Dialed(addr) | PendingState::OutboundAccepted(addr)) => self
+                    .conn_tx
+                    .send(types::ConnectivityEvent::ConnectionError {
+                        addr,
+                        error: P2pError::DialError(DialError::IoError(
+                            std::io::ErrorKind::ConnectionRefused,
+                        )),
+                    })
+                    .await
+                    .map_err(P2pError::from),
+                _ => {
+                    // TODO: report to swarm manager?
+                    log::debug!("connection failed for peer {:?}: {:?}", peer_id, error);
+                    Err(error.into())
+                }
+            }
+        } else {
+            log::error!("unhandled connection error: {:#?}", error);
+            Ok(())
+        }
+    }
+
+    pub async fn on_connection_closed(&mut self, peer_id: PeerId) -> crate::Result<()> {
+        self.swarm.behaviour_mut().established_conns.remove(&peer_id);
+        self.conn_tx
+            .send(types::ConnectivityEvent::ConnectionClosed { peer_id })
+            .await
+            .map_err(P2pError::from)
+    }
+
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         log::debug!("starting event loop");
 
@@ -80,13 +186,22 @@ impl Backend {
                         peer_id, endpoint, ..
                     } => self.on_connection_established(peer_id, endpoint).await?,
                     SwarmEvent::OutgoingConnectionError { peer_id, error } => {
-                        self.on_outgoing_connection_error(peer_id, error).await;
+                        self.on_outgoing_connection_error(peer_id, error).await?;
                     }
                     SwarmEvent::ConnectionClosed { peer_id, .. } => {
-                        self.on_connection_closed(peer_id).await;
+                        self.on_connection_closed(peer_id).await?;
                     }
                     SwarmEvent::NewListenAddr { address, .. } => {
                         log::trace!("new listen address {:?}", address);
+                    }
+                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(event)) => {
+                        self.conn_tx.send(event).await.map_err(P2pError::from)?;
+                    }
+                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::Syncing(event)) => {
+                        self.sync_tx.send(event).await.map_err(P2pError::from)?;
+                    }
+                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
+                        self.gossip_tx.send(event).await.map_err(P2pError::from)?;
                     }
                     _ => {
                         log::warn!("unhandled event {:?}", event);
@@ -100,8 +215,7 @@ impl Backend {
         }
     }
 
-    // TODO: into separate handlers?
-    // TODO: there has to be a better way to add new commands?
+	// TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
@@ -226,19 +340,26 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{behaviour, SyncingCodec, SyncingProtocol};
+    use crate::net::libp2p::{
+        behaviour,
+        sync::{SyncingCodec, SyncingProtocol},
+    };
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
         identify::{Identify, IdentifyConfig},
         identity,
         mdns::Mdns,
-        mplex, noise,
+        mplex, noise, ping,
+        request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
         tcp::TcpConfig,
-        Transport,
+        Multiaddr, Transport,
     };
-    use std::iter;
+    use std::{
+        collections::{HashMap, HashSet, VecDeque},
+        iter,
+    };
     use tokio::sync::oneshot;
 
     // create a swarm object which is the top-level object of libp2p
@@ -275,7 +396,6 @@ mod tests {
             id_keys.public(),
         ));
 
-        // TODO: configure sync protocol
         let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
         let cfg = RequestResponseConfig::default();
         let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
@@ -286,7 +406,12 @@ mod tests {
             gossipsub,
             identify,
             sync,
-            relay_mdns: false,
+            relay_mdns: true,
+            events: VecDeque::new(),
+            pending_reqs: HashMap::new(),
+            established_conns: HashSet::new(),
+            pending_conns: HashMap::new(),
+            waker: None,
         };
 
         SwarmBuilder::new(transport, behaviour, peer_id).build()
@@ -300,7 +425,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -327,7 +452,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -364,7 +489,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx, false);
+        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

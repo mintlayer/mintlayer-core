@@ -14,55 +14,42 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 
 //! Network behaviour configuration for libp2p
 
 use crate::{
-    error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
     net::{
         self,
         libp2p::{
             constants::*,
             sync::*,
-            types::{self, Libp2pBehaviourEvent},
+            types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
-        types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
-        ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
+        types::PubSubTopic,
     },
 };
-use async_trait::async_trait;
 use common::chain::config::ChainConfig;
-use itertools::*;
 use libp2p::{
-    core::{upgrade, PeerId},
-    gossipsub::{
-        self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, MessageId, ValidationMode,
-    },
-    identify, identity, mdns, mplex,
-    multiaddr::Protocol,
-    noise, ping,
+    core::PeerId,
+    gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
+    identify, identity, mdns, ping,
     request_response::*,
     swarm::{
         ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
-        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters, SwarmBuilder,
+        NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
-    tcp::TcpConfig,
-    Multiaddr, NetworkBehaviour, Transport,
+    NetworkBehaviour,
 };
 use logging::log;
-use serialization::{Decode, Encode};
+use serialization::Decode;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
     task::{Context, Poll, Waker},
-    time::Duration,
 };
-use tokio::sync::{mpsc, oneshot};
-use utils::ensure;
 
 #[derive(NetworkBehaviour)]
 #[behaviour(
@@ -99,6 +86,12 @@ pub struct Libp2pBehaviour {
     pub waker: Option<Waker>,
 }
 
+type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
+    <Libp2pBehaviour as Libp2pNetworkBehaviour>::OutEvent,
+    <Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler,
+    <<<Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler
+        as IntoConnectionHandler>::Handler as ConnectionHandler>::InEvent>;
+
 impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
@@ -114,7 +107,6 @@ impl Libp2pBehaviour {
             .build()
             .expect("configuration to be valid");
 
-        // TODO: impl display for semver/magic bytes?
         let version = config.version();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
@@ -179,15 +171,8 @@ impl Libp2pBehaviour {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters
-    ) -> Poll<NetworkBehaviourAction<
-        <Libp2pBehaviour as Libp2pNetworkBehaviour>::OutEvent,
-        <Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler,
-        <<<Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler
-            as IntoConnectionHandler>::Handler
-                as ConnectionHandler>::InEvent>
-        >
-    {
+        _params: &mut impl PollParameters,
+    ) -> Poll<Libp2pNetworkBehaviourAction> {
         match &self.waker {
             Some(waker) => {
                 if waker.will_wake(cx.waker()) {
@@ -215,10 +200,12 @@ impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
                     error
                 );
 
-                self.add_event(Libp2pBehaviourEvent::ConnectivityError {
-                    peer_id,
-                    error: error.into(),
-                });
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Error {
+                        peer_id,
+                        error: error.into(),
+                    },
+                ));
             }
             identify::IdentifyEvent::Sent { peer_id } => {
                 log::debug!("identify info sent to peer {:?}", peer_id);
@@ -246,17 +233,21 @@ impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
                     }
                     Some(types::PendingState::OutboundAccepted(addr)) => {
                         self.established_conns.insert(peer_id);
-                        self.add_event(Libp2pBehaviourEvent::ConnectionAccepted {
-                            addr,
-                            peer_info: Box::new(info),
-                        });
+                        self.add_event(Libp2pBehaviourEvent::Connectivity(
+                            ConnectivityEvent::ConnectionAccepted {
+                                addr,
+                                peer_info: Box::new(info),
+                            },
+                        ));
                     }
                     Some(types::PendingState::InboundAccepted(addr)) => {
                         self.established_conns.insert(peer_id);
-                        self.add_event(Libp2pBehaviourEvent::IncomingConnection {
-                            addr,
-                            peer_info: Box::new(info),
-                        });
+                        self.add_event(Libp2pBehaviourEvent::Connectivity(
+                            ConnectivityEvent::IncomingConnection {
+                                addr,
+                                peer_info: Box::new(info),
+                            },
+                        ));
                     }
                 }
             }
@@ -272,29 +263,25 @@ impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
                 result: Result::Ok(ping::Success::Ping { rtt }),
             } => {
                 // TODO: report rtt to swarm manager?
-                log::debug!("peer {:?} responded to ping, rtt {:?}", peer, rtt);
+                log::debug!("peer {} responded to ping, rtt {:?}", peer, rtt);
             }
             ping::Event {
                 peer,
                 result: Result::Ok(ping::Success::Pong),
             } => {
-                log::debug!("peer {:?} responded to pong", peer);
+                log::debug!("peer {} responded to pong", peer);
             }
             ping::Event {
                 peer,
                 result: Result::Err(ping::Failure::Timeout),
             } => {
-                log::warn!("ping timeout for peer {:?}", peer);
-
-                self.add_event(Libp2pBehaviourEvent::Disconnected { peer_id: peer });
+                log::warn!("ping timeout for peer {}", peer);
             }
             ping::Event {
                 peer,
                 result: Result::Err(ping::Failure::Unsupported),
             } => {
-                log::error!("peer {:?} doesn't support libp2p::ping", peer);
-
-                self.add_event(Libp2pBehaviourEvent::Disconnected { peer_id: peer });
+                log::error!("peer {} doesn't support libp2p::ping", peer);
             }
             ping::Event {
                 peer: _,
@@ -310,15 +297,23 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
         match event {
             gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
+                // TODO: swarm manager??
                 log::trace!("peer {} unsubscribed from topic {:?}", peer_id, topic);
             }
             gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
+                // TODO: swarm manager??
                 log::trace!("peer {} subscribed to topic {:?}", peer_id, topic);
             }
             gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
                 // TODO: should not be possible with mintlayer, disconnect?
-                // TODO: write test
                 log::info!("peer {} does not support gossipsub", peer_id);
+
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Misbehaved {
+                        peer_id,
+                        behaviour: 0,
+                    },
+                ))
             }
             gossipsub::GossipsubEvent::Message {
                 propagation_source,
@@ -340,18 +335,20 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                         );
 
                         // TODO: implement reputation
-                        return self.add_event(Libp2pBehaviourEvent::Misbehaved {
-                            peer_id: propagation_source,
-                            behaviour: 0,
-                        });
+                        return self.add_event(Libp2pBehaviourEvent::Connectivity(
+                            ConnectivityEvent::Misbehaved {
+                                peer_id: propagation_source,
+                                behaviour: 0,
+                            },
+                        ));
                     }
                 };
 
-                self.add_event(Libp2pBehaviourEvent::MessageReceived {
+                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::MessageReceived {
                     peer_id: propagation_source,
                     message,
                     message_id,
-                });
+                }));
             }
         }
     }
@@ -369,7 +366,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                     channel,
                 } => {
                     self.pending_reqs.insert(request_id, channel);
-                    self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
                         types::SyncingEvent::Request {
                             peer_id: peer,
                             request_id,
@@ -381,7 +378,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                     request_id,
                     response,
                 } => {
-                    self.add_event(Libp2pBehaviourEvent::SyncingEvent(
+                    self.add_event(Libp2pBehaviourEvent::Syncing(
                         types::SyncingEvent::Response {
                             peer_id: peer,
                             request_id,
@@ -403,23 +400,19 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => {
                 match error {
                     OutboundFailure::Timeout => {
-                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
-                            types::SyncingEvent::Error {
-                                peer_id: peer,
-                                request_id,
-                                error: net::types::RequestResponseError::Timeout,
-                            },
-                        ));
+                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: net::types::RequestResponseError::Timeout,
+                        }));
                     }
                     OutboundFailure::ConnectionClosed => {
-                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
-                            types::SyncingEvent::Error {
-                                peer_id: peer,
-                                request_id,
-                                // TODO: connection manager
-                                error: net::types::RequestResponseError::ConnectionClosed,
-                            },
-                        ));
+                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            // TODO: connection manager
+                            error: net::types::RequestResponseError::ConnectionClosed,
+                        }));
                     }
                     OutboundFailure::DialFailure => {
                         log::error!("CRITICAL: syncing code tried to dial peer");
@@ -436,22 +429,18 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
             } => {
                 match error {
                     InboundFailure::Timeout => {
-                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
-                            types::SyncingEvent::Error {
-                                peer_id: peer,
-                                request_id,
-                                error: net::types::RequestResponseError::Timeout,
-                            },
-                        ));
+                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: net::types::RequestResponseError::Timeout,
+                        }));
                     }
                     InboundFailure::ConnectionClosed => {
-                        self.add_event(Libp2pBehaviourEvent::SyncingEvent(
-                            types::SyncingEvent::Error {
-                                peer_id: peer,
-                                request_id,
-                                error: net::types::RequestResponseError::ConnectionClosed,
-                            },
-                        ));
+                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
+                            peer_id: peer,
+                            request_id,
+                            error: net::types::RequestResponseError::ConnectionClosed,
+                        }));
                     }
                     InboundFailure::ResponseOmission => {
                         log::error!("CRITICAL(??): response omitted!");
@@ -474,14 +463,18 @@ impl NetworkBehaviourEventProcess<mdns::MdnsEvent> for Libp2pBehaviour {
 
         match event {
             mdns::MdnsEvent::Discovered(peers) => {
-                self.add_event(Libp2pBehaviourEvent::Discovered {
-                    peers: peers.collect(),
-                });
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Discovered {
+                        peers: peers.collect(),
+                    },
+                ));
             }
             mdns::MdnsEvent::Expired(expired) => {
-                self.add_event(Libp2pBehaviourEvent::Expired {
-                    peers: expired.collect(),
-                });
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Expired {
+                        peers: expired.collect(),
+                    },
+                ));
             }
         }
     }
