@@ -226,7 +226,7 @@ fn sign_mutate_then_verify(
 
 fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.flags = 1234567890;
+    tx_updater.flags = tx_updater.flags.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.get_inputs().iter().enumerate() {
         assert_eq!(
@@ -238,7 +238,7 @@ fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
 
 fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    tx_updater.lock_time = 1234567890;
+    tx_updater.lock_time = tx_updater.lock_time.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
     for (input_num, _) in tx.get_inputs().iter().enumerate() {
         assert_eq!(
