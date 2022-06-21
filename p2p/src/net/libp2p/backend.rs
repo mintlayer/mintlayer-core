@@ -108,9 +108,6 @@ impl Backend {
                     SwarmEvent::NewListenAddr { address, .. } => {
                         log::trace!("new listen address {:?}", address);
                     }
-                    SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::GossipsubEvent(event)) => {
-                        self.on_gossipsub_event(event).await;
-                    }
                     SwarmEvent::Behaviour(types::Libp2pBehaviourEvent::IdentifyEvent(event)) => {
                         self.on_identify_event(event).await;
                     }

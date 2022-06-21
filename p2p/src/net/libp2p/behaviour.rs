@@ -245,7 +245,52 @@ impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
 
 impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
-        println!("gossipsub");
+        match event {
+            gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
+                log::trace!("peer {} unsubscribed from topic {:?}", peer_id, topic);
+            }
+            gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
+                log::trace!("peer {} subscribed to topic {:?}", peer_id, topic);
+            }
+            gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
+                // TODO: should not be possible with mintlayer, disconnect?
+                // TODO: write test
+                log::info!("peer {} does not support gossipsub", peer_id);
+            }
+            gossipsub::GossipsubEvent::Message {
+                propagation_source,
+                message_id,
+                message,
+            } => {
+                log::trace!(
+                    "gossipsub message received, message id {:?}, propagation source {}",
+                    message_id,
+                    propagation_source
+                );
+
+                let message = match message::Message::decode(&mut &message.data[..]) {
+                    Ok(data) => data,
+                    Err(_) => {
+                        log::warn!(
+                            "received invalid message, propagation source: {:?}",
+                            propagation_source
+                        );
+
+                        // TODO: implement reputation
+                        return self.add_event(Libp2pBehaviourEvent::Misbehaved {
+                            peer_id: propagation_source,
+                            behaviour: 0,
+                        });
+                    }
+                };
+
+                self.add_event(Libp2pBehaviourEvent::MessageReceived {
+                    peer_id: propagation_source,
+                    message,
+                    message_id,
+                });
+            }
+        }
     }
 }
 

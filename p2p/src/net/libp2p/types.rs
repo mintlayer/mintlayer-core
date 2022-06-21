@@ -221,6 +221,13 @@ pub enum Libp2pBehaviourEvent {
         peer_id: PeerId,
         behaviour: u32,
     },
+
+    /// Gossipsub message received
+    MessageReceived {
+        peer_id: PeerId,
+        message_id: MessageId,
+        message: message::Message,
+    },
 }
 
 impl From<GossipsubEvent> for Libp2pBehaviourEvent {
