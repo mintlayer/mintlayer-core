@@ -93,7 +93,7 @@ mod test {
 
     // Using Destination::PublicKey for AuthorizedPublicKeyHashSpend.
     #[test]
-    fn wrong_destination() {
+    fn wrong_destination_type() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
