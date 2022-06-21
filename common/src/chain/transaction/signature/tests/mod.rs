@@ -129,7 +129,7 @@ fn mutate_all() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -143,7 +143,7 @@ fn mutate_all_anyonecanpay() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -157,7 +157,7 @@ fn mutate_none() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -172,7 +172,7 @@ fn mutate_none_anyonecanpay() {
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -186,7 +186,7 @@ fn mutate_single() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -201,7 +201,7 @@ fn mutate_single_anyonecanpay() {
     let outpoint_dest = Destination::PublicKey(public_key);
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-    let original_tx = sign_modify_then_verify(&private_key, sighash_type, &outpoint_dest);
+    let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
     check_change_input(&original_tx, &outpoint_dest, true);
@@ -209,7 +209,7 @@ fn mutate_single_anyonecanpay() {
     check_change_output(&original_tx, &outpoint_dest, true);
 }
 
-fn sign_modify_then_verify(
+fn sign_mutate_then_verify(
     private_key: &PrivateKey,
     sighash_type: SigHashType,
     destination: &Destination,
