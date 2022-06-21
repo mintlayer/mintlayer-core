@@ -29,7 +29,7 @@ fn sign_and_verify_different_sighash_types() {
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sigh_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
+        let tx = generate_and_sign_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signed_tx(&tx, &destination),
             Ok(()),
@@ -95,7 +95,7 @@ fn verify_signature_invalid_input_index() {
     let destination = Destination::PublicKey(public_key);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sigh_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
+        let tx = generate_and_sign_tx(&destination, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signature(&destination, &tx, INVALID_INPUT_INDEX),
             Err(TransactionSigError::InvalidInputIndex(
@@ -116,7 +116,7 @@ fn verify_signature_wrong_destination() {
     let different_outpoint = Destination::PublicKey(public_key_2);
 
     for sighash_type in sig_hash_types() {
-        let tx = generate_and_sigh_tx(&outpoint, 3, 3, &private_key, sighash_type).unwrap();
+        let tx = generate_and_sign_tx(&outpoint, 3, 3, &private_key, sighash_type).unwrap();
         assert_eq!(
             verify_signature(&different_outpoint, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -217,7 +217,7 @@ fn sign_mutate_then_verify(
     destination: &Destination,
 ) -> Transaction {
     // Create and sign tx, and then modify and verify it.
-    let original_tx = generate_and_sigh_tx(destination, 3, 3, private_key, sighash_type).unwrap();
+    let original_tx = generate_and_sign_tx(destination, 3, 3, private_key, sighash_type).unwrap();
     assert_eq!(verify_signed_tx(&original_tx, destination), Ok(()));
 
     check_change_flags(&original_tx, destination);

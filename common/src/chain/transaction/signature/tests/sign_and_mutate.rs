@@ -144,7 +144,7 @@ fn mutate_all() {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     let mutations = [
         add_input,
@@ -173,7 +173,7 @@ fn mutate_all_anyonecanpay() {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     let mutations = [
         add_output,
@@ -207,7 +207,7 @@ fn mutate_none() {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     let mutations = [
         add_input,
@@ -240,7 +240,7 @@ fn mutate_none_anyonecanpay() {
     let sighash_type =
         SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     {
         let tx = modify_input(&tx);
@@ -275,7 +275,7 @@ fn mutate_single() {
     let destination = Destination::PublicKey(public_key);
     let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     let mutations = [
         add_input,
@@ -340,7 +340,7 @@ fn mutate_single_anyonecanpay() {
     let sighash_type =
         SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
     let tx =
-        generate_and_sigh_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
+        generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     let mutations = [add_input, remove_last_input, add_output, remove_last_output];
     for mutate in mutations.into_iter() {

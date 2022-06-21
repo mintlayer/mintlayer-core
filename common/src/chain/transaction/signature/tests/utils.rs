@@ -89,7 +89,7 @@ pub fn sign_whole_tx(
     Ok(())
 }
 
-pub fn generate_and_sigh_tx(
+pub fn generate_and_sign_tx(
     destination: &Destination,
     inputs: usize,
     outputs: usize,
