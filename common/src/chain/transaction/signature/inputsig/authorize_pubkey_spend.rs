@@ -107,7 +107,7 @@ mod test {
     }
 
     #[test]
-    fn invalid_signature() {
+    fn invalid_signature_type() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
@@ -121,9 +121,11 @@ mod test {
                 INPUT_NUM,
             )
             .unwrap();
-            let mut raw_signature = witness.get_raw_signature().clone();
-            raw_signature[0] = raw_signature[0].wrapping_add(2);
 
+            let mut raw_signature = witness.get_raw_signature().clone();
+            AuthorizedPublicKeySpend::from_data(&raw_signature).unwrap();
+
+            raw_signature[0] = raw_signature[0].wrapping_add(2);
             assert_eq!(
                 Err(TransactionSigError::InvalidSignatureEncoding),
                 AuthorizedPublicKeySpend::from_data(&raw_signature),

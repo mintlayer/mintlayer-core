@@ -118,7 +118,7 @@ mod test {
     }
 
     #[test]
-    fn invalid_signature() {
+    fn invalid_signature_type() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
@@ -133,9 +133,11 @@ mod test {
                 INPUT_NUM,
             )
             .unwrap();
-            let mut raw_signature = witness.get_raw_signature().clone();
-            raw_signature[0] = raw_signature[0].wrapping_add(2);
 
+            let mut raw_signature = witness.get_raw_signature().clone();
+            AuthorizedPublicKeyHashSpend::from_data(&raw_signature).unwrap();
+
+            raw_signature[0] = raw_signature[0].wrapping_add(2);
             assert!(
                 matches!(
                     AuthorizedPublicKeyHashSpend::from_data(&raw_signature),
