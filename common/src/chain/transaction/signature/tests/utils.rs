@@ -1,4 +1,10 @@
+use rand::Rng;
+
+use crypto::key::{PrivateKey, PublicKey};
+use script::Script;
+
 use crate::{
+    address::pubkeyhash::PublicKeyHash,
     chain::{
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
@@ -9,8 +15,6 @@ use crate::{
     },
     primitives::{amount::IntType, Amount, Id, H256},
 };
-use crypto::key::PrivateKey;
-use rand::Rng;
 
 // This is required because we can't access private fields of the Transaction class
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,16 +25,14 @@ pub struct MutableTransaction {
     pub lock_time: u32,
 }
 
-impl TryFrom<&Transaction> for MutableTransaction {
-    type Error = &'static str;
-
-    fn try_from(tx: &Transaction) -> Result<Self, Self::Error> {
-        Ok(Self {
+impl From<&Transaction> for MutableTransaction {
+    fn from(tx: &Transaction) -> Self {
+        Self {
             flags: tx.get_flags(),
             inputs: tx.get_inputs().clone(),
             outputs: tx.get_outputs().clone(),
             lock_time: tx.get_lock_time(),
-        })
+        }
     }
 }
 
@@ -46,26 +48,30 @@ impl MutableTransaction {
 }
 
 pub fn generate_unsigned_tx(
-    outpoint_dest: Destination,
-    inputs_count: u32,
-    outputs_count: u32,
+    destination: &Destination,
+    inputs_count: usize,
+    outputs_count: usize,
 ) -> Result<Transaction, TransactionCreationError> {
     let mut rng = rand::thread_rng();
-    let mut inputs = Vec::new();
-    for input_index in 0..inputs_count {
-        inputs.push(TxInput::new(
-            Id::<Transaction>::new(&H256::random()).into(),
-            input_index,
-            InputWitness::NoSignature(None),
-        ));
-    }
-    let mut outputs = Vec::new();
-    for _ in 0..outputs_count {
-        outputs.push(TxOutput::new(
+
+    let inputs = (0..inputs_count)
+        .map(|input_index| {
+            TxInput::new(
+                Id::<Transaction>::new(&H256::random()).into(),
+                input_index as u32,
+                InputWitness::NoSignature(None),
+            )
+        })
+        .collect();
+
+    let outputs = std::iter::from_fn(|| {
+        Some(TxOutput::new(
             Amount::from_atoms(rng.gen::<IntType>()),
-            outpoint_dest.clone(),
-        ));
-    }
+            destination.clone(),
+        ))
+    })
+    .take(outputs_count)
+    .collect();
 
     let tx = Transaction::new(0, inputs, outputs, 0)?;
     Ok(tx)
@@ -75,12 +81,25 @@ pub fn sign_whole_tx(
     tx: &mut Transaction,
     private_key: &PrivateKey,
     sighash_type: SigHashType,
-    outpoint_dest: Destination,
+    destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.get_inputs().len() {
-        update_signature(tx, i, private_key, sighash_type, outpoint_dest.clone())?;
+        update_signature(tx, i, private_key, sighash_type, destination.clone())?;
     }
     Ok(())
+}
+
+pub fn generate_and_sigh_tx(
+    destination: &Destination,
+    inputs: usize,
+    outputs: usize,
+    private_key: &PrivateKey,
+    sighash_type: SigHashType,
+) -> Result<Transaction, TransactionCreationError> {
+    let mut tx = generate_unsigned_tx(destination, inputs, outputs).unwrap();
+    sign_whole_tx(&mut tx, private_key, sighash_type, destination).unwrap();
+    assert_eq!(verify_signed_tx(&tx, &destination), Ok(()));
+    Ok(tx)
 }
 
 pub fn update_signature(
@@ -103,10 +122,35 @@ pub fn update_signature(
 
 pub fn verify_signed_tx(
     tx: &Transaction,
-    outpoint_dest: &Destination,
+    destination: &Destination,
 ) -> Result<(), TransactionSigError> {
     for i in 0..tx.get_inputs().len() {
-        verify_signature(outpoint_dest, tx, i)?
+        verify_signature(destination, tx, i)?
     }
     Ok(())
+}
+
+/// Returns an iterator over all possible signature hash types.
+pub fn sig_hash_types() -> impl Iterator<Item = SigHashType> + Clone {
+    [
+        SigHashType::try_from(SigHashType::ALL),
+        SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY),
+        SigHashType::try_from(SigHashType::NONE),
+        SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY),
+        SigHashType::try_from(SigHashType::SINGLE),
+        SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY),
+    ]
+    .into_iter()
+    .map(Result::unwrap)
+}
+
+/// Returns an iterator over all possible destinations.
+pub fn destinations(public_key: PublicKey) -> impl Iterator<Item = Destination> {
+    [
+        Destination::Address(PublicKeyHash::from(&public_key)),
+        Destination::PublicKey(public_key),
+        Destination::AnyoneCanSpend,
+        Destination::ScriptHash(Id::<Script>::from(H256::random())),
+    ]
+    .into_iter()
 }

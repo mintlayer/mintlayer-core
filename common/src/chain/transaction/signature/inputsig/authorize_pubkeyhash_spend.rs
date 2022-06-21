@@ -22,7 +22,7 @@ use crate::{
     address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,
 };
 
-#[derive(Debug, Encode, Decode, PartialEq)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedPublicKeyHashSpend {
     public_key: PublicKey,
     signature: Signature,
@@ -81,204 +81,116 @@ pub fn sign_address_spending(
 mod test {
     use crypto::key::{KeyKind, PrivateKey};
 
-    use crate::{
-        chain::{
-            signature::{
-                inputsig::{InputWitness, StandardInputSignature},
-                sighashtype::SigHashType,
-                signature_hash,
-            },
-            Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
-        },
-        primitives::{Amount, Id},
+    use crate::chain::{
+        signature::{inputsig::StandardInputSignature, signature_hash},
+        transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        Destination,
     };
 
     use super::*;
 
-    fn generate_unsigned_tx(
-        outpoint_dest: Destination,
-    ) -> Result<Transaction, TransactionCreationError> {
-        let tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                Id::<Transaction>::new(&H256::zero()).into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
-            vec![TxOutput::new(Amount::from_atoms(100), outpoint_dest)],
-            0,
-        )?;
-        Ok(tx)
-    }
+    const INPUT_NUM: usize = 0;
 
-    fn prepare_data_for_verify(
-        sighash_type: SigHashType,
-    ) -> (PublicKeyHash, AuthorizedPublicKeyHashSpend, H256) {
-        const INPUT_NUM: usize = 0;
+    // Using Destination::PublicKey for AuthorizedPublicKeyHashSpend.
+    #[test]
+    fn wrong_destination() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let pubkey_hash = PublicKeyHash::from(&public_key);
-        let outpoint_dest = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_dest,
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-        let spender_signature =
-            AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap();
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        (pubkey_hash, spender_signature, sighash)
-    }
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
-    fn prepare_data_for_wrong_destination(sighash_type: SigHashType) -> StandardInputSignature {
-        const INPUT_NUM: usize = 0;
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_dest,
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap()
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
+            assert!(
+                matches!(
+                    AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()),
+                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                ),
+                "{sighash_type:X?}"
+            )
+        }
     }
 
     #[test]
-    fn test_wrong_destination() {
-        // Destination = Address, but we try to use here AuthorizedPublicKeyHashSpend
-        {
-            let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            // Compare Err(TransactionSigError) without inner message
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
-        }
-        {
-            let sighash_type =
-                SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
-        }
-        {
-            let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
-        }
-        {
-            let sighash_type =
-                SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
-        }
-        {
-            let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
-        }
-        {
-            let sighash_type =
-                SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-            let witness = prepare_data_for_wrong_destination(sighash_type);
-            assert!(matches!(
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap_err(),
-                TransactionSigError::AddressAuthDecodingFailed(_)
-            ));
+    fn invalid_signature() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
+            let mut raw_signature = witness.get_raw_signature().clone();
+            raw_signature[0] = raw_signature[0].wrapping_add(2);
+
+            assert!(
+                matches!(
+                    AuthorizedPublicKeyHashSpend::from_data(&raw_signature),
+                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                ),
+                "{sighash_type:X?}"
+            )
         }
     }
 
     #[test]
     fn test_verify_address_spending() {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let (public_key, spender_signature, sighash) = prepare_data_for_verify(sighash_type);
-        verify_address_spending(&public_key, &spender_signature, &sighash).unwrap();
-    }
-
-    fn prepare_data_for_sign(sighash_type: SigHashType) -> (PrivateKey, PublicKeyHash, H256) {
-        const INPUT_NUM: usize = 0;
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_dest = Destination::PublicKey(public_key.clone());
-        let tx = generate_unsigned_tx(outpoint_dest.clone()).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_dest,
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        (private_key, PublicKeyHash::from(&public_key), sighash)
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
+            let spender_signature =
+                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
+
+            verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
+                .expect(&format!("{sighash_type:X?}"));
+        }
     }
 
     #[test]
     fn test_sign_address_spending() {
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key.clone());
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
 
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
-
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
-
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let (private_key, public_key, sighash) = prepare_data_for_sign(sighash_type);
-        let _ = sign_address_spending(&private_key, &public_key, &sighash).unwrap();
+            sign_address_spending(&private_key, &pubkey_hash, &sighash)
+                .expect(&format!("{sighash_type:X?}"));
+        }
     }
 }

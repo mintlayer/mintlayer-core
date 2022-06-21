@@ -171,131 +171,87 @@ impl Encode for StandardInputSignature {
     }
 }
 
-// TODO: write tests
-
 #[cfg(test)]
 mod test {
     use crate::{
-        chain::{TransactionCreationError, TxInput, TxOutput},
-        primitives::{Amount, Id},
+        address::pubkeyhash::PublicKeyHash,
+        chain::transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
     };
 
     use super::*;
     use crypto::key::{KeyKind, PrivateKey};
+    use itertools::Itertools;
 
-    fn generate_unsigned_tx(
-        outpoint_dest: Destination,
-    ) -> Result<Transaction, TransactionCreationError> {
-        let tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                Id::<Transaction>::new(&H256::zero()).into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
-            vec![TxOutput::new(Amount::from_atoms(100), outpoint_dest)],
-            0,
-        )?;
-        Ok(tx)
+    const INPUT_NUM: usize = 0;
+
+    #[test]
+    fn produce_signature_address_missmatch() {
+        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            assert_eq!(
+                Err(TransactionSigError::PublicKeyToAddressMismatch),
+                StandardInputSignature::produce_signature_for_input(
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                    &tx,
+                    INPUT_NUM,
+                ),
+                "{sighash_type:X?}"
+            );
+        }
     }
 
     #[test]
-    fn test_produce_and_verify() {
-        const INPUT_NUM: usize = 0;
-        // ALL
-        let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
+    fn produce_signature_key_missmatch() {
+        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            assert_eq!(
+                Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
+                StandardInputSignature::produce_signature_for_input(
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                    &tx,
+                    INPUT_NUM,
+                ),
+                "{sighash_type:X?}"
+            );
+        }
+    }
+
+    #[test]
+    fn produce_and_verify() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
+        let outpoints = [
+            Destination::Address(PublicKeyHash::from(&public_key)),
+            Destination::PublicKey(public_key),
+        ];
 
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
+        for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
+        {
+            let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
 
-        // ALL | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
-
-        // NONE
-        let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
-
-        // NONE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
-
-        // SINGLE
-        let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
-        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let outpoint_destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(outpoint_destination.clone()).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
-
-        // SINGLE | ANYONECANPAY
-        let sighash_type =
-            SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
-        let witness = StandardInputSignature::produce_signature_for_input(
-            &private_key,
-            sighash_type,
-            outpoint_destination.clone(),
-            &tx,
-            INPUT_NUM,
-        )
-        .unwrap();
-
-        let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
-        witness.verify_signature(&outpoint_destination, &sighash).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
+            witness
+                .verify_signature(&destination, &sighash)
+                .expect(&format!("{sighash_type:X?} {destination:?}"));
+        }
     }
 }

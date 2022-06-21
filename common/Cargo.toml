@@ -37,6 +37,7 @@ expect-test = "1.2.2"
 serde_test = "1.0"
 serde_json = "1.0"
 rand = "0.8.5"
+itertools = "0.10"
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"

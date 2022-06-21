@@ -643,6 +643,7 @@ dependencies = [
  "generic-array",
  "hex",
  "hex-literal",
+ "itertools",
  "lazy_static",
  "logging",
  "loom",
