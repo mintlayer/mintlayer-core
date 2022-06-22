@@ -232,10 +232,10 @@ mod test {
         fn from_map(map: BTreeMap<String, Vec<u8>>) -> Self {
             Self {
                 key: map.get("Key").unwrap().clone(),
-                ad: map.get("AD").unwrap_or(&Vec::new()).clone(),
-                nonce: map.get("Nonce").unwrap_or(&Vec::new()).clone(),
-                input: map.get("In").unwrap_or(&Vec::new()).clone(),
-                output: map.get("Out").unwrap_or(&Vec::new()).clone(),
+                ad: map.get("AD").unwrap().clone(),
+                nonce: map.get("Nonce").unwrap().clone(),
+                input: map.get("In").unwrap().clone(),
+                output: map.get("Out").unwrap().clone(),
             }
         }
     }
@@ -264,14 +264,15 @@ mod test {
                 continue;
             }
 
+            // the only remaining case is for "some_key = some_hex_value" in the line
             let split_parts = line.split('=').collect::<Vec<_>>();
             assert!(split_parts.len() == 2);
-            if split_parts.len() == 2 {
-                let k = split_parts[0].trim();
-                let v = split_parts[1].trim();
-                let el = Vec::from_hex(v).unwrap();
-                current_batch_map.insert(k.to_owned(), el);
-            }
+
+            // insert this information to the map
+            let k = split_parts[0].trim();
+            let v = split_parts[1].trim();
+            let el = Vec::from_hex(v).unwrap();
+            current_batch_map.insert(k.to_owned(), el);
         }
         result
     }
