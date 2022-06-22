@@ -20,13 +20,13 @@ use self::chacha20poly1305::Chacha20poly1305Key;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Decode, Encode)]
 pub enum SymmetricKeyKind {
-    Chacha20Poly1305,
+    XChacha20Poly1305,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 enum SymmetricKeyHolder {
     #[codec(index = 0)]
-    Chacha20Poly1305(Chacha20poly1305Key),
+    XChacha20Poly1305(Chacha20poly1305Key),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
@@ -37,7 +37,7 @@ pub struct SymmetricKey {
 impl SymmetricKey {
     pub fn new<R: Rng + CryptoRng>(kind: SymmetricKeyKind, rng: &mut R) -> Self {
         let key = match kind {
-            SymmetricKeyKind::Chacha20Poly1305 => SymmetricKeyHolder::Chacha20Poly1305(
+            SymmetricKeyKind::XChacha20Poly1305 => SymmetricKeyHolder::XChacha20Poly1305(
                 Chacha20poly1305Key::new_from_array(rng.gen::<[u8; 32]>()),
             ),
         };
@@ -50,13 +50,13 @@ impl SymmetricKey {
         rng: &mut R,
     ) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::Chacha20Poly1305(k) => k.encrypt(message, rng),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng),
         }
     }
 
     pub fn decrypt(&self, cipher_text: &[u8]) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::Chacha20Poly1305(k) => k.decrypt(cipher_text),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.decrypt(cipher_text),
         }
     }
 }
@@ -73,7 +73,7 @@ mod test {
     #[test]
     fn encode_then_decode() {
         let mut rng = make_true_rng();
-        let key = SymmetricKey::new(SymmetricKeyKind::Chacha20Poly1305, &mut rng);
+        let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let encoded = key.encode();
         let decoded = SymmetricKey::decode_all(&mut encoded.as_slice()).unwrap();
         assert_eq!(key, decoded);
@@ -82,7 +82,7 @@ mod test {
     #[test]
     fn encrypt_then_decrypt() {
         let mut rng = make_true_rng();
-        let key = SymmetricKey::new(SymmetricKeyKind::Chacha20Poly1305, &mut rng);
+        let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
         let encrypted = key.encrypt(&message, &mut rng).unwrap();
