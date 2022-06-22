@@ -5,12 +5,12 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-portpicker = "0.1.1"
+portpicker = "0.1"
 p2p = { path = "../" }
 common = { path = "../../common/" }
 
 [dependencies.libp2p]
-version = "0.44.0"
+version = "0.45"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "tcp-async-io"]
 

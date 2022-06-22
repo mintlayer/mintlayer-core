@@ -102,6 +102,6 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
             .get_best_block_index()
             .map_err(ChainstateError::FailedToReadProperty)?
             .expect("Best block index could not be found");
-        Ok(best_block_index.get_block_height())
+        Ok(best_block_index.block_height())
     }
 }

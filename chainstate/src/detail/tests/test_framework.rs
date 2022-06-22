@@ -91,7 +91,7 @@ impl<'a> BlockTestFramework {
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
             hash_prev_block,
-            time::get() as u32,
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)
@@ -107,9 +107,9 @@ impl<'a> BlockTestFramework {
     ) -> Vec<Id<Block>> {
         let mut result = Vec::new();
         for block_index in blocks {
-            if let Some(ref prev_block_id) = block_index.get_prev_block_id() {
+            if let Some(ref prev_block_id) = block_index.prev_block_id() {
                 if prev_block_id == current_block_id {
-                    result.push(block_index.get_block_id().clone());
+                    result.push(block_index.block_id().clone());
                 }
             }
         }
@@ -151,12 +151,12 @@ impl<'a> BlockTestFramework {
                     "{tabs}+-- {block_id} (H:{height}{mainchain_flag},B:{position})",
                     tabs = "\t".repeat(depth),
                     block_id = &block_id.get(),
-                    height = block_index.get_block_height(),
+                    height = block_index.block_height(),
                     mainchain_flag = main_chain,
                     position = self
                         .block_indexes
                         .iter()
-                        .position(|block| block.get_block_id() == block_id)
+                        .position(|block| block.block_id() == block_id)
                         .unwrap()
                 );
                 let block_children = Self::get_children_blocks(block_id, &self.block_indexes);
@@ -176,14 +176,14 @@ impl<'a> BlockTestFramework {
         println!();
         for tx in transactions {
             println!("+ BLOCK: {} => TX: {}", block_id.get(), tx.get_id().get());
-            for (input_index, input) in tx.get_inputs().iter().enumerate() {
+            for (input_index, input) in tx.inputs().iter().enumerate() {
                 println!("\t+Input: {}", input_index);
-                println!("\t\t+From: {:?}", input.get_outpoint());
+                println!("\t\t+From: {:?}", input.outpoint());
             }
-            for (output_index, output) in tx.get_outputs().iter().enumerate() {
+            for (output_index, output) in tx.outputs().iter().enumerate() {
                 let spent_status = self.get_spent_status(&tx.get_id(), output_index as u32);
                 println!("\t+Output: {}", output_index);
-                println!("\t\t+Value: {}", output.get_value().into_atoms());
+                println!("\t\t+Value: {}", output.value().into_atoms());
                 match spent_status {
                     Some(OutputSpentState::Unspent) => println!("\t\t+Spend: Unspent"),
                     Some(OutputSpentState::SpentBy(spender)) => {
@@ -251,7 +251,7 @@ impl<'a> BlockTestFramework {
     }
 
     fn check_spend_status(&self, tx: &Transaction, spend_status: &TestSpentStatus) {
-        for (output_index, _) in tx.get_outputs().iter().enumerate() {
+        for (output_index, _) in tx.outputs().iter().enumerate() {
             let is_spend_status_correct = if spend_status == &TestSpentStatus::Spent {
                 self.get_spent_status(&tx.get_id(), output_index as u32)
                     != Some(OutputSpentState::Unspent)
@@ -288,12 +288,12 @@ impl<'a> BlockTestFramework {
         spend_status: TestSpentStatus,
     ) {
         if spend_status != TestSpentStatus::NotInMainchain {
-            match self.block_indexes.iter().find(|x| x.get_block_id() == block_id) {
+            match self.block_indexes.iter().find(|x| x.block_id() == block_id) {
                 Some(block_index) => {
                     let block = self
                         .chainstate
                         .blockchain_storage
-                        .get_block(block_index.get_block_id().clone())
+                        .get_block(block_index.block_id().clone())
                         .unwrap()
                         .unwrap();
                     for tx in block.transactions() {
@@ -313,9 +313,9 @@ impl<'a> BlockTestFramework {
             .ok()
             .flatten()
             .unwrap();
-        assert_eq!(block_index.get_prev_block_id().as_ref(), prev_block_id);
-        assert_eq!(block_index.get_block_height(), BlockHeight::new(height));
-        self.check_block_at_height(block_index.get_block_height().next_height(), next_block_id);
+        assert_eq!(block_index.prev_block_id().as_ref(), prev_block_id);
+        assert_eq!(block_index.block_height(), BlockHeight::new(height));
+        self.check_block_at_height(block_index.block_height().next_height(), next_block_id);
     }
 
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
@@ -326,11 +326,11 @@ impl<'a> BlockTestFramework {
             .ok()
             .flatten()
             .unwrap();
-        let height = block_index.get_block_height();
+        let height = block_index.block_height();
         let id_at_height =
             self.chainstate.blockchain_storage.get_block_id_by_height(&height).unwrap();
         match id_at_height {
-            Some(id) => id == *block_index.get_block_id(),
+            Some(id) => id == *block_index.block_id(),
             None => false,
         }
     }

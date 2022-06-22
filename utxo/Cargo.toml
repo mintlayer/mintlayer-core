@@ -12,6 +12,6 @@ crypto = { path = '../crypto' }
 logging = { path = "../logging/" }
 serialization = { path = "../serialization" }
 
-parity-scale-codec = { version = "3.1.2", features = ["chain-error"] }
-iter_tools = "0.1.0"
-thiserror = "1.0.30"
+parity-scale-codec = { version = "3.1", features = ["chain-error"] }
+itertools = "0.10"
+thiserror = "1.0"

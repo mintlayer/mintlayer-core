@@ -1,16 +1,17 @@
 pub use crate::chain::transaction::input::*;
 pub use crate::chain::transaction::output::*;
 pub use crate::chain::transaction::TransactionCreationError;
-use crate::primitives::{id, Id, Idable};
+use crate::primitives::{id, Id, Idable, VersionTag};
 use crypto::hash::StreamHasher;
-use serialization::{Decode, Encode};
+use serialization::{Decode, Encode, Tagged};
 
 use super::signature::inputsig::InputWitness;
 use super::Transaction;
 use super::TransactionUpdateError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Tagged)]
 pub struct TransactionV1 {
+    version: VersionTag<1>,
     flags: u32,
     inputs: Vec<TxInput>,
     outputs: Vec<TxOutput>,
@@ -18,9 +19,6 @@ pub struct TransactionV1 {
 }
 
 impl TransactionV1 {
-    // This has to be the same its index in the Transaction enum
-    pub const VERSION_BYTE: u8 = 0x01;
-
     pub fn new(
         flags: u32,
         inputs: Vec<TxInput>,
@@ -28,6 +26,7 @@ impl TransactionV1 {
         lock_time: u32,
     ) -> Result<Self, TransactionCreationError> {
         let tx = TransactionV1 {
+            version: VersionTag::default(),
             flags,
             inputs,
             outputs,
@@ -40,23 +39,23 @@ impl TransactionV1 {
         (self.flags & 1) != 0
     }
 
-    pub fn get_flags(&self) -> u32 {
+    pub fn flags(&self) -> u32 {
         self.flags
     }
 
-    pub fn get_inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &Vec<TxInput> {
         &self.inputs
     }
 
-    pub fn get_outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &Vec<TxOutput> {
         &self.outputs
     }
 
-    pub fn get_lock_time(&self) -> u32 {
+    pub fn lock_time(&self) -> u32 {
         self.lock_time
     }
 
-    pub fn get_serialized_hash(&self) -> Id<Transaction> {
+    pub fn serialized_hash(&self) -> Id<Transaction> {
         Id::new(&id::hash_encoded(self))
     }
 
@@ -79,15 +78,15 @@ impl Idable for TransactionV1 {
         let mut hash_stream = id::DefaultHashAlgoStream::new();
 
         // Collect data from inputs, excluding witnesses
-        let inputs: Vec<&OutPoint> = self.get_inputs().iter().map(TxInput::get_outpoint).collect();
+        let inputs: Vec<&OutPoint> = self.inputs().iter().map(TxInput::outpoint).collect();
 
         // Include the transaction format version first
-        id::hash_encoded_to(&Self::VERSION_BYTE, &mut hash_stream);
+        id::hash_encoded_to(&self.version, &mut hash_stream);
         // Followed by transaction contents
-        id::hash_encoded_to(&self.get_flags(), &mut hash_stream);
+        id::hash_encoded_to(&self.flags(), &mut hash_stream);
         id::hash_encoded_to(&inputs, &mut hash_stream);
-        id::hash_encoded_to(&self.get_outputs(), &mut hash_stream);
-        id::hash_encoded_to(&self.get_lock_time(), &mut hash_stream);
+        id::hash_encoded_to(&self.outputs(), &mut hash_stream);
+        id::hash_encoded_to(&self.lock_time(), &mut hash_stream);
         Id::new(&hash_stream.finalize().into())
     }
 }

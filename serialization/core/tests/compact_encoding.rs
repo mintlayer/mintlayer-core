@@ -1,6 +1,6 @@
 mod utils;
 
-use serialization::{Decode, Encode};
+use serialization_core::{Decode, Encode};
 use utils::CompactWrapper;
 
 #[test]

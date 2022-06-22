@@ -8,8 +8,12 @@ use thiserror::Error;
 pub enum StateUpdateError {
     #[error("Blockchain storage error: {0}")]
     StorageError(blockchain_storage::Error),
-    #[error("Transaction number `{0}` does not exist in block `{1}`")]
-    TxNumWrongInBlock(usize, Id<Block>),
+    #[error("While connecting a block, transaction number `{0}` does not exist in block `{1}`")]
+    TxNumWrongInBlockOnConnect(usize, Id<Block>),
+    #[error("While disconnecting a block, transaction number `{0}` does not exist in block `{1}`")]
+    TxNumWrongInBlockOnDisconnect(usize, Id<Block>),
+    #[error("While disconnecting a block, transaction number `{0}` does not exist in block `{1}`")]
+    InvariantErrorTxNumWrongInBlock(usize, Id<Block>),
     #[error("Outputs already in the inputs cache")]
     OutputAlreadyPresentInInputsCache,
     #[error("Block reward spent immaturely")]
@@ -24,8 +28,10 @@ pub enum StateUpdateError {
     InvariantBrokenSourceBlockIndexNotFound,
     #[error("Output is not found in the cache or database")]
     MissingOutputOrSpent,
-    #[error("Output was erased in a previous step (possible in reorgs with no cache flushing)")]
-    MissingOutputOrSpentOutputErased,
+    #[error("While connecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
+    MissingOutputOrSpentOutputErasedOnConnect,
+    #[error("While disconnecting a block, output was erased in a previous step (possible in reorgs with no cache flushing)")]
+    MissingOutputOrSpentOutputErasedOnDisconnect,
     #[error("Attempt to print money (total inputs: `{0:?}` vs total outputs `{1:?}`")]
     AttemptToPrintMoney(Amount, Amount),
     #[error("Fee calculation failed (total inputs: `{0:?}` vs total outputs `{1:?}`")]
@@ -91,7 +97,7 @@ impl From<TxMainChainIndexError> for StateUpdateError {
                 StateUpdateError::SerializationInvariantError(block_id)
             }
             TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
-                StateUpdateError::TxNumWrongInBlock(tx_num, block_id)
+                StateUpdateError::InvariantErrorTxNumWrongInBlock(tx_num, block_id)
             }
         }
     }

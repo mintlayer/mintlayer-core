@@ -78,11 +78,11 @@ impl OutPoint {
         }
     }
 
-    pub fn get_tx_id(&self) -> OutPointSourceId {
+    pub fn tx_id(&self) -> OutPointSourceId {
         self.id.clone()
     }
 
-    pub fn get_output_index(&self) -> u32 {
+    pub fn output_index(&self) -> u32 {
         self.index
     }
 }
@@ -105,11 +105,11 @@ impl TxInput {
         }
     }
 
-    pub fn get_outpoint(&self) -> &OutPoint {
+    pub fn outpoint(&self) -> &OutPoint {
         &self.outpoint
     }
 
-    pub fn get_witness(&self) -> &InputWitness {
+    pub fn witness(&self) -> &InputWitness {
         &self.witness
     }
 

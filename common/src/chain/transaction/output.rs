@@ -31,11 +31,11 @@ impl TxOutput {
         }
     }
 
-    pub fn get_value(&self) -> Amount {
+    pub fn value(&self) -> Amount {
         self.value
     }
 
-    pub fn get_destination(&self) -> &Destination {
+    pub fn destination(&self) -> &Destination {
         &self.dest
     }
 }

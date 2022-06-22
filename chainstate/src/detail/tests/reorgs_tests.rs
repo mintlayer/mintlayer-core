@@ -27,7 +27,8 @@ fn test_reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let result = chainstate.process_block(
@@ -131,29 +132,26 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventLi
     const NEW_CHAIN_END_ON: usize = 11;
 
     assert!(btf
-        .create_chain(
-            &btf.block_indexes[NEW_CHAIN_START_ON].get_block_id().clone(),
-            5,
-        )
+        .create_chain(&btf.block_indexes[NEW_CHAIN_START_ON].block_id().clone(), 5,)
         .is_ok());
     check_last_event(btf, events);
 
     let block = btf
         .chainstate
         .blockchain_storage
-        .get_block(btf.block_indexes[NEW_CHAIN_END_ON - 1].get_block_id().clone())
+        .get_block(btf.block_indexes[NEW_CHAIN_END_ON - 1].block_id().clone())
         .unwrap()
         .unwrap();
 
     let double_spend_block = btf.random_block(
         &block,
         Some(&[TestBlockParams::SpendFrom(
-            btf.block_indexes[NEW_CHAIN_END_ON].get_block_id().clone(),
+            btf.block_indexes[NEW_CHAIN_END_ON].block_id().clone(),
         )]),
     );
     assert!(btf.add_special_block(double_spend_block).is_ok());
     // Cause reorg on a failed block
-    assert!(btf.create_chain(&btf.block_indexes[12].get_block_id().clone(), 1).is_err());
+    assert!(btf.create_chain(&btf.block_indexes[12].block_id().clone(), 1).is_err());
 }
 
 fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
@@ -170,20 +168,17 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
     const NEW_CHAIN_START_ON: usize = 5;
     const NEW_CHAIN_END_ON: usize = 9;
     assert!(btf
-        .create_chain(
-            &btf.block_indexes[NEW_CHAIN_START_ON].get_block_id().clone(),
-            1
-        )
+        .create_chain(&btf.block_indexes[NEW_CHAIN_START_ON].block_id().clone(), 1)
         .is_ok());
     let block = btf
         .chainstate
         .blockchain_storage
-        .get_block(btf.block_indexes[NEW_CHAIN_END_ON].get_block_id().clone())
+        .get_block(btf.block_indexes[NEW_CHAIN_END_ON].block_id().clone())
         .unwrap()
         .unwrap();
     let double_spend_block = btf.random_block(
         &block,
-        Some(&[TestBlockParams::SpendFrom(btf.block_indexes[3].get_block_id().clone())]),
+        Some(&[TestBlockParams::SpendFrom(btf.block_indexes[3].block_id().clone())]),
     );
     let block_id = double_spend_block.get_id();
     assert!(btf.add_special_block(double_spend_block).is_ok());
@@ -207,12 +202,12 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
     let block = btf
         .chainstate
         .blockchain_storage
-        .get_block(btf.block_indexes.last().unwrap().get_block_id().clone())
+        .get_block(btf.block_indexes.last().unwrap().block_id().clone())
         .unwrap()
         .unwrap();
     let double_spend_block = btf.random_block(
         &block,
-        Some(&[TestBlockParams::SpendFrom(btf.block_indexes[6].get_block_id().clone())]),
+        Some(&[TestBlockParams::SpendFrom(btf.block_indexes[6].block_id().clone())]),
     );
     assert!(btf.add_special_block(double_spend_block).is_err());
 }
@@ -229,46 +224,46 @@ fn check_reorg_to_first_chain(btf: &mut BlockTestFramework, events: &EventList) 
     //                         +-- 0x67fd…6419 (H:3,B:4))
     // > H - Height, M - main chain, B - block
     //
-    let block_id = btf.block_indexes[2].get_block_id().clone();
+    let block_id = btf.block_indexes[2].block_id().clone();
     assert!(btf.create_chain(&block_id, 2).is_ok());
     check_last_event(btf, events);
 
     // b3
     btf.test_block(
-        btf.block_indexes[3].get_block_id(),
-        Some(btf.block_indexes[1].get_block_id()),
+        btf.block_indexes[3].block_id(),
+        Some(btf.block_indexes[1].block_id()),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].block_id()));
     // b4
     btf.test_block(
-        btf.block_indexes[4].get_block_id(),
-        Some(btf.block_indexes[3].get_block_id()),
+        btf.block_indexes[4].block_id(),
+        Some(btf.block_indexes[3].block_id()),
         None,
         3,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(btf.block_indexes[4].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[4].block_id()));
     // b5
     btf.test_block(
-        btf.block_indexes[5].get_block_id(),
-        Some(btf.block_indexes[2].get_block_id()),
-        Some(btf.block_indexes[6].get_block_id()),
+        btf.block_indexes[5].block_id(),
+        Some(btf.block_indexes[2].block_id()),
+        Some(btf.block_indexes[6].block_id()),
         3,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[5].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[5].block_id()));
     // b6
     btf.test_block(
-        btf.block_indexes[6].get_block_id(),
-        Some(btf.block_indexes[5].get_block_id()),
+        btf.block_indexes[6].block_id(),
+        Some(btf.block_indexes[5].block_id()),
         None,
         4,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[6].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[6].block_id()));
 }
 
 fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &EventList) {
@@ -286,7 +281,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
     let block = btf
         .chainstate
         .blockchain_storage
-        .get_block(btf.block_indexes.last().unwrap().get_block_id().clone())
+        .get_block(btf.block_indexes.last().unwrap().block_id().clone())
         .unwrap()
         .unwrap();
     let block = btf.random_block(&block, None);
@@ -294,22 +289,22 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
     check_last_event(btf, events);
     // b3
     btf.test_block(
-        btf.block_indexes[3].get_block_id(),
-        Some(btf.block_indexes[1].get_block_id()),
-        Some(btf.block_indexes[4].get_block_id()),
+        btf.block_indexes[3].block_id(),
+        Some(btf.block_indexes[1].block_id()),
+        Some(btf.block_indexes[4].block_id()),
         2,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[3].block_id()));
     // b4
     btf.test_block(
-        btf.block_indexes[4].get_block_id(),
-        Some(btf.block_indexes[3].get_block_id()),
+        btf.block_indexes[4].block_id(),
+        Some(btf.block_indexes[3].block_id()),
         None,
         3,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[4].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[4].block_id()));
 }
 
 fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
@@ -325,44 +320,44 @@ fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
     // Don't reorg to a chain of the same length
     assert!(btf.create_chain(&btf.genesis().get_id(), 2).is_ok());
     check_last_event(btf, events);
-    assert!(btf.create_chain(&btf.block_indexes[1].get_block_id().clone(), 1).is_ok());
+    assert!(btf.create_chain(&btf.block_indexes[1].block_id().clone(), 1).is_ok());
     check_last_event(btf, events);
 
     // genesis
     btf.test_block(
-        btf.block_indexes[0].get_block_id(),
+        btf.block_indexes[0].block_id(),
         None,
-        Some(btf.block_indexes[1].get_block_id()),
+        Some(btf.block_indexes[1].block_id()),
         0,
         TestSpentStatus::Spent,
     );
     // b1
     btf.test_block(
-        btf.block_indexes[1].get_block_id(),
+        btf.block_indexes[1].block_id(),
         Some(&btf.genesis().get_id()),
-        Some(btf.block_indexes[2].get_block_id()),
+        Some(btf.block_indexes[2].block_id()),
         1,
         TestSpentStatus::Spent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[1].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[1].block_id()));
     // b2
     btf.test_block(
-        btf.block_indexes[2].get_block_id(),
-        Some(btf.block_indexes[1].get_block_id()),
+        btf.block_indexes[2].block_id(),
+        Some(btf.block_indexes[1].block_id()),
         None,
         2,
         TestSpentStatus::Unspent,
     );
-    assert!(btf.is_block_in_main_chain(btf.block_indexes[2].get_block_id()));
+    assert!(btf.is_block_in_main_chain(btf.block_indexes[2].block_id()));
     // b3
     btf.test_block(
-        btf.block_indexes[3].get_block_id(),
-        Some(btf.block_indexes[1].get_block_id()),
+        btf.block_indexes[3].block_id(),
+        Some(btf.block_indexes[1].block_id()),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].get_block_id()));
+    assert!(!btf.is_block_in_main_chain(btf.block_indexes[3].block_id()));
 }
 
 fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
@@ -373,10 +368,10 @@ fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
     match events.last() {
         Some((block_id, block_height)) => {
             let block_index = btf.block_indexes.last().unwrap();
-            if btf.is_block_in_main_chain(block_index.get_block_id()) {
+            if btf.is_block_in_main_chain(block_index.block_id()) {
                 // If block not in main chain then it means we didn't receive a new tip event. Nothing to check!
-                assert!(block_id == block_index.get_block_id());
-                assert!(block_height == &block_index.get_block_height());
+                assert!(block_id == block_index.block_id());
+                assert!(block_height == &block_index.block_height());
             }
         }
         None => {

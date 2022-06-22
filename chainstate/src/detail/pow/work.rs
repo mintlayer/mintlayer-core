@@ -25,6 +25,7 @@ use crate::detail::pow::helpers::{
 use super::error::ConsensusPoWError;
 use crate::detail::pow::PoW;
 use common::chain::block::consensus_data::PoWData;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::block::{BlockHeader, BlockIndex};
 use common::chain::config::ChainConfig;
@@ -71,7 +72,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
         PoWStatus::Threshold { initial_difficulty } => Ok(*initial_difficulty),
         PoWStatus::Ongoing => {
             let prev_block_id = header
-                .get_prev_block_id()
+                .prev_block_id()
                 .clone()
                 .expect("If PoWStatus is `Onging` then we cannot be at genesis");
 
@@ -92,7 +93,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
 
             PoW::new(chain_config).get_work_required(
                 &prev_block_index,
-                header.block_time(),
+                header.timestamp(),
                 block_index_handle,
             )
         }
@@ -102,6 +103,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
     fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
+        // TODO: this needs to be fixed because it could suffer from an underflow
         let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
 
         num::clamp(
@@ -114,10 +116,10 @@ impl PoW {
     fn get_work_required<H: BlockIndexHandle>(
         &self,
         prev_block_index: &BlockIndex,
-        new_block_time: u32,
+        new_block_time: BlockTimestamp,
         db_accessor: &H,
     ) -> Result<Compact, ConsensusPoWError> {
-        let prev_block_consensus_data = prev_block_index.get_block_header().consensus_data();
+        let prev_block_consensus_data = prev_block_index.block_header().consensus_data();
         // this function should only be called when consensus status is PoW::Ongoing, i.e. previous
         // block was PoW
         debug_assert!(matches!(prev_block_consensus_data, ConsensusData::PoW(..)));
@@ -134,7 +136,7 @@ impl PoW {
         }
 
         let current_height = prev_block_index
-            .get_block_height()
+            .block_height()
             .checked_add(1)
             .expect("max block height has been reached.");
 
@@ -145,7 +147,7 @@ impl PoW {
             return if self.allow_min_difficulty_blocks() {
                 // special difficulty rules
                 Ok(self.next_work_required_for_min_difficulty(
-                    new_block_time,
+                    new_block_time.as_int_seconds(),
                     prev_block_index,
                     prev_block_bits,
                 ))
@@ -162,13 +164,15 @@ impl PoW {
     /// retargeting proof of work
     fn next_work_required(
         &self,
-        retarget_block_time: u32,
+        retarget_block_time: BlockTimestamp,
         prev_block_index: &BlockIndex,
         prev_block_bits: Compact,
     ) -> Result<Compact, ConsensusPoWError> {
         // limit adjustment step
-        let actual_timespan_of_last_interval =
-            self.actual_timespan(prev_block_index.get_block_time(), retarget_block_time);
+        let actual_timespan_of_last_interval = self.actual_timespan(
+            prev_block_index.block_timestamp().as_int_seconds(),
+            retarget_block_time.as_int_seconds(),
+        );
 
         calculate_new_target(
             actual_timespan_of_last_interval,
@@ -190,7 +194,7 @@ impl PoW {
         if special_rules::block_production_stalled(
             self.target_spacing().as_secs(),
             new_block_time,
-            prev_block_index.get_block_time(),
+            prev_block_index.block_timestamp().as_int_seconds(),
         ) {
             Compact::from(self.difficulty_limit())
         } else {

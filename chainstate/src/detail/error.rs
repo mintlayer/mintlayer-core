@@ -16,10 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use common::{
-    chain::{
-        block::{Block, BlockConsistencyError},
-        Transaction,
-    },
+    chain::{block::Block, Transaction},
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
@@ -81,18 +78,16 @@ pub enum CheckBlockError {
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
-    #[error("Internal block representation is invalid `{0}`")]
-    BlockConsistencyError(#[from] BlockConsistencyError),
     #[error("Only genesis can have no previous block")]
     InvalidBlockNoPrevBlock,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<Block>, Id<Block>),
-    #[error("Previous block time must be equal or lower")]
+    #[error("Block time must be equal or higher than the median of its ancestors")]
     BlockTimeOrderInvalid,
-    #[error("Block from the future")]
+    #[error("Block time too far into the future")]
     BlockFromTheFuture,
-    #[error("Block size is too large")]
-    BlockTooLarge,
+    #[error("Block size is too large: {0}")]
+    BlockSizeError(#[from] BlockSizeError),
     #[error("Check transaction failed: {0}")]
     CheckTransactionFailed(CheckBlockTransactionsError),
     #[error("Check transaction failed: {0}")]
@@ -148,6 +143,16 @@ pub enum OrphanCheckError {
     PrevBlockIndexNotFound(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]
     LocalOrphan,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum BlockSizeError {
+    #[error("Block header too large (current: {0}, limit: {1})")]
+    Header(usize, usize),
+    #[error("Block transactions component size too large (current: {0}, limit: {1})")]
+    SizeOfTxs(usize, usize),
+    #[error("Block smart contracts component size too large (current: {0}, limit: {1})")]
+    SizeOfSmartContracts(usize, usize),
 }
 
 impl From<OrphanAddError> for Result<(), OrphanCheckError> {

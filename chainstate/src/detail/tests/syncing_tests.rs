@@ -25,7 +25,8 @@ fn test_get_locator() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(Arc::clone(&config), storage, None).unwrap();
+        let mut consensus =
+            Chainstate::new(Arc::clone(&config), storage, None, Default::default()).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
         let limit = crypto::random::make_pseudo_rng().gen::<u16>();
@@ -67,7 +68,7 @@ fn test_get_headers_same_chain() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(config, storage, None).unwrap();
+        let mut consensus = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         let mut prev_block = consensus.chain_config.genesis_block().clone();
         let limit = crypto::random::make_pseudo_rng().gen::<u16>();
@@ -110,7 +111,7 @@ fn test_get_headers_same_chain() {
         // because both locator and `consesus` are tracking the same chain, the first header
         // of locator is always the parent of the first header in `new_received_headers`
         assert_eq!(new_received_headers, headers[..hdr_limit]);
-        assert_eq!(headers[0].get_prev_block_id(), &Some(locator[0].get_id()));
+        assert_eq!(headers[0].prev_block_id(), &Some(locator[0].get_id()));
     });
 }
 
@@ -132,7 +133,7 @@ fn test_get_headers_different_chains() {
 
             let new_headers = btf.chainstate.get_headers(locator).unwrap();
             assert_eq!(
-                new_headers[0].get_prev_block_id(),
+                new_headers[0].prev_block_id(),
                 &Some(btf.genesis().get_id()),
             );
         }
@@ -148,13 +149,13 @@ fn test_get_headers_different_chains() {
 
             let limit = crypto::random::make_pseudo_rng().gen_range(100..2500);
             btf.create_chain(
-                &btf.block_indexes[common_height - 1].get_block_id().clone(),
+                &btf.block_indexes[common_height - 1].block_id().clone(),
                 limit,
             )
             .unwrap();
             let locator = btf.chainstate.get_locator().unwrap();
             btf.create_chain(
-                &btf.block_indexes[common_height - 1].get_block_id().clone(),
+                &btf.block_indexes[common_height - 1].block_id().clone(),
                 limit * 4,
             )
             .unwrap();
@@ -163,10 +164,9 @@ fn test_get_headers_different_chains() {
 
             // verify that the new header attaches to a block that is in
             // the set of blocks that is know by both chains (it's height <= common_height)
-            let id = new_headers[0].get_prev_block_id().clone().unwrap();
+            let id = new_headers[0].prev_block_id().clone().unwrap();
             assert!(
-                btf.get_block_index(&id).get_block_height()
-                    <= BlockHeight::new(common_height as u64)
+                btf.get_block_index(&id).block_height() <= BlockHeight::new(common_height as u64)
             );
         }
 
@@ -185,31 +185,31 @@ fn test_get_headers_different_chains() {
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
                 assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
                 );
             }
 
             let limit = crypto::random::make_pseudo_rng().gen_range(32..256);
             btf1.create_chain(
-                &btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id().clone(),
+                &btf1.block_indexes[btf1.block_indexes.len() - 1].block_id().clone(),
                 limit,
             )
             .unwrap();
             btf2.create_chain(
-                &btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id().clone(),
+                &btf2.block_indexes[btf2.block_indexes.len() - 1].block_id().clone(),
                 limit * 2,
             )
             .unwrap();
 
             let locator = btf1.chainstate.get_locator().unwrap();
             let headers = btf2.chainstate.get_headers(locator).unwrap();
-            let id = headers[0].get_prev_block_id().clone().unwrap();
+            let id = headers[0].prev_block_id().clone().unwrap();
             assert!(btf1.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
 
             let locator = btf2.chainstate.get_locator().unwrap();
             let headers = btf1.chainstate.get_headers(locator).unwrap();
-            let id = headers[0].get_prev_block_id().clone().unwrap();
+            let id = headers[0].prev_block_id().clone().unwrap();
             assert!(btf2.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
         }
     });
@@ -231,8 +231,8 @@ fn test_filter_already_existing_blocks() {
                 btf1.add_special_block(prev1.clone()).unwrap();
                 btf2.add_special_block(prev1.clone()).unwrap();
                 assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
                 );
             }
 
@@ -279,8 +279,8 @@ fn test_filter_already_existing_blocks() {
                 btf1.add_special_block(prev.clone()).unwrap();
                 btf2.add_special_block(prev.clone()).unwrap();
                 assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].get_block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].get_block_id(),
+                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
+                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
                 );
             }
 
@@ -297,7 +297,7 @@ fn test_filter_already_existing_blocks() {
             assert_eq!(
                 headers_filtered,
                 Err(PropertyQueryError::BlockNotFound(
-                    headers[1].get_prev_block_id().clone().expect("to have a prev")
+                    headers[1].prev_block_id().clone().expect("to have a prev")
                 ))
             );
         }

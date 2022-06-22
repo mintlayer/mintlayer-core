@@ -17,6 +17,7 @@
 
 use super::error::ConsensusPoWError;
 use crate::detail::consensus_validator::BlockIndexHandle;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::BlockIndex;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
@@ -33,9 +34,9 @@ pub(crate) fn get_starting_block_time(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
     db_accessor: &dyn BlockIndexHandle,
-) -> Result<u32, ConsensusPoWError> {
+) -> Result<BlockTimestamp, ConsensusPoWError> {
     let retarget_height = {
-        let height: u64 = block_index.get_block_height().into();
+        let height: u64 = block_index.block_height().into();
         // Go back by what we want to be 14 days worth of blocks (the last 2015 blocks)
         let old_block_height = height - (difficulty_adjustment_interval - 1);
         BlockHeight::new(old_block_height)
@@ -45,14 +46,14 @@ pub(crate) fn get_starting_block_time(
         Ok(bi) => bi,
         Err(err) => {
             return Err(ConsensusPoWError::AncestorAtHeightNotFound(
-                block_index.get_block_id().clone(),
+                block_index.block_id().clone(),
                 retarget_height,
                 err,
             ))
         }
     };
 
-    Ok(retarget_block_index.get_block_time())
+    Ok(retarget_block_index.block_timestamp())
 }
 
 /// Returns a calculated new target as Compact datatype.

@@ -91,7 +91,7 @@ pub trait UtxosView {
     fn has_utxo(&self, outpoint: &OutPoint) -> bool;
 
     /// Retrieves the block hash of the best block in this view
-    fn get_best_block_hash(&self) -> Option<Id<Block>>;
+    fn best_block_hash(&self) -> Option<Id<Block>>;
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;
@@ -221,7 +221,7 @@ impl<'a> UtxosCache<'a> {
     pub fn new(parent: &'a dyn UtxosView) -> Self {
         UtxosCache {
             parent: Some(parent),
-            current_block_hash: parent.get_best_block_hash(),
+            current_block_hash: parent.best_block_hash(),
             utxos: BTreeMap::new(),
             memory_usage: 0,
         }
@@ -239,7 +239,7 @@ impl<'a> UtxosCache<'a> {
     ) -> Result<(), Error> {
         let id = OutPointSourceId::from(tx.get_id());
 
-        for (idx, output) in tx.get_outputs().iter().enumerate() {
+        for (idx, output) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(id.clone(), idx as u32);
 
             // by default no overwrite allowed.
@@ -261,11 +261,8 @@ impl<'a> UtxosCache<'a> {
     /// returns a TxUndo if function is a success;
     /// or an error if the tx's input cannot be spent.
     pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
-        let tx_undo: Result<Vec<Utxo>, Error> = tx
-            .get_inputs()
-            .iter()
-            .map(|tx_in| self.spend_utxo(tx_in.get_outpoint()))
-            .collect();
+        let tx_undo: Result<Vec<Utxo>, Error> =
+            tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
         self.add_utxos(tx, UtxoSource::BlockChain(height), false)?;
 
@@ -412,10 +409,10 @@ impl<'a> UtxosView for UtxosCache<'a> {
         self.get_utxo(outpoint).is_some()
     }
 
-    fn get_best_block_hash(&self) -> Option<Id<Block>> {
+    fn best_block_hash(&self) -> Option<Id<Block>> {
         self.current_block_hash.clone().or_else(||
             // if the block_hash is empty in this view, use parent's `get_best_block_hash`.
-            self.parent.and_then(|parent| parent.get_best_block_hash()))
+            self.parent.and_then(|parent| parent.best_block_hash()))
     }
 
     fn estimated_size(&self) -> Option<usize> {

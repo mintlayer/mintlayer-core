@@ -32,7 +32,7 @@ impl CachedInputsOperation {
                 tx_index.spend(output_index, spender).map_err(StateUpdateError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(StateUpdateError::MissingOutputOrSpentOutputErased)
+                return Err(StateUpdateError::MissingOutputOrSpentOutputErasedOnConnect)
             }
         }
 
@@ -48,7 +48,7 @@ impl CachedInputsOperation {
                 tx_index.unspend(output_index).map_err(StateUpdateError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(StateUpdateError::MissingOutputOrSpentOutputErased)
+                return Err(StateUpdateError::MissingOutputOrSpentOutputErasedOnDisconnect)
             }
         }
 

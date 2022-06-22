@@ -17,48 +17,52 @@
 #![allow(unused, dead_code)]
 use lazy_static::lazy_static;
 use logging::log;
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::SystemTime;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime};
+
+fn duration_to_int(d: &Duration) -> Result<u64, Box<dyn std::error::Error>> {
+    let r = d.as_millis().try_into()?;
+    Ok(r)
+}
+
+fn duration_from_int(v: u64) -> Duration {
+    Duration::from_millis(v)
+}
 
 lazy_static! {
-    static ref TIME_SOURCE: AtomicI64 = Default::default();
+    static ref TIME_SOURCE: AtomicU64 = Default::default();
 }
 
 /// Either gets the current time or panics
-pub fn get() -> i64 {
+pub fn get() -> Duration {
     let value = TIME_SOURCE.load(Ordering::SeqCst);
     if value == 0 {
         return SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs() as i64;
+            .expect("Time went backwards");
     }
 
-    value
+    duration_from_int(value)
 }
 
 /// Return mocked time if set, otherwise return `None`
-pub fn get_mocked() -> Option<i64> {
+pub fn get_mocked() -> Option<Duration> {
     let value = TIME_SOURCE.load(Ordering::SeqCst);
     if value == 0 {
         return None;
     }
 
-    Some(value)
+    Some(duration_from_int(value))
 }
 
 /// Reset time source to use `SystemTime::UNIX_EPOCH`
 pub fn reset() {
-    TIME_SOURCE.store(0i64, Ordering::SeqCst);
+    TIME_SOURCE.store(0, Ordering::SeqCst);
 }
 
-/// Set current time
-pub fn set(now: i64) -> Result<(), &'static str> {
-    if now <= 0 {
-        return Err("Invalid time given");
-    }
-
-    TIME_SOURCE.store(now, Ordering::SeqCst);
+/// Set current time as a Duration since SystemTime::UNIX_EPOCH
+pub fn set(now: Duration) -> Result<(), Box<dyn std::error::Error>> {
+    TIME_SOURCE.store(duration_to_int(&now)?, Ordering::SeqCst);
     Ok(())
 }
 
@@ -71,29 +75,29 @@ mod tests {
         logging::init_logging::<&std::path::Path>(None);
 
         let handle = std::thread::spawn(move || {
-            log::info!("p2p time: {}", get());
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            log::info!("p2p time: {}", get().as_secs());
+            std::thread::sleep(Duration::from_secs(1));
 
-            log::info!("p2p time: {}", get());
-            assert_eq!(get(), 1337);
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            log::info!("p2p time: {}", get().as_secs());
+            assert_eq!(get().as_secs(), 1337);
+            std::thread::sleep(Duration::from_secs(1));
 
-            log::info!("p2p time: {}", get());
-            assert_ne!(get(), 1337);
+            log::info!("p2p time: {}", get().as_secs());
+            assert_ne!(get().as_secs(), 1337);
         });
 
         std::thread::spawn(move || {
-            log::info!("rpc time: {}", get());
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            log::info!("rpc time: {}", get().as_secs());
+            std::thread::sleep(Duration::from_millis(500));
 
-            set(1337);
-            assert_eq!(get(), 1337);
-            log::info!("rpc time: {}", get());
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            set(Duration::from_secs(1337));
+            assert_eq!(get().as_secs(), 1337);
+            log::info!("rpc time: {}", get().as_secs());
+            std::thread::sleep(Duration::from_millis(500));
 
             reset();
-            assert_ne!(get(), 1337);
-            log::info!("rpc time: {}", get());
+            assert_ne!(get().as_secs(), 1337);
+            log::info!("rpc time: {}", get().as_secs());
         });
 
         handle.join();
@@ -103,14 +107,19 @@ mod tests {
     fn test_mocked() {
         assert_eq!(get_mocked(), None);
 
-        assert_eq!(set(1337), Ok(()));
-        assert_eq!(get(), 1337);
-        assert_eq!(get_mocked(), Some(1337));
+        set(Duration::from_secs(1337)).unwrap();
+        assert_eq!(get().as_secs(), 1337);
+        assert_eq!(get_mocked(), Some(Duration::from_secs(1337)));
 
         reset();
         assert_eq!(get_mocked(), None);
+    }
 
-        assert_eq!(set(0), Err("Invalid time given"));
-        assert_eq!(set(-17), Err("Invalid time given"));
+    #[test]
+    fn test_conversion() {
+        let val = 1234567;
+        let d = duration_from_int(val);
+        let val_again = duration_to_int(&d).unwrap();
+        assert_eq!(val, val_again);
     }
 }

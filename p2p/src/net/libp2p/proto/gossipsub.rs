@@ -95,7 +95,7 @@ mod tests {
         message::{MessageType, PubSubMessage},
         net::{self, libp2p::proto::util},
     };
-    use common::chain::block::{consensus_data::ConsensusData, Block};
+    use common::chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block};
     use futures::{FutureExt, StreamExt};
     use libp2p::{
         gossipsub::{GossipsubEvent, GossipsubMessage, IdentTopic as Topic, MessageId, TopicHash},
@@ -140,7 +140,13 @@ mod tests {
         let message = Message {
             magic: [0, 1, 2, 3],
             msg: MessageType::PubSub(PubSubMessage::Block(
-                Block::new(vec![], None, 1337u32, ConsensusData::None).unwrap(),
+                Block::new(
+                    vec![],
+                    None,
+                    BlockTimestamp::from_int_seconds(1337u32),
+                    ConsensusData::None,
+                )
+                .unwrap(),
             )),
         };
 

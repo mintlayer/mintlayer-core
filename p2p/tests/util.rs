@@ -17,7 +17,7 @@
 use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
 use common::{
     chain::{
-        block::{Block, ConsensusData},
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
         transaction::Transaction,
@@ -34,7 +34,7 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    if output.get_value() > Amount::from_atoms(1) {
+    if output.value() > Amount::from_atoms(1) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -42,7 +42,7 @@ fn create_utxo_data(
                 nosig_random_witness(),
             ),
             TxOutput::new(
-                (output.get_value() - Amount::from_atoms(1)).unwrap(),
+                (output.value() - Amount::from_atoms(1)).unwrap(),
                 anyonecanspend_address(),
             ),
         ))
@@ -77,14 +77,14 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(&prev_block.get_id().get()))
         },
-        time::get() as u32,
+        BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
         consensus_data,
     )
     .expect("not to fail")
 }
 
 fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
-    tx.get_outputs()
+    tx.outputs()
         .iter()
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(config, &tx.get_id(), index, output))
@@ -110,7 +110,7 @@ pub async fn start_chainstate(
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",
-        make_chainstate(config, storage, None).unwrap(),
+        make_chainstate(config, storage, None, Default::default()).unwrap(),
     );
     tokio::spawn(async move { man.main().await });
     handle

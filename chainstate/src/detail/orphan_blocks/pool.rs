@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach
 
+use super::{OrphanBlocksRef, OrphanBlocksRefMut};
 use common::chain::block::Block;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
@@ -193,6 +194,14 @@ impl OrphanBlocksPool {
             .collect();
         res
     }
+
+    pub fn as_ro_ref(&self) -> OrphanBlocksRef {
+        OrphanBlocksRef::new(self)
+    }
+
+    pub fn as_rw_ref(&mut self) -> OrphanBlocksRefMut {
+        OrphanBlocksRefMut::new(self)
+    }
 }
 
 #[cfg(test)]
@@ -205,6 +214,7 @@ mod tests {
 
     mod helpers {
         use super::*;
+        use common::chain::block::timestamp::BlockTimestamp;
         use common::chain::block::ConsensusData;
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
@@ -226,7 +236,7 @@ mod tests {
             Block::new(
                 vec![tx],
                 Some(prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into())),
-                rng.gen(),
+                BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,
             )
             .unwrap()

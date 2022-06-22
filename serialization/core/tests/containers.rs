@@ -1,7 +1,7 @@
 mod utils;
 
 use rand::Rng;
-use serialization::{Decode, Encode};
+use serialization_core::{Decode, Encode};
 use std::collections::BTreeMap;
 use utils::SimpleWrapper;
 

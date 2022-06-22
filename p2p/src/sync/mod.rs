@@ -383,7 +383,7 @@ where
         let mut prev_id = headers
             .get(0)
             .expect("first header to exist")
-            .get_prev_block_id()
+            .prev_block_id()
             .clone()
             .ok_or_else(|| {
                 // TODO: ban peer
@@ -404,7 +404,7 @@ where
         }
 
         for header in &headers {
-            if header.get_prev_block_id() != &Some(prev_id) {
+            if header.prev_block_id() != &Some(prev_id) {
                 log::error!("peer {:?} sent headers that are out of order", peer_id);
                 return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
             }
@@ -775,7 +775,10 @@ mod tests {
         let storage = blockchain_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("TODO");
-        let handle = man.add_subsystem("consensus", make_chainstate(cfg, storage, None).unwrap());
+        let handle = man.add_subsystem(
+            "consensus",
+            make_chainstate(cfg, storage, None, Default::default()).unwrap(),
+        );
         tokio::spawn(async move { man.main().await });
 
         let config = Arc::new(common::chain::config::create_unit_test_config());

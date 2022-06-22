@@ -18,6 +18,7 @@
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
 use blockchain_storage::Store;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
@@ -85,8 +86,8 @@ fn create_utxo_data(
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
     let mut rng = crypto::random::make_pseudo_rng();
-    let spent_value = rng.gen_range(0..output.get_value().into_atoms());
-    if output.get_value() > Amount::from_atoms(spent_value) {
+    let spent_value = rng.gen_range(0..output.value().into_atoms());
+    if output.value() > Amount::from_atoms(spent_value) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -94,7 +95,7 @@ fn create_utxo_data(
                 empty_witness(),
             ),
             TxOutput::new(
-                (output.get_value() - Amount::from_atoms(spent_value)).unwrap(),
+                (output.value() - Amount::from_atoms(spent_value)).unwrap(),
                 anyonecanspend_address(),
             ),
         ))
@@ -116,7 +117,13 @@ impl ChainstateBuilder {
         }
     }
     fn build(self) -> Chainstate {
-        Chainstate::new(Arc::new(self.config), self.storage, None).unwrap()
+        Chainstate::new(
+            Arc::new(self.config),
+            self.storage,
+            None,
+            Default::default(),
+        )
+        .unwrap()
     }
 
     #[allow(unused)]
@@ -152,14 +159,14 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(&prev_block.get_id().get()))
         },
-        time::get() as u32,
+        BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
         consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
 fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
-    tx.get_outputs()
+    tx.outputs()
         .iter()
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
@@ -179,7 +186,7 @@ fn generate_blocks_for_functional_tests() {
 
     for i in 1..6 {
         let prev_block =
-            btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
+            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
         let mut mined_block = btf.random_block(&prev_block, None);
         let bits = difficulty.into();
         assert!(

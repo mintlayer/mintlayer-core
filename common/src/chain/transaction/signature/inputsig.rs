@@ -128,7 +128,7 @@ impl StandardInputSignature {
         })
     }
 
-    pub fn get_raw_signature(&self) -> &Vec<u8> {
+    pub fn raw_signature(&self) -> &Vec<u8> {
         &self.raw_signature
     }
 }

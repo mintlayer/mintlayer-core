@@ -83,7 +83,7 @@ mod test {
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "chainstate",
-            crate::make_chainstate(cfg, storage, None).unwrap(),
+            crate::make_chainstate(cfg, storage, None, Default::default()).unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",

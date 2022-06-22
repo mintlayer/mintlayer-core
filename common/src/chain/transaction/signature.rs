@@ -81,11 +81,11 @@ pub fn signature_hash_for_inputs(
         sighashtype::InputsMode::CommitWhoPays => {
             hash_encoded_to(&(inputs.len() as u32), stream);
             for input in inputs {
-                hash_encoded_to(&input.get_outpoint(), stream);
+                hash_encoded_to(&input.outpoint(), stream);
             }
         }
         sighashtype::InputsMode::AnyoneCanPay => {
-            hash_encoded_to(&target_input.get_outpoint(), stream);
+            hash_encoded_to(&target_input.outpoint(), stream);
         }
     }
 }
@@ -133,11 +133,11 @@ impl SignatureHashableElement for &[TxInput] {
             sighashtype::InputsMode::CommitWhoPays => {
                 hash_encoded_to(&(self.len() as u32), stream);
                 for input in *self {
-                    hash_encoded_to(&input.get_outpoint(), stream);
+                    hash_encoded_to(&input.outpoint(), stream);
                 }
             }
             sighashtype::InputsMode::AnyoneCanPay => {
-                hash_encoded_to(&target_input.get_outpoint(), stream);
+                hash_encoded_to(&target_input.outpoint(), stream);
             }
         }
         Ok(())
@@ -185,11 +185,11 @@ pub trait Transactable {
 
 impl Transactable for Transaction {
     fn inputs(&self) -> Option<&[TxInput]> {
-        Some(self.get_inputs())
+        Some(self.inputs())
     }
 
     fn outputs(&self) -> Option<&[TxOutput]> {
-        Some(self.get_outputs())
+        Some(self.outputs())
     }
 
     fn version_byte(&self) -> Option<u8> {
@@ -197,11 +197,11 @@ impl Transactable for Transaction {
     }
 
     fn lock_time(&self) -> Option<u32> {
-        Some(self.get_lock_time())
+        Some(self.lock_time())
     }
 
     fn flags(&self) -> Option<u32> {
-        Some(self.get_flags())
+        Some(self.flags())
     }
 }
 
@@ -278,7 +278,7 @@ pub fn verify_signature<T: Transactable>(
         input_num,
         inputs.len(),
     ))?;
-    let input_witness = target_input.get_witness();
+    let input_witness = target_input.witness();
     match input_witness {
         inputsig::InputWitness::NoSignature(_) => match outpoint_destination {
             Destination::Address(_) | Destination::PublicKey(_) | Destination::ScriptHash(_) => {

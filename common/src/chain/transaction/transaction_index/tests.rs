@@ -2,6 +2,7 @@ use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::RngCore;
 
 use super::*;
+use crate::chain::block::timestamp::BlockTimestamp;
 use crate::{
     chain::{
         block::ConsensusData,
@@ -63,7 +64,7 @@ fn basic_spending() {
             source_output_index: 4
         }
     );
-    assert_eq!(tx_index.get_output_count(), 3);
+    assert_eq!(tx_index.output_count(), 3);
 
     let p = match tx_index.position {
         SpendablePosition::Transaction(ref p) => p,
@@ -79,7 +80,7 @@ fn basic_spending() {
     }
     assert!(!tx_index.all_outputs_spent());
 
-    for i in 0..tx_index.get_output_count() {
+    for i in 0..tx_index.output_count() {
         assert_eq!(
             tx_index.get_spent_state(i).unwrap(),
             OutputSpentState::Unspent
@@ -262,8 +263,13 @@ fn generate_random_invalid_block() -> Block {
     let time = rng.next_u32();
     let prev_id = Some(Id::new(&generate_random_h256(&mut rng)));
 
-    Block::new(transactions, prev_id, time, ConsensusData::None)
-        .expect("Creating block caused fail")
+    Block::new(
+        transactions,
+        prev_id,
+        BlockTimestamp::from_int_seconds(time),
+        ConsensusData::None,
+    )
+    .expect("Creating block caused fail")
 }
 
 #[test]
@@ -273,23 +279,22 @@ fn test_indices_calculations() {
     let serialized_header = block.header().encode();
     let serialized_transactions = block.transactions().encode();
     assert_eq!(
-        // +1 for the enum arm byte
-        1 + serialized_header.len() + serialized_transactions.len(),
+        // no need to add enum arm byte, the version is already a part of the header data
+        serialized_header.len() + serialized_transactions.len(),
         serialized_block.len(),
     );
     // TODO: calculate block reward position
     for (tx_num, tx) in block.transactions().iter().enumerate() {
         let tx_index = calculate_tx_index_from_block(&block, tx_num).unwrap();
         assert!(!tx_index.all_outputs_spent());
-        assert_eq!(tx_index.get_output_count(), tx.get_outputs().len() as u32);
+        assert_eq!(tx_index.output_count(), tx.outputs().len() as u32);
 
-        let pos = match tx_index.get_position() {
+        let pos = match tx_index.position() {
             SpendablePosition::Transaction(pos) => pos,
             SpendablePosition::BlockReward(_) => unreachable!(),
         };
-        let tx_start_pos = pos.get_byte_offset_in_block() as usize;
-        let tx_end_pos =
-            pos.get_byte_offset_in_block() as usize + pos.get_serialized_size() as usize;
+        let tx_start_pos = pos.byte_offset_in_block() as usize;
+        let tx_end_pos = pos.byte_offset_in_block() as usize + pos.serialized_size() as usize;
         let tx_serialized_in_block = &serialized_block[tx_start_pos..tx_end_pos];
         let tx_serialized = tx.encode();
         assert_eq!(tx_serialized_in_block, tx_serialized);

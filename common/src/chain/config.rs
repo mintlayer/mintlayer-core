@@ -1,5 +1,6 @@
 use hex::FromHex;
 
+use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
@@ -12,13 +13,15 @@ use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
 use crate::primitives::BlockDistance;
 use crate::primitives::Idable;
-use crate::primitives::{version::SemVer, BlockHeight};
+use crate::primitives::{semver::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
 const MAINNET_COIN_DECIMALS: u8 = 11;
 const MAINNET_COIN_PREMINE: &str = "400_000_000";
 const MAINNET_TOTAL_SUPPLY: &str = "599_990_800";
+
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
@@ -54,11 +57,15 @@ pub struct ChainConfig {
     genesis_block: Block,
     genesis_block_id: Id<Block>,
     blockreward_maturity: BlockDistance,
+    max_future_block_time_offset: Duration,
     version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     // TODO: use an isolated type for emission schedule that contains everything related
     emission_schedule: Vec<(BlockHeight, Amount)>,
+    max_block_header_size: usize,
+    max_block_size_with_standard_txs: usize,
+    max_block_size_with_smart_contracts: usize,
 }
 
 impl ChainConfig {
@@ -118,6 +125,10 @@ impl ChainConfig {
         self.coin_decimals
     }
 
+    pub fn max_future_block_time_offset(&self) -> &Duration {
+        &self.max_future_block_time_offset
+    }
+
     pub fn block_subsidy_at_height(&self, height_in: &BlockHeight) -> Amount {
         self.emission_schedule
             .iter()
@@ -128,12 +139,24 @@ impl ChainConfig {
             .1
     }
 
+    pub fn max_block_header_size(&self) -> usize {
+        self.max_block_header_size
+    }
+
+    pub fn max_block_size_from_txs(&self) -> usize {
+        self.max_block_size_with_standard_txs
+    }
+
+    pub fn max_block_size_from_smart_contracts(&self) -> usize {
+        self.max_block_size_with_smart_contracts
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
 
-    pub const fn get_blockreward_maturity(&self) -> &BlockDistance {
+    pub const fn blockreward_maturity(&self) -> &BlockDistance {
         &self.blockreward_maturity
     }
 }
@@ -147,7 +170,9 @@ const REGTEST_ADDRESS_PREFIX: &str = "rmt";
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
-pub const MAX_BLOCK_WEIGHT: usize = 1_048_576;
+const MAX_BLOCK_HEADER_SIZE: usize = 1024;
+const MAX_BLOCK_TXS_SIZE: usize = 524_288;
+const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
@@ -179,8 +204,13 @@ fn create_mainnet_genesis() -> Block {
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
-        .expect("Error creating genesis block")
+    Block::new(
+        vec![tx],
+        None,
+        BlockTimestamp::from_int_seconds(1639975460),
+        ConsensusData::None,
+    )
+    .expect("Error creating genesis block")
 }
 
 fn create_unit_test_genesis(premine_destination: Destination) -> Block {
@@ -197,8 +227,13 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(vec![tx], None, 1639975460, ConsensusData::None)
-        .expect("Error creating genesis block")
+    Block::new(
+        vec![tx],
+        None,
+        BlockTimestamp::from_int_seconds(1639975460),
+        ConsensusData::None,
+    )
+    .expect("Error creating genesis block")
 }
 
 fn subsidy_in_year_to_subsidy_in_height<S: AsRef<str>>(
@@ -212,7 +247,7 @@ fn subsidy_in_year_to_subsidy_in_height<S: AsRef<str>>(
         .map(|(year, s)| {
             (
                 BlockHeight::new(1 + (*year as u64) * year_in_blocks),
-                Amount::from_fixedpoint_str(s.as_ref(), coin_decimals).unwrap(),
+                Amount::from_fixedpoint_str(s.as_ref(), coin_decimals).expect("subsidy parse fail"),
             )
         })
         .collect::<Vec<(BlockHeight, Amount)>>();
@@ -230,9 +265,15 @@ fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
     // the schedule cannot be empty
     assert!(!schedule.is_empty());
     // the first block subsidy must be for block of height 1
-    assert_eq!(schedule.first().unwrap().0, BlockHeight::new(1));
+    assert_eq!(
+        schedule.first().expect("empty schedule").0,
+        BlockHeight::new(1)
+    );
     // the last block subsidy must always be zero, otherwise the total is infinite
-    assert_eq!(schedule.last().unwrap().1, Amount::from_atoms(0));
+    assert_eq!(
+        schedule.last().expect("empty schedule").1,
+        Amount::from_atoms(0)
+    );
     // the heights must be sorted
     assert_emission_schedule_is_sorted(schedule);
 
@@ -240,14 +281,16 @@ fn calculate_total_emission(schedule: &[(BlockHeight, Amount)]) -> Amount {
         .iter()
         .rfold((schedule[0].0, Amount::from_atoms(0)), |init, curr| {
             // blocks that have the same subsidy
-            let block_count_in_segment: i64 = (init.0 - curr.0).unwrap().into();
+            let block_count_in_segment: i64 =
+                (init.0 - curr.0).expect("block count underflow").into();
+            let block_count_in_segment = block_count_in_segment as u128;
             let total_amount_so_far = init.1;
             let subsidy_in_this_segment = curr.1;
+            let subsidy_in_block_sequence =
+                (subsidy_in_this_segment * block_count_in_segment).expect("subsidy overflow");
             (
                 curr.0,
-                (total_amount_so_far
-                    + (subsidy_in_this_segment * (block_count_in_segment as u128)).unwrap())
-                .unwrap(),
+                (total_amount_so_far + subsidy_in_block_sequence).expect("subsidy overflow"),
             )
         })
         .1
@@ -271,28 +314,12 @@ pub fn emission_schedule_from_yearly<S: AsRef<str>>(
     emission_schedule
 }
 
-pub fn create_mainnet() -> ChainConfig {
-    let chain_type = ChainType::Mainnet;
-    let pow_config = PoWChainConfig::new(chain_type);
-
-    let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
-        (
-            BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                initial_difficulty: pow_config.limit().into(),
-            }),
-        ),
-    ];
-
-    let genesis_block = create_mainnet_genesis();
-    let genesis_block_id = genesis_block.get_id();
+fn mainnet_emission_schedule() -> (Duration, u8, Vec<(BlockHeight, Amount)>) {
+    // Unwrap is allowed in this function. It is called on node startup so any issue is caught
+    // immediately during testing.
+    #![allow(clippy::unwrap_used)]
 
     let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
-
     let coin_decimals = MAINNET_COIN_DECIMALS;
 
     let expected_total_block_subsidy =
@@ -321,6 +348,31 @@ pub fn create_mainnet() -> ChainConfig {
         Some(expected_total_block_subsidy),
     );
 
+    (target_block_spacing, coin_decimals, emission_schedule)
+}
+
+pub fn create_mainnet() -> ChainConfig {
+    let chain_type = ChainType::Mainnet;
+    let pow_config = PoWChainConfig::new(chain_type);
+
+    let upgrades = vec![
+        (
+            BlockHeight::new(0),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            BlockHeight::new(1),
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: pow_config.limit().into(),
+            }),
+        ),
+    ];
+
+    let genesis_block = create_mainnet_genesis();
+    let genesis_block_id = genesis_block.get_id();
+
+    let (target_block_spacing, coin_decimals, emission_schedule) = mainnet_emission_schedule();
+
     ChainConfig {
         chain_type,
         address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
@@ -333,9 +385,13 @@ pub fn create_mainnet() -> ChainConfig {
         genesis_block_id,
         version: SemVer::new(0, 1, 0),
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         target_block_spacing,
         coin_decimals,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -359,34 +415,7 @@ pub fn create_regtest() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
 
-    let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
-    let coin_decimals = MAINNET_COIN_DECIMALS;
-
-    let expected_total_block_subsidy =
-        (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
-            - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
-        .unwrap();
-
-    let subsidy_per_block_in_year_n_str = [
-        (0, "202"),
-        (1, "151"),
-        (2, "113"),
-        (3, "85"),
-        (4, "64"),
-        (5, "48"),
-        (6, "36"),
-        (7, "27"),
-        (8, "20"),
-        (9, "15"),
-        (10, "0"),
-    ];
-
-    let emission_schedule = emission_schedule_from_yearly(
-        &subsidy_per_block_in_year_n_str,
-        &target_block_spacing,
-        coin_decimals,
-        Some(expected_total_block_subsidy),
-    );
+    let (target_block_spacing, coin_decimals, emission_schedule) = mainnet_emission_schedule();
 
     ChainConfig {
         chain_type,
@@ -401,8 +430,12 @@ pub fn create_regtest() -> ChainConfig {
         version: SemVer::new(0, 1, 0),
         target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
-        coin_decimals: MAINNET_COIN_DECIMALS,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
+        coin_decimals,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -410,34 +443,7 @@ pub fn create_unit_test_config() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
 
-    let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
-    let coin_decimals = MAINNET_COIN_DECIMALS;
-
-    let expected_total_block_subsidy =
-        (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
-            - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
-        .unwrap();
-
-    let subsidy_per_block_in_year_n_str = [
-        (0, "202"),
-        (1, "151"),
-        (2, "113"),
-        (3, "85"),
-        (4, "64"),
-        (5, "48"),
-        (6, "36"),
-        (7, "27"),
-        (8, "20"),
-        (9, "15"),
-        (10, "0"),
-    ];
-
-    let emission_schedule = emission_schedule_from_yearly(
-        &subsidy_per_block_in_year_n_str,
-        &target_block_spacing,
-        coin_decimals,
-        Some(expected_total_block_subsidy),
-    );
+    let (target_block_spacing, coin_decimals, emission_schedule) = mainnet_emission_schedule();
 
     ChainConfig {
         chain_type: ChainType::Mainnet,
@@ -452,8 +458,12 @@ pub fn create_unit_test_config() -> ChainConfig {
         version: SemVer::new(0, 1, 0),
         target_block_spacing,
         blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
         coin_decimals,
         emission_schedule,
+        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
     }
 }
 
@@ -490,34 +500,7 @@ impl TestChainConfig {
         let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
         let genesis_block_id = genesis_block.get_id();
 
-        let target_block_spacing = DEFAULT_TARGET_BLOCK_SPACING;
-        let coin_decimals = MAINNET_COIN_DECIMALS;
-
-        let expected_total_block_subsidy =
-            (Amount::from_fixedpoint_str(MAINNET_TOTAL_SUPPLY, coin_decimals).unwrap()
-                - Amount::from_fixedpoint_str(MAINNET_COIN_PREMINE, coin_decimals).unwrap())
-            .unwrap();
-
-        let subsidy_per_block_in_year_n_str = [
-            (0, "202"),
-            (1, "151"),
-            (2, "113"),
-            (3, "85"),
-            (4, "64"),
-            (5, "48"),
-            (6, "36"),
-            (7, "27"),
-            (8, "20"),
-            (9, "15"),
-            (10, "0"),
-        ];
-
-        let emission_schedule = emission_schedule_from_yearly(
-            &subsidy_per_block_in_year_n_str,
-            &target_block_spacing,
-            coin_decimals,
-            Some(expected_total_block_subsidy),
-        );
+        let (target_block_spacing, coin_decimals, emission_schedule) = mainnet_emission_schedule();
 
         ChainConfig {
             chain_type: ChainType::Mainnet,
@@ -532,8 +515,12 @@ impl TestChainConfig {
             version: SemVer::new(0, 1, 0),
             target_block_spacing,
             blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
+            max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             coin_decimals,
             emission_schedule,
+            max_block_header_size: MAX_BLOCK_HEADER_SIZE,
+            max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
+            max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
         }
     }
 }

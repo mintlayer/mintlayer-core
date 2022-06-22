@@ -14,6 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+#![allow(clippy::unwrap_used)]
+
 use p2p::net::{mock::MockService, NetworkingService};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use tokio::net::{TcpListener, TcpStream};

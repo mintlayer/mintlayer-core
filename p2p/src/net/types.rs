@@ -18,18 +18,15 @@ use super::*;
 
 /// Discovered peer address information
 #[derive(Debug, PartialEq, Eq)]
-pub struct AddrInfo<T>
-where
-    T: NetworkingService,
-{
+pub struct AddrInfo<T: NetworkingService> {
     /// Unique ID of the peer
     pub id: T::PeerId,
 
     /// List of discovered IPv4 addresses
-    pub ip4: Vec<Arc<T::Address>>,
+    pub ip4: Vec<T::Address>,
 
     /// List of discovered IPv6 addresses
-    pub ip6: Vec<Arc<T::Address>>,
+    pub ip6: Vec<T::Address>,
 }
 
 /// Peer information learned during handshaking
@@ -51,7 +48,7 @@ where
     pub magic_bytes: [u8; 4],
 
     /// Peer software version
-    pub version: primitives::version::SemVer,
+    pub version: primitives::semver::SemVer,
 
     /// User agent of the peer
     pub agent: Option<String>,
@@ -61,14 +58,35 @@ where
     pub protocols: Vec<T::ProtocolId>,
 }
 
+impl<T: NetworkingService> Display for PeerInfo<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Peer information:")?;
+        writeln!(f, "--> Peer ID: {}", self.peer_id)?;
+        writeln!(f, "--> Magic bytes: {:x?}", self.magic_bytes)?;
+        writeln!(f, "--> Software version: {}", self.version)?;
+        writeln!(
+            f,
+            "--> User agent: {}",
+            self.agent.as_ref().unwrap_or(&"No user agent".to_string())
+        )?;
+        write!(f, "--> Protocols: ")?;
+
+        for protocol in &self.protocols {
+            write!(f, "{} ", protocol)?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Connectivity-related events received from the network
 #[derive(Debug)]
-pub enum ConnectivityEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection accepted
     ConnectionAccepted {
+        /// Peer address
+        addr: T::Address,
+
         /// Peer information
         peer_info: PeerInfo<T>,
     },
@@ -80,6 +98,15 @@ where
 
         /// Peer information
         peer_info: PeerInfo<T>,
+    },
+
+    /// Outbound connection failed
+    ConnectionError {
+        /// Address that was dialed
+        addr: T::Address,
+
+        /// Error that occurred
+        error: error::P2pError,
     },
 
     /// Remote closed connection

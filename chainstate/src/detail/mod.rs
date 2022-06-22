@@ -31,7 +31,14 @@ mod orphan_blocks;
 
 mod error;
 pub use error::*;
+
+use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
+
 mod pow;
+
+pub mod ban_score;
+mod block_index_history_iter;
+mod median_time;
 
 mod chainstateref;
 
@@ -45,13 +52,17 @@ mod spend_cache;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
-// TODO: ISSUE #129 - https://github.com/mintlayer/mintlayer-core/issues/129
+pub mod time_getter;
+use time_getter::TimeGetter;
+
+#[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
     blockchain_storage: blockchain_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
+    time_getter: TimeGetter,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq)]
@@ -65,18 +76,26 @@ impl Chainstate {
         self.events_controller.wait_for_all_events();
     }
 
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw> {
+    #[must_use]
+    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
         let db_tx = self.blockchain_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             db_tx,
-            Some(&mut self.orphan_blocks),
+            self.orphan_blocks.as_rw_ref(),
+            self.time_getter.getter(),
         )
     }
 
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo> {
+    #[must_use]
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
         let db_tx = self.blockchain_storage.transaction_ro();
-        chainstateref::ChainstateRef::new_ro(&self.chain_config, db_tx)
+        chainstateref::ChainstateRef::new_ro(
+            &self.chain_config,
+            db_tx,
+            self.orphan_blocks.as_ro_ref(),
+            self.time_getter.getter(),
+        )
     }
 
     pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
@@ -87,14 +106,21 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
+        time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
 
-        let mut cons =
-            Self::new_no_genesis(chain_config, blockchain_storage, custom_orphan_error_hook)?;
+        let mut cons = Self::new_no_genesis(
+            chain_config,
+            blockchain_storage,
+            custom_orphan_error_hook,
+            time_getter,
+        )?;
+
         let best_block_id = cons.get_best_block_id().map_err(|e| {
             ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
         })?;
+
         if best_block_id.is_none() {
             cons.process_block(
                 cons.chain_config.genesis_block().clone(),
@@ -114,6 +140,7 @@ impl Chainstate {
         chain_config: Arc<ChainConfig>,
         blockchain_storage: blockchain_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
+        time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
@@ -121,6 +148,7 @@ impl Chainstate {
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
+            time_getter,
         };
         Ok(cons)
     }
@@ -128,8 +156,8 @@ impl Chainstate {
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => {
-                let new_height = new_block_index.get_block_height();
-                let new_id = new_block_index.get_block_id().clone();
+                let new_height = new_block_index.block_height();
+                let new_id = new_block_index.block_id().clone();
                 self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
@@ -194,7 +222,6 @@ impl Chainstate {
         let best_block_id =
             chainstate_ref.get_best_block_id().map_err(BlockError::BestBlockLoadError)?;
 
-        // TODO: this seems to require block index, which doesn't seem to be the case in bitcoin, as otherwise orphans can't be checked
         chainstate_ref.check_block(&block).map_err(BlockError::CheckBlockFailed)?;
 
         let block_index = chainstate_ref.accept_block(&block)?;
@@ -218,8 +245,8 @@ impl Chainstate {
         if let Some(ref bi) = result {
             log::info!(
                 "New tip in chainstate {} with height {}",
-                bi.get_block_id(),
-                bi.get_block_height()
+                bi.block_id(),
+                bi.block_height()
             );
         }
 
@@ -235,8 +262,9 @@ impl Chainstate {
         self.attempt_to_process_block(block, block_source, 0)
     }
 
-    // TODO: used to check block size + other preliminary check before giving the block to process_block
-    pub fn preliminary_block_check(&self, _block: Block) -> Result<(), BlockError> {
+    pub fn preliminary_block_check(&self, block: Block) -> Result<(), BlockError> {
+        let chainstate_ref = self.make_db_tx_ro();
+        chainstate_ref.check_block(&block)?;
         Ok(())
     }
 
@@ -278,7 +306,7 @@ impl Chainstate {
         let best_block_index = chainstate_ref
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
-        let height = best_block_index.get_block_height();
+        let height = best_block_index.block_height();
 
         let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
             .take_while(|i| (height - BlockDistance::new(*i)).is_some())
@@ -309,7 +337,7 @@ impl Chainstate {
         for header in locator.iter() {
             if let Some(block_index) = chainstate_ref.get_block_index(&header.get_id())? {
                 if chainstate_ref.is_block_in_main_chain(&block_index)? {
-                    best = block_index.get_block_height();
+                    best = block_index.block_height();
                     break;
                 }
             }
@@ -319,7 +347,7 @@ impl Chainstate {
         let best_height = chainstate_ref
             .get_best_block_index()?
             .expect("best block's height to exist")
-            .get_block_height();
+            .block_height();
 
         let limit = std::cmp::min(
             (best + HEADER_LIMIT).expect("BlockHeight limit reached"),
@@ -338,7 +366,7 @@ impl Chainstate {
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
         // verify that the first block attaches to our chain
-        match first_block.get_prev_block_id() {
+        match first_block.prev_block_id() {
             None => return Err(PropertyQueryError::InvalidInputForPrevBlock),
             Some(id) => {
                 if self.get_block_index(id)?.is_none() {

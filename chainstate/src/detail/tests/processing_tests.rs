@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+use crate::detail::median_time::calculate_median_time_past;
 use crate::detail::pow::error::ConsensusPoWError;
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
@@ -31,6 +32,8 @@ use common::chain::UpgradeVersion;
 use common::primitives::Compact;
 use common::Uint256;
 use crypto::key::{KeyKind, PrivateKey};
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 #[test]
 fn test_process_genesis_block_wrong_block_source() {
@@ -38,7 +41,8 @@ fn test_process_genesis_block_wrong_block_source() {
         // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config.clone(), storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Peer;
@@ -53,7 +57,8 @@ fn test_process_genesis_block() {
         // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -72,9 +77,9 @@ fn test_process_genesis_block() {
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(chainstate.chain_config.genesis_block_id())
         );
-        assert_eq!(block_index.get_prev_block_id(), &None);
-        assert_eq!(block_index.get_chain_trust(), 1);
-        assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
+        assert_eq!(block_index.prev_block_id(), &None);
+        assert_eq!(block_index.chain_trust(), 1);
+        assert_eq!(block_index.block_height(), BlockHeight::new(0));
     });
 }
 
@@ -85,7 +90,7 @@ fn test_orphans_chains() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None).unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
 
         assert_eq!(
             chainstate.get_best_block_id().unwrap().unwrap(),
@@ -120,11 +125,11 @@ fn test_orphans_chains() {
         let current_best = chainstate.get_best_block_id().unwrap().unwrap();
         let last_block_index_in_db = chainstate.get_block_index(&current_best).unwrap().unwrap();
         assert_eq!(
-            last_block_index_in_db.get_block_height(),
+            last_block_index_in_db.block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
         assert_eq!(
-            last_block_index.get_block_height(),
+            last_block_index.block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
 
@@ -139,7 +144,8 @@ fn test_empty_chainstate() {
         // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
         assert!(chainstate.get_best_block_id().unwrap().is_none());
         assert!(chainstate
             .blockchain_storage
@@ -149,7 +155,7 @@ fn test_empty_chainstate() {
         // Let's add genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new(config, storage, None).unwrap();
+        let chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
         chainstate.get_best_block_id().unwrap().unwrap();
         assert!(
             chainstate.get_best_block_id().ok().flatten().unwrap()
@@ -210,9 +216,9 @@ fn test_spend_inputs_simple() {
                 .expect("Not found mainchain tx index")
                 .expect(ERR_STORAGE_FAIL);
 
-            for input in tx.get_inputs() {
+            for input in tx.inputs() {
                 if tx_index
-                    .get_spent_state(input.get_outpoint().get_output_index())
+                    .get_spent_state(input.outpoint().output_index())
                     .expect("Unable to get spent state")
                     != OutputSpentState::Unspent
                 {
@@ -230,7 +236,8 @@ fn test_straight_chain() {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(config, storage, None).unwrap();
+        let mut chainstate =
+            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
         // process the genesis block
         let block_source = BlockSource::Local;
@@ -250,24 +257,24 @@ fn test_straight_chain() {
             Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(
-            block_index.get_block_id(),
+            block_index.block_id(),
             &chainstate.chain_config.genesis_block_id()
         );
-        assert_eq!(block_index.get_prev_block_id(), &None);
+        assert_eq!(block_index.prev_block_id(), &None);
         // TODO: ensure that block at height is tested after removing the next
-        assert_eq!(block_index.get_chain_trust(), 1);
-        assert_eq!(block_index.get_block_height(), BlockHeight::new(0));
+        assert_eq!(block_index.chain_trust(), 1);
+        assert_eq!(block_index.block_height(), BlockHeight::new(0));
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
         for _ in 0..COUNT_BLOCKS {
-            let prev_block_id = block_index.get_block_id();
+            let prev_block_id = block_index.block_id();
             let best_block_id = chainstate
                 .blockchain_storage
                 .get_best_block_id()
                 .ok()
                 .flatten()
                 .expect("Unable to get best block ID");
-            assert_eq!(&best_block_id, block_index.get_block_id());
+            assert_eq!(&best_block_id, block_index.block_id());
             let block_source = BlockSource::Peer;
             let new_block = produce_test_block(&prev_block, false);
             let new_block_index = dbg!(chainstate.process_block(new_block.clone(), block_source))
@@ -277,13 +284,13 @@ fn test_straight_chain() {
 
             // TODO: ensure that block at height is tested after removing the next
             assert_eq!(
-                new_block_index.get_prev_block_id().as_ref(),
+                new_block_index.prev_block_id().as_ref(),
                 Some(prev_block_id)
             );
-            assert!(new_block_index.get_chain_trust() > block_index.get_chain_trust());
+            assert!(new_block_index.chain_trust() > block_index.chain_trust());
             assert_eq!(
-                new_block_index.get_block_height(),
-                block_index.get_block_height().next_height()
+                new_block_index.block_height(),
+                block_index.block_height().next_height()
             );
 
             block_index = new_block_index;
@@ -309,7 +316,7 @@ fn test_get_ancestor() {
     let split = btf.block_indexes[SPLIT_HEIGHT].clone();
 
     // Create the first chain and test get_ancestor for this chain's  last block
-    btf.create_chain(split.get_block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
+    btf.create_chain(split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
         .expect("second chain");
     let last_block_in_first_chain =
         btf.block_indexes.last().expect("last block in first chain").clone();
@@ -322,7 +329,7 @@ fn test_get_ancestor() {
         .clone();
 
     assert_eq!(
-        last_block_in_first_chain.get_block_id(),
+        last_block_in_first_chain.block_id(),
         btf.chainstate
             .make_db_tx()
             .get_ancestor(
@@ -330,11 +337,11 @@ fn test_get_ancestor() {
                 u64::try_from(FIRST_CHAIN_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
-            .get_block_id()
+            .block_id()
     );
 
     assert_eq!(
-        ancestor.get_block_id(),
+        ancestor.block_id(),
         btf.chainstate
             .make_db_tx()
             .get_ancestor(
@@ -342,11 +349,11 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
-            .get_block_id()
+            .block_id()
     );
 
     assert_eq!(
-        ancestor_in_first_chain.get_block_id(),
+        ancestor_in_first_chain.block_id(),
         btf.chainstate
             .make_db_tx()
             .get_ancestor(
@@ -354,16 +361,16 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_IN_FIRST_CHAIN_HEIGHT).unwrap().into()
             )
             .expect("ancestor in first chain")
-            .get_block_id()
+            .block_id()
     );
 
     // Create a second chain and test get_ancestor for this chain's last block
-    btf.create_chain(split.get_block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
+    btf.create_chain(split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
         .expect("second chain");
     let last_block_in_second_chain =
         btf.block_indexes.last().expect("last block in first chain").clone();
     assert_eq!(
-        ancestor.get_block_id(),
+        ancestor.block_id(),
         btf.chainstate
             .make_db_tx()
             .get_ancestor(
@@ -371,7 +378,7 @@ fn test_get_ancestor() {
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
-            .get_block_id()
+            .block_id()
     );
 
     assert_eq!(
@@ -404,13 +411,13 @@ fn test_last_common_ancestor() {
     let split = btf.block_indexes[SPLIT_HEIGHT].clone();
 
     // First branch of fork
-    btf.create_chain(split.get_block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
+    btf.create_chain(split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
         .expect("Chain creation to succeed");
     let last_block_in_first_chain =
         btf.block_indexes.last().expect("last block in first chain").clone();
 
     // Second branch of fork
-    btf.create_chain(split.get_block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
+    btf.create_chain(split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
         .expect("second chain");
     let last_block_in_second_chain =
         btf.block_indexes.last().expect("last block in first chain").clone();
@@ -420,8 +427,8 @@ fn test_last_common_ancestor() {
             .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_second_chain)
             .unwrap()
-            .get_block_id(),
-        split.get_block_id()
+            .block_id(),
+        split.block_id()
     );
 
     assert_eq!(
@@ -429,8 +436,8 @@ fn test_last_common_ancestor() {
             .make_db_tx()
             .last_common_ancestor(&last_block_in_second_chain, &last_block_in_first_chain)
             .unwrap()
-            .get_block_id(),
-        split.get_block_id()
+            .block_id(),
+        split.block_id()
     );
 
     assert_eq!(
@@ -438,8 +445,8 @@ fn test_last_common_ancestor() {
             .make_db_tx()
             .last_common_ancestor(&last_block_in_first_chain, &last_block_in_first_chain)
             .unwrap()
-            .get_block_id(),
-        last_block_in_first_chain.get_block_id()
+            .block_id(),
+        last_block_in_first_chain.block_id()
     );
 
     assert_eq!(
@@ -447,8 +454,8 @@ fn test_last_common_ancestor() {
             .make_db_tx()
             .last_common_ancestor(&genesis, &split)
             .unwrap()
-            .get_block_id(),
-        genesis.get_block_id()
+            .block_id(),
+        genesis.block_id()
     );
 }
 
@@ -522,7 +529,7 @@ fn test_consensus_type() {
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
     let block_without_consensus_data = produce_test_block_with_consensus_data(
-        &btf.get_block(btf.block_indexes[4].get_block_id().clone()).unwrap().unwrap(),
+        &btf.get_block(btf.block_indexes[4].block_id().clone()).unwrap().unwrap(),
         false,
         ConsensusData::None,
     );
@@ -537,7 +544,7 @@ fn test_consensus_type() {
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
         let prev_block =
-            btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
+            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
         let mut mined_block = btf.random_block(&prev_block, None);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -553,7 +560,7 @@ fn test_consensus_type() {
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
     // fail.
-    let prev_block = btf.get_block(btf.block_indexes[9].get_block_id().clone()).unwrap().unwrap();
+    let prev_block = btf.get_block(btf.block_indexes[9].block_id().clone()).unwrap().unwrap();
     let mut mined_block = btf.random_block(&prev_block, None);
     let bits = min_difficulty.into();
     assert!(
@@ -572,7 +579,7 @@ fn test_consensus_type() {
     btf.create_chain(&prev_block.get_id(), 5).expect("chain creation");
 
     // At height 15 we are again proof of work, ignoring consensus should fail
-    let prev_block = btf.get_block(btf.block_indexes[14].get_block_id().clone()).unwrap().unwrap();
+    let prev_block = btf.get_block(btf.block_indexes[14].block_id().clone()).unwrap().unwrap();
     let block_without_consensus_data =
         produce_test_block_with_consensus_data(&prev_block, false, ConsensusData::None);
 
@@ -586,7 +593,7 @@ fn test_consensus_type() {
     // Mining should work
     for i in 15..20 {
         let prev_block =
-            btf.get_block(btf.block_indexes[i - 1].get_block_id().clone()).unwrap().unwrap();
+            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
         let mut mined_block = btf.random_block(&prev_block, None);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -653,13 +660,7 @@ fn test_pow() {
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
     let prev_block = btf
-        .get_block(
-            btf.block_indexes
-                .last()
-                .expect("genesis should be there")
-                .get_block_id()
-                .clone(),
-        )
+        .get_block(btf.block_indexes.last().expect("genesis should be there").block_id().clone())
         .unwrap()
         .unwrap();
     let mut random_invalid_block = btf.random_block(&prev_block, None);
@@ -690,8 +691,102 @@ fn test_pow() {
 }
 
 #[test]
+fn test_blocks_from_the_future() {
+    common::concurrency::model(|| {
+        // In this test, processing a few correct blocks in a single chain
+        let config = Arc::new(create_unit_test_config());
+
+        // current time is genesis time
+        let current_time = Arc::new(std::sync::atomic::AtomicU64::new(
+            config.genesis_block().timestamp().as_int_seconds() as u64,
+        ));
+        let chainstate_current_time = Arc::clone(&current_time);
+        let time_getter = TimeGetter::new(Arc::new(move || {
+            Duration::from_secs(chainstate_current_time.load(Ordering::SeqCst))
+        }));
+
+        let storage = Store::new_empty().unwrap();
+        let mut chainstate = Chainstate::new(config, storage, None, time_getter).unwrap();
+
+        {
+            // ensure no blocks are in chain, so that median time can be the genesis time
+            let current_height: u64 =
+                chainstate.get_best_block_index().unwrap().unwrap().block_height().into();
+            assert_eq!(current_height, 0);
+        }
+
+        {
+            // constrain the test to protect this test becoming legacy by changing the definition of median time for genesis
+            let chainstate_ref = chainstate.make_db_tx_ro();
+            assert_eq!(
+                calculate_median_time_past(
+                    &chainstate_ref,
+                    &chainstate.chain_config.genesis_block_id()
+                ),
+                chainstate.chain_config.genesis_block().timestamp()
+            );
+        }
+
+        {
+            // submit a block on the threshold of being rejected for being from the future
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+
+            let good_block = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                BlockTimestamp::from_int_seconds(
+                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset,
+                ),
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            chainstate.process_block(good_block, BlockSource::Local).unwrap().unwrap();
+        }
+
+        {
+            // submit a block a second after the allowed threshold in the future
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+
+            let bad_block_in_future = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                BlockTimestamp::from_int_seconds(
+                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset + 1,
+                ),
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            assert_eq!(
+                chainstate.process_block(bad_block_in_future, BlockSource::Local).unwrap_err(),
+                BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
+            );
+        }
+
+        {
+            // submit a block one second before genesis in time
+            let bad_block_from_past = Block::new(
+                vec![],
+                Some(chainstate.chain_config.genesis_block_id()),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32 - 1),
+                ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+
+            assert_eq!(
+                chainstate.process_block(bad_block_from_past, BlockSource::Local).unwrap_err(),
+                BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+            );
+        }
+    });
+}
+
+#[test]
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _chainstate = make_chainstate(config, storage, None).unwrap();
+    let _chainstate = make_chainstate(config, storage, None, Default::default()).unwrap();
 }

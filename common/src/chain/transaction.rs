@@ -16,7 +16,7 @@
 // Author(s): S. Afach
 
 use crate::primitives::{Id, Idable};
-use serialization::{Decode, Encode};
+use serialization::{DirectDecode, DirectEncode, Encode};
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 
@@ -35,16 +35,14 @@ use self::signature::inputsig::InputWitness;
 
 mod transaction_v1;
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
-pub enum Transaction {
-    #[codec(index = 1)]
-    V1(TransactionV1),
+pub enum TransactionSize {
+    ScriptedTransaction(usize),
+    SmartContractTransaction(usize),
 }
 
-impl From<Id<TransactionV1>> for Id<Transaction> {
-    fn from(id_tx_v1: Id<TransactionV1>) -> Id<Transaction> {
-        Id::new(&id_tx_v1.get())
-    }
+#[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+pub enum Transaction {
+    V1(TransactionV1),
 }
 
 impl Idable for Transaction {
@@ -78,14 +76,9 @@ impl Transaction {
     }
 
     pub fn version_byte(&self) -> u8 {
-        let result = match &self {
-            Transaction::V1(_) => 1,
-        };
-        debug_assert_eq!(
-            result,
-            *self.encode().get(0).expect("Unexpected version byte")
-        );
-        result
+        match &self {
+            Transaction::V1(tx) => serialization::tagged::tag_of(&tx),
+        }
     }
 
     pub fn is_replaceable(&self) -> bool {
@@ -94,34 +87,46 @@ impl Transaction {
         }
     }
 
-    pub fn get_flags(&self) -> u32 {
+    pub fn flags(&self) -> u32 {
         match &self {
-            Transaction::V1(tx) => tx.get_flags(),
+            Transaction::V1(tx) => tx.flags(),
         }
     }
 
-    pub fn get_inputs(&self) -> &Vec<TxInput> {
+    pub fn inputs(&self) -> &Vec<TxInput> {
         match &self {
-            Transaction::V1(tx) => tx.get_inputs(),
+            Transaction::V1(tx) => tx.inputs(),
         }
     }
 
-    pub fn get_outputs(&self) -> &Vec<TxOutput> {
+    pub fn outputs(&self) -> &Vec<TxOutput> {
         match &self {
-            Transaction::V1(tx) => tx.get_outputs(),
+            Transaction::V1(tx) => tx.outputs(),
         }
     }
 
-    pub fn get_lock_time(&self) -> u32 {
+    pub fn lock_time(&self) -> u32 {
         match &self {
-            Transaction::V1(tx) => tx.get_lock_time(),
+            Transaction::V1(tx) => tx.lock_time(),
         }
     }
 
     /// provides the hash of a transaction including the witness (malleable)
-    pub fn get_serialized_hash(&self) -> Id<Transaction> {
+    pub fn serialized_hash(&self) -> Id<Transaction> {
         match &self {
-            Transaction::V1(tx) => tx.get_serialized_hash(),
+            Transaction::V1(tx) => tx.serialized_hash(),
+        }
+    }
+
+    pub fn has_smart_contracts(&self) -> bool {
+        false
+    }
+
+    pub fn transaction_data_size(&self) -> TransactionSize {
+        if self.has_smart_contracts() {
+            TransactionSize::SmartContractTransaction(self.encoded_size())
+        } else {
+            TransactionSize::ScriptedTransaction(self.encoded_size())
         }
     }
 
@@ -140,6 +145,7 @@ impl Transaction {
 mod test {
     use super::*;
     use crypto::random::RngCore;
+    use serialization::Decode;
 
     #[test]
     #[allow(clippy::eq_op)]
