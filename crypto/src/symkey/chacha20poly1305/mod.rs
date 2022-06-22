@@ -33,7 +33,7 @@ impl Chacha20poly1305Key {
         nonce: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let cipher = XChaCha20Poly1305::new(&self.key_data);
-        let nonce = XNonce::from_slice(&nonce);
+        let nonce = XNonce::from_slice(nonce);
         let cipher_text = cipher
             .encrypt(nonce, message.as_ref())
             .map_err(|e| Error::EncryptionError(e.to_string()))?;
