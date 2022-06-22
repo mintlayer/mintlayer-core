@@ -230,7 +230,7 @@ fn check_change_flags(original_tx: &Transaction, destination: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.flags = tx_updater.flags.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.get_inputs().iter().enumerate() {
+    for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(destination, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -242,7 +242,7 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.lock_time = tx_updater.lock_time.wrapping_add(1234567890);
     let tx = tx_updater.generate_tx().unwrap();
-    for (input_num, _) in tx.get_inputs().iter().enumerate() {
+    for (input_num, _) in tx.inputs().iter().enumerate() {
         assert_eq!(
             verify_signature(outpoint_dest, &tx, input_num),
             Err(TransactionSigError::SignatureVerificationFailed)
@@ -270,14 +270,13 @@ fn check_insert_input(original_tx: &Transaction, destination: &Destination, shou
 // A witness mutation should result in signature verification error.
 fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    for input in 0..original_tx.get_inputs().len() {
-        let signature = match tx_updater.inputs[0].get_witness() {
+    for input in 0..original_tx.inputs().len() {
+        let signature = match tx_updater.inputs[0].witness() {
             InputWitness::Standard(signature) => signature,
             InputWitness::NoSignature(_) => panic!("Unexpected InputWitness::NoSignature"),
         };
 
-        let raw_signature =
-            signature.get_raw_signature().iter().map(|b| b.wrapping_add(1)).collect();
+        let raw_signature = signature.raw_signature().iter().map(|b| b.wrapping_add(1)).collect();
         let signature = StandardInputSignature::new(signature.sighash_type(), raw_signature);
         tx_updater.inputs[input].update_witness(InputWitness::Standard(signature));
         let tx = tx_updater.generate_tx().unwrap();
@@ -310,8 +309,8 @@ fn check_mutate_output(original_tx: &Transaction, destination: &Destination, sho
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
-        (tx_updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
-        tx_updater.outputs[0].get_destination().clone(),
+        (tx_updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+        tx_updater.outputs[0].destination().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);
@@ -328,7 +327,7 @@ fn check_mutate_input(original_tx: &Transaction, destination: &Destination, shou
     tx_updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
         9999,
-        tx_updater.inputs[0].get_witness().clone(),
+        tx_updater.inputs[0].witness().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);

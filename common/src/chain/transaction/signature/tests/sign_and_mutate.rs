@@ -13,7 +13,6 @@ use crate::{
             },
             verify_signature, TransactionSigError,
         },
-        transaction::signature::Transactable,
         Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
@@ -244,7 +243,7 @@ fn mutate_none_anyonecanpay() {
 
     {
         let tx = mutate_input(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         assert_eq!(
             verify_signature(&destination, &tx, 0),
@@ -287,7 +286,7 @@ fn mutate_single() {
     ];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the different error.
@@ -306,7 +305,7 @@ fn mutate_single() {
     let mutations = [add_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -321,7 +320,7 @@ fn mutate_single() {
 
     {
         let tx = mutate_output(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         // Mutation of the first output makes signature invalid.
         assert_eq!(
@@ -350,7 +349,7 @@ fn mutate_single_anyonecanpay() {
     let mutations = [add_input, remove_last_input, add_output, remove_last_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -370,7 +369,7 @@ fn mutate_single_anyonecanpay() {
     let mutations = [mutate_input, mutate_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         assert_eq!(
             verify_signature(&destination, &tx, 0),
@@ -392,7 +391,7 @@ fn mutate_single_anyonecanpay() {
     let mutations = [remove_first_input, remove_first_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         // Mutations make the last input number invalid, so verifying the signature for it should
         // result in the `InvalidInputIndex` error.
@@ -421,7 +420,7 @@ fn check_mutations<M>(
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
         // The number of inputs can be changed by the `mutate` function.
-        let inputs = tx.inputs().unwrap().len();
+        let inputs = tx.inputs().len();
 
         assert_eq!(
             verify_signature(&destination, &tx, INVALID_INPUT),
@@ -447,7 +446,7 @@ fn mutate_input(tx: &Transaction) -> Transaction {
     updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
         9999,
-        updater.inputs[0].get_witness().clone(),
+        updater.inputs[0].witness().clone(),
     );
     updater.generate_tx().unwrap()
 }
@@ -480,8 +479,8 @@ fn add_output(tx: &Transaction) -> Transaction {
 fn mutate_output(tx: &Transaction) -> Transaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs[0] = TxOutput::new(
-        (updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),
-        updater.outputs[0].get_destination().clone(),
+        (updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+        updater.outputs[0].destination().clone(),
     );
     updater.generate_tx().unwrap()
 }

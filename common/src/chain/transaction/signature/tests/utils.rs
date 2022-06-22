@@ -28,10 +28,10 @@ pub struct MutableTransaction {
 impl From<&Transaction> for MutableTransaction {
     fn from(tx: &Transaction) -> Self {
         Self {
-            flags: tx.get_flags(),
-            inputs: tx.get_inputs().clone(),
-            outputs: tx.get_outputs().clone(),
-            lock_time: tx.get_lock_time(),
+            flags: tx.flags(),
+            inputs: tx.inputs().clone(),
+            outputs: tx.outputs().clone(),
+            lock_time: tx.lock_time(),
         }
     }
 }
@@ -83,7 +83,7 @@ pub fn sign_whole_tx(
     sighash_type: SigHashType,
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
-    for i in 0..tx.get_inputs().len() {
+    for i in 0..tx.inputs().len() {
         update_signature(tx, i, private_key, sighash_type, destination.clone())?;
     }
     Ok(())
@@ -124,7 +124,7 @@ pub fn verify_signed_tx(
     tx: &Transaction,
     destination: &Destination,
 ) -> Result<(), TransactionSigError> {
-    for i in 0..tx.get_inputs().len() {
+    for i in 0..tx.inputs().len() {
         verify_signature(destination, tx, i)?
     }
     Ok(())

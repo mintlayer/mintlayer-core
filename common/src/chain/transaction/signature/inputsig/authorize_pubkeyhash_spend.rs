@@ -130,7 +130,7 @@ mod test {
             .unwrap();
             assert!(
                 matches!(
-                    AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()),
+                    AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()),
                     Err(TransactionSigError::AddressAuthDecodingFailed(_))
                 ),
                 "{sighash_type:X?}"
@@ -156,7 +156,7 @@ mod test {
             )
             .unwrap();
 
-            let mut raw_signature = witness.get_raw_signature().clone();
+            let mut raw_signature = witness.raw_signature().clone();
             AuthorizedPublicKeyHashSpend::from_data(&raw_signature).unwrap();
 
             raw_signature[0] = raw_signature[0].wrapping_add(2);
@@ -189,7 +189,7 @@ mod test {
             )
             .unwrap();
             let spender_signature =
-                AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap();
+                AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
 
             verify_address_spending(&pubkey_hash, &spender_signature, &sighash)

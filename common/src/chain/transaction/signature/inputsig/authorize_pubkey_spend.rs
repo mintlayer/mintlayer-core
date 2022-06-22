@@ -122,7 +122,7 @@ mod test {
 
             assert_eq!(
                 Err(TransactionSigError::InvalidSignatureEncoding),
-                AuthorizedPublicKeySpend::from_data(witness.get_raw_signature()),
+                AuthorizedPublicKeySpend::from_data(witness.raw_signature()),
                 "{sighash_type:X?}"
             )
         }
@@ -145,7 +145,7 @@ mod test {
             )
             .unwrap();
 
-            let mut raw_signature = witness.get_raw_signature().clone();
+            let mut raw_signature = witness.raw_signature().clone();
             AuthorizedPublicKeySpend::from_data(&raw_signature).unwrap();
 
             raw_signature[0] = raw_signature[0].wrapping_add(2);
@@ -175,7 +175,7 @@ mod test {
             )
             .unwrap();
             let spender_signature =
-                AuthorizedPublicKeySpend::from_data(witness.get_raw_signature()).unwrap();
+                AuthorizedPublicKeySpend::from_data(witness.raw_signature()).unwrap();
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
             verify_public_key_spending(&public_key, &spender_signature, &sighash)
                 .expect(&format!("{sighash_type:X?}"));
