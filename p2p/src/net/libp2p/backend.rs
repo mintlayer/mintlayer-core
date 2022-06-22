@@ -18,8 +18,6 @@
 
 // TODO: think about connection management
 
-// TODO: think about connection management
-
 use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{types, SyncResponse},

@@ -148,12 +148,12 @@ fn mutate_all() {
 
     let mutations = [
         add_input,
-        modify_input,
+        mutate_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
         add_output,
-        modify_output,
+        mutate_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -177,7 +177,7 @@ fn mutate_all_anyonecanpay() {
 
     let mutations = [
         add_output,
-        modify_output,
+        mutate_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -190,7 +190,7 @@ fn mutate_all_anyonecanpay() {
     );
 
     {
-        let tx = modify_input(&tx);
+        let tx = mutate_input(&tx);
         assert_eq!(
             verify_signature(&destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
@@ -211,7 +211,7 @@ fn mutate_none() {
 
     let mutations = [
         add_input,
-        modify_input,
+        mutate_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -225,7 +225,7 @@ fn mutate_none() {
 
     let mutations = [
         add_output,
-        modify_output,
+        mutate_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -243,7 +243,7 @@ fn mutate_none_anyonecanpay() {
         generate_and_sign_tx(&destination, INPUTS, OUTPUTS, &private_key, sighash_type).unwrap();
 
     {
-        let tx = modify_input(&tx);
+        let tx = mutate_input(&tx);
         let inputs = tx.inputs().unwrap().len();
 
         assert_eq!(
@@ -261,7 +261,7 @@ fn mutate_none_anyonecanpay() {
         remove_middle_input,
         remove_last_input,
         add_output,
-        modify_output,
+        mutate_output,
         remove_first_output,
         remove_middle_output,
         remove_last_output,
@@ -279,7 +279,7 @@ fn mutate_single() {
 
     let mutations = [
         add_input,
-        modify_input,
+        mutate_input,
         remove_first_input,
         remove_middle_input,
         remove_last_input,
@@ -316,7 +316,7 @@ fn mutate_single() {
     }
 
     {
-        let tx = modify_output(&tx);
+        let tx = mutate_output(&tx);
         let inputs = tx.inputs().unwrap().len();
 
         assert_eq!(
@@ -360,7 +360,7 @@ fn mutate_single_anyonecanpay() {
         );
     }
 
-    let mutations = [modify_input, modify_output];
+    let mutations = [mutate_input, mutate_output];
     for mutate in mutations.into_iter() {
         let tx = mutate(&tx);
         let inputs = tx.inputs().unwrap().len();
@@ -433,7 +433,7 @@ fn add_input(tx: &Transaction) -> Transaction {
     updater.generate_tx().unwrap()
 }
 
-fn modify_input(tx: &Transaction) -> Transaction {
+fn mutate_input(tx: &Transaction) -> Transaction {
     let mut updater = MutableTransaction::from(tx);
     updater.inputs[0] = TxInput::new(
         OutPointSourceId::Transaction(Id::<Transaction>::from(H256::random())),
@@ -468,7 +468,7 @@ fn add_output(tx: &Transaction) -> Transaction {
     updater.generate_tx().unwrap()
 }
 
-fn modify_output(tx: &Transaction) -> Transaction {
+fn mutate_output(tx: &Transaction) -> Transaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs[0] = TxOutput::new(
         (updater.outputs[0].get_value() + Amount::from_atoms(100)).unwrap(),

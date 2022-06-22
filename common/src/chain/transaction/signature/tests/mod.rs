@@ -222,7 +222,7 @@ fn sign_mutate_then_verify(
 
     check_change_flags(&original_tx, destination);
     check_change_locktime(&original_tx, destination);
-    check_change_witness(&original_tx, destination);
+    check_mutate_witness(&original_tx, destination);
     original_tx
 }
 
@@ -262,7 +262,7 @@ fn check_insert_input(original_tx: &Transaction, destination: &Destination, shou
     assert_verify_signature(destination, &tx, should_fail);
 }
 
-fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
+fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
     // Should failed due to change in witness
     let mut tx_updater = MutableTransaction::from(original_tx);
     for (input_num, _) in original_tx.get_inputs().iter().enumerate() {
