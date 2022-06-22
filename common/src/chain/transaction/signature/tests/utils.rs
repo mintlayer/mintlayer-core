@@ -54,15 +54,15 @@ pub fn generate_unsigned_tx(
 ) -> Result<Transaction, TransactionCreationError> {
     let mut rng = rand::thread_rng();
 
-    let inputs = (0..inputs_count)
-        .map(|input_index| {
-            TxInput::new(
-                Id::<Transaction>::new(&H256::random()).into(),
-                input_index as u32,
-                InputWitness::NoSignature(None),
-            )
-        })
-        .collect();
+    let inputs = std::iter::from_fn(|| {
+        Some(TxInput::new(
+            Id::<Transaction>::new(&H256::random()).into(),
+            rng.gen(),
+            InputWitness::NoSignature(None),
+        ))
+    })
+    .take(inputs_count)
+    .collect();
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::new(
