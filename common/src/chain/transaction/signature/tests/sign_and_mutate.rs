@@ -8,7 +8,7 @@ use crate::{
         signature::{
             sighashtype::{OutputsMode, SigHashType},
             tests::{
-                check_change_input, check_change_output, check_insert_input, check_insert_output,
+                check_insert_input, check_insert_output, check_mutate_input, check_mutate_output,
                 sign_mutate_then_verify,
             },
             verify_signature, TransactionSigError,
@@ -82,9 +82,9 @@ fn modify_and_verify() {
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, true);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, true);
-        check_change_output(&tx, &destination, true);
+        check_mutate_output(&tx, &destination, true);
     }
 
     {
@@ -92,18 +92,18 @@ fn modify_and_verify() {
             SigHashType::try_from(SigHashType::ALL | SigHashType::ANYONECANPAY).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, false);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, true);
-        check_change_output(&tx, &destination, true);
+        check_mutate_output(&tx, &destination, true);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::NONE).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, true);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, false);
-        check_change_output(&tx, &destination, false);
+        check_mutate_output(&tx, &destination, false);
     }
 
     {
@@ -111,18 +111,18 @@ fn modify_and_verify() {
             SigHashType::try_from(SigHashType::NONE | SigHashType::ANYONECANPAY).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, false);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, false);
-        check_change_output(&tx, &destination, false);
+        check_mutate_output(&tx, &destination, false);
     }
 
     {
         let sighash_type = SigHashType::try_from(SigHashType::SINGLE).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, true);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, false);
-        check_change_output(&tx, &destination, true);
+        check_mutate_output(&tx, &destination, true);
     }
 
     {
@@ -130,9 +130,9 @@ fn modify_and_verify() {
             SigHashType::try_from(SigHashType::SINGLE | SigHashType::ANYONECANPAY).unwrap();
         let tx = sign_mutate_then_verify(&private_key, sighash_type, &destination);
         check_insert_input(&tx, &destination, false);
-        check_change_input(&tx, &destination, true);
+        check_mutate_input(&tx, &destination, true);
         check_insert_output(&tx, &destination, false);
-        check_change_output(&tx, &destination, true);
+        check_mutate_output(&tx, &destination, true);
     }
 }
 

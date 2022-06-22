@@ -134,9 +134,9 @@ fn mutate_all() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, true);
-    check_change_output(&original_tx, &outpoint_dest, true);
+    check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // ALL|ANYONECANPAY applies to one input and all outputs, so adding input is ok, but anything else isn't.
@@ -148,9 +148,9 @@ fn mutate_all_anyonecanpay() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, true);
-    check_change_output(&original_tx, &outpoint_dest, true);
+    check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // NONE is applied to all inputs and none of the outputs, so the latter can be changed in any way.
@@ -162,9 +162,9 @@ fn mutate_none() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
-    check_change_output(&original_tx, &outpoint_dest, false);
+    check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
 // NONE|ANYONECANPAY is applied to only one input, so changing everything else is OK.
@@ -177,9 +177,9 @@ fn mutate_none_anyonecanpay() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
-    check_change_output(&original_tx, &outpoint_dest, false);
+    check_mutate_output(&original_tx, &outpoint_dest, false);
 }
 
 // SINGLE is applied to all inputs and one output, so only adding an output is OK.
@@ -191,9 +191,9 @@ fn mutate_single() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, true);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
-    check_change_output(&original_tx, &outpoint_dest, true);
+    check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 // SINGLE|ANYONECANPAY is applied to one input and one output so adding inputs and outputs is OK.
@@ -206,9 +206,9 @@ fn mutate_single_anyonecanpay() {
     let original_tx = sign_mutate_then_verify(&private_key, sighash_type, &outpoint_dest);
 
     check_insert_input(&original_tx, &outpoint_dest, false);
-    check_change_input(&original_tx, &outpoint_dest, true);
+    check_mutate_input(&original_tx, &outpoint_dest, true);
     check_insert_output(&original_tx, &outpoint_dest, false);
-    check_change_output(&original_tx, &outpoint_dest, true);
+    check_mutate_output(&original_tx, &outpoint_dest, true);
 }
 
 fn sign_mutate_then_verify(
@@ -259,7 +259,12 @@ fn check_insert_input(original_tx: &Transaction, destination: &Destination, shou
         InputWitness::NoSignature(None),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(destination, &tx, should_fail);
+    let res = verify_signature(destination, &tx, 0);
+    if should_fail {
+        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+    } else {
+        res.unwrap();
+    }
 }
 
 fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
@@ -299,10 +304,15 @@ fn check_insert_output(original_tx: &Transaction, destination: &Destination, sho
         Destination::PublicKey(pub_key),
     ));
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(destination, &tx, should_fail);
+    let res = verify_signature(destination, &tx, 0);
+    if should_fail {
+        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+    } else {
+        res.unwrap();
+    }
 }
 
-fn check_change_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_mutate_output(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
@@ -310,10 +320,15 @@ fn check_change_output(original_tx: &Transaction, destination: &Destination, sho
         tx_updater.outputs[0].get_destination().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(destination, &tx, should_fail);
+    let res = verify_signature(destination, &tx, 0);
+    if should_fail {
+        assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
+    } else {
+        res.unwrap();
+    }
 }
 
-fn check_change_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
+fn check_mutate_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.inputs[0] = TxInput::new(
@@ -322,11 +337,7 @@ fn check_change_input(original_tx: &Transaction, destination: &Destination, shou
         tx_updater.inputs[0].get_witness().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
-    assert_verify_signature(destination, &tx, should_fail);
-}
-
-fn assert_verify_signature(outpoint: &Destination, tx: &Transaction, should_fail: bool) {
-    let res = verify_signature(outpoint, tx, 0);
+    let res = verify_signature(destination, &tx, 0);
     if should_fail {
         assert_eq!(res, Err(TransactionSigError::SignatureVerificationFailed));
     } else {
