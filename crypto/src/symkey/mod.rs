@@ -50,13 +50,13 @@ impl SymmetricKey {
         rng: &mut R,
     ) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng, None),
         }
     }
 
     pub fn decrypt(&self, cipher_text: &[u8]) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::XChacha20Poly1305(k) => k.decrypt(cipher_text),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.decrypt(cipher_text, None),
         }
     }
 }

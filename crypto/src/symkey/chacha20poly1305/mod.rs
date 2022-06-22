@@ -1,6 +1,6 @@
 use crate::random::{CryptoRng, Rng};
 use crate::symkey::Error;
-use chacha20poly1305::aead::{Aead, NewAead};
+use chacha20poly1305::aead::{AeadInPlace, NewAead};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use parity_scale_codec::{Decode, Encode};
 
@@ -27,15 +27,17 @@ impl Chacha20poly1305Key {
         }
     }
 
-    fn encrypt_with_nonce<T: AsRef<[u8]>>(
+    fn encrypt_with_nonce_and_aead<T: AsRef<[u8]>>(
         &self,
-        message: T,
         nonce: &[u8],
+        message: T,
+        associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         let cipher = XChaCha20Poly1305::new(&self.key_data);
         let nonce = XNonce::from_slice(nonce);
-        let cipher_text = cipher
-            .encrypt(nonce, message.as_ref())
+        let mut cipher_text = message.as_ref().to_vec();
+        cipher
+            .encrypt_in_place(nonce, associated_data.unwrap_or(b""), &mut cipher_text)
             .map_err(|e| Error::EncryptionError(e.to_string()))?;
         let nonce: [u8; NONCE_LEN] = (*nonce).into();
         // concatenate the nonce + cipher as the result
@@ -47,23 +49,31 @@ impl Chacha20poly1305Key {
         &self,
         message: T,
         rng: &mut R,
+        associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         let nonce = rng.gen::<[u8; NONCE_LEN]>();
-        self.encrypt_with_nonce(message, &nonce)
+        self.encrypt_with_nonce_and_aead(&nonce, message, associated_data)
     }
 
-    fn decrypt_with_nonce<T: AsRef<[u8]>>(
+    fn decrypt_with_nonce_and_aead<T: AsRef<[u8]>>(
         &self,
-        cipher_text: T,
         nonce: &[u8],
+        cipher_text: T,
+        associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         let cipher = XChaCha20Poly1305::new(&self.key_data);
+        let mut message = cipher_text.as_ref().to_vec();
         cipher
-            .decrypt(nonce.into(), cipher_text.as_ref())
-            .map_err(|e| Error::DecryptionError(e.to_string()))
+            .decrypt_in_place(nonce.into(), associated_data.unwrap_or(b""), &mut message)
+            .map_err(|e| Error::DecryptionError(e.to_string()))?;
+        Ok(message)
     }
 
-    pub fn decrypt<T: AsRef<[u8]>>(&self, cipher_text_in: T) -> Result<Vec<u8>, Error> {
+    pub fn decrypt<T: AsRef<[u8]>>(
+        &self,
+        cipher_text_in: T,
+        associated_data: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Error> {
         if cipher_text_in.as_ref().len() < NONCE_LEN {
             return Err(Error::CipherTextTooShort(
                 cipher_text_in.as_ref().len(),
@@ -72,7 +82,7 @@ impl Chacha20poly1305Key {
         }
         let nonce = &cipher_text_in.as_ref()[..NONCE_LEN];
         let cipher_text = &cipher_text_in.as_ref()[NONCE_LEN..];
-        self.decrypt_with_nonce(cipher_text, nonce)
+        self.decrypt_with_nonce_and_aead(nonce, cipher_text, associated_data)
     }
 }
 
@@ -129,8 +139,8 @@ mod test {
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let encrypted = key.encrypt(&message, &mut rng).unwrap();
-        let decrypted = key.decrypt(&encrypted).unwrap();
+        let encrypted = key.encrypt(&message, &mut rng, None).unwrap();
+        let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -140,7 +150,7 @@ mod test {
         let key = Chacha20poly1305Key::new_from_rng(&mut rng);
         let cipher_text_len = rng.gen::<usize>() % NONCE_LEN;
         let cipher_text = (0..cipher_text_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let decrypt_err = key.decrypt(&cipher_text).unwrap_err();
+        let decrypt_err = key.decrypt(&cipher_text, None).unwrap_err();
         assert_eq!(
             decrypt_err,
             Error::CipherTextTooShort(cipher_text_len, NONCE_LEN)
@@ -155,7 +165,7 @@ mod test {
         let key = Chacha20poly1305Key::decode_all(&mut key_bin.as_slice()).unwrap();
         let encrypted_hex = "83ad5caae9782309d0d3b74be26629f879d331ab069e54b7d7079d24e509cf5af08ff9cecb8b50693bbd4aa0b0114b0d25bd0f0a079c66868b8b86a7c3e592d71ce3a9a47fd9";
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
-        let decrypted = key.decrypt(&encrypted).unwrap();
+        let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -167,7 +177,7 @@ mod test {
         let key = Chacha20poly1305Key::new_from_array(key_bin.try_into().unwrap());
         let encrypted_hex = "83ad5caae9782309d0d3b74be26629f879d331ab069e54b7d7079d24e509cf5af08ff9cecb8b50693bbd4aa0b0114b0d25bd0f0a079c66868b8b86a7c3e592d71ce3a9a47fd9";
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
-        let decrypted = key.decrypt(&encrypted).unwrap();
+        let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 }
