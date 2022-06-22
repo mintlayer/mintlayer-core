@@ -274,13 +274,7 @@ fn check_change_witness(original_tx: &Transaction, outpoint_dest: &Destination) 
                     .get_raw_signature()
                     .iter()
                     .skip(60)
-                    .map(|item| {
-                        if item < &u8::MAX {
-                            item.wrapping_add(1)
-                        } else {
-                            item.wrapping_sub(1)
-                        }
-                    })
+                    .map(|item| item.wrapping_add(1))
                     .collect();
 
                 raw_signature.extend(body_signature);
