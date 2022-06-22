@@ -51,7 +51,9 @@ impl SymmetricKey {
         associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng, associated_data),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => {
+                k.encrypt(message, rng, associated_data.unwrap_or(b""))
+            }
         }
     }
 
