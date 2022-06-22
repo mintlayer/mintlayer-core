@@ -267,32 +267,26 @@ fn check_insert_input(original_tx: &Transaction, destination: &Destination, shou
     }
 }
 
+// A witness mutation should result in signature verification error.
 fn check_mutate_witness(original_tx: &Transaction, outpoint_dest: &Destination) {
-    // Should failed due to change in witness
     let mut tx_updater = MutableTransaction::from(original_tx);
-    for (input_num, _) in original_tx.get_inputs().iter().enumerate() {
+    for input in 0..original_tx.get_inputs().len() {
         let signature = match tx_updater.inputs[0].get_witness() {
-            InputWitness::Standard(signature) => {
-                // Let's change around 20ish last bytes, it's also avoided SCALE errors
-                let mut raw_signature = (&signature.get_raw_signature()[0..60]).to_vec();
-                let body_signature: Vec<u8> = signature
-                    .get_raw_signature()
-                    .iter()
-                    .skip(60)
-                    .map(|item| item.wrapping_add(1))
-                    .collect();
-
-                raw_signature.extend(body_signature);
-                StandardInputSignature::new(signature.sighash_type(), raw_signature)
-            }
-            InputWitness::NoSignature(_) => unreachable!(),
+            InputWitness::Standard(signature) => signature,
+            InputWitness::NoSignature(_) => panic!("Unexpected InputWitness::NoSignature"),
         };
-        tx_updater.inputs[input_num].update_witness(InputWitness::Standard(signature));
+
+        let raw_signature =
+            signature.get_raw_signature().iter().map(|b| b.wrapping_add(1)).collect();
+        let signature = StandardInputSignature::new(signature.sighash_type(), raw_signature);
+        tx_updater.inputs[input].update_witness(InputWitness::Standard(signature));
         let tx = tx_updater.generate_tx().unwrap();
-        assert_eq!(
-            verify_signature(outpoint_dest, &tx, input_num),
-            Err(TransactionSigError::SignatureVerificationFailed)
-        );
+
+        assert!(matches!(
+            verify_signature(outpoint_dest, &tx, input),
+            Err(TransactionSigError::SignatureVerificationFailed
+                | TransactionSigError::InvalidSignatureEncoding)
+        ));
     }
 }
 
