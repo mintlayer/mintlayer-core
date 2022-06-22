@@ -14,6 +14,7 @@ pub struct Chacha20poly1305Key {
 }
 
 impl Chacha20poly1305Key {
+    #[allow(dead_code)]
     pub fn new_from_rng<R: Rng + CryptoRng>(rng: &mut R) -> Self {
         let k = rng.gen::<[u8; KEY_LEN]>();
 
