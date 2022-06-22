@@ -27,13 +27,12 @@ impl Chacha20poly1305Key {
         }
     }
 
-    pub fn encrypt<T: AsRef<[u8]>, R: Rng + CryptoRng>(
+    fn encrypt_with_nonce<T: AsRef<[u8]>>(
         &self,
         message: T,
-        rng: &mut R,
+        nonce: &[u8],
     ) -> Result<Vec<u8>, Error> {
         let cipher = XChaCha20Poly1305::new(&self.key_data);
-        let nonce = rng.gen::<[u8; NONCE_LEN]>();
         let nonce = XNonce::from_slice(&nonce);
         let cipher_text = cipher
             .encrypt(nonce, message.as_ref())
@@ -42,6 +41,26 @@ impl Chacha20poly1305Key {
         // concatenate the nonce + cipher as the result
         let result = nonce.into_iter().chain(cipher_text.into_iter()).collect::<Vec<_>>();
         Ok(result)
+    }
+
+    pub fn encrypt<T: AsRef<[u8]>, R: Rng + CryptoRng>(
+        &self,
+        message: T,
+        rng: &mut R,
+    ) -> Result<Vec<u8>, Error> {
+        let nonce = rng.gen::<[u8; NONCE_LEN]>();
+        self.encrypt_with_nonce(message, &nonce)
+    }
+
+    fn decrypt_with_nonce<T: AsRef<[u8]>>(
+        &self,
+        cipher_text: T,
+        nonce: &[u8],
+    ) -> Result<Vec<u8>, Error> {
+        let cipher = XChaCha20Poly1305::new(&self.key_data);
+        cipher
+            .decrypt(nonce.into(), cipher_text.as_ref())
+            .map_err(|e| Error::DecryptionError(e.to_string()))
     }
 
     pub fn decrypt<T: AsRef<[u8]>>(&self, cipher_text_in: T) -> Result<Vec<u8>, Error> {
@@ -53,10 +72,7 @@ impl Chacha20poly1305Key {
         }
         let nonce = &cipher_text_in.as_ref()[..NONCE_LEN];
         let cipher_text = &cipher_text_in.as_ref()[NONCE_LEN..];
-        let cipher = XChaCha20Poly1305::new(&self.key_data);
-        cipher
-            .decrypt(nonce.into(), cipher_text)
-            .map_err(|e| Error::DecryptionError(e.to_string()))
+        self.decrypt_with_nonce(cipher_text, nonce)
     }
 }
 
