@@ -117,6 +117,11 @@ impl Decode for Chacha20poly1305Key {
 
 #[cfg(test)]
 mod test {
+    use std::{
+        collections::BTreeMap,
+        io::{self, BufRead},
+    };
+
     use hex::FromHex;
     use parity_scale_codec::DecodeAll;
 
@@ -192,5 +197,113 @@ mod test {
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
         let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
+    }
+
+    #[test]
+    fn select_text_external_as_example() {
+        let message = b"".as_slice();
+        let key_hex = "0000000000000000000000000000000000000000000000000000000000000000";
+        let aead_hex = "0102";
+        let nonce_hex = "000102030405060708090a0b0c0d0e0f1011121314151617";
+        let expected_encrypted_hex = "8d3324a3c4926d98b90af8e85b68fef1";
+        let key_bin = Vec::from_hex(key_hex).unwrap();
+        let aead = Vec::from_hex(aead_hex).unwrap();
+        let nonce = Vec::from_hex(nonce_hex).unwrap();
+        let key = Chacha20poly1305Key::new_from_array(key_bin.try_into().unwrap());
+        let expected_encrypted = Vec::from_hex(expected_encrypted_hex).unwrap();
+        let nonce_with_encrypted =
+            key.encrypt_with_nonce_and_aead(&nonce, message, Some(&aead)).unwrap();
+        let decrypted = key
+            .decrypt_with_nonce_and_aead(&nonce, &nonce_with_encrypted[NONCE_LEN..], Some(&aead))
+            .unwrap();
+        assert_eq!(nonce_with_encrypted[NONCE_LEN..], expected_encrypted);
+        assert_eq!(decrypted, message);
+    }
+
+    struct ExternalXChacha20Poly1305Data {
+        key: Vec<u8>,
+        ad: Vec<u8>,
+        nonce: Vec<u8>,
+        input: Vec<u8>,
+        output: Vec<u8>,
+    }
+
+    impl ExternalXChacha20Poly1305Data {
+        fn from_map(map: BTreeMap<String, Vec<u8>>) -> Self {
+            Self {
+                key: map.get("Key").unwrap().clone(),
+                ad: map.get("AD").unwrap_or(&Vec::new()).clone(),
+                nonce: map.get("Nonce").unwrap_or(&Vec::new()).clone(),
+                input: map.get("In").unwrap_or(&Vec::new()).clone(),
+                output: map.get("Out").unwrap_or(&Vec::new()).clone(),
+            }
+        }
+    }
+
+    fn read_test_vectors_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Vec<ExternalXChacha20Poly1305Data> {
+        let f = std::fs::File::open(path).unwrap();
+        let lines = io::BufReader::new(f).lines();
+
+        let mut result = Vec::new();
+
+        let mut current_batch_map: BTreeMap<String, Vec<u8>> = Default::default();
+        for (_line_num, line) in lines.into_iter().enumerate() {
+            let line = line.unwrap();
+            let line = line.trim();
+            if line.starts_with('#') {
+                continue;
+            }
+            // an empty line means we're starting a new test
+            if line.is_empty() {
+                if !current_batch_map.is_empty() {
+                    result.push(ExternalXChacha20Poly1305Data::from_map(current_batch_map));
+                }
+                current_batch_map = Default::default();
+                continue;
+            }
+
+            let split_parts = line.split('=').collect::<Vec<_>>();
+            assert!(split_parts.len() == 2);
+            if split_parts.len() == 2 {
+                let k = split_parts[0].trim();
+                let v = split_parts[1].trim();
+                let el = Vec::from_hex(v).unwrap();
+                current_batch_map.insert(k.to_owned(), el);
+            }
+        }
+        result
+    }
+
+    fn test_external_data(data: ExternalXChacha20Poly1305Data) {
+        let message = data.input;
+        let cipher = data.output;
+        let key_bin = data.key;
+        let aead = data.ad;
+        let nonce = data.nonce;
+        let key = Chacha20poly1305Key::new_from_array(key_bin.try_into().unwrap());
+        let nonce_with_encrypted = key
+            .encrypt_with_nonce_and_aead(&nonce, message.as_slice(), Some(&aead))
+            .unwrap();
+        let decrypted = key
+            .decrypt_with_nonce_and_aead(&nonce, &nonce_with_encrypted[NONCE_LEN..], Some(&aead))
+            .unwrap();
+        assert_eq!(nonce_with_encrypted[NONCE_LEN..], cipher);
+        assert_eq!(decrypted, message);
+    }
+
+    #[test]
+    fn select_text_external() {
+        let test_vectors = read_test_vectors_file(
+            std::path::Path::new("src")
+                .join("symkey")
+                .join("chacha20poly1305")
+                .join("XCHACHA20_POLY1305_TEST_VECTORS_QIG_CRL_2019_10_17.tv"),
+        );
+        assert_eq!(test_vectors.len(), 1559);
+        for test_vec in test_vectors {
+            test_external_data(test_vec);
+        }
     }
 }
