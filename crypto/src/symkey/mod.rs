@@ -48,15 +48,20 @@ impl SymmetricKey {
         &self,
         message: &[u8],
         rng: &mut R,
+        associated_data: Option<&[u8]>,
     ) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng, None),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.encrypt(message, rng, associated_data),
         }
     }
 
-    pub fn decrypt(&self, cipher_text: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn decrypt(
+        &self,
+        cipher_text: &[u8],
+        associated_data: Option<&[u8]>,
+    ) -> Result<Vec<u8>, Error> {
         match &self.key {
-            SymmetricKeyHolder::XChacha20Poly1305(k) => k.decrypt(cipher_text, None),
+            SymmetricKeyHolder::XChacha20Poly1305(k) => k.decrypt(cipher_text, associated_data),
         }
     }
 }
@@ -85,8 +90,8 @@ mod test {
         let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
         let message_len = 1 + rng.gen::<u32>() % 10000;
         let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-        let encrypted = key.encrypt(&message, &mut rng).unwrap();
-        let decrypted = key.decrypt(&encrypted).unwrap();
+        let encrypted = key.encrypt(&message, &mut rng, None).unwrap();
+        let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 
@@ -98,7 +103,7 @@ mod test {
         let key = SymmetricKey::decode_all(&mut key_bin.as_slice()).unwrap();
         let encrypted_hex = "83ad5caae9782309d0d3b74be26629f879d331ab069e54b7d7079d24e509cf5af08ff9cecb8b50693bbd4aa0b0114b0d25bd0f0a079c66868b8b86a7c3e592d71ce3a9a47fd9";
         let encrypted = Vec::from_hex(encrypted_hex).unwrap();
-        let decrypted = key.decrypt(&encrypted).unwrap();
+        let decrypted = key.decrypt(&encrypted, None).unwrap();
         assert_eq!(message, decrypted);
     }
 }
