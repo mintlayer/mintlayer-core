@@ -289,6 +289,8 @@ fn mutate_single() {
         let tx = mutate(&tx);
         let inputs = tx.inputs().unwrap().len();
 
+        // Mutations make the last input number invalid, so verifying the signature for it should
+        // result in the different error.
         for input in 0..inputs - 1 {
             assert_eq!(
                 verify_signature(&destination, &tx, input),
@@ -306,6 +308,8 @@ fn mutate_single() {
         let tx = mutate(&tx);
         let inputs = tx.inputs().unwrap().len();
 
+        // Mutations make the last input number invalid, so verifying the signature for it should
+        // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
             assert_eq!(verify_signature(&destination, &tx, input), Ok(()));
         }
@@ -319,12 +323,13 @@ fn mutate_single() {
         let tx = mutate_output(&tx);
         let inputs = tx.inputs().unwrap().len();
 
+        // Mutation of the first output makes signature invalid.
         assert_eq!(
             verify_signature(&destination, &tx, 0),
             Err(TransactionSigError::SignatureVerificationFailed),
         );
         for input in 1..inputs - 1 {
-            assert_eq!(verify_signature(&destination, &tx, input), Ok(()),);
+            assert_eq!(verify_signature(&destination, &tx, input), Ok(()));
         }
         assert_eq!(
             verify_signature(&destination, &tx, inputs),
@@ -347,6 +352,8 @@ fn mutate_single_anyonecanpay() {
         let tx = mutate(&tx);
         let inputs = tx.inputs().unwrap().len();
 
+        // Mutations make the last input number invalid, so verifying the signature for it should
+        // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
             assert_eq!(
                 verify_signature(&destination, &tx, input),
@@ -387,6 +394,8 @@ fn mutate_single_anyonecanpay() {
         let tx = mutate(&tx);
         let inputs = tx.inputs().unwrap().len();
 
+        // Mutations make the last input number invalid, so verifying the signature for it should
+        // result in the `InvalidInputIndex` error.
         for input in 0..inputs - 1 {
             assert_eq!(
                 verify_signature(&destination, &tx, input),
