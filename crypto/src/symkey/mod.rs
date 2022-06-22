@@ -96,6 +96,19 @@ mod test {
     }
 
     #[test]
+    fn encrypt_then_decrypt_with_associated_data() {
+        let mut rng = make_true_rng();
+        let key = SymmetricKey::new(SymmetricKeyKind::XChacha20Poly1305, &mut rng);
+        let message_len = 1 + rng.gen::<u32>() % 10000;
+        let aead_len = 1 + rng.gen::<u32>() % 10000;
+        let message = (0..message_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let aead = (0..aead_len).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
+        let encrypted = key.encrypt(&message, &mut rng, Some(&aead)).unwrap();
+        let decrypted = key.decrypt(&encrypted, Some(&aead)).unwrap();
+        assert_eq!(message, decrypted);
+    }
+
+    #[test]
     fn select_text() {
         let message = b"Hello there! Great to see you!".as_slice();
         let key_hex = "00a824a1cff88c1acdbb481c75ee60c35e99f1edb0704b5eeb2684c469891a58fa";
