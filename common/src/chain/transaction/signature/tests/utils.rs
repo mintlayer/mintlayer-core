@@ -73,7 +73,7 @@ pub fn generate_unsigned_tx(
     .take(outputs_count)
     .collect();
 
-    let tx = Transaction::new(0, inputs, outputs, 0)?;
+    let tx = Transaction::new(rng.gen(), inputs, outputs, rng.gen())?;
     Ok(tx)
 }
 
