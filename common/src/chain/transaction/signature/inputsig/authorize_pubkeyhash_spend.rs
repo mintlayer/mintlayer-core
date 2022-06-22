@@ -79,24 +79,45 @@ pub fn sign_address_spending(
 
 #[cfg(test)]
 mod test {
-    use crypto::key::{KeyKind, PrivateKey};
-
+    use super::*;
     use crate::chain::{
         signature::{inputsig::StandardInputSignature, signature_hash},
         transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
         Destination,
     };
+    use crypto::key::{KeyKind, PrivateKey};
+    use rand::Rng;
 
-    use super::*;
+    const INPUTS: usize = 10;
+    const OUTPUTS: usize = 10;
 
-    const INPUT_NUM: usize = 0;
+    // Try to produce a signature for a non-existent input.
+    #[test]
+    fn invalid_input_index() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            let res = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                1,
+            );
+            assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
+        }
+    }
 
     // Using Destination::PublicKey for AuthorizedPublicKeyHashSpend.
     #[test]
     fn wrong_destination_type() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -104,7 +125,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                INPUT_NUM,
+                rng.gen_range(0..INPUTS),
             )
             .unwrap();
             assert!(
@@ -122,7 +143,8 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
 
         for sighash_type in sig_hash_types() {
             let witness = StandardInputSignature::produce_signature_for_input(
@@ -130,7 +152,7 @@ mod test {
                 sighash_type,
                 destination.clone(),
                 &tx,
-                INPUT_NUM,
+                rng.gen_range(0..INPUTS),
             )
             .unwrap();
 
@@ -153,20 +175,22 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let pubkey_hash = PublicKeyHash::from(&public_key);
         let destination = Destination::Address(pubkey_hash);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
 
         for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                INPUT_NUM,
+                input,
             )
             .unwrap();
             let spender_signature =
                 AuthorizedPublicKeyHashSpend::from_data(witness.get_raw_signature()).unwrap();
-            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
 
             verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
                 .expect(&format!("{sighash_type:X?}"));
@@ -178,18 +202,20 @@ mod test {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let destination = Destination::PublicKey(public_key.clone());
         let pubkey_hash = PublicKeyHash::from(&public_key);
-        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
 
         for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
             let witness = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 sighash_type,
                 destination.clone(),
                 &tx,
-                INPUT_NUM,
+                input,
             )
             .unwrap();
-            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
 
             sign_address_spending(&private_key, &pubkey_hash, &sighash)
                 .expect(&format!("{sighash_type:X?}"));
