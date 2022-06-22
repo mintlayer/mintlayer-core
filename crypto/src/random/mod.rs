@@ -1,5 +1,5 @@
 pub use rand::prelude::SliceRandom;
-pub use rand::{seq, Rng, RngCore, SeedableRng};
+pub use rand::{seq, CryptoRng, Rng, RngCore, SeedableRng};
 
 pub mod distributions {
     pub use rand::distributions::{Alphanumeric, Distribution, Standard};
