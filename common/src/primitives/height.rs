@@ -28,6 +28,13 @@ impl fmt::Display for BlockHeight {
     }
 }
 
+impl std::str::FromStr for BlockHeight {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse().map(BlockHeight::new)
+    }
+}
+
 impl From<BlockHeight> for HeightIntType {
     fn from(block_height: BlockHeight) -> HeightIntType {
         block_height.0

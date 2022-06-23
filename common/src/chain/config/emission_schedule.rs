@@ -1,5 +1,6 @@
-use super::DEFAULT_TARGET_BLOCK_SPACING;
 use crate::primitives::{Amount, BlockHeight};
+use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::time::Duration;
 
 // TODO Move to a separate module
@@ -57,14 +58,35 @@ impl std::ops::Mul<u128> for Mlt {
     }
 }
 
+impl std::fmt::Display for Mlt {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str(&self.0.into_fixedpoint_str(Mlt::DECIMALS))
+    }
+}
+
+/// MLT amount parsing error
+#[derive(Eq, PartialEq, Clone, Debug, thiserror::Error)]
+pub enum ParseMltError {
+    // TODO we need better error reporting from Amount::from_fixedpoint_str
+    #[error("MLT amount parsing error")]
+    Unknown,
+}
+
+impl FromStr for Mlt {
+    type Err = ParseMltError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Amount::from_fixedpoint_str(s, Mlt::DECIMALS)
+            .ok_or(ParseMltError::Unknown)
+            .map(Mlt)
+    }
+}
+
 /// Internal emission schedule representation
 pub type EmissionScheduleFn = dyn Fn(BlockHeight) -> Mlt + Sync + Send + 'static;
 
 /// Emission schedule, characterized by function from block height to total supply at that point.
 ///
-/// The function has to be a monotonic non-decreasing function. The function also has to
-/// eventually flatten out to a constant function if [Self::final_supply] is required to make any
-/// sense. The point at which the function becomes constant is where the block rewards run out.
+/// The function has to be a monotonic non-decreasing function.
 #[derive(Clone)]
 pub struct EmissionSchedule(std::sync::Arc<EmissionScheduleFn>);
 
@@ -81,76 +103,23 @@ impl EmissionSchedule {
         Self(f.into())
     }
 
-    /// Construct an emission schedule from yearly block award table
+    /// Get total MLT amount issued up to given block height.
     ///
-    /// This constructor takes:
-    ///  * The initial supply (premine amount)
-    ///  * Yearly per-block rewards, as a vector.
-    ///    In years outside of the range of the vector, the reward is assumed to be zero.
-    ///  * The target block interval. Only intervals in 1 second increments are valid.
-    ///
-    /// All calculations MLT amount are capped at [Mlt::MAX], which is [u128::MAX] atoms. The
-    /// reward vector contains unsigned quantities and is finite in the number of years. Because of
-    /// that, the resulting function is guaranteed to be monotonically increasing and to flatten out
-    /// once the reward years pass.
-    pub fn from_yearly_table(initial: Mlt, yearly: Vec<Mlt>, block_interval: Duration) -> Self {
-        // Check block interval is in whole seconds
-        assert!(
-            (block_interval.as_nanos() % 1_000_000_000) == 0,
-            "Block interval supported up to the resolution of 1 sec"
-        );
-
-        // Number of blocks emitted per year
-        let blocks_per_year: u64 = (365 * 24 * 60 * 60) / block_interval.as_secs();
-        // Total supply at start of each year in which rewards are emitted
-        let mut yearly_cumulative = vec![initial];
-        yearly_cumulative.extend(yearly.iter().scan(initial, |sum, &block_reward| {
-            *sum = (block_reward * blocks_per_year as u128)
-                .and_then(|year_reward| year_reward + *sum)
-                .expect("MLT reward overflow");
-            Some(*sum)
-        }));
-        // Total supply after the emission is finished
-        let total = yearly_cumulative.last().copied().expect("Per-year supply empty");
-
-        let supply_fn = move |ht: BlockHeight| {
-            let ht: u64 = ht.into();
-            let year = (ht / blocks_per_year) as usize;
-            let blocks_this_year = (ht % blocks_per_year) as u128;
-            let prev_years = yearly_cumulative.get(year).copied().unwrap_or(total);
-            let per_block = yearly.get(year).copied().unwrap_or(Mlt::ZERO);
-            (per_block * blocks_this_year)
-                .and_then(|this_year| this_year + prev_years)
-                .expect("MLT reward overflow")
-        };
-
-        Self::from_fn(supply_fn)
-    }
-
-    /// Get supply at given block height
-    pub fn supply_at(&self, ht: BlockHeight) -> Mlt {
+    /// This includes all coins ever created up to given block height, including premine and any
+    /// coins that have been burnt or made irrecoverable.
+    pub fn amount_at(&self, ht: BlockHeight) -> Mlt {
         self.0(ht)
     }
 
     /// Get initial supply (premine)
     pub fn initial_supply(&self) -> Mlt {
-        self.supply_at(BlockHeight::zero())
-    }
-
-    /// Get final supply
-    pub fn final_supply(&self) -> Mlt {
-        self.supply_at(BlockHeight::max())
-    }
-
-    /// Total amount of MLT emitted as block rewards
-    pub fn total_subsidy(&self) -> Mlt {
-        (self.final_supply() - self.initial_supply()).expect("Supply not monotonic")
+        self.amount_at(BlockHeight::zero())
     }
 
     /// Get subsidy for block at given height
     pub fn subsidy(&self, ht: BlockHeight) -> Mlt {
         let prev_ht = ht.prev_height().expect("Genesis has no subsidy");
-        (self.supply_at(ht) - self.supply_at(prev_ht)).expect("Supply not monotonic")
+        (self.amount_at(ht) - self.amount_at(prev_ht)).expect("Supply not monotonic")
     }
 }
 
@@ -160,26 +129,283 @@ impl std::fmt::Debug for EmissionSchedule {
     }
 }
 
+/// Emission schedule where supply is a piecewise linear function, represented as a table.
+///
+/// The table has a string representation, described in [Self::from_str].
+#[derive(Eq, PartialEq, Debug, Clone)]
+pub struct EmissionScheduleTabular {
+    /// The initial supply, in MLTs
+    initial_supply: Mlt,
+    /// The initial per-block subsidy, before the first period kicks in.
+    initial_subsidy: Mlt,
+    /// Subsidy periods. Specified by block height and the block subsidy starting at that height.
+    periods: BTreeMap<BlockHeight, Mlt>,
+}
+
+impl EmissionScheduleTabular {
+    /// Create a new piecewise-linear supply schedule
+    ///
+    /// This constructor takes:
+    ///  * The initial supply (premine amount)
+    ///  * The initial per-block subsidy, before the first explicitly specified period (below).
+    ///  * Subsidy periods. These are mappings from block heights to per-block subsidy from that
+    ///    point onwards, until the next period. The periods are implicitly sorted by BTreeMap.
+    pub fn new(
+        initial_supply: Mlt,
+        initial_subsidy: Mlt,
+        periods: BTreeMap<BlockHeight, Mlt>,
+    ) -> Self {
+        Self {
+            initial_supply,
+            initial_subsidy,
+            periods,
+        }
+    }
+
+    /// All subsidy periods, starting at block height 0
+    pub fn subsidy_periods(&self) -> impl Iterator<Item = (BlockHeight, Mlt)> + '_ {
+        std::iter::once((BlockHeight::zero(), self.initial_subsidy))
+            .chain(self.periods.iter().map(|(ht, mlt)| (*ht, *mlt)))
+    }
+
+    /// Get the initial supply
+    pub fn initial_supply(&self) -> Mlt {
+        self.initial_supply
+    }
+
+    /// Get tail emission block height and per-block amount
+    pub fn tail_emission(&self) -> (BlockHeight, Mlt) {
+        let empty_tail = || (BlockHeight::zero(), self.initial_subsidy);
+        self.periods.iter().next_back().map_or_else(empty_tail, |(ht, mlt)| (*ht, *mlt))
+    }
+
+    /// Final supply. `None` if the supply increases indefinitely
+    pub fn final_supply(&self) -> Option<Mlt> {
+        let (tail_block, tail_subsidy) = self.tail_emission();
+        (tail_subsidy == Mlt::ZERO).then(|| self.schedule().amount_at(tail_block))
+    }
+
+    /// Get the final emission schedule
+    pub fn schedule(&self) -> EmissionSchedule {
+        let table_seed = (
+            self.initial_supply,
+            self.initial_subsidy,
+            BlockHeight::zero(),
+        );
+
+        // Pre-calculate a table with starting supply and per-block rewards for each reward period.
+        let table: BTreeMap<BlockHeight, (Mlt, Mlt)> = self
+            .periods
+            .iter()
+            .scan(
+                table_seed,
+                |(supply, old_subsidy, start_block), (end_block, new_subsidy)| {
+                    let n_blocks = u64::from(*end_block) - u64::from(*start_block);
+                    let cur_period = (*old_subsidy * n_blocks as u128).expect("Subsidy overflow");
+                    *supply = (*supply + cur_period).expect("Subsidy overflow");
+                    *old_subsidy = *new_subsidy;
+                    *start_block = *end_block;
+                    Some((*end_block, (*supply, *new_subsidy)))
+                },
+            )
+            .collect();
+
+        // Take copies of values to be moved into the closure.
+        let initial_entry = (self.initial_supply, self.initial_subsidy);
+
+        EmissionSchedule::from_fn(move |height: BlockHeight| {
+            let initial = (&BlockHeight::zero(), &initial_entry);
+            let (start, (start_supply, subsidy)) =
+                table.range(BlockHeight::zero()..height).next_back().unwrap_or(initial);
+            assert!(
+                start <= &height,
+                "Block heights incorrect, start={start}, ht={height}"
+            );
+            let n_blocks = u64::from(height) - u64::from(*start);
+            let period_subsidy = (*subsidy * n_blocks as u128).expect("Subsidy overflow");
+            (*start_supply + period_subsidy).expect("Subsidy overflow")
+        })
+    }
+}
+
+impl std::fmt::Display for EmissionScheduleTabular {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}+{}", self.initial_supply, self.initial_subsidy)?;
+        for (ht, mlt) in &self.periods {
+            write!(f, ",{ht}:+{mlt}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Eq, PartialEq, Debug, thiserror::Error)]
+pub enum ParseEmissionTableError {
+    #[error("Emission table cannot be an empty string")]
+    Empty,
+    #[error("Initial supply amount malformed: {0}")]
+    InitialSupply(<Mlt as FromStr>::Err),
+    #[error("Subsidy for period {0} not specified")]
+    NoSubsidy(usize),
+    #[error("Block subsidy for period {0} malformed: {1}")]
+    Subsidy(usize, <Mlt as FromStr>::Err),
+    #[error("Block height for period {0} malformed: {1}")]
+    BlockHeight(usize, <BlockHeight as FromStr>::Err),
+}
+
+impl FromStr for EmissionScheduleTabular {
+    type Err = ParseEmissionTableError;
+
+    /// Load a piecewise linear supply schedule from a string
+    ///
+    /// The string format is as follows:
+    ///
+    /// * The initial supply a MLT amount
+    /// * Followed by the "`+`" sign
+    /// * Followed by the initial block subsidy in MLT
+    /// * Optionally a comma followed by comma-separated subsidy period entries, consisting of:
+    ///   * The block height at which the period starts
+    ///   * Followed by "`:+`"
+    ///   * Followed by the per-block MLT subsidy in this period
+    ///
+    /// All MLT amounts are allowed to contain fractions, up to the precision of 1 atom.
+    ///
+    /// ## Examples
+    ///
+    /// Start with 100 MLTs, no additional emission:
+    /// ```
+    /// # use common::chain::config::emission_schedule::*;
+    /// let es: EmissionScheduleTabular = "100+0".parse().unwrap();
+    /// assert_eq!(es.final_supply(), Some(Mlt::from_mlt(100)));
+    /// ```
+    ///
+    /// Start with 1000 MLTs, add 0.1 MLT each block forever:
+    /// ```
+    /// # use common::chain::config::emission_schedule::*;
+    /// let es: EmissionScheduleTabular = "1000+0.1".parse().unwrap();
+    /// assert_eq!(es.final_supply(), None);
+    /// ```
+    ///
+    /// Start with 1000 MLTs, add 1 MLT each block up to block 500, no subsidy afterwards:
+    /// ```
+    /// # use common::chain::config::emission_schedule::*;
+    /// let es: EmissionScheduleTabular = "1000+1,500:+0".parse().unwrap();
+    /// ```
+    ///
+    /// A more complicated schedule with multiple subsidy periods:
+    /// ```
+    /// # use common::chain::config::emission_schedule::*;
+    /// let es: EmissionScheduleTabular =
+    ///     "1000+1,10000:+0.5,20000:+0.25,30000:+0.125,40000:+0".parse().unwrap();
+    /// ```
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split(',');
+
+        let (initial_supply, initial_subsidy) = parts
+            .next()
+            .ok_or(Self::Err::Empty)?
+            .trim()
+            .split_once('+')
+            .ok_or(Self::Err::NoSubsidy(0))?;
+        let initial_supply = initial_supply.trim().parse().map_err(Self::Err::InitialSupply)?;
+        let initial_subsidy = initial_subsidy.parse().map_err(|e| Self::Err::Subsidy(0, e))?;
+
+        let periods: Result<BTreeMap<BlockHeight, Mlt>, Self::Err> = parts
+            .zip(1..)
+            .map(|(s, n)| {
+                let (ht, mlt) = s.trim().split_once(":+").ok_or(Self::Err::NoSubsidy(n))?;
+                let ht: BlockHeight = ht.parse().map_err(|e| Self::Err::BlockHeight(n, e))?;
+                let mlt: Mlt = mlt.parse().map_err(|e| Self::Err::Subsidy(n, e))?;
+                Ok((ht, mlt))
+            })
+            .collect();
+
+        Ok(Self {
+            initial_supply,
+            initial_subsidy,
+            periods: periods?,
+        })
+    }
+}
+
 // Emission schedule for mainnet
 
-const MAINNET_COIN_PREMINE: Mlt = Mlt::from_mlt(400_000_000);
+pub const MAINNET_COIN_PREMINE: Mlt = Mlt::from_mlt(400_000_000);
 
-pub fn mainnet_schedule() -> EmissionSchedule {
-    let yearly_block_rewards = [202, 151, 113, 85, 64, 48, 36, 27, 20, 15];
-    let yearly_block_rewards = yearly_block_rewards.iter().copied().map(Mlt::from_mlt).collect();
+pub fn mainnet_schedule_table(block_interval: Duration) -> EmissionScheduleTabular {
+    // Check block interval is in whole seconds
+    assert!(
+        (block_interval.as_nanos() % 1_000_000_000) == 0,
+        "Block interval supported up to the resolution of 1 sec"
+    );
 
-    EmissionSchedule::from_yearly_table(
-        MAINNET_COIN_PREMINE,
-        yearly_block_rewards,
-        DEFAULT_TARGET_BLOCK_SPACING,
-    )
+    // Number of blocks emitted per year
+    let blocks_per_year: u64 = (365 * 24 * 60 * 60) / block_interval.as_secs();
+    let years = (1..).map(|x| BlockHeight::new(blocks_per_year * x));
+    let initial_subsidy = Mlt::from_mlt(202);
+    let subsequent_subsidies =
+        [151, 113, 85, 64, 48, 36, 27, 20, 15, 0].iter().map(|x| Mlt::from_mlt(*x));
+    let rewards = years.zip(subsequent_subsidies).collect();
+    EmissionScheduleTabular::new(MAINNET_COIN_PREMINE, initial_subsidy, rewards)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
+
     const MAINNET_TOTAL_SUPPLY: Mlt = Mlt::from_mlt(599_990_800);
     const BLOCKS_PER_YEAR: u64 = 262800;
+
+    fn mainnet_default_table() -> EmissionScheduleTabular {
+        mainnet_schedule_table(crate::chain::config::DEFAULT_TARGET_BLOCK_SPACING)
+    }
+
+    fn mainnet_default_schedule() -> EmissionSchedule {
+        mainnet_default_table().schedule()
+    }
+
+    const MAINNET_TABLE_STRING: &str = concat!(
+        "400000000+202,",
+        "262800:+151,525600:+113,788400:+85,1051200:+64,1314000:+48,",
+        "1576800:+36,1839600:+27,2102400:+20,2365200:+15,2628000:+0",
+    );
+
+    #[test]
+    fn mainnet_schedule_display() {
+        assert_eq!(
+            &format!("{}", mainnet_default_table()),
+            MAINNET_TABLE_STRING
+        )
+    }
+
+    #[test]
+    fn mainnet_schedule_from_str() {
+        assert_eq!(
+            EmissionScheduleTabular::from_str(MAINNET_TABLE_STRING),
+            Ok(mainnet_default_table()),
+        );
+    }
+
+    proptest! {
+        #[test]
+        fn table_parser_nocrash(input: String) {
+            let _: Result<EmissionScheduleTabular, _> = input.parse();
+        }
+
+        #[test]
+        fn table_parser_roundtrip(
+            input in r"[0-9]{1,9} *\+[0-9]{1,4}( *, *[0-9]{1,6}:\+[0-9]{1,4}){0,20}"
+        ) {
+            let es = match EmissionScheduleTabular::from_str(&input) {
+                Ok(es) => es,
+                Err(e) => panic!("Invalid table string {input:?}: {e}"),
+            };
+            let formatted = format!("{es}");
+            let reconstructed: EmissionScheduleTabular = formatted.parse().unwrap();
+            assert_eq!(es, reconstructed);
+            assert_eq!(formatted, format!("{reconstructed}"));
+        }
+    }
 
     #[test]
     fn mainnet_subsidy_schedule() {
@@ -292,7 +518,7 @@ mod tests {
     #[test]
     fn subsidy_calculation_nonnegative() {
         // Note: The es.subsidy() method contains an assertion that fires if the MLT amount < 0.
-        let es = mainnet_schedule();
+        let es = mainnet_default_schedule();
 
         // Check heights up to 2 million exhaustively
         for ht in (1u64..2_000_000).map(BlockHeight::from) {
@@ -301,9 +527,7 @@ mod tests {
 
         // Check year transition heights + 5 block neighbourhood
         let year_transition_block_heights = (1..20).flat_map(|year| {
-            (0..=10)
-                .into_iter()
-                .map(move |offset| BlockHeight::from(year * BLOCKS_PER_YEAR + offset - 5))
+            (0..=10).map(move |offset| BlockHeight::from(year * BLOCKS_PER_YEAR + offset - 5))
         });
         for ht in year_transition_block_heights {
             let _ = es.subsidy(ht);
@@ -312,18 +536,79 @@ mod tests {
 
     #[test]
     fn total_emission_0() {
+        let schedule = EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, BTreeMap::new());
+        assert_eq!(schedule.final_supply(), Some(Mlt::ZERO));
+    }
+
+    #[test]
+    fn total_emission_1() {
+        let schedule = [
+            (BlockHeight::new(1), Mlt::from_atoms(20)),
+            (BlockHeight::new(11), Mlt::from_atoms(0)),
+        ];
         let schedule =
-            EmissionSchedule::from_yearly_table(Mlt::ZERO, vec![], DEFAULT_TARGET_BLOCK_SPACING);
-        assert_eq!(schedule.final_supply(), Mlt::ZERO);
+            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        assert_eq!(schedule.final_supply(), Some(Mlt::from_atoms(200)));
+    }
+
+    #[test]
+    fn total_emission_2() {
+        let schedule = [
+            (BlockHeight::new(1), Mlt::from_atoms(20)),
+            (BlockHeight::new(11), Mlt::from_atoms(10)),
+            (BlockHeight::new(51), Mlt::from_atoms(0)),
+        ];
+        let schedule =
+            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        assert_eq!(schedule.final_supply(), Some(Mlt::from_atoms(200 + 400)));
+    }
+
+    #[test]
+    fn total_emission_3() {
+        let schedule = [
+            (BlockHeight::new(1), Mlt::from_atoms(20)),
+            (BlockHeight::new(11), Mlt::from_atoms(10)),
+            (BlockHeight::new(51), Mlt::from_atoms(5)),
+            (BlockHeight::new(101), Mlt::from_atoms(0)),
+        ];
+        let schedule =
+            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        assert_eq!(
+            schedule.final_supply(),
+            Some(Mlt::from_atoms(200 + 400 + 250))
+        );
+    }
+
+    #[test]
+    fn total_emission_4() {
+        let schedule = EmissionScheduleTabular::new(Mlt::ZERO, Mlt::from_atoms(1), BTreeMap::new());
+        assert_eq!(schedule.final_supply(), None);
+    }
+
+    #[test]
+    fn total_emission_5() {
+        let schedule = [
+            (BlockHeight::new(1), Mlt::from_atoms(20)),
+            (BlockHeight::new(11), Mlt::from_atoms(10)),
+            (BlockHeight::new(51), Mlt::from_atoms(5)),
+            (BlockHeight::new(101), Mlt::from_atoms(1)),
+        ];
+        let schedule =
+            EmissionScheduleTabular::new(Mlt::ZERO, Mlt::ZERO, schedule.into_iter().collect());
+        assert_eq!(schedule.final_supply(), None);
     }
 
     #[test]
     fn initial_supply_mainnet() {
-        assert_eq!(mainnet_schedule().initial_supply(), MAINNET_COIN_PREMINE);
+        assert_eq!(
+            mainnet_default_schedule().initial_supply(),
+            MAINNET_COIN_PREMINE
+        );
     }
 
     #[test]
     fn total_supply_mainnet() {
-        assert_eq!(mainnet_schedule().final_supply(), MAINNET_TOTAL_SUPPLY);
+        let es = mainnet_schedule_table(crate::chain::config::DEFAULT_TARGET_BLOCK_SPACING);
+        assert_eq!(es.final_supply(), Some(MAINNET_TOTAL_SUPPLY));
     }
 }

@@ -248,7 +248,8 @@ pub fn create_mainnet() -> ChainConfig {
     let genesis_block = create_mainnet_genesis();
     let genesis_block_id = genesis_block.get_id();
 
-    let emission_schedule = emission_schedule::mainnet_schedule();
+    let emission_schedule =
+        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
 
     ChainConfig {
         chain_type,
@@ -292,7 +293,8 @@ pub fn create_regtest() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
 
-    let emission_schedule = emission_schedule::mainnet_schedule();
+    let emission_schedule =
+        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
 
     ChainConfig {
         chain_type,
@@ -320,7 +322,8 @@ pub fn create_unit_test_config() -> ChainConfig {
     let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
     let genesis_block_id = genesis_block.get_id();
 
-    let emission_schedule = emission_schedule::mainnet_schedule();
+    let emission_schedule =
+        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
 
     ChainConfig {
         chain_type: ChainType::Mainnet,
@@ -377,7 +380,8 @@ impl TestChainConfig {
         let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
         let genesis_block_id = genesis_block.get_id();
 
-        let emission_schedule = emission_schedule::mainnet_schedule();
+        let emission_schedule =
+            emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
 
         ChainConfig {
             chain_type: ChainType::Mainnet,
