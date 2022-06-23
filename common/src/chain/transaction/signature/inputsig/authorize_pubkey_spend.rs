@@ -148,6 +148,8 @@ mod test {
             let mut raw_signature = witness.raw_signature().clone();
             AuthorizedPublicKeySpend::from_data(&raw_signature).unwrap();
 
+            // Changing the first byte doesn't changes the signature data, instead it changes the
+            // signature enum discriminant, therefore it changes the signature type.
             raw_signature[0] = raw_signature[0].wrapping_add(2);
             assert_eq!(
                 Err(TransactionSigError::InvalidSignatureEncoding),
