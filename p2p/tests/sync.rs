@@ -193,8 +193,49 @@ where
     T: NetworkingService,
     T::SyncingCodecHandle: SyncingCodecService<T>,
 {
-    let event = mgr.handle_mut().poll_next().await.unwrap();
-    mgr.on_syncing_event(event).await.unwrap();
+    match mgr.handle_mut().poll_next().await.unwrap() {
+        net::types::SyncingEvent::Request {
+            peer_id,
+            request_id,
+            request:
+                Message {
+                    msg: MessageType::Syncing(SyncingMessage::Request(message)),
+                    magic: _,
+                },
+        } => match message {
+            SyncingRequest::GetHeaders { locator } => {
+                mgr.process_header_request(peer_id, request_id, locator).await?;
+            }
+            SyncingRequest::GetBlocks { block_ids } => {
+                mgr.process_block_request(peer_id, request_id, block_ids).await?;
+            }
+        },
+        net::types::SyncingEvent::Response {
+            peer_id,
+            request_id: _,
+            response:
+                Message {
+                    msg: MessageType::Syncing(SyncingMessage::Response(message)),
+                    magic: _,
+                },
+        } => match message {
+            SyncingResponse::Headers { headers } => {
+                mgr.process_header_response(peer_id, headers).await?;
+            }
+            SyncingResponse::Blocks { blocks } => {
+                mgr.process_block_response(peer_id, blocks).await?;
+            }
+        },
+        net::types::SyncingEvent::Error {
+            peer_id,
+            request_id,
+            error,
+        } => {
+            mgr.process_error(peer_id, request_id, error).await?;
+        }
+        _ => {}
+    }
+
     mgr.check_state().await
 }
 
@@ -265,9 +306,7 @@ async fn remote_ahead_by_7_blocks() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..9 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
@@ -389,9 +428,7 @@ async fn local_ahead_by_12_blocks() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..14 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
@@ -553,9 +590,7 @@ async fn remote_local_diff_chains_local_higher() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..24 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
@@ -748,9 +783,7 @@ async fn remote_local_diff_chains_remote_higher() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..20 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
@@ -946,9 +979,7 @@ async fn two_remote_nodes_different_chains() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..18 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
@@ -1093,9 +1124,7 @@ async fn two_remote_nodes_same_chains() {
     let (tx, mut rx) = mpsc::channel(1);
     let handle = tokio::spawn(async move {
         loop {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
 
             if mgr1.state() == &SyncState::Idle {
                 break;
@@ -1242,9 +1271,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
 
     let handle = tokio::spawn(async move {
         loop {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
 
             if mgr1.state() == &SyncState::Idle {
                 break;
@@ -1422,9 +1449,7 @@ async fn test_connect_disconnect_resyncing() {
 
     let handle = tokio::spawn(async move {
         for _ in 0..9 {
-            let event = mgr1.handle_mut().poll_next().await.unwrap();
-            mgr1.on_syncing_event(event).await.unwrap();
-            mgr1.check_state().await.unwrap();
+            advance_mgr_state(&mut mgr1).await.unwrap();
         }
 
         mgr1
