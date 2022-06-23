@@ -5,7 +5,8 @@ use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, Transact
 use common::{
     chain::{
         block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
+            calculate_tx_merkle_root, calculate_witness_merkle_root, height_skip::get_skip_height,
+            Block, BlockHeader, BlockIndex,
         },
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
@@ -682,6 +683,16 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             prev_block_index.block_height().next_height()
         });
 
+        let some_ancestor = match prev_block_index {
+            Some(ref prev_bi) => Some(
+                self.get_ancestor(&prev_bi, get_skip_height(height))
+                    .map_err(|_| BlockError::AncestorRetrievalFailed(block.get_id()))?
+                    .block_id()
+                    .clone(),
+            ),
+            None => None,
+        };
+
         // Set Time Max
         let time_max = prev_block_index.as_ref().map_or(block.timestamp(), |prev_block_index| {
             std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp())
@@ -692,7 +703,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             *prev_block_index.chain_trust()
         });
         let chain_trust = prev_chain_trust + self.get_block_proof(block)?;
-        let block_index = BlockIndex::new(block, chain_trust, height, time_max);
+        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 

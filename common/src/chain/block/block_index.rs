@@ -12,6 +12,7 @@ use super::timestamp::BlockTimestamp;
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
+    skip: Option<Id<Block>>,
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
@@ -21,6 +22,7 @@ impl BlockIndex {
     pub fn new(
         block: &Block,
         chain_trust: Uint256,
+        some_ancestor: Option<Id<Block>>,
         height: BlockHeight,
         time_max: BlockTimestamp,
     ) -> Self {
@@ -28,6 +30,7 @@ impl BlockIndex {
         Self {
             block_header: block.header().clone(),
             block_id: block.get_id(),
+            skip: some_ancestor,
             chain_trust,
             height,
             time_max,
@@ -64,6 +67,10 @@ impl BlockIndex {
 
     pub fn block_header(&self) -> &BlockHeader {
         &self.block_header
+    }
+
+    pub fn some_ancestor(&self) -> &Id<Block> {
+        &self.block_id
     }
 
     pub fn into_block_header(self) -> BlockHeader {
