@@ -137,7 +137,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.clone()))
     }
 
-    // TODO improve using pskip
     pub fn get_ancestor(
         &self,
         block_index: &BlockIndex,
@@ -153,9 +152,30 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let mut height_walk = block_index.block_height();
         let mut block_index_walk = block_index.clone();
         while height_walk > ancestor_height {
-            block_index_walk = self.get_previous_block_index(&block_index_walk)?;
-            height_walk =
-                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
+            let height_walk_prev = (height_walk - BlockDistance::new(1))
+                .expect("Can never fail because prev is zero at worst");
+
+            let height_skip = get_skip_height(height_walk);
+            let height_skip_prev = get_skip_height(height_walk_prev);
+            if block_index_walk.some_ancestor().is_some()
+                && (height_skip == ancestor_height
+                    || (height_skip > ancestor_height
+                        && !(height_skip_prev.next_height().next_height() < height_skip
+                            && height_skip_prev >= ancestor_height)))
+            {
+                block_index_walk = self
+                    .get_block_index(
+                        block_index_walk
+                            .some_ancestor()
+                            .expect("We already checked the id already exists"),
+                    )?
+                    .expect("Block index of ancestor must exist, since id exists");
+                height_walk = height_skip;
+            } else {
+                block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+                height_walk = (height_walk - BlockDistance::from(1))
+                    .expect("height_walk is greater than height");
+            }
         }
         Ok(block_index_walk)
     }

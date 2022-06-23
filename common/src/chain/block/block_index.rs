@@ -69,8 +69,8 @@ impl BlockIndex {
         &self.block_header
     }
 
-    pub fn some_ancestor(&self) -> &Id<Block> {
-        &self.block_id
+    pub fn some_ancestor(&self) -> Option<&Id<Block>> {
+        self.skip.as_ref()
     }
 
     pub fn into_block_header(self) -> BlockHeader {
