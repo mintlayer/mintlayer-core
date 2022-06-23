@@ -2,7 +2,7 @@ use crate::random::{CryptoRng, Rng};
 
 mod chacha20poly1305;
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use thiserror::Error;
 
@@ -71,7 +71,7 @@ impl SymmetricKey {
 #[cfg(test)]
 mod test {
     use hex::FromHex;
-    use parity_scale_codec::DecodeAll;
+    use serialization::DecodeAll;
 
     use crate::random::make_true_rng;
 

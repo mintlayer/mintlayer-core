@@ -54,7 +54,7 @@ impl Decode for Signature {
 }
 
 impl Signature {
-    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, parity_scale_codec::Error> {
+    pub fn from_data<T: AsRef<[u8]>>(data: T) -> Result<Self, serialization::Error> {
         let decoded_sig = Signature::decode_all(&mut data.as_ref())?;
         Ok(decoded_sig)
     }

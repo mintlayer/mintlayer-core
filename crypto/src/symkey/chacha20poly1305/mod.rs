@@ -2,7 +2,7 @@ use crate::random::{CryptoRng, Rng};
 use crate::symkey::Error;
 use chacha20poly1305::aead::{AeadInPlace, NewAead};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 pub const NONCE_LEN: usize = 24;
 pub const KEY_LEN: usize = 32;
@@ -91,7 +91,7 @@ impl Encode for Chacha20poly1305Key {
         KEY_LEN
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         dest.write(self.key_data.as_slice())
     }
 
@@ -105,9 +105,7 @@ impl Decode for Chacha20poly1305Key {
         Some(KEY_LEN)
     }
 
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = <[u8; KEY_LEN]>::decode(input)?;
         let k = chacha20poly1305::Key::from_slice(&v);
         let result = Chacha20poly1305Key { key_data: *k };
@@ -123,7 +121,7 @@ mod test {
     };
 
     use hex::FromHex;
-    use parity_scale_codec::DecodeAll;
+    use serialization::DecodeAll;
 
     use crate::random::make_true_rng;
 

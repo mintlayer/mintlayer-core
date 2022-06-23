@@ -194,7 +194,7 @@ mod test {
     use super::*;
     use crate::random::make_true_rng;
     use hex::ToHex;
-    use parity_scale_codec::DecodeAll;
+    use serialization::DecodeAll;
     use tari_crypto::tari_utilities::message_format::MessageFormat;
 
     #[test]
