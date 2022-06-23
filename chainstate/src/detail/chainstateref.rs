@@ -685,7 +685,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         let some_ancestor = match prev_block_index {
             Some(ref prev_bi) => Some(
-                self.get_ancestor(&prev_bi, get_skip_height(height))
+                self.get_ancestor(prev_bi, get_skip_height(height))
                     .map_err(|_| BlockError::AncestorRetrievalFailed(block.get_id()))?
                     .block_id()
                     .clone(),
