@@ -1,10 +1,10 @@
 mod internal;
 
+use crate::random::{CryptoRng, Rng};
 use generic_array::GenericArray;
 pub use internal::add_sigs;
 pub use internal::RistrettoSchnorrSignature;
 use internal::*;
-use rand::{CryptoRng, Rng};
 use serialization::{Decode, Encode};
 use tari_crypto::{keys::PublicKey, tari_utilities::ByteArray};
 
@@ -194,7 +194,7 @@ mod test {
     use super::*;
     use crate::random::make_true_rng;
     use hex::ToHex;
-    use parity_scale_codec::DecodeAll;
+    use serialization::DecodeAll;
     use tari_crypto::tari_utilities::message_format::MessageFormat;
 
     #[test]
