@@ -87,7 +87,7 @@ mod test {
     #[test]
     fn invalid_input_index() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let destination = Destination::PublicKey(public_key.clone());
+        let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
 
         for sighash_type in sig_hash_types() {
@@ -131,7 +131,7 @@ mod test {
     #[test]
     fn invalid_signature_type() {
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        let destination = Destination::PublicKey(public_key.clone());
+        let destination = Destination::PublicKey(public_key);
         let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
         let mut rng = rand::thread_rng();
 
@@ -178,7 +178,7 @@ mod test {
                 AuthorizedPublicKeySpend::from_data(witness.raw_signature()).unwrap();
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
             verify_public_key_spending(&public_key, &spender_signature, &sighash)
-                .expect(&format!("{sighash_type:X?}"));
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
 
@@ -201,7 +201,7 @@ mod test {
             .unwrap();
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
             sign_pubkey_spending(&private_key, &public_key, &sighash)
-                .expect(&format!("{sighash_type:X?}"));
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
 }

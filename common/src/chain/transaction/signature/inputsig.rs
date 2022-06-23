@@ -251,7 +251,7 @@ mod test {
             let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
             witness
                 .verify_signature(&destination, &sighash)
-                .expect(&format!("{sighash_type:X?} {destination:?}"));
+                .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
         }
     }
 }

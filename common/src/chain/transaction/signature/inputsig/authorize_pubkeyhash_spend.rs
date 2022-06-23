@@ -193,7 +193,7 @@ mod test {
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
 
             verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
-                .expect(&format!("{sighash_type:X?}"));
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
 
@@ -218,7 +218,7 @@ mod test {
             let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
 
             sign_address_spending(&private_key, &pubkey_hash, &sighash)
-                .expect(&format!("{sighash_type:X?}"));
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
         }
     }
 }

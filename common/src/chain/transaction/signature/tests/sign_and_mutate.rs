@@ -418,19 +418,19 @@ fn check_mutations<M>(
     M: IntoIterator<Item = fn(&Transaction) -> Transaction>,
 {
     for mutate in mutations.into_iter() {
-        let tx = mutate(&tx);
+        let tx = mutate(tx);
         // The number of inputs can be changed by the `mutate` function.
         let inputs = tx.inputs().len();
 
         assert_eq!(
-            verify_signature(&destination, &tx, INVALID_INPUT),
+            verify_signature(destination, &tx, INVALID_INPUT),
             Err(TransactionSigError::InvalidInputIndex(
                 INVALID_INPUT,
                 inputs
             ))
         );
         for input in 0..inputs {
-            assert_eq!(verify_signature(&destination, &tx, input), expected);
+            assert_eq!(verify_signature(destination, &tx, input), expected);
         }
     }
 }
