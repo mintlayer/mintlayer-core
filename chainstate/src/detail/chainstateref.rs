@@ -399,15 +399,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         1
     }
 
-    fn check_tx_outputs(&self, transactions: &[Transaction]) -> Result<(), BlockError> {
-        for tx in transactions {
-            for _output in tx.outputs() {
-                // TODO: Check tx outputs to prevent the overwriting of the transaction
-            }
-        }
-        Ok(())
-    }
-
     fn make_cache_with_connected_transactions(
         &self,
         block: &Block,
@@ -571,7 +562,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             return Err(BlockError::InvariantErrorInvalidTip);
         }
         let block = self.get_block_from_index(new_tip_block_index)?.expect("Inconsistent DB");
-        self.check_tx_outputs(block.transactions())?;
 
         if block.is_genesis(self.chain_config) {
             self.connect_genesis_transactions(&block)?
@@ -670,6 +660,12 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     fn add_to_block_index(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
+        match self.db_tx.get_block_index(&block.get_id()).map_err(BlockError::from)? {
+            // this is not an error, because it's valid to have the header but not the whole block
+            Some(bi) => return Ok(bi),
+            None => (),
+        }
+
         let prev_block_index = if block.is_genesis(self.chain_config) {
             // Genesis case. We should use then_some when stabilized feature(bool_to_option)
             None
@@ -697,8 +693,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     }
 
     pub fn accept_block(&mut self, block: &Block) -> Result<BlockIndex, BlockError> {
-        // TODO: before doing anything, we should ensure the block isn't already known
         let block_index = self.add_to_block_index(block)?;
+        match self.db_tx.get_block(block.get_id()).map_err(BlockError::from)? {
+            Some(_) => return Err(BlockError::BlockAlreadyExists(block.get_id())),
+            None => (),
+        }
         self.check_block_index(&block_index)?;
         self.db_tx.set_block_index(&block_index).map_err(BlockError::from)?;
         self.db_tx.add_block(block).map_err(BlockError::from)?;
