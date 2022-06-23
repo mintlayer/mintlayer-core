@@ -1,6 +1,3 @@
-# Compiled by EL, AAR
-# Reviewed by RA, ZY, BM
-#
 # Test vectors for xchacha20poly1305
 # Tested against DJB's XAE, libsodium
 # ALLOWABLE FOR INTERNAL + ACADEMIC RELEASES

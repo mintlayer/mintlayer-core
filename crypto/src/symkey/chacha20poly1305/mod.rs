@@ -298,7 +298,7 @@ mod test {
             std::path::Path::new("src")
                 .join("symkey")
                 .join("chacha20poly1305")
-                .join("XCHACHA20_POLY1305_TEST_VECTORS_QIG_CRL_2019_10_17.tv"),
+                .join("XCHACHA20POLY1305_TEST_VECTORS.tv"),
         );
         assert_eq!(test_vectors.len(), 1559);
         for test_vec in test_vectors {
