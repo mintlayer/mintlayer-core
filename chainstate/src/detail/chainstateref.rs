@@ -7,7 +7,7 @@ use common::{
         block::{
             calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
         },
-        calculate_tx_index_from_block, ChainConfig, OutPointSourceId, Transaction,
+        calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
