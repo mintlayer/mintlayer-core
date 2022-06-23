@@ -28,6 +28,7 @@ impl BanScore for BlockError {
             BlockError::InvalidBlockSource => 100,
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
+            BlockError::BlockProofCalculationError(_) => 100,
         }
     }
 }
