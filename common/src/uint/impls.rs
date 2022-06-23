@@ -252,6 +252,19 @@ macro_rules! construct_uint {
             }
         }
 
+        impl<'a> From<u64> for $name {
+            /// Creates a Uint256 from the given reference
+            /// to the bytes array of fixed length.
+            ///
+            /// # Note
+            ///
+            /// The given bytes are assumed to be in little endian order.
+            #[inline]
+            fn from(n: u64) -> Self {
+                Self::from_u64(n)
+            }
+        }
+
         impl PartialOrd for $name {
             #[inline]
             fn partial_cmp(&self, other: &$name) -> Option<::core::cmp::Ordering> {

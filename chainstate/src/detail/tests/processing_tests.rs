@@ -78,7 +78,7 @@ fn test_process_genesis_block() {
             Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(block_index.prev_block_id(), &None);
-        assert_eq!(block_index.chain_trust(), 1);
+        assert_eq!(block_index.chain_trust(), &Uint256::from_u64(1));
         assert_eq!(block_index.block_height(), BlockHeight::new(0));
     });
 }
@@ -262,7 +262,7 @@ fn test_straight_chain() {
         );
         assert_eq!(block_index.prev_block_id(), &None);
         // TODO: ensure that block at height is tested after removing the next
-        assert_eq!(block_index.chain_trust(), 1);
+        assert_eq!(block_index.chain_trust(), &Uint256::from_u64(1));
         assert_eq!(block_index.block_height(), BlockHeight::new(0));
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
