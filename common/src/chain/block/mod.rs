@@ -29,6 +29,8 @@ pub mod block_size;
 
 pub mod timestamp;
 
+pub mod height_skip;
+
 pub use block_v1::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
