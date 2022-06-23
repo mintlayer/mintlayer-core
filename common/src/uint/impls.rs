@@ -527,7 +527,7 @@ impl Encode for Uint256 {
     }
 
     fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
-        let v: H256 = self.clone().into();
+        let v: H256 = (*self).into();
         v.encode_to(dest)
     }
 
@@ -588,7 +588,7 @@ mod tests {
     #[test]
     pub fn uint256_serialization() {
         let h256val = H256::random();
-        let uint256val: Uint256 = h256val.clone().into();
+        let uint256val: Uint256 = h256val.into();
         let encoded_h256 = h256val.encode();
         let encoded_uint256val = uint256val.encode();
         assert_eq!(encoded_uint256val.len(), 32);
