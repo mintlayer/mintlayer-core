@@ -263,7 +263,7 @@ mod tests {
             (
                 genesis_pow,
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::from_u64(1000).unwrap().into(),
+                    initial_difficulty: Uint256::from_u64(1000).into(),
                 }),
             ),
             (
@@ -273,7 +273,7 @@ mod tests {
             (
                 back_to_pow,
                 UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                    initial_difficulty: Uint256::from_u64(2000).unwrap().into(),
+                    initial_difficulty: Uint256::from_u64(2000).into(),
                 }),
             ),
         ];
@@ -287,7 +287,7 @@ mod tests {
         assert_eq!(
             upgrades.consensus_status(0.into()),
             RequiredConsensus::PoW(PoWStatus::Threshold {
-                initial_difficulty: Uint256::from_u64(1000).unwrap().into()
+                initial_difficulty: Uint256::from_u64(1000).into()
             })
         );
         assert_eq!(
@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(
             upgrades.consensus_status(15_000.into()),
             RequiredConsensus::PoW(PoWStatus::Threshold {
-                initial_difficulty: Uint256::from_u64(2_000).unwrap().into()
+                initial_difficulty: Uint256::from_u64(2_000).into()
             })
         );
         assert_eq!(
