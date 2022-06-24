@@ -42,7 +42,6 @@ async fn test_libp2p_gossipsub() {
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
         addr1,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
@@ -52,7 +51,6 @@ async fn test_libp2p_gossipsub() {
     let (mut conn2, mut pubsub2, _) = Libp2pService::start(
         addr2,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
@@ -66,6 +64,9 @@ async fn test_libp2p_gossipsub() {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
+
+    pubsub1.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
+    pubsub2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
 
     // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
@@ -166,7 +167,6 @@ async fn test_libp2p_gossipsub_3_peers() {
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
         addr1,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
@@ -179,7 +179,6 @@ async fn test_libp2p_gossipsub_3_peers() {
             let res = Libp2pService::start(
                 addr,
                 &[],
-                &[PubSubTopic::Blocks],
                 Arc::clone(&config),
                 std::time::Duration::from_secs(10),
             )
@@ -200,6 +199,13 @@ async fn test_libp2p_gossipsub_3_peers() {
     connect_peers(&mut conn1, &mut peer1.0).await;
     connect_peers(&mut peer1.0, &mut peer2.0).await;
     connect_peers(&mut peer2.0, &mut peer3.0).await;
+
+    pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    peer1.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    peer2.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    peer3.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+
+    println!("here");
 
     // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
@@ -310,12 +316,13 @@ async fn test_libp2p_gossipsub_invalid_data() {
     let (_conn1, mut pubsub1, _) = Libp2pService::start(
         addr1,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
     .await
     .unwrap();
+
+    pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     assert_eq!(
         pubsub1
@@ -337,17 +344,15 @@ async fn test_libp2p_gossipsub_too_big_message() {
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
         addr1,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
     .await
     .unwrap();
     let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn2, _pubsub2, _) = Libp2pService::start(
+    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
         addr2,
         &[],
-        &[PubSubTopic::Blocks],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
@@ -361,6 +366,9 @@ async fn test_libp2p_gossipsub_too_big_message() {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
+
+    pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
+    pubsub2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
     let txs = (0..(200_000))
         .map(|_| Transaction::new(0, vec![], vec![], 0).unwrap())

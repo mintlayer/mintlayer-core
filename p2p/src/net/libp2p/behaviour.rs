@@ -26,7 +26,6 @@ use crate::{
             sync::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
-        types::PubSubTopic,
     },
 };
 use common::chain::config::ChainConfig;
@@ -96,7 +95,6 @@ impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
         id_keys: identity::Keypair,
-        topics: &[PubSubTopic],
         relay_mdns: bool,
     ) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()
@@ -118,7 +116,7 @@ impl Libp2pBehaviour {
         let mut req_cfg = RequestResponseConfig::default();
         req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
 
-        let mut behaviour = Libp2pBehaviour {
+        let behaviour = Libp2pBehaviour {
             mdns: mdns::Mdns::new(Default::default()).await.expect("mDNS to succeed"),
             ping: ping::Behaviour::new(
                 ping::Config::new()
@@ -149,13 +147,6 @@ impl Libp2pBehaviour {
             pending_conns: HashMap::new(),
             waker: None,
         };
-
-        // subscribes to our topic
-        // TODO: subscribe only after initial block download is done
-        for topic in topics.iter() {
-            log::debug!("subscribing to gossipsub topic {:?}", topic);
-            behaviour.gossipsub.subscribe(&topic.into()).expect("subscription to work");
-        }
 
         behaviour
     }

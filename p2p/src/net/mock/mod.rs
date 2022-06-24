@@ -97,7 +97,6 @@ impl NetworkingService for MockService {
     async fn start(
         addr: Self::Address,
         _strategies: &[Self::DiscoveryStrategy],
-        _topics: &[PubSubTopic],
         _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(

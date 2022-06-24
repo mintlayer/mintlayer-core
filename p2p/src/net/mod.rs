@@ -80,7 +80,6 @@ pub trait NetworkingService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        topics: &[types::PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(

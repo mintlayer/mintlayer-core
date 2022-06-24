@@ -230,7 +230,6 @@ impl NetworkingService for Libp2pService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        topics: &[PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
@@ -259,8 +258,7 @@ impl NetworkingService for Libp2pService {
 
         let swarm = SwarmBuilder::new(
             transport,
-            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, topics, relay_mdns)
-                .await,
+            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, relay_mdns).await,
             peer_id,
         )
         .build();

@@ -22,7 +22,7 @@ use crate::{
     event,
     message::{self, Message, MessageType, PubSubMessage},
     net::{
-        types::{PubSubEvent, ValidationResult},
+        types::{PubSubEvent, PubSubTopic, ValidationResult},
         NetworkingService, PubSubService,
     },
 };
@@ -56,6 +56,9 @@ pub struct PubSubMessageHandler<T: NetworkingService> {
 
     /// RX channel for receiving control events from RPC/[`swarm::PeerManager`]
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
+
+    /// Topics that the `PubSubMessageHandler` listens to
+    topics: Vec<PubSubTopic>,
 }
 
 impl<T> PubSubMessageHandler<T>
@@ -75,12 +78,14 @@ where
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
+        topics: &[PubSubTopic],
     ) -> Self {
         Self {
             chain_config,
             pubsub_handle,
             chainstate_handle,
             rx_pubsub,
+            topics: topics.to_vec(),
         }
     }
 
@@ -106,7 +111,7 @@ where
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
 
-        // TODO: subscribe to pubsub topics
+        self.pubsub_handle.subscribe(&self.topics).await?;
         Ok(rx)
     }
 
