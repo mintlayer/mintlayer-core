@@ -21,7 +21,6 @@ jobs:
       with:
         profile: minimal
         toolchain: stable
-        components: rustfmt
         default: true
     - name: Checkout repository and submodules
       uses: actions/checkout@v2
