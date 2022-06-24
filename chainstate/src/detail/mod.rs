@@ -375,14 +375,14 @@ impl Chainstate {
             }
         }
 
-        // TODO: this does some unnecessary copying of the headers; make this loop consume the vec
-        for (num, header) in headers.iter().enumerate() {
-            if self.get_block_index(&header.get_id())?.is_none() {
-                return Ok(headers[num..].to_vec());
-            }
-        }
+        let res = headers
+            .into_iter()
+            .skip_while(|header| {
+                self.get_block_index(&header.get_id()).expect("Database failure").is_some()
+            })
+            .collect::<Vec<_>>();
 
-        Ok(vec![])
+        Ok(res)
     }
 }
 
