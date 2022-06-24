@@ -703,18 +703,14 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             prev_block_index.block_height().next_height()
         });
 
-        let some_ancestor = match prev_block_index {
-            Some(ref prev_bi) => Some(
-                self.get_ancestor(prev_bi, get_skip_height(height))
-                    .expect(&format!(
-                        "Ancestor retrieval failed for block {}",
-                        block.get_id()
-                    ))
-                    .block_id()
-                    .clone(),
-            ),
-            None => None,
-        };
+        let some_ancestor = prev_block_index.as_ref().map(|prev_bi| {
+            self.get_ancestor(prev_bi, get_skip_height(height))
+                .unwrap_or_else(|_| {
+                    panic!("Ancestor retrieval failed for block: {}", block.get_id())
+                })
+                .block_id()
+                .clone()
+        });
 
         // Set Time Max
         let time_max = prev_block_index.as_ref().map_or(block.timestamp(), |prev_block_index| {
