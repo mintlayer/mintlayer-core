@@ -156,6 +156,12 @@ where
         result: types::ValidationResult,
     ) -> crate::Result<()>;
 
+    /// Subscribe to publish-subscribe topics
+    ///
+    /// # Arguments
+    /// * `topics` - list of topics
+    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
+
     /// Poll unvalidated pubsub messages
     ///
     /// The message must be validated by the application layer and the validation

@@ -209,6 +209,10 @@ where
         todo!();
     }
 
+    async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
+        todo!();
+    }
+
     async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         todo!();
     }

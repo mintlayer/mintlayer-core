@@ -463,6 +463,20 @@ where
             .map_err(|e| e) // command failure
     }
 
+    async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::Subscribe {
+                topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
+                response: tx,
+            })
+            .await?;
+
+        rx.await
+            .map_err(|e| e)? // channel closed
+            .map_err(|e| e) // command failure
+    }
+
     async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         match self.gossip_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::PubSubEvent::MessageReceived {

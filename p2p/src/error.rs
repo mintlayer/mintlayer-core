@@ -16,7 +16,9 @@
 // Author(s): A. Altonen
 use common::primitives::semver::SemVer;
 use libp2p::{
-    gossipsub::error::PublishError as GossipsubPublishError,
+    gossipsub::error::{
+        PublishError as GossipsubPublishError, SubscriptionError as GossipsubSubscriptionError,
+    },
     swarm::{handler::ConnectionHandlerUpgrErr, DialError::*},
 };
 use thiserror::Error;
@@ -74,6 +76,14 @@ pub enum PublishError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq)]
+pub enum SubscriptionError {
+    #[error("Failed to publish subscription: {0}")]
+    FailedToPublish(PublishError),
+    #[error("Not allowed to subscribe to this topic")]
+    NotAllowed,
+}
+
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialError {
     #[error("Peer is banned")]
     Banned,
@@ -123,6 +133,8 @@ pub enum P2pError {
     ProtocolError(ProtocolError),
     #[error("Failed to publish message: `{0}`")]
     PublishError(PublishError),
+    #[error("Failed to subscribe to pubsub topic: `{0}`")]
+    SubscriptionError(SubscriptionError),
     #[error("Failed to upgrade connection: `{0}`")]
     ConnectionError(ConnectionError),
     #[error("Failed to dial peer: `{0}`")]
@@ -183,21 +195,32 @@ impl From<chainstate::ChainstateError> for P2pError {
     }
 }
 
+impl From<libp2p::gossipsub::error::PublishError> for PublishError {
+    fn from(err: libp2p::gossipsub::error::PublishError) -> PublishError {
+        match err {
+            GossipsubPublishError::Duplicate => PublishError::Duplicate,
+            GossipsubPublishError::SigningError(_) => PublishError::SigningFailed,
+            GossipsubPublishError::InsufficientPeers => PublishError::InsufficientPeers,
+            GossipsubPublishError::MessageTooLarge => PublishError::MessageTooLarge(None, None),
+            GossipsubPublishError::TransformFailed(_) => PublishError::TransformFailed,
+        }
+    }
+}
+
 impl From<libp2p::gossipsub::error::PublishError> for P2pError {
     fn from(err: libp2p::gossipsub::error::PublishError) -> P2pError {
+        P2pError::PublishError(PublishError::from(err))
+    }
+}
+
+impl From<libp2p::gossipsub::error::SubscriptionError> for P2pError {
+    fn from(err: libp2p::gossipsub::error::SubscriptionError) -> P2pError {
         match err {
-            GossipsubPublishError::Duplicate => P2pError::PublishError(PublishError::Duplicate),
-            GossipsubPublishError::SigningError(_) => {
-                P2pError::PublishError(PublishError::SigningFailed)
-            }
-            GossipsubPublishError::InsufficientPeers => {
-                P2pError::PublishError(PublishError::InsufficientPeers)
-            }
-            GossipsubPublishError::MessageTooLarge => {
-                P2pError::PublishError(PublishError::MessageTooLarge(None, None))
-            }
-            GossipsubPublishError::TransformFailed(_) => {
-                P2pError::PublishError(PublishError::TransformFailed)
+            GossipsubSubscriptionError::PublishError(error) => P2pError::SubscriptionError(
+                SubscriptionError::FailedToPublish(PublishError::from(error)),
+            ),
+            GossipsubSubscriptionError::NotAllowed => {
+                P2pError::SubscriptionError(SubscriptionError::NotAllowed)
             }
         }
     }

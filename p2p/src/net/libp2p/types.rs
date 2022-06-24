@@ -81,6 +81,12 @@ pub enum Command {
         response: Box<SyncResponse>,
         channel: oneshot::Sender<crate::Result<()>>,
     },
+
+    /// Subscribe to gossipsub topics
+    Subscribe {
+        topics: Vec<Topic>,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 #[derive(Debug)]
