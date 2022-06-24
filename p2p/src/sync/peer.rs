@@ -35,7 +35,7 @@ pub enum PeerSyncState {
     UploadingBlocks(Id<Block>),
 
     /// Peer is uploading headers to local node
-    UploadingHeaders,
+    UploadingHeaders(Vec<BlockHeader>),
 
     /// Peer is idling and can be used for block requests
     Idle,

@@ -14,11 +14,12 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+#![allow(unused)]
 use crate::{
     error::{FatalError, P2pError, PeerError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
-    net::{self, NetworkingService, SyncingCodecService},
+    net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
 };
 use chainstate::{
     chainstate_interface, BlockError, BlockSource, ChainstateError::ProcessBlockError,
@@ -37,8 +38,10 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::{mpsc, oneshot};
+use utils::ensure;
 
 pub mod peer;
+mod request;
 
 // TODO: from config? global constant?
 const HEADER_LIMIT: usize = 2000;
@@ -47,13 +50,9 @@ const HEADER_LIMIT: usize = 2000;
 const RETRY_LIMIT: usize = 3;
 
 // TODO: add more tests
-// TODO: split syncing into separate files
 // TODO: match against error in `run()` and deal with `ProtocolError`
 // TODO: use ensure
-// TODO: create better api for request/response codec
-// TODO: create helper function for creating requests/responses
 // TODO: cache locator and invalidate it when `NewTip` event is received
-// TODO: simplify code: remove code duplication, move code to submodules, add req/resp api, etc.
 
 // Define which errors are fatal for the sync manager as the error is bubbled
 // up to the main event loop which then decides how to act on errors.
@@ -79,17 +78,7 @@ impl<T> FatalError for crate::Result<T> {
     }
 }
 
-enum RequestType {
-    GetHeaders,
-    GetBlocks(Vec<Id<Block>>),
-}
-
-struct PendingRequest<T: NetworkingService> {
-    _peer_id: T::PeerId,
-    request_type: RequestType,
-    retry_count: usize,
-}
-
+/// Syncing state of the local node
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum SyncState {
     /// Local node's state is uninitialized
@@ -110,10 +99,7 @@ pub enum SyncState {
 ///
 /// Currently its only mode of operation is greedy so it will download all changes from every
 /// peer it's connected to and actively keep track of the peer's state.
-pub struct SyncManager<T>
-where
-    T: NetworkingService,
-{
+pub struct SyncManager<T: NetworkingService> {
     /// Chain config
     config: Arc<ChainConfig>,
 
@@ -139,10 +125,10 @@ where
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// Pending requests
-    requests: HashMap<T::RequestId, PendingRequest<T>>,
+    requests: HashMap<T::RequestId, request::RequestState<T>>,
 }
 
-// TODO: refactor this code
+/// Syncing manager
 impl<T> SyncManager<T>
 where
     T: NetworkingService,
@@ -169,92 +155,20 @@ where
         }
     }
 
+    /// Get current sync state
     pub fn state(&self) -> &SyncState {
         &self.state
     }
 
+    /// Get mutable reference to the handle
     pub fn handle_mut(&mut self) -> &mut T::SyncingCodecHandle {
         &mut self.handle
     }
 
-    pub async fn send_header_request(
-        &mut self,
-        peer_id: T::PeerId,
-        locator: Vec<BlockHeader>,
-        retry_count: usize,
-    ) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        let request_id = self
-            .handle
-            .send_request(
-                peer_id,
-                Message {
-                    magic: *self.config.magic_bytes(),
-                    msg: MessageType::Syncing(SyncingMessage::Request(
-                        SyncingRequest::GetHeaders { locator },
-                    )),
-                },
-            )
-            .await?;
-        self.requests.insert(
-            request_id,
-            PendingRequest {
-                _peer_id: peer_id,
-                request_type: RequestType::GetHeaders,
-                retry_count,
-            },
-        );
-        peer.set_state(peer::PeerSyncState::UploadingHeaders);
-
-        Ok(())
-    }
-
-    pub async fn send_block_request(
-        &mut self,
-        peer_id: T::PeerId,
-        block_id: Id<Block>,
-        retry_count: usize,
-    ) -> crate::Result<()> {
-        let peer = self
-            .peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-        let request_id = self
-            .handle
-            .send_request(
-                peer_id,
-                Message {
-                    magic: *self.config.magic_bytes(),
-                    msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                        block_ids: vec![block_id.clone()],
-                    })),
-                },
-            )
-            .await?;
-        self.requests.insert(
-            request_id,
-            PendingRequest {
-                _peer_id: peer_id,
-                request_type: RequestType::GetBlocks(vec![block_id.clone()]),
-                retry_count,
-            },
-        );
-        peer.set_state(peer::PeerSyncState::UploadingBlocks(block_id));
-
-        Ok(())
-    }
-
+    /// Register peer to the `SyncManager`
     pub async fn register_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        log::info!("register peer {:?} to sync manager", peer_id);
-
         match self.peers.entry(peer_id) {
-            Entry::Occupied(_) => {
-                log::error!("peer {:?} already known by sync manager", peer_id);
-                Err(P2pError::PeerError(PeerError::PeerAlreadyExists))
-            }
+            Entry::Occupied(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             Entry::Vacant(entry) => {
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
                 entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
@@ -263,50 +177,31 @@ where
         }
     }
 
+    /// Unregister peer from the `SyncManager`
     pub fn unregister_peer(&mut self, peer_id: T::PeerId) {
-        log::info!("unregister peer {:?}", peer_id);
-
         self.peers.remove(&peer_id);
     }
 
+    /// Process header request
     pub async fn process_header_request(
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
         locator: Vec<BlockHeader>,
     ) -> crate::Result<()> {
-        log::trace!(
-            "received a header request from peer {:?}, locator {:#?}",
-            peer_id,
-            locator
-        );
-
+        // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
-        self.handle
-            .send_response(
-                request_id,
-                Message {
-                    magic: *self.config.magic_bytes(),
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers,
-                    })),
-                },
-            )
-            .await
+        self.send_header_response(request_id, headers).await
     }
 
-    async fn process_block_request(
+    /// Process block request
+    pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
-        log::trace!(
-            "received a block request from peer {:?}, header counter {}",
-            peer_id,
-            headers.len(),
-        );
-
+        // TODO: check if remote has already asked for these headers?
         if headers.len() != 1 {
             log::error!("expected 1 header, received {} headers", headers.len());
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
@@ -317,6 +212,7 @@ where
             .get_mut(&peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
         let block_id = headers.get(0).expect("header to exist").clone();
+        // TODO: check error
         let block = self
             .chainstate_handle
             .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
@@ -332,37 +228,19 @@ where
                 P2pError::ProtocolError(ProtocolError::InvalidMessage)
             })?;
 
-        self.handle
-            .send_response(
-                request_id,
-                Message {
-                    magic: *self.config.magic_bytes(),
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                        blocks: vec![block],
-                    })),
-                },
-            )
-            .await
+        self.send_block_response(request_id, vec![block]).await
     }
 
-    // TODO: get rid of the awful `set_state()` calls
-    // TODO: simplify this code massively
-    async fn process_header_response(
+    /// Validate incoming header response
+    async fn validate_header_response(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: &T::PeerId,
         headers: Vec<BlockHeader>,
-    ) -> crate::Result<()> {
+    ) -> crate::Result<Option<BlockHeader>> {
         let peer = self
             .peers
-            .get_mut(&peer_id)
+            .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        log::debug!(
-            "initialize peer {:?} state, number of headers: {}",
-            peer_id,
-            headers.len(),
-        );
-        log::trace!("headers: {:#?}", headers);
 
         if headers.len() > HEADER_LIMIT {
             // TODO: ban peer
@@ -373,10 +251,10 @@ where
             );
             return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
         }
+
+        // empty response means that local and remote are in sync
         if headers.is_empty() {
-            log::debug!("local node is in sync with peer {:?}", peer_id);
-            peer.set_state(peer::PeerSyncState::Idle);
-            return Ok(());
+            return Ok(None);
         }
 
         // make sure the first header attaches to the locator that was sent out
@@ -391,16 +269,27 @@ where
                 P2pError::ProtocolError(ProtocolError::InvalidMessage)
             })?;
 
-        if !peer.locator().iter().any(|header| header.get_id() == prev_id)
-            && self.config.genesis_block_id() != prev_id
-        {
-            // TODO: ban peer
-            log::error!(
-                "peer {:?} sent headers that don't attach to the sent locator or to genesis block",
-                peer_id
-            );
+        match peer.state() {
+            peer::PeerSyncState::UploadingHeaders(ref locator) => {
+                if !locator.iter().any(|header| header.get_id() == prev_id)
+                    && self.config.genesis_block_id() != prev_id
+                {
+                    // TODO: ban peer
+                    log::error!(
+                        "peer {:?} sent headers that don't attach to the sent locator or to genesis block",
+                        peer_id
+                    );
 
-            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                }
+            }
+            _ => {
+                log::error!("peer is in wrong state to send header response");
+                return Err(P2pError::ProtocolError(ProtocolError::InvalidState(
+                    "",
+                    "UploadingHeaders",
+                )));
+            }
         }
 
         for header in &headers {
@@ -417,53 +306,39 @@ where
             .await??;
 
         peer.register_header_response(&unknown_headers);
-        if let Some(header) = peer.get_header_for_download() {
-            let request_id = self
-                .handle
-                .send_request(
-                    peer_id,
-                    Message {
-                        magic: *self.config.magic_bytes(),
-                        msg: MessageType::Syncing(SyncingMessage::Request(
-                            SyncingRequest::GetBlocks {
-                                block_ids: vec![header.get_id()],
-                            },
-                        )),
-                    },
-                )
-                .await?;
-            self.requests.insert(
-                request_id,
-                PendingRequest {
-                    _peer_id: peer_id,
-                    request_type: RequestType::GetBlocks(vec![header.get_id()]),
-                    retry_count: 0,
-                },
-            );
-            peer.set_state(peer::PeerSyncState::UploadingBlocks(header.get_id()));
-        } else {
-            peer.set_state(peer::PeerSyncState::Idle);
+        Ok(peer.get_header_for_download())
+    }
+
+    /// Process incoming header response
+    pub async fn process_header_response(
+        &mut self,
+        peer_id: T::PeerId,
+        headers: Vec<BlockHeader>,
+    ) -> crate::Result<()> {
+        match self.validate_header_response(&peer_id, headers).await {
+            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id(), 0).await?,
+            Ok(None) => self
+                .peers
+                .get_mut(&peer_id)
+                .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
+                .set_state(peer::PeerSyncState::Idle),
+            Err(err) => {
+                // TODO: handle errror, ban peer?
+            }
         }
 
         Ok(())
     }
 
-    // TODO: create process_block function?
-    async fn process_block_response(
+    /// Validate incoming block response
+    async fn validate_block_response(
         &mut self,
-        peer_id: T::PeerId,
+        peer_id: &T::PeerId,
         blocks: Vec<Block>,
-    ) -> crate::Result<()> {
-        log::trace!("received {} blocks from peer {:?}", blocks.len(), peer_id,);
-
-        if blocks.len() != 1 {
-            log::error!("expected 1 block, received {} blocks", blocks.len());
-            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        }
-
+    ) -> crate::Result<Option<BlockHeader>> {
         let peer = self
             .peers
-            .get_mut(&peer_id)
+            .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
         // TODO: check error, ban peer
@@ -474,6 +349,8 @@ where
             .call_mut(move |this| this.process_block(block, BlockSource::Peer))
             .await?;
 
+        // TODO: check all errors
+        // TODO: ban peer if needed
         match result {
             Ok(_) => {}
             Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) => {
@@ -482,73 +359,41 @@ where
             Err(e) => return Err(P2pError::ChainstateError(e)),
         }
 
-        let next_header = peer.register_block_response(&header);
-        match next_header {
-            Ok(Some(next_block)) => {
-                let request_id = self
-                    .handle
-                    .send_request(
-                        peer_id,
-                        Message {
-                            magic: *self.config.magic_bytes(),
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetBlocks {
-                                    block_ids: vec![next_block.get_id()],
-                                },
-                            )),
-                        },
-                    )
-                    .await?;
-                self.requests.insert(
-                    request_id,
-                    PendingRequest {
-                        _peer_id: peer_id,
-                        request_type: RequestType::GetBlocks(vec![next_block.get_id()]),
-                        retry_count: 0,
-                    },
-                );
-                peer.set_state(peer::PeerSyncState::UploadingBlocks(next_block.get_id()));
-                Ok(())
-            }
+        peer.register_block_response(&header)
+    }
+
+    /// Process block response
+    pub async fn process_block_response(
+        &mut self,
+        peer_id: T::PeerId,
+        blocks: Vec<Block>,
+    ) -> crate::Result<()> {
+        if blocks.len() != 1 {
+            log::error!("expected 1 block, received {} blocks", blocks.len());
+            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+        }
+
+        match self.validate_block_response(&peer_id, blocks).await {
+            Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id(), 0).await,
             Ok(None) => {
-                // last block from peer, ask if peer knows of any new headers
+                // last block from peer received, ask if peer knows of any new headers
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-                peer.set_locator(locator.clone());
-                let request_id = self
-                    .handle
-                    .send_request(
-                        peer_id,
-                        Message {
-                            magic: *self.config.magic_bytes(),
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetHeaders { locator },
-                            )),
-                        },
-                    )
-                    .await?;
-                self.requests.insert(
-                    request_id,
-                    PendingRequest {
-                        _peer_id: peer_id,
-                        request_type: RequestType::GetHeaders,
-                        retry_count: 0,
-                    },
-                );
-                peer.set_state(peer::PeerSyncState::UploadingHeaders);
-                Ok(())
+                self.send_header_request(peer_id, locator, 0).await
             }
             Err(e) => {
                 // TODO: ban peer
-                log::error!(
-                    "peer sent invalid or unexpected data, close connection: {:?}",
-                    e
-                );
                 Ok(())
             }
         }
     }
 
-    // if all peers are idling, then it means we're idling -> fully synced
+    /// Check the current state of syncing
+    ///
+    /// The node is considered fully synced, i.e., that its initial block download is done, if:
+    /// - all of its peers are in `Idle` state
+    ///
+    /// When the node is synced, [`crate::PubSubMessageHandler`] is notified so it knows to
+    /// subscribe to the needed publish-subscribe topics.
     pub async fn check_state(&mut self) -> crate::Result<()> {
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
@@ -561,7 +406,7 @@ where
                     self.state = SyncState::DownloadingBlocks;
                     return Ok(());
                 }
-                peer::PeerSyncState::UploadingHeaders | peer::PeerSyncState::Unknown => {
+                peer::PeerSyncState::UploadingHeaders(_) | peer::PeerSyncState::Unknown => {
                     self.state = SyncState::Uninitialized;
                     return Ok(());
                 }
@@ -576,38 +421,7 @@ where
             .map_err(P2pError::from)
     }
 
-    async fn process_request(
-        &mut self,
-        peer_id: T::PeerId,
-        request_id: T::RequestId,
-        request: SyncingRequest,
-    ) -> crate::Result<()> {
-        match request {
-            SyncingRequest::GetHeaders { locator } => {
-                self.process_header_request(peer_id, request_id, locator).await
-            }
-            SyncingRequest::GetBlocks { block_ids } => {
-                self.process_block_request(peer_id, request_id, block_ids).await
-            }
-        }
-    }
-
-    async fn process_response(
-        &mut self,
-        peer_id: T::PeerId,
-        response: SyncingResponse,
-    ) -> crate::Result<()> {
-        match response {
-            SyncingResponse::Headers { headers } => {
-                self.process_header_response(peer_id, headers).await
-            }
-            SyncingResponse::Blocks { blocks } => {
-                self.process_block_response(peer_id, blocks).await
-            }
-        }
-    }
-
-    async fn process_error(
+    pub async fn process_error(
         &mut self,
         peer_id: T::PeerId,
         request_id: T::RequestId,
@@ -640,13 +454,13 @@ where
                     }
 
                     match request.request_type {
-                        RequestType::GetHeaders => {
+                        request::RequestType::GetHeaders => {
                             let locator =
                                 self.chainstate_handle.call(|this| this.get_locator()).await??;
                             self.send_header_request(peer_id, locator, request.retry_count + 1)
                                 .await?;
                         }
-                        RequestType::GetBlocks(block_ids) => {
+                        request::RequestType::GetBlocks(block_ids) => {
                             assert_eq!(block_ids.len(), 1);
                             self.send_block_request(
                                 peer_id,
@@ -662,84 +476,100 @@ where
         Ok(())
     }
 
-    /// Handle incoming block/header request/response
-    pub async fn on_syncing_event(
-        &mut self,
-        event: net::types::SyncingEvent<T>,
-    ) -> crate::Result<()> {
-        match event {
-            net::types::SyncingEvent::Request {
-                peer_id,
-                request_id,
-                request:
-                    Message {
-                        msg: MessageType::Syncing(SyncingMessage::Request(message)),
-                        magic: _,
-                    },
-            } => {
-                log::debug!(
-                    "process incoming request (id {:?}) from peer {:?}",
-                    request_id,
-                    peer_id
-                );
-                self.process_request(peer_id, request_id, message).await
-            }
-            net::types::SyncingEvent::Response {
-                peer_id,
-                request_id,
-                response:
-                    Message {
-                        msg: MessageType::Syncing(SyncingMessage::Response(message)),
-                        magic: _,
-                    },
-            } => {
-                log::debug!(
-                    "process incoming response (id {:?}) from peer {:?}",
-                    request_id,
-                    peer_id
-                );
-                self.process_response(peer_id, message).await
-            }
-            net::types::SyncingEvent::Error {
-                peer_id,
-                request_id,
-                error,
-            } => self.process_error(peer_id, request_id, error).await,
-            net::types::SyncingEvent::Request { peer_id, .. }
-            | net::types::SyncingEvent::Response { peer_id, .. } => {
-                log::error!("received an invalid message from peer {:?}", peer_id);
-                // TODO: disconnect peer and ban it
-                // TODO: send `Misbehaved` event to PeerManager
-                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-            }
-        }
-    }
-
-    /// Handle control-related sync event from P2P/PeerManager
-    async fn on_control_event(&mut self, event: event::SyncControlEvent<T>) -> crate::Result<()> {
-        match event {
-            event::SyncControlEvent::Connected(peer_id) => self.register_peer(peer_id).await,
-            event::SyncControlEvent::Disconnected(peer_id) => {
-                self.unregister_peer(peer_id);
-                Ok(())
-            }
-        }
-    }
-
     /// Run SyncManager event loop
-    pub async fn run(&mut self) -> crate::Result<()> {
-        log::info!("starting sync manager event loop");
+    pub async fn run(&mut self) -> crate::Result<void::Void> {
+        log::info!("Starting SyncManager");
 
         loop {
             tokio::select! {
-                res = self.handle.poll_next() => {
-                    self.on_syncing_event(res?).await.map_fatal_err()?;
-                }
-                res = self.rx_sync.recv().fuse() => {
-                    self.on_control_event(res.ok_or(P2pError::ChannelClosed)?).await.map_fatal_err()?;
+                event = self.handle.poll_next() => match event? {
+                    SyncingEvent::Request {
+                        peer_id,
+                        request_id,
+                        request:
+                            Message {
+                                msg: MessageType::Syncing(SyncingMessage::Request(message)),
+                                magic: _,
+                            },
+                    } => {
+                        match message {
+                            SyncingRequest::GetHeaders { locator } => {
+                                log::debug!(
+                                    "process header request (id {:?}) from peer {}",
+                                    request_id, peer_id
+                                );
+                                log::trace!("locator: {:#?}", locator);
+
+                                self.process_header_request(peer_id, request_id, locator).await?;
+                            }
+                            SyncingRequest::GetBlocks { block_ids } => {
+                                log::debug!(
+                                    "process block request (id {:?}) from peer {}",
+                                    request_id, peer_id
+                                );
+                                log::trace!("requested block ids: {:#?}", block_ids);
+
+                                self.process_block_request(peer_id, request_id, block_ids).await?;
+                            }
+                        }
+                    }
+                    SyncingEvent::Response {
+                        peer_id,
+                        request_id,
+                        response:
+                            Message {
+                                msg: MessageType::Syncing(SyncingMessage::Response(message)),
+                                magic: _,
+                            },
+                    } => {
+                        match message {
+                            SyncingResponse::Headers { headers } => {
+                                log::debug!(
+                                    "process header response (id {:?}) from peer {:?}",
+                                    request_id, peer_id
+                                );
+                                log::trace!("received headers: {:#?}", headers);
+
+                                self.process_header_response(peer_id, headers).await?;
+                            }
+                            SyncingResponse::Blocks { blocks } => {
+                                log::debug!(
+                                    "process block response (id {:?}) from peer {:?}",
+                                    request_id, peer_id
+                                );
+                                log::trace!("# of received blocks: {:#?}", blocks.len());
+
+                                self.process_block_response(peer_id, blocks).await?;
+                            }
+                        }
+                    },
+                    SyncingEvent::Error {
+                        peer_id,
+                        request_id,
+                        error,
+                    } => {
+                        self.process_error(peer_id, request_id, error).await?;
+                    },
+                    SyncingEvent::Request { peer_id, .. } | SyncingEvent::Response { peer_id, .. } => {
+                        log::error!("received an invalid message from peer {:?}", peer_id);
+                        // TODO: disconnect peer and ban it
+                        // TODO: send `Misbehaved` event to PeerManager
+                        // return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                    }
+                },
+                event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    event::SyncControlEvent::Connected(peer_id) => {
+                        log::debug!("register peer {} to sync manager", peer_id);
+                        self.register_peer(peer_id).await?;
+                    }
+                    event::SyncControlEvent::Disconnected(peer_id) => {
+                        log::debug!("unregister peer {} from sync manager", peer_id);
+                        self.unregister_peer(peer_id);
+                    }
                 }
             }
 
+            // TODO: handle error
             self.check_state().await.map_fatal_err()?;
         }
     }
