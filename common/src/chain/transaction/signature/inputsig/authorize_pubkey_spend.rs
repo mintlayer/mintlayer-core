@@ -20,7 +20,7 @@ use parity_scale_codec::{Decode, Encode};
 
 use crate::{chain::signature::TransactionSigError, primitives::H256};
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedPublicKeySpend {
     signature: Signature,
 }
@@ -66,4 +66,144 @@ pub fn sign_pubkey_spending(
     Ok(AuthorizedPublicKeySpend::new(signature))
 }
 
-// TODO: tests
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::{
+        address::pubkeyhash::PublicKeyHash,
+        chain::{
+            signature::{inputsig::StandardInputSignature, signature_hash},
+            transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+            Destination,
+        },
+    };
+    use crypto::key::{KeyKind, PrivateKey};
+    use rand::Rng;
+
+    const INPUTS: usize = 10;
+    const OUTPUTS: usize = 10;
+
+    // Try to produce a signature for a non-existent input.
+    #[test]
+    fn invalid_input_index() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            let res = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                1,
+            );
+            assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
+        }
+    }
+
+    // Using Destination::Address for AuthorizedPublicKeySpend.
+    #[test]
+    fn wrong_destination_type() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                rng.gen_range(0..INPUTS),
+            )
+            .unwrap();
+
+            assert_eq!(
+                Err(TransactionSigError::InvalidSignatureEncoding),
+                AuthorizedPublicKeySpend::from_data(witness.raw_signature()),
+                "{sighash_type:X?}"
+            )
+        }
+    }
+
+    #[test]
+    fn invalid_signature_type() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                rng.gen_range(0..INPUTS),
+            )
+            .unwrap();
+
+            let mut raw_signature = witness.raw_signature().clone();
+            AuthorizedPublicKeySpend::from_data(&raw_signature).unwrap();
+
+            // Changing the first byte doesn't changes the signature data, instead it changes the
+            // signature enum discriminant, therefore it changes the signature type.
+            raw_signature[0] = raw_signature[0].wrapping_add(2);
+            assert_eq!(
+                Err(TransactionSigError::InvalidSignatureEncoding),
+                AuthorizedPublicKeySpend::from_data(&raw_signature),
+                "{sighash_type:X?}"
+            )
+        }
+    }
+
+    #[test]
+    fn test_verify_public_key_spending() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key.clone());
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                input,
+            )
+            .unwrap();
+            let spender_signature =
+                AuthorizedPublicKeySpend::from_data(witness.raw_signature()).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+            verify_public_key_spending(&public_key, &spender_signature, &sighash)
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
+        }
+    }
+
+    #[test]
+    fn test_sign_pubkey_spending() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key.clone());
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                input,
+            )
+            .unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+            sign_pubkey_spending(&private_key, &public_key, &sighash)
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
+        }
+    }
+}

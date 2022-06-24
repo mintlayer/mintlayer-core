@@ -1,4 +1,4 @@
-// Copyright (c) 2021 RBB S.r.l
+// Copyright (c) 2021 RBB S.r.l&
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -22,7 +22,7 @@ use crate::{
     address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,
 };
 
-#[derive(Debug, Encode, Decode)]
+#[derive(Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AuthorizedPublicKeyHashSpend {
     public_key: PublicKey,
     signature: Signature,
@@ -77,4 +77,150 @@ pub fn sign_address_spending(
     Ok(AuthorizedPublicKeyHashSpend::new(public_key, signature))
 }
 
-// TODO: tests
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::chain::{
+        signature::{inputsig::StandardInputSignature, signature_hash},
+        transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+        Destination,
+    };
+    use crypto::key::{KeyKind, PrivateKey};
+    use rand::Rng;
+
+    const INPUTS: usize = 10;
+    const OUTPUTS: usize = 10;
+
+    // Try to produce a signature for a non-existent input.
+    #[test]
+    fn invalid_input_index() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            let res = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                1,
+            );
+            assert_eq!(res, Err(TransactionSigError::InvalidInputIndex(1, 1)));
+        }
+    }
+
+    // Using Destination::PublicKey for AuthorizedPublicKeyHashSpend.
+    #[test]
+    fn wrong_destination_type() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                rng.gen_range(0..INPUTS),
+            )
+            .unwrap();
+            assert!(
+                matches!(
+                    AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()),
+                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                ),
+                "{sighash_type:X?}"
+            )
+        }
+    }
+
+    #[test]
+    fn invalid_signature_type() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                rng.gen_range(0..INPUTS),
+            )
+            .unwrap();
+
+            let mut raw_signature = witness.raw_signature().clone();
+            AuthorizedPublicKeyHashSpend::from_data(&raw_signature).unwrap();
+
+            // Changing the first byte doesn't changes the signature data, instead it changes the
+            // signature enum discriminant, therefore it changes the signature type.
+            raw_signature[0] = raw_signature[0].wrapping_add(2);
+            assert!(
+                matches!(
+                    AuthorizedPublicKeyHashSpend::from_data(&raw_signature),
+                    Err(TransactionSigError::AddressAuthDecodingFailed(_))
+                ),
+                "{sighash_type:X?}"
+            )
+        }
+    }
+
+    #[test]
+    fn test_verify_address_spending() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let destination = Destination::Address(pubkey_hash);
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                input,
+            )
+            .unwrap();
+            let spender_signature =
+                AuthorizedPublicKeyHashSpend::from_data(witness.raw_signature()).unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+
+            verify_address_spending(&pubkey_hash, &spender_signature, &sighash)
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
+        }
+    }
+
+    #[test]
+    fn test_sign_address_spending() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key.clone());
+        let pubkey_hash = PublicKeyHash::from(&public_key);
+        let tx = generate_unsigned_tx(&destination, INPUTS, OUTPUTS).unwrap();
+        let mut rng = rand::thread_rng();
+
+        for sighash_type in sig_hash_types() {
+            let input = rng.gen_range(0..INPUTS);
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                input,
+            )
+            .unwrap();
+            let sighash = signature_hash(witness.sighash_type(), &tx, input).unwrap();
+
+            sign_address_spending(&private_key, &pubkey_hash, &sighash)
+                .unwrap_or_else(|_| panic!("{sighash_type:X?}"));
+        }
+    }
+}

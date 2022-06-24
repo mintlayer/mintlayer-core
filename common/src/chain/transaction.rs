@@ -59,7 +59,7 @@ pub enum TransactionCreationError {
     Unknown,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TransactionUpdateError {
     Unknown,
 }

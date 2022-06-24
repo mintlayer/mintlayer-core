@@ -68,7 +68,7 @@ impl TryFrom<u8> for SigHashType {
 }
 
 /// How inputs should be hashed
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum InputsMode {
     /// Commit to all inputs
     CommitWhoPays,
@@ -83,7 +83,7 @@ impl Default for SigHashType {
 }
 
 /// How outputs should be hashed
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum OutputsMode {
     /// Commit to all outputs
     All,
@@ -93,14 +93,11 @@ pub enum OutputsMode {
     Single,
 }
 
-// TODO: test
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
-    #[allow(clippy::eq_op)]
     fn check_sighashtype_conversion() {
         // Check inputs and outputs mode
         let sighash_type = SigHashType::try_from(SigHashType::ALL).unwrap();

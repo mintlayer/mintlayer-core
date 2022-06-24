@@ -171,13 +171,87 @@ impl Encode for StandardInputSignature {
     }
 }
 
-// TODO: write tests
-
 #[cfg(test)]
 mod test {
+    use crate::{
+        address::pubkeyhash::PublicKeyHash,
+        chain::transaction::signature::tests::utils::{generate_unsigned_tx, sig_hash_types},
+    };
+
+    use super::*;
+    use crypto::key::{KeyKind, PrivateKey};
+    use itertools::Itertools;
+
+    const INPUT_NUM: usize = 0;
+
     #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn produce_signature_address_missmatch() {
+        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::Address(PublicKeyHash::from(&public_key));
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            assert_eq!(
+                Err(TransactionSigError::PublicKeyToAddressMismatch),
+                StandardInputSignature::produce_signature_for_input(
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                    &tx,
+                    INPUT_NUM,
+                ),
+                "{sighash_type:X?}"
+            );
+        }
+    }
+
+    #[test]
+    fn produce_signature_key_missmatch() {
+        let (private_key, _) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let (_, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let destination = Destination::PublicKey(public_key);
+        let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+
+        for sighash_type in sig_hash_types() {
+            assert_eq!(
+                Err(TransactionSigError::SpendeePrivatePublicKeyMismatch),
+                StandardInputSignature::produce_signature_for_input(
+                    &private_key,
+                    sighash_type,
+                    destination.clone(),
+                    &tx,
+                    INPUT_NUM,
+                ),
+                "{sighash_type:X?}"
+            );
+        }
+    }
+
+    #[test]
+    fn produce_and_verify() {
+        let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+        let outpoints = [
+            Destination::Address(PublicKeyHash::from(&public_key)),
+            Destination::PublicKey(public_key),
+        ];
+
+        for (sighash_type, destination) in sig_hash_types().cartesian_product(outpoints.into_iter())
+        {
+            let tx = generate_unsigned_tx(&destination, 1, 2).unwrap();
+            let witness = StandardInputSignature::produce_signature_for_input(
+                &private_key,
+                sighash_type,
+                destination.clone(),
+                &tx,
+                INPUT_NUM,
+            )
+            .unwrap();
+
+            let sighash = signature_hash(witness.sighash_type(), &tx, INPUT_NUM).unwrap();
+            witness
+                .verify_signature(&destination, &sighash)
+                .unwrap_or_else(|_| panic!("{sighash_type:X?} {destination:?}"));
+        }
     }
 }
