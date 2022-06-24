@@ -14,14 +14,27 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+//! Publish-subscribe message/event handling
+
 use crate::{
-    error::{P2pError, ProtocolError},
+    error::{P2pError, ProtocolError, PublishError},
     event,
     message::{self, Message, MessageType, PubSubMessage},
-    net::{self, NetworkingService, PubSubService},
+    net::{
+        types::{PubSubEvent, ValidationResult},
+        NetworkingService, PubSubService,
+    },
 };
-use chainstate::{chainstate_interface, BlockError, ChainstateError::ProcessBlockError};
-use common::chain::ChainConfig;
+use chainstate::{
+    ban_score::BanScore,
+    chainstate_interface, BlockError,
+    ChainstateError::{FailedToInitializeChainstate, FailedToReadProperty, ProcessBlockError},
+};
+use common::{
+    chain::{block::Block, ChainConfig},
+    primitives::Id,
+};
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -30,13 +43,18 @@ use tokio::sync::mpsc;
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
 
-pub struct PubSubMessageHandler<T>
-where
-    T: NetworkingService,
-{
-    config: Arc<ChainConfig>,
+/// Publish-subscribe message handler
+pub struct PubSubMessageHandler<T: NetworkingService> {
+    /// Chain config
+    chain_config: Arc<ChainConfig>,
+
+    /// Handle for communication with networking service
     pubsub_handle: T::PubSubHandle,
+
+    /// Handle for communication with chainstate
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+
+    /// RX channel for receiving control events from RPC/[`swarm::PeerManager`]
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 }
 
@@ -45,91 +63,30 @@ where
     T: NetworkingService,
     T::PubSubHandle: PubSubService<T>,
 {
+    /// Create new `PubSubMessageHandler`
+    ///
+    /// # Arguments
+    /// * `chain_config` - chain configuration
+    /// * `pubsub_handle` - handle for communication with networking service
+    /// * `chainstate_handle` -  handle for communication with chainstate
+    /// * `rx_pubsub` - RX channel for receiving control events
     pub fn new(
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
     ) -> Self {
         Self {
-            config,
+            chain_config,
             pubsub_handle,
             chainstate_handle,
             rx_pubsub,
         }
     }
 
-    // TODO: remove one global message type and create multiple message types so we can get rid of this check
-    async fn validate_pubsub_message(
-        &mut self,
-        event: net::types::PubSubEvent<T>,
-    ) -> crate::Result<(T::PeerId, T::MessageId, PubSubMessage)> {
-        match event {
-            net::types::PubSubEvent::MessageReceived {
-                peer_id,
-                message_id,
-                message:
-                    Message {
-                        magic: _,
-                        msg: MessageType::PubSub(PubSubMessage::Block(block)),
-                    },
-            } => Ok((peer_id, message_id, PubSubMessage::Block(block))),
-            net::types::PubSubEvent::MessageReceived {
-                peer_id,
-                message_id,
-                message:
-                    Message {
-                        magic: _,
-                        msg: MessageType::Syncing(_),
-                    },
-            } => {
-                // TODO: report misbehaviour to swarm manager
-                log::error!("received an invalid message from peer {:?}", peer_id);
-                self.pubsub_handle
-                    .report_validation_result(
-                        peer_id,
-                        message_id,
-                        net::types::ValidationResult::Reject,
-                    )
-                    .await?;
-                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-            }
-        }
-    }
-
-    // while initial block download is in progress, ignore all incoming data
-    // and wait for the completion event to be received from syncing
-    async fn node_syncing(&mut self) -> crate::Result<()> {
-        loop {
-            tokio::select! {
-                event = self.pubsub_handle.poll_next() => {
-                    let (peer_id, message_id, _) = self.validate_pubsub_message(event?).await?;
-
-                    log::trace!(
-                        "received a pubsub message from peer {:?}, ignoring",
-                        peer_id
-                    );
-
-                    self.pubsub_handle
-                        .report_validation_result(
-                            peer_id,
-                            message_id,
-                            net::types::ValidationResult::Ignore,
-                        )
-                        .await?;
-                }
-                event = self.rx_pubsub.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    event::PubSubControlEvent::InitialBlockDownloadDone => {
-                        log::info!("initial block download done, activate pubsub");
-                        return Ok(());
-                    }
-                }
-            }
-        }
-    }
-
-    async fn node_active(&mut self) -> crate::Result<()> {
-        let (tx, mut rx) = mpsc::channel(CHANNEL_SIZE);
+    /// Subscribe to events
+    async fn subscribe_to_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
+        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
 
         let subscribe_func =
             Arc::new(
@@ -137,7 +94,7 @@ where
                     chainstate::ChainstateEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
                             if let Err(e) = tx.send(block_id).await {
-                                log::error!("pubsub manager closed: {:?}", e)
+                                log::error!("PubSubMessageHandler closed: {:?}", e)
                             }
                         });
                     }
@@ -149,89 +106,141 @@ where
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
 
-        loop {
-            tokio::select! {
-                event = self.pubsub_handle.poll_next() => {
-                    let (peer_id, message_id, message) = self.validate_pubsub_message(event?).await?;
+        // TODO: subscribe to pubsub topics
+        Ok(rx)
+    }
 
-                    log::trace!(
-                        "received a pubsub message from peer {:?}, send to chainstate",
-                        peer_id
-                    );
+    /// Process block announcement from the network
+    async fn process_block_announcement(
+        &mut self,
+        peer_id: T::PeerId,
+        message_id: T::MessageId,
+        block: Block,
+    ) -> crate::Result<()> {
+        let result = self
+            .chainstate_handle
+            .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
+            .await?;
 
-                    match message {
-                        PubSubMessage::Block(block) => {
-                            let result = match self
-                                .chainstate_handle
-                                .call_mut(move |this| {
-                                    this.process_block(block, chainstate::BlockSource::Peer)
-                                })
-                                .await?
-                            {
-                                Ok(_) => net::types::ValidationResult::Accept,
-                                Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) =>
-                                    net::types::ValidationResult::Accept, // TODO: ignore?
-                                Err(err) => {
-                                    // TODO: report misbehaviour to swarm manager and close connection
-                                    log::error!(
-                                    "block rejected, peer id {:?}, message id {:?}, reason, {:?}",
-                                    peer_id,
-                                    message_id,
-                                    err
-                                );
-
-                                net::types::ValidationResult::Reject
-                                }
-                            };
-                            self.pubsub_handle
-                                .report_validation_result(peer_id, message_id, result)
-                                .await?;
-                        }
-                    }
+        let (validation_result, score) = match result {
+            Ok(_) => (ValidationResult::Accept, 0),
+            Err(ProcessBlockError(ref block_error)) => match block_error {
+                err @ BlockError::BlockAlreadyExists(_id) => {
+                    (ValidationResult::Accept, err.ban_score())
                 }
-                block_id = rx.recv().fuse() => {
-                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
-                    let block = self
-                        .chainstate_handle
-                        .call(|this| this.get_block(block_id))
-                        .await??;
-
-                    // TODO: make this look nicer
-                    match block {
-                        Some(block) => {
-                            match self.pubsub_handle
-                                .publish(message::Message {
-                                    magic: *self.config.magic_bytes(),
-                                    msg: message::MessageType::PubSub(
-                                        message::PubSubMessage::Block(block),
-                                    ),
-                                })
-                                .await {
-                                    Ok(_) => {},
-                                    Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
-                                    Err(e) => {
-                                        log::error!("failed to publish message: {:?}", e);
-                                    }
-                                }
-                        }
-                        None => {
-                            log::error!("CRITICAL: best block not available")
-                        }
-                    }
+                err @ BlockError::StorageError(_) => (ValidationResult::Ignore, err.ban_score()),
+                err @ BlockError::BestBlockLoadError(_) => {
+                    (ValidationResult::Ignore, err.ban_score())
                 }
+                err @ BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::InvariantErrorInvalidTip => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::InvariantErrorPrevBlockNotFound => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::DatabaseCommitError(_, _, _) => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::OrphanCheckFailed(_err) => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::CheckBlockFailed(_err) => {
+                    (ValidationResult::Reject, err.ban_score())
+                }
+                err @ BlockError::StateUpdateFailed(_err) => {
+                    (ValidationResult::Ignore, err.ban_score())
+                }
+                err @ BlockError::PrevBlockNotFound => (ValidationResult::Reject, err.ban_score()),
+                err @ BlockError::InvalidBlockSource => (ValidationResult::Reject, err.ban_score()),
+                err @ BlockError::BlockProofCalculationError(_) => {
+                    (ValidationResult::Reject, err.ban_score())
+                }
+            },
+            Err(FailedToInitializeChainstate(_)) => (ValidationResult::Ignore, 0),
+            Err(FailedToReadProperty(_)) => (ValidationResult::Ignore, 0),
+        };
+
+        if score > 0 {
+            // TODO: adjust peer score
+        }
+
+        self.pubsub_handle
+            .report_validation_result(peer_id, message_id, validation_result)
+            .await
+    }
+
+    /// Announce block to the network
+    async fn announce_block(&mut self, block: Block) -> crate::Result<()> {
+        let result = self
+            .pubsub_handle
+            .publish(message::Message {
+                magic: *self.chain_config.magic_bytes(),
+                msg: message::MessageType::PubSub(message::PubSubMessage::Block(block)),
+            })
+            .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(P2pError::ChannelClosed) => result,
+            Err(P2pError::PublishError(ref error)) => match error {
+                PublishError::InsufficientPeers => Ok(()),
+                PublishError::TransformFailed => result,
+                PublishError::Duplicate => result,
+                PublishError::MessageTooLarge(_size, _limit) => result,
+                PublishError::SigningFailed => result,
+            },
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)) => result,
+            Err(err) => {
+                log::error!(
+                    "Unexpected error occurred while trying to announce block: {}",
+                    err
+                );
+                Ok(())
             }
         }
     }
 
-    pub async fn run(&mut self) -> crate::Result<()> {
-        // when node is started and it connects to some peers,
-        // it starts the initial block download. During this period,
-        // all events from both syncing and pubsub implementation should be ignored
-        self.node_syncing().await?;
+    /// Run `PubSubMessageHandler` event loop
+    pub async fn run(&mut self) -> crate::Result<void::Void> {
+        match self.rx_pubsub.recv().await {
+            None => return Err(P2pError::ChannelClosed),
+            Some(event::PubSubControlEvent::InitialBlockDownloadDone) => {
+                log::info!("Initial block download done, starting PubSubMessageHandler");
+            }
+        }
 
-        // when the initial block download is done, SyncManager notifies us about it,
-        // meaning the PubSubMessageHandler can start processing block/transaction announcements
-        self.node_active().await
+        // subscribe to chainstate events and pubsub topics
+        let mut block_rx = self.subscribe_to_events().await?;
+
+        loop {
+            tokio::select! {
+                event = self.pubsub_handle.poll_next() => match event? {
+                    PubSubEvent::MessageReceived { peer_id, message_id, message } => match message {
+                        Message {
+                            magic: _,
+                            msg: MessageType::PubSub(PubSubMessage::Block(block)),
+                        } => self.process_block_announcement(peer_id, message_id, block).await?,
+                        Message {
+                            magic: _,
+                           msg: MessageType::Syncing(_),
+                        } => {
+                            // TODO: ban peer
+                        }
+                    }
+                },
+                block_id = block_rx.recv().fuse() => {
+                    let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
+
+                    match self.chainstate_handle.call(|this| this.get_block(block_id)).await?? {
+                        Some(block) => self.announce_block(block).await?,
+                        None => log::error!("CRITICAL: best block not available"),
+                    }
+                }
+            }
+        }
     }
 }
 
