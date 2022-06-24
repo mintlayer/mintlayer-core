@@ -54,8 +54,6 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
-    #[error("Block skip calculation failed for block: {0}")]
-    AncestorRetrievalFailed(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

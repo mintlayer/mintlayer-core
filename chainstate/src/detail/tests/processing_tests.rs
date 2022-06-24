@@ -315,6 +315,18 @@ fn test_get_ancestor() {
     let ancestor = btf.block_indexes[ANCESTOR_HEIGHT].clone();
     let split = btf.block_indexes[SPLIT_HEIGHT].clone();
 
+    // we aggressively test the simple ancestor calculation for all previous heights up to genesis
+    for i in 0..=split.block_height().into() {
+        assert_eq!(
+            btf.block_indexes[i as usize].block_id(),
+            btf.chainstate
+                .make_db_tx()
+                .get_ancestor(&split, i.into())
+                .expect(&format!("Ancestor of height {} not reached", i))
+                .block_id()
+        );
+    }
+
     // Create the first chain and test get_ancestor for this chain's  last block
     btf.create_chain(split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
         .expect("second chain");
