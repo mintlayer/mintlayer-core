@@ -19,18 +19,14 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::{SyncRequest, SyncResponse, SyncingCodec},
+        libp2p::sync::{SyncRequest, SyncResponse},
     },
 };
 use libp2p::{
-    gossipsub::{
-        Gossipsub, GossipsubEvent, IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash,
-    },
-    identify::{Identify, IdentifyEvent, IdentifyInfo},
-    mdns::{Mdns, MdnsEvent},
-    ping::{self, PingEvent},
-    request_response::{RequestId, RequestResponse, RequestResponseEvent},
-    Multiaddr, NetworkBehaviour, PeerId,
+    gossipsub::{IdentTopic as Topic, MessageAcceptance, MessageId, TopicHash},
+    identify::IdentifyInfo,
+    request_response::RequestId,
+    Multiaddr, PeerId,
 };
 use tokio::sync::oneshot;
 
@@ -89,7 +85,6 @@ pub enum Command {
 
 #[derive(Debug)]
 pub enum ConnectivityEvent {
-    #[allow(unused)]
     /// Outbound connection accepted by remote
     ConnectionAccepted {
         addr: Multiaddr,
@@ -142,6 +137,7 @@ pub enum PubSubEvent {
     },
 }
 
+#[derive(Debug)]
 pub enum SyncingEvent {
     Request {
         peer_id: PeerId,
@@ -191,52 +187,23 @@ impl From<net::types::ValidationResult> for MessageAcceptance {
     }
 }
 
-#[derive(NetworkBehaviour)]
-#[behaviour(out_event = "ComposedEvent")]
-pub struct ComposedBehaviour {
-    pub mdns: Mdns,
-    pub gossipsub: Gossipsub,
-    pub ping: ping::Behaviour,
-    pub identify: Identify,
-    pub sync: RequestResponse<SyncingCodec>,
-}
-
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
-pub enum ComposedEvent {
-    MdnsEvent(MdnsEvent),
-    GossipsubEvent(GossipsubEvent),
-    PingEvent(PingEvent),
-    IdentifyEvent(IdentifyEvent),
-    SyncingEvent(RequestResponseEvent<SyncRequest, SyncResponse>),
+pub enum Libp2pBehaviourEvent {
+    Connectivity(ConnectivityEvent),
+    Syncing(SyncingEvent),
+    PubSub(PubSubEvent),
 }
 
-impl From<MdnsEvent> for ComposedEvent {
-    fn from(event: MdnsEvent) -> Self {
-        ComposedEvent::MdnsEvent(event)
-    }
-}
+// TODO: connection manager
+#[derive(Debug)]
+pub enum PendingState {
+    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
+    Dialed(Multiaddr),
 
-impl From<GossipsubEvent> for ComposedEvent {
-    fn from(event: GossipsubEvent) -> Self {
-        ComposedEvent::GossipsubEvent(event)
-    }
-}
+    /// Connection established for outbound connection
+    OutboundAccepted(Multiaddr),
 
-impl From<PingEvent> for ComposedEvent {
-    fn from(event: PingEvent) -> Self {
-        ComposedEvent::PingEvent(event)
-    }
-}
-
-impl From<IdentifyEvent> for ComposedEvent {
-    fn from(event: IdentifyEvent) -> Self {
-        ComposedEvent::IdentifyEvent(event)
-    }
-}
-
-impl From<RequestResponseEvent<SyncRequest, SyncResponse>> for ComposedEvent {
-    fn from(event: RequestResponseEvent<SyncRequest, SyncResponse>) -> Self {
-        ComposedEvent::SyncingEvent(event)
-    }
+    /// Connection established for inbound connection
+    InboundAccepted(Multiaddr),
 }
