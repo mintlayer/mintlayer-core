@@ -5,7 +5,8 @@ use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, Transact
 use common::{
     chain::{
         block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader, BlockIndex,
+            calculate_tx_merkle_root, calculate_witness_merkle_root, height_skip::get_skip_height,
+            Block, BlockHeader, BlockIndex,
         },
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
@@ -136,25 +137,54 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.clone()))
     }
 
-    // TODO improve using pskip
     pub fn get_ancestor(
         &self,
         block_index: &BlockIndex,
-        ancestor_height: BlockHeight,
+        target_height: BlockHeight,
     ) -> Result<BlockIndex, PropertyQueryError> {
-        if ancestor_height > block_index.block_height() {
+        if target_height > block_index.block_height() {
             return Err(PropertyQueryError::InvalidAncestorHeight {
                 block_height: block_index.block_height(),
-                ancestor_height,
+                ancestor_height: target_height,
             });
         }
 
+        let step_to_prev_block = |block_index_walk: &mut BlockIndex,
+                                  height_walk: &mut BlockHeight|
+         -> Result<(), PropertyQueryError> {
+            *block_index_walk = self.get_previous_block_index(block_index_walk)?;
+            *height_walk = (*height_walk - BlockDistance::from(1))
+                .expect("height_walk is greater than height");
+            Ok(())
+        };
+
         let mut height_walk = block_index.block_height();
         let mut block_index_walk = block_index.clone();
-        while height_walk > ancestor_height {
-            block_index_walk = self.get_previous_block_index(&block_index_walk)?;
-            height_walk =
-                (height_walk - BlockDistance::from(1)).expect("height_walk is greater than height");
+        while height_walk > target_height {
+            let height_walk_prev = (height_walk - BlockDistance::new(1))
+                .expect("Can never fail because prev is zero at worst");
+
+            let height_skip = get_skip_height(height_walk);
+            let height_skip_prev = get_skip_height(height_walk_prev);
+            match block_index_walk.some_ancestor() {
+                Some(ancestor) => {
+                    // prepare the booleans for the check
+                    let at_target = height_skip == target_height;
+                    let still_not_there = height_skip > target_height;
+                    let too_close = height_skip_prev.next_height().next_height() < height_skip;
+                    let prev_too_close = height_skip_prev >= target_height;
+
+                    if at_target || (still_not_there && !(too_close && prev_too_close)) {
+                        block_index_walk = self
+                            .get_block_index(ancestor)?
+                            .expect("Block index of ancestor must exist, since id exists");
+                        height_walk = height_skip;
+                    } else {
+                        step_to_prev_block(&mut block_index_walk, &mut height_walk)?;
+                    }
+                }
+                None => step_to_prev_block(&mut block_index_walk, &mut height_walk)?,
+            };
         }
         Ok(block_index_walk)
     }
@@ -681,6 +711,15 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             prev_block_index.block_height().next_height()
         });
 
+        let some_ancestor = prev_block_index.as_ref().map(|prev_bi| {
+            self.get_ancestor(prev_bi, get_skip_height(height))
+                .unwrap_or_else(|_| {
+                    panic!("Ancestor retrieval failed for block: {}", block.get_id())
+                })
+                .block_id()
+                .clone()
+        });
+
         // Set Time Max
         let time_max = prev_block_index.as_ref().map_or(block.timestamp(), |prev_block_index| {
             std::cmp::max(prev_block_index.chain_timestamps_max(), block.timestamp())
@@ -691,7 +730,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             *prev_block_index.chain_trust()
         });
         let chain_trust = prev_chain_trust + self.get_block_proof(block)?;
-        let block_index = BlockIndex::new(block, chain_trust, height, time_max);
+        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 
