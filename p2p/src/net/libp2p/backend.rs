@@ -215,7 +215,7 @@ impl Backend {
         }
     }
 
-	// TODO: design p2p global command system
+    // TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
         log::debug!("handle incoming command {:?}", cmd);
