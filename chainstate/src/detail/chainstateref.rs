@@ -480,12 +480,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         to_disconnect: &BlockIndex,
         last_to_remain_connected: &Id<Block>,
     ) -> Result<(), BlockError> {
-        if to_disconnect.block_id() == last_to_remain_connected {
-            return Ok(());
+        let mut to_disconnect_next = to_disconnect.clone();
+        while to_disconnect_next.block_id() != last_to_remain_connected {
+            to_disconnect_next = self.disconnect_tip(Some(to_disconnect_next.block_id()))?;
         }
-
-        let current_mainchain_tip = self.disconnect_tip(Some(to_disconnect.block_id()))?;
-        self.disconnect_until(&current_mainchain_tip, last_to_remain_connected)
+        Ok(())
     }
 
     fn reorganize(
