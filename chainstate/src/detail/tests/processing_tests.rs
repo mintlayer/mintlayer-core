@@ -322,7 +322,7 @@ fn test_get_ancestor() {
             btf.chainstate
                 .make_db_tx()
                 .get_ancestor(&split, i.into())
-                .expect(&format!("Ancestor of height {} not reached", i))
+                .unwrap_or_else(|_| panic!("Ancestor of height {} not reached", i))
                 .block_id()
         );
     }
