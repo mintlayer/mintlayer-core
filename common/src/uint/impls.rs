@@ -526,7 +526,7 @@ impl Encode for Uint256 {
         32
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         let v: H256 = (*self).into();
         v.encode_to(dest)
     }
@@ -537,9 +537,7 @@ impl Encode for Uint256 {
 }
 
 impl Decode for Uint256 {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let v = <H256>::decode(input)?;
         Ok(v.into())
     }
