@@ -67,6 +67,8 @@ debug-assertions = true
 overflow-checks = true
 
 [profile.test]
-opt-level = 2
 debug-assertions = true
 overflow-checks = true
+
+[profile.test.package.script]
+opt-level = 2
