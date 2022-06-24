@@ -152,7 +152,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let step_to_prev_block = |block_index_walk: &mut BlockIndex,
                                   height_walk: &mut BlockHeight|
          -> Result<(), PropertyQueryError> {
-            *block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+            *block_index_walk = self.get_previous_block_index(block_index_walk)?;
             *height_walk = (*height_walk - BlockDistance::from(1))
                 .expect("height_walk is greater than height");
             Ok(())
