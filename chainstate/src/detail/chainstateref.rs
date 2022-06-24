@@ -140,12 +140,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn get_ancestor(
         &self,
         block_index: &BlockIndex,
-        ancestor_height: BlockHeight,
+        target_height: BlockHeight,
     ) -> Result<BlockIndex, PropertyQueryError> {
-        if ancestor_height > block_index.block_height() {
+        if target_height > block_index.block_height() {
             return Err(PropertyQueryError::InvalidAncestorHeight {
                 block_height: block_index.block_height(),
-                ancestor_height,
+                ancestor_height: target_height,
             });
         }
 
@@ -160,7 +160,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         let mut height_walk = block_index.block_height();
         let mut block_index_walk = block_index.clone();
-        while height_walk > ancestor_height {
+        while height_walk > target_height {
             let height_walk_prev = (height_walk - BlockDistance::new(1))
                 .expect("Can never fail because prev is zero at worst");
 
@@ -168,11 +168,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             let height_skip_prev = get_skip_height(height_walk_prev);
             match block_index_walk.some_ancestor() {
                 Some(ancestor) => {
-                    if height_skip == ancestor_height
-                        || (height_skip > ancestor_height
-                            && !(height_skip_prev.next_height().next_height() < height_skip
-                                && height_skip_prev >= ancestor_height))
-                    {
+                    // prepare the booleans for the check
+                    let at_target = height_skip == target_height;
+                    let still_not_there = height_skip > target_height;
+                    let too_close = height_skip_prev.next_height().next_height() < height_skip;
+                    let prev_too_close = height_skip_prev >= target_height;
+
+                    if at_target || (still_not_there && !(too_close && prev_too_close)) {
                         block_index_walk = self
                             .get_block_index(ancestor)?
                             .expect("Block index of ancestor must exist, since id exists");
