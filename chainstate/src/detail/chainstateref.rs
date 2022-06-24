@@ -149,6 +149,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             });
         }
 
+        let step_to_prev_block = |block_index_walk: &mut BlockIndex,
+                                  height_walk: &mut BlockHeight|
+         -> Result<(), PropertyQueryError> {
+            *block_index_walk = self.get_previous_block_index(&block_index_walk)?;
+            *height_walk = (*height_walk - BlockDistance::from(1))
+                .expect("height_walk is greater than height");
+            Ok(())
+        };
+
         let mut height_walk = block_index.block_height();
         let mut block_index_walk = block_index.clone();
         while height_walk > ancestor_height {
@@ -157,25 +166,23 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
             let height_skip = get_skip_height(height_walk);
             let height_skip_prev = get_skip_height(height_walk_prev);
-            if block_index_walk.some_ancestor().is_some()
-                && (height_skip == ancestor_height
-                    || (height_skip > ancestor_height
-                        && !(height_skip_prev.next_height().next_height() < height_skip
-                            && height_skip_prev >= ancestor_height)))
-            {
-                block_index_walk = self
-                    .get_block_index(
-                        block_index_walk
-                            .some_ancestor()
-                            .expect("We already checked the id already exists"),
-                    )?
-                    .expect("Block index of ancestor must exist, since id exists");
-                height_walk = height_skip;
-            } else {
-                block_index_walk = self.get_previous_block_index(&block_index_walk)?;
-                height_walk = (height_walk - BlockDistance::from(1))
-                    .expect("height_walk is greater than height");
-            }
+            match block_index_walk.some_ancestor() {
+                Some(ancestor) => {
+                    if height_skip == ancestor_height
+                        || (height_skip > ancestor_height
+                            && !(height_skip_prev.next_height().next_height() < height_skip
+                                && height_skip_prev >= ancestor_height))
+                    {
+                        block_index_walk = self
+                            .get_block_index(ancestor)?
+                            .expect("Block index of ancestor must exist, since id exists");
+                        height_walk = height_skip;
+                    } else {
+                        step_to_prev_block(&mut block_index_walk, &mut height_walk)?;
+                    }
+                }
+                None => step_to_prev_block(&mut block_index_walk, &mut height_walk)?,
+            };
         }
         Ok(block_index_walk)
     }
