@@ -65,6 +65,7 @@ utxo = { path = "utxo"}
 [profile.release]
 debug-assertions = true
 overflow-checks = true
+lto = true
 
 [profile.test]
 debug-assertions = true
