@@ -10,6 +10,7 @@ use common::{
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
+    Uint256,
 };
 use logging::log;
 use utils::ensure;
@@ -379,7 +380,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             }
         }
 
-        // TODO: Check signatures will be added when BLS is ready
         Ok(())
     }
 
@@ -394,9 +394,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn get_block_proof(&self, _block: &Block) -> u128 {
-        // TODO: Make correct block proof calculation based on consensus
-        1
+    fn get_block_proof(&self, block: &Block) -> Result<Uint256, BlockError> {
+        block
+            .header()
+            .consensus_data()
+            .get_block_proof()
+            .ok_or_else(|| BlockError::BlockProofCalculationError(block.get_id()))
     }
 
     fn make_cache_with_connected_transactions(
@@ -685,9 +688,10 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         });
 
         // Set Chain Trust
-        let chain_trust = prev_block_index
-            .map_or(0, |prev_block_index| prev_block_index.chain_trust())
-            + self.get_block_proof(block);
+        let prev_chain_trust = prev_block_index.map_or(Uint256::from_u64(0), |prev_block_index| {
+            *prev_block_index.chain_trust()
+        });
+        let chain_trust = prev_chain_trust + self.get_block_proof(block)?;
         let block_index = BlockIndex::new(block, chain_trust, height, time_max);
         Ok(block_index)
     }

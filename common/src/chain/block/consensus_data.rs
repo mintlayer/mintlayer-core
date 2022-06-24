@@ -1,6 +1,7 @@
 use crate::chain::TxInput;
 use crate::chain::{signature::Transactable, TxOutput};
 use crate::primitives::Compact;
+use crate::Uint256;
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
@@ -57,6 +58,14 @@ impl ConsensusData {
             },
         }
     }
+
+    pub fn get_block_proof(&self) -> Option<Uint256> {
+        match self {
+            ConsensusData::None => Some(1.into()),
+            ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
+            ConsensusData::FakePoS(_) => Some(1.into()),
+        }
+    }
 }
 
 /// Fake PoS just to test spending block rewards; will be removed at some point in the future
@@ -104,5 +113,16 @@ impl PoWData {
 
     pub fn update_nonce(&mut self, nonce: u128) {
         self.nonce = nonce;
+    }
+
+    pub fn get_block_proof(&self) -> Option<Uint256> {
+        // 2**256 / (target + 1) == ~target / (target+1) + 1    (eqn shamelessly stolen from bitcoind)
+        let target: Uint256 = self.bits.try_into().ok()?;
+        let mut ret = !target;
+        let mut ret1 = target;
+        ret1.increment();
+        ret = ret / ret1;
+        ret.increment();
+        Some(ret)
     }
 }

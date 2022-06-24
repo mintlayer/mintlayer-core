@@ -131,9 +131,8 @@ mod tests {
                 0xFFFFFFFFFFFFFFFF,
             ]);
 
-            let target_max = target_max
-                / Uint256::from_u64(mainnet_cfg.target_timespan().as_secs() * 4)
-                    .expect("should be okay");
+            let target_max =
+                target_max / Uint256::from_u64(mainnet_cfg.target_timespan().as_secs() * 4);
             assert!(mainnet_cfg.limit() < target_max);
         }
     }

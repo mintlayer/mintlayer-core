@@ -19,27 +19,19 @@ impl TryFrom<Compact> for Uint256 {
 
             Uint256::from_u64(word as u64)
         } else {
-            Uint256::from_u64(word as u64).map(|x| {
-                let shift = 8 * (size - 3);
-                x.shl(shift as usize)
-            })
+            let value = Uint256::from_u64(word as u64);
+            let shift = 8 * (size - 3);
+            value.shl(shift as usize)
         };
 
-        match value {
-            None => Err(None),
-            Some(value) => {
-                if (word != 0 && (compact & 0x00800000) != 0)
-                    || (word != 0
-                        && ((size > 34)
-                            || (word > 0xFF && size > 33)
-                            || (word > 0xFFFF && size > 32)))
-                {
-                    return Err(Some(value));
-                }
-
-                Ok(value)
-            }
+        if (word != 0 && (compact & 0x00800000) != 0)
+            || (word != 0
+                && ((size > 34) || (word > 0xFF && size > 33) || (word > 0xFFFF && size > 32)))
+        {
+            return Err(Some(value));
         }
+
+        Ok(value)
     }
 }
 
@@ -83,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_compact_uint256_conversion() {
-        let u256 = Uint256::from_u64(0x80).expect("it should convert with not problems");
+        let u256 = Uint256::from_u64(0x80);
         let compact = Compact::from(u256);
         assert_eq!(compact, Compact(0x02008000));
 

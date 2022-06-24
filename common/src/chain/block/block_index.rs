@@ -2,7 +2,7 @@ use crate::chain::block::block_v1::BlockHeader;
 use crate::chain::block::Block;
 use crate::chain::ChainConfig;
 use crate::primitives::{BlockHeight, Id, Idable};
-// use crate::Uint256;
+use crate::Uint256;
 use serialization::{Decode, Encode};
 
 use super::timestamp::BlockTimestamp;
@@ -12,9 +12,7 @@ use super::timestamp::BlockTimestamp;
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
-    // TODO: When Carla finish her code, we should use Uint256 at the moment it's unable to store to DB
-    //  pub chain_trust: Uint256,
-    chain_trust: u128,
+    chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
 }
@@ -22,7 +20,7 @@ pub struct BlockIndex {
 impl BlockIndex {
     pub fn new(
         block: &Block,
-        chain_trust: u128,
+        chain_trust: Uint256,
         height: BlockHeight,
         time_max: BlockTimestamp,
     ) -> Self {
@@ -60,8 +58,8 @@ impl BlockIndex {
         self.height
     }
 
-    pub fn chain_trust(&self) -> u128 {
-        self.chain_trust
+    pub fn chain_trust(&self) -> &Uint256 {
+        &self.chain_trust
     }
 
     pub fn block_header(&self) -> &BlockHeader {

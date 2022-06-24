@@ -19,6 +19,9 @@
 //! Implementation of various large-but-fixed sized unsigned integer types.
 //! The functions here are designed to be fast.
 
+use crate::primitives::H256;
+use serialization::{Decode, Encode};
+
 macro_rules! construct_uint {
     ($name:ident, $n_words:expr) => {
         /// little endian large integer type
@@ -77,17 +80,17 @@ macro_rules! construct_uint {
 
             /// Create an object from a given unsigned 64-bit integer
             #[inline]
-            pub fn from_u64(init: u64) -> Option<$name> {
+            pub fn from_u64(init: u64) -> $name {
                 let mut ret = [0; $n_words];
                 ret[0] = init;
-                Some($name(ret))
+                $name(ret)
             }
 
             /// Create an object from a given signed 64-bit integer
             #[inline]
             pub fn from_i64(init: i64) -> Option<$name> {
                 if init >= 0 {
-                    $name::from_u64(init as u64)
+                    Some($name::from_u64(init as u64))
                 } else {
                     None
                 }
@@ -246,6 +249,19 @@ macro_rules! construct_uint {
             #[inline]
             fn from(data: &'a [u8; $n_words * 8]) -> Self {
                 Self::inner_from_slice(data)
+            }
+        }
+
+        impl<'a> From<u64> for $name {
+            /// Creates a Uint256 from the given reference
+            /// to the bytes array of fixed length.
+            ///
+            /// # Note
+            ///
+            /// The given bytes are assumed to be in little endian order.
+            #[inline]
+            fn from(n: u64) -> Self {
+                Self::from_u64(n)
             }
         }
 
@@ -505,6 +521,28 @@ macro_rules! construct_uint {
 construct_uint!(Uint256, 4);
 construct_uint!(Uint128, 2);
 
+impl Encode for Uint256 {
+    fn size_hint(&self) -> usize {
+        32
+    }
+
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
+        let v: H256 = (*self).into();
+        v.encode_to(dest)
+    }
+
+    fn encoded_size(&self) -> usize {
+        32
+    }
+}
+
+impl Decode for Uint256 {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
+        let v = <H256>::decode(input)?;
+        Ok(v.into())
+    }
+}
+
 /// Invalid slice length
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 /// Invalid slice length
@@ -540,19 +578,34 @@ impl Uint256 {
 
 #[cfg(test)]
 mod tests {
+    use serialization::DecodeAll;
+
     use super::*;
     use crate::uint::BitArray;
 
     #[test]
+    pub fn uint256_serialization() {
+        let h256val = H256::random();
+        let uint256val: Uint256 = h256val.into();
+        let encoded_h256 = h256val.encode();
+        let encoded_uint256val = uint256val.encode();
+        assert_eq!(encoded_uint256val.len(), 32);
+        assert_eq!(encoded_h256, encoded_uint256val);
+
+        let decoded_uint256 = Uint256::decode_all(&mut encoded_uint256val.as_slice()).unwrap();
+        assert_eq!(decoded_uint256, uint256val);
+    }
+
+    #[test]
     pub fn uint256_bits_test() {
-        assert_eq!(Uint256::from_u64(255).unwrap().bits(), 8);
-        assert_eq!(Uint256::from_u64(256).unwrap().bits(), 9);
-        assert_eq!(Uint256::from_u64(300).unwrap().bits(), 9);
-        assert_eq!(Uint256::from_u64(60000).unwrap().bits(), 16);
-        assert_eq!(Uint256::from_u64(70000).unwrap().bits(), 17);
+        assert_eq!(Uint256::from_u64(255).bits(), 8);
+        assert_eq!(Uint256::from_u64(256).bits(), 9);
+        assert_eq!(Uint256::from_u64(300).bits(), 9);
+        assert_eq!(Uint256::from_u64(60000).bits(), 16);
+        assert_eq!(Uint256::from_u64(70000).bits(), 17);
 
         // Try to read the following lines out loud quickly
-        let mut shl = Uint256::from_u64(70000).unwrap();
+        let mut shl = Uint256::from_u64(70000);
         shl = shl << 100;
         assert_eq!(shl.bits(), 117);
         shl = shl << 100;
@@ -561,21 +614,21 @@ mod tests {
         assert_eq!(shl.bits(), 0);
 
         // Bit set check
-        assert!(!Uint256::from_u64(10).unwrap().bit(0));
-        assert!(Uint256::from_u64(10).unwrap().bit(1));
-        assert!(!Uint256::from_u64(10).unwrap().bit(2));
-        assert!(Uint256::from_u64(10).unwrap().bit(3));
-        assert!(!Uint256::from_u64(10).unwrap().bit(4));
+        assert!(!Uint256::from_u64(10).bit(0));
+        assert!(Uint256::from_u64(10).bit(1));
+        assert!(!Uint256::from_u64(10).bit(2));
+        assert!(Uint256::from_u64(10).bit(3));
+        assert!(!Uint256::from_u64(10).bit(4));
     }
 
     #[test]
     pub fn uint256_display_test() {
         assert_eq!(
-            format!("{:?}", Uint256::from_u64(0xDEADBEEF).unwrap()),
+            format!("{:?}", Uint256::from_u64(0xDEADBEEF)),
             "0x00000000000000000000000000000000000000000000000000000000deadbeef"
         );
         assert_eq!(
-            format!("{:?}", Uint256::from_u64(u64::max_value()).unwrap()),
+            format!("{:?}", Uint256::from_u64(u64::max_value())),
             "0x000000000000000000000000000000000000000000000000ffffffffffffffff"
         );
 
@@ -710,7 +763,7 @@ mod tests {
 
     #[test]
     pub fn uint256_arithmetic_test() {
-        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF).unwrap();
+        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
         let copy = init;
 
         let add = init + copy;
@@ -744,34 +797,31 @@ mod tests {
         );
         // Division
         assert_eq!(
-            Uint256::from_u64(105).unwrap() / Uint256::from_u64(5).unwrap(),
-            Uint256::from_u64(21).unwrap()
+            Uint256::from_u64(105) / Uint256::from_u64(5),
+            Uint256::from_u64(21)
         );
-        let div = mult / Uint256::from_u64(300).unwrap();
+        let div = mult / Uint256::from_u64(300);
         assert_eq!(
             div,
             Uint256([0x9F30411021524112u64, 0x0001BD5B7DDFBD5A, 0, 0])
         );
 
         assert_eq!(
-            Uint256::from_u64(105).unwrap() % Uint256::from_u64(5).unwrap(),
-            Uint256::from_u64(0).unwrap()
+            Uint256::from_u64(105) % Uint256::from_u64(5),
+            Uint256::from_u64(0)
         );
         assert_eq!(
-            Uint256::from_u64(35498456).unwrap() % Uint256::from_u64(3435).unwrap(),
-            Uint256::from_u64(1166).unwrap()
+            Uint256::from_u64(35498456) % Uint256::from_u64(3435),
+            Uint256::from_u64(1166)
         );
-        let rem_src = mult * Uint256::from_u64(39842).unwrap() + Uint256::from_u64(9054).unwrap();
-        assert_eq!(
-            rem_src % Uint256::from_u64(39842).unwrap(),
-            Uint256::from_u64(9054).unwrap()
-        );
+        let rem_src = mult * Uint256::from_u64(39842) + Uint256::from_u64(9054);
+        assert_eq!(rem_src % Uint256::from_u64(39842), Uint256::from_u64(9054));
         // TODO: bit inversion
     }
 
     #[test]
     pub fn mul_u32_test() {
-        let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF).unwrap();
+        let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
         let u96_res = u64_val.mul_u32(0xFFFFFFFF);
         let u128_res = u96_res.mul_u32(0xFFFFFFFF);
@@ -810,7 +860,7 @@ mod tests {
 
     #[test]
     pub fn multiplication_test() {
-        let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF).unwrap();
+        let u64_val = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
         let u128_res = u64_val * u64_val;
 
@@ -881,7 +931,7 @@ mod tests {
 
     #[test]
     pub fn uint256_bitslice_test() {
-        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF).unwrap();
+        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
         let add = init + (init << 64);
         assert_eq!(add.bit_slice(64, 128), init);
         assert_eq!(add.mask(64), init);
@@ -891,7 +941,7 @@ mod tests {
     pub fn uint256_extreme_bitshift_test() {
         // Shifting a u64 by 64 bits gives an undefined value, so make sure that
         // we're doing the Right Thing here
-        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF).unwrap();
+        let init = Uint256::from_u64(0xDEADBEEFDEADBEEF);
 
         assert_eq!(init << 64, Uint256([0, 0xDEADBEEFDEADBEEF, 0, 0]));
         let add = (init << 64) + init;
