@@ -24,6 +24,7 @@ use common::{
 };
 use logging::log;
 use std::collections::VecDeque;
+use utils::ensure;
 
 /// State of the peer
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,30 +88,16 @@ where
         &mut self,
         header: &BlockHeader,
     ) -> crate::Result<Option<BlockHeader>> {
-        match &self.state {
-            PeerSyncState::UploadingBlocks(expected) => {
-                if expected != &header.get_id() {
-                    log::error!(
-                        "peer {:?} sent us the wrong header, expected {:?}, got {:?}",
-                        self.peer_id,
-                        expected,
-                        header
-                    );
-                    // TODO: this is a protocol error
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                }
-            }
-            _ => {
-                // TODO: this is a protocol error
-                log::error!(
-                    "received a header from peer {:?} while not expecting it",
-                    self.peer_id
-                );
-                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-            }
+        if let PeerSyncState::UploadingBlocks(expected) = &self.state {
+            ensure!(
+                expected == &header.get_id(),
+                P2pError::ProtocolError(ProtocolError::InvalidMessage),
+            );
+
+            return Ok(self.get_next_block());
         }
 
-        Ok(self.get_next_block())
+        Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
     }
 
     fn get_next_block(&mut self) -> Option<BlockHeader> {

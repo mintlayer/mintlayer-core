@@ -51,7 +51,6 @@ const RETRY_LIMIT: usize = 3;
 
 // TODO: add more tests
 // TODO: match against error in `run()` and deal with `ProtocolError`
-// TODO: use ensure
 // TODO: cache locator and invalidate it when `NewTip` event is received
 
 // Define which errors are fatal for the sync manager as the error is bubbled
@@ -201,16 +200,17 @@ where
         request_id: T::RequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
-        // TODO: check if remote has already asked for these headers?
-        if headers.len() != 1 {
-            log::error!("expected 1 header, received {} headers", headers.len());
-            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        }
+        ensure!(
+            headers.len() == 1,
+            P2pError::ProtocolError(ProtocolError::InvalidMessage),
+        );
+        ensure!(
+            self.peers.contains_key(&peer_id),
+            P2pError::PeerError(PeerError::PeerDoesntExist),
+        );
 
-        let _peer = self
-            .peers
-            .get_mut(&peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
+        // TODO: check if remote has already asked for these headers?
+
         let block_id = headers.get(0).expect("header to exist").clone();
         // TODO: check error
         let block = self
@@ -237,20 +237,15 @@ where
         peer_id: &T::PeerId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<Option<BlockHeader>> {
+        ensure!(
+            headers.len() <= HEADER_LIMIT,
+            P2pError::ProtocolError(ProtocolError::InvalidMessage),
+        );
+
         let peer = self
             .peers
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        if headers.len() > HEADER_LIMIT {
-            // TODO: ban peer
-            log::error!(
-                "peer sent {} headers while the maximum is {}",
-                headers.len(),
-                HEADER_LIMIT
-            );
-            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        }
 
         // empty response means that local and remote are in sync
         if headers.is_empty() {
@@ -293,10 +288,10 @@ where
         }
 
         for header in &headers {
-            if header.prev_block_id() != &Some(prev_id) {
-                log::error!("peer {:?} sent headers that are out of order", peer_id);
-                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-            }
+            ensure!(
+                header.prev_block_id() == &Some(prev_id),
+                P2pError::ProtocolError(ProtocolError::InvalidMessage),
+            );
             prev_id = header.get_id();
         }
 
@@ -368,10 +363,10 @@ where
         peer_id: T::PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
-        if blocks.len() != 1 {
-            log::error!("expected 1 block, received {} blocks", blocks.len());
-            return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-        }
+        ensure!(
+            blocks.len() == 1,
+            P2pError::ProtocolError(ProtocolError::InvalidMessage),
+        );
 
         match self.validate_block_response(&peer_id, blocks).await {
             Ok(Some(next_block)) => self.send_block_request(peer_id, next_block.get_id(), 0).await,
@@ -395,6 +390,8 @@ where
     /// When the node is synced, [`crate::PubSubMessageHandler`] is notified so it knows to
     /// subscribe to the needed publish-subscribe topics.
     pub async fn check_state(&mut self) -> crate::Result<()> {
+        // TODO: improve "initial block download done" check
+
         if self.peers.is_empty() {
             self.state = SyncState::Uninitialized;
             return Ok(());
@@ -415,6 +412,7 @@ where
         }
 
         self.state = SyncState::Idle;
+        // TODO: global event system
         self.tx_pubsub
             .send(event::PubSubControlEvent::InitialBlockDownloadDone)
             .await
@@ -428,6 +426,7 @@ where
         error: net::types::RequestResponseError,
     ) -> crate::Result<()> {
         match error {
+            // TODO: through peermanager!
             net::types::RequestResponseError::ConnectionClosed => {
                 self.unregister_peer(peer_id);
             }
@@ -445,6 +444,7 @@ where
                             peer_id
                         );
                         self.unregister_peer(peer_id);
+                        // TODO: global event system
                         let (tx, rx) = oneshot::channel();
                         self.tx_swarm
                             .send(event::SwarmEvent::Disconnect(peer_id, tx))
@@ -525,7 +525,7 @@ where
                         match message {
                             SyncingResponse::Headers { headers } => {
                                 log::debug!(
-                                    "process header response (id {:?}) from peer {:?}",
+                                    "process header response (id {:?}) from peer {}",
                                     request_id, peer_id
                                 );
                                 log::trace!("received headers: {:#?}", headers);
@@ -534,7 +534,7 @@ where
                             }
                             SyncingResponse::Blocks { blocks } => {
                                 log::debug!(
-                                    "process block response (id {:?}) from peer {:?}",
+                                    "process block response (id {:?}) from peer {}",
                                     request_id, peer_id
                                 );
                                 log::trace!("# of received blocks: {:#?}", blocks.len());
@@ -551,7 +551,7 @@ where
                         self.process_error(peer_id, request_id, error).await?;
                     },
                     SyncingEvent::Request { peer_id, .. } | SyncingEvent::Response { peer_id, .. } => {
-                        log::error!("received an invalid message from peer {:?}", peer_id);
+                        log::error!("received an invalid message from peer {}", peer_id);
                         // TODO: disconnect peer and ban it
                         // TODO: send `Misbehaved` event to PeerManager
                         // return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
