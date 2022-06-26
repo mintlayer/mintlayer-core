@@ -14,15 +14,15 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 use crate::{
-    error::{FatalError, P2pError, PeerError, ProtocolError},
+    error::{P2pError, PeerError, ProtocolError},
     event,
     message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
     net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
 };
 use chainstate::{
-    chainstate_interface, BlockError, BlockSource, ChainstateError::ProcessBlockError,
+    ban_score::BanScore, chainstate_interface, BlockError, BlockSource,
+    ChainstateError::ProcessBlockError,
 };
 use common::{
     chain::{
@@ -50,32 +50,7 @@ const HEADER_LIMIT: usize = 2000;
 const RETRY_LIMIT: usize = 3;
 
 // TODO: add more tests
-// TODO: match against error in `run()` and deal with `ProtocolError`
 // TODO: cache locator and invalidate it when `NewTip` event is received
-
-// Define which errors are fatal for the sync manager as the error is bubbled
-// up to the main event loop which then decides how to act on errors.
-// Peer not existing is not a fatal error for SyncManager but it is fatal error
-// for the function that tries to update peer state.
-//
-// This is just a convenience method to have access to nicer error handling
-impl<T> FatalError for crate::Result<T> {
-    fn map_fatal_err(self) -> core::result::Result<(), P2pError> {
-        if let Err(err) = self {
-            match err {
-                P2pError::ChannelClosed | P2pError::ChainstateError(_) => {
-                    log::error!("fatal error occurred: {:#?}", err);
-                    return Err(err);
-                }
-                _ => {
-                    log::error!("non-fatal error occurred: {:#?}", err);
-                }
-            }
-        }
-
-        Ok(())
-    }
-}
 
 /// Syncing state of the local node
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -170,7 +145,10 @@ where
             Entry::Occupied(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             Entry::Vacant(entry) => {
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
-                entry.insert(peer::PeerContext::new(peer_id, locator.clone()));
+                entry.insert(peer::PeerContext::new_with_locator(
+                    peer_id,
+                    locator.clone(),
+                ));
                 self.send_header_request(peer_id, locator, 0).await
             }
         }
@@ -184,7 +162,7 @@ where
     /// Process header request
     pub async fn process_header_request(
         &mut self,
-        peer_id: T::PeerId,
+        _peer_id: T::PeerId,
         request_id: T::RequestId,
         locator: Vec<BlockHeader>,
     ) -> crate::Result<()> {
@@ -209,26 +187,19 @@ where
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        // TODO: check if remote has already asked for these headers?
-
-        let block_id = headers.get(0).expect("header to exist").clone();
-        // TODO: check error
-        let block = self
+        let block_result = self
             .chainstate_handle
-            .call(move |this| this.get_block(headers.get(0).expect("header to exist").clone()))
-            .await??
-            .ok_or_else(|| {
-                // TODO: handle these two errors separate
-                log::error!(
-                    "peer {:?} requested block we don't have \
-                        or database doesn't have a block it previously had, block id: {:?}",
-                    peer_id,
-                    block_id
-                );
-                P2pError::ProtocolError(ProtocolError::InvalidMessage)
-            })?;
+            .call(move |this| this.get_block(headers.into_iter().next().expect("header to exist")))
+            .await?;
 
-        self.send_block_response(request_id, vec![block]).await
+        match block_result {
+            Ok(Some(block)) => self.send_block_response(request_id, vec![block]).await,
+            Ok(None) => {
+                // TODO: check if remote has already asked for these headers?
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
+            Err(err) => Err(P2pError::ChainstateError(err)),
+        }
     }
 
     /// Validate incoming header response
@@ -252,56 +223,40 @@ where
             return Ok(None);
         }
 
-        // make sure the first header attaches to the locator that was sent out
-        let mut prev_id = headers
-            .get(0)
-            .expect("first header to exist")
-            .prev_block_id()
-            .clone()
-            .ok_or_else(|| {
-                // TODO: ban peer
-                log::error!("peer {:?} sent a header with invalid previous id", peer_id);
-                P2pError::ProtocolError(ProtocolError::InvalidMessage)
-            })?;
-
+        // verify that the first headers attaches to local and chain
+        // and that the received headers are in order
         match peer.state() {
             peer::PeerSyncState::UploadingHeaders(ref locator) => {
-                if !locator.iter().any(|header| header.get_id() == prev_id)
-                    && self.config.genesis_block_id() != prev_id
-                {
-                    // TODO: ban peer
-                    log::error!(
-                        "peer {:?} sent headers that don't attach to the sent locator or to genesis block",
-                        peer_id
-                    );
-
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                }
+                ensure!(
+                    locator
+                        .iter()
+                        .any(|header| &Some(header.get_id()) == headers[0].prev_block_id())
+                        || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
+                    P2pError::ProtocolError(ProtocolError::InvalidMessage),
+                );
             }
-            _ => {
-                log::error!("peer is in wrong state to send header response");
-                return Err(P2pError::ProtocolError(ProtocolError::InvalidState(
-                    "",
-                    "UploadingHeaders",
-                )));
-            }
+            _ => return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         }
 
-        for header in &headers {
+        for (a, b) in itertools::zip(&headers, &headers[1..]) {
             ensure!(
-                header.prev_block_id() == &Some(prev_id),
+                b.prev_block_id() == &Some(a.get_id()),
                 P2pError::ProtocolError(ProtocolError::InvalidMessage),
             );
-            prev_id = header.get_id();
         }
 
-        let unknown_headers = self
+        // call chainstate to get the blocks that the local node doesn't know about
+        match self
             .chainstate_handle
             .call(|this| this.filter_already_existing_blocks(headers))
-            .await??;
-
-        peer.register_header_response(&unknown_headers);
-        Ok(peer.get_header_for_download())
+            .await?
+        {
+            Ok(headers) => {
+                peer.register_header_response(&headers);
+                Ok(peer.get_header_for_download())
+            }
+            Err(err) => Err(P2pError::ChainstateError(err)),
+        }
     }
 
     /// Process incoming header response
@@ -311,18 +266,16 @@ where
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         match self.validate_header_response(&peer_id, headers).await {
-            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id(), 0).await?,
-            Ok(None) => self
-                .peers
-                .get_mut(&peer_id)
-                .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
-                .set_state(peer::PeerSyncState::Idle),
-            Err(err) => {
-                // TODO: handle errror, ban peer?
+            Ok(Some(header)) => self.send_block_request(peer_id, header.get_id(), 0).await,
+            Ok(None) => {
+                self.peers
+                    .get_mut(&peer_id)
+                    .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?
+                    .set_state(peer::PeerSyncState::Idle);
+                Ok(())
             }
+            Err(err) => Err(err),
         }
-
-        Ok(())
     }
 
     /// Validate incoming block response
@@ -336,22 +289,17 @@ where
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        // TODO: check error, ban peer
-        let header = blocks.get(0).expect("block to exist").header().clone();
         let block = blocks.into_iter().next().expect("block to exist");
-        let result = self
+        let header = block.header().clone();
+
+        match self
             .chainstate_handle
             .call_mut(move |this| this.process_block(block, BlockSource::Peer))
-            .await?;
-
-        // TODO: check all errors
-        // TODO: ban peer if needed
-        match result {
+            .await?
+        {
             Ok(_) => {}
-            Err(ProcessBlockError(BlockError::BlockAlreadyExists(id))) => {
-                log::debug!("block {:?} already exists", id)
-            }
-            Err(e) => return Err(P2pError::ChainstateError(e)),
+            Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
+            Err(err) => return Err(P2pError::ChainstateError(err)),
         }
 
         peer.register_block_response(&header)
@@ -375,10 +323,7 @@ where
                 let locator = self.chainstate_handle.call(|this| this.get_locator()).await??;
                 self.send_header_request(peer_id, locator, 0).await
             }
-            Err(e) => {
-                // TODO: ban peer
-                Ok(())
-            }
+            Err(err) => Err(err),
         }
     }
 
@@ -433,14 +378,14 @@ where
             net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
                     log::warn!(
-                        "outbound request {:?} for peer {:?} timed out",
+                        "outbound request {:?} for peer {} timed out",
                         request_id,
                         peer_id
                     );
 
                     if request.retry_count == RETRY_LIMIT {
                         log::error!(
-                            "peer {:?} failed to respond to request, close connection",
+                            "peer {} failed to respond to request, close connection",
                             peer_id
                         );
                         self.unregister_peer(peer_id);
@@ -476,6 +421,43 @@ where
         Ok(())
     }
 
+    async fn handle_error(
+        &mut self,
+        peer_id: T::PeerId,
+        result: crate::Result<()>,
+    ) -> crate::Result<()> {
+        match result {
+            Ok(_) => Ok(()),
+            Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
+            Err(P2pError::ProtocolError(_err)) => {
+                log::error!("Peer {} commited a protocol error: {}", peer_id, _err);
+                // TODO: self.tx_swarm.report_protocol_error(peer_id, error).await?;
+                Ok(())
+            }
+            Err(P2pError::ChainstateError(err)) => match err {
+                ProcessBlockError(err) => {
+                    if err.ban_score() > 0 {
+                        // TODO: self.tx_swarm.report_chainstate_error(peer_id, error).await?;
+                    }
+
+                    Ok(())
+                }
+                err => {
+                    log::error!("Peer {} caused a chainstate error: {}", peer_id, err);
+                    Ok(())
+                }
+            },
+            Err(P2pError::PeerError(err)) => {
+                log::error!("Peer error: {}", err);
+                Ok(())
+            }
+            Err(err) => {
+                log::error!("Unexpected error occurred: {}", err);
+                Ok(())
+            }
+        }
+    }
+
     /// Run SyncManager event loop
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         log::info!("Starting SyncManager");
@@ -500,7 +482,8 @@ where
                                 );
                                 log::trace!("locator: {:#?}", locator);
 
-                                self.process_header_request(peer_id, request_id, locator).await?;
+                                let result = self.process_header_request(peer_id, request_id, locator).await;
+                                self.handle_error(peer_id, result).await?;
                             }
                             SyncingRequest::GetBlocks { block_ids } => {
                                 log::debug!(
@@ -509,7 +492,8 @@ where
                                 );
                                 log::trace!("requested block ids: {:#?}", block_ids);
 
-                                self.process_block_request(peer_id, request_id, block_ids).await?;
+                                let result = self.process_block_request(peer_id, request_id, block_ids).await;
+                                self.handle_error(peer_id, result).await?;
                             }
                         }
                     }
@@ -530,7 +514,8 @@ where
                                 );
                                 log::trace!("received headers: {:#?}", headers);
 
-                                self.process_header_response(peer_id, headers).await?;
+                                let result = self.process_header_response(peer_id, headers).await;
+                                self.handle_error(peer_id, result).await?;
                             }
                             SyncingResponse::Blocks { blocks } => {
                                 log::debug!(
@@ -539,7 +524,8 @@ where
                                 );
                                 log::trace!("# of received blocks: {:#?}", blocks.len());
 
-                                self.process_block_response(peer_id, blocks).await?;
+                                let result = self.process_block_response(peer_id, blocks).await;
+                                self.handle_error(peer_id, result).await?;
                             }
                         }
                     },
@@ -548,29 +534,31 @@ where
                         request_id,
                         error,
                     } => {
-                        self.process_error(peer_id, request_id, error).await?;
+                        let result = self.process_error(peer_id, request_id, error).await;
+                        self.handle_error(peer_id, result).await?;
                     },
                     SyncingEvent::Request { peer_id, .. } | SyncingEvent::Response { peer_id, .. } => {
                         log::error!("received an invalid message from peer {}", peer_id);
-                        // TODO: disconnect peer and ban it
-                        // TODO: send `Misbehaved` event to PeerManager
-                        // return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
+                        self.handle_error(
+                            peer_id,
+                            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+                        ).await?;
                     }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SyncControlEvent::Connected(peer_id) => {
                         log::debug!("register peer {} to sync manager", peer_id);
-                        self.register_peer(peer_id).await?;
+                        let result = self.register_peer(peer_id).await;
+                        self.handle_error(peer_id, result).await?;
                     }
                     event::SyncControlEvent::Disconnected(peer_id) => {
                         log::debug!("unregister peer {} from sync manager", peer_id);
-                        self.unregister_peer(peer_id);
+                        self.unregister_peer(peer_id)
                     }
                 }
-            }
+            };
 
-            // TODO: handle error
-            self.check_state().await.map_fatal_err()?;
+            self.check_state().await?;
         }
     }
 }

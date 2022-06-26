@@ -143,10 +143,6 @@ pub enum P2pError {
     Other(&'static str),
 }
 
-pub trait FatalError {
-    fn map_fatal_err(self) -> core::result::Result<(), P2pError>;
-}
-
 impl From<std::io::Error> for P2pError {
     fn from(e: std::io::Error) -> P2pError {
         P2pError::DialError(DialError::IoError(e.kind()))

@@ -22,7 +22,6 @@ use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
 };
-use logging::log;
 use std::collections::VecDeque;
 use utils::ensure;
 
@@ -48,29 +47,29 @@ where
     T: NetworkingService,
 {
     /// Unique peer ID
-    peer_id: T::PeerId,
+    _peer_id: T::PeerId,
 
     /// State of the peer
     state: PeerSyncState,
-
-    /// Locator that was sent to the peer
-    /// Used to verify header response and pick unknown headers
-    locator: Vec<BlockHeader>,
 
     /// List of block headers indicating which blocks
     /// still need to be downloaded from the remote peer
     work: VecDeque<BlockHeader>,
 }
 
-impl<T> PeerContext<T>
-where
-    T: NetworkingService,
-{
-    pub fn new(peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+impl<T: NetworkingService> PeerContext<T> {
+    pub fn new(_peer_id: T::PeerId) -> Self {
         Self {
-            peer_id,
-            locator,
+            _peer_id,
             state: PeerSyncState::Unknown,
+            work: VecDeque::new(),
+        }
+    }
+
+    pub fn new_with_locator(_peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+        Self {
+            _peer_id,
+            state: PeerSyncState::UploadingHeaders(locator),
             work: VecDeque::new(),
         }
     }
@@ -113,14 +112,6 @@ where
     pub fn state(&self) -> &PeerSyncState {
         &self.state
     }
-
-    pub fn set_locator(&mut self, locator: Vec<BlockHeader>) {
-        self.locator = locator;
-    }
-
-    pub fn locator(&self) -> &Vec<BlockHeader> {
-        &self.locator
-    }
 }
 
 #[cfg(test)]
@@ -132,7 +123,7 @@ mod tests {
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        PeerContext::<MockService>::new(addr, vec![])
+        PeerContext::<MockService>::new(addr)
     }
 
     #[test]
