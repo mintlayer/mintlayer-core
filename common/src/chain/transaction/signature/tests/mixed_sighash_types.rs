@@ -6,8 +6,10 @@ use super::utils::*;
 use crate::chain::Destination;
 
 // Create a transaction with a different signature hash type for every input.
+// This test takes a long time to finish, so it is ignored by default.
+#[ignore]
 #[test]
-fn mixed_sighas_types() {
+fn mixed_sighash_types() {
     let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let destination = Destination::PublicKey(public_key);
 
