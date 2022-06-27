@@ -122,10 +122,18 @@ where
         message_id: T::MessageId,
         block: Block,
     ) -> crate::Result<()> {
-        let result = self
+        let result = match self
             .chainstate_handle
-            .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
-            .await?;
+            .call(move |this| this.preliminary_block_check(block))
+            .await?
+        {
+            Ok(block) => {
+                self.chainstate_handle
+                    .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
+                    .await?
+            }
+            Err(err) => Err(err),
+        };
 
         let (validation_result, score) = match result {
             Ok(_) => (ValidationResult::Accept, 0),

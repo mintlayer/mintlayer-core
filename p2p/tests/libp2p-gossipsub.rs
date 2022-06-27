@@ -205,8 +205,6 @@ async fn test_libp2p_gossipsub_3_peers() {
     peer2.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer3.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
-    println!("here");
-
     // spam the message on the pubsubsub until it succeeds (= until we have a peer)
     loop {
         let res = pubsub1
