@@ -22,8 +22,8 @@ use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
 };
-use logging::log;
 use std::collections::VecDeque;
+use utils::ensure;
 
 /// State of the peer
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,29 +47,29 @@ where
     T: NetworkingService,
 {
     /// Unique peer ID
-    peer_id: T::PeerId,
+    _peer_id: T::PeerId,
 
     /// State of the peer
     state: PeerSyncState,
-
-    /// Locator that was sent to the peer
-    /// Used to verify header response and pick unknown headers
-    locator: Vec<BlockHeader>,
 
     /// List of block headers indicating which blocks
     /// still need to be downloaded from the remote peer
     work: VecDeque<BlockHeader>,
 }
 
-impl<T> PeerContext<T>
-where
-    T: NetworkingService,
-{
-    pub fn new(peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+impl<T: NetworkingService> PeerContext<T> {
+    pub fn new(_peer_id: T::PeerId) -> Self {
         Self {
-            peer_id,
-            locator,
+            _peer_id,
             state: PeerSyncState::Unknown,
+            work: VecDeque::new(),
+        }
+    }
+
+    pub fn new_with_locator(_peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+        Self {
+            _peer_id,
+            state: PeerSyncState::UploadingHeaders(locator),
             work: VecDeque::new(),
         }
     }
@@ -87,30 +87,16 @@ where
         &mut self,
         header: &BlockHeader,
     ) -> crate::Result<Option<BlockHeader>> {
-        match &self.state {
-            PeerSyncState::UploadingBlocks(expected) => {
-                if expected != &header.get_id() {
-                    log::error!(
-                        "peer {:?} sent us the wrong header, expected {:?}, got {:?}",
-                        self.peer_id,
-                        expected,
-                        header
-                    );
-                    // TODO: this is a protocol error
-                    return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-                }
-            }
-            _ => {
-                // TODO: this is a protocol error
-                log::error!(
-                    "received a header from peer {:?} while not expecting it",
-                    self.peer_id
-                );
-                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-            }
+        if let PeerSyncState::UploadingBlocks(expected) = &self.state {
+            ensure!(
+                expected == &header.get_id(),
+                P2pError::ProtocolError(ProtocolError::InvalidMessage),
+            );
+
+            return Ok(self.get_next_block());
         }
 
-        Ok(self.get_next_block())
+        Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
     }
 
     fn get_next_block(&mut self) -> Option<BlockHeader> {
@@ -126,14 +112,6 @@ where
     pub fn state(&self) -> &PeerSyncState {
         &self.state
     }
-
-    pub fn set_locator(&mut self, locator: Vec<BlockHeader>) {
-        self.locator = locator;
-    }
-
-    pub fn locator(&self) -> &Vec<BlockHeader> {
-        &self.locator
-    }
 }
 
 #[cfg(test)]
@@ -145,7 +123,7 @@ mod tests {
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
         let addr: SocketAddr = test_utils::make_address("[::1]:");
-        PeerContext::<MockService>::new(addr, vec![])
+        PeerContext::<MockService>::new(addr)
     }
 
     #[test]
