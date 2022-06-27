@@ -2,7 +2,7 @@
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
-// you may not use this file except in compliance with the License.
+//  may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 //  http://spdx.org/licenses/MIT
@@ -36,8 +36,6 @@ use std::{
     sync::Arc,
 };
 use tokio::sync::mpsc;
-
-mod util;
 
 async fn make_sync_manager<T>(
     addr: T::Address,
@@ -107,12 +105,13 @@ async fn init_chainstate_2(
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
-    let handle1 = util::start_chainstate(Arc::clone(&config)).await;
-    let handle2 = util::start_chainstate(Arc::clone(&config)).await;
-    let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
+    let handle1 = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let handle2 = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let blocks =
+        test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
-    util::import_blocks(&handle1, blocks.clone()).await;
-    util::import_blocks(&handle2, blocks).await;
+    test_utils::import_blocks(&handle1, blocks.clone()).await;
+    test_utils::import_blocks(&handle2, blocks).await;
 
     (handle1, handle2)
 }
@@ -125,14 +124,15 @@ async fn init_chainstate_3(
     subsystem::Handle<Box<dyn ChainstateInterface>>,
     subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) {
-    let handle1 = util::start_chainstate(Arc::clone(&config)).await;
-    let handle2 = util::start_chainstate(Arc::clone(&config)).await;
-    let handle3 = util::start_chainstate(Arc::clone(&config)).await;
-    let blocks = util::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
+    let handle1 = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let handle2 = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let handle3 = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let blocks =
+        test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
 
-    util::import_blocks(&handle1, blocks.clone()).await;
-    util::import_blocks(&handle2, blocks.clone()).await;
-    util::import_blocks(&handle3, blocks).await;
+    test_utils::import_blocks(&handle1, blocks.clone()).await;
+    test_utils::import_blocks(&handle2, blocks.clone()).await;
+    test_utils::import_blocks(&handle3, blocks).await;
 
     (handle1, handle2, handle3)
 }
@@ -296,7 +296,7 @@ async fn remote_ahead_by_7_blocks() {
 
     // add 7 more blocks on top of the best block (which is also known by mgr1)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
@@ -417,7 +417,7 @@ async fn local_ahead_by_12_blocks() {
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 12).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr1_handle, 12).await;
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
@@ -573,10 +573,10 @@ async fn remote_local_diff_chains_local_higher() {
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 14).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr1_handle, 14).await;
 
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 7).await;
 
     // save local and remote tips so we can verify who did a reorg
     let local_tip = get_tip(&mgr1_handle).await;
@@ -766,10 +766,10 @@ async fn remote_local_diff_chains_remote_higher() {
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr1_handle, 5).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr1_handle, 5).await;
 
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
-    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 12).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 12).await;
 
     // save local and remote tips so we can verify who did a reorg
     let local_tip = get_tip(&mgr1_handle).await;
@@ -960,8 +960,8 @@ async fn two_remote_nodes_different_chains() {
             .await;
 
     // add 5 more blocks for first remote and 7 blocks to second remote
-    util::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
-    util::add_more_blocks(Arc::clone(&config), &mgr3_handle, 7).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
+    test_utils::add_more_blocks(Arc::clone(&config), &mgr3_handle, 7).await;
 
     // save local and remote tips so we can verify who did a reorg
     let mgr2_tip = get_tip(&mgr2_handle).await;
@@ -1099,10 +1099,10 @@ async fn two_remote_nodes_same_chains() {
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
     let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
 
-    util::import_blocks(&mgr2_handle, blocks.clone()).await;
-    util::import_blocks(&mgr3_handle, blocks).await;
+    test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
+    test_utils::import_blocks(&mgr3_handle, blocks).await;
 
     // save local and remote tips so we can verify who did a reorg
     let mgr2_tip = get_tip(&mgr2_handle).await;
@@ -1250,10 +1250,10 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
     let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
 
-    util::import_blocks(&mgr2_handle, blocks.clone()).await;
-    util::import_blocks(&mgr3_handle, blocks).await;
+    test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
+    test_utils::import_blocks(&mgr3_handle, blocks).await;
 
     // connect remote peers to local peer
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -1323,13 +1323,14 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                             .await
                             .unwrap()
                             .unwrap();
-                        blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 10);
+                        blocks =
+                            test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 10);
                     }
 
                     if dest_peer_id == conn2.peer_id() {
-                        util::import_blocks(&mgr2_handle, blocks.clone()).await;
+                        test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
                     } else {
-                        util::import_blocks(&mgr3_handle, blocks.clone()).await;
+                        test_utils::import_blocks(&mgr3_handle, blocks.clone()).await;
                     }
                 }
             }
@@ -1440,8 +1441,8 @@ async fn test_connect_disconnect_resyncing() {
         .await
         .unwrap()
         .unwrap();
-    let blocks = util::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 7);
-    util::import_blocks(&mgr2_handle, blocks.clone()).await;
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 7);
+    test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
 
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
