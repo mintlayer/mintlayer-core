@@ -28,6 +28,13 @@ impl fmt::Display for BlockHeight {
     }
 }
 
+impl std::str::FromStr for BlockHeight {
+    type Err = std::num::ParseIntError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        s.parse().map(BlockHeight::new)
+    }
+}
+
 impl From<BlockHeight> for HeightIntType {
     fn from(block_height: BlockHeight) -> HeightIntType {
         block_height.0
@@ -131,6 +138,10 @@ impl BlockHeight {
 
     pub fn next_height(&self) -> BlockHeight {
         BlockHeight(self.0.checked_add(1).expect("Block height overflow"))
+    }
+
+    pub fn prev_height(&self) -> Option<BlockHeight> {
+        self.0.checked_sub(1).map(Self)
     }
 }
 

@@ -6,8 +6,14 @@ license = "MIT"
 
 [dependencies]
 portpicker = "0.1"
-p2p = { path = "../" }
+
+# local dependencies
+chainstate-storage = { path = "../../chainstate-storage" }
+chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
+crypto = { path = "../../crypto/" }
+p2p = { path = "../" }
+subsystem = { path = "../../subsystem/" }
 
 [dependencies.libp2p]
 version = "0.45"

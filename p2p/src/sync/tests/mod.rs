@@ -23,7 +23,11 @@ use chainstate::make_chainstate;
 use libp2p::PeerId;
 
 #[cfg(test)]
+mod block_response;
+#[cfg(test)]
 mod connection;
+#[cfg(test)]
+mod header_response;
 #[cfg(test)]
 mod request_response;
 

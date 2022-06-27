@@ -26,6 +26,21 @@ async fn test_peer_connected() {
     assert_eq!(mgr.peers.len(), 1);
 }
 
+// handle peer reconnection
+#[tokio::test]
+async fn test_peer_reconnected() {
+    let (mut mgr, _conn, _sync, _pubsub, _swarm) =
+        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+
+    let peer_id = PeerId::random();
+    assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
+    assert_eq!(mgr.peers.len(), 1);
+    assert_eq!(
+        mgr.register_peer(peer_id).await,
+        Err(P2pError::PeerError(PeerError::PeerAlreadyExists))
+    );
+}
+
 // handle peer disconnection event
 #[tokio::test]
 async fn test_peer_disconnected() {
