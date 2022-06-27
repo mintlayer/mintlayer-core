@@ -44,7 +44,7 @@ where
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, rx_swarm) = mpsc::channel(16);
-    let storage = blockchain_storage::Store::new_empty().unwrap();
+    let storage = chainstate_storage::Store::new_empty().unwrap();
     let cfg = Arc::new(common::chain::config::create_unit_test_config());
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(

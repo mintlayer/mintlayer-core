@@ -17,7 +17,7 @@
 
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
-use blockchain_storage::Store;
+use chainstate_storage::Store;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};

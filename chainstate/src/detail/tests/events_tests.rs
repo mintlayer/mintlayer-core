@@ -16,7 +16,7 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
-use blockchain_storage::Store;
+use chainstate_storage::Store;
 use common::chain::block::Block;
 use common::primitives::Id;
 use std::collections::BTreeMap;

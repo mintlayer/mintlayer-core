@@ -52,7 +52,7 @@ default-members = [
 [dependencies]
 common = { path = "common"}
 storage = { path = "storage"}
-blockchain-storage = { path = "blockchain-storage"}
+chainstate-storage = { path = "chainstate-storage"}
 crypto = { path = "crypto"}
 chainstate = { path = "chainstate"}
 chainstate-types = { path = "chainstate-types"}

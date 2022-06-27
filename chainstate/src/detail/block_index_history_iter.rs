@@ -51,7 +51,7 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
 mod tests {
     use std::sync::Arc;
 
-    use blockchain_storage::Store;
+    use chainstate_storage::Store;
     use common::{
         chain::{
             block::{timestamp::BlockTimestamp, ConsensusData},

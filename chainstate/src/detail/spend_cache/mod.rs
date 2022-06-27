@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::amount_sum;
 use common::chain::signature::{verify_signature, Transactable};
 use common::chain::Transaction;

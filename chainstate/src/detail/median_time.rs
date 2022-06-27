@@ -30,7 +30,7 @@ mod test {
     use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate};
 
     use super::*;
-    use blockchain_storage::Store;
+    use chainstate_storage::Store;
     use common::{
         chain::{
             block::{timestamp::BlockTimestamp, ConsensusData},

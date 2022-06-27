@@ -20,8 +20,8 @@ use crate::detail::pow::error::ConsensusPoWError;
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
 use crate::make_chainstate;
-use blockchain_storage::BlockchainStorageRead;
-use blockchain_storage::Store;
+use chainstate_storage::BlockchainStorageRead;
+use chainstate_storage::Store;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::config::create_unit_test_config;
 use common::chain::config::TestChainConfig;
@@ -72,7 +72,7 @@ fn test_process_genesis_block() {
             .unwrap();
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(chainstate.chain_config.genesis_block_id())
@@ -148,7 +148,7 @@ fn test_empty_chainstate() {
             Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
         assert!(chainstate.get_best_block_id().unwrap().is_none());
         assert!(chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block(chainstate.chain_config.genesis_block_id())
             .unwrap()
             .is_none());
@@ -162,13 +162,13 @@ fn test_empty_chainstate() {
                 == chainstate.chain_config.genesis_block_id()
         );
         assert!(chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block(chainstate.chain_config.genesis_block_id())
             .unwrap()
             .is_some());
         assert!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_block(chainstate.chain_config.genesis_block_id())
                 .unwrap()
                 .unwrap()
@@ -190,7 +190,7 @@ fn test_spend_inputs_simple() {
         for tx in block.transactions() {
             assert!(
                 chainstate
-                    .blockchain_storage
+                    .chainstate_storage
                     .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                     .expect(ERR_STORAGE_FAIL)
                     == None
@@ -202,7 +202,7 @@ fn test_spend_inputs_simple() {
         assert!(chainstate.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             new_id
@@ -211,7 +211,7 @@ fn test_spend_inputs_simple() {
         // Check that tx inputs in the main chain and not spend
         for tx in block.transactions() {
             let tx_index = chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                 .expect("Not found mainchain tx index")
                 .expect(ERR_STORAGE_FAIL);
@@ -251,7 +251,7 @@ fn test_straight_chain() {
             .expect("Unable to process genesis block");
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(chainstate.chain_config.genesis_block_id())
@@ -269,7 +269,7 @@ fn test_straight_chain() {
         for _ in 0..COUNT_BLOCKS {
             let prev_block_id = block_index.block_id();
             let best_block_id = chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .ok()
                 .flatten()

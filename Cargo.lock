@@ -372,23 +372,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
-name = "blockchain-storage"
-version = "0.1.0"
-dependencies = [
- "chainstate-types",
- "common",
- "crypto",
- "itertools",
- "mockall",
- "num-traits",
- "parity-scale-codec",
- "serialization",
- "storage",
- "thiserror",
- "utxo",
-]
-
-[[package]]
 name = "blocking"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -514,7 +497,7 @@ name = "chainstate"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "blockchain-storage",
+ "chainstate-storage",
  "chainstate-types",
  "common",
  "crypto",
@@ -534,6 +517,23 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+]
+
+[[package]]
+name = "chainstate-storage"
+version = "0.1.0"
+dependencies = [
+ "chainstate-types",
+ "common",
+ "crypto",
+ "itertools",
+ "mockall",
+ "num-traits",
+ "parity-scale-codec",
+ "serialization",
+ "storage",
+ "thiserror",
+ "utxo",
 ]
 
 [[package]]
@@ -2170,8 +2170,8 @@ dependencies = [
 name = "mintlayer-core"
 version = "0.1.0"
 dependencies = [
- "blockchain-storage",
  "chainstate",
+ "chainstate-storage",
  "chainstate-types",
  "common",
  "crypto",
@@ -2387,8 +2387,8 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "blockchain-storage",
  "chainstate",
+ "chainstate-storage",
  "clap 3.2.5",
  "common",
  "jsonrpsee",
@@ -2548,8 +2548,8 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "blockchain-storage",
  "chainstate",
+ "chainstate-storage",
  "common",
  "crypto",
  "futures",

@@ -41,7 +41,7 @@ features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
 portpicker = "0.1"
-blockchain-storage = { path = "../blockchain-storage" }
+chainstate-storage = { path = "../chainstate-storage" }
 
 [dev-dependencies.test-utils]
 version = "0.1"

@@ -4,7 +4,7 @@ use super::{
     consensus_validator::TransactionIndexHandle, median_time::calculate_median_time_past,
     time_getter::TimeGetterFn,
 };
-use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
@@ -68,8 +68,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
     }
 }
 
-impl<'a, S: TransactionRw<Error = blockchain_storage::Error>, O> ChainstateRef<'a, S, O> {
-    pub fn commit_db_tx(self) -> blockchain_storage::Result<()> {
+impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'a, S, O> {
+    pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
 }
