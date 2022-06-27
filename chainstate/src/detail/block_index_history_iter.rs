@@ -1,7 +1,5 @@
-use common::{
-    chain::block::{Block, BlockIndex},
-    primitives::Id,
-};
+use chainstate_types::block_index::BlockIndex;
+use common::{chain::block::Block, primitives::Id};
 use logging::log;
 
 use super::consensus_validator::BlockIndexHandle;
@@ -53,7 +51,7 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
 mod tests {
     use std::sync::Arc;
 
-    use blockchain_storage::Store;
+    use chainstate_storage::Store;
     use common::{
         chain::{
             block::{timestamp::BlockTimestamp, ConsensusData},

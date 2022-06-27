@@ -78,7 +78,7 @@ mod test {
     async fn with_chainstate<F: 'static + Send + Future<Output = ()>>(
         proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
-        let storage = blockchain_storage::Store::new_empty().unwrap();
+        let storage = chainstate_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(

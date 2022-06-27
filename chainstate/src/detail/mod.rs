@@ -17,8 +17,8 @@
 
 use crate::detail::orphan_blocks::OrphanBlocksPool;
 use crate::ChainstateEvent;
-use blockchain_storage::Transactional;
-use common::chain::block::block_index::BlockIndex;
+use chainstate_storage::Transactional;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::{Block, BlockHeader};
 use common::chain::config::ChainConfig;
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
@@ -42,8 +42,8 @@ mod median_time;
 
 mod chainstateref;
 
-type TxRw<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRw;
-type TxRo<'a> = <blockchain_storage::Store as Transactional<'a>>::TransactionRo;
+type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
+type TxRo<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRo;
 type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
@@ -58,7 +58,7 @@ use time_getter::TimeGetter;
 #[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
-    blockchain_storage: blockchain_storage::Store,
+    chainstate_storage: chainstate_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
@@ -78,7 +78,7 @@ impl Chainstate {
 
     #[must_use]
     fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
-        let db_tx = self.blockchain_storage.transaction_rw();
+        let db_tx = self.chainstate_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
             db_tx,
@@ -89,7 +89,7 @@ impl Chainstate {
 
     #[must_use]
     fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
-        let db_tx = self.blockchain_storage.transaction_ro();
+        let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
             db_tx,
@@ -104,7 +104,7 @@ impl Chainstate {
 
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        blockchain_storage: blockchain_storage::Store,
+        chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
@@ -112,7 +112,7 @@ impl Chainstate {
 
         let mut cons = Self::new_no_genesis(
             chain_config,
-            blockchain_storage,
+            chainstate_storage,
             custom_orphan_error_hook,
             time_getter,
         )?;
@@ -138,13 +138,13 @@ impl Chainstate {
 
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
-        blockchain_storage: blockchain_storage::Store,
+        chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
-            blockchain_storage,
+            chainstate_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
@@ -183,7 +183,7 @@ impl Chainstate {
 
     fn process_db_commit_error(
         &mut self,
-        db_error: blockchain_storage::Error,
+        db_error: chainstate_storage::Error,
         block: Block,
         block_source: BlockSource,
         attempt_number: usize,

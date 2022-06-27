@@ -11,7 +11,7 @@ pub enum ConsensusData {
     #[codec(index = 1)]
     PoW(PoWData),
     #[codec(index = 2)]
-    FakePoS(FakePoSData),
+    PoS(PoSData),
 }
 
 pub struct BlockRewardTransactable<'a> {
@@ -52,7 +52,7 @@ impl ConsensusData {
                 inputs: None,
                 outputs: Some(pow_data.outputs()),
             },
-            ConsensusData::FakePoS(pos_data) => BlockRewardTransactable {
+            ConsensusData::PoS(pos_data) => BlockRewardTransactable {
                 inputs: Some(&pos_data.kernel_inputs),
                 outputs: Some(&pos_data.reward_outputs),
             },
@@ -61,26 +61,40 @@ impl ConsensusData {
 
     pub fn get_block_proof(&self) -> Option<Uint256> {
         match self {
-            ConsensusData::None => Some(1.into()),
+            ConsensusData::None => Some(1u64.into()),
             ConsensusData::PoW(ref pow_data) => pow_data.get_block_proof(),
-            ConsensusData::FakePoS(_) => Some(1.into()),
+            ConsensusData::PoS(_) => Some(1u64.into()),
         }
     }
 }
 
 /// Fake PoS just to test spending block rewards; will be removed at some point in the future
 #[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
-pub struct FakePoSData {
+pub struct PoSData {
     kernel_inputs: Vec<TxInput>,
     reward_outputs: Vec<TxOutput>,
+    bits: Compact,
 }
 
-impl FakePoSData {
-    pub fn new(kernel_inputs: Vec<TxInput>, reward_outputs: Vec<TxOutput>) -> Self {
+impl PoSData {
+    pub fn new(kernel_inputs: Vec<TxInput>, reward_outputs: Vec<TxOutput>, bits: Compact) -> Self {
         Self {
             kernel_inputs,
             reward_outputs,
+            bits,
         }
+    }
+
+    pub fn kernel_inputs(&self) -> &Vec<TxInput> {
+        &self.kernel_inputs
+    }
+
+    pub fn reward_outputs(&self) -> &Vec<TxOutput> {
+        &self.reward_outputs
+    }
+
+    pub fn bits(&self) -> &Compact {
+        &self.bits
     }
 }
 

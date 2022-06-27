@@ -15,7 +15,7 @@ enum Error {
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // Initialize storage and chain configuration
-    let storage = blockchain_storage::Store::new_empty()?;
+    let storage = chainstate_storage::Store::new_empty()?;
 
     // Chain configuration
     let chain_config = match opts.net {

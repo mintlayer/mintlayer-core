@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::tests::*;
-use blockchain_storage::{BlockchainStorageRead, Store};
+use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;
 
 #[test]
@@ -38,7 +38,7 @@ fn test_reorg_simple() {
         assert!(result.is_ok());
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(chainstate.chain_config.genesis_block_id())
@@ -50,7 +50,7 @@ fn test_reorg_simple() {
         chainstate.process_block(block_first.clone(), BlockSource::Local).unwrap();
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             new_id
@@ -63,14 +63,14 @@ fn test_reorg_simple() {
         chainstate.process_block(block_second.clone(), BlockSource::Local).unwrap();
         assert_ne!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             new_id
@@ -82,7 +82,7 @@ fn test_reorg_simple() {
         assert!(chainstate.process_block(new_block, BlockSource::Local).is_ok());
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             new_id
@@ -138,7 +138,7 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventLi
 
     let block = btf
         .chainstate
-        .blockchain_storage
+        .chainstate_storage
         .get_block(btf.block_indexes[NEW_CHAIN_END_ON - 1].block_id().clone())
         .unwrap()
         .unwrap();
@@ -172,7 +172,7 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
         .is_ok());
     let block = btf
         .chainstate
-        .blockchain_storage
+        .chainstate_storage
         .get_block(btf.block_indexes[NEW_CHAIN_END_ON].block_id().clone())
         .unwrap()
         .unwrap();
@@ -201,7 +201,7 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
     //
     let block = btf
         .chainstate
-        .blockchain_storage
+        .chainstate_storage
         .get_block(btf.block_indexes.last().unwrap().block_id().clone())
         .unwrap()
         .unwrap();
@@ -280,7 +280,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
     //
     let block = btf
         .chainstate
-        .blockchain_storage
+        .chainstate_storage
         .get_block(btf.block_indexes.last().unwrap().block_id().clone())
         .unwrap()
         .unwrap();

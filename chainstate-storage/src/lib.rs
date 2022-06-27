@@ -1,6 +1,6 @@
 //! Application-level interface for the persistent blockchain storage.
 
-use common::chain::block::block_index::BlockIndex;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;

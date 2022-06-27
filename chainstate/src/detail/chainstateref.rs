@@ -1,13 +1,14 @@
 use std::collections::BTreeSet;
 
-use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
-use blockchain_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
+use super::{
+    consensus_validator::TransactionIndexHandle, median_time::calculate_median_time_past,
+    time_getter::TimeGetterFn,
+};
+use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
+use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
-        block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, height_skip::get_skip_height,
-            Block, BlockHeader, BlockIndex,
-        },
+        block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
@@ -49,8 +50,26 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
     }
 }
 
-impl<'a, S: TransactionRw<Error = blockchain_storage::Error>, O> ChainstateRef<'a, S, O> {
-    pub fn commit_db_tx(self) -> blockchain_storage::Result<()> {
+impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
+    for ChainstateRef<'a, S, O>
+{
+    fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
+        self.get_mainchain_tx_index(tx_id)
+    }
+
+    fn get_mainchain_tx_by_position(
+        &self,
+        tx_index: &common::chain::TxMainChainPosition,
+    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
+        self.get_mainchain_tx_by_position(tx_index)
+    }
+}
+
+impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'a, S, O> {
+    pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
 }
@@ -98,6 +117,24 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         log::trace!("Loading block index of id: {}", block_id);
         self.db_tx.get_block_index(block_id).map_err(PropertyQueryError::from)
+    }
+
+    pub fn get_mainchain_tx_index(
+        &self,
+        tx_id: &OutPointSourceId,
+    ) -> Result<Option<common::chain::TxMainChainIndex>, PropertyQueryError> {
+        log::trace!("Loading transaction index of id: {:?}", tx_id);
+        self.db_tx.get_mainchain_tx_index(tx_id).map_err(PropertyQueryError::from)
+    }
+
+    fn get_mainchain_tx_by_position(
+        &self,
+        tx_index: &common::chain::TxMainChainPosition,
+    ) -> Result<Option<common::chain::Transaction>, PropertyQueryError> {
+        log::trace!("Loading transaction by pos: {:?}", tx_index);
+        self.db_tx
+            .get_mainchain_tx_by_position(tx_index)
+            .map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_id_by_height(

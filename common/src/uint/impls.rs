@@ -19,7 +19,7 @@
 //! Implementation of various large-but-fixed sized unsigned integer types.
 //! The functions here are designed to be fast.
 
-use crate::primitives::H256;
+use crate::primitives::{Amount, H256};
 use serialization::{Decode, Encode};
 
 macro_rules! construct_uint {
@@ -84,6 +84,26 @@ macro_rules! construct_uint {
                 let mut ret = [0; $n_words];
                 ret[0] = init;
                 $name(ret)
+            }
+
+            /// Create an object from a given unsigned 128-bit integer
+            #[inline]
+            pub fn from_u128(init: u128) -> $name {
+                let serialized_input = init.encode();
+                let pad: [u8; 8 * ($n_words - 2)] = [0; 8 * ($n_words - 2)];
+                let full: [u8; 8 * $n_words] = serialized_input
+                    .into_iter()
+                    .chain(pad.into_iter())
+                    .collect::<Vec<u8>>()
+                    .try_into()
+                    .expect("Size should match");
+                Self::from_bytes(full)
+            }
+
+            /// Create an object from a given unsigned Amount
+            #[inline]
+            pub fn from_amount(init: Amount) -> $name {
+                Self::from_u128(init.into_atoms())
             }
 
             /// Create an object from a given signed 64-bit integer
@@ -253,15 +273,23 @@ macro_rules! construct_uint {
         }
 
         impl<'a> From<u64> for $name {
-            /// Creates a Uint256 from the given reference
-            /// to the bytes array of fixed length.
-            ///
-            /// # Note
-            ///
-            /// The given bytes are assumed to be in little endian order.
             #[inline]
             fn from(n: u64) -> Self {
                 Self::from_u64(n)
+            }
+        }
+
+        impl<'a> From<u128> for $name {
+            #[inline]
+            fn from(n: u128) -> Self {
+                Self::from_u128(n)
+            }
+        }
+
+        impl<'a> From<Amount> for $name {
+            #[inline]
+            fn from(n: Amount) -> Self {
+                Self::from_amount(n)
             }
         }
 
@@ -951,5 +979,44 @@ mod tests {
             add << 64,
             Uint256([0, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0])
         );
+    }
+
+    fn test_op_equality(v: u128) {
+        let a1 = v;
+        let b1 = a1 << 64;
+        let a2 = Uint256::from_u64(v as u64);
+        let b2 = a2 << 64;
+        let b3 = Uint256::from_u128(b1);
+        assert_eq!(b2, b3);
+    }
+
+    #[test]
+    pub fn uint256_from_uint128() {
+        test_op_equality(1);
+        test_op_equality(10);
+        test_op_equality(100);
+        test_op_equality(1000);
+        test_op_equality(10000);
+        test_op_equality(100000);
+        test_op_equality(1000000);
+        test_op_equality(10000000);
+        test_op_equality(100000000);
+        test_op_equality(10000000000);
+        test_op_equality(100000000000);
+        test_op_equality(1000000000000);
+        test_op_equality(10000000000000);
+        test_op_equality(100000000000000);
+        test_op_equality(1000000000000000);
+        test_op_equality(10000000000000000);
+        test_op_equality(100000000000000000);
+        test_op_equality(1000000000000000000);
+        test_op_equality(10000000000000000000);
+        test_op_equality(100000000000000000000);
+        test_op_equality(1000000000000000000000);
+        test_op_equality(10000000000000000000000);
+        test_op_equality(100000000000000000000000);
+        test_op_equality(1000000000000000000000000);
+        test_op_equality(10000000000000000000000000);
+        test_op_equality(100000000000000000000000000);
     }
 }

@@ -16,7 +16,7 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
-use blockchain_storage::BlockchainStorageRead;
+use chainstate_storage::BlockchainStorageRead;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{OutPointSourceId, Transaction, TxInput, TxOutput};
@@ -80,7 +80,7 @@ fn spend_tx_in_the_same_block() {
             assert!(chainstate.process_block(block, BlockSource::Local).is_ok());
             assert_eq!(
                 chainstate
-                    .blockchain_storage
+                    .chainstate_storage
                     .get_best_block_id()
                     .expect(ERR_BEST_BLOCK_NOT_FOUND),
                 Some(block_id)
@@ -135,7 +135,7 @@ fn spend_tx_in_the_same_block() {
             assert!(chainstate.process_block(block, BlockSource::Local).is_err());
             assert_eq!(
                 chainstate
-                    .blockchain_storage
+                    .chainstate_storage
                     .get_best_block_id()
                     .expect(ERR_BEST_BLOCK_NOT_FOUND)
                     .expect(ERR_STORAGE_FAIL),
@@ -221,7 +221,7 @@ fn double_spend_tx_in_the_same_block() {
         assert!(chainstate.process_block(block, BlockSource::Local).is_err());
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND)
                 .expect(ERR_STORAGE_FAIL),
@@ -282,7 +282,7 @@ fn double_spend_tx_in_another_block() {
         chainstate.process_block(first_block, BlockSource::Local).unwrap();
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(first_block_id.clone())
@@ -311,7 +311,7 @@ fn double_spend_tx_in_another_block() {
         assert!(chainstate.process_block(second_block, BlockSource::Local).is_err());
         assert_eq!(
             chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND)
                 .expect(ERR_STORAGE_FAIL),

@@ -1,11 +1,11 @@
-use crate::chain::block::block_v1::BlockHeader;
-use crate::chain::block::Block;
-use crate::chain::ChainConfig;
-use crate::primitives::{BlockHeight, Id, Idable};
-use crate::Uint256;
+use common::chain::block::block_header::BlockHeader;
+use common::chain::block::Block;
+use common::chain::ChainConfig;
+use common::primitives::{BlockHeight, Id, Idable};
+use common::Uint256;
 use serialization::{Decode, Encode};
 
-use super::timestamp::BlockTimestamp;
+use common::chain::block::timestamp::BlockTimestamp;
 
 #[derive(Debug, Clone, Encode, Decode)]
 #[allow(dead_code, unused_variables)]

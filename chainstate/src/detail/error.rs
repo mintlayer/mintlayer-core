@@ -29,7 +29,7 @@ use super::{
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum BlockError {
     #[error("Block storage error: `{0}`")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Error while checking the previous block: {0}")]
     OrphanCheckFailed(#[from] OrphanCheckError),
     #[error("Check block failed: {0}")]
@@ -51,7 +51,7 @@ pub enum BlockError {
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
-    DatabaseCommitError(Id<Block>, usize, blockchain_storage::Error),
+    DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
 }
@@ -59,7 +59,7 @@ pub enum BlockError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusVerificationError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
     PrevBlockLoadError(Id<Block>, Id<Block>, PropertyQueryError),
     #[error("Previous block {0} of block {1} not found in database")]
@@ -75,7 +75,7 @@ pub enum ConsensusVerificationError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Block has an invalid merkle root")]
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
@@ -99,7 +99,7 @@ pub enum CheckBlockError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum CheckBlockTransactionsError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(chainstate_storage::Error),
     #[error("Duplicate input in transaction {0} in block {1}")]
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
@@ -111,7 +111,7 @@ pub enum CheckBlockTransactionsError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PropertyQueryError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Best block not found")]
     BestBlockNotFound,
     #[error("Best block index not found")]
@@ -138,7 +138,7 @@ pub enum PropertyQueryError {
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Previous block not found")]
     PrevBlockIdNotFound,
     #[error("Block index not found")]

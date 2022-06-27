@@ -1,4 +1,4 @@
-use crate::primitives::BlockHeight;
+use common::primitives::BlockHeight;
 
 fn invert_lowest_one(n: u64) -> u64 {
     n & n.wrapping_sub(1)

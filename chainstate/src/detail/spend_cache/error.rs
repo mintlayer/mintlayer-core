@@ -7,7 +7,7 @@ use thiserror::Error;
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum StateUpdateError {
     #[error("Blockchain storage error: {0}")]
-    StorageError(blockchain_storage::Error),
+    StorageError(chainstate_storage::Error),
     #[error("While connecting a block, transaction number `{0}` does not exist in block `{1}`")]
     TxNumWrongInBlockOnConnect(usize, Id<Block>),
     #[error("While disconnecting a block, transaction number `{0}` does not exist in block `{1}`")]
@@ -65,8 +65,8 @@ pub enum StateUpdateError {
     SerializationInvariantError(Id<Block>),
 }
 
-impl From<blockchain_storage::Error> for StateUpdateError {
-    fn from(err: blockchain_storage::Error) -> Self {
+impl From<chainstate_storage::Error> for StateUpdateError {
+    fn from(err: chainstate_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
         StateUpdateError::StorageError(err)

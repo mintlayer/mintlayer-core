@@ -16,7 +16,7 @@
 // Author(s): A. Sinitsyn
 
 use crate::detail::tests::*;
-use blockchain_storage::BlockchainStorageRead;
+use chainstate_storage::BlockchainStorageRead;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::{OutputSpentState, Transaction, TxInput, TxOutput};
 use common::primitives::Id;
@@ -31,7 +31,7 @@ pub(in crate::detail::tests) struct BlockTestFramework {
 impl<'a> BlockTestFramework {
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
         let genesis_index = chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block_index(&chainstate.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
@@ -44,7 +44,7 @@ impl<'a> BlockTestFramework {
     pub(in crate::detail::tests) fn new() -> Self {
         let chainstate = setup_chainstate();
         let genesis_index = chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block_index(&chainstate.chain_config.genesis_block_id())
             .unwrap()
             .unwrap();
@@ -70,7 +70,7 @@ impl<'a> BlockTestFramework {
                     TestBlockParams::SpendFrom(block_id) => {
                         let block = self
                             .chainstate
-                            .blockchain_storage
+                            .chainstate_storage
                             .get_block(block_id.clone())
                             .unwrap()
                             .unwrap();
@@ -123,7 +123,7 @@ impl<'a> BlockTestFramework {
 
     #[allow(dead_code)]
     pub(in crate::detail::tests) fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
-        self.chainstate.blockchain_storage.get_block_index(id).ok().flatten().unwrap()
+        self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
     #[allow(dead_code)]
@@ -138,7 +138,7 @@ impl<'a> BlockTestFramework {
             for block_id in &blocks {
                 let block_index = self
                     .chainstate
-                    .blockchain_storage
+                    .chainstate_storage
                     .get_block_index(block_id)
                     .ok()
                     .flatten()
@@ -202,7 +202,7 @@ impl<'a> BlockTestFramework {
     ) -> Result<(), BlockError> {
         let mut block = self
             .chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block(parent_block_id.clone())
             .ok()
             .flatten()
@@ -213,7 +213,7 @@ impl<'a> BlockTestFramework {
             let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
             self.block_indexes.push(block_index.unwrap_or_else(|| {
                 self.chainstate
-                    .blockchain_storage
+                    .chainstate_storage
                     .get_block_index(&block.get_id())
                     .unwrap()
                     .unwrap()
@@ -229,7 +229,7 @@ impl<'a> BlockTestFramework {
         let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
         self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
             self.chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_block_index(&block.get_id())
                 .unwrap()
                 .unwrap()
@@ -244,7 +244,7 @@ impl<'a> BlockTestFramework {
     ) -> Option<OutputSpentState> {
         let tx_index = self
             .chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_mainchain_tx_index(&OutPointSourceId::from(tx_id.clone()))
             .unwrap()?;
         tx_index.get_spent_state(output_index).ok()
@@ -272,7 +272,7 @@ impl<'a> BlockTestFramework {
         if expected_block_id.is_some() {
             let real_next_block_id = self
                 .chainstate
-                .blockchain_storage
+                .chainstate_storage
                 .get_block_id_by_height(&block_height)
                 .unwrap();
             assert_eq!(real_next_block_id.as_ref(), expected_block_id);
@@ -292,7 +292,7 @@ impl<'a> BlockTestFramework {
                 Some(block_index) => {
                     let block = self
                         .chainstate
-                        .blockchain_storage
+                        .chainstate_storage
                         .get_block(block_index.block_id().clone())
                         .unwrap()
                         .unwrap();
@@ -308,7 +308,7 @@ impl<'a> BlockTestFramework {
 
         let block_index = self
             .chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block_index(block_id)
             .ok()
             .flatten()
@@ -321,14 +321,14 @@ impl<'a> BlockTestFramework {
     pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         let block_index = self
             .chainstate
-            .blockchain_storage
+            .chainstate_storage
             .get_block_index(block_id)
             .ok()
             .flatten()
             .unwrap();
         let height = block_index.block_height();
         let id_at_height =
-            self.chainstate.blockchain_storage.get_block_id_by_height(&height).unwrap();
+            self.chainstate.chainstate_storage.get_block_id_by_height(&height).unwrap();
         match id_at_height {
             Some(id) => id == *block_index.block_id(),
             None => false,

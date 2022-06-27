@@ -8,7 +8,7 @@ license = "MIT"
 portpicker = "0.1"
 
 # local dependencies
-blockchain-storage = { path = "../../blockchain_storage" }
+chainstate-storage = { path = "../../chainstate-storage" }
 chainstate = { path = "../../chainstate/" }
 common = { path = "../../common/" }
 crypto = { path = "../../crypto/" }

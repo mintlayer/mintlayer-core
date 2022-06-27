@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 #![allow(warnings)]
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
-use blockchain_storage::BlockchainStorageRead;
+use chainstate_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
 use crypto::random::Rng;
 
@@ -205,12 +205,12 @@ fn test_get_headers_different_chains() {
             let locator = btf1.chainstate.get_locator().unwrap();
             let headers = btf2.chainstate.get_headers(locator).unwrap();
             let id = headers[0].prev_block_id().clone().unwrap();
-            assert!(btf1.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
+            assert!(btf1.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
 
             let locator = btf2.chainstate.get_locator().unwrap();
             let headers = btf1.chainstate.get_headers(locator).unwrap();
             let id = headers[0].prev_block_id().clone().unwrap();
-            assert!(btf2.chainstate.blockchain_storage.get_block_index(&id).unwrap().is_some());
+            assert!(btf2.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
         }
     });
 }
