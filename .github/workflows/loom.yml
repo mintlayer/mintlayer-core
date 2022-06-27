@@ -27,4 +27,4 @@ jobs:
       with:
         submodules: recursive
     - name: Run permutation tests
-      run: cargo test --tests --release -p storage -p blockchain-storage
+      run: cargo test --tests --release -p storage -p chainstate-storage
