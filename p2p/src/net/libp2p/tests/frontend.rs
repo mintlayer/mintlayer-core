@@ -40,7 +40,6 @@ async fn test_connect_new() {
     let service = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
         &[],
-        &[],
         config,
         Duration::from_secs(10),
     )
@@ -56,7 +55,6 @@ async fn test_connect_new_addrinuse() {
     let service = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
         &[],
-        &[],
         Arc::clone(&config),
         Duration::from_secs(10),
     )
@@ -65,7 +63,6 @@ async fn test_connect_new_addrinuse() {
 
     let service = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
-        &[],
         &[],
         config,
         Duration::from_secs(10),
@@ -91,14 +88,12 @@ async fn test_connect_accept() {
     let service1 = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
         &[],
-        &[],
         Arc::clone(&config),
         Duration::from_secs(10),
     )
     .await;
     let service2 = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
-        &[],
         &[],
         Arc::clone(&config),
         Duration::from_secs(10),
@@ -126,7 +121,6 @@ async fn test_connect_peer_id_missing() {
     let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
     let (mut service, _, _) = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
-        &[],
         &[],
         config,
         Duration::from_secs(10),
@@ -313,7 +307,6 @@ async fn test_connect_with_timeout() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service, _, _) = Libp2pService::start(
         test_utils::make_address("/ip6/::1/tcp/"),
-        &[],
         &[],
         config,
         Duration::from_secs(2),

@@ -164,7 +164,6 @@ where
                 P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
             })?,
             &[],
-            &[net::types::PubSubTopic::Blocks],
             Arc::clone(&config),
             TIMEOUT,
         )
@@ -207,10 +206,15 @@ where
 
         // TODO: merge with syncmanager when appropriate
         tokio::spawn(async move {
-            if let Err(e) =
-                pubsub::PubSubMessageHandler::<T>::new(config, pubsub, consensus_handle, rx_pubsub)
-                    .run()
-                    .await
+            if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
+                config,
+                pubsub,
+                consensus_handle,
+                rx_pubsub,
+                &[net::types::PubSubTopic::Blocks],
+            )
+            .run()
+            .await
             {
                 log::error!("PubSubMessageHandler failed: {:?}", e);
             }

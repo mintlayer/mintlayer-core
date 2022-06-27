@@ -333,6 +333,15 @@ impl Backend {
                     channel.send(res).map_err(|_| P2pError::ChannelClosed)
                 }
             },
+            types::Command::Subscribe { topics, response } => {
+                for topic in topics {
+                    if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+                        return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
+                    }
+                }
+
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }

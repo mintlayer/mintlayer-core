@@ -36,7 +36,6 @@ where
     let (conn, _, _) = T::start(
         addr,
         &[],
-        &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )

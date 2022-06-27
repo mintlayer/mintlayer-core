@@ -57,7 +57,6 @@ where
     let (conn, _, sync) = T::start(
         addr,
         &[],
-        &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )

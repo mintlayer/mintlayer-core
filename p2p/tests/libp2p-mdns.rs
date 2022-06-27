@@ -32,7 +32,6 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv, _, _) = Libp2pService::start(
         addr.clone(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
-        &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
@@ -43,7 +42,6 @@ async fn test_libp2p_peer_discovery() {
     let (mut serv2, _, _) = Libp2pService::start(
         addr2.clone(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
-        &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )

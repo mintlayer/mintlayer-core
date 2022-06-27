@@ -97,7 +97,6 @@ impl NetworkingService for MockService {
     async fn start(
         addr: Self::Address,
         _strategies: &[Self::DiscoveryStrategy],
-        _topics: &[PubSubTopic],
         _config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
@@ -206,6 +205,10 @@ where
         _msg_id: T::MessageId,
         _result: ValidationResult,
     ) -> crate::Result<()> {
+        todo!();
+    }
+
+    async fn subscribe(&mut self, _topics: &[PubSubTopic]) -> crate::Result<()> {
         todo!();
     }
 

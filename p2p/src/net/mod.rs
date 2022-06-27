@@ -80,7 +80,6 @@ pub trait NetworkingService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        topics: &[types::PubSubTopic],
         chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
@@ -155,6 +154,12 @@ where
         msg_id: T::MessageId,
         result: types::ValidationResult,
     ) -> crate::Result<()>;
+
+    /// Subscribe to publish-subscribe topics
+    ///
+    /// # Arguments
+    /// * `topics` - list of topics
+    async fn subscribe(&mut self, topics: &[types::PubSubTopic]) -> crate::Result<()>;
 
     /// Poll unvalidated pubsub messages
     ///

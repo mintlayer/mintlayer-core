@@ -262,10 +262,10 @@ impl Chainstate {
         self.attempt_to_process_block(block, block_source, 0)
     }
 
-    pub fn preliminary_block_check(&self, block: Block) -> Result<(), BlockError> {
+    pub fn preliminary_block_check(&self, block: Block) -> Result<Block, BlockError> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
-        Ok(())
+        Ok(block)
     }
 
     pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {

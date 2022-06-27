@@ -31,7 +31,7 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
         Ok(())
     }
 
-    fn preliminary_block_check(&self, block: Block) -> Result<(), ChainstateError> {
+    fn preliminary_block_check(&self, block: Block) -> Result<Block, ChainstateError> {
         self.chainstate
             .preliminary_block_check(block)
             .map_err(ChainstateError::ProcessBlockError)
