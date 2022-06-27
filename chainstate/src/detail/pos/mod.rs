@@ -22,7 +22,7 @@ use super::{
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum PoSError {
     #[error("Block storage error: `{0}`")]
-    StorageError(#[from] blockchain_storage::Error),
+    StorageError(#[from] chainstate_storage::Error),
     #[error("Stake kernel hash failed to meet the target requirement")]
     StakeKernelHashTooHigh,
     #[error(
