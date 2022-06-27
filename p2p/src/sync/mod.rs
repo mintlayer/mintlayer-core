@@ -21,8 +21,7 @@ use crate::{
     net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
 };
 use chainstate::{
-    ban_score::BanScore, chainstate_interface, BlockError, BlockSource,
-    ChainstateError::ProcessBlockError,
+    ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
 };
 use common::{
     chain::{
@@ -292,11 +291,20 @@ where
         let block = blocks.into_iter().next().expect("block to exist");
         let header = block.header().clone();
 
-        match self
+        let result = match self
             .chainstate_handle
-            .call_mut(move |this| this.process_block(block, BlockSource::Peer))
+            .call(move |this| this.preliminary_block_check(block))
             .await?
         {
+            Ok(block) => {
+                self.chainstate_handle
+                    .call_mut(move |this| this.process_block(block, chainstate::BlockSource::Peer))
+                    .await?
+            }
+            Err(err) => Err(err),
+        };
+
+        match result {
             Ok(_) => {}
             Err(ProcessBlockError(BlockError::BlockAlreadyExists(_id))) => {}
             Err(err) => return Err(P2pError::ChainstateError(err)),
