@@ -54,6 +54,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
+    #[error("Kernel input was not found in block: {0}")]
+    PoSKernelInputNotFound(Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

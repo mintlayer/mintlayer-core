@@ -34,6 +34,7 @@ pub use error::*;
 
 use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
 
+mod pos;
 mod pow;
 
 pub mod ban_score;

@@ -1,3 +1,5 @@
+use chainstate_types::preconnect_data::ConsensusExtraData;
+use chainstate_types::stake_modifer::PoSStakeModifier;
 use common::chain::block::BlockHeader;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
@@ -7,6 +9,7 @@ use common::primitives::BlockHeight;
 use common::primitives::Idable;
 
 use crate::detail::pow::work::check_pow_consensus;
+use crate::BlockError;
 
 pub use self::block_index_handle::BlockIndexHandle;
 pub use self::transaction_index_handle::TransactionIndexHandle;
@@ -51,6 +54,24 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
     do_validate(chain_config, header, &consensus_status, block_index_handle)?;
     Ok(())
+}
+
+fn compute_extra_consensus_data(header: &BlockHeader) -> Result<ConsensusExtraData, BlockError> {
+    match header.consensus_data() {
+        ConsensusData::None => Ok(ConsensusExtraData::None),
+        ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
+        ConsensusData::PoS(pos_data) => {
+            let kernel_output = pos_data
+                .kernel_inputs()
+                .get(0)
+                .ok_or(BlockError::PoSKernelInputNotFound(header.get_id()))?;
+            // TODO: define prev_stake_modifier in next line
+            todo!();
+            let stake_modifier = PoSStakeModifier::from_new_block(None, &kernel_output.outpoint());
+            let data = ConsensusExtraData::PoS(stake_modifier);
+            Ok(data)
+        }
+    }
 }
 
 fn validate_pow_consensus<H: BlockIndexHandle>(
