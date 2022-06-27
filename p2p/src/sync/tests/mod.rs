@@ -26,6 +26,8 @@ use libp2p::PeerId;
 mod connection;
 #[cfg(test)]
 mod request_response;
+#[cfg(test)]
+mod header_response;
 
 async fn make_sync_manager<T>(
     addr: T::Address,
