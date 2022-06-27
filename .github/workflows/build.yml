@@ -57,6 +57,9 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    # This test is ignored, so it needs to run separately.
+    - name: Run mixed_sighash_types test
+      run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
 
@@ -79,6 +82,9 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    # This test is ignored, so it needs to run separately.
+    - name: Run mixed_sighash_types test
+      run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
 
@@ -101,5 +107,8 @@ jobs:
       run: cargo build --release
     - name: Run tests
       run: cargo test --release --workspace
+    # This test is ignored, so it needs to run separately.
+    - name: Run mixed_sighash_types test
+      run: cargo test mixed_sighash_types
     - name: Run functional tests
       run: cargo test --release -p mintlayer-test --test functional -- --ignored
