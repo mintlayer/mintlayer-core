@@ -1,7 +1,5 @@
-use common::{
-    chain::block::{Block, BlockIndex},
-    primitives::Id,
-};
+use chainstate_types::block_index::BlockIndex;
+use common::{chain::block::Block, primitives::Id};
 use logging::log;
 
 use super::consensus_validator::BlockIndexHandle;

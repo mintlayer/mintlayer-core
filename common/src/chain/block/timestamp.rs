@@ -8,6 +8,12 @@ pub struct BlockTimestamp {
     timestamp: u32,
 }
 
+impl std::fmt::Display for BlockTimestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.timestamp.fmt(f)
+    }
+}
+
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TimestampError {
     #[error("Duration cannot fit in a u32: {0:?}")]

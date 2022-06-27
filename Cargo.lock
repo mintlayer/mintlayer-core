@@ -375,6 +375,7 @@ checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 name = "blockchain-storage"
 version = "0.1.0"
 dependencies = [
+ "chainstate-types",
  "common",
  "crypto",
  "itertools",
@@ -514,6 +515,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "blockchain-storage",
+ "chainstate-types",
  "common",
  "crypto",
  "hex",
@@ -532,6 +534,17 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+]
+
+[[package]]
+name = "chainstate-types"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "crypto",
+ "logging",
+ "parity-scale-codec",
+ "serialization",
 ]
 
 [[package]]
@@ -2159,6 +2172,7 @@ version = "0.1.0"
 dependencies = [
  "blockchain-storage",
  "chainstate",
+ "chainstate-types",
  "common",
  "crypto",
  "logging",

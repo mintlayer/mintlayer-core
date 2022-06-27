@@ -17,8 +17,8 @@
 
 use super::error::ConsensusPoWError;
 use crate::detail::consensus_validator::BlockIndexHandle;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::BlockIndex;
 use common::primitives::{BlockHeight, Compact};
 use common::Uint256;
 

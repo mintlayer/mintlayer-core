@@ -1,5 +1,6 @@
+use chainstate_types::block_index::BlockIndex;
 use common::{
-    chain::block::{Block, BlockIndex},
+    chain::block::Block,
     primitives::{BlockHeight, Id},
 };
 

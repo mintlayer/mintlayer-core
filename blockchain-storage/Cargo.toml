@@ -11,6 +11,7 @@ common = { path = '../common' }
 utxo = { path = '../utxo' }
 storage = { path = '../storage'}
 serialization = { path = "../serialization" }
+chainstate-types = {path = '../chainstate-types'}
 
 mockall = { version = "0.11", optional = true }
 parity-scale-codec = "3.1"

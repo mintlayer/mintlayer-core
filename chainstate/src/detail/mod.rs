@@ -18,7 +18,7 @@
 use crate::detail::orphan_blocks::OrphanBlocksPool;
 use crate::ChainstateEvent;
 use blockchain_storage::Transactional;
-use common::chain::block::block_index::BlockIndex;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::{Block, BlockHeader};
 use common::chain::config::ChainConfig;
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};

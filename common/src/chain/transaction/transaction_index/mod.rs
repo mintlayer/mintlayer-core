@@ -95,6 +95,15 @@ impl From<Id<Block>> for SpendablePosition {
     }
 }
 
+impl SpendablePosition {
+    pub fn block_id_anyway(&self) -> &Id<Block> {
+        match self {
+            SpendablePosition::Transaction(pos) => pos.block_id(),
+            SpendablePosition::BlockReward(id) => &id,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TxMainChainIndexError {
     InvalidOutputCount,

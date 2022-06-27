@@ -9,10 +9,12 @@ use common::primitives::Idable;
 use crate::detail::pow::work::check_pow_consensus;
 
 pub use self::block_index_handle::BlockIndexHandle;
+pub use self::transaction_index_handle::TransactionIndexHandle;
 
 use super::ConsensusVerificationError;
 
 mod block_index_handle;
+mod transaction_index_handle;
 
 pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
@@ -58,7 +60,7 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
     block_index_handle: &H,
 ) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
-        ConsensusData::None | ConsensusData::FakePoS(_) => {
+        ConsensusData::None | ConsensusData::PoS(_) => {
             Err(ConsensusVerificationError::ConsensusTypeMismatch(
                 "Chain configuration says we are PoW but block consensus data is not PoW.".into(),
             ))
@@ -73,7 +75,7 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
 fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(()),
-        ConsensusData::PoW(_)|ConsensusData::FakePoS(_) => Err(ConsensusVerificationError::ConsensusTypeMismatch(
+        ConsensusData::PoW(_)|ConsensusData::PoS(_) => Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
     }
@@ -84,7 +86,7 @@ fn validate_pos_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificat
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::FakePoS(_) => Ok(()),
+        ConsensusData::PoS(_) => Ok(()),
     }
 }
 

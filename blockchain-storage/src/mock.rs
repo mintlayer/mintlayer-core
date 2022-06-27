@@ -1,6 +1,6 @@
 //! A mock version of the blockchian storage.
 
-use common::chain::block::block_index::BlockIndex;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::Block;
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,

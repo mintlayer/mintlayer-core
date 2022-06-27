@@ -24,10 +24,11 @@ use crate::detail::pow::helpers::{
 
 use super::error::ConsensusPoWError;
 use crate::detail::pow::PoW;
+use chainstate_types::block_index::BlockIndex;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::block::timestamp::BlockTimestamp;
+use common::chain::block::BlockHeader;
 use common::chain::block::{Block, ConsensusData};
-use common::chain::block::{BlockHeader, BlockIndex};
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
 use common::chain::TxOutput;

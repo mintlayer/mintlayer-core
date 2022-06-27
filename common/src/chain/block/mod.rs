@@ -20,8 +20,6 @@ use crate::chain::transaction::Transaction;
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::{Id, Idable, VersionTag, H256};
-pub mod block_index;
-pub use block_index::*;
 mod block_v1;
 pub mod consensus_data;
 
@@ -29,9 +27,9 @@ pub mod block_size;
 
 pub mod timestamp;
 
-pub mod height_skip;
+pub mod block_header;
 
-pub use block_v1::BlockHeader;
+pub use block_header::BlockHeader;
 use block_v1::BlockV1;
 pub use consensus_data::ConsensusData;
 use serialization::{DirectDecode, DirectEncode};
