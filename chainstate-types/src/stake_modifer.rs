@@ -7,7 +7,7 @@ use common::{
 };
 use serialization::{Decode, Encode};
 
-#[derive(Encode, Decode, Clone)]
+#[derive(Debug, Encode, Decode, Clone)]
 pub struct PoSStakeModifier {
     value: H256,
 }

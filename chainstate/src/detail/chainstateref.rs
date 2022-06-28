@@ -1,11 +1,16 @@
 use std::collections::BTreeSet;
 
 use super::{
-    consensus_validator::TransactionIndexHandle, median_time::calculate_median_time_past,
+    consensus_validator::{compute_extra_consensus_data, TransactionIndexHandle},
+    median_time::calculate_median_time_past,
     time_getter::TimeGetterFn,
 };
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
-use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
+use chainstate_types::{
+    block_index::BlockIndex,
+    height_skip::get_skip_height,
+    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
+};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
@@ -455,7 +460,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)
+        consensus_validator::validate_consensus(self.chain_config, block.header(), self, self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
         Ok(())
@@ -763,11 +768,23 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         });
 
         // Set Chain Trust
-        let prev_chain_trust = prev_block_index.map_or(Uint256::from_u64(0), |prev_block_index| {
-            *prev_block_index.chain_trust()
-        });
+        let prev_chain_trust =
+            prev_block_index.as_ref().map_or(Uint256::from_u64(0), |prev_block_index| {
+                *prev_block_index.chain_trust()
+            });
         let chain_trust = prev_chain_trust + self.get_block_proof(block)?;
-        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
+        let consensus_extra = match &prev_block_index {
+            Some(prev_bi) => compute_extra_consensus_data(prev_bi, block.header())?,
+            None => ConsensusExtraData::None,
+        };
+        let block_index = BlockIndex::new(
+            block,
+            chain_trust,
+            some_ancestor,
+            height,
+            time_max,
+            BlockPreconnectData::new(consensus_extra),
+        );
         Ok(block_index)
     }
 

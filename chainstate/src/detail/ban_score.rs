@@ -1,8 +1,9 @@
 use crate::BlockError;
 
 use super::{
-    pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError, BlockSizeError,
-    CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
+    pos::ConsensusPoSError, pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError,
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError,
+    OrphanCheckError,
 };
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -125,6 +126,7 @@ impl BanScore for ConsensusVerificationError {
             ConsensusVerificationError::ConsensusTypeMismatch(_) => 100,
             ConsensusVerificationError::PoWError(err) => err.ban_score(),
             ConsensusVerificationError::UnsupportedConsensusType => 100,
+            &ConsensusVerificationError::PoSError(ref err) => err.ban_score(),
         }
     }
 }
@@ -149,6 +151,33 @@ impl BanScore for BlockSizeError {
             BlockSizeError::Header(_, _) => 100,
             BlockSizeError::SizeOfTxs(_, _) => 100,
             BlockSizeError::SizeOfSmartContracts(_, _) => 100,
+        }
+    }
+}
+
+impl BanScore for ConsensusPoSError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ConsensusPoSError::StorageError(_) => 0,
+            ConsensusPoSError::StakeKernelHashTooHigh => 100,
+            ConsensusPoSError::TimestampViolation(_, _) => 100,
+            ConsensusPoSError::NoKernel => 100,
+            ConsensusPoSError::MultipleKernels => 100,
+            ConsensusPoSError::OutpointTransactionRetrievalError => 100,
+            ConsensusPoSError::OutpointTransactionNotFound => 100,
+            ConsensusPoSError::InIndexOutpointAccessError => 100,
+            ConsensusPoSError::KernelOutputAlreadySpent => 100,
+            ConsensusPoSError::KernelBlockIndexLoadError(_) => 0,
+            ConsensusPoSError::KernelBlockIndexNotFound(_) => 100,
+            ConsensusPoSError::KernelTransactionRetrievalFailed(_) => 0,
+            ConsensusPoSError::KernelOutputIndexOutOfRange(_) => 100,
+            ConsensusPoSError::KernelTransactionNotFound => 100,
+            ConsensusPoSError::KernelHeaderOutputDoesNotExist(_) => 100,
+            ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(_, _) => 100,
+            ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
+            ConsensusPoSError::PrevStakeModiferNotFound => 100,
+            ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
+            ConsensusPoSError::KernelAncesteryCheckFailed(_) => 100,
         }
     }
 }

@@ -1,3 +1,4 @@
+use chainstate_types::block_index::BlockIndex;
 use chainstate_types::preconnect_data::ConsensusExtraData;
 use chainstate_types::stake_modifer::PoSStakeModifier;
 use common::chain::block::BlockHeader;
@@ -14,15 +15,18 @@ use crate::BlockError;
 pub use self::block_index_handle::BlockIndexHandle;
 pub use self::transaction_index_handle::TransactionIndexHandle;
 
+use super::pos::check_proof_of_stake;
 use super::ConsensusVerificationError;
 
 mod block_index_handle;
 mod transaction_index_handle;
 
-pub(crate) fn validate_consensus<H: BlockIndexHandle>(
+// TODO; using the transaction index itself is not good enough. We need an object that tracks the current state of the mainchain. This is a temporary solution
+pub(crate) fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     block_index_handle: &H,
+    transaction_index_handle: &T,
 ) -> Result<(), ConsensusVerificationError> {
     let block_height = if header.is_genesis(chain_config) {
         BlockHeight::from(0)
@@ -52,11 +56,20 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
             .expect("max block height reached")
     };
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
-    do_validate(chain_config, header, &consensus_status, block_index_handle)?;
+    do_validate(
+        chain_config,
+        header,
+        &consensus_status,
+        block_index_handle,
+        transaction_index_handle,
+    )?;
     Ok(())
 }
 
-fn compute_extra_consensus_data(header: &BlockHeader) -> Result<ConsensusExtraData, BlockError> {
+pub fn compute_extra_consensus_data(
+    prev_block_index: &BlockIndex,
+    header: &BlockHeader,
+) -> Result<ConsensusExtraData, BlockError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
@@ -64,11 +77,11 @@ fn compute_extra_consensus_data(header: &BlockHeader) -> Result<ConsensusExtraDa
             let kernel_output = pos_data
                 .kernel_inputs()
                 .get(0)
-                .ok_or(BlockError::PoSKernelInputNotFound(header.get_id()))?;
-            // TODO: define prev_stake_modifier in next line
-            todo!();
-            let stake_modifier = PoSStakeModifier::from_new_block(None, &kernel_output.outpoint());
-            let data = ConsensusExtraData::PoS(stake_modifier);
+                .ok_or_else(|| BlockError::PoSKernelInputNotFound(header.get_id()))?;
+            let prev_stake_modifier = prev_block_index.preconnect_data().stake_modifier();
+            let stake_modifer =
+                PoSStakeModifier::from_new_block(prev_stake_modifier, kernel_output.outpoint());
+            let data = ConsensusExtraData::PoS(stake_modifer);
             Ok(data)
         }
     }
@@ -88,7 +101,7 @@ fn validate_pow_consensus<H: BlockIndexHandle>(
         }
         ConsensusData::PoW(_) => {
             check_pow_consensus(chain_config, header, pow_status, block_index_handle)
-                .map_err(ConsensusVerificationError::PoWError)
+                .map_err(Into::into)
         }
     }
 }
@@ -102,27 +115,38 @@ fn validate_ignore_consensus(header: &BlockHeader) -> Result<(), ConsensusVerifi
     }
 }
 
-fn validate_pos_consensus(header: &BlockHeader) -> Result<(), ConsensusVerificationError> {
+fn validate_pos_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
+    chain_config: &ChainConfig,
+    block_index_handle: &H,
+    transaction_index_handle: &T,
+    header: &BlockHeader,
+) -> Result<(), ConsensusVerificationError> {
     match header.consensus_data() {
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::PoS(_) => Ok(()),
+        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config, header, pos_data, block_index_handle, transaction_index_handle).map_err(Into::into),
     }
 }
 
-fn do_validate<H: BlockIndexHandle>(
+fn do_validate<H: BlockIndexHandle, T: TransactionIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     consensus_status: &RequiredConsensus,
     block_index_handle: &H,
+    transaction_index_handle: &T,
 ) -> Result<(), ConsensusVerificationError> {
     match consensus_status {
         RequiredConsensus::PoW(pow_status) => {
             validate_pow_consensus(chain_config, header, pow_status, block_index_handle)
         }
         RequiredConsensus::IgnoreConsensus => validate_ignore_consensus(header),
-        RequiredConsensus::PoS => validate_pos_consensus(header),
+        RequiredConsensus::PoS => validate_pos_consensus(
+            chain_config,
+            block_index_handle,
+            transaction_index_handle,
+            header,
+        ),
         RequiredConsensus::DSA => Err(ConsensusVerificationError::UnsupportedConsensusType),
     }
 }

@@ -7,6 +7,8 @@ use serialization::{Decode, Encode};
 
 use common::chain::block::timestamp::BlockTimestamp;
 
+use crate::preconnect_data::BlockPreconnectData;
+
 #[derive(Debug, Clone, Encode, Decode)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
@@ -16,6 +18,7 @@ pub struct BlockIndex {
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
+    preconnect_data: BlockPreconnectData,
 }
 
 impl BlockIndex {
@@ -25,6 +28,7 @@ impl BlockIndex {
         some_ancestor: Option<Id<Block>>,
         height: BlockHeight,
         time_max: BlockTimestamp,
+        preconnect_data: BlockPreconnectData,
     ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
         Self {
@@ -34,6 +38,7 @@ impl BlockIndex {
             chain_trust,
             height,
             time_max,
+            preconnect_data,
         }
     }
 
@@ -75,5 +80,9 @@ impl BlockIndex {
 
     pub fn into_block_header(self) -> BlockHeader {
         self.block_header
+    }
+
+    pub fn preconnect_data(&self) -> &BlockPreconnectData {
+        &self.preconnect_data
     }
 }

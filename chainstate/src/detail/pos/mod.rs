@@ -1,4 +1,4 @@
-use chainstate_types::stake_modifer::PoSStakeModifier;
+use chainstate_types::{block_index::BlockIndex, stake_modifer::PoSStakeModifier};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
@@ -7,7 +7,7 @@ use common::{
     },
     primitives::{
         id::{hash_encoded_to, DefaultHashAlgoStream},
-        Compact, Id, H256,
+        Compact, Id, Idable, H256,
     },
     Uint256,
 };
@@ -20,7 +20,7 @@ use super::{
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum PoSError {
+pub enum ConsensusPoSError {
     #[error("Block storage error: `{0}`")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("Stake kernel hash failed to meet the target requirement")]
@@ -40,7 +40,7 @@ pub enum PoSError {
     #[error("Outpoint access error. Possibly invalid")]
     InIndexOutpointAccessError,
     #[error("Output already spent")]
-    OutputAlreadySpent,
+    KernelOutputAlreadySpent,
     #[error("Kernel block index load error with block id: {0}")]
     KernelBlockIndexLoadError(Id<Block>),
     #[error("Kernel block index not found with block id: {0}")]
@@ -55,12 +55,14 @@ pub enum PoSError {
     KernelHeaderOutputDoesNotExist(Id<Block>),
     #[error("Kernel header index out of range. Block id: {0} and index {1}")]
     KernelHeaderOutputIndexOutOfRange(Id<Block>, u32),
-    #[error("Kernel header retrieval error {0}")]
-    KernelHeaderRetrievalFailed(PropertyQueryError),
     #[error("Bits to target conversion failed {0:?}")]
     BitsToTargetConversionFailed(Compact),
     #[error("Could not find previous block's stake modifer")]
     PrevStakeModiferNotFound,
+    #[error("Could not find the previous block index of block: {0}")]
+    PrevBlockIndexNotFound(Id<Block>),
+    #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]
+    KernelAncesteryCheckFailed(Id<Block>),
 }
 
 fn check_stake_kernel_hash(
@@ -68,13 +70,13 @@ fn check_stake_kernel_hash(
     kernel_block_time: BlockTimestamp,
     kernel_output: TxOutput,
     spender_block_time: BlockTimestamp,
-    prev_stake_modifier: PoSStakeModifier,
-) -> Result<H256, PoSError> {
+    prev_stake_modifier: &PoSStakeModifier,
+) -> Result<H256, ConsensusPoSError> {
     use crypto::hash::StreamHasher;
 
     ensure!(
         spender_block_time < kernel_block_time,
-        PoSError::TimestampViolation(kernel_block_time, spender_block_time),
+        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_time),
     );
 
     let mut hasher = DefaultHashAlgoStream::new();
@@ -87,95 +89,119 @@ fn check_stake_kernel_hash(
     // TODO: the target multiplication can overflow, use Uint512
     ensure!(
         hash_pos_arith <= target * kernel_output.value().into(),
-        PoSError::StakeKernelHashTooHigh
+        ConsensusPoSError::StakeKernelHashTooHigh
     );
 
     Ok(hash_pos)
 }
 
-fn get_stake_modifier(
-    _chain_config: &ChainConfig,
-    _block_id: &Id<Block>,
-    _block_index_handle: &dyn BlockIndexHandle,
-) -> Result<Option<PoSStakeModifier>, PoSError> {
-    todo!()
+/// Ensures that the kernel_block_index is an ancestor of header
+fn ensure_correct_ancestory(
+    header: &BlockHeader,
+    prev_block_index: &BlockIndex,
+    kernel_block_index: &BlockIndex,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<(), ConsensusPoSError> {
+    let kernel_block_header_as_ancestor = block_index_handle
+        .get_ancestor(prev_block_index, kernel_block_index.block_height())
+        .map_err(|_| ConsensusPoSError::KernelAncesteryCheckFailed(header.get_id()))?;
+
+    ensure!(
+        kernel_block_header_as_ancestor.block_id() == kernel_block_index.block_id(),
+        ConsensusPoSError::KernelAncesteryCheckFailed(header.block_id()),
+    );
+    Ok(())
 }
 
 pub fn check_proof_of_stake(
-    chain_config: &ChainConfig,
+    _chain_config: &ChainConfig,
     header: &BlockHeader,
-    pos_data: PoSData,
+    pos_data: &PoSData,
     block_index_handle: &dyn BlockIndexHandle,
     tx_index_retriever: &dyn TransactionIndexHandle,
-) -> Result<(), PoSError> {
-    ensure!(!pos_data.kernel_inputs().is_empty(), PoSError::NoKernel);
+) -> Result<(), ConsensusPoSError> {
+    ensure!(
+        !pos_data.kernel_inputs().is_empty(),
+        ConsensusPoSError::NoKernel
+    );
     // in general this should not be an issue, but we have to first study this security model with one kernel
     ensure!(
         pos_data.kernel_inputs().len() == 1,
-        PoSError::MultipleKernels
+        ConsensusPoSError::MultipleKernels
     );
-    let kernel_outpoint = pos_data.kernel_inputs().get(0).ok_or(PoSError::NoKernel)?.outpoint();
+    let kernel_outpoint =
+        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
     let kernel_tx_index = tx_index_retriever
         .get_mainchain_tx_index(&kernel_outpoint.tx_id())
-        .map_err(|_| PoSError::OutpointTransactionRetrievalError)?
-        .ok_or(PoSError::OutpointTransactionNotFound)?;
+        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
+        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
 
     let kernel_block_id = kernel_tx_index.position().block_id_anyway();
 
-    let kernel_block_header = block_index_handle
+    let kernel_block_index = block_index_handle
         .get_block_index(kernel_block_id)
-        .map_err(|_| PoSError::KernelBlockIndexLoadError(kernel_block_id.clone()))?
-        .ok_or(PoSError::KernelBlockIndexNotFound(kernel_block_id.clone()))?;
+        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id.clone()))?
+        .ok_or_else(|| ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id.clone()))?;
 
-    // TODO: ensure that kernel_block_header is an ancestor of header
+    let prev_block_index = block_index_handle
+        .get_block_index(header.prev_block_id().as_ref().expect("There has to be a prev block"))
+        .expect("Database error while retrieving prev block index")
+        .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+
+    ensure_correct_ancestory(
+        header,
+        &prev_block_index,
+        &kernel_block_index,
+        block_index_handle,
+    )?;
 
     let kernel_output = match kernel_tx_index.position() {
         common::chain::SpendablePosition::Transaction(tx_pos) => tx_index_retriever
             .get_mainchain_tx_by_position(tx_pos)
-            .map_err(PoSError::KernelTransactionRetrievalFailed)?
-            .ok_or(PoSError::KernelTransactionNotFound)?
+            .map_err(ConsensusPoSError::KernelTransactionRetrievalFailed)?
+            .ok_or(ConsensusPoSError::KernelTransactionNotFound)?
             .outputs()
             .get(kernel_outpoint.output_index() as usize)
-            .ok_or(PoSError::KernelOutputIndexOutOfRange(
-                kernel_outpoint.output_index(),
-            ))?
+            .ok_or_else(|| {
+                ConsensusPoSError::KernelOutputIndexOutOfRange(kernel_outpoint.output_index())
+            })?
             .clone(),
-        common::chain::SpendablePosition::BlockReward(block_id) => kernel_block_header
+        common::chain::SpendablePosition::BlockReward(block_id) => kernel_block_index
             .block_header()
             .block_reward_transactable()
             .outputs()
-            .ok_or(PoSError::KernelHeaderOutputDoesNotExist(block_id.clone()))?
+            .ok_or_else(|| ConsensusPoSError::KernelHeaderOutputDoesNotExist(block_id.clone()))?
             .get(kernel_outpoint.output_index() as usize)
-            .ok_or(PoSError::KernelHeaderOutputIndexOutOfRange(
-                block_id.clone(),
-                kernel_outpoint.output_index(),
-            ))?
+            .ok_or_else(|| {
+                ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
+                    block_id.clone(),
+                    kernel_outpoint.output_index(),
+                )
+            })?
             .clone(),
     };
 
     let is_input_already_spent = kernel_tx_index
         .get_spent_state(kernel_outpoint.output_index())
-        .map_err(|_| PoSError::InIndexOutpointAccessError)?;
+        .map_err(|_| ConsensusPoSError::InIndexOutpointAccessError)?;
 
     ensure!(
         is_input_already_spent == OutputSpentState::Unspent,
-        PoSError::OutputAlreadySpent,
+        ConsensusPoSError::KernelOutputAlreadySpent,
     );
 
     let target: Uint256 = (*pos_data.bits())
         .try_into()
-        .map_err(|_| PoSError::BitsToTargetConversionFailed(pos_data.bits().clone()))?;
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
 
-    let prev_stake_modifier = get_stake_modifier(
-        chain_config,
-        header.prev_block_id().as_ref().expect("Prev block id must exist"),
-        block_index_handle,
-    )?
-    .ok_or(PoSError::PrevStakeModiferNotFound)?;
+    let prev_stake_modifier = prev_block_index
+        .preconnect_data()
+        .stake_modifier()
+        .ok_or(ConsensusPoSError::PrevStakeModiferNotFound)?;
 
     let _hash_pos = check_stake_kernel_hash(
         target,
-        kernel_block_header.block_timestamp(),
+        kernel_block_index.block_timestamp(),
         kernel_output,
         header.timestamp(),
         prev_stake_modifier,

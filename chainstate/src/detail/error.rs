@@ -22,7 +22,7 @@ use common::{
 use thiserror::Error;
 
 use super::{
-    orphan_blocks::OrphanAddError, pow::error::ConsensusPoWError,
+    orphan_blocks::OrphanAddError, pos::ConsensusPoSError, pow::error::ConsensusPoWError,
     spend_cache::error::StateUpdateError,
 };
 
@@ -69,7 +69,9 @@ pub enum ConsensusVerificationError {
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
-    PoWError(ConsensusPoWError),
+    PoWError(#[from] ConsensusPoWError),
+    #[error("PoW error: {0}")]
+    PoSError(#[from] ConsensusPoSError),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
 }
