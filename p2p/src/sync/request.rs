@@ -52,14 +52,9 @@ where
     ///
     /// # Arguments
     /// * `block_ids` - IDs of the blocks that are requested
-    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> (Message, RequestType) {
+    pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> (message::Request, RequestType) {
         (
-            Message {
-                magic: *self.config.magic_bytes(),
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                    block_ids: block_ids.clone(),
-                })),
-            },
+            message::Request::BlockRequest(message::BlockRequest::new(block_ids.clone())),
             RequestType::GetBlocks(block_ids),
         )
     }
@@ -71,14 +66,12 @@ where
     ///
     /// # Arguments
     /// * `locator` - locator object that shows the state of the local node
-    pub fn make_header_request(&self, locator: Vec<BlockHeader>) -> (Message, RequestType) {
+    pub fn make_header_request(
+        &self,
+        locator: Vec<BlockHeader>,
+    ) -> (message::Request, RequestType) {
         (
-            Message {
-                magic: *self.config.magic_bytes(),
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator,
-                })),
-            },
+            message::Request::HeaderRequest(message::HeaderRequest::new(locator)),
             RequestType::GetHeaders,
         )
     }
@@ -87,24 +80,16 @@ where
     ///
     /// # Arguments
     /// * `headers` - the headers that were requested
-    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> Message {
-        Message {
-            magic: *self.config.magic_bytes(),
-            msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                headers,
-            })),
-        }
+    pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> message::Response {
+        message::Response::HeaderResponse(message::HeaderResponse::new(headers))
     }
 
     /// Make block response
     ///
     /// # Arguments
     /// * `blocks` - the blocks that were requested
-    pub fn make_block_response(&self, blocks: Vec<Block>) -> Message {
-        Message {
-            magic: *self.config.magic_bytes(),
-            msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks { blocks })),
-        }
+    pub fn make_block_response(&self, blocks: Vec<Block>) -> message::Response {
+        message::Response::BlockResponse(message::BlockResponse::new(blocks))
     }
 
     /// Helper function for sending a request to remote
@@ -115,17 +100,17 @@ where
     ///
     /// # Arguments
     /// * `peer_id` - peer ID of the remote node
-    /// * `message` - [`crate::message::Message`] containing the request
+    /// * `request` - [`crate::message::Request`] containing the request
     /// * `request_type` - [`RequestType`] indicating the type, used for tracking progress
     /// * `retry_count` - how many times the request has been resent
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        message: Message,
+        request: message::Request,
         request_type: RequestType,
         retry_count: usize,
     ) -> crate::Result<()> {
-        let request_id = self.handle.send_request(peer_id, message).await?;
+        let request_id = self.handle.send_request(peer_id, request).await?;
         self.requests.insert(
             request_id,
             RequestState {

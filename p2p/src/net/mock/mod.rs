@@ -195,7 +195,7 @@ impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkingService<PeerId = SocketAddr> + Send,
 {
-    async fn publish(&mut self, _message: message::Message) -> crate::Result<()> {
+    async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
     }
 
@@ -225,7 +225,7 @@ where
     async fn send_request(
         &mut self,
         _peer_id: T::PeerId,
-        _message: message::Message,
+        _request: message::Request,
     ) -> crate::Result<T::RequestId> {
         todo!();
     }
@@ -233,7 +233,7 @@ where
     async fn send_response(
         &mut self,
         _request_id: T::RequestId,
-        _message: message::Message,
+        _response: message::Response,
     ) -> crate::Result<()> {
         todo!();
     }

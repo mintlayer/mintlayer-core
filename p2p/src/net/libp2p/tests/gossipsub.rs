@@ -23,15 +23,15 @@ use serialization::Encode;
 
 impl PartialEq for types::PubSubEvent {
     fn eq(&self, other: &Self) -> bool {
-        let types::PubSubEvent::MessageReceived {
+        let types::PubSubEvent::Announcement {
             peer_id: p1,
             message_id: m1,
-            message: msg1,
+            announcement: msg1,
         } = self;
-        let types::PubSubEvent::MessageReceived {
+        let types::PubSubEvent::Announcement {
             peer_id: p2,
             message_id: m2,
-            message: msg2,
+            announcement: msg2,
         } = other;
 
         (p1 == p2) && (m1 == m2) && (msg1 == msg2)

@@ -19,8 +19,7 @@
 
 use crate::{
     error::{P2pError, ProtocolError, PublishError},
-    event,
-    message::{self, Message, MessageType, PubSubMessage},
+    event, message,
     net::{
         types::{PubSubEvent, PubSubTopic, ValidationResult},
         NetworkingService, PubSubService,
@@ -46,7 +45,7 @@ const CHANNEL_SIZE: usize = 64;
 /// Publish-subscribe message handler
 pub struct PubSubMessageHandler<T: NetworkingService> {
     /// Chain config
-    chain_config: Arc<ChainConfig>,
+    _chain_config: Arc<ChainConfig>,
 
     /// Handle for communication with networking service
     pubsub_handle: T::PubSubHandle,
@@ -74,14 +73,14 @@ where
     /// * `chainstate_handle` -  handle for communication with chainstate
     /// * `rx_pubsub` - RX channel for receiving control events
     pub fn new(
-        chain_config: Arc<ChainConfig>,
+        _chain_config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
         topics: &[PubSubTopic],
     ) -> Self {
         Self {
-            chain_config,
+            _chain_config,
             pubsub_handle,
             chainstate_handle,
             rx_pubsub,
@@ -187,13 +186,7 @@ where
 
     /// Announce block to the network
     async fn announce_block(&mut self, block: Block) -> crate::Result<()> {
-        let result = self
-            .pubsub_handle
-            .publish(message::Message {
-                magic: *self.chain_config.magic_bytes(),
-                msg: message::MessageType::PubSub(message::PubSubMessage::Block(block)),
-            })
-            .await;
+        let result = self.pubsub_handle.publish(message::Announcement::Block(block)).await;
 
         match result {
             Ok(_) => Ok(()),
@@ -231,17 +224,10 @@ where
         loop {
             tokio::select! {
                 event = self.pubsub_handle.poll_next() => match event? {
-                    PubSubEvent::MessageReceived { peer_id, message_id, message } => match message {
-                        Message {
-                            magic: _,
-                            msg: MessageType::PubSub(PubSubMessage::Block(block)),
-                        } => self.process_block_announcement(peer_id, message_id, block).await?,
-                        Message {
-                            magic: _,
-                           msg: MessageType::Syncing(_),
-                        } => {
-                            // TODO: ban peer
-                        }
+                    PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+                        message::Announcement::Block(block) => {
+                            self.process_block_announcement(peer_id, message_id, block).await?;
+                        },
                     }
                 },
                 block_id = block_rx.recv().fuse() => {
