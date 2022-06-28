@@ -174,8 +174,8 @@ fn test_get_headers_different_chains() {
         // Verify that the first returned header attaches before genesis
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let consensus1 = chainstate_with_config(config.clone());
+            let consensus2 = chainstate_with_config(config);
             let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();
@@ -220,8 +220,8 @@ fn test_filter_already_existing_blocks() {
     common::concurrency::model(|| {
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let consensus1 = chainstate_with_config(config.clone());
+            let consensus2 = chainstate_with_config(config);
             let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev1 = btf1.genesis().clone();
@@ -268,8 +268,8 @@ fn test_filter_already_existing_blocks() {
         // try to offer headers that don't attach to local chain
         {
             let config = TestChainConfig::new().build();
-            let consensus1 = ChainstateBuilder::new().with_config(config.clone()).build();
-            let consensus2 = ChainstateBuilder::new().with_config(config).build();
+            let consensus1 = chainstate_with_config(config.clone());
+            let consensus2 = chainstate_with_config(config);
             let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
             let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
             let mut prev = btf1.genesis().clone();

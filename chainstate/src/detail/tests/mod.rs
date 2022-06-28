@@ -15,46 +15,40 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::detail::tests::test_framework::BlockTestFramework;
-use crate::detail::*;
+use std::{iter, sync::Mutex};
+
+use crate::detail::{tests::test_framework::BlockTestFramework, *};
 use chainstate_storage::Store;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::config::{create_regtest, create_unit_test_config};
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
-use common::primitives::{time, H256};
-use common::primitives::{Amount, Id};
-use common::Uint256;
-use crypto::random::{Rng, SliceRandom};
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        config::{create_regtest, create_unit_test_config},
+        signature::inputsig::InputWitness,
+        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+    },
+    primitives::{time, Amount, Id, H256},
+    Uint256,
+};
+use crypto::random::Rng;
 use serialization::Encode;
-use std::sync::Mutex;
 
-pub(in crate::detail::tests) type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
-
+mod double_spend_tests;
+mod events_tests;
+mod processing_tests;
+mod reorgs_tests;
+mod signature_tests;
+mod syncing_tests;
 mod test_framework;
 
-#[cfg(test)]
-mod double_spend_tests;
-#[cfg(test)]
-mod events_tests;
-#[cfg(test)]
-mod processing_tests;
-#[cfg(test)]
-mod reorgs_tests;
-#[cfg(test)]
-mod signature_tests;
-#[cfg(test)]
-mod syncing_tests;
+type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
-pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
-pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
-pub(crate) const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
-pub(crate) const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
+const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
+const ERR_STORAGE_FAIL: &str = "Storage failure";
+const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
+const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 #[derive(Debug)]
-#[allow(dead_code)]
-pub(in crate::detail::tests) enum TestBlockParams {
+enum TestBlockParams {
     NoErrors,
     TxCount(usize),
     Fee(Amount),
@@ -63,7 +57,7 @@ pub(in crate::detail::tests) enum TestBlockParams {
 }
 
 #[derive(Debug, Eq, PartialEq)]
-pub(in crate::detail::tests) enum TestSpentStatus {
+enum TestSpentStatus {
     Spent,
     Unspent,
     NotInMainchain,
@@ -71,8 +65,8 @@ pub(in crate::detail::tests) enum TestSpentStatus {
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
-    let mut msg: Vec<u8> = (1..100).collect();
-    msg.shuffle(&mut rng);
+    let length = rng.gen_range(50..150);
+    let msg = iter::from_fn(|| rng.gen()).take(length).collect();
     InputWitness::NoSignature(Some(msg))
 }
 
@@ -126,7 +120,6 @@ impl ChainstateBuilder {
         .unwrap()
     }
 
-    #[allow(unused)]
     fn with_config(mut self, chain_config: ChainConfig) -> Self {
         self.config = chain_config;
         self
@@ -135,6 +128,10 @@ impl ChainstateBuilder {
 
 fn setup_chainstate() -> Chainstate {
     ChainstateBuilder::new().build()
+}
+
+fn chainstate_with_config(config: ChainConfig) -> Chainstate {
+    ChainstateBuilder::new().with_config(config).build()
 }
 
 fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
@@ -174,12 +171,11 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
 }
 
 // generate 5 regtest blocks and print them in hex
-// TODO: remove when block production is ready
 #[ignore]
 #[test]
 fn generate_blocks_for_functional_tests() {
     let config = create_regtest();
-    let chainstate = ChainstateBuilder::new().with_config(config).build();
+    let chainstate = chainstate_with_config(config);
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);

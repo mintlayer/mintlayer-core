@@ -516,7 +516,7 @@ fn test_consensus_type() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
-    let chainstate = ChainstateBuilder::new().with_config(config).build();
+    let chainstate = chainstate_with_config(config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -665,7 +665,7 @@ fn test_pow() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
-    let chainstate = ChainstateBuilder::new().with_config(config).build();
+    let chainstate = chainstate_with_config(config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 

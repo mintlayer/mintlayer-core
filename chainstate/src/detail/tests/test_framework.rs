@@ -54,7 +54,6 @@ impl<'a> BlockTestFramework {
         }
     }
 
-    #[allow(dead_code)]
     pub(in crate::detail::tests) fn random_block(
         &self,
         parent_block: &Block,
