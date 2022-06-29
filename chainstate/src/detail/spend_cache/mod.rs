@@ -342,6 +342,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             source_output_index: outpoint.output_index() as usize,
                         })?;
 
+                    // TODO: see if a different treatment should be done for different output purposes
+
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
                 }
@@ -364,6 +366,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             tx_id: None,
                             source_output_index: outpoint.output_index() as usize,
                         })?;
+
+                    // TODO: see if a different treatment should be done for different output purposes
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
