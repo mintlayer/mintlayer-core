@@ -122,7 +122,7 @@ pub fn check_proof_of_stake(
 ) -> Result<(), ConsensusPoSError> {
     ensure!(
         !pos_data.kernel_inputs().is_empty(),
-        ConsensusPoSError::NoKernel
+        ConsensusPoSError::NoKernel,
     );
     // in general this should not be an issue, but we have to first study this security model with one kernel
     ensure!(
