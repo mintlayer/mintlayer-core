@@ -17,7 +17,7 @@
 
 use std::sync::Mutex;
 
-use crate::detail::tests::test_framework::BlockTestFramework;
+use crate::detail::tests::test_framework::{BlockTestFramework, TestBlockParams, TestSpentStatus};
 use crate::detail::tests::*;
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;

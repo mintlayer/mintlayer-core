@@ -15,20 +15,40 @@
 //
 // Author(s): A. Sinitsyn
 
-use crate::detail::tests::*;
-use chainstate_storage::BlockchainStorageRead;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::{OutputSpentState, Transaction, TxInput, TxOutput};
-use common::primitives::Id;
-use common::primitives::H256;
 use std::panic;
 
-pub(in crate::detail::tests) struct BlockTestFramework {
+use crate::detail::tests::*;
+use chainstate_storage::BlockchainStorageRead;
+use common::{
+    chain::{
+        block::{Block, ConsensusData},
+        OutputSpentState, Transaction, TxInput, TxOutput,
+    },
+    primitives::{Id, H256},
+};
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum TestSpentStatus {
+    Spent,
+    Unspent,
+    NotInMainchain,
+}
+
+#[derive(Debug)]
+pub enum TestBlockParams {
+    NoErrors,
+    TxCount(usize),
+    Fee(Amount),
+    Orphan,
+    SpendFrom(Id<Block>),
+}
+
+pub struct BlockTestFramework {
     pub chainstate: Chainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
-impl<'a> BlockTestFramework {
+impl BlockTestFramework {
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
         let genesis_index = chainstate
             .chainstate_storage
@@ -41,28 +61,16 @@ impl<'a> BlockTestFramework {
         }
     }
 
-    pub(in crate::detail::tests) fn new() -> Self {
+    pub fn new() -> Self {
         let chainstate = setup_chainstate();
-        let genesis_index = chainstate
-            .chainstate_storage
-            .get_block_index(&chainstate.chain_config.genesis_block_id())
-            .unwrap()
-            .unwrap();
-        Self {
-            chainstate,
-            block_indexes: vec![genesis_index],
-        }
+        Self::with_chainstate(chainstate)
     }
 
-    pub(in crate::detail::tests) fn random_block(
-        &self,
-        parent_block: &Block,
-        params: Option<&[TestBlockParams]>,
-    ) -> Block {
+    pub fn random_block(&self, parent_block: &Block, params: Option<&[TestBlockParams]>) -> Block {
         let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
             parent_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
-        let mut hash_prev_block = Some(parent_block.get_id());
+        let mut prev_block_hash = parent_block.get_id();
         if let Some(params) = params {
             for param in params {
                 match param {
@@ -81,7 +89,8 @@ impl<'a> BlockTestFramework {
                         );
                         inputs.push(double_spend_input)
                     }
-                    TestBlockParams::Orphan => hash_prev_block = Some(Id::new(&H256::random())),
+                    TestBlockParams::Orphan => prev_block_hash = Id::new(&H256::random()),
+                    // TODO: FIXME.
                     _ => unimplemented!(),
                 }
             }
@@ -89,112 +98,22 @@ impl<'a> BlockTestFramework {
 
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-            hash_prev_block,
+            Some(prev_block_hash),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
-    pub(in crate::detail::tests) fn genesis(&self) -> &Block {
+    pub fn genesis(&self) -> &Block {
         self.chainstate.chain_config.genesis_block()
     }
 
-    fn get_children_blocks(
-        current_block_id: &Id<Block>,
-        blocks: &Vec<BlockIndex>,
-    ) -> Vec<Id<Block>> {
-        let mut result = Vec::new();
-        for block_index in blocks {
-            if let Some(ref prev_block_id) = block_index.prev_block_id() {
-                if prev_block_id == current_block_id {
-                    result.push(block_index.block_id().clone());
-                }
-            }
-        }
-        result
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::detail::tests) fn print_chains(&self) {
-        self.debug_print_chains(vec![self.genesis().get_id()], 0);
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::detail::tests) fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
+    pub fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
         self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
-    #[allow(dead_code)]
-    pub(in crate::detail::tests) fn debug_print_chains(
-        &self,
-        blocks: Vec<Id<Block>>,
-        depth: usize,
-    ) {
-        if blocks.is_empty() {
-            println!("{}X", "--".repeat(depth));
-        } else {
-            for block_id in &blocks {
-                let block_index = self
-                    .chainstate
-                    .chainstate_storage
-                    .get_block_index(block_id)
-                    .ok()
-                    .flatten()
-                    .unwrap();
-                let mut main_chain = "";
-                if self.is_block_in_main_chain(block_id) {
-                    main_chain = ",M";
-                }
-                println!(
-                    "{tabs}+-- {block_id} (H:{height}{mainchain_flag},B:{position})",
-                    tabs = "\t".repeat(depth),
-                    block_id = &block_id.get(),
-                    height = block_index.block_height(),
-                    mainchain_flag = main_chain,
-                    position = self
-                        .block_indexes
-                        .iter()
-                        .position(|block| block.block_id() == block_id)
-                        .unwrap()
-                );
-                let block_children = Self::get_children_blocks(block_id, &self.block_indexes);
-                if !block_children.is_empty() {
-                    self.debug_print_chains(block_children, depth + 1);
-                }
-            }
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::detail::tests) fn debug_print_tx(
-        &self,
-        block_id: Id<Block>,
-        transactions: &Vec<Transaction>,
-    ) {
-        println!();
-        for tx in transactions {
-            println!("+ BLOCK: {} => TX: {}", block_id.get(), tx.get_id().get());
-            for (input_index, input) in tx.inputs().iter().enumerate() {
-                println!("\t+Input: {}", input_index);
-                println!("\t\t+From: {:?}", input.outpoint());
-            }
-            for (output_index, output) in tx.outputs().iter().enumerate() {
-                let spent_status = self.get_spent_status(&tx.get_id(), output_index as u32);
-                println!("\t+Output: {}", output_index);
-                println!("\t\t+Value: {}", output.value().into_atoms());
-                match spent_status {
-                    Some(OutputSpentState::Unspent) => println!("\t\t+Spend: Unspent"),
-                    Some(OutputSpentState::SpentBy(spender)) => {
-                        println!("\t\t+Spend: {:?}", spender)
-                    }
-                    None => println!("\t\t+Spend: Not in mainchain"),
-                }
-            }
-        }
-    }
-
-    pub(in crate::detail::tests) fn create_chain(
+    pub fn create_chain(
         &mut self,
         parent_block_id: &Id<Block>,
         count_blocks: usize,
@@ -209,34 +128,21 @@ impl<'a> BlockTestFramework {
 
         for _ in 0..count_blocks {
             block = produce_test_block(&block, false);
-            let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
-            self.block_indexes.push(block_index.unwrap_or_else(|| {
-                self.chainstate
-                    .chainstate_storage
-                    .get_block_index(&block.get_id())
-                    .unwrap()
-                    .unwrap()
-            }));
+            self.add_special_block(block.clone())?;
         }
         Ok(())
     }
 
-    pub(in crate::detail::tests) fn add_special_block(
-        &mut self,
-        block: Block,
-    ) -> Result<Option<BlockIndex>, BlockError> {
-        let block_index = self.chainstate.process_block(block.clone(), BlockSource::Local)?;
+    pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
+        let id = block.get_id();
+        let block_index = self.chainstate.process_block(block, BlockSource::Local)?;
         self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
-            self.chainstate
-                .chainstate_storage
-                .get_block_index(&block.get_id())
-                .unwrap()
-                .unwrap()
+            self.chainstate.chainstate_storage.get_block_index(&id).unwrap().unwrap()
         }));
         Ok(block_index)
     }
 
-    pub(in crate::detail::tests) fn get_spent_status(
+    pub fn get_spent_status(
         &self,
         tx_id: &Id<Transaction>,
         output_index: u32,
@@ -251,15 +157,12 @@ impl<'a> BlockTestFramework {
 
     fn check_spend_status(&self, tx: &Transaction, spend_status: &TestSpentStatus) {
         for (output_index, _) in tx.outputs().iter().enumerate() {
-            let is_spend_status_correct = if spend_status == &TestSpentStatus::Spent {
-                self.get_spent_status(&tx.get_id(), output_index as u32)
-                    != Some(OutputSpentState::Unspent)
+            let status = self.get_spent_status(&tx.get_id(), output_index as u32);
+            if spend_status == &TestSpentStatus::Spent {
+                assert_ne!(status, Some(OutputSpentState::Unspent));
             } else {
-                self.get_spent_status(&tx.get_id(), output_index as u32)
-                    == Some(OutputSpentState::Unspent)
-            };
-
-            assert!(is_spend_status_correct);
+                assert_eq!(status, Some(OutputSpentState::Unspent));
+            }
         }
     }
 
@@ -278,7 +181,7 @@ impl<'a> BlockTestFramework {
         }
     }
 
-    pub(in crate::detail::tests) fn test_block(
+    pub fn test_block(
         &self,
         block_id: &Id<Block>,
         prev_block_id: Option<&Id<Block>>,

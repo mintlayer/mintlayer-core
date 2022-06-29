@@ -17,20 +17,18 @@
 
 use std::{iter, sync::Mutex};
 
-use crate::detail::{tests::test_framework::BlockTestFramework, *};
+use crate::detail::*;
 use chainstate_storage::Store;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
-        config::{create_regtest, create_unit_test_config},
+        config::create_unit_test_config,
         signature::inputsig::InputWitness,
         Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, H256},
-    Uint256,
 };
 use crypto::random::Rng;
-use serialization::Encode;
 
 mod double_spend_tests;
 mod events_tests;
@@ -46,22 +44,6 @@ const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
 const ERR_STORAGE_FAIL: &str = "Storage failure";
 const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
 const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
-
-#[derive(Debug)]
-enum TestBlockParams {
-    NoErrors,
-    TxCount(usize),
-    Fee(Amount),
-    Orphan,
-    SpendFrom(Id<Block>),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-enum TestSpentStatus {
-    Spent,
-    Unspent,
-    NotInMainchain,
-}
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
@@ -168,28 +150,4 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
         .collect::<Vec<(TxInput, TxOutput)>>()
-}
-
-// generate 5 regtest blocks and print them in hex
-#[ignore]
-#[test]
-fn generate_blocks_for_functional_tests() {
-    let config = create_regtest();
-    let chainstate = chainstate_with_config(config);
-    let mut btf = BlockTestFramework::with_chainstate(chainstate);
-    let difficulty =
-        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
-
-    for i in 1..6 {
-        let prev_block =
-            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
-        let mut mined_block = btf.random_block(&prev_block, None);
-        let bits = difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
-                .expect("Unexpected conversion error")
-        );
-        println!("{}", hex::encode(mined_block.encode()));
-        btf.add_special_block(mined_block).unwrap();
-    }
 }
