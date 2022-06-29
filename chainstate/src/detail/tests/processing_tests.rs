@@ -24,7 +24,7 @@ use chainstate_storage::BlockchainStorageRead;
 use chainstate_storage::Store;
 use common::chain::block::consensus_data::PoWData;
 use common::chain::config::create_unit_test_config;
-use common::chain::config::TestChainConfig;
+use common::chain::config::Builder as ConfigBuilder;
 use common::chain::ConsensusUpgrade;
 use common::chain::NetUpgrades;
 use common::chain::OutputSpentState;
@@ -512,10 +512,10 @@ fn test_consensus_type() {
     let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
 
     // Internally this calls Consensus::new, which processes the genesis block
-    // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
+    // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
+    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let chainstate = ChainstateBuilder::new().with_config(config).build();
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
@@ -664,7 +664,7 @@ fn test_pow() {
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = TestChainConfig::new().with_net_upgrades(net_upgrades).build();
+    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let chainstate = ChainstateBuilder::new().with_config(config).build();
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);

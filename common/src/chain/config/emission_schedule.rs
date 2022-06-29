@@ -99,8 +99,8 @@ impl EmissionSchedule {
     }
 
     /// Construct an emission schedule from a function. See also [Self::from_fn]
-    pub fn from_dyn_fn(f: Box<EmissionScheduleFn>) -> Self {
-        Self(f.into())
+    pub fn from_arc_fn(f: std::sync::Arc<EmissionScheduleFn>) -> Self {
+        Self(f)
     }
 
     /// Get total MLT amount issued up to given block height.

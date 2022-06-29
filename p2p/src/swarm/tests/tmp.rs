@@ -176,11 +176,7 @@ async fn connect_outbound_different_network() {
     .await;
     let mut swarm2 = make_peer_manager::<Libp2pService>(
         test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::new(
-            common::chain::config::TestChainConfig::new()
-                .with_magic_bytes([1, 2, 3, 4])
-                .build(),
-        ),
+        Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
@@ -230,11 +226,7 @@ async fn connect_inbound_different_network() {
     .await;
     let mut swarm2 = make_peer_manager::<Libp2pService>(
         test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::new(
-            common::chain::config::TestChainConfig::new()
-                .with_magic_bytes([1, 2, 3, 4])
-                .build(),
-        ),
+        Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
