@@ -643,6 +643,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             self.connect_transactions(
                 &block,
                 &new_tip_block_index.block_height(),
+                // TODO: maturity value should come from consensus validation, not from chainconfig directly,
+                // because PoS has a different maturity time than PoW
                 self.chain_config.blockreward_maturity(),
             )?;
         }

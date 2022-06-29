@@ -127,7 +127,7 @@ pub fn check_proof_of_stake(
     // in general this should not be an issue, but we have to first study this security model with one kernel
     ensure!(
         pos_data.kernel_inputs().len() == 1,
-        ConsensusPoSError::MultipleKernels
+        ConsensusPoSError::MultipleKernels,
     );
     let kernel_outpoint =
         pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
