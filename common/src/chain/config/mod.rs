@@ -12,6 +12,7 @@ use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::ConsensusUpgrade;
 use crate::chain::upgrades::NetUpgrades;
+use crate::chain::OutputPurpose;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
@@ -191,7 +192,7 @@ fn create_mainnet_genesis() -> Block {
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
-        genesis_mint_destination,
+        OutputPurpose::Transfer(genesis_mint_destination),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
@@ -215,7 +216,10 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
         InputWitness::NoSignature(Some(genesis_message)),
     );
 
-    let output = TxOutput::new(Amount::from_atoms(100000000000000), premine_destination);
+    let output = TxOutput::new(
+        Amount::from_atoms(100000000000000),
+        OutputPurpose::Transfer(premine_destination),
+    );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 

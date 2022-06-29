@@ -396,7 +396,7 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use common::chain::{Destination, TxOutput};
+    use common::chain::{Destination, OutputPurpose, TxOutput};
     use common::primitives::{Amount, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
@@ -636,7 +636,7 @@ pub(crate) mod test {
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             Amount::from_atoms(random_value),
-            Destination::PublicKey(pub_key),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let is_block_reward = random_value % 3 == 0;
 

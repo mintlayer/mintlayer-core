@@ -57,7 +57,7 @@ impl From<Error> for utxo::Error {
 mod test {
     use super::*;
     use crate::store::test::create_rand_block_undo;
-    use common::chain::{Destination, OutPoint, OutPointSourceId, TxOutput};
+    use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
@@ -68,7 +68,7 @@ mod test {
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             Amount::from_atoms(random_value),
-            Destination::PublicKey(pub_key),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
 

@@ -24,7 +24,7 @@ use common::{
         config::ChainConfig,
         signature::inputsig::InputWitness,
         transaction::Transaction,
-        Destination, OutPointSourceId, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
@@ -77,7 +77,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.value() - Amount::from_atoms(1)).unwrap(),
-                anyonecanspend_address(),
+                OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
     } else {

@@ -18,24 +18,36 @@ pub enum Destination {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum OutputPurpose {
+    Transfer(Destination),
+    StakeLock(Destination),
+}
+
+impl OutputPurpose {
+    pub fn destination(&self) -> &Destination {
+        match self {
+            OutputPurpose::Transfer(d) => d,
+            OutputPurpose::StakeLock(d) => d,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TxOutput {
     value: Amount,
-    dest: Destination,
+    purpose: OutputPurpose,
 }
 
 impl TxOutput {
-    pub fn new(value: Amount, destination: Destination) -> Self {
-        TxOutput {
-            value,
-            dest: destination,
-        }
+    pub fn new(value: Amount, purpose: OutputPurpose) -> Self {
+        TxOutput { value, purpose }
     }
 
     pub fn value(&self) -> Amount {
         self.value
     }
 
-    pub fn destination(&self) -> &Destination {
-        &self.dest
+    pub fn purpose(&self) -> &OutputPurpose {
+        &self.purpose
     }
 }
