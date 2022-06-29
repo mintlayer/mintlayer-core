@@ -96,7 +96,7 @@ fn check_stake_kernel_hash(
 }
 
 /// Ensures that the kernel_block_index is an ancestor of header
-fn ensure_correct_ancestory(
+fn ensure_correct_ancestry(
     header: &BlockHeader,
     prev_block_index: &BlockIndex,
     kernel_block_index: &BlockIndex,
@@ -148,7 +148,7 @@ pub fn check_proof_of_stake(
         .expect("Database error while retrieving prev block index")
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
 
-    ensure_correct_ancestory(
+    ensure_correct_ancestry(
         header,
         &prev_block_index,
         &kernel_block_index,
