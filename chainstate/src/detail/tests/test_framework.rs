@@ -113,11 +113,12 @@ impl BlockTestFramework {
         self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
+    /// Creates and process a given amount of blocks. Returns the last produced block.
     pub fn create_chain(
         &mut self,
         parent_block_id: &Id<Block>,
         count_blocks: usize,
-    ) -> Result<(), BlockError> {
+    ) -> Result<Block, BlockError> {
         let mut block = self
             .chainstate
             .chainstate_storage
@@ -130,7 +131,7 @@ impl BlockTestFramework {
             block = produce_test_block(&block, false);
             self.add_special_block(block.clone())?;
         }
-        Ok(())
+        Ok(block)
     }
 
     pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
@@ -239,5 +240,9 @@ impl BlockTestFramework {
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
+    }
+
+    pub fn chainstate(&mut self) -> &mut Chainstate {
+        &mut self.chainstate
     }
 }

@@ -14,50 +14,37 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(warnings)]
+
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use chainstate_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
 use crypto::random::Rng;
 
 #[test]
-fn test_get_locator() {
+fn get_locator() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let storage = Store::new_empty().unwrap();
-        let mut consensus =
-            Chainstate::new(Arc::clone(&config), storage, None, Default::default()).unwrap();
+        let mut framework = BlockTestFramework::new();
+        assert_eq!(framework.chainstate().get_locator().unwrap().len(), 1);
 
-        let mut prev_block = consensus.chain_config.genesis_block().clone();
-        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
+        let limit = crypto::random::make_pseudo_rng().gen_range(1..10000);
+        let last_block = framework.create_chain(&framework.genesis().get_id(), limit).unwrap();
 
-        for _ in 0..limit {
-            let new_block = produce_test_block(&prev_block, false);
-            consensus
-                .process_block(new_block.clone(), BlockSource::Peer)
-                .ok()
-                .flatten()
-                .unwrap();
-            prev_block = new_block;
-        }
-        let locator = consensus.get_locator().unwrap();
-
-        // only genesis
-        if limit == 0 {
-            assert_eq!(locator.len(), 1);
-        } else {
-            assert_eq!(locator.len(), (limit as f64).log2().floor() as usize + 2);
-        }
+        let locator = framework.chainstate().get_locator().unwrap();
+        assert_eq!(locator.len(), (limit as f64).log2().floor() as usize + 2);
 
         // verify that the locator selected correct headers
-        let height =
-            consensus.get_block_height_in_main_chain(&prev_block.get_id()).unwrap().unwrap();
-        assert_eq!(&locator[0], prev_block.header());
+        let height = framework
+            .chainstate()
+            .get_block_height_in_main_chain(&last_block.get_id())
+            .unwrap()
+            .unwrap();
+        assert_eq!(&locator[0], last_block.header());
         let iter = locator.iter().skip(1);
 
         for (header, i) in iter.zip(0..locator.len() - 1) {
             let idx = height - BlockDistance::new(2i64.pow(i as u32));
-            let correct = consensus.get_header_from_height(&idx.unwrap()).unwrap().unwrap();
+            let correct =
+                framework.chainstate().get_header_from_height(&idx.unwrap()).unwrap().unwrap();
             assert_eq!(&correct, header);
         }
     });
