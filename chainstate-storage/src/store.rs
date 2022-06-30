@@ -429,14 +429,14 @@ pub(crate) mod test {
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
             vec![tx0.clone()],
-            Some(Id::new(&H256::default())),
+            Some(Id::new(H256::default())),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
         )
         .unwrap();
         let block1 = Block::new(
             vec![tx1.clone()],
-            Some(Id::new(&block0.get_id().get())),
+            Some(Id::new(block0.get_id().get())),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
@@ -680,7 +680,7 @@ pub(crate) mod test {
     fn undo_test() {
         let block_undo0 = create_rand_block_undo(10, 5, BlockHeight::new(1));
         // create id:
-        let id0: Id<Block> = Id::new(&H256::random());
+        let id0: Id<Block> = Id::new(H256::random());
 
         // set up the store
         let mut store = Store::new_empty().unwrap();
@@ -699,7 +699,7 @@ pub(crate) mod test {
 
         let block_undo1 = create_rand_block_undo(5, 10, BlockHeight::new(2));
         // create id:
-        let id1: Id<Block> = Id::new(&H256::random());
+        let id1: Id<Block> = Id::new(H256::random());
 
         assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
         assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));

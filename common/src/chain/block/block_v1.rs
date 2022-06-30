@@ -19,7 +19,7 @@ pub struct BlockV1 {
 impl Idable for BlockV1 {
     type Tag = Block;
     fn get_id(&self) -> Id<Block> {
-        Id::new(&id::hash_encoded(self.header()))
+        Id::new(id::hash_encoded(self.header()))
     }
 }
 

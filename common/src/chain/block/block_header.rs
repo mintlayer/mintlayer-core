@@ -23,7 +23,7 @@ impl BlockHeader {
     }
 
     pub fn block_id(&self) -> Id<Block> {
-        Id::new(&id::hash_encoded(self))
+        Id::new(id::hash_encoded(self))
     }
 
     pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
@@ -46,6 +46,6 @@ impl BlockHeader {
 impl Idable for BlockHeader {
     type Tag = Block;
     fn get_id(&self) -> Id<Block> {
-        Id::new(&id::hash_encoded(self))
+        Id::new(id::hash_encoded(self))
     }
 }

@@ -56,7 +56,7 @@ impl TransactionV1 {
     }
 
     pub fn serialized_hash(&self) -> Id<Transaction> {
-        Id::new(&id::hash_encoded(self))
+        Id::new(id::hash_encoded(self))
     }
 
     pub fn update_witness(
@@ -87,6 +87,6 @@ impl Idable for TransactionV1 {
         id::hash_encoded_to(&inputs, &mut hash_stream);
         id::hash_encoded_to(&self.outputs(), &mut hash_stream);
         id::hash_encoded_to(&self.lock_time(), &mut hash_stream);
-        Id::new(&hash_stream.finalize().into())
+        Id::new(hash_stream.finalize().into())
     }
 }

@@ -202,8 +202,8 @@ mod tests {
             .in_sequence(&mut seq)
             .return_const(Err(TXFAIL));
 
-        assert!(store.set_best_block_id(&Id::new(&HASH1)).is_ok());
-        assert!(store.set_best_block_id(&Id::new(&HASH2)).is_err());
+        assert!(store.set_best_block_id(&Id::new(HASH1)).is_ok());
+        assert!(store.set_best_block_id(&Id::new(HASH2)).is_err());
     }
 
     #[test]
@@ -297,7 +297,7 @@ mod tests {
         .unwrap();
         let block1 = Block::new(
             vec![tx1],
-            Some(Id::new(&block0.get_id().get())),
+            Some(Id::new(block0.get_id().get())),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
@@ -352,7 +352,7 @@ mod tests {
     #[test]
     fn attach_to_top_bad_parent() {
         let (_block0, block1) = sample_data();
-        let top_id = Id::new(&H256([0x99; 32]));
+        let top_id = Id::new(H256([0x99; 32]));
         let mut store = MockStore::new();
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();

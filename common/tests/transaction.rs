@@ -11,23 +11,23 @@ fn transaction_id_snapshots() {
 
     let outs0: Vec<TxOutput> = [TxOutput::new(
         Amount::from_atoms(25),
-        OutputPurpose::Transfer(Destination::ScriptHash(Id::new(&hash0))),
+        OutputPurpose::Transfer(Destination::ScriptHash(Id::new(hash0))),
     )]
     .to_vec();
     let ins0: Vec<TxInput> = [TxInput::new(
-        Id::<Transaction>::new(&hash0).into(),
+        Id::<Transaction>::new(hash0).into(),
         5,
         InputWitness::NoSignature(None),
     )]
     .to_vec();
     let ins1: Vec<TxInput> = [
         TxInput::new(
-            Id::<Transaction>::new(&hash1).into(),
+            Id::<Transaction>::new(hash1).into(),
             3,
             InputWitness::NoSignature(Some(vec![0x01, 0x05, 0x09])),
         ),
         TxInput::new(
-            Id::<Transaction>::new(&hash2).into(),
+            Id::<Transaction>::new(hash2).into(),
             0,
             InputWitness::NoSignature(Some(vec![0x91, 0x55, 0x19, 0x00])),
         ),
