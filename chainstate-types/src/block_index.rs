@@ -7,7 +7,7 @@ use serialization::{Decode, Encode};
 
 use common::chain::block::timestamp::BlockTimestamp;
 
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, Eq, PartialEq)]
 #[allow(dead_code, unused_variables)]
 pub struct BlockIndex {
     block_id: Id<Block>,

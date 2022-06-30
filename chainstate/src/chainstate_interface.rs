@@ -41,7 +41,7 @@ pub trait ChainstateInterface: Send {
     /// header is returned in case there is no common ancestor with a better block height.
     fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ChainstateError>;
 
-    /// Removes from the given header all that is already known to the chain.
+    /// Removes all headers that are already known to the chain from the given vector.
     fn filter_already_existing_blocks(
         &self,
         headers: Vec<BlockHeader>,

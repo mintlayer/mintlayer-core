@@ -24,7 +24,7 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::{create_regtest, create_unit_test_config},
         signature::inputsig::InputWitness,
-        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, H256},
     Uint256,

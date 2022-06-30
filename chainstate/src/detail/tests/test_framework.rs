@@ -87,7 +87,7 @@ impl BlockTestFramework {
                         );
                         inputs.push(double_spend_input)
                     }
-                    TestBlockParams::Orphan => prev_block_hash = Id::new(&H256::random()),
+                    TestBlockParams::Orphan => prev_block_hash = Id::new(H256::random()),
                     // TODO: FIXME.
                     _ => unimplemented!(),
                 }
