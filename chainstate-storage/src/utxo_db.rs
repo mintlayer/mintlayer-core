@@ -57,7 +57,7 @@ impl From<Error> for utxo::Error {
 mod test {
     use super::*;
     use crate::store::test::create_rand_block_undo;
-    use common::chain::{Destination, OutPoint, OutPointSourceId, TxOutput};
+    use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
@@ -68,13 +68,13 @@ mod test {
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             Amount::from_atoms(random_value),
-            Destination::PublicKey(pub_key),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.
         let id = {
-            let utxo_id: Id<Block> = Id::new(&H256::random());
+            let utxo_id: Id<Block> = Id::new(H256::random());
             OutPointSourceId::BlockReward(utxo_id)
         };
 
@@ -97,7 +97,7 @@ mod test {
         assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
 
         // test block id
-        let block_id: Id<Block> = Id::new(&H256::random());
+        let block_id: Id<Block> = Id::new(H256::random());
         assert!(db_interface.set_best_block_id(&block_id).is_ok());
 
         let block_id = db_interface

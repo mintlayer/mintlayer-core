@@ -1,6 +1,8 @@
+mod builder;
 pub mod emission_schedule;
 
-use emission_schedule::{EmissionSchedule, Mlt};
+pub use builder::Builder;
+pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
 use hex::FromHex;
 
@@ -10,13 +12,12 @@ use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
-use crate::chain::upgrades::ConsensusUpgrade;
 use crate::chain::upgrades::NetUpgrades;
+use crate::chain::OutputPurpose;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
 use crate::primitives::BlockDistance;
-use crate::primitives::Idable;
 use crate::primitives::{semver::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -42,6 +43,26 @@ pub enum ChainType {
     Testnet,
     Regtest,
     Signet,
+}
+
+impl ChainType {
+    const fn default_address_prefix(&self) -> &'static str {
+        match self {
+            ChainType::Mainnet => "mtc",
+            ChainType::Testnet => "tmt",
+            ChainType::Regtest => "rmt",
+            ChainType::Signet => "smt",
+        }
+    }
+
+    const fn default_magic_bytes(&self) -> [u8; 4] {
+        match self {
+            ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
+            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
+            ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
+            ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -153,12 +174,6 @@ impl ChainConfig {
     }
 }
 
-const MAINNET_ADDRESS_PREFIX: &str = "mtc";
-#[allow(dead_code)]
-const TESTNET_ADDRESS_PREFIX: &str = "tmt";
-#[allow(dead_code)]
-const REGTEST_ADDRESS_PREFIX: &str = "rmt";
-
 // If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
 const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
 // DSA allows us to have blocks up to 1mb
@@ -184,14 +199,14 @@ fn create_mainnet_genesis() -> Block {
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
-        Id::<Transaction>::new(&H256::zero()).into(),
+        Id::<Transaction>::new(H256::zero()).into(),
         0,
         InputWitness::NoSignature(Some(genesis_message)),
     );
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
-        genesis_mint_destination,
+        OutputPurpose::Transfer(genesis_mint_destination),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
@@ -210,12 +225,15 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
-        Id::<Transaction>::new(&H256::zero()).into(),
+        Id::<Transaction>::new(H256::zero()).into(),
         0,
         InputWitness::NoSignature(Some(genesis_message)),
     );
 
-    let output = TxOutput::new(Amount::from_atoms(100000000000000), premine_destination);
+    let output = TxOutput::new(
+        Amount::from_atoms(100000000000000),
+        OutputPurpose::Transfer(premine_destination),
+    );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
         .expect("Failed to create genesis coinbase transaction");
 
@@ -229,181 +247,18 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
 }
 
 pub fn create_mainnet() -> ChainConfig {
-    let chain_type = ChainType::Mainnet;
-    let pow_config = PoWChainConfig::new(chain_type);
-
-    let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
-        (
-            BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                initial_difficulty: pow_config.limit().into(),
-            }),
-        ),
-    ];
-
-    let genesis_block = create_mainnet_genesis();
-    let genesis_block_id = genesis_block.get_id();
-
-    let emission_schedule =
-        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
-
-    ChainConfig {
-        chain_type,
-        address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
-        net_upgrades: NetUpgrades::initialize(upgrades).expect("Should not fail"),
-        rpc_port: 15234,
-        p2p_port: 8978,
-        magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block,
-        genesis_block_id,
-        version: SemVer::new(0, 1, 0),
-        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
-        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
-        target_block_spacing: DEFAULT_TARGET_BLOCK_SPACING,
-        coin_decimals: Mlt::DECIMALS,
-        emission_schedule,
-        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
-        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
-    }
+    Builder::new(ChainType::Mainnet).build()
 }
 
 pub fn create_regtest() -> ChainConfig {
-    let chain_type = ChainType::Regtest;
-    let pow_config = PoWChainConfig::new(chain_type);
-
-    let upgrades = vec![
-        (
-            BlockHeight::new(0),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
-        ),
-        (
-            BlockHeight::new(1),
-            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
-                initial_difficulty: pow_config.limit().into(),
-            }),
-        ),
-    ];
-
-    let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
-    let genesis_block_id = genesis_block.get_id();
-
-    let emission_schedule =
-        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
-
-    ChainConfig {
-        chain_type,
-        address_prefix: REGTEST_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
-        net_upgrades: NetUpgrades::initialize(upgrades).expect("Should not fail"),
-        rpc_port: 11111,
-        p2p_port: 22222,
-        magic_bytes: [0xaa, 0xbb, 0xcc, 0xdd],
-        genesis_block,
-        genesis_block_id,
-        version: SemVer::new(0, 1, 0),
-        target_block_spacing: DEFAULT_TARGET_BLOCK_SPACING,
-        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
-        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
-        coin_decimals: Mlt::DECIMALS,
-        emission_schedule,
-        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
-        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
-    }
+    Builder::new(ChainType::Regtest).build()
 }
 
 pub fn create_unit_test_config() -> ChainConfig {
-    let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
-    let genesis_block_id = genesis_block.get_id();
-
-    let emission_schedule =
-        emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
-
-    ChainConfig {
-        chain_type: ChainType::Mainnet,
-        address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-        height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
-        net_upgrades: NetUpgrades::unit_tests(),
-        rpc_port: 15234,
-        p2p_port: 8978,
-        magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        genesis_block,
-        genesis_block_id,
-        version: SemVer::new(0, 1, 0),
-        target_block_spacing: DEFAULT_TARGET_BLOCK_SPACING,
-        blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
-        max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
-        coin_decimals: Mlt::DECIMALS,
-        emission_schedule,
-        max_block_header_size: MAX_BLOCK_HEADER_SIZE,
-        max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-        max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
-    }
-}
-
-pub struct TestChainConfig {
-    net_upgrades: NetUpgrades<UpgradeVersion>,
-    magic_bytes: [u8; 4],
-}
-
-impl Default for TestChainConfig {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TestChainConfig {
-    pub fn new() -> Self {
-        Self {
-            net_upgrades: NetUpgrades::unit_tests(),
-            magic_bytes: [0x1a, 0x64, 0xe5, 0xf1],
-        }
-    }
-
-    pub fn with_net_upgrades(mut self, net_upgrades: NetUpgrades<UpgradeVersion>) -> Self {
-        self.net_upgrades = net_upgrades;
-        self
-    }
-
-    pub fn with_magic_bytes(mut self, magic_bytes: [u8; 4]) -> Self {
-        self.magic_bytes = magic_bytes;
-        self
-    }
-
-    pub fn build(self) -> ChainConfig {
-        let genesis_block = create_unit_test_genesis(Destination::AnyoneCanSpend);
-        let genesis_block_id = genesis_block.get_id();
-
-        let emission_schedule =
-            emission_schedule::mainnet_schedule_table(DEFAULT_TARGET_BLOCK_SPACING).schedule();
-
-        ChainConfig {
-            chain_type: ChainType::Mainnet,
-            address_prefix: MAINNET_ADDRESS_PREFIX.to_owned(),
-            height_checkpoint_data: BTreeMap::<BlockHeight, Id<Block>>::new(),
-            net_upgrades: self.net_upgrades,
-            rpc_port: 15234,
-            p2p_port: 8978,
-            magic_bytes: self.magic_bytes,
-            genesis_block,
-            genesis_block_id,
-            version: SemVer::new(0, 1, 0),
-            target_block_spacing: DEFAULT_TARGET_BLOCK_SPACING,
-            blockreward_maturity: MAINNET_BLOCKREWARD_MATURITY,
-            max_future_block_time_offset: DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
-            coin_decimals: Mlt::DECIMALS,
-            emission_schedule,
-            max_block_header_size: MAX_BLOCK_HEADER_SIZE,
-            max_block_size_with_standard_txs: MAX_BLOCK_TXS_SIZE,
-            max_block_size_with_smart_contracts: MAX_BLOCK_CONTRACTS_SIZE,
-        }
-    }
+    Builder::new(ChainType::Mainnet)
+        .net_upgrades(NetUpgrades::unit_tests())
+        .genesis_unittest(Destination::AnyoneCanSpend)
+        .build()
 }
 
 #[cfg(test)]
@@ -434,9 +289,9 @@ mod tests {
 
     #[test]
     fn different_magic_bytes() {
-        let config1 = TestChainConfig::new().build();
-        let config2 = TestChainConfig::new().with_magic_bytes([1, 2, 3, 4]).build();
+        let config1 = Builder::new(ChainType::Regtest).build();
+        let config2 = Builder::new(ChainType::Regtest).magic_bytes([1, 2, 3, 4]).build();
 
-        assert_ne!(config1.magic_bytes(), config2.magic_bytes(),);
+        assert_ne!(config1.magic_bytes(), config2.magic_bytes());
     }
 }

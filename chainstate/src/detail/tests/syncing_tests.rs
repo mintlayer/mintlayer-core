@@ -19,7 +19,7 @@ use std::iter;
 
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use chainstate_storage::BlockchainStorageRead;
-use common::chain::config::TestChainConfig;
+use common::chain::config::Builder as ConfigBuilder;
 use crypto::random::{self, Rng};
 
 // Generate some blocks and check that a locator is of expected length.

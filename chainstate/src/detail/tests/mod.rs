@@ -74,7 +74,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.value() - Amount::from_atoms(spent_value)).unwrap(),
-                anyonecanspend_address(),
+                OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
     } else {
@@ -112,9 +112,9 @@ fn produce_test_block_with_consensus_data(
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
         if orphan {
-            Some(Id::new(&H256::random()))
+            Some(Id::new(H256::random()))
         } else {
-            Some(Id::new(&prev_block.get_id().get()))
+            Some(Id::new(prev_block.get_id().get()))
         },
         BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
         consensus_data,

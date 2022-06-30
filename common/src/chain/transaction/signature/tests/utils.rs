@@ -11,7 +11,7 @@ use crate::{
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
-        Destination, Transaction, TransactionCreationError, TxInput, TxOutput,
+        Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::IntType, Amount, Id, H256},
 };
@@ -56,7 +56,7 @@ pub fn generate_unsigned_tx(
 
     let inputs = std::iter::from_fn(|| {
         Some(TxInput::new(
-            Id::<Transaction>::new(&H256::random()).into(),
+            Id::<Transaction>::new(H256::random()).into(),
             rng.gen(),
             InputWitness::NoSignature(None),
         ))
@@ -67,7 +67,7 @@ pub fn generate_unsigned_tx(
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::new(
             Amount::from_atoms(rng.gen::<IntType>()),
-            destination.clone(),
+            OutputPurpose::Transfer(destination.clone()),
         ))
     })
     .take(outputs_count)

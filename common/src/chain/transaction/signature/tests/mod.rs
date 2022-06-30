@@ -11,7 +11,7 @@ use super::{
 use crate::{
     chain::{
         signature::{verify_signature, TransactionSigError},
-        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
@@ -252,7 +252,7 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
 
 fn check_insert_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
+    let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random()));
     tx_updater.inputs.push(TxInput::new(
         outpoinr_source_id,
         1,
@@ -294,7 +294,7 @@ fn check_insert_output(original_tx: &Transaction, destination: &Destination, sho
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
         Amount::from_atoms(1234567890),
-        Destination::PublicKey(pub_key),
+        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     ));
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);
@@ -310,7 +310,7 @@ fn check_mutate_output(original_tx: &Transaction, destination: &Destination, sho
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
         (tx_updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
-        tx_updater.outputs[0].destination().clone(),
+        tx_updater.outputs[0].purpose().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
     let res = verify_signature(destination, &tx, 0);
