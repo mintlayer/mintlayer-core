@@ -252,7 +252,7 @@ fn check_change_locktime(original_tx: &Transaction, outpoint_dest: &Destination)
 
 fn check_insert_input(original_tx: &Transaction, destination: &Destination, should_fail: bool) {
     let mut tx_updater = MutableTransaction::from(original_tx);
-    let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(&H256::random()));
+    let outpoinr_source_id = OutPointSourceId::Transaction(Id::<Transaction>::new(H256::random()));
     tx_updater.inputs.push(TxInput::new(
         outpoinr_source_id,
         1,

@@ -95,7 +95,7 @@ impl<T: Eq> PartialOrd for Id<T> {
 
 impl<T: Eq> From<H256> for Id<T> {
     fn from(hash: H256) -> Self {
-        Self::new(&hash)
+        Self::new(hash)
     }
 }
 
@@ -104,9 +104,9 @@ impl<T> Id<T> {
         self.id
     }
 
-    pub fn new(h: &H256) -> Self {
+    pub fn new(h: H256) -> Self {
         Self {
-            id: *h,
+            id: h,
             _shadow: std::marker::PhantomData,
         }
     }
@@ -238,7 +238,7 @@ mod tests {
     fn id_json() {
         fn check(hex: &'static str) {
             use serde_json::Value;
-            let id: Id<()> = Id::new(&hex.parse().unwrap());
+            let id: Id<()> = Id::new(hex.parse().unwrap());
             // ID should serialize into its hex string
             serde_test::assert_tokens(&id, &[serde_test::Token::Str(hex)]);
             assert_eq!(

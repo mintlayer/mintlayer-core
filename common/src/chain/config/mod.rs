@@ -199,7 +199,7 @@ fn create_mainnet_genesis() -> Block {
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
-        Id::<Transaction>::new(&H256::zero()).into(),
+        Id::<Transaction>::new(H256::zero()).into(),
         0,
         InputWitness::NoSignature(Some(genesis_message)),
     );
@@ -225,7 +225,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
 
     let genesis_message = b"".to_vec();
     let input = TxInput::new(
-        Id::<Transaction>::new(&H256::zero()).into(),
+        Id::<Transaction>::new(H256::zero()).into(),
         0,
         InputWitness::NoSignature(Some(genesis_message)),
     );
