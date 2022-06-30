@@ -21,12 +21,13 @@ use crate::detail::{tests::test_framework::BlockTestFramework, *};
 use chainstate_storage::Store;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        block::{timestamp::BlockTimestamp, ConsensusData},
         config::{create_regtest, create_unit_test_config},
         signature::inputsig::InputWitness,
-        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
+        Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount, Id, H256},
+    primitives::{time, Amount, BlockHeight, Id, H256},
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
@@ -59,27 +60,18 @@ fn anyonecanspend_address() -> Destination {
 }
 
 fn create_utxo_data(
-    tx_id: &Id<Transaction>,
+    outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
     let mut rng = crypto::random::make_pseudo_rng();
     let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
-    if output.value() > spent_value {
-        Some((
-            TxInput::new(
-                OutPointSourceId::Transaction(tx_id.clone()),
-                index as u32,
-                empty_witness(),
-            ),
-            TxOutput::new(
-                (output.value() - spent_value).unwrap(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ),
-        ))
-    } else {
-        None
-    }
+    let new_value = (output.value() - spent_value).unwrap();
+    utils::ensure!(new_value >= Amount::from_atoms(1));
+    Some((
+        TxInput::new(outsrc, index as u32, empty_witness()),
+        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+    ))
 }
 
 fn setup_chainstate() -> Chainstate {
@@ -100,38 +92,78 @@ fn chainstate_with_config(
     .unwrap()
 }
 
-fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
-    produce_test_block_with_consensus_data(prev_block, orphan, ConsensusData::None)
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TestBlockInfo {
+    pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
+    pub(crate) id: Id<GenBlock>,
+}
+
+impl TestBlockInfo {
+    fn from_block(blk: &Block) -> Self {
+        let txns = blk
+            .transactions()
+            .iter()
+            .map(|tx| {
+                (
+                    OutPointSourceId::Transaction(tx.get_id()),
+                    tx.outputs().clone(),
+                )
+            })
+            .collect();
+        let id = blk.get_id().into();
+        Self { txns, id }
+    }
+
+    fn from_genesis(genesis: &Genesis) -> Self {
+        let id: Id<GenBlock> = genesis.get_id().into();
+        let outsrc = OutPointSourceId::BlockReward(id.clone());
+        let txns = vec![(outsrc, genesis.utxos().to_vec())];
+        Self { txns, id }
+    }
+
+    fn from_id(cs: &Chainstate, id: Id<GenBlock>) -> Self {
+        use chainstate_storage::BlockchainStorageRead;
+        match id.classify(&cs.chain_config) {
+            GenBlockId::Genesis(_) => Self::from_genesis(cs.chain_config.genesis_block()),
+            GenBlockId::Block(id) => {
+                let block = cs.chainstate_storage.get_block(id).unwrap().unwrap();
+                Self::from_block(&block)
+            }
+        }
+    }
+
+    fn orphan(mut self) -> Self {
+        self.id = Id::new(H256::random());
+        self
+    }
+}
+
+fn produce_test_block(prev_block: TestBlockInfo) -> Block {
+    produce_test_block_with_consensus_data(prev_block, ConsensusData::None)
 }
 
 fn produce_test_block_with_consensus_data(
-    prev_block: &Block,
-    orphan: bool,
+    prev_block: TestBlockInfo,
     consensus_data: ConsensusData,
 ) -> Block {
     // The value of each output is decreased by a random amount to produce a new input and output.
     let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
-        prev_block.transactions().iter().flat_map(create_new_outputs).unzip();
+        prev_block.txns.into_iter().flat_map(|(s, o)| create_new_outputs(s, &o)).unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-        if orphan {
-            Some(Id::new(H256::random()))
-        } else {
-            Some(Id::new(prev_block.get_id().get()))
-        },
+        prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
-fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
-    tx.outputs()
-        .iter()
+fn create_new_outputs(srcid: OutPointSourceId, outs: &[TxOutput]) -> Vec<(TxInput, TxOutput)> {
+    outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
-        .collect::<Vec<(TxInput, TxOutput)>>()
+        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output))
+        .collect()
 }
 
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
@@ -140,22 +172,22 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
 #[test]
 fn generate_blocks_for_functional_tests() {
     let chain_config = create_regtest();
+    let mut prev_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
-    for i in 1..6 {
-        let prev_block =
-            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
-        let mut mined_block = btf.random_block(&prev_block, None);
+    for _ in 1..6 {
+        let mut mined_block = btf.random_block(prev_block, None);
         let bits = difficulty.into();
         assert!(
             crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
                 .expect("Unexpected conversion error")
         );
         println!("{}", hex::encode(mined_block.encode()));
+        prev_block = TestBlockInfo::from_block(&mined_block);
         btf.add_special_block(mined_block).unwrap();
     }
 }

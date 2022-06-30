@@ -16,7 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use common::{
-    chain::{block::Block, Transaction},
+    chain::{Block, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
@@ -39,7 +39,7 @@ pub enum BlockError {
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
-    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<Block>, PropertyQueryError),
+    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
     InvariantErrorInvalidTip,
     #[error("Failed to find previous block in non-genesis setting")]
@@ -61,9 +61,9 @@ pub enum ConsensusVerificationError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
-    PrevBlockLoadError(Id<Block>, Id<Block>, PropertyQueryError),
+    PrevBlockLoadError(Id<GenBlock>, Id<Block>, PropertyQueryError),
     #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<Block>, Id<Block>),
+    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
@@ -80,8 +80,6 @@ pub enum CheckBlockError {
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
-    #[error("Only genesis can have no previous block")]
-    InvalidBlockNoPrevBlock,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<Block>, Id<Block>),
     #[error("Block time must be equal or higher than the median of its ancestors")]
@@ -119,7 +117,7 @@ pub enum PropertyQueryError {
     #[error("Block not found {0}")]
     BlockNotFound(Id<Block>),
     #[error("Previous block index not found {0}")]
-    PrevBlockIndexNotFound(Id<Block>),
+    PrevBlockIndexNotFound(Id<GenBlock>),
     #[error("Block index {0} has no previous block entry in it")]
     BlockIndexHasNoPrevBlock(Id<Block>),
     #[error("Block for height {0} not found")]

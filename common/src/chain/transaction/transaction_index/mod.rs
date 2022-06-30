@@ -15,7 +15,7 @@
 
 use super::Transaction;
 use crate::{
-    chain::block::Block,
+    chain::{Block, GenBlock, GenBlockId, Genesis},
     primitives::{Id, Idable},
 };
 use serialization::{Decode, Encode};
@@ -26,6 +26,8 @@ pub enum Spender {
     RegularInput(Id<Transaction>),
     #[codec(index = 1)]
     StakeKernel(Id<Block>),
+    #[codec(index = 2)]
+    Premine(Id<Genesis>),
 }
 
 impl From<Id<Transaction>> for Spender {
@@ -37,6 +39,21 @@ impl From<Id<Transaction>> for Spender {
 impl From<Id<Block>> for Spender {
     fn from(spender: Id<Block>) -> Spender {
         Spender::StakeKernel(spender)
+    }
+}
+
+impl From<Id<Genesis>> for Spender {
+    fn from(spender: Id<Genesis>) -> Spender {
+        Spender::Premine(spender)
+    }
+}
+
+impl From<GenBlockId> for Spender {
+    fn from(spender: GenBlockId) -> Spender {
+        match spender {
+            GenBlockId::Block(id) => id.into(),
+            GenBlockId::Genesis(id) => id.into(),
+        }
     }
 }
 
@@ -95,7 +112,7 @@ pub enum SpendError {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum SpendablePosition {
     Transaction(TxMainChainPosition),
-    BlockReward(Id<Block>),
+    BlockReward(Id<GenBlock>),
 }
 
 impl From<TxMainChainPosition> for SpendablePosition {
@@ -106,15 +123,21 @@ impl From<TxMainChainPosition> for SpendablePosition {
 
 impl From<Id<Block>> for SpendablePosition {
     fn from(pos: Id<Block>) -> SpendablePosition {
+        SpendablePosition::BlockReward(pos.into())
+    }
+}
+
+impl From<Id<GenBlock>> for SpendablePosition {
+    fn from(pos: Id<GenBlock>) -> SpendablePosition {
         SpendablePosition::BlockReward(pos)
     }
 }
 
 impl SpendablePosition {
-    pub fn block_id_anyway(&self) -> &Id<Block> {
+    pub fn block_id_anyway(&self) -> Id<GenBlock> {
         match self {
-            SpendablePosition::Transaction(pos) => pos.block_id(),
-            SpendablePosition::BlockReward(id) => id,
+            SpendablePosition::Transaction(pos) => pos.block_id().clone().into(),
+            SpendablePosition::BlockReward(id) => id.clone(),
         }
     }
 }

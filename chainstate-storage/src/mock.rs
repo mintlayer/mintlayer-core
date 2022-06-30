@@ -16,10 +16,10 @@
 //! A mock version of the blockchian storage.
 
 use chainstate_types::block_index::BlockIndex;
-use common::chain::block::Block;
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
 };
+use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
 
 mockall::mock! {
@@ -28,7 +28,7 @@ mockall::mock! {
 
     impl crate::BlockchainStorageRead for Store {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
@@ -46,12 +46,12 @@ mockall::mock! {
         fn get_block_id_by_height(
             &self,
             height: &BlockHeight,
-        ) -> crate::Result<Option<Id<Block>>>;
+        ) -> crate::Result<Option<Id<GenBlock>>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -65,7 +65,7 @@ mockall::mock! {
         fn set_block_id_at_height(
             &mut self,
             height: &BlockHeight,
-            block_id: &Id<Block>,
+            block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
@@ -88,7 +88,7 @@ mockall::mock! {
 
     impl crate::BlockchainStorageRead for StoreTxRo {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
@@ -105,7 +105,7 @@ mockall::mock! {
         fn get_block_id_by_height(
             &self,
             height: &BlockHeight,
-        ) -> crate::Result<Option<Id<Block>>>;
+        ) -> crate::Result<Option<Id<GenBlock>>>;
     }
 
     impl storage::traits::TransactionRo for StoreTxRo {
@@ -120,7 +120,7 @@ mockall::mock! {
 
     impl crate::BlockchainStorageRead for StoreTxRw {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
 
@@ -137,12 +137,12 @@ mockall::mock! {
         fn get_block_id_by_height(
             &self,
             height: &BlockHeight,
-        ) -> crate::Result<Option<Id<Block>>>;
+        ) -> crate::Result<Option<Id<GenBlock>>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -157,7 +157,7 @@ mockall::mock! {
         fn set_block_id_at_height(
             &mut self,
             height: &BlockHeight,
-            block_id: &Id<Block>,
+            block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
@@ -271,13 +271,8 @@ mod tests {
                 None => return storage::abort("top not set"),
                 Some(best_id) => {
                     // Check the parent block is the current best block
-                    match block.prev_block_id() {
-                        Some(prev_block_id) => {
-                            if prev_block_id != best_id {
-                                return storage::abort("not on top");
-                            }
-                        }
-                        None => return storage::abort("DB corrupted"),
+                    if block.prev_block_id() != best_id {
+                        return storage::abort("not on top");
                     }
                     best_id
                 }
@@ -285,7 +280,7 @@ mod tests {
             // Add the block to the database
             tx.add_block(block)?;
             // Set the best block ID
-            tx.set_best_block_id(&block.get_id())?;
+            tx.set_best_block_id(&block.get_id().into())?;
             storage::commit("ok")
         });
         res.unwrap_or_else(|e| {
@@ -306,14 +301,14 @@ mod tests {
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
             vec![tx0],
-            None,
+            Id::<GenBlock>::new(H256([0x23; 32])),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
         )
         .unwrap();
         let block1 = Block::new(
             vec![tx1],
-            Some(Id::new(block0.get_id().get())),
+            block0.get_id().into(),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
@@ -337,10 +332,11 @@ mod tests {
         let mut store = MockStore::new();
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();
-            tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id())));
+            tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));
+            let expected_id: Id<GenBlock> = block1_id.clone().into();
             tx.expect_set_best_block_id()
-                .with(mockall::predicate::eq(block1_id.clone()))
+                .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));
             tx.expect_commit().return_const(Ok(()));
             tx
@@ -388,10 +384,11 @@ mod tests {
         let mut store = MockStore::new();
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();
-            tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id())));
+            tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));
+            let expected_id: Id<GenBlock> = block1_id.clone().into();
             tx.expect_set_best_block_id()
-                .with(mockall::predicate::eq(block1_id.clone()))
+                .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));
             tx.expect_commit().return_const(Err(TXFAIL));
             tx

@@ -15,12 +15,17 @@
 
 pub mod block;
 pub mod config;
+pub mod gen_block;
+pub mod genesis;
 mod pow;
 pub mod transaction;
 mod upgrades;
 
 pub use transaction::*;
 
+pub use block::Block;
 pub use config::ChainConfig;
+pub use gen_block::{GenBlock, GenBlockId};
+pub use genesis::Genesis;
 pub use pow::PoWChainConfig;
 pub use upgrades::*;

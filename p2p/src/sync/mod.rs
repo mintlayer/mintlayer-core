@@ -226,11 +226,11 @@ where
         // and that the received headers are in order
         match peer.state() {
             peer::PeerSyncState::UploadingHeaders(ref locator) => {
+                let genesis_id = self.config.genesis_block_id();
+                let mut locator = locator.iter().chain(std::iter::once(&genesis_id));
+                let anchor_point = headers[0].prev_block_id();
                 ensure!(
-                    locator
-                        .iter()
-                        .any(|header_id| &Some(header_id.clone()) == headers[0].prev_block_id())
-                        || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
+                    locator.any(|id| anchor_point == id),
                     P2pError::ProtocolError(ProtocolError::InvalidMessage),
                 );
             }
@@ -239,7 +239,7 @@ where
 
         for (a, b) in itertools::zip(&headers, &headers[1..]) {
             ensure!(
-                b.prev_block_id() == &Some(a.get_id()),
+                b.prev_block_id() == &a.get_id(),
                 P2pError::ProtocolError(ProtocolError::InvalidMessage),
             );
         }

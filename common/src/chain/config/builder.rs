@@ -17,7 +17,7 @@ use super::emission_schedule::{self, *};
 use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
 
 use crate::chain::{
-    block::Block, ConsensusUpgrade, Destination, NetUpgrades, PoWChainConfig, UpgradeVersion,
+    ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
 use crate::primitives::{semver::SemVer, BlockDistance, BlockHeight, Idable};
 
@@ -71,7 +71,7 @@ enum EmissionScheduleInit {
 enum GenesisBlockInit {
     UnitTest { premine_destination: Destination },
     Mainnet,
-    Custom(Block),
+    Custom(Genesis),
 }
 
 impl GenesisBlockInit {
@@ -174,7 +174,7 @@ impl Builder {
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
             target_block_spacing,
-            genesis_block_id: genesis_block.get_id(),
+            genesis_block_id: genesis_block.get_id().into(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,
@@ -225,7 +225,7 @@ impl Builder {
     }
 
     /// Specify a custom genesis block
-    pub fn genesis_custom(mut self, genesis: Block) -> Self {
+    pub fn genesis_custom(mut self, genesis: Genesis) -> Self {
         self.genesis_block = GenesisBlockInit::Custom(genesis);
         self
     }

@@ -19,10 +19,10 @@ use crate::detail::tests::*;
 use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
-        block::{Block, ConsensusData},
-        OutputSpentState, Transaction, TxInput, TxOutput,
+        block::ConsensusData, Block, GenBlock, Genesis, OutputSpentState, Transaction, TxInput,
+        TxOutput,
     },
-    primitives::{Id, H256},
+    primitives::{Id, Idable, H256},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -49,14 +49,9 @@ pub struct BlockTestFramework {
 
 impl BlockTestFramework {
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
-        let genesis_index = chainstate
-            .chainstate_storage
-            .get_block_index(&chainstate.chain_config.genesis_block_id())
-            .unwrap()
-            .unwrap();
         Self {
             chainstate,
-            block_indexes: vec![genesis_index],
+            block_indexes: Vec::new(),
         }
     }
 
@@ -65,11 +60,18 @@ impl BlockTestFramework {
         Self::with_chainstate(chainstate)
     }
 
-    pub fn random_block(&self, parent_block: &Block, params: Option<&[TestBlockParams]>) -> Block {
-        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
-            parent_block.transactions().iter().flat_map(create_new_outputs).unzip();
+    pub(in crate::detail::tests) fn random_block(
+        &self,
+        parent_info: TestBlockInfo,
+        params: Option<&[TestBlockParams]>,
+    ) -> Block {
+        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_info
+            .txns
+            .into_iter()
+            .flat_map(|(s, o)| create_new_outputs(s, &o))
+            .unzip();
 
-        let mut prev_block_hash = parent_block.get_id();
+        let mut prev_block_hash = parent_info.id;
         if let Some(params) = params {
             for param in params {
                 match param {
@@ -97,40 +99,123 @@ impl BlockTestFramework {
 
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-            Some(prev_block_hash),
+            prev_block_hash,
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
-    pub fn genesis(&self) -> &Block {
+    pub(in crate::detail::tests) fn genesis(&self) -> &Genesis {
         self.chainstate.chain_config.genesis_block()
     }
 
-    pub fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
-        self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
+    fn get_children_blocks(
+        current_block_id: &Id<GenBlock>,
+        blocks: &Vec<BlockIndex>,
+    ) -> Vec<Id<Block>> {
+        let mut result = Vec::new();
+        for block_index in blocks {
+            if block_index.prev_block_id() == current_block_id {
+                result.push(block_index.block_id().clone());
+            }
+        }
+        result
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::detail::tests) fn print_chains(&self) {
+        self.debug_print_chains(vec![], 0);
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::detail::tests) fn debug_print_chains(
+        &self,
+        blocks: Vec<Id<Block>>,
+        depth: usize,
+    ) {
+        if blocks.is_empty() {
+            println!("{}X", "--".repeat(depth));
+        } else {
+            for block_id in &blocks {
+                let block_index = self
+                    .chainstate
+                    .chainstate_storage
+                    .get_block_index(block_id)
+                    .ok()
+                    .flatten()
+                    .unwrap();
+                let mut main_chain = "";
+                if self.is_block_in_main_chain(block_id) {
+                    main_chain = ",M";
+                }
+                println!(
+                    "{tabs}+-- {block_id} (H:{height}{mainchain_flag},B:{position})",
+                    tabs = "\t".repeat(depth),
+                    block_id = &block_id.get(),
+                    height = block_index.block_height(),
+                    mainchain_flag = main_chain,
+                    position = self
+                        .block_indexes
+                        .iter()
+                        .position(|block| block.block_id() == block_id)
+                        .unwrap()
+                );
+                let children =
+                    Self::get_children_blocks(&block_id.clone().into(), &self.block_indexes);
+                if !children.is_empty() {
+                    self.debug_print_chains(children, depth + 1);
+                }
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::detail::tests) fn debug_print_tx(
+        &self,
+        block_id: Id<Block>,
+        transactions: &Vec<Transaction>,
+    ) {
+        println!();
+        for tx in transactions {
+            println!("+ BLOCK: {} => TX: {}", block_id.get(), tx.get_id().get());
+            for (input_index, input) in tx.inputs().iter().enumerate() {
+                println!("\t+Input: {}", input_index);
+                println!("\t\t+From: {:?}", input.outpoint());
+            }
+            for (output_index, output) in tx.outputs().iter().enumerate() {
+                let spent_status = self.get_spent_status(&tx.get_id(), output_index as u32);
+                println!("\t+Output: {}", output_index);
+                println!("\t\t+Value: {}", output.value().into_atoms());
+                match spent_status {
+                    Some(OutputSpentState::Unspent) => println!("\t\t+Spend: Unspent"),
+                    Some(OutputSpentState::SpentBy(spender)) => {
+                        println!("\t\t+Spend: {:?}", spender)
+                    }
+                    None => println!("\t\t+Spend: Not in mainchain"),
+                }
+            }
+        }
+    }
+
+    pub fn get_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+        self.chainstate.make_db_tx_ro().get_gen_block_index(id).unwrap().unwrap()
     }
 
     /// Creates and processes a given amount of blocks. Returns the last produced block.
-    pub fn create_chain(
+    pub(in crate::detail::tests) fn create_chain(
         &mut self,
-        parent_block_id: &Id<Block>,
+        parent_block_id: &Id<GenBlock>,
         count_blocks: usize,
-    ) -> Result<Block, BlockError> {
-        let mut block = self
-            .chainstate
-            .chainstate_storage
-            .get_block(parent_block_id.clone())
-            .ok()
-            .flatten()
-            .unwrap();
+    ) -> Result<Id<GenBlock>, BlockError> {
+        let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, parent_block_id.clone());
 
         for _ in 0..count_blocks {
-            block = produce_test_block(&block, false);
+            let block = produce_test_block(test_block_info);
+            test_block_info = TestBlockInfo::from_block(&block);
             self.add_special_block(block.clone())?;
         }
-        Ok(block)
+        Ok(test_block_info.id)
     }
 
     pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
@@ -177,14 +262,16 @@ impl BlockTestFramework {
                 .chainstate_storage
                 .get_block_id_by_height(&block_height)
                 .unwrap();
-            assert_eq!(real_next_block_id.as_ref(), expected_block_id);
+            let expected_block_id: Option<Id<GenBlock>> =
+                expected_block_id.map(|id| id.clone().into());
+            assert_eq!(real_next_block_id, expected_block_id);
         }
     }
 
     pub fn test_block(
         &self,
         block_id: &Id<Block>,
-        prev_block_id: Option<&Id<Block>>,
+        prev_block_id: &Id<GenBlock>,
         next_block_id: Option<&Id<Block>>,
         height: u64,
         spend_status: TestSpentStatus,
@@ -208,14 +295,9 @@ impl BlockTestFramework {
             }
         }
 
-        let block_index = self
-            .chainstate
-            .chainstate_storage
-            .get_block_index(block_id)
-            .ok()
-            .flatten()
-            .unwrap();
-        assert_eq!(block_index.prev_block_id().as_ref(), prev_block_id);
+        let block_index =
+            self.chainstate.chainstate_storage.get_block_index(block_id).unwrap().unwrap();
+        assert_eq!(block_index.prev_block_id(), prev_block_id);
         assert_eq!(block_index.block_height(), BlockHeight::new(height));
         self.check_block_at_height(block_index.block_height().next_height(), next_block_id);
     }
@@ -243,5 +325,10 @@ impl BlockTestFramework {
 
     pub fn chainstate(&mut self) -> &mut Chainstate {
         &mut self.chainstate
+    }
+
+    pub fn index_at(&self, at: usize) -> &BlockIndex {
+        assert!(at > 0, "No block index for genesis");
+        &self.block_indexes[at - 1]
     }
 }
