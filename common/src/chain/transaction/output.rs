@@ -34,7 +34,7 @@ impl OutputPurpose {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TxOutput {
-    value: Amount,
+    value: Amount, // TODO: Add here tokens
     purpose: OutputPurpose,
 }
 
