@@ -15,8 +15,6 @@
 //
 // Author(s): A. Sinitsyn
 
-use std::panic;
-
 use crate::detail::tests::*;
 use chainstate_storage::BlockchainStorageRead;
 use common::{
@@ -113,7 +111,7 @@ impl BlockTestFramework {
         self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
-    /// Creates and process a given amount of blocks. Returns the last produced block.
+    /// Creates and processes a given amount of blocks. Returns the last produced block.
     pub fn create_chain(
         &mut self,
         parent_block_id: &Id<Block>,

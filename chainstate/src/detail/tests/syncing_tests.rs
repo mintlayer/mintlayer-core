@@ -15,278 +15,268 @@
 //
 // Author(s): A. Altonen
 
+use std::iter;
+
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use chainstate_storage::BlockchainStorageRead;
 use common::chain::config::TestChainConfig;
-use crypto::random::Rng;
+use crypto::random::{self, Rng};
 
+// Generate some blocks and check that a locator is of expected length.
 #[test]
 fn get_locator() {
     common::concurrency::model(|| {
-        let mut framework = BlockTestFramework::new();
-        assert_eq!(framework.chainstate().get_locator().unwrap().len(), 1);
+        let mut btf = BlockTestFramework::new();
 
-        let limit = crypto::random::make_pseudo_rng().gen_range(1..10000);
-        let last_block = framework.create_chain(&framework.genesis().get_id(), limit).unwrap();
+        // There is only one (genesis) block.
+        let locator = btf.chainstate().get_locator().unwrap();
+        assert_eq!(locator.len(), 1);
+        assert_eq!(btf.genesis().header(), &locator[0]);
 
-        let locator = framework.chainstate().get_locator().unwrap();
-        assert_eq!(locator.len(), (limit as f64).log2().floor() as usize + 2);
+        // Expand the chain several times.
+        let mut rng = random::make_pseudo_rng();
+        let mut blocks = 1;
+        let mut last_block = btf.genesis().clone();
+        for _ in 0..8 {
+            let new_blocks = rng.gen_range(1..2000);
+            last_block = btf.create_chain(&last_block.get_id(), new_blocks).unwrap();
+            blocks += new_blocks;
 
-        // verify that the locator selected correct headers
-        let height = framework
-            .chainstate()
-            .get_block_height_in_main_chain(&last_block.get_id())
-            .unwrap()
-            .unwrap();
-        assert_eq!(&locator[0], last_block.header());
-        let iter = locator.iter().skip(1);
+            // Check the locator length.
+            let locator = btf.chainstate().get_locator().unwrap();
+            assert_eq!(locator.len(), (blocks as f64).log2().floor() as usize + 2);
 
-        for (header, i) in iter.zip(0..locator.len() - 1) {
-            let idx = height - BlockDistance::new(2i64.pow(i as u32));
-            let correct =
-                framework.chainstate().get_header_from_height(&idx.unwrap()).unwrap().unwrap();
-            assert_eq!(&correct, header);
-        }
-    });
-}
-
-#[test]
-fn test_get_headers_same_chain() {
-    common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let storage = Store::new_empty().unwrap();
-        let mut consensus = Chainstate::new(config, storage, None, Default::default()).unwrap();
-
-        let mut prev_block = consensus.chain_config.genesis_block().clone();
-        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
-
-        for _ in 0..limit {
-            let new_block = produce_test_block(&prev_block, false);
-            consensus
-                .process_block(new_block.clone(), BlockSource::Peer)
-                .ok()
-                .flatten()
+            // Check the locator headers.
+            let height = btf
+                .chainstate()
+                .get_block_height_in_main_chain(&last_block.get_id())
+                .unwrap()
                 .unwrap();
-            prev_block = new_block;
-        }
-
-        // first check that if the two chains are in sync, no headers are returned
-        let locator = consensus.get_locator().unwrap();
-        assert_eq!(consensus.get_headers(locator.clone()).unwrap(), vec![]);
-
-        // then add some blocks while keeping the old locator and verify that
-        // that only headers of the new blocks are returned
-        let limit = crypto::random::make_pseudo_rng().gen::<u16>();
-        let mut headers = vec![];
-
-        for _ in 0..limit {
-            let new_block = produce_test_block(&prev_block, false);
-            headers.push(new_block.header().clone());
-            consensus
-                .process_block(new_block.clone(), BlockSource::Peer)
-                .ok()
-                .flatten()
-                .unwrap();
-            prev_block = new_block;
-        }
-
-        let new_received_headers = consensus.get_headers(locator.clone()).unwrap();
-        let hdr_limit = if limit > 2000 { 2000 } else { headers.len() };
-
-        // verify that the received headers match expected and that they attach to locator
-        //
-        // because both locator and `consesus` are tracking the same chain, the first header
-        // of locator is always the parent of the first header in `new_received_headers`
-        assert_eq!(new_received_headers, headers[..hdr_limit]);
-        assert_eq!(headers[0].prev_block_id(), &Some(locator[0].get_id()));
-    });
-}
-
-#[test]
-fn test_get_headers_different_chains() {
-    common::concurrency::model(|| {
-        // first create test where the chains have branched off at genesis
-        // verify that the first header attaches to genesis
-        {
-            let mut btf = BlockTestFramework::new();
-            let limit = crypto::random::make_pseudo_rng().gen_range(0..10_000);
-            btf.create_chain(&btf.genesis().get_id(), (limit / 10) as usize).unwrap();
-
-            let locator = btf.chainstate.get_locator().unwrap();
-            btf.create_chain(&btf.genesis().get_id(), limit).unwrap();
-
-            // verify that the locators are different now that the chain has more headers
-            assert!(locator.len() < btf.chainstate.get_locator().unwrap().len());
-
-            let new_headers = btf.chainstate.get_headers(locator).unwrap();
-            assert_eq!(
-                new_headers[0].prev_block_id(),
-                &Some(btf.genesis().get_id()),
-            );
-        }
-
-        // create two chains which branch at some random point and
-        // add random amount of blocks to both chains.
-        //
-        // Verify that the first returned header attaches to the other chain
-        {
-            let mut btf = BlockTestFramework::new();
-            let common_height = crypto::random::make_pseudo_rng().gen_range(100..10_000);
-            btf.create_chain(&btf.genesis().get_id(), common_height).unwrap();
-
-            let limit = crypto::random::make_pseudo_rng().gen_range(100..2500);
-            btf.create_chain(
-                &btf.block_indexes[common_height - 1].block_id().clone(),
-                limit,
-            )
-            .unwrap();
-            let locator = btf.chainstate.get_locator().unwrap();
-            btf.create_chain(
-                &btf.block_indexes[common_height - 1].block_id().clone(),
-                limit * 4,
-            )
-            .unwrap();
-
-            let new_headers = btf.chainstate.get_headers(locator).unwrap();
-
-            // verify that the new header attaches to a block that is in
-            // the set of blocks that is know by both chains (it's height <= common_height)
-            let id = new_headers[0].prev_block_id().clone().unwrap();
-            assert!(
-                btf.get_block_index(&id).block_height() <= BlockHeight::new(common_height as u64)
-            );
-        }
-
-        // create two chains which both have unique blocks and share some blocks
-        // Verify that the first returned header attaches before genesis
-        {
-            let config = TestChainConfig::new().build();
-            let consensus1 = chainstate_with_config(config.clone());
-            let consensus2 = chainstate_with_config(config);
-            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
-            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
-            let mut prev = btf1.genesis().clone();
-
-            for _ in 0..crypto::random::make_pseudo_rng().gen_range(100..250) {
-                prev = btf1.random_block(&prev, None);
-                btf1.add_special_block(prev.clone()).unwrap();
-                btf2.add_special_block(prev.clone()).unwrap();
-                assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
-                );
+            assert_eq!(&locator[0], last_block.header());
+            for (i, header) in locator.iter().skip(1).enumerate() {
+                let idx = height - BlockDistance::new(2i64.pow(i as u32));
+                let expected =
+                    btf.chainstate().get_header_from_height(&idx.unwrap()).unwrap().unwrap();
+                assert_eq!(&expected, header);
             }
-
-            let limit = crypto::random::make_pseudo_rng().gen_range(32..256);
-            btf1.create_chain(
-                &btf1.block_indexes[btf1.block_indexes.len() - 1].block_id().clone(),
-                limit,
-            )
-            .unwrap();
-            btf2.create_chain(
-                &btf2.block_indexes[btf2.block_indexes.len() - 1].block_id().clone(),
-                limit * 2,
-            )
-            .unwrap();
-
-            let locator = btf1.chainstate.get_locator().unwrap();
-            let headers = btf2.chainstate.get_headers(locator).unwrap();
-            let id = headers[0].prev_block_id().clone().unwrap();
-            assert!(btf1.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
-
-            let locator = btf2.chainstate.get_locator().unwrap();
-            let headers = btf1.chainstate.get_headers(locator).unwrap();
-            let id = headers[0].prev_block_id().clone().unwrap();
-            assert!(btf2.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
         }
     });
 }
 
+// Check that new blocks (produced after a locator is created) are returned.
 #[test]
-fn test_filter_already_existing_blocks() {
+fn get_headers() {
     common::concurrency::model(|| {
-        {
-            let config = TestChainConfig::new().build();
-            let consensus1 = chainstate_with_config(config.clone());
-            let consensus2 = chainstate_with_config(config);
-            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
-            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
-            let mut prev1 = btf1.genesis().clone();
+        let mut rng = random::make_pseudo_rng();
+        let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
 
-            for _ in 0..crypto::random::make_pseudo_rng().gen_range(8..16) {
+        let mut btf = BlockTestFramework::new();
+        let mut last_block = btf.genesis().clone();
+        last_block = btf.create_chain(&last_block.get_id(), rng.gen_range(1000..2000)).unwrap();
+
+        // The locator is from this exact chain, so `get_headers` should return an empty sequence.
+        let locator = btf.chainstate().get_locator().unwrap();
+        assert_eq!(
+            btf.chainstate().get_headers(locator.clone()).unwrap(),
+            vec![]
+        );
+
+        // Produce more blocks. Now `get_headers` should return these blocks.
+        let expected: Vec<_> = iter::from_fn(|| {
+            last_block = produce_test_block(&last_block, false);
+            btf.chainstate()
+                .process_block(last_block.clone(), BlockSource::Peer)
+                .ok()
+                .flatten()
+                .unwrap();
+            Some(last_block.header().clone())
+        })
+        .take(rng.gen_range(1000..header_limit))
+        .collect();
+
+        let headers = btf.chainstate().get_headers(locator.clone()).unwrap();
+        assert_eq!(headers, expected);
+        // Because both the locator and chainstate are tracking the same chain, the first header of
+        // the locator is always the parent of the first new block.
+        assert_eq!(expected[0].prev_block_id(), &Some(locator[0].get_id()));
+
+        // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
+        btf.create_chain(&last_block.get_id(), header_limit - expected.len()).unwrap();
+        let headers = btf.chainstate().get_headers(locator).unwrap();
+        assert_eq!(headers.len(), header_limit);
+    });
+}
+
+// Create two chains that only share the genesis block and verify that the header is attached to
+// the genesis.
+#[test]
+fn get_headers_genesis() {
+    common::concurrency::model(|| {
+        let mut rng = random::make_pseudo_rng();
+
+        let mut btf = BlockTestFramework::new();
+        let genesis = btf.genesis().clone();
+
+        btf.create_chain(&genesis.get_id(), rng.gen_range(100..1000)).unwrap();
+        let locator_1 = btf.chainstate.get_locator().unwrap();
+
+        let chain_length = rng.gen_range(1000..2000);
+        btf.create_chain(&genesis.get_id(), chain_length).unwrap();
+        let locator_2 = btf.chainstate.get_locator().unwrap();
+        assert_ne!(locator_1, locator_2);
+        assert!(locator_1.len() < locator_2.len());
+
+        let headers = btf.chainstate.get_headers(locator_1).unwrap();
+        assert_eq!(headers[0].prev_block_id(), &Some(genesis.get_id()));
+        assert_eq!(headers.len(), chain_length);
+    });
+}
+
+// Create two chains that branch at some point, both with some unique blocks. Verify that the first
+// returned header is attached to a block that is known to both chains.
+#[test]
+fn get_headers_branching_chains() {
+    common::concurrency::model(|| {
+        let mut rng = random::make_pseudo_rng();
+        let common_height = rng.gen_range(100..10_000);
+
+        let mut btf = BlockTestFramework::new();
+        let common_block = btf.create_chain(&btf.genesis().get_id(), common_height).unwrap();
+
+        btf.create_chain(&common_block.get_id(), rng.gen_range(100..2500)).unwrap();
+        let locator = btf.chainstate.get_locator().unwrap();
+        btf.create_chain(&common_block.get_id(), rng.gen_range(2500..5000)).unwrap();
+
+        let headers = btf.chainstate.get_headers(locator).unwrap();
+        let id = headers[0].prev_block_id().as_ref().unwrap();
+        assert!(btf.get_block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+    });
+}
+
+// Create two separate chains that share some blocks. Verify that the first returned header is
+// attached to some block known for both chains.
+#[test]
+fn get_headers_different_chains() {
+    common::concurrency::model(|| {
+        let mut rng = random::make_pseudo_rng();
+
+        let mut btf1 = BlockTestFramework::new();
+        let mut btf2 = BlockTestFramework::new();
+
+        let mut prev = btf1.genesis().clone();
+        assert_eq!(&prev, btf2.genesis());
+        for _ in 0..rng.gen_range(100..250) {
+            prev = btf1.random_block(&prev, None);
+            btf1.add_special_block(prev.clone()).unwrap();
+            btf2.add_special_block(prev.clone()).unwrap();
+            assert_eq!(
+                btf1.block_indexes.last().unwrap().block_id(),
+                btf2.block_indexes.last().unwrap().block_id()
+            );
+        }
+
+        btf1.create_chain(&prev.get_id(), rng.gen_range(32..256)).unwrap();
+        btf2.create_chain(&prev.get_id(), rng.gen_range(256..512)).unwrap();
+
+        let locator = btf1.chainstate.get_locator().unwrap();
+        let headers = btf2.chainstate.get_headers(locator).unwrap();
+        let id = headers[0].prev_block_id().clone().unwrap();
+        assert!(btf1.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
+
+        let locator = btf2.chainstate.get_locator().unwrap();
+        let headers = btf1.chainstate.get_headers(locator).unwrap();
+        let id = headers[0].prev_block_id().clone().unwrap();
+        assert!(btf2.chainstate.chainstate_storage.get_block_index(&id).unwrap().is_some());
+    });
+}
+
+#[test]
+fn filter_already_existing_blocks() {
+    common::concurrency::model(|| {
+        let mut rng = random::make_pseudo_rng();
+
+        let mut btf1 = BlockTestFramework::new();
+        let mut btf2 = BlockTestFramework::new();
+
+        let mut prev1 = btf1.genesis().clone();
+        for _ in 0..rng.gen_range(8..16) {
+            prev1 = btf1.random_block(&prev1, None);
+            btf1.add_special_block(prev1.clone()).unwrap();
+            btf2.add_special_block(prev1.clone()).unwrap();
+            assert_eq!(
+                btf1.block_indexes.last().unwrap().block_id(),
+                btf2.block_indexes.last().unwrap().block_id(),
+            );
+        }
+
+        let limit = rng.gen_range(32..256);
+        let mut prev2 = prev1.clone();
+        let mut headers1 = vec![];
+        let mut headers2 = vec![];
+
+        // Add random blocks to both chains.
+        for i in 0..(limit * 2) {
+            if i <= limit {
                 prev1 = btf1.random_block(&prev1, None);
+                headers1.push(prev1.header().clone());
                 btf1.add_special_block(prev1.clone()).unwrap();
-                btf2.add_special_block(prev1.clone()).unwrap();
-                assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
-                );
             }
 
-            let limit = crypto::random::make_pseudo_rng().gen_range(32..256);
-            let mut prev2 = prev1.clone();
-            let mut headers1 = vec![];
-            let mut headers2 = vec![];
-
-            // add random blocks to both chains
-            for i in 0..(limit * 2) {
-                if i <= limit {
-                    prev1 = btf1.random_block(&prev1, None);
-                    headers1.push(prev1.header().clone());
-                    btf1.add_special_block(prev1.clone()).unwrap();
-                }
-
-                prev2 = btf1.random_block(&prev2, None);
-                headers2.push(prev2.header().clone());
-                btf2.add_special_block(prev2.clone()).unwrap();
-            }
-
-            let locator = btf1.chainstate.get_locator().unwrap();
-            let headers = btf2.chainstate.get_headers(locator).unwrap();
-            let headers = btf1.chainstate.filter_already_existing_blocks(headers).unwrap();
-            assert_eq!(headers, headers2);
-
-            let locator = btf2.chainstate.get_locator().unwrap();
-            let headers = btf1.chainstate.get_headers(locator).unwrap();
-            let headers = btf2.chainstate.filter_already_existing_blocks(headers).unwrap();
-            assert_eq!(headers, headers1);
+            prev2 = btf1.random_block(&prev2, None);
+            headers2.push(prev2.header().clone());
+            btf2.add_special_block(prev2.clone()).unwrap();
         }
 
-        // try to offer headers that don't attach to local chain
-        {
-            let config = TestChainConfig::new().build();
-            let consensus1 = chainstate_with_config(config.clone());
-            let consensus2 = chainstate_with_config(config);
-            let mut btf1 = BlockTestFramework::with_chainstate(consensus1);
-            let mut btf2 = BlockTestFramework::with_chainstate(consensus2);
-            let mut prev = btf1.genesis().clone();
+        // Check that filter_already_existing_blocks retains only unique to other chain blocks.
+        let locator = btf1.chainstate.get_locator().unwrap();
+        let headers = btf2.chainstate.get_headers(locator).unwrap();
+        assert!(headers.len() > headers2.len());
+        let headers = btf1.chainstate.filter_already_existing_blocks(headers).unwrap();
+        assert_eq!(headers, headers2);
 
-            for _ in 0..crypto::random::make_pseudo_rng().gen_range(8..16) {
-                prev = btf1.random_block(&prev, None);
-                btf1.add_special_block(prev.clone()).unwrap();
-                btf2.add_special_block(prev.clone()).unwrap();
-                assert_eq!(
-                    btf1.block_indexes[btf1.block_indexes.len() - 1].block_id(),
-                    btf2.block_indexes[btf2.block_indexes.len() - 1].block_id(),
-                );
-            }
+        let locator = btf2.chainstate.get_locator().unwrap();
+        let headers = btf1.chainstate.get_headers(locator).unwrap();
+        assert!(headers.len() > headers1.len());
+        let headers = btf2.chainstate.filter_already_existing_blocks(headers).unwrap();
+        assert_eq!(headers, headers1);
+    });
+}
 
-            let headers = (0..crypto::random::make_pseudo_rng().gen_range(3..10))
-                .map(|_| {
-                    prev = btf2.random_block(&prev, None);
-                    btf2.add_special_block(prev.clone()).unwrap();
-                    prev.header().clone()
-                })
-                .collect::<Vec<_>>();
+// Try to use headers that aren't attached to the chain.
+#[test]
+fn filter_already_existing_blocks_detached_headers() {
+    common::concurrency::model(|| {
+        let mut rng = random::make_pseudo_rng();
 
-            let headers_filtered =
-                btf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
+        let mut btf1 = BlockTestFramework::new();
+        let mut btf2 = BlockTestFramework::new();
+
+        let mut prev = btf1.genesis().clone();
+        for _ in 0..rng.gen_range(8..16) {
+            prev = btf1.random_block(&prev, None);
+            btf1.add_special_block(prev.clone()).unwrap();
+            btf2.add_special_block(prev.clone()).unwrap();
             assert_eq!(
-                headers_filtered,
-                Err(PropertyQueryError::BlockNotFound(
-                    headers[1].prev_block_id().clone().expect("to have a prev")
-                ))
+                btf1.block_indexes.last().unwrap().block_id(),
+                btf2.block_indexes.last().unwrap().block_id(),
             );
         }
+
+        let headers = (0..rng.gen_range(3..10))
+            .map(|_| {
+                prev = btf2.random_block(&prev, None);
+                btf2.add_special_block(prev.clone()).unwrap();
+                prev.header().clone()
+            })
+            .collect::<Vec<_>>();
+
+        let filtered_headers =
+            btf1.chainstate.filter_already_existing_blocks(headers[1..].to_vec());
+        assert_eq!(
+            filtered_headers,
+            Err(PropertyQueryError::BlockNotFound(
+                headers[1].prev_block_id().clone().unwrap()
+            ))
+        );
     });
 }

@@ -17,18 +17,20 @@
 
 use std::{iter, sync::Mutex};
 
-use crate::detail::*;
+use crate::detail::{tests::test_framework::BlockTestFramework, *};
 use chainstate_storage::Store;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
-        config::create_unit_test_config,
+        config::{create_regtest, create_unit_test_config},
         signature::inputsig::InputWitness,
         Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, H256},
+    Uint256,
 };
 use crypto::random::Rng;
+use serialization::Encode;
 
 mod double_spend_tests;
 mod events_tests;
@@ -80,40 +82,18 @@ fn create_utxo_data(
     }
 }
 
-struct ChainstateBuilder {
-    config: ChainConfig,
-    storage: Store,
-}
-
-impl ChainstateBuilder {
-    fn new() -> Self {
-        Self {
-            config: create_unit_test_config(),
-            storage: Store::new_empty().unwrap(),
-        }
-    }
-    fn build(self) -> Chainstate {
-        Chainstate::new(
-            Arc::new(self.config),
-            self.storage,
-            None,
-            Default::default(),
-        )
-        .unwrap()
-    }
-
-    fn with_config(mut self, chain_config: ChainConfig) -> Self {
-        self.config = chain_config;
-        self
-    }
-}
-
 fn setup_chainstate() -> Chainstate {
-    ChainstateBuilder::new().build()
+    chainstate_with_config(create_unit_test_config())
 }
 
 fn chainstate_with_config(config: ChainConfig) -> Chainstate {
-    ChainstateBuilder::new().with_config(config).build()
+    Chainstate::new(
+        Arc::new(config),
+        Store::new_empty().unwrap(),
+        None,
+        Default::default(),
+    )
+    .unwrap()
 }
 
 fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
@@ -125,9 +105,7 @@ fn produce_test_block_with_consensus_data(
     orphan: bool,
     consensus_data: ConsensusData,
 ) -> Block {
-    // For each output we create a new input and output that will placed into a new block.
-    // If value of original output is less than 1 then output will disappear in a new block.
-    // Otherwise, value will be decreasing for 1.
+    // The value of each output is decreased by a random amount to produce a new input and output.
     let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
         prev_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
@@ -150,4 +128,29 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
         .enumerate()
         .filter_map(move |(index, output)| create_utxo_data(&tx.get_id(), index, output))
         .collect::<Vec<(TxInput, TxOutput)>>()
+}
+
+// Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
+// TODO: remove when block production is ready
+#[ignore]
+#[test]
+fn generate_blocks_for_functional_tests() {
+    let config = create_regtest();
+    let chainstate = chainstate_with_config(config);
+    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let difficulty =
+        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
+
+    for i in 1..6 {
+        let prev_block =
+            btf.get_block(btf.block_indexes[i - 1].block_id().clone()).unwrap().unwrap();
+        let mut mined_block = btf.random_block(&prev_block, None);
+        let bits = difficulty.into();
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+                .expect("Unexpected conversion error")
+        );
+        println!("{}", hex::encode(mined_block.encode()));
+        btf.add_special_block(mined_block).unwrap();
+    }
 }
