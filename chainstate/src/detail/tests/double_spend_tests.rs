@@ -57,14 +57,20 @@ fn spend_tx_in_the_same_block() {
                 0,
                 empty_witness(),
             );
-            let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
+            let output = TxOutput::new(
+                Amount::from_atoms(12345678912345),
+                OutputPurpose::Transfer(receiver.clone()),
+            );
 
             let first_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
             let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
-            let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
+            let output = TxOutput::new(
+                Amount::from_atoms(987654321),
+                OutputPurpose::Transfer(receiver),
+            );
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             // Create tx that pointing to the previous tx
@@ -113,14 +119,20 @@ fn spend_tx_in_the_same_block() {
                 0,
                 empty_witness(),
             );
-            let output = TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone());
+            let output = TxOutput::new(
+                Amount::from_atoms(12345678912345),
+                OutputPurpose::Transfer(receiver.clone()),
+            );
 
             let first_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             let first_tx_id = first_tx.get_id();
 
             let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
-            let output = TxOutput::new(Amount::from_atoms(987654321), receiver);
+            let output = TxOutput::new(
+                Amount::from_atoms(987654321),
+                OutputPurpose::Transfer(receiver),
+            );
             let second_tx =
                 Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
             // Create tx that pointing to the previous tx
@@ -182,7 +194,10 @@ fn double_spend_tx_in_the_same_block() {
                 0,
                 empty_witness(),
             )],
-            vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
+            vec![TxOutput::new(
+                Amount::from_atoms(12345678912345),
+                OutputPurpose::Transfer(receiver.clone()),
+            )],
             0,
         )
         .expect(ERR_CREATE_TX_FAIL);
@@ -196,7 +211,10 @@ fn double_spend_tx_in_the_same_block() {
                 0,
                 InputWitness::NoSignature(None),
             )],
-            vec![TxOutput::new(Amount::from_atoms(987654321), receiver.clone())],
+            vec![TxOutput::new(
+                Amount::from_atoms(987654321),
+                OutputPurpose::Transfer(receiver.clone()),
+            )],
             0,
         )
         .expect(ERR_CREATE_TX_FAIL);
@@ -205,7 +223,10 @@ fn double_spend_tx_in_the_same_block() {
         let third_tx = Transaction::new(
             123456789,
             vec![TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None))],
-            vec![TxOutput::new(Amount::from_atoms(987654321), receiver)],
+            vec![TxOutput::new(
+                Amount::from_atoms(987654321),
+                OutputPurpose::Transfer(receiver),
+            )],
             0,
         )
         .expect(ERR_CREATE_TX_FAIL);
@@ -265,7 +286,10 @@ fn double_spend_tx_in_another_block() {
                 0,
                 empty_witness(),
             )],
-            vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver.clone())],
+            vec![TxOutput::new(
+                Amount::from_atoms(12345678912345),
+                OutputPurpose::Transfer(receiver.clone()),
+            )],
             0,
         )
         .expect(ERR_CREATE_TX_FAIL);
@@ -295,7 +319,10 @@ fn double_spend_tx_in_another_block() {
                 0,
                 empty_witness(),
             )],
-            vec![TxOutput::new(Amount::from_atoms(12345678912345), receiver)],
+            vec![TxOutput::new(
+                Amount::from_atoms(12345678912345),
+                OutputPurpose::Transfer(receiver),
+            )],
             0,
         )
         .expect(ERR_CREATE_TX_FAIL);

@@ -3,6 +3,7 @@ use crypto::random::RngCore;
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::OutputPurpose;
 use crate::{
     chain::{
         block::ConsensusData,
@@ -223,7 +224,7 @@ fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput 
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TxOutput::new(
         Amount::from_atoms(g.next_u64() as u128),
-        Destination::PublicKey(pub_key),
+        OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     )
 }
 

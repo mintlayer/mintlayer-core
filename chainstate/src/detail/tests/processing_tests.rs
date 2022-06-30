@@ -27,6 +27,7 @@ use common::chain::config::create_unit_test_config;
 use common::chain::config::Builder as ConfigBuilder;
 use common::chain::ConsensusUpgrade;
 use common::chain::NetUpgrades;
+use common::chain::OutputPurpose;
 use common::chain::OutputSpentState;
 use common::chain::UpgradeVersion;
 use common::primitives::Compact;
@@ -564,7 +565,10 @@ fn test_consensus_type() {
             &mut mined_block,
             u128::MAX,
             bits,
-            vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+            vec![TxOutput::new(
+                Amount::from_atoms(10),
+                OutputPurpose::Transfer(Destination::PublicKey(pub_key))
+            )]
         )
         .expect("Unexpected conversion error"));
         btf.add_special_block(mined_block).unwrap();
@@ -613,7 +617,10 @@ fn test_consensus_type() {
             &mut mined_block,
             u128::MAX,
             bits,
-            vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+            vec![TxOutput::new(
+                Amount::from_atoms(10),
+                OutputPurpose::Transfer(Destination::PublicKey(pub_key))
+            )]
         )
         .expect("Unexpected conversion error"));
         btf.add_special_block(mined_block).unwrap();
@@ -696,7 +703,10 @@ fn test_pow() {
         &mut valid_block,
         u128::MAX,
         bits,
-        vec![TxOutput::new(Amount::from_atoms(10), Destination::PublicKey(pub_key))]
+        vec![TxOutput::new(
+            Amount::from_atoms(10),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key))
+        )]
     )
     .expect("Unexpected conversion error"));
     btf.add_special_block(valid_block.clone()).unwrap();

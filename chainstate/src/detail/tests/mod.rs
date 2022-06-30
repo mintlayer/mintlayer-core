@@ -22,7 +22,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
+use common::chain::{Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
 use common::Uint256;
@@ -96,7 +96,7 @@ fn create_utxo_data(
             ),
             TxOutput::new(
                 (output.value() - Amount::from_atoms(spent_value)).unwrap(),
-                anyonecanspend_address(),
+                OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
     } else {
