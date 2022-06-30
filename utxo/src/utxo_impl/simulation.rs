@@ -118,7 +118,7 @@ fn populate_cache<'a>(
 fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 
-    let block_hash = Id::new(&H256::random());
+    let block_hash = Id::new(H256::random());
     let mut parent = UtxosCache::default();
     parent.set_best_block(block_hash);
 
@@ -134,7 +134,7 @@ fn stack_flush_test() {
     let (mut cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(50), &outps);
     outps.append(&mut cache3_outps);
 
-    let new_block_hash = Id::new(&H256::random());
+    let new_block_hash = Id::new(H256::random());
     cache3.set_best_block(new_block_hash);
     let cache3_clone = cache3.clone();
     assert!(flush_to_base(cache3_clone, &mut parent).is_ok());

@@ -74,7 +74,7 @@ mod test {
 
         // create the id based on the `is_block_reward` value.
         let id = {
-            let utxo_id: Id<Block> = Id::new(&H256::random());
+            let utxo_id: Id<Block> = Id::new(H256::random());
             OutPointSourceId::BlockReward(utxo_id)
         };
 
@@ -97,7 +97,7 @@ mod test {
         assert_eq!(db_interface.get_utxo(&outpoint), Ok(None));
 
         // test block id
-        let block_id: Id<Block> = Id::new(&H256::random());
+        let block_id: Id<Block> = Id::new(H256::random());
         assert!(db_interface.set_best_block_id(&block_id).is_ok());
 
         let block_id = db_interface

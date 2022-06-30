@@ -76,7 +76,7 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![first_tx, second_tx],
-                Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
+                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
                 BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
                 ConsensusData::None,
             )
@@ -138,7 +138,7 @@ fn spend_tx_in_the_same_block() {
             // Create tx that pointing to the previous tx
             let block = Block::new(
                 vec![second_tx, first_tx],
-                Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
+                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
                 BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
                 ConsensusData::None,
             )
@@ -234,7 +234,7 @@ fn double_spend_tx_in_the_same_block() {
         // Create tx that pointing to the previous tx
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
-            Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
+            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
@@ -297,7 +297,7 @@ fn double_spend_tx_in_another_block() {
         // Create tx that pointing to the previous tx
         let first_block = Block::new(
             vec![first_tx],
-            Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
+            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )

@@ -75,7 +75,7 @@ mod tests {
             // put three blocks in a chain after genesis
             let block1 = Block::new(
                 vec![],
-                Some(Id::new(&chainstate.chain_config.genesis_block_id().get())),
+                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
                 BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
                 ConsensusData::None,
             )
@@ -132,7 +132,7 @@ mod tests {
             {
                 let chainstate_ref = chainstate.make_db_tx_ro();
                 let mut iter =
-                    BlockIndexHistoryIterator::new(Id::new(&H256::zero()), &chainstate_ref);
+                    BlockIndexHistoryIterator::new(Id::new(H256::zero()), &chainstate_ref);
 
                 assert_ne!(iter.next_id, None); // ensure that we start with some id
                 assert!(iter.next().is_none());

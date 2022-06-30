@@ -124,12 +124,12 @@ mod test {
 
     // The hash value doesn't matter because we first compare the enum arm
     fn compare_test(block_reward_hash: &H256, tx_hash: &H256) {
-        let br = OutPointSourceId::BlockReward(Id::new(block_reward_hash));
+        let br = OutPointSourceId::BlockReward(Id::new(*block_reward_hash));
         let bro0 = OutPoint::new(br.clone(), 0);
         let bro1 = OutPoint::new(br.clone(), 1);
         let bro2 = OutPoint::new(br, 2);
 
-        let tx = OutPointSourceId::Transaction(Id::new(tx_hash));
+        let tx = OutPointSourceId::Transaction(Id::new(*tx_hash));
         let txo0 = OutPoint::new(tx.clone(), 0);
         let txo1 = OutPoint::new(tx.clone(), 1);
         let txo2 = OutPoint::new(tx, 2);

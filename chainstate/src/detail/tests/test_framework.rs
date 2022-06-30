@@ -82,7 +82,7 @@ impl<'a> BlockTestFramework {
                         );
                         inputs.push(double_spend_input)
                     }
-                    TestBlockParams::Orphan => hash_prev_block = Some(Id::new(&H256::random())),
+                    TestBlockParams::Orphan => hash_prev_block = Some(Id::new(H256::random())),
                     _ => unimplemented!(),
                 }
             }

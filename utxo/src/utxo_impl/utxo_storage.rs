@@ -231,7 +231,7 @@ mod test {
         db_interface: &mut UtxoInMemoryDBImpl,
         tx_outputs_size: u32,
     ) -> (Id<Block>, Vec<OutPoint>) {
-        let best_block_id: Id<Block> = Id::new(&H256::random());
+        let best_block_id: Id<Block> = Id::new(H256::random());
         assert!(db_interface.set_best_block_id(&best_block_id).is_ok());
 
         // let's populate the db with outputs.
@@ -430,7 +430,7 @@ mod test {
             let tx_inputs: Vec<TxInput> = (0..rnd)
                 .into_iter()
                 .map(|i| {
-                    let id: Id<Block> = Id::new(&H256::random());
+                    let id: Id<Block> = Id::new(H256::random());
                     let id = OutPointSourceId::BlockReward(id);
 
                     TxInput::new(id, i, InputWitness::NoSignature(None))
@@ -456,7 +456,7 @@ mod test {
     fn test_utxo() {
         common::concurrency::model(move || {
             let utxos = create_utxo_entries(10);
-            let new_best_block_hash = Id::new(&H256::random());
+            let new_best_block_hash = Id::new(H256::random());
 
             let utxos = ConsumedUtxoCache {
                 container: utxos,
@@ -495,7 +495,7 @@ mod test {
                 let entry = UtxoEntry::new(utxo, true, false);
                 map.insert(outpoint.clone(), entry);
 
-                let new_hash = Id::new(&H256::random());
+                let new_hash = Id::new(H256::random());
                 let another_cache = ConsumedUtxoCache {
                     container: map,
                     best_block: new_hash,

@@ -56,7 +56,7 @@ pub fn generate_unsigned_tx(
 
     let inputs = std::iter::from_fn(|| {
         Some(TxInput::new(
-            Id::<Transaction>::new(&H256::random()).into(),
+            Id::<Transaction>::new(H256::random()).into(),
             rng.gen(),
             InputWitness::NoSignature(None),
         ))
