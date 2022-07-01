@@ -116,6 +116,7 @@ fn several_subscribers_several_events() {
     });
 }
 
+// An orphan bock is rejected during processing, so it shouldn't trigger the new tip event.
 #[test]
 fn orphan_block() {
     common::concurrency::model(|| {
@@ -136,6 +137,52 @@ fn orphan_block() {
         chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
         assert!(errors.lock().unwrap().is_empty());
+    });
+}
+
+#[test]
+fn custom_orphan_error_hook() {
+    common::concurrency::model(|| {
+        let config = Arc::new(create_unit_test_config());
+        let storage = Store::new_empty().unwrap();
+        let (orphan_error_hook, errors) = orphan_error_hook();
+        let mut chainstate =
+            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+
+        let events = subscribe_n(&mut chainstate, 1);
+        assert!(!chainstate.events_controller.subscribers().is_empty());
+
+        let first_block = produce_test_block(&chainstate.chain_config.genesis_block(), false);
+        // Produce a block with a bad timestamp.
+        let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
+            + 2 * chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+        let second_block = Block::new(
+            vec![],
+            Some(first_block.get_id()),
+            BlockTimestamp::from_int_seconds(timestamp),
+            ConsensusData::None,
+        )
+        .expect(ERR_CREATE_BLOCK_FAIL);
+
+        // The second block isn't processed because its parent isn't known.
+        assert_eq!(
+            Err(BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)),
+            chainstate.process_block(second_block, BlockSource::Local)
+        );
+        chainstate.wait_for_all_events();
+        assert!(events.lock().unwrap().is_empty());
+        assert!(errors.lock().unwrap().is_empty());
+
+        // Processing the first block should trigger the custom orphan error hook.
+        chainstate.process_block(first_block, BlockSource::Local).unwrap();
+        chainstate.wait_for_all_events();
+        assert_eq!(events.lock().unwrap().len(), 1);
+        let guard = errors.lock().unwrap();
+        assert_eq!(guard.len(), 1);
+        assert_eq!(
+            guard[0],
+            BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
+        );
     });
 }
 
