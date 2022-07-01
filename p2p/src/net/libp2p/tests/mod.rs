@@ -17,7 +17,7 @@
 use crate::net::{
     self,
     libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, types},
+    libp2p::{backend::Backend, behaviour, connectivity, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -35,14 +35,14 @@ use libp2p::{
 };
 use logging::log;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     iter,
     num::NonZeroU32,
 };
 use tokio::sync::mpsc;
 
 #[cfg(test)]
-mod connectivity;
+mod connection;
 #[cfg(test)]
 mod frontend;
 #[cfg(test)]
@@ -122,11 +122,10 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            connmgr: connectivity::ConnectionManager::new(),
             relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
-            established_conns: HashSet::new(),
-            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -218,11 +217,10 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            connmgr: connectivity::ConnectionManager::new(),
             relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
-            established_conns: HashSet::new(),
-            pending_conns: HashMap::new(),
             waker: None,
         };
 
