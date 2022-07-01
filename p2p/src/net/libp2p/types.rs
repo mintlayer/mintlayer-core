@@ -197,16 +197,3 @@ pub enum Libp2pBehaviourEvent {
     Syncing(SyncingEvent),
     PubSub(PubSubEvent),
 }
-
-// TODO: connection manager
-#[derive(Debug)]
-pub enum PendingState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed(Multiaddr),
-
-    /// Connection established for outbound connection
-    OutboundAccepted(Multiaddr),
-
-    /// Connection established for inbound connection
-    InboundAccepted(Multiaddr),
-}

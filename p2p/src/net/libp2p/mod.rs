@@ -47,6 +47,7 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
+mod connectivity;
 mod constants;
 mod sync;
 mod tests;
