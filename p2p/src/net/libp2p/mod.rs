@@ -435,9 +435,8 @@ where
             })
             .await?;
 
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
     }
 
     async fn report_validation_result(
@@ -456,9 +455,8 @@ where
             })
             .await?;
 
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
     }
 
     async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
@@ -470,9 +468,8 @@ where
             })
             .await?;
 
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
     }
 
     async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
@@ -509,9 +506,8 @@ where
             })
             .await?;
 
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
     }
 
     async fn send_response(
@@ -528,9 +524,8 @@ where
             })
             .await?;
 
-        rx.await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e) // command failure
+        // The first error indicates the channel being closed and the second one is a p2p error.
+        rx.await?
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
