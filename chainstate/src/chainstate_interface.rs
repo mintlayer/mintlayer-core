@@ -27,11 +27,11 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Option<Id<Block>>, ChainstateError>;
     fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
 
-    /// Returns an exponential sequence of block headers.
+    /// Returns a list of block headers whose heights distances increase exponentially starting
+    /// from the current tip.
     ///
-    /// This returns a relatively short sequence even for a long chain because the distance
-    /// increased exponentially between each following block header. Such sequence can be used to
-    /// quickly find a common ancestor between different chains.
+    /// This returns a relatively short sequence even for a long chain. Such sequence can be used
+    /// to quickly find a common ancestor between different chains.
     fn get_locator(&self) -> Result<Vec<BlockHeader>, ChainstateError>;
 
     /// Returns a list of block headers starting from the last locator's block that is in the main

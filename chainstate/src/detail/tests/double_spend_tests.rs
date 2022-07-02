@@ -94,11 +94,11 @@ fn spend_tx_in_the_same_block_invalid_order() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert_eq!(
+        matches!(
+            chainstate.process_block(block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::MissingOutputOrSpent
-            )),
-            chainstate.process_block(block, BlockSource::Local)
+            ))
         );
         assert_eq!(
             chainstate
@@ -144,13 +144,13 @@ fn double_spend_tx_in_the_same_block() {
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
         let block_id = block.get_id();
-        assert_eq!(
+        matches!(
+            chainstate.process_block(block, BlockSource::Local),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+                    CheckBlockTransactionsError::DuplicateInputInBlock(id)
                 )
-            )),
-            chainstate.process_block(block, BlockSource::Local)
+            )) if id == block_id
         );
         assert_eq!(
             chainstate
@@ -211,11 +211,11 @@ fn double_spend_tx_in_another_block() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert_eq!(
+        matches!(
+            chainstate.process_block(second_block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::DoubleSpendAttempt(Spender::RegularInput(first_tx.get_id()))
-            )),
-            chainstate.process_block(second_block, BlockSource::Local)
+                StateUpdateError::DoubleSpendAttempt(Spender::RegularInput(id))
+            )) if id == first_tx.get_id()
         );
         assert_eq!(
             chainstate

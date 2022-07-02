@@ -15,40 +15,40 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::detail::median_time::calculate_median_time_past;
-use crate::detail::pow::error::ConsensusPoWError;
-use crate::detail::tests::test_framework::BlockTestFramework;
-use crate::detail::tests::*;
-use crate::make_chainstate;
-use chainstate_storage::BlockchainStorageRead;
-use chainstate_storage::Store;
-use common::chain::block::consensus_data::PoWData;
-use common::chain::config::create_unit_test_config;
-use common::chain::config::Builder as ConfigBuilder;
-use common::chain::ConsensusUpgrade;
-use common::chain::NetUpgrades;
-use common::chain::OutputPurpose;
-use common::chain::OutputSpentState;
-use common::chain::UpgradeVersion;
-use common::primitives::Compact;
-use common::Uint256;
-use crypto::key::{KeyKind, PrivateKey};
-use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::{sync::atomic::Ordering, time::Duration};
 
+use crate::{
+    detail::{
+        median_time::calculate_median_time_past,
+        pow::error::ConsensusPoWError,
+        tests::{test_framework::BlockTestFramework, *},
+    },
+    make_chainstate,
+};
+use chainstate_storage::{BlockchainStorageRead, Store};
+use common::{
+    chain::{
+        block::consensus_data::PoWData,
+        config::{create_unit_test_config, Builder as ConfigBuilder},
+        ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
+    },
+    primitives::Compact,
+    Uint256,
+};
+use crypto::key::{KeyKind, PrivateKey};
+
+// Check that the genesis block cannot have the `Peer` source.
 #[test]
-fn test_process_genesis_block_wrong_block_source() {
+fn genesis_peer_block() {
     common::concurrency::model(|| {
-        // Genesis can't be from Peer, test it
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
             Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
-
-        // process the genesis block
-        let block_source = BlockSource::Peer;
-        let result = chainstate.process_block(config.genesis_block().clone(), block_source);
-        assert_eq!(result.unwrap_err(), BlockError::InvalidBlockSource);
+        matches!(
+            chainstate.process_block(config.genesis_block().clone(), BlockSource::Peer),
+            Err(BlockError::InvalidBlockSource)
+        );
     });
 }
 
@@ -83,8 +83,6 @@ fn test_process_genesis_block() {
         assert_eq!(block_index.block_height(), BlockHeight::new(0));
     });
 }
-
-// TODO: test the orphans' custom error hook
 
 #[test]
 fn test_orphans_chains() {

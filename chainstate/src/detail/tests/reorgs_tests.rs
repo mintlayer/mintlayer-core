@@ -77,7 +77,7 @@ fn reorg_simple() {
             Some(block_a.get_id())
         );
 
-        // Produce one more block that cause a reorg.
+        // Produce one more block that causes a reorg.
         let block_c = produce_test_block(&block_b, false);
         assert!(chainstate.process_block(block_c.clone(), BlockSource::Local).is_ok());
         assert_eq!(
