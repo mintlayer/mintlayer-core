@@ -148,10 +148,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
 
-        let _ = rx
-            .await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e)?; // command failure
+        let _ = rx.await??;
 
         todo!();
         // Ok(
