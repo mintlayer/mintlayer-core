@@ -32,7 +32,6 @@ pub enum TestSpentStatus {
     NotInMainchain,
 }
 
-#[derive(Debug)]
 pub enum TestBlockParams {
     NoErrors,
     TxCount(usize),
