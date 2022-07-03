@@ -159,6 +159,11 @@ pub enum SyncingEvent {
     },
 }
 
+#[derive(Debug)]
+pub enum ControlEvent {
+    CloseConnection { peer_id: PeerId },
+}
+
 impl From<&net::types::PubSubTopic> for Topic {
     fn from(t: &net::types::PubSubTopic) -> Topic {
         match t {
@@ -196,4 +201,5 @@ pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),
     PubSub(PubSubEvent),
+    Control(ControlEvent),
 }
