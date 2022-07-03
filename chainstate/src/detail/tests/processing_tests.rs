@@ -36,6 +36,7 @@ use common::{
     Uint256,
 };
 use crypto::key::{KeyKind, PrivateKey};
+use crypto::random::{self, Rng};
 
 // Check that the genesis block cannot have the `Peer` source.
 #[test]
@@ -45,28 +46,27 @@ fn genesis_peer_block() {
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
             Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
-        matches!(
-            chainstate.process_block(config.genesis_block().clone(), BlockSource::Peer),
-            Err(BlockError::InvalidBlockSource)
+        assert_eq!(
+            chainstate
+                .process_block(config.genesis_block().clone(), BlockSource::Peer)
+                .unwrap_err(),
+            BlockError::InvalidBlockSource
         );
     });
 }
 
 #[test]
-fn test_process_genesis_block() {
+fn process_genesis_block() {
     common::concurrency::model(|| {
-        // This test process only Genesis block
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
             Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
-        // process the genesis block
-        let block_source = BlockSource::Local;
         let block_index = chainstate
             .process_block(
                 chainstate.chain_config.genesis_block().clone(),
-                block_source,
+                BlockSource::Local,
             )
             .ok()
             .flatten()
@@ -87,29 +87,25 @@ fn test_process_genesis_block() {
 #[test]
 fn test_orphans_chains() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
-
+        let mut chainstate = setup_chainstate();
         assert_eq!(
             chainstate.get_best_block_id().unwrap().unwrap(),
             chainstate.chain_config.genesis_block_id()
         );
 
-        // Process the orphan block
-        let genesis_block = chainstate.chain_config.genesis_block().clone();
-        let missing_block = produce_test_block(&genesis_block, false);
-        let mut current_block = missing_block.clone();
+        // Create but don't process a block, so it will be unknown to the chainstate.
+        let missing_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
 
+        // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
-
+        let mut current_block = missing_block.clone();
         for orphan_count in 1..MAX_ORPHANS_COUNT_IN_TEST {
             current_block = produce_test_block(&current_block, false);
             assert_eq!(
                 chainstate.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
                 BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
             );
-            // the best is still genesis, because we're submitting orphans
+            // The genesis block is still the best one, because we are processing orphan blocks.
             assert_eq!(
                 chainstate.get_best_block_id().unwrap().unwrap(),
                 chainstate.chain_config.genesis_block_id()
@@ -118,120 +114,113 @@ fn test_orphans_chains() {
             assert_eq!(chainstate.orphan_blocks.len(), orphan_count);
         }
 
-        // now we submit the missing block (at height 1), and we expect all blocks to be processed
-        let last_block_index =
-            chainstate.process_block(missing_block, BlockSource::Local).unwrap().unwrap();
+        // Submit the missing block, so all blocks are be processed.
+        assert_eq!(
+            chainstate
+                .process_block(missing_block, BlockSource::Local)
+                .unwrap()
+                .unwrap()
+                .block_height(),
+            (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
+        );
         let current_best = chainstate.get_best_block_id().unwrap().unwrap();
-        let last_block_index_in_db = chainstate.get_block_index(&current_best).unwrap().unwrap();
         assert_eq!(
-            last_block_index_in_db.block_height(),
+            chainstate.get_block_index(&current_best).unwrap().unwrap().block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
-        assert_eq!(
-            last_block_index.block_height(),
-            (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
-        );
-
-        // no more orphan blocks left
+        // There should be no more orphan blocks left.
         assert_eq!(chainstate.orphan_blocks.len(), 0);
     });
 }
 
+// Create the chainstate without a genesis block.
 #[test]
-fn test_empty_chainstate() {
+fn empty_chainstate() {
     common::concurrency::model(|| {
-        // No genesis
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let chainstate =
             Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
-        assert!(chainstate.get_best_block_id().unwrap().is_none());
-        assert!(chainstate
-            .chainstate_storage
-            .get_block(chainstate.chain_config.genesis_block_id())
-            .unwrap()
-            .is_none());
-        // Let's add genesis
-        let config = Arc::new(create_unit_test_config());
-        let storage = Store::new_empty().unwrap();
-        let chainstate = Chainstate::new(config, storage, None, Default::default()).unwrap();
-        chainstate.get_best_block_id().unwrap().unwrap();
-        assert!(
-            chainstate.get_best_block_id().ok().flatten().unwrap()
-                == chainstate.chain_config.genesis_block_id()
+        assert_eq!(chainstate.get_best_block_id().unwrap(), None);
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_block(chainstate.chain_config.genesis_block_id())
+                .unwrap(),
+            None
         );
-        assert!(chainstate
-            .chainstate_storage
-            .get_block(chainstate.chain_config.genesis_block_id())
-            .unwrap()
-            .is_some());
-        assert!(
+    });
+}
+
+#[test]
+fn chainstate_genesis() {
+    common::concurrency::model(|| {
+        let chainstate = setup_chainstate();
+        assert_eq!(
+            chainstate.get_best_block_id().ok().flatten().unwrap(),
+            chainstate.chain_config.genesis_block_id()
+        );
+        assert_eq!(
             chainstate
                 .chainstate_storage
                 .get_block(chainstate.chain_config.genesis_block_id())
                 .unwrap()
                 .unwrap()
-                .get_id()
-                == chainstate.chain_config.genesis_block_id()
+                .get_id(),
+            chainstate.chain_config.genesis_block_id()
         );
     });
 }
 
 #[test]
-fn test_spend_inputs_simple() {
+fn spend_inputs_simple() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        // Create a new block
         let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
-
-        // Check that all tx not in the main chain
+        // Check that the transactions from the unprocessed block aren't in the main-chain.
         for tx in block.transactions() {
-            assert!(
+            assert_eq!(
                 chainstate
                     .chainstate_storage
                     .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                    .expect(ERR_STORAGE_FAIL)
-                    == None
+                    .expect(ERR_STORAGE_FAIL),
+                None
             );
         }
 
-        // Process the second block
-        let new_id = Some(block.get_id());
+        // Process the block.
         assert!(chainstate.process_block(block.clone(), BlockSource::Local).is_ok());
         assert_eq!(
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            new_id
+            Some(block.get_id())
         );
 
-        // Check that tx inputs in the main chain and not spend
+        // Check that the transactions are in the main-chain and their inputs are not spent.
         for tx in block.transactions() {
             let tx_index = chainstate
                 .chainstate_storage
                 .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                .expect("Not found mainchain tx index")
+                .unwrap()
                 .expect(ERR_STORAGE_FAIL);
 
             for input in tx.inputs() {
-                if tx_index
-                    .get_spent_state(input.outpoint().output_index())
-                    .expect("Unable to get spent state")
-                    != OutputSpentState::Unspent
-                {
-                    panic!("Tx input can't be spent");
-                }
+                assert_eq!(
+                    tx_index.get_spent_state(input.outpoint().output_index()).unwrap(),
+                    OutputSpentState::Unspent
+                );
             }
         }
     });
 }
 
+// Process several blocks FIXME.
 #[test]
-fn test_straight_chain() {
+fn straight_chain() {
     common::concurrency::model(|| {
-        const COUNT_BLOCKS: usize = 255;
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
@@ -265,7 +254,7 @@ fn test_straight_chain() {
         assert_eq!(block_index.block_height(), BlockHeight::new(0));
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
-        for _ in 0..COUNT_BLOCKS {
+        for _ in 0..random::make_pseudo_rng().gen_range(100..200) {
             let prev_block_id = block_index.block_id();
             let best_block_id = chainstate
                 .chainstate_storage

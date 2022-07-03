@@ -94,11 +94,9 @@ fn spend_tx_in_the_same_block_invalid_order() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        matches!(
-            chainstate.process_block(block, BlockSource::Local),
-            Err(BlockError::StateUpdateFailed(
-                StateUpdateError::MissingOutputOrSpent
-            ))
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
         );
         assert_eq!(
             chainstate
@@ -144,13 +142,11 @@ fn double_spend_tx_in_the_same_block() {
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
         let block_id = block.get_id();
-        matches!(
-            chainstate.process_block(block, BlockSource::Local),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::DuplicateInputInBlock(id)
-                )
-            )) if id == block_id
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+            ))
         );
         assert_eq!(
             chainstate
@@ -211,11 +207,11 @@ fn double_spend_tx_in_another_block() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        matches!(
-            chainstate.process_block(second_block, BlockSource::Local),
-            Err(BlockError::StateUpdateFailed(
-                StateUpdateError::DoubleSpendAttempt(Spender::RegularInput(id))
-            )) if id == first_tx.get_id()
+        assert_eq!(
+            chainstate.process_block(second_block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::DoubleSpendAttempt(
+                Spender::RegularInput(first_tx.get_id())
+            ))
         );
         assert_eq!(
             chainstate

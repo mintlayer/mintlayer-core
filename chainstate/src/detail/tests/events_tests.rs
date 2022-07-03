@@ -130,9 +130,9 @@ fn orphan_block() {
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
         let block = produce_test_block(chainstate.chain_config.genesis_block(), true);
-        matches!(
-            chainstate.process_block(block, BlockSource::Local),
-            Err(BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan))
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
         );
         chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
@@ -165,9 +165,9 @@ fn custom_orphan_error_hook() {
         .expect(ERR_CREATE_BLOCK_FAIL);
 
         // The second block isn't processed because its parent isn't known.
-        matches!(
-            chainstate.process_block(second_block, BlockSource::Local),
-            Err(BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan))
+        assert_eq!(
+            chainstate.process_block(second_block, BlockSource::Local).unwrap_err(),
+            BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
         );
         chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
