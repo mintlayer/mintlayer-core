@@ -22,7 +22,7 @@ use crate::{
     error::{P2pError, PeerError},
     net::libp2p::{
         behaviour,
-        types::{self, Libp2pBehaviourEvent},
+        types::{self, ControlEvent, Libp2pBehaviourEvent},
     },
 };
 use futures::StreamExt;
@@ -81,6 +81,16 @@ impl Backend {
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
                         self.gossip_tx.send(event).await.map_err(P2pError::from)?;
+                    }
+                    SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
+                        ControlEvent::CloseConnection { peer_id })
+                    ) => {
+                        match self.swarm.disconnect_peer_id(peer_id) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                log::error!("Failed to disconnect peer {}: {:?}", peer_id, err);
+                            }
+                        }
                     }
                     _ => {
                         log::debug!("unhandled event {:?}", event);

@@ -53,102 +53,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-/// Events used to command the swarm
-pub enum ControlEvent {
-    /// Close the connection to peer
-    CloseConnection { peer_id: PeerId },
-}
-
-/// Events used to report swarm behaviour to front-end
-pub enum BehaviourEvent {
-    /// Inbound connection accepted
-    InboundAccepted {
-        addr: Multiaddr,
-        peer_info: Box<identify::IdentifyInfo>,
-    },
-
-    /// Outbound connection accepted
-    OutboundAccepted {
-        addr: Multiaddr,
-        peer_info: Box<identify::IdentifyInfo>,
-    },
-
-    /// Connection closed
-    ConnectionClosed { peer_id: PeerId },
-
-    /// Connection error
-    ConnectionError { addr: Multiaddr, error: P2pError },
-}
-
-/// Events emitted by the `ConnectionManager`
-pub enum ConnectionManagerEvent {
-    Behaviour(BehaviourEvent),
-    Control(ControlEvent),
-}
-
-/// State of a pending connection
-enum ConnectionState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialing,
-
-    /// Connection established for outbound connection
-    OutboundAccepted,
-
-    /// Connection established for inbound connection
-    InboundAccepted,
-
-    /// Connection is active
-    Active,
-
-    /// Connection is in the process of getting closed
-    Closing,
-}
-
-/// Entry for an established and active connections
-struct Connection {
-    /// Active address of the remote peer
-    addr: Multiaddr,
-
-    /// Connection state of the remote peer
-    state: ConnectionState,
-
-    /// `IdentifyInfo` of the remote peer
-    peer_info: Option<identify::IdentifyInfo>,
-}
-
-impl Connection {
-    pub fn new(
-        addr: Multiaddr,
-        state: ConnectionState,
-        peer_info: Option<identify::IdentifyInfo>,
-    ) -> Self {
-        Self {
-            addr,
-            state,
-            peer_info,
-        }
-    }
-
-    /// Is the connection still pending (either respose or `IdentifyInfo`)
-    pub fn is_pending(&self) -> bool {
-        std::matches!(
-            self.state,
-            ConnectionState::Dialing
-                | ConnectionState::OutboundAccepted
-                | ConnectionState::InboundAccepted
-        )
-    }
-
-    /// Is the connection in an active state
-    pub fn _is_active(&self) -> bool {
-        std::matches!(self.state, ConnectionState::Active)
-    }
-
-    /// Is the connection getting closed
-    pub fn is_closing(&self) -> bool {
-        std::matches!(self.state, ConnectionState::Closing)
-    }
-}
+pub mod types;
 
 /// Connection manager
 pub struct ConnectionManager {
@@ -156,10 +61,10 @@ pub struct ConnectionManager {
     waker: Option<Waker>,
 
     /// Set of events polled by the behviour
-    events: VecDeque<ConnectionManagerEvent>,
+    events: VecDeque<types::ConnectionManagerEvent>,
 
     /// Set of known connections
-    connections: HashMap<PeerId, Connection>,
+    connections: HashMap<PeerId, types::Connection>,
 }
 
 impl ConnectionManager {
@@ -171,7 +76,12 @@ impl ConnectionManager {
         }
     }
 
-    fn add_event(&mut self, event: ConnectionManagerEvent) {
+    /// Get a reference to connections set
+    pub fn connections(&self) -> &HashMap<PeerId, types::Connection> {
+        &self.connections
+    }
+
+    fn add_event(&mut self, event: types::ConnectionManagerEvent) {
         self.events.push_back(event);
 
         if let Some(waker) = self.waker.take() {
@@ -182,8 +92,8 @@ impl ConnectionManager {
     /// Close active connection
     pub fn handle_connection_closed(&mut self, peer_id: &PeerId) -> crate::Result<()> {
         if self.connections.remove(peer_id).is_some() {
-            self.add_event(ConnectionManagerEvent::Behaviour(
-                BehaviourEvent::ConnectionClosed { peer_id: *peer_id },
+            self.add_event(types::ConnectionManagerEvent::Behaviour(
+                types::BehaviourEvent::ConnectionClosed { peer_id: *peer_id },
             ));
             return Ok(());
         }
@@ -191,7 +101,7 @@ impl ConnectionManager {
         Err(P2pError::PeerError(PeerError::PeerDoesntExist))
     }
 
-    /// Close the connection to remote peer
+    /// Close active connection to remote peer
     ///
     /// The connection is closed by marking the connection as `Closing` and issuing
     /// a control event `Disconnect` which is captured by the `Swarm` object which
@@ -208,23 +118,9 @@ impl ConnectionManager {
                 return Ok(());
             }
 
-            connection.state = ConnectionState::Closing;
-            self.add_event(ConnectionManagerEvent::Control(
-                ControlEvent::CloseConnection { peer_id: *peer_id },
-            ));
-        }
-
-        Err(P2pError::PeerError(PeerError::PeerDoesntExist))
-    }
-
-    /// Close pending connection
-    ///
-    /// Something went wrong while the connection was being established. Destroy the entry for the
-    /// connection and notify front-end about the peer being possibly malicious.
-    fn close_pending_connection(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        if self.connections.remove(peer_id).is_some() {
-            self.add_event(ConnectionManagerEvent::Behaviour(
-                BehaviourEvent::ConnectionClosed { peer_id: *peer_id },
+            connection.set_state(types::ConnectionState::Closing);
+            self.add_event(types::ConnectionManagerEvent::Control(
+                types::ControlEvent::CloseConnection { peer_id: *peer_id },
             ));
             return Ok(());
         }
@@ -237,20 +133,22 @@ impl ConnectionManager {
     /// If the connection is known by connection manager, remove it from the set
     /// of active connections and inform front-end about it.
     fn handle_connection_refused(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        match self.connections.remove(peer_id) {
-            Some(connection) => {
-                self.add_event(ConnectionManagerEvent::Behaviour(
-                    BehaviourEvent::ConnectionError {
-                        addr: connection.addr,
+        if let Some(connection) = self.connections.remove(peer_id) {
+            if connection.is_outbound_pending() {
+                self.add_event(types::ConnectionManagerEvent::Behaviour(
+                    types::BehaviourEvent::ConnectionError {
+                        addr: connection.addr().clone(),
                         error: P2pError::DialError(DialError::IoError(
                             std::io::ErrorKind::ConnectionRefused,
                         )),
                     },
                 ));
-                Ok(())
             }
-            None => Err(P2pError::PeerError(PeerError::PeerDoesntExist)),
+
+            return Ok(());
         }
+
+        Err(P2pError::PeerError(PeerError::PeerDoesntExist))
     }
 
     /// Handle dial failure
@@ -276,48 +174,55 @@ impl ConnectionManager {
         if self.connections.get(&peer_id).is_none() {
             self.connections.insert(
                 peer_id,
-                Connection::new(addr, ConnectionState::Dialing, None),
+                types::Connection::new(addr, types::ConnectionState::Dialing, None),
             );
         }
     }
 
-    // TODO: finish this function
+    /// Register `IdentifyInfo` to the `ConnectionManager`
+    ///
+    /// Register the peer information and if the connection is in a valid state
+    /// (`InboundAccepted`/`OutboundAccepted`), relay that information to the front-end
+    /// along with the information that a new connection has been established.
     pub fn register_identify_info(
         &mut self,
         peer_id: &PeerId,
         received_info: identify::IdentifyInfo,
     ) -> crate::Result<()> {
-        let mut connection = self
+        let connection = self
             .connections
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let event = match connection.state {
-            ConnectionState::InboundAccepted => {
-                connection.peer_info = Some(received_info.clone());
-                connection.state = ConnectionState::Active;
+        let event = match connection.state() {
+            types::ConnectionState::InboundAccepted => {
+                connection.set_peer_info(Some(received_info.clone()));
+                connection.set_state(types::ConnectionState::Active);
 
-                Some(ConnectionManagerEvent::Behaviour(
-                    BehaviourEvent::InboundAccepted {
-                        addr: connection.addr.clone(),
+                Some(types::ConnectionManagerEvent::Behaviour(
+                    types::BehaviourEvent::InboundAccepted {
+                        addr: connection.addr().clone(),
                         peer_info: Box::new(received_info),
                     },
                 ))
             }
-            ConnectionState::OutboundAccepted => {
-                connection.peer_info = Some(received_info.clone());
-                connection.state = ConnectionState::Active;
+            types::ConnectionState::OutboundAccepted => {
+                connection.set_peer_info(Some(received_info.clone()));
+                connection.set_state(types::ConnectionState::Active);
 
-                Some(ConnectionManagerEvent::Behaviour(
-                    BehaviourEvent::OutboundAccepted {
-                        addr: connection.addr.clone(),
+                Some(types::ConnectionManagerEvent::Behaviour(
+                    types::BehaviourEvent::OutboundAccepted {
+                        addr: connection.addr().clone(),
                         peer_info: Box::new(received_info),
                     },
                 ))
             }
-            ConnectionState::Active => None,
-            ConnectionState::Closing => None,
-            ConnectionState::Dialing => None,
+            types::ConnectionState::Dialing => {
+                self.close_connection(peer_id)?;
+                None
+            }
+            types::ConnectionState::Active => None,
+            types::ConnectionState::Closing => None,
         };
 
         if let Some(event) = event {
@@ -329,21 +234,20 @@ impl ConnectionManager {
 
     /// Handle connection established event for dialer
     pub fn handle_dialer_connection_established(&mut self, peer_id: &PeerId) -> crate::Result<()> {
-        let mut connection = self
+        let connection = self
             .connections
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        match connection.state {
-            ConnectionState::Dialing => {
-                connection.state = ConnectionState::OutboundAccepted;
+        match connection.state() {
+            types::ConnectionState::Dialing => {
+                connection.set_state(types::ConnectionState::OutboundAccepted);
                 Ok(())
             }
-            ConnectionState::InboundAccepted | ConnectionState::OutboundAccepted => {
-                self.close_pending_connection(peer_id)
-            }
-            ConnectionState::Active => self.close_connection(peer_id),
-            ConnectionState::Closing => Ok(()),
+            types::ConnectionState::InboundAccepted
+            | types::ConnectionState::OutboundAccepted
+            | types::ConnectionState::Active => self.close_connection(peer_id),
+            types::ConnectionState::Closing => Ok(()),
         }
     }
 
@@ -353,26 +257,25 @@ impl ConnectionManager {
         peer_id: &PeerId,
         addr: Multiaddr,
     ) -> crate::Result<()> {
-        match self.connections.remove(peer_id) {
-            Some(_state) => self.close_connection(peer_id),
-            None => {
-                self.connections.insert(
-                    *peer_id,
-                    Connection::new(addr, ConnectionState::InboundAccepted, None),
-                );
-                Ok(())
-            }
+        if self.connections.contains_key(peer_id) {
+            return self.close_connection(peer_id);
         }
+
+        self.connections.insert(
+            *peer_id,
+            types::Connection::new(addr, types::ConnectionState::InboundAccepted, None),
+        );
+        Ok(())
     }
 }
 
 impl NetworkBehaviour for ConnectionManager {
     type ConnectionHandler = DummyConnectionHandler;
-    type OutEvent = ConnectionManagerEvent;
+    type OutEvent = types::ConnectionManagerEvent;
 
     fn addresses_of_peer(&mut self, peer_id: &PeerId) -> Vec<Multiaddr> {
         self.connections.get(peer_id).map_or(vec![], |connection| {
-            connection.peer_info.as_ref().map_or(vec![connection.addr.clone()], |info| {
+            connection.peer_info().as_ref().map_or(vec![connection.addr().clone()], |info| {
                 info.listen_addrs.clone()
             })
         })
@@ -485,3 +388,6 @@ impl NetworkBehaviour for ConnectionManager {
         Poll::Pending
     }
 }
+
+#[cfg(test)]
+mod tests;

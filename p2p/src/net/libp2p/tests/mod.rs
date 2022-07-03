@@ -42,8 +42,6 @@ use std::{
 use tokio::sync::mpsc;
 
 #[cfg(test)]
-mod connection;
-#[cfg(test)]
 mod frontend;
 #[cfg(test)]
 mod gossipsub;
@@ -53,6 +51,8 @@ mod identify;
 mod mdns;
 #[cfg(test)]
 mod ping;
+#[cfg(test)]
+mod swarm;
 
 #[allow(dead_code)]
 pub async fn make_libp2p(
