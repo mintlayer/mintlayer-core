@@ -168,6 +168,8 @@ impl Libp2pBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
+        // TODO: poll discovery
+
         Poll::Pending
     }
 }

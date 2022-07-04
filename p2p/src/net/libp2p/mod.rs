@@ -51,6 +51,7 @@ use utils::ensure;
 mod backend;
 mod connectivity;
 mod constants;
+mod discovery;
 mod sync;
 mod tests;
 mod types;
