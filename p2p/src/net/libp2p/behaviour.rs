@@ -22,6 +22,10 @@ use crate::{
     net::{
         self,
         libp2p::{
+            connectivity::{
+                self,
+                types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+            },
             constants::*,
             sync::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
@@ -30,7 +34,6 @@ use crate::{
 };
 use common::chain::config::ChainConfig;
 use libp2p::{
-    core::PeerId,
     gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify, identity, mdns, ping,
     request_response::*,
@@ -43,7 +46,7 @@ use libp2p::{
 use logging::log;
 use serialization::Decode;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     iter,
     num::NonZeroU32,
     sync::Arc,
@@ -62,30 +65,19 @@ pub struct Libp2pBehaviour {
     pub ping: ping::Behaviour,
     pub identify: identify::Identify,
     pub sync: RequestResponse<SyncingCodec>,
+    pub connmgr: connectivity::ConnectionManager,
 
-    /// Should mDNS events be relayed to front-end
     #[behaviour(ignore)]
     pub relay_mdns: bool,
-
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
-
     #[behaviour(ignore)]
     pub pending_reqs: HashMap<RequestId, ResponseChannel<SyncResponse>>,
-
-    // TODO: connectionmanager
-    #[behaviour(ignore)]
-    pub(super) established_conns: HashSet<PeerId>,
-
-    // TODO: connectionmanager
-    #[behaviour(ignore)]
-    pub pending_conns: HashMap<PeerId, types::PendingState>,
-
     #[behaviour(ignore)]
     pub waker: Option<Waker>,
 }
 
-type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
+pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
     <Libp2pBehaviour as Libp2pNetworkBehaviour>::OutEvent,
     <Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler,
     <<<Libp2pBehaviour as Libp2pNetworkBehaviour>::ConnectionHandler
@@ -140,11 +132,10 @@ impl Libp2pBehaviour {
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
+            connmgr: connectivity::ConnectionManager::new(),
             relay_mdns,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
-            established_conns: HashSet::new(),
-            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -185,62 +176,22 @@ impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: identify::IdentifyEvent) {
         match event {
             identify::IdentifyEvent::Error { peer_id, error } => {
-                log::error!(
-                    "libp2p-identify error occurred with connected peer ({:?}): {:?}",
-                    peer_id,
-                    error
-                );
-
-                self.add_event(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Error {
-                        peer_id,
-                        error: error.into(),
-                    },
-                ));
-            }
-            identify::IdentifyEvent::Sent { peer_id } => {
-                log::debug!("identify info sent to peer {:?}", peer_id);
-            }
-            identify::IdentifyEvent::Pushed { peer_id } => {
-                log::debug!("identify info pushed to peer {:?}", peer_id);
+                log::error!("libp2p-identify error for peer {}: {}", peer_id, error);
             }
             identify::IdentifyEvent::Received { peer_id, info } => {
-                // TODO: update swarm manager?
-                // TODO: connection manager
-                if self.established_conns.contains(&peer_id) {
-                    log::trace!("peer {:?} resent their info: {:#?}", peer_id, info);
-                    return;
+                if let Err(err) = self.connmgr.register_identify_info(&peer_id, info) {
+                    log::error!(
+                        "Failed to register `IdentifyInfo` for peer {}: {}",
+                        peer_id,
+                        err
+                    );
                 }
-
-                // TODO: implement connection manager
-                match self.pending_conns.remove(&peer_id) {
-                    None => {
-                        // TODO: report peer id to swarm manager
-                        log::error!("pending connection for peer {:?} does not exist", peer_id);
-                    }
-                    Some(types::PendingState::Dialed(_addr)) => {
-                        // TODO: report peer id to swarm manager
-                        log::error!("received peer info before connection was established");
-                    }
-                    Some(types::PendingState::OutboundAccepted(addr)) => {
-                        self.established_conns.insert(peer_id);
-                        self.add_event(Libp2pBehaviourEvent::Connectivity(
-                            ConnectivityEvent::ConnectionAccepted {
-                                addr,
-                                peer_info: Box::new(info),
-                            },
-                        ));
-                    }
-                    Some(types::PendingState::InboundAccepted(addr)) => {
-                        self.established_conns.insert(peer_id);
-                        self.add_event(Libp2pBehaviourEvent::Connectivity(
-                            ConnectivityEvent::IncomingConnection {
-                                addr,
-                                peer_info: Box::new(info),
-                            },
-                        ));
-                    }
-                }
+            }
+            identify::IdentifyEvent::Sent { peer_id } => {
+                log::trace!("identify info sent to peer {:?}", peer_id)
+            }
+            identify::IdentifyEvent::Pushed { peer_id } => {
+                log::trace!("identify info pushed to peer {:?}", peer_id)
             }
         }
     }
@@ -267,12 +218,14 @@ impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
                 result: Result::Err(ping::Failure::Timeout),
             } => {
                 log::warn!("ping timeout for peer {}", peer);
+                // TODO: add test for this
             }
             ping::Event {
                 peer,
                 result: Result::Err(ping::Failure::Unsupported),
             } => {
                 log::error!("peer {} doesn't support libp2p::ping", peer);
+                // TODO: add test for this
             }
             ping::Event {
                 peer: _,
@@ -288,11 +241,9 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
         match event {
             gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                // TODO: swarm manager??
                 log::trace!("peer {} unsubscribed from topic {:?}", peer_id, topic);
             }
             gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
-                // TODO: swarm manager??
                 log::trace!("peer {} subscribed to topic {:?}", peer_id, topic);
             }
             gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
@@ -398,12 +349,13 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                         }));
                     }
                     OutboundFailure::ConnectionClosed => {
-                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
-                            peer_id: peer,
-                            request_id,
-                            // TODO: connection manager
-                            error: net::types::RequestResponseError::ConnectionClosed,
-                        }));
+                        if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
+                            log::error!(
+                                "Failed to handle `ConnectionClosed` event for peer {}: {}",
+                                peer,
+                                err
+                            );
+                        }
                     }
                     OutboundFailure::DialFailure => {
                         log::error!("CRITICAL: syncing code tried to dial peer");
@@ -427,11 +379,13 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                         }));
                     }
                     InboundFailure::ConnectionClosed => {
-                        self.add_event(Libp2pBehaviourEvent::Syncing(types::SyncingEvent::Error {
-                            peer_id: peer,
-                            request_id,
-                            error: net::types::RequestResponseError::ConnectionClosed,
-                        }));
+                        if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
+                            log::error!(
+                                "Failed to handle `ConnectionClosed` event for peer {}: {}",
+                                peer,
+                                err
+                            );
+                        }
                     }
                     InboundFailure::ResponseOmission => {
                         log::error!("CRITICAL(??): response omitted!");
@@ -467,6 +421,40 @@ impl NetworkBehaviourEventProcess<mdns::MdnsEvent> for Libp2pBehaviour {
                     },
                 ));
             }
+        }
+    }
+}
+
+impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
+    fn inject_event(&mut self, event: ConnectionManagerEvent) {
+        match event {
+            ConnectionManagerEvent::Behaviour(event) => match event {
+                BehaviourEvent::InboundAccepted { addr, peer_info } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
+                        ConnectivityEvent::IncomingConnection { addr, peer_info },
+                    ))
+                }
+                BehaviourEvent::OutboundAccepted { addr, peer_info } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
+                        ConnectivityEvent::ConnectionAccepted { addr, peer_info },
+                    ))
+                }
+                BehaviourEvent::ConnectionClosed { peer_id } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
+                        ConnectivityEvent::ConnectionClosed { peer_id },
+                    ))
+                }
+                BehaviourEvent::ConnectionError { addr, error } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
+                        ConnectivityEvent::ConnectionError { addr, error },
+                    ))
+                }
+            },
+            ConnectionManagerEvent::Control(event) => match event {
+                ControlEvent::CloseConnection { peer_id } => self.add_event(
+                    Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
+                ),
+            },
         }
     }
 }

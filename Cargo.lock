@@ -507,7 +507,6 @@ dependencies = [
  "logging",
  "mockall",
  "num",
- "proptest",
  "replace_with",
  "rpc",
  "serde_json",
@@ -529,7 +528,6 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
- "parity-scale-codec",
  "serialization",
  "storage",
  "thiserror",
@@ -541,8 +539,6 @@ name = "chainstate-types"
 version = "0.1.0"
 dependencies = [
  "common",
- "crypto",
- "logging",
  "parity-scale-codec",
  "serialization",
 ]
@@ -656,7 +652,6 @@ dependencies = [
  "expect-test",
  "generic-array",
  "hex",
- "hex-literal",
  "itertools",
  "lazy_static",
  "logging",
@@ -2063,7 +2058,6 @@ name = "logging"
 version = "0.1.0"
 dependencies = [
  "env_logger",
- "lazy_static",
  "log",
 ]
 
@@ -2556,10 +2550,8 @@ dependencies = [
  "common",
  "crypto",
  "futures",
- "futures-timer",
  "itertools",
  "jsonrpsee",
- "lazy_static",
  "libp2p",
  "logging",
  "parity-scale-codec",
@@ -3740,7 +3732,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "logging",
- "serialization",
  "thiserror",
 ]
 

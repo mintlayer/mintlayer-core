@@ -8,10 +8,13 @@ license = "MIT"
 
 [dependencies]
 common = { path = '../common' }
-crypto = { path = '../crypto' }
 logging = { path = "../logging/" }
 serialization = { path = "../serialization" }
 
 parity-scale-codec = { version = "3.1", features = ["chain-error"] }
-itertools = "0.10"
 thiserror = "1.0"
+
+[dev-dependencies]
+crypto = { path = '../crypto' }
+
+itertools = "0.10"

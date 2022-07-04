@@ -15,231 +15,89 @@
 //
 // Author(s): A. Sinitsyn
 
-use crate::detail::tests::*;
+use crate::detail::{spend_cache::error::StateUpdateError, tests::*};
 use chainstate_storage::BlockchainStorageRead;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::{OutPointSourceId, Transaction, TxInput, TxOutput};
-use common::primitives::{time, Amount, Id};
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        OutPointSourceId, Spender, Transaction, TxInput, TxOutput,
+    },
+    primitives::{time, Amount, Id},
+};
+use crypto::random::{self, Rng};
 
+// Process a block where the second transaction uses the first one as input.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
 #[test]
-fn spend_tx_in_the_same_block() {
+fn spend_output_in_the_same_block() {
     common::concurrency::model(|| {
-        // Check is it correctly spend when the second tx pointing on the first tx
-        //
-        // Genesis -> b1
-        //
-        // +--Block----------------+
-        // |                       |
-        // | +-------tx-1--------+ |
-        // | |input = prev_block | |
-        // | +-------------------+ |
-        // |                       |
-        // | +-------tx-2--------+ |
-        // | |input = tx1        | |
-        // | +-------------------+ |
-        // +-----------------------+
-        {
-            let mut chainstate = setup_chainstate();
-            // Create base tx
-            let receiver = anyonecanspend_address();
-
-            let prev_block_tx_id = chainstate
-                .chain_config
-                .genesis_block()
-                .transactions()
-                .get(0)
-                .expect("Transaction not found")
-                .get_id();
-
-            let input = TxInput::new(
-                OutPointSourceId::Transaction(prev_block_tx_id),
-                0,
-                empty_witness(),
-            );
-            let output = TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(12345678912345)),
-                OutputPurpose::Transfer(receiver.clone()),
-            );
-
-            let first_tx =
-                Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
-            let first_tx_id = first_tx.get_id();
-
-            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
-            let output = TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(987654321)),
-                OutputPurpose::Transfer(receiver),
-            );
-            let second_tx =
-                Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
-            // Create tx that pointing to the previous tx
-            let block = Block::new(
-                vec![first_tx, second_tx],
-                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
-                ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            let block_id = block.get_id();
-
-            assert!(chainstate.process_block(block, BlockSource::Local).is_ok());
-            assert_eq!(
-                chainstate
-                    .chainstate_storage
-                    .get_best_block_id()
-                    .expect(ERR_BEST_BLOCK_NOT_FOUND),
-                Some(block_id)
-            );
-        }
-        // The case is invalid. Transactions must in order.
-        //
-        // Genesis -> b1
-        //
-        // +--Block----------------+
-        // |                       |
-        // | +-------tx-1--------+ |
-        // | |input = tx2        | |
-        // | +-------------------+ |
-        // |                       |
-        // | +-------tx-2--------+ |
-        // | |input = prev_block | |
-        // | +-------------------+ |
-        // +-----------------------+
-        {
-            let mut chainstate = setup_chainstate();
-            // Create base tx
-            let receiver = anyonecanspend_address();
-
-            let prev_block_tx_id =
-                chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
-
-            let input = TxInput::new(
-                OutPointSourceId::Transaction(prev_block_tx_id),
-                0,
-                empty_witness(),
-            );
-            let output = TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(12345678912345)),
-                OutputPurpose::Transfer(receiver.clone()),
-            );
-
-            let first_tx =
-                Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
-            let first_tx_id = first_tx.get_id();
-
-            let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
-            let output = TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(987654321)),
-                OutputPurpose::Transfer(receiver),
-            );
-            let second_tx =
-                Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL);
-            // Create tx that pointing to the previous tx
-            let block = Block::new(
-                vec![second_tx, first_tx],
-                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
-                ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-
-            assert!(chainstate.process_block(block, BlockSource::Local).is_err());
-            assert_eq!(
-                chainstate
-                    .chainstate_storage
-                    .get_best_block_id()
-                    .expect(ERR_BEST_BLOCK_NOT_FOUND)
-                    .expect(ERR_STORAGE_FAIL),
-                chainstate.chain_config.genesis_block_id()
-            );
-        }
-    });
-}
-
-#[test]
-#[allow(clippy::eq_op)]
-fn double_spend_tx_in_the_same_block() {
-    common::concurrency::model(|| {
-        // Check is it correctly spend when a couple of transactions pointing on one output
-        //
-        // Genesis -> b1
-        //
-        // +--Block----------------+
-        // |                       |
-        // | +-------tx-1--------+ |
-        // | |input = prev_block | |
-        // | +-------------------+ |
-        // |                       |
-        // | +-------tx-2--------+ |
-        // | |input = tx1        | |
-        // | +-------------------+ |
-        // |                       |
-        // | +-------tx-3--------+ |
-        // | |input = tx1        | |
-        // | +-------------------+ |
-        // +-----------------------+
-
         let mut chainstate = setup_chainstate();
-        let receiver = anyonecanspend_address();
 
-        let prev_block_tx_id =
-            chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+        let first_tx = tx_from_genesis(&chainstate);
+        let second_tx = tx_from_tx(&first_tx);
 
-        // Create first tx
-        let first_tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block_tx_id),
-                0,
-                empty_witness(),
-            )],
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(12345678912345)),
-                OutputPurpose::Transfer(receiver.clone()),
-            )],
-            0,
-        )
-        .expect(ERR_CREATE_TX_FAIL);
-        let first_tx_id = first_tx.get_id();
-
-        // Create second tx
-        let second_tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                first_tx_id.clone().into(),
-                0,
-                InputWitness::NoSignature(None),
-            )],
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(987654321)),
-                OutputPurpose::Transfer(receiver.clone()),
-            )],
-            0,
-        )
-        .expect(ERR_CREATE_TX_FAIL);
-
-        // Create third tx
-        let third_tx = Transaction::new(
-            123456789,
-            vec![TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None))],
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(987654321)),
-                OutputPurpose::Transfer(receiver),
-            )],
-            0,
-        )
-        .expect(ERR_CREATE_TX_FAIL);
-
-        // Create tx that pointing to the previous tx
         let block = Block::new(
-            vec![first_tx, second_tx, third_tx],
+            vec![first_tx, second_tx],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert!(chainstate.process_block(block, BlockSource::Local).is_err());
+        let block_id = block.get_id();
+
+        chainstate.process_block(block, BlockSource::Local).unwrap();
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            Some(block_id)
+        );
+    });
+}
+
+// The order of transactions is important, so in the following case block processing should result
+// in an error.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = tx2        | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// +-----------------------+
+#[test]
+fn spend_output_in_the_same_block_invalid_order() {
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+
+        let first_tx = tx_from_genesis(&chainstate);
+        let second_tx = tx_from_tx(&first_tx);
+
+        let block = Block::new(
+            vec![second_tx, first_tx],
+            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            ConsensusData::None,
+        )
+        .expect(ERR_CREATE_BLOCK_FAIL);
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
+        );
         assert_eq!(
             chainstate
                 .chainstate_storage
@@ -251,52 +109,81 @@ fn double_spend_tx_in_the_same_block() {
     });
 }
 
+// Try to use the transaction output twice in one block.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-3--------+ |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
+#[test]
+fn double_spend_tx_in_the_same_block() {
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+
+        let first_tx = tx_from_genesis(&chainstate);
+        let second_tx = tx_from_tx(&first_tx);
+        let third_tx = tx_from_tx(&first_tx);
+
+        let block = Block::new(
+            vec![first_tx, second_tx, third_tx],
+            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            ConsensusData::None,
+        )
+        .expect(ERR_CREATE_BLOCK_FAIL);
+        let block_id = block.get_id();
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
+            ))
+        );
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_STORAGE_FAIL)
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            chainstate.chain_config.genesis_block_id()
+        );
+    });
+}
+
+// Try to use an output twice in different blocks.
+//
+// Genesis -> b1 -> b2.
+//
+// +--Block-1--------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = genesis    | |
+// | +-------------------+ |
+// +-----------------------+
+//
+// +--Block-2--------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = genesis    | |
+// | +-------------------+ |
+// +-----------------------+
 #[test]
 fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
-        // Different blocks in the same chain attempt to spend the same output
-        //
-        // Genesis -> b1 -> b2
-        //
-        // +--Block-1--------------+
-        // |                       |
-        // | +-------tx-1--------+ |
-        // | |input = genesis    | |
-        // | +-------------------+ |
-        // +-----------------------+
-        //
-        // +--Block-2--------------+
-        // |                       |
-        // | +-------tx-1--------+ |
-        // | |input = genesis    | |
-        // | +-------------------+ |
-        // +-----------------------+
-
         let mut chainstate = setup_chainstate();
-        let receiver = anyonecanspend_address();
 
-        let prev_block_tx_id =
-            chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
-
-        // Create first tx
-        let first_tx = Transaction::new(
-            0,
-            vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block_tx_id.clone()),
-                0,
-                empty_witness(),
-            )],
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(12345678912345)),
-                OutputPurpose::Transfer(receiver.clone()),
-            )],
-            0,
-        )
-        .expect(ERR_CREATE_TX_FAIL);
-
-        // Create tx that pointing to the previous tx
+        let first_tx = tx_from_genesis(&chainstate);
         let first_block = Block::new(
-            vec![first_tx],
+            vec![first_tx.clone()],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
@@ -311,23 +198,8 @@ fn double_spend_tx_in_another_block() {
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(first_block_id.clone())
         );
-        // Create second tx
-        let second_tx = Transaction::new(
-            12345,
-            vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block_tx_id),
-                0,
-                empty_witness(),
-            )],
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(12345678912345)),
-                OutputPurpose::Transfer(receiver),
-            )],
-            0,
-        )
-        .expect(ERR_CREATE_TX_FAIL);
 
-        // Create tx that pointing to the previous tx
+        let second_tx = tx_from_genesis(&chainstate);
         let second_block = Block::new(
             vec![second_tx],
             Some(first_block_id.clone()),
@@ -335,14 +207,45 @@ fn double_spend_tx_in_another_block() {
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
-        assert!(chainstate.process_block(second_block, BlockSource::Local).is_err());
+        assert_eq!(
+            chainstate.process_block(second_block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::DoubleSpendAttempt(
+                Spender::RegularInput(first_tx.get_id())
+            ))
+        );
         assert_eq!(
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND)
-                .expect(ERR_STORAGE_FAIL),
+                .expect(ERR_STORAGE_FAIL)
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
             first_block_id
         );
     });
+}
+
+// Creates a transaction with an input based on the first transaction from the genesis block.
+fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
+    let genesis_block_tx_id =
+        chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+    let input = TxInput::new(
+        OutPointSourceId::Transaction(genesis_block_tx_id),
+        0,
+        empty_witness(),
+    );
+    let output = TxOutput::new(
+        Amount::from_atoms(random::make_pseudo_rng().gen_range(100_000..200_000)),
+        OutputPurpose::Transfer(anyonecanspend_address()),
+    );
+    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
+}
+
+// Creates a transaction with an input based on the specified transaction id.
+fn tx_from_tx(tx: &Transaction) -> Transaction {
+    let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
+    let output = TxOutput::new(
+        Amount::from_atoms(random::make_pseudo_rng().gen_range(1000..2000)),
+        OutputPurpose::Transfer(anyonecanspend_address()),
+    );
+    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
 }
