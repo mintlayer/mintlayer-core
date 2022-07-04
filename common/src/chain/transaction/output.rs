@@ -1,4 +1,4 @@
-use crate::{address::pubkeyhash::PublicKeyHash, primitives::Id, chain::tokens::OutputValue};
+use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, primitives::Id};
 use script::Script;
 use serialization::{Decode, Encode};
 

@@ -57,7 +57,9 @@ impl From<Error> for utxo::Error {
 mod test {
     use super::*;
     use crate::store::test::create_rand_block_undo;
-    use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput, OutputValue};
+    use common::chain::{
+        Destination, OutPoint, OutPointSourceId, OutputPurpose, OutputValue, TxOutput,
+    };
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};

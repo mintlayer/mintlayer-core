@@ -396,7 +396,7 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 #[cfg(test)]
 pub(crate) mod test {
     use super::*;
-    use common::chain::{Destination, OutputPurpose, TxOutput, OutputValue};
+    use common::chain::{Destination, OutputPurpose, OutputValue, TxOutput};
     use common::primitives::{Amount, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
