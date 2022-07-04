@@ -32,6 +32,8 @@ pub enum TestSpentStatus {
     NotInMainchain,
 }
 
+// TODO: See https://github.com/mintlayer/mintlayer-core/issues/274 for details.
+#[allow(dead_code)]
 pub enum TestBlockParams {
     NoErrors,
     TxCount(usize),

@@ -217,22 +217,19 @@ fn spend_inputs_simple() {
     });
 }
 
-// Process several blocks FIXME.
+// Produce and process some blocks.
 #[test]
 fn straight_chain() {
     common::concurrency::model(|| {
-        // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
             Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
-        // process the genesis block
-        let block_source = BlockSource::Local;
-        let mut block_index = chainstate
+        let genesis_index = chainstate
             .process_block(
                 chainstate.chain_config.genesis_block().clone(),
-                block_source,
+                BlockSource::Local,
             )
             .ok()
             .flatten()
@@ -245,51 +242,66 @@ fn straight_chain() {
             Some(chainstate.chain_config.genesis_block_id())
         );
         assert_eq!(
-            block_index.block_id(),
+            genesis_index.block_id(),
             &chainstate.chain_config.genesis_block_id()
         );
-        assert_eq!(block_index.prev_block_id(), &None);
-        // TODO: ensure that block at height is tested after removing the next
-        assert_eq!(block_index.chain_trust(), &Uint256::from_u64(1));
-        assert_eq!(block_index.block_height(), BlockHeight::new(0));
+        assert_eq!(genesis_index.prev_block_id(), &None);
+        assert_eq!(genesis_index.chain_trust(), &Uint256::from_u64(1));
+        assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
+        let mut prev_block_index = genesis_index;
         for _ in 0..random::make_pseudo_rng().gen_range(100..200) {
-            let prev_block_id = block_index.block_id();
-            let best_block_id = chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .ok()
-                .flatten()
-                .expect("Unable to get best block ID");
-            assert_eq!(&best_block_id, block_index.block_id());
-            let block_source = BlockSource::Peer;
+            assert_eq!(
+                chainstate.chainstate_storage.get_best_block_id().ok().flatten().unwrap(),
+                prev_block.get_id()
+            );
+
             let new_block = produce_test_block(&prev_block, false);
-            let new_block_index = dbg!(chainstate.process_block(new_block.clone(), block_source))
+            let new_block_index = chainstate
+                .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
                 .flatten()
                 .expect("Unable to process block");
 
-            // TODO: ensure that block at height is tested after removing the next
-            assert_eq!(
-                new_block_index.prev_block_id().as_ref(),
-                Some(prev_block_id)
-            );
-            assert!(new_block_index.chain_trust() > block_index.chain_trust());
+            assert_eq!(new_block_index.prev_block_id(), &Some(prev_block.get_id()));
+            assert!(new_block_index.chain_trust() > prev_block_index.chain_trust());
             assert_eq!(
                 new_block_index.block_height(),
-                block_index.block_height().next_height()
+                prev_block_index.block_height().next_height()
             );
 
-            block_index = new_block_index;
+            prev_block_index = new_block_index;
             prev_block = new_block;
         }
     });
 }
 
 #[test]
-fn test_get_ancestor() {
-    use crate::detail::tests::test_framework::BlockTestFramework;
+fn get_ancestor_invalid_height() {
+    let mut btf = BlockTestFramework::new();
+    let height = 1;
+    btf.create_chain(&btf.genesis().get_id(), height).unwrap();
+    let last_block_index = btf.block_indexes.last().expect("last block in first chain").clone();
+
+    let invalid_height = height + 1;
+    assert_eq!(
+        PropertyQueryError::InvalidAncestorHeight {
+            ancestor_height: u64::try_from(invalid_height).unwrap().into(),
+            block_height: u64::try_from(height).unwrap().into(),
+        },
+        btf.chainstate
+            .make_db_tx()
+            .get_ancestor(
+                &last_block_index,
+                u64::try_from(invalid_height).unwrap().into()
+            )
+            .unwrap_err()
+    );
+}
+
+#[test]
+fn get_ancestor() {
     let mut btf = BlockTestFramework::new();
 
     // We will create two chains that split at height 100
@@ -380,33 +392,18 @@ fn test_get_ancestor() {
             .expect("ancestor")
             .block_id()
     );
-
-    assert_eq!(
-        PropertyQueryError::InvalidAncestorHeight {
-            ancestor_height: u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into(),
-            block_height: u64::try_from(SECOND_CHAIN_LENGTH).unwrap().into(),
-        },
-        btf.chainstate
-            .make_db_tx()
-            .get_ancestor(
-                &last_block_in_second_chain,
-                u64::try_from(SECOND_CHAIN_LENGTH + 1).unwrap().into()
-            )
-            .unwrap_err()
-    );
 }
 
+// Create two chains that split at height 100.
 #[test]
-fn test_last_common_ancestor() {
-    use crate::detail::tests::test_framework::BlockTestFramework;
+fn last_common_ancestor() {
     let mut btf = BlockTestFramework::new();
 
-    // We will create two chains that split at height 100
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;
     const SECOND_CHAIN_LENGTH: usize = 300;
-    btf.create_chain(&btf.genesis().get_id(), SPLIT_HEIGHT)
-        .expect("Chain creation to succeed");
+
+    btf.create_chain(&btf.genesis().get_id(), SPLIT_HEIGHT).unwrap();
     let genesis = btf.block_indexes.get(0).expect("genesis_block").clone();
     let split = btf.block_indexes[SPLIT_HEIGHT].clone();
 
@@ -460,12 +457,7 @@ fn test_last_common_ancestor() {
 }
 
 #[test]
-fn test_consensus_type() {
-    use common::chain::ConsensusUpgrade;
-    use common::chain::NetUpgrades;
-    use common::chain::UpgradeVersion;
-    use common::Uint256;
-
+fn consensus_type() {
     let ignore_consensus = BlockHeight::new(0);
     let pow = BlockHeight::new(5);
     let ignore_again = BlockHeight::new(10);
@@ -508,7 +500,7 @@ fn test_consensus_type() {
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
-    // The next block will have height 1. At this height, we are still under IngoreConsenssu, so
+    // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
     let pow_block = produce_test_block_with_consensus_data(
         btf.genesis(),
@@ -614,26 +606,8 @@ fn test_consensus_type() {
     }
 }
 
-fn make_invalid_pow_block(
-    block: &mut Block,
-    max_nonce: u128,
-    bits: Compact,
-) -> Result<bool, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0, vec![]);
-    for nonce in 0..max_nonce {
-        data.update_nonce(nonce);
-        block.update_consensus_data(ConsensusData::PoW(data.clone()));
-
-        if !crate::detail::pow::work::check_proof_of_work(block.get_id().get(), bits)? {
-            return Ok(true);
-        }
-    }
-
-    Ok(false)
-}
-
 #[test]
-fn test_pow() {
+fn pow() {
     let ignore_consensus = BlockHeight::new(0);
     let pow_consensus = BlockHeight::new(1);
     let difficulty =
@@ -700,7 +674,7 @@ fn test_pow() {
 }
 
 #[test]
-fn test_blocks_from_the_future() {
+fn blocks_from_the_future() {
     common::concurrency::model(|| {
         // In this test, processing a few correct blocks in a single chain
         let config = Arc::new(create_unit_test_config());
@@ -797,5 +771,23 @@ fn test_blocks_from_the_future() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    let _chainstate = make_chainstate(config, storage, None, Default::default()).unwrap();
+    make_chainstate(config, storage, None, Default::default()).unwrap();
+}
+
+fn make_invalid_pow_block(
+    block: &mut Block,
+    max_nonce: u128,
+    bits: Compact,
+) -> Result<bool, ConsensusPoWError> {
+    let mut data = PoWData::new(bits, 0, vec![]);
+    for nonce in 0..max_nonce {
+        data.update_nonce(nonce);
+        block.update_consensus_data(ConsensusData::PoW(data.clone()));
+
+        if !crate::detail::pow::work::check_proof_of_work(block.get_id().get(), bits)? {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
