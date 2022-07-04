@@ -6,7 +6,7 @@ use serialization::{Decode, Encode};
 use crate::random::make_true_rng;
 pub use signature::Signature;
 
-use self::rschnorr::RistrittoSignatureError;
+use self::rschnorr::RistrettoSignatureError;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub enum SignatureError {
@@ -40,10 +40,10 @@ pub(crate) enum PublicKeyHolder {
     RistrettoSchnorr(rschnorr::MLRistrettoPublicKey),
 }
 
-impl From<RistrittoSignatureError> for SignatureError {
-    fn from(e: RistrittoSignatureError) -> Self {
+impl From<RistrettoSignatureError> for SignatureError {
+    fn from(e: RistrettoSignatureError) -> Self {
         match e {
-            RistrittoSignatureError::ByteConversionError(s) => {
+            RistrettoSignatureError::ByteConversionError(s) => {
                 SignatureError::DataConversionError(s)
             }
         }
