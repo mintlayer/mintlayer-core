@@ -28,7 +28,7 @@ pub(in crate::detail::tests) struct BlockTestFramework {
     pub block_indexes: Vec<BlockIndex>,
 }
 
-impl<'a> BlockTestFramework {
+impl BlockTestFramework {
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
         let genesis_index = chainstate
             .chainstate_storage
@@ -183,7 +183,7 @@ impl<'a> BlockTestFramework {
             for (output_index, output) in tx.outputs().iter().enumerate() {
                 let spent_status = self.get_spent_status(&tx.get_id(), output_index as u32);
                 println!("\t+Output: {}", output_index);
-                println!("\t\t+Value: {}", output.value().into_atoms());
+                println!("\t\t+Value: {:?}", output.value());
                 match spent_status {
                     Some(OutputSpentState::Unspent) => println!("\t\t+Spend: Unspent"),
                     Some(OutputSpentState::SpentBy(spender)) => {

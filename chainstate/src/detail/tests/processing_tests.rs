@@ -566,7 +566,7 @@ fn test_consensus_type() {
             u128::MAX,
             bits,
             vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key))
             )]
         )
@@ -618,7 +618,7 @@ fn test_consensus_type() {
             u128::MAX,
             bits,
             vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key))
             )]
         )
@@ -704,7 +704,7 @@ fn test_pow() {
         u128::MAX,
         bits,
         vec![TxOutput::new(
-            Amount::from_atoms(10),
+            OutputValue::Coin(Amount::from_atoms(10)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key))
         )]
     )

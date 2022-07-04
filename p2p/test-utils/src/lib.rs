@@ -24,7 +24,7 @@ use common::{
         config::ChainConfig,
         signature::inputsig::InputWitness,
         transaction::Transaction,
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, OutputValue, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
@@ -68,7 +68,11 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    if output.value() > Amount::from_atoms(1) {
+    let output_value = match output.value() {
+        OutputValue::Coin(coin) => *coin,
+        OutputValue::Asset(_) => return None,
+    };
+    if output_value > Amount::from_atoms(1) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -76,7 +80,7 @@ fn create_utxo_data(
                 nosig_random_witness(),
             ),
             TxOutput::new(
-                (output.value() - Amount::from_atoms(1)).unwrap(),
+                OutputValue::Coin((output_value - Amount::from_atoms(1)).unwrap()),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))

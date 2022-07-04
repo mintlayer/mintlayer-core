@@ -56,6 +56,7 @@ mockall::mock! {
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
     }
 
+    #[allow(clippy::extra_unused_lifetimes)]
     impl<'tx> crate::Transactional<'tx> for Store {
         type TransactionRo = MockStoreTxRo;
         type TransactionRw = MockStoreTxRw;

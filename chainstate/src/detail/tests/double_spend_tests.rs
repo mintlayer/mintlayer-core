@@ -58,7 +58,7 @@ fn spend_tx_in_the_same_block() {
                 empty_witness(),
             );
             let output = TxOutput::new(
-                Amount::from_atoms(12345678912345),
+                OutputValue::Coin(Amount::from_atoms(12345678912345)),
                 OutputPurpose::Transfer(receiver.clone()),
             );
 
@@ -68,7 +68,7 @@ fn spend_tx_in_the_same_block() {
 
             let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(
-                Amount::from_atoms(987654321),
+                OutputValue::Coin(Amount::from_atoms(987654321)),
                 OutputPurpose::Transfer(receiver),
             );
             let second_tx =
@@ -120,7 +120,7 @@ fn spend_tx_in_the_same_block() {
                 empty_witness(),
             );
             let output = TxOutput::new(
-                Amount::from_atoms(12345678912345),
+                OutputValue::Coin(Amount::from_atoms(12345678912345)),
                 OutputPurpose::Transfer(receiver.clone()),
             );
 
@@ -130,7 +130,7 @@ fn spend_tx_in_the_same_block() {
 
             let input = TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None));
             let output = TxOutput::new(
-                Amount::from_atoms(987654321),
+                OutputValue::Coin(Amount::from_atoms(987654321)),
                 OutputPurpose::Transfer(receiver),
             );
             let second_tx =
@@ -195,7 +195,7 @@ fn double_spend_tx_in_the_same_block() {
                 empty_witness(),
             )],
             vec![TxOutput::new(
-                Amount::from_atoms(12345678912345),
+                OutputValue::Coin(Amount::from_atoms(12345678912345)),
                 OutputPurpose::Transfer(receiver.clone()),
             )],
             0,
@@ -212,7 +212,7 @@ fn double_spend_tx_in_the_same_block() {
                 InputWitness::NoSignature(None),
             )],
             vec![TxOutput::new(
-                Amount::from_atoms(987654321),
+                OutputValue::Coin(Amount::from_atoms(987654321)),
                 OutputPurpose::Transfer(receiver.clone()),
             )],
             0,
@@ -224,7 +224,7 @@ fn double_spend_tx_in_the_same_block() {
             123456789,
             vec![TxInput::new(first_tx_id.into(), 0, InputWitness::NoSignature(None))],
             vec![TxOutput::new(
-                Amount::from_atoms(987654321),
+                OutputValue::Coin(Amount::from_atoms(987654321)),
                 OutputPurpose::Transfer(receiver),
             )],
             0,
@@ -287,7 +287,7 @@ fn double_spend_tx_in_another_block() {
                 empty_witness(),
             )],
             vec![TxOutput::new(
-                Amount::from_atoms(12345678912345),
+                OutputValue::Coin(Amount::from_atoms(12345678912345)),
                 OutputPurpose::Transfer(receiver.clone()),
             )],
             0,
@@ -320,7 +320,7 @@ fn double_spend_tx_in_another_block() {
                 empty_witness(),
             )],
             vec![TxOutput::new(
-                Amount::from_atoms(12345678912345),
+                OutputValue::Coin(Amount::from_atoms(12345678912345)),
                 OutputPurpose::Transfer(receiver),
             )],
             0,

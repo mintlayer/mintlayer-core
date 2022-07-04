@@ -22,7 +22,9 @@ use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::{create_regtest, create_unit_test_config};
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput};
+use common::chain::{
+    Destination, OutPointSourceId, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
+};
 use common::primitives::{time, H256};
 use common::primitives::{Amount, Id};
 use common::Uint256;
@@ -69,7 +71,7 @@ pub(in crate::detail::tests) enum TestSpentStatus {
     NotInMainchain,
 }
 
-fn empty_witness() -> InputWitness {
+pub fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
     let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(&mut rng);
@@ -86,8 +88,11 @@ fn create_utxo_data(
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
     let mut rng = crypto::random::make_pseudo_rng();
-    let spent_value = rng.gen_range(0..output.value().into_atoms());
-    if output.value() > Amount::from_atoms(spent_value) {
+    let (output_value, spent_value) = match output.value() {
+        OutputValue::Coin(coin) => (*coin, rng.gen_range(0..coin.into_atoms())),
+        OutputValue::Asset(_) => return None,
+    };
+    if output_value > Amount::from_atoms(spent_value) {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -95,7 +100,7 @@ fn create_utxo_data(
                 empty_witness(),
             ),
             TxOutput::new(
-                (output.value() - Amount::from_atoms(spent_value)).unwrap(),
+                OutputValue::Coin((output_value - Amount::from_atoms(spent_value)).unwrap()),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
