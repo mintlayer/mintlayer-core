@@ -43,7 +43,7 @@ pub struct SchnorrkelPrivateKey {
 }
 
 impl SchnorrkelPrivateKey {
-    #[must_use]
+    #[allow(dead_code)]
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
         let sk = schnorrkel::SecretKey::generate_with(rng);
         let pk = sk.to_public();
@@ -123,12 +123,12 @@ mod tests {
         let out1 = &io1.to_preout();
         assert_eq!(
             proof1,
-            proof1batchable.shorten_vrf(&keypair1.public, ctx.bytes(msg), &out1).unwrap(),
+            proof1batchable.shorten_vrf(&keypair1.public, ctx.bytes(msg), out1).unwrap(),
             "Oops `shorten_vrf` failed"
         );
         let (io1too, proof1too) = keypair1
             .public
-            .vrf_verify(ctx.bytes(msg), &out1, &proof1)
+            .vrf_verify(ctx.bytes(msg), out1, &proof1)
             .expect("Correct VRF verification failed!");
         assert_eq!(
             io1too, io1,
@@ -145,13 +145,13 @@ mod tests {
         );
 
         assert!(
-            keypair1.public.vrf_verify(ctx.bytes(b"not meow"), &out1, &proof1).is_err(),
+            keypair1.public.vrf_verify(ctx.bytes(b"not meow"), out1, &proof1).is_err(),
             "VRF verification with incorrect message passed!"
         );
 
         let keypair2 = Keypair::generate_with(&mut csprng);
         assert!(
-            keypair2.public.vrf_verify(ctx.bytes(msg), &out1, &proof1).is_err(),
+            keypair2.public.vrf_verify(ctx.bytes(msg), out1, &proof1).is_err(),
             "VRF verification with incorrect signer passed!"
         );
     }
