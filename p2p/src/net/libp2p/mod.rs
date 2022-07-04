@@ -408,8 +408,8 @@ impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
     T: NetworkingService<PeerId = PeerId, MessageId = MessageId> + Send,
 {
-    async fn publish(&mut self, message: message::Message) -> crate::Result<()> {
-        let encoded = message.encode();
+    async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()> {
+        let encoded = announcement.encode();
         ensure!(
             encoded.len() <= constants::GOSSIPSUB_MAX_TRANSMIT_SIZE,
             P2pError::PublishError(PublishError::MessageTooLarge(
@@ -418,13 +418,10 @@ where
             ))
         );
 
-        // TODO: add support for transactions in the future
-        let topic =
-            if let message::MessageType::PubSub(message::PubSubMessage::Block(_)) = message.msg {
-                net::types::PubSubTopic::Blocks
-            } else {
-                return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
-            };
+        // TODO: transactions
+        let topic = match &announcement {
+            message::Announcement::Block(_) => net::types::PubSubTopic::Blocks,
+        };
 
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
@@ -474,14 +471,14 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<PubSubEvent<T>> {
         match self.gossip_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::PubSubEvent::MessageReceived {
+            types::PubSubEvent::Announcement {
                 peer_id,
-                message,
                 message_id,
-            } => Ok(PubSubEvent::MessageReceived {
+                announcement,
+            } => Ok(PubSubEvent::Announcement {
                 peer_id,
-                message,
                 message_id,
+                announcement,
             }),
         }
     }
@@ -495,13 +492,13 @@ where
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        message: message::Message,
+        request: message::Request,
     ) -> crate::Result<T::RequestId> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendRequest {
                 peer_id,
-                request: Box::new(SyncRequest::new(message.encode())),
+                request: Box::new(SyncRequest::new(request.encode())),
                 response: tx,
             })
             .await?;
@@ -513,13 +510,13 @@ where
     async fn send_response(
         &mut self,
         request_id: T::RequestId,
-        message: message::Message,
+        response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendResponse {
                 request_id,
-                response: Box::new(SyncResponse::new(message.encode())),
+                response: Box::new(SyncResponse::new(response.encode())),
                 channel: tx,
             })
             .await?;
@@ -535,12 +532,9 @@ where
                 request_id,
                 request,
             } => {
-                let request = message::Message::decode(&mut &(*request)[..]).map_err(|err| {
-                    log::error!(
-                        "invalid request received from peer {:?}: {:?}",
-                        peer_id,
-                        err
-                    );
+                // TODO: decode  on libp2p side!
+                let request = message::Request::decode(&mut &(*request)[..]).map_err(|err| {
+                    log::error!("invalid request received from peer {}: {}", peer_id, err);
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 
@@ -555,12 +549,9 @@ where
                 request_id,
                 response,
             } => {
-                let response = message::Message::decode(&mut &(*response)[..]).map_err(|err| {
-                    log::error!(
-                        "invalid response received from peer {:?}: {:?}",
-                        peer_id,
-                        err
-                    );
+                // TODO: decode  on libp2p side!
+                let response = message::Response::decode(&mut &(*response)[..]).map_err(|err| {
+                    log::error!("invalid response received from peer {}: {}", peer_id, err);
                     P2pError::ProtocolError(ProtocolError::InvalidMessage)
                 })?;
 

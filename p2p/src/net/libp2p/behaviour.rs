@@ -317,7 +317,7 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                     propagation_source
                 );
 
-                let message = match message::Message::decode(&mut &message.data[..]) {
+                let announcement = match message::Announcement::decode(&mut &message.data[..]) {
                     Ok(data) => data,
                     Err(_) => {
                         log::warn!(
@@ -335,10 +335,10 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                     }
                 };
 
-                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::MessageReceived {
+                self.add_event(Libp2pBehaviourEvent::PubSub(PubSubEvent::Announcement {
                     peer_id: propagation_source,
-                    message,
                     message_id,
+                    announcement,
                 }));
             }
         }

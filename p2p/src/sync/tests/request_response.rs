@@ -15,6 +15,8 @@
 //
 // Author(s): A. Altonen
 use super::*;
+use crate::message::*;
+use std::collections::HashSet;
 
 #[tokio::test]
 async fn test_request_response() {
@@ -29,12 +31,7 @@ async fn test_request_response() {
     mgr1.handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
@@ -45,25 +42,12 @@ async fn test_request_response() {
         request,
     }) = mgr2.handle.poll_next().await
     {
-        assert_eq!(
-            request,
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![]
-                }))
-            }
-        );
+        assert_eq!(request, Request::HeaderRequest(HeaderRequest::new(vec![])),);
 
         mgr2.handle
             .send_response(
                 request_id,
-                Message {
-                    magic: [5, 6, 7, 8],
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers: vec![],
-                    })),
-                },
+                Response::HeaderResponse(HeaderResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -81,95 +65,63 @@ async fn test_multiple_requests_and_responses() {
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    let mut request_ids = HashSet::new();
 
-    mgr1.handle
+    let id = mgr1
+        .handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [1, 2, 3, 4],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
+    request_ids.insert(id);
 
-    mgr1.handle
+    let id = mgr1
+        .handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
+    request_ids.insert(id);
+
+    assert_eq!(request_ids.len(), 2);
 
     for _ in 0..2 {
         if let Ok(net::types::SyncingEvent::Request {
             peer_id: _,
             request_id,
-            request,
+            request: _,
         }) = mgr2.handle.poll_next().await
         {
-            if let Message {
-                magic,
-                msg:
-                    MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                        locator: _,
-                    })),
-            } = request
-            {
-                mgr2.handle
-                    .send_response(
-                        request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers: vec![] },
-                            )),
-                        },
-                    )
-                    .await
-                    .unwrap();
-            }
+            mgr2.handle
+                .send_response(
+                    request_id,
+                    Response::HeaderResponse(HeaderResponse::new(vec![])),
+                )
+                .await
+                .unwrap();
         } else {
             panic!("invalid data received");
         }
     }
 
-    let mut magic_seen = 0;
     for _ in 0..2 {
         if let Ok(net::types::SyncingEvent::Response {
             peer_id: _,
-            request_id: _,
-            response,
+            request_id,
+            response: _,
         }) = mgr1.handle.poll_next().await
         {
-            if let Message {
-                magic,
-                msg:
-                    MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers: _,
-                    })),
-            } = response
-            {
-                if magic == [1, 2, 3, 4] {
-                    magic_seen += 1;
-                } else {
-                    assert_eq!(magic, [5, 6, 7, 8]);
-                    magic_seen += 1;
-                }
-            }
+            request_ids.remove(&request_id);
         } else {
             panic!("invalid data received");
         }
     }
 
-    assert_eq!(magic_seen, 2);
+    assert!(request_ids.is_empty());
 }
 
 // receive getheaders before receiving `Connected` event from swarm manager
@@ -250,14 +202,10 @@ async fn request_timeout() {
         assert_eq!(rx.await, Ok(()));
     });
 
-    for _ in 0..4 {
+    for _ in 0..8 {
         assert!(std::matches!(
             mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. })
-        ));
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Error { .. })
+            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
         ));
     }
 }

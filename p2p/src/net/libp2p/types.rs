@@ -133,13 +133,10 @@ pub enum ConnectivityEvent {
 
 #[derive(Debug, Clone)]
 pub enum PubSubEvent {
-    // TODO: rethink this event
-    // TODO: box?
-    // Message received from one of the PubSub topics
-    MessageReceived {
+    Announcement {
         peer_id: PeerId,
         message_id: MessageId,
-        message: message::Message,
+        announcement: message::Announcement,
     },
 }
 
