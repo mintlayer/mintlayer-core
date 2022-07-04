@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
     chain::{block::Block, config::ChainConfig},
@@ -23,7 +22,7 @@ use common::{
 use p2p::{
     error::P2pError,
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
-    message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
+    message::{BlockRequest, BlockResponse, HeaderResponse, Request, Response},
     net::{
         self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
         NetworkingService, SyncingCodecService,
@@ -160,26 +159,17 @@ where
         net::types::SyncingEvent::Request {
             peer_id: _,
             request_id,
-            request:
-                Message {
-                    msg:
-                        MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                            locator,
-                        })),
-                    magic,
-                },
+            request: Request::HeaderRequest(request),
         } => {
-            let headers =
-                handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+            let headers = handle
+                .call(move |this| this.get_headers(request.into_locator()))
+                .await
+                .unwrap()
+                .unwrap();
             mgr.handle_mut()
                 .send_response(
                     request_id,
-                    Message {
-                        magic,
-                        msg: MessageType::Syncing(SyncingMessage::Response(
-                            SyncingResponse::Headers { headers },
-                        )),
-                    },
+                    Response::HeaderResponse(HeaderResponse::new(headers)),
                 )
                 .await
         }
@@ -196,33 +186,25 @@ where
         net::types::SyncingEvent::Request {
             peer_id,
             request_id,
-            request:
-                Message {
-                    msg: MessageType::Syncing(SyncingMessage::Request(message)),
-                    magic: _,
-                },
-        } => match message {
-            SyncingRequest::GetHeaders { locator } => {
-                mgr.process_header_request(peer_id, request_id, locator).await?;
+            request,
+        } => match request {
+            Request::HeaderRequest(request) => {
+                mgr.process_header_request(peer_id, request_id, request.into_locator()).await?;
             }
-            SyncingRequest::GetBlocks { block_ids } => {
-                mgr.process_block_request(peer_id, request_id, block_ids).await?;
+            Request::BlockRequest(request) => {
+                mgr.process_block_request(peer_id, request_id, request.into_block_ids()).await?;
             }
         },
         net::types::SyncingEvent::Response {
             peer_id,
             request_id: _,
-            response:
-                Message {
-                    msg: MessageType::Syncing(SyncingMessage::Response(message)),
-                    magic: _,
-                },
-        } => match message {
-            SyncingResponse::Headers { headers } => {
-                mgr.process_header_response(peer_id, headers).await?;
+            response,
+        } => match response {
+            Response::HeaderResponse(response) => {
+                mgr.process_header_response(peer_id, response.into_headers()).await?;
             }
-            SyncingResponse::Blocks { blocks } => {
-                mgr.process_block_response(peer_id, blocks).await?;
+            Response::BlockResponse(response) => {
+                mgr.process_block_response(peer_id, response.into_blocks()).await?;
             }
         },
         net::types::SyncingEvent::Error {
@@ -232,7 +214,6 @@ where
         } => {
             mgr.process_error(peer_id, request_id, error).await?;
         }
-        _ => {}
     }
 
     mgr.check_state().await
@@ -316,26 +297,17 @@ async fn remote_ahead_by_7_blocks() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                let headers = mgr2_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers },
-                            )),
-                        },
+                        Response::HeaderResponse(HeaderResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -343,17 +315,10 @@ async fn remote_ahead_by_7_blocks() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -363,12 +328,7 @@ async fn remote_ahead_by_7_blocks() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Blocks { blocks },
-                            )),
-                        },
+                        Response::BlockResponse(BlockResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -376,14 +336,7 @@ async fn remote_ahead_by_7_blocks() {
             net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers: _,
-                            })),
-                        magic: _,
-                    },
+                response: Response::HeaderResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -440,26 +393,17 @@ async fn local_ahead_by_12_blocks() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                let headers = mgr2_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers },
-                            )),
-                        },
+                        Response::HeaderResponse(HeaderResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -467,17 +411,10 @@ async fn local_ahead_by_12_blocks() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                                blocks,
-                            })),
-                        magic,
-                    },
+                response: Response::BlockResponse(response),
             } => {
-                assert_eq!(blocks.len(), 1);
-                let block = blocks[0].clone();
+                assert_eq!(response.blocks().len(), 1);
+                let block = response.blocks()[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -488,14 +425,7 @@ async fn local_ahead_by_12_blocks() {
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Message {
-                                magic,
-                                msg: MessageType::Syncing(SyncingMessage::Request(
-                                    SyncingRequest::GetBlocks {
-                                        block_ids: vec![header],
-                                    },
-                                )),
-                            },
+                            Request::BlockRequest(BlockRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -507,18 +437,11 @@ async fn local_ahead_by_12_blocks() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
-                            })),
-                        magic,
-                    },
+                response: Response::HeaderResponse(response),
             } => {
-                assert_eq!(headers.len(), 12);
+                assert_eq!(response.headers().len(), 12);
                 let headers = mgr2_handle
-                    .call(move |this| this.filter_already_existing_blocks(headers))
+                    .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
                     .await
                     .unwrap()
                     .unwrap();
@@ -527,14 +450,7 @@ async fn local_ahead_by_12_blocks() {
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetBlocks {
-                                    block_ids: vec![header],
-                                },
-                            )),
-                        },
+                        Request::BlockRequest(BlockRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -602,26 +518,17 @@ async fn remote_local_diff_chains_local_higher() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                let headers = mgr2_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers },
-                            )),
-                        },
+                        Response::HeaderResponse(HeaderResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -629,17 +536,10 @@ async fn remote_local_diff_chains_local_higher() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -649,12 +549,7 @@ async fn remote_local_diff_chains_local_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Blocks { blocks },
-                            )),
-                        },
+                        Response::BlockResponse(BlockResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -662,17 +557,10 @@ async fn remote_local_diff_chains_local_higher() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                                blocks,
-                            })),
-                        magic,
-                    },
+                response: Response::BlockResponse(response),
             } => {
-                assert_eq!(blocks.len(), 1);
-                let block = blocks[0].clone();
+                assert_eq!(response.blocks().len(), 1);
+                let block = response.blocks()[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -683,14 +571,7 @@ async fn remote_local_diff_chains_local_higher() {
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Message {
-                                magic,
-                                msg: MessageType::Syncing(SyncingMessage::Request(
-                                    SyncingRequest::GetBlocks {
-                                        block_ids: vec![header],
-                                    },
-                                )),
-                            },
+                            Request::BlockRequest(BlockRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -699,17 +580,10 @@ async fn remote_local_diff_chains_local_higher() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
-                            })),
-                        magic,
-                    },
+                response: Response::HeaderResponse(response),
             } => {
                 let headers = mgr2_handle
-                    .call(move |this| this.filter_already_existing_blocks(headers))
+                    .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
                     .await
                     .unwrap()
                     .unwrap();
@@ -718,14 +592,7 @@ async fn remote_local_diff_chains_local_higher() {
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetBlocks {
-                                    block_ids: vec![header],
-                                },
-                            )),
-                        },
+                        Request::BlockRequest(BlockRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -795,26 +662,17 @@ async fn remote_local_diff_chains_remote_higher() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                let headers = mgr2_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers },
-                            )),
-                        },
+                        Response::HeaderResponse(HeaderResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -822,17 +680,10 @@ async fn remote_local_diff_chains_remote_higher() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -842,12 +693,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Blocks { blocks },
-                            )),
-                        },
+                        Response::BlockResponse(BlockResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -855,17 +701,10 @@ async fn remote_local_diff_chains_remote_higher() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                                blocks,
-                            })),
-                        magic,
-                    },
+                response: Response::BlockResponse(response),
             } => {
-                assert_eq!(blocks.len(), 1);
-                let block = blocks[0].clone();
+                assert_eq!(response.blocks().len(), 1);
+                let block = response.blocks()[0].clone();
                 mgr2_handle
                     .call_mut(move |this| this.process_block(block, BlockSource::Peer))
                     .await
@@ -876,14 +715,7 @@ async fn remote_local_diff_chains_remote_higher() {
                     mgr2.handle_mut()
                         .send_request(
                             peer_id,
-                            Message {
-                                magic,
-                                msg: MessageType::Syncing(SyncingMessage::Request(
-                                    SyncingRequest::GetBlocks {
-                                        block_ids: vec![header],
-                                    },
-                                )),
-                            },
+                            Request::BlockRequest(BlockRequest::new(vec![header])),
                         )
                         .await
                         .unwrap();
@@ -892,17 +724,10 @@ async fn remote_local_diff_chains_remote_higher() {
             net::types::SyncingEvent::Response {
                 peer_id,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers,
-                            })),
-                        magic,
-                    },
+                response: Response::HeaderResponse(response),
             } => {
                 let headers = mgr2_handle
-                    .call(move |this| this.filter_already_existing_blocks(headers))
+                    .call(move |this| this.filter_already_existing_blocks(response.into_headers()))
                     .await
                     .unwrap()
                     .unwrap();
@@ -911,14 +736,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 mgr2.handle_mut()
                     .send_request(
                         peer_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Request(
-                                SyncingRequest::GetBlocks {
-                                    block_ids: vec![header],
-                                },
-                            )),
-                        },
+                        Request::BlockRequest(BlockRequest::new(vec![header])),
                     )
                     .await
                     .unwrap();
@@ -994,23 +812,14 @@ async fn two_remote_nodes_different_chains() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers,
-                    })),
-                };
+                let headers = mgr_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let msg = Response::HeaderResponse(HeaderResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -1021,28 +830,16 @@ async fn two_remote_nodes_different_chains() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                        blocks: vec![mgr_handle
-                            .call(move |this| this.get_block(id))
-                            .await
-                            .unwrap()
-                            .unwrap()
-                            .unwrap()],
-                    })),
-                };
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
+                let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
+                    .call(move |this| this.get_block(id))
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap()]));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -1053,14 +850,7 @@ async fn two_remote_nodes_different_chains() {
             net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers: _,
-                            })),
-                        magic: _,
-                    },
+                response: Response::HeaderResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -1145,23 +935,14 @@ async fn two_remote_nodes_same_chains() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers,
-                    })),
-                };
+                let headers = mgr_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let msg = Response::HeaderResponse(HeaderResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -1172,28 +953,16 @@ async fn two_remote_nodes_same_chains() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                        blocks: vec![mgr_handle
-                            .call(move |this| this.get_block(id))
-                            .await
-                            .unwrap()
-                            .unwrap()
-                            .unwrap()],
-                    })),
-                };
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
+                let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
+                    .call(move |this| this.get_block(id))
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap()]));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -1204,14 +973,7 @@ async fn two_remote_nodes_same_chains() {
             net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers: _,
-                            })),
-                        magic: _,
-                    },
+                response: Response::HeaderResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -1292,23 +1054,14 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers,
-                    })),
-                };
+                let headers = mgr_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let msg = Response::HeaderResponse(HeaderResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -1337,28 +1090,16 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
-                let msg = Message {
-                    magic,
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Blocks {
-                        blocks: vec![mgr_handle
-                            .call(move |this| this.get_block(id))
-                            .await
-                            .unwrap()
-                            .unwrap()
-                            .unwrap()],
-                    })),
-                };
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
+                let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
+                    .call(move |this| this.get_block(id))
+                    .await
+                    .unwrap()
+                    .unwrap()
+                    .unwrap()]));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap();
@@ -1369,14 +1110,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers: _,
-                            })),
-                        magic: _,
-                    },
+                response: Response::HeaderResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }
@@ -1460,26 +1194,17 @@ async fn test_connect_disconnect_resyncing() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                                locator,
-                            })),
-                        magic,
-                    },
+                request: Request::HeaderRequest(request),
             } => {
-                let headers =
-                    mgr2_handle.call(move |this| this.get_headers(locator)).await.unwrap().unwrap();
+                let headers = mgr2_handle
+                    .call(move |this| this.get_headers(request.into_locator()))
+                    .await
+                    .unwrap()
+                    .unwrap();
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers },
-                            )),
-                        },
+                        Response::HeaderResponse(HeaderResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -1487,17 +1212,10 @@ async fn test_connect_disconnect_resyncing() {
             net::types::SyncingEvent::Request {
                 peer_id: _,
                 request_id,
-                request:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetBlocks {
-                                block_ids,
-                            })),
-                        magic,
-                    },
+                request: Request::BlockRequest(request),
             } => {
-                assert_eq!(block_ids.len(), 1);
-                let id = block_ids[0].clone();
+                assert_eq!(request.block_ids().len(), 1);
+                let id = request.block_ids()[0].clone();
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -1507,12 +1225,7 @@ async fn test_connect_disconnect_resyncing() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Blocks { blocks },
-                            )),
-                        },
+                        Response::BlockResponse(BlockResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -1520,14 +1233,7 @@ async fn test_connect_disconnect_resyncing() {
             net::types::SyncingEvent::Response {
                 peer_id: _,
                 request_id: _,
-                response:
-                    Message {
-                        msg:
-                            MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                                headers: _,
-                            })),
-                        magic: _,
-                    },
+                response: Response::HeaderResponse(_response),
             } => {}
             msg => panic!("invalid message received: {:?}", msg),
         }

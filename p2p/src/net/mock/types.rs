@@ -35,10 +35,10 @@ pub enum ConnectivityEvent {
 // TODO: use two events, one for txs and one for blocks?
 pub enum PubSubEvent {
     /// Message received from one of the pubsub topics
-    MessageReceived {
+    Announcement {
         peer_id: SocketAddr,
         topic: net::types::PubSubTopic,
-        message: message::Message,
+        message: message::Announcement,
     },
 }
 
