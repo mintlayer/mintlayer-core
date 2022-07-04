@@ -16,7 +16,7 @@ pub enum RistrettoKeyError {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub enum RistrittoSignatureError {
+pub enum RistrettoSignatureError {
     ByteConversionError(String),
 }
 
@@ -94,7 +94,7 @@ impl MLRistrettoPrivateKey {
         &self,
         rng: &mut R,
         msg: &[u8],
-    ) -> Result<RistrettoSchnorrSignature, RistrittoSignatureError> {
+    ) -> Result<RistrettoSchnorrSignature, RistrettoSignatureError> {
         let (r, r_pub) = RistrettoPublicKey::random_keypair(rng);
         let k = &self.key_data;
         let e = Self::construct_challenge_from_message(msg);
