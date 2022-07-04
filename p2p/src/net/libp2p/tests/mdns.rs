@@ -21,54 +21,8 @@ use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
 use libp2p::Multiaddr;
 
-#[ignore]
 #[tokio::test]
-async fn test_on_discovered() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut backend1, _cmd, _conn_rx, _gossip_rx, _syn_rx) = make_libp2p(
-        common::chain::config::create_mainnet(),
-        addr.clone(),
-        &[],
-        true,
-    )
-    .await;
-
-    let (mut backend2, _cmd, _conn_rx2, _gossip_rx2, _sync_rx2) = make_libp2p(
-        common::chain::config::create_mainnet(),
-        test_utils::make_address("/ip6/::1/tcp/"),
-        &[],
-        true,
-    )
-    .await;
-
-    connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
-        addr,
-        &mut backend1.swarm,
-        &mut backend2.swarm,
-    )
-    .await;
-
-    loop {
-        tokio::select! {
-            event = backend1.swarm.select_next_some() => {
-                assert!(
-                    std::matches!(
-                        event,
-                        SwarmEvent::Behaviour(
-                            Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Discovered { .. })
-                        )
-                    )
-                );
-                break;
-            },
-            _ = backend2.swarm.next() => {}
-        }
-    }
-}
-
-#[ignore]
-#[tokio::test]
-async fn test_on_expired() {
+async fn test_discovered_and_expired() {
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut backend1, _, _conn_rx, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),

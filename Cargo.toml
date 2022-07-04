@@ -29,6 +29,7 @@ members = [
   "utils",         # various utilities
   "utxo",          # utxo and related utilities (cache, undo, etc.)
   "test",          # integration tests
+  "test-framework"
 ]
 
 default-members = [
