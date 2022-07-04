@@ -272,21 +272,21 @@ macro_rules! construct_uint {
             }
         }
 
-        impl<'a> From<u64> for $name {
+        impl From<u64> for $name {
             #[inline]
             fn from(n: u64) -> Self {
                 Self::from_u64(n)
             }
         }
 
-        impl<'a> From<u128> for $name {
+        impl From<u128> for $name {
             #[inline]
             fn from(n: u128) -> Self {
                 Self::from_u128(n)
             }
         }
 
-        impl<'a> From<Amount> for $name {
+        impl From<Amount> for $name {
             #[inline]
             fn from(n: Amount) -> Self {
                 Self::from_amount(n)

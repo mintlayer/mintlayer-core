@@ -13,7 +13,7 @@ use crate::{
             },
             verify_signature, TransactionSigError,
         },
-        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputValue, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
@@ -479,7 +479,12 @@ fn add_output(tx: &Transaction) -> Transaction {
 fn mutate_output(tx: &Transaction) -> Transaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs[0] = TxOutput::new(
-        (updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+        match updater.outputs[0].value() {
+            OutputValue::Coin(coin) => {
+                OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
+            }
+            OutputValue::Asset(asset) => OutputValue::Asset(asset.clone()),
+        },
         updater.outputs[0].purpose().clone(),
     );
     updater.generate_tx().unwrap()

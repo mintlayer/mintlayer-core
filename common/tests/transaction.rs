@@ -1,5 +1,5 @@
 use common::chain::signature::inputsig::InputWitness;
-use common::chain::transaction::*;
+use common::chain::{transaction::*, OutputValue};
 use common::primitives::{Amount, Id, Idable, H256};
 use expect_test::expect;
 
@@ -10,7 +10,7 @@ fn transaction_id_snapshots() {
     let hash2 = H256([0x52; 32]);
 
     let outs0: Vec<TxOutput> = [TxOutput::new(
-        Amount::from_atoms(25),
+        OutputValue::Coin(Amount::from_atoms(25)),
         OutputPurpose::Transfer(Destination::ScriptHash(Id::new(&hash0))),
     )]
     .to_vec();

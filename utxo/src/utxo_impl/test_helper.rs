@@ -1,7 +1,8 @@
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::{
-    Destination, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+    Destination, OutPoint, OutPointSourceId, OutputPurpose, OutputValue, Transaction, TxInput,
+    TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
@@ -28,7 +29,7 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
         let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_outputs.push(TxOutput::new(
-            Amount::from_atoms(random_amt),
+            OutputValue::Coin(Amount::from_atoms(random_amt)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         ));
     }
@@ -77,7 +78,7 @@ fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
     let rng = make_pseudo_rng().gen_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
-        Amount::from_atoms(rng),
+        OutputValue::Coin(Amount::from_atoms(rng)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     );
     let is_block_reward = rng % 3 == 0;

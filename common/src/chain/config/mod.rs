@@ -1,6 +1,5 @@
 mod builder;
 pub mod emission_schedule;
-
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
@@ -10,11 +9,11 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
+use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
-use crate::chain::OutputValue;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
