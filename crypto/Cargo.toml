@@ -23,6 +23,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 chacha20poly1305 = "0.9"
 thiserror = "1.0"
+schnorrkel = "0.10.2"
 
 [dev-dependencies]
 hex = "0.4"
