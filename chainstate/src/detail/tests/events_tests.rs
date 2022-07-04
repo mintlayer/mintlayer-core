@@ -152,7 +152,7 @@ fn custom_orphan_error_hook() {
         let events = subscribe_n(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
-        let first_block = produce_test_block(&chainstate.chain_config.genesis_block(), false);
+        let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
         // Produce a block with a bad timestamp.
         let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
             + 2 * chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;

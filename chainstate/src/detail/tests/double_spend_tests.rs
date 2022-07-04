@@ -201,7 +201,7 @@ fn double_spend_tx_in_another_block() {
 
         let second_tx = tx_from_genesis(&chainstate);
         let second_block = Block::new(
-            vec![second_tx.clone()],
+            vec![second_tx],
             Some(first_block_id.clone()),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,

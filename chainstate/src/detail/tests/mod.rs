@@ -49,7 +49,7 @@ const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
-    let length = rng.gen_range(50..150);
+    let length = rng.gen_range(128..256);
     let msg = iter::from_fn(|| rng.gen()).take(length).collect();
     InputWitness::NoSignature(Some(msg))
 }
@@ -64,8 +64,8 @@ fn create_utxo_data(
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
     let mut rng = crypto::random::make_pseudo_rng();
-    let spent_value = rng.gen_range(0..output.value().into_atoms());
-    if output.value() > Amount::from_atoms(spent_value) {
+    let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
+    if output.value() > spent_value {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -73,7 +73,7 @@ fn create_utxo_data(
                 empty_witness(),
             ),
             TxOutput::new(
-                (output.value() - Amount::from_atoms(spent_value)).unwrap(),
+                (output.value() - spent_value).unwrap(),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
