@@ -48,9 +48,9 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
-    pub fn new(mdns_enabled: bool) -> Self {
+    pub async fn new(mdns_enabled: bool) -> Self {
         Self {
-            mdns: mdns::Mdns::new(mdns_enabled),
+            mdns: mdns::Mdns::new(mdns_enabled).await,
         }
     }
 
