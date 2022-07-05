@@ -13,29 +13,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach, A. Sinitsyn
+// Author(s): S. Afach, A. Sinitsyn, S. Tkach
 
 use std::sync::Mutex;
 
-use crate::detail::tests::test_framework::BlockTestFramework;
-use crate::detail::tests::*;
+use crate::detail::tests::{
+    test_framework::{BlockTestFramework, TestBlockParams, TestSpentStatus},
+    *,
+};
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;
 
+// Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
 #[test]
-fn test_reorg_simple() {
+fn reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
             Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
 
-        // process the genesis block
-        let result = chainstate.process_block(
-            chainstate.chain_config.genesis_block().clone(),
-            BlockSource::Local,
-        );
-        assert!(result.is_ok());
+        // Process the genesis block.
+        chainstate
+            .process_block(
+                chainstate.chain_config.genesis_block().clone(),
+                BlockSource::Local,
+            )
+            .unwrap();
         assert_eq!(
             chainstate
                 .chainstate_storage
@@ -44,23 +48,20 @@ fn test_reorg_simple() {
             Some(chainstate.chain_config.genesis_block_id())
         );
 
-        // Process the second block
-        let block_first = produce_test_block(chainstate.chain_config.genesis_block(), false);
-        let new_id = Some(block_first.get_id());
-        chainstate.process_block(block_first.clone(), BlockSource::Local).unwrap();
+        let block_a = produce_test_block(chainstate.chain_config.genesis_block(), false);
+        chainstate.process_block(block_a.clone(), BlockSource::Local).unwrap();
         assert_eq!(
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            new_id
+            Some(block_a.get_id())
         );
 
-        // Process the parallel block and choose the better one
-        let block_second = produce_test_block(chainstate.chain_config.genesis_block(), false);
-        assert_ne!(block_first.get_id(), block_second.get_id());
-        // let new_id = Some(block.get_id());
-        chainstate.process_block(block_second.clone(), BlockSource::Local).unwrap();
+        // Produce the parallel chain.
+        let block_b = produce_test_block(chainstate.chain_config.genesis_block(), false);
+        assert_ne!(block_a.get_id(), block_b.get_id());
+        chainstate.process_block(block_b.clone(), BlockSource::Local).unwrap();
         assert_ne!(
             chainstate
                 .chainstate_storage
@@ -73,19 +74,18 @@ fn test_reorg_simple() {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            new_id
+            Some(block_a.get_id())
         );
 
-        // Produce another block that cause reorg
-        let new_block = produce_test_block(&block_second, false);
-        let new_id = Some(new_block.get_id());
-        assert!(chainstate.process_block(new_block, BlockSource::Local).is_ok());
+        // Produce one more block that causes a reorg.
+        let block_c = produce_test_block(&block_b, false);
+        assert!(chainstate.process_block(block_c.clone(), BlockSource::Local).is_ok());
         assert_eq!(
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            new_id
+            Some(block_c.get_id())
         );
     });
 }

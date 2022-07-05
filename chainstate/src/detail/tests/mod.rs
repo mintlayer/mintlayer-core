@@ -13,61 +13,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach, A. Sinitsyn
+// Author(s): S. Afach, A. Sinitsyn, S. Tkach
 
-use crate::detail::tests::test_framework::BlockTestFramework;
-use crate::detail::*;
-use chainstate_storage::Store;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::config::{create_regtest, create_unit_test_config};
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput};
-use common::primitives::{time, H256};
-use common::primitives::{Amount, Id};
-use common::Uint256;
-use crypto::random::{Rng, SliceRandom};
-use serialization::Encode;
 use std::sync::Mutex;
 
-pub(in crate::detail::tests) type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
+use crate::detail::{tests::test_framework::BlockTestFramework, *};
+use chainstate_storage::Store;
+use common::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        config::{create_regtest, create_unit_test_config},
+        signature::inputsig::InputWitness,
+        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+    },
+    primitives::{time, Amount, Id, H256},
+    Uint256,
+};
+use crypto::random::{Rng, SliceRandom};
+use serialization::Encode;
 
+mod double_spend_tests;
+mod events_tests;
+mod processing_tests;
+mod reorgs_tests;
+mod signature_tests;
+mod syncing_tests;
 mod test_framework;
 
-#[cfg(test)]
-mod double_spend_tests;
-#[cfg(test)]
-mod events_tests;
-#[cfg(test)]
-mod processing_tests;
-#[cfg(test)]
-mod reorgs_tests;
-#[cfg(test)]
-mod signature_tests;
-#[cfg(test)]
-mod syncing_tests;
+type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
-pub(crate) const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
-pub(crate) const ERR_STORAGE_FAIL: &str = "Storage failure";
-pub(crate) const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
-pub(crate) const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
-
-#[derive(Debug)]
-#[allow(dead_code)]
-pub(in crate::detail::tests) enum TestBlockParams {
-    NoErrors,
-    TxCount(usize),
-    Fee(Amount),
-    Orphan,
-    SpendFrom(Id<Block>),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub(in crate::detail::tests) enum TestSpentStatus {
-    Spent,
-    Unspent,
-    NotInMainchain,
-}
+const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
+const ERR_STORAGE_FAIL: &str = "Storage failure";
+const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
+const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
@@ -86,8 +64,8 @@ fn create_utxo_data(
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
     let mut rng = crypto::random::make_pseudo_rng();
-    let spent_value = rng.gen_range(0..output.value().into_atoms());
-    if output.value() > Amount::from_atoms(spent_value) {
+    let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
+    if output.value() > spent_value {
         Some((
             TxInput::new(
                 OutPointSourceId::Transaction(tx_id.clone()),
@@ -95,7 +73,7 @@ fn create_utxo_data(
                 empty_witness(),
             ),
             TxOutput::new(
-                (output.value() - Amount::from_atoms(spent_value)).unwrap(),
+                (output.value() - spent_value).unwrap(),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ),
         ))
@@ -104,37 +82,18 @@ fn create_utxo_data(
     }
 }
 
-struct ChainstateBuilder {
-    config: ChainConfig,
-    storage: Store,
-}
-
-impl ChainstateBuilder {
-    fn new() -> Self {
-        Self {
-            config: create_unit_test_config(),
-            storage: Store::new_empty().unwrap(),
-        }
-    }
-    fn build(self) -> Chainstate {
-        Chainstate::new(
-            Arc::new(self.config),
-            self.storage,
-            None,
-            Default::default(),
-        )
-        .unwrap()
-    }
-
-    #[allow(unused)]
-    fn with_config(mut self, chain_config: ChainConfig) -> Self {
-        self.config = chain_config;
-        self
-    }
-}
-
 fn setup_chainstate() -> Chainstate {
-    ChainstateBuilder::new().build()
+    chainstate_with_config(create_unit_test_config())
+}
+
+fn chainstate_with_config(config: ChainConfig) -> Chainstate {
+    Chainstate::new(
+        Arc::new(config),
+        Store::new_empty().unwrap(),
+        None,
+        Default::default(),
+    )
+    .unwrap()
 }
 
 fn produce_test_block(prev_block: &Block, orphan: bool) -> Block {
@@ -146,9 +105,7 @@ fn produce_test_block_with_consensus_data(
     orphan: bool,
     consensus_data: ConsensusData,
 ) -> Block {
-    // For each output we create a new input and output that will placed into a new block.
-    // If value of original output is less than 1 then output will disappear in a new block.
-    // Otherwise, value will be decreasing for 1.
+    // The value of each output is decreased by a random amount to produce a new input and output.
     let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
         prev_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
@@ -173,13 +130,13 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
         .collect::<Vec<(TxInput, TxOutput)>>()
 }
 
-// generate 5 regtest blocks and print them in hex
+// Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready
 #[ignore]
 #[test]
 fn generate_blocks_for_functional_tests() {
     let config = create_regtest();
-    let chainstate = ChainstateBuilder::new().with_config(config).build();
+    let chainstate = chainstate_with_config(config);
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
