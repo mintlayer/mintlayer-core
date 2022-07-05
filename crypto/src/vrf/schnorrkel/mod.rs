@@ -11,7 +11,6 @@ pub struct SchnorrkelPublicKey {
 }
 
 impl SchnorrkelPublicKey {
-    #[allow(dead_code)]
     pub fn from_private_key(private_key: &SchnorrkelPrivateKey) -> Self {
         SchnorrkelPublicKey {
             key: private_key.key.to_public(),
@@ -54,7 +53,6 @@ pub struct SchnorrkelPrivateKey {
 }
 
 impl SchnorrkelPrivateKey {
-    #[allow(dead_code)]
     pub fn new<R: Rng + CryptoRng>(rng: &mut R) -> (SchnorrkelPrivateKey, SchnorrkelPublicKey) {
         let sk = schnorrkel::SecretKey::generate_with(rng);
         let pk = sk.to_public();
