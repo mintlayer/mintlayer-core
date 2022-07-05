@@ -10,6 +10,15 @@ pub struct SchnorrkelPublicKey {
     key: schnorrkel::PublicKey,
 }
 
+impl SchnorrkelPublicKey {
+    #[allow(dead_code)]
+    pub fn from_private_key(private_key: &SchnorrkelPrivateKey) -> Self {
+        SchnorrkelPublicKey {
+            key: private_key.key.to_public(),
+        }
+    }
+}
+
 impl Encode for SchnorrkelPublicKey {
     fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
         self.key.to_bytes().using_encoded(f)
@@ -86,8 +95,9 @@ impl Decode for SchnorrkelPrivateKey {
 #[cfg(test)]
 mod tests {
     use crate::random::make_true_rng;
-    use parity_scale_codec::{DecodeAll, Encode};
     use schnorrkel::{signing_context, Keypair};
+    use serialization::{DecodeAll, Encode};
+    use tari_crypto::tari_utilities::hex::Hex;
 
     use super::*;
 
@@ -113,6 +123,22 @@ mod tests {
 
         assert_eq!(encoded_sk, encoded_sk_again);
         assert_eq!(encoded_pk, encoded_pk_again);
+    }
+
+    #[test]
+    fn fixed_keys() {
+        let encoded_sk = Vec::from_hex("414978f2c626250805d5e036249cccae02d6dca262daa8d7a880617da1eeed023effa71123f8172cd5e45b15c92a17fa143aba6010a741353d4dcbe382ae1944").unwrap();
+        let encoded_pk =
+            Vec::from_hex("86a720458a04160e17441c3622c41933094d28b06a38632933689ec89fa8fb3c")
+                .unwrap();
+
+        let decoded_sk = SchnorrkelPrivateKey::decode_all(&mut encoded_sk.as_slice()).unwrap();
+        let decoded_pk = SchnorrkelPublicKey::decode_all(&mut encoded_pk.as_slice()).unwrap();
+
+        assert_eq!(
+            decoded_pk,
+            SchnorrkelPublicKey::from_private_key(&decoded_sk)
+        )
     }
 
     #[test]
