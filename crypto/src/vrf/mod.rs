@@ -16,7 +16,7 @@ pub struct VRFPrivateKey {
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub(crate) enum VRFPrivateKeyHolder {
-    RistrettoSchnorr(schnorrkel::SchnorrkelPrivateKey),
+    Schnorrkel(schnorrkel::SchnorrkelPrivateKey),
 }
 
 #[derive(Debug, PartialOrd, Ord, PartialEq, Eq, Clone, Decode, Encode)]
@@ -26,7 +26,7 @@ pub struct VRFPublicKey {
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Decode, Encode)]
 pub(crate) enum VRFPublicKeyHolder {
-    RistrettoSchnorr(schnorrkel::SchnorrkelPublicKey),
+    Schnorrkel(schnorrkel::SchnorrkelPublicKey),
 }
 
 impl VRFPrivateKey {
@@ -37,10 +37,10 @@ impl VRFPrivateKey {
                 let k = schnorrkel::SchnorrkelPrivateKey::new(&mut rng);
                 (
                     VRFPrivateKey {
-                        key: VRFPrivateKeyHolder::RistrettoSchnorr(k.0),
+                        key: VRFPrivateKeyHolder::Schnorrkel(k.0),
                     },
                     VRFPublicKey {
-                        pub_key: VRFPublicKeyHolder::RistrettoSchnorr(k.1),
+                        pub_key: VRFPublicKeyHolder::Schnorrkel(k.1),
                     },
                 )
             }
@@ -49,7 +49,7 @@ impl VRFPrivateKey {
 
     pub fn kind(&self) -> VRFKeyKind {
         match self.key {
-            VRFPrivateKeyHolder::RistrettoSchnorr(_) => VRFKeyKind::Schnorrkel,
+            VRFPrivateKeyHolder::Schnorrkel(_) => VRFKeyKind::Schnorrkel,
         }
     }
 
@@ -61,8 +61,8 @@ impl VRFPrivateKey {
 impl VRFPublicKey {
     pub fn from_private_key(private_key: &VRFPrivateKey) -> Self {
         match private_key.get_internal_key() {
-            VRFPrivateKeyHolder::RistrettoSchnorr(ref k) => VRFPublicKey {
-                pub_key: VRFPublicKeyHolder::RistrettoSchnorr(
+            VRFPrivateKeyHolder::Schnorrkel(ref k) => VRFPublicKey {
+                pub_key: VRFPublicKeyHolder::Schnorrkel(
                     schnorrkel::SchnorrkelPublicKey::from_private_key(k),
                 ),
             },
