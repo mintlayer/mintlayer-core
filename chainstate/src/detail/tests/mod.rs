@@ -29,7 +29,7 @@ use common::{
     primitives::{time, Amount, Id, H256},
     Uint256,
 };
-use crypto::random::Rng;
+use crypto::random::{Rng, SliceRandom};
 use serialization::Encode;
 
 mod double_spend_tests;
@@ -49,8 +49,9 @@ const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
-    let length = rng.gen_range(128..512);
-    let msg = iter::from_fn(|| rng.gen()).take(length).collect();
+    let length = rng.gen_range(128..256);
+    let mut msg: Vec<_> = iter::from_fn(|| rng.gen()).take(length).collect();
+    msg.shuffle(&mut rng);
     InputWitness::NoSignature(Some(msg))
 }
 

@@ -39,7 +39,7 @@ use crypto::random::{self, Rng};
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_tx_in_the_same_block() {
+fn spend_output_in_the_same_block() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
@@ -80,7 +80,7 @@ fn spend_tx_in_the_same_block() {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_tx_in_the_same_block_invalid_order() {
+fn spend_output_in_the_same_block_invalid_order() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
@@ -152,8 +152,8 @@ fn double_spend_tx_in_the_same_block() {
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND)
-                .expect(ERR_STORAGE_FAIL),
+                .expect(ERR_STORAGE_FAIL)
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
             chainstate.chain_config.genesis_block_id()
         );
     });
@@ -217,8 +217,8 @@ fn double_spend_tx_in_another_block() {
             chainstate
                 .chainstate_storage
                 .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND)
-                .expect(ERR_STORAGE_FAIL),
+                .expect(ERR_STORAGE_FAIL)
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
             first_block_id
         );
     });
