@@ -1,6 +1,20 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 mod builder;
 pub mod emission_schedule;
-
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
@@ -10,6 +24,7 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::block::Block;
 use crate::chain::block::ConsensusData;
 use crate::chain::signature::inputsig::InputWitness;
+use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
@@ -205,7 +220,7 @@ fn create_mainnet_genesis() -> Block {
     );
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
-        Amount::from_atoms(100000000000000),
+        OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(genesis_mint_destination),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
@@ -231,7 +246,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Block {
     );
 
     let output = TxOutput::new(
-        Amount::from_atoms(100000000000000),
+        OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(premine_destination),
     );
     let tx = Transaction::new(0, vec![input], vec![output], 0)
