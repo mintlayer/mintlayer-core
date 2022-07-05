@@ -49,8 +49,7 @@ const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
-    let length = rng.gen_range(128..256);
-    let mut msg: Vec<_> = iter::from_fn(|| rng.gen()).take(length).collect();
+    let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(&mut rng);
     InputWitness::NoSignature(Some(msg))
 }
