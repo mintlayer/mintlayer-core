@@ -52,6 +52,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
             storage.clone(),
             None,
             Default::default(),
+            opts.chainstate_config,
         )?,
     );
 
@@ -61,7 +62,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
             chainstate.clone(),
-            opts.p2p_addr,
+            opts.p2p_config,
         )
         .await
         .expect("The p2p subsystem initialization failed"),
@@ -70,7 +71,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",
-        rpc::Builder::new(opts.rpc_addr)
+        rpc::Builder::new(opts.rpc_config)
             .register(chainstate.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())

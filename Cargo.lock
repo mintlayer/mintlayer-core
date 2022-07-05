@@ -499,6 +499,7 @@ dependencies = [
  "async-trait",
  "chainstate-storage",
  "chainstate-types",
+ "clap 3.2.5",
  "common",
  "crypto",
  "hex",
@@ -2551,6 +2552,7 @@ dependencies = [
  "async-trait",
  "chainstate",
  "chainstate-storage",
+ "clap 3.2.5",
  "common",
  "crypto",
  "futures",
@@ -3233,6 +3235,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "clap 3.2.5",
  "jsonrpsee",
  "logging",
  "subsystem",

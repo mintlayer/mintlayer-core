@@ -144,7 +144,14 @@ pub async fn start_chainstate(
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",
-        make_chainstate(config, storage, None, Default::default()).unwrap(),
+        make_chainstate(
+            config,
+            storage,
+            None,
+            Default::default(),
+            chainstate::Config {},
+        )
+        .unwrap(),
     );
     tokio::spawn(async move { man.main().await });
     handle

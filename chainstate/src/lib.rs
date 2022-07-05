@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+mod config;
 mod detail;
 
 pub mod rpc;
@@ -33,10 +34,9 @@ use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
-use detail::time_getter::TimeGetter;
-pub use detail::BlockError;
-use detail::PropertyQueryError;
-pub use detail::{BlockSource, Chainstate};
+pub use config::Config;
+use detail::{time_getter::TimeGetter, PropertyQueryError};
+pub use detail::{BlockError, BlockSource, Chainstate};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -62,6 +62,7 @@ pub fn make_chainstate(
     chainstate_storage: chainstate_storage::Store,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
+    _config: Config,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
     let cons = Chainstate::new(
         chain_config,

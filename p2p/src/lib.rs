@@ -24,6 +24,9 @@ use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 
+mod config;
+pub use config::Config;
+
 pub mod error;
 pub mod event;
 pub mod message;
@@ -231,7 +234,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    bind_addr: String,
+    config: Config,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
@@ -244,6 +247,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(bind_addr, chain_config, consensus_handle).await?,
+        p2p: P2P::new(config.p2p_addr, chain_config, consensus_handle).await?,
     })
 }

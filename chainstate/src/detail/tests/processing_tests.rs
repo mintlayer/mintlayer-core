@@ -23,7 +23,7 @@ use crate::{
         pow::error::ConsensusPoWError,
         tests::{test_framework::BlockTestFramework, *},
     },
-    make_chainstate,
+    make_chainstate, Config as ChainstateConfig,
 };
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::{
@@ -771,7 +771,14 @@ fn blocks_from_the_future() {
 fn test_mainnet_initialization() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let storage = Store::new_empty().unwrap();
-    make_chainstate(config, storage, None, Default::default()).unwrap();
+    make_chainstate(
+        config,
+        storage,
+        None,
+        Default::default(),
+        ChainstateConfig {},
+    )
+    .unwrap();
 }
 
 fn make_invalid_pow_block(

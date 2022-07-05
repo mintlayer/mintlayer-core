@@ -19,7 +19,7 @@ use crate::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     net::{libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService},
 };
-use chainstate::make_chainstate;
+use chainstate::{make_chainstate, Config as ChainstateConfig};
 use libp2p::PeerId;
 
 #[cfg(test)]
@@ -53,7 +53,7 @@ where
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "consensus",
-        make_chainstate(cfg, storage, None, Default::default()).unwrap(),
+        make_chainstate(cfg, storage, None, Default::default(), ChainstateConfig {}).unwrap(),
     );
     tokio::spawn(async move { man.main().await });
 

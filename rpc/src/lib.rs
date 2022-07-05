@@ -15,14 +15,16 @@
 
 use std::net::SocketAddr;
 
-use jsonrpsee::http_server::HttpServerBuilder;
-use jsonrpsee::http_server::HttpServerHandle;
+use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 
 pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 
 use logging::log;
+
+mod config;
+pub use config::Config;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;
@@ -54,8 +56,8 @@ impl Builder {
     }
 
     /// New builder pre-populated with RPC info methods
-    pub fn new(address: SocketAddr) -> Self {
-        Self::new_empty(address).register(RpcInfo.into_rpc())
+    pub fn new(config: Config) -> Self {
+        Self::new_empty(config.rpc_addr).register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -129,10 +131,10 @@ mod tests {
 
     #[tokio::test]
     async fn rpc_server() -> anyhow::Result<()> {
-        let rpc = Builder::new("127.0.0.1:3030".parse().unwrap())
-            .register(SubsystemRpcImpl.into_rpc())
-            .build()
-            .await?;
+        let config = Config {
+            rpc_addr: "127.0.0.1:3030".parse().unwrap(),
+        };
+        let rpc = Builder::new(config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
         let url = format!("http://{}", rpc.address());
         let client = HttpClientBuilder::default().build(url)?;

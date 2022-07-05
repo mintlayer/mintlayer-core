@@ -15,9 +15,7 @@
 
 //! Chainstate subsystem RPC handler
 
-use crate::ChainstateError;
-
-use crate::{Block, BlockSource};
+use crate::{Block, BlockSource, ChainstateError};
 use common::primitives::BlockHeight;
 use serialization::Decode;
 use subsystem::subsystem::CallError;
@@ -87,6 +85,7 @@ fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Res
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Config;
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -98,7 +97,7 @@ mod test {
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "chainstate",
-            crate::make_chainstate(cfg, storage, None, Default::default()).unwrap(),
+            crate::make_chainstate(cfg, storage, None, Default::default(), Config {}).unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",
