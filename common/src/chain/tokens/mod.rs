@@ -44,3 +44,6 @@ pub enum AssetData {
     //     metadata_uri: Vec<u8>,
     // },
 }
+
+#[cfg(test)]
+mod tests;
