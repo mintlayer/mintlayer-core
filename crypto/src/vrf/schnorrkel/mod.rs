@@ -1,7 +1,8 @@
 use crate::random::{CryptoRng, Rng};
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
-const EXPECTED_PUBKEY_LEN: usize = 32;
+const PUBKEY_LEN: usize = 32;
+const PRIVKEY_LEN: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[must_use]
@@ -10,25 +11,26 @@ pub struct SchnorrkelPublicKey {
 }
 
 impl Encode for SchnorrkelPublicKey {
-    fn encode(&self) -> Vec<u8> {
-        self.key.to_bytes().to_vec()
+    fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+        self.key.to_bytes().using_encoded(f)
     }
+
     fn encoded_size(&self) -> usize {
-        debug_assert_eq!(self.key.to_bytes().len(), EXPECTED_PUBKEY_LEN);
-        EXPECTED_PUBKEY_LEN
+        debug_assert_eq!(self.key.to_bytes().len(), PUBKEY_LEN);
+        PUBKEY_LEN
     }
 }
 
 impl Decode for SchnorrkelPublicKey {
     fn encoded_fixed_size() -> Option<usize> {
-        Some(EXPECTED_PUBKEY_LEN)
+        Some(PUBKEY_LEN)
     }
 
     fn decode<I: parity_scale_codec::Input>(
         input: &mut I,
     ) -> Result<Self, parity_scale_codec::Error> {
         const ERR_MSG: &str = "Failed to read schnorrkel public key";
-        let mut v = [0; EXPECTED_PUBKEY_LEN];
+        let mut v = [0; PUBKEY_LEN];
         input.read(v.as_mut_slice())?;
         let key = schnorrkel::PublicKey::from_bytes(&v)
             .map_err(|_| parity_scale_codec::Error::from(ERR_MSG))?;
@@ -53,28 +55,27 @@ impl SchnorrkelPrivateKey {
     }
 }
 
-const EXPECTED_PRIVKEY_LEN: usize = 64;
-
 impl Encode for SchnorrkelPrivateKey {
-    fn encode(&self) -> Vec<u8> {
-        self.key.to_bytes().to_vec()
+    fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+        self.key.to_bytes().using_encoded(f)
     }
+
     fn encoded_size(&self) -> usize {
-        debug_assert_eq!(self.key.to_bytes().len(), EXPECTED_PRIVKEY_LEN);
-        EXPECTED_PRIVKEY_LEN
+        debug_assert_eq!(self.key.to_bytes().len(), PRIVKEY_LEN);
+        PRIVKEY_LEN
     }
 }
 
 impl Decode for SchnorrkelPrivateKey {
     fn encoded_fixed_size() -> Option<usize> {
-        Some(EXPECTED_PRIVKEY_LEN)
+        Some(PRIVKEY_LEN)
     }
 
     fn decode<I: parity_scale_codec::Input>(
         input: &mut I,
     ) -> Result<Self, parity_scale_codec::Error> {
         const ERR_MSG: &str = "Failed to read schnorrkel private key";
-        let mut v = [0; EXPECTED_PRIVKEY_LEN];
+        let mut v = [0; PRIVKEY_LEN];
         input.read(v.as_mut_slice())?;
         let key = schnorrkel::SecretKey::from_bytes(&v)
             .map_err(|_| parity_scale_codec::Error::from(ERR_MSG))?;
