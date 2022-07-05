@@ -6,6 +6,5 @@ license = "MIT"
 
 [dependencies]
 common = { path = "../common"}
-serialization = { path = "../serialization"}
 logging = { path = '../logging' }
 thiserror = "1.0"

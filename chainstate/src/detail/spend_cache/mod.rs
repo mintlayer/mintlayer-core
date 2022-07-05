@@ -18,7 +18,7 @@
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::amount_sum;
 use common::chain::signature::{verify_signature, Transactable};
-use common::chain::Transaction;
+use common::chain::{OutputValue, Transaction};
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
@@ -175,7 +175,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         outputs: &[TxOutput],
         output_index: usize,
         spender_id: Spender,
-    ) -> Result<Amount, StateUpdateError> {
+    ) -> Result<&OutputValue, StateUpdateError> {
         let output = outputs.get(output_index).ok_or(StateUpdateError::OutputIndexOutOfRange {
             tx_id: Some(spender_id),
             source_output_index: output_index,
@@ -183,7 +183,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(output.value())
     }
 
-    fn calculate_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
+    fn calculate_mlt_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
@@ -211,7 +211,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             )
                         })?;
 
-                    Self::get_output_amount(tx.outputs(), output_index, tx.get_id().into())?
+                    Self::get_output_amount(tx.outputs(), output_index, tx.get_id().into())
+                        .cloned()?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
                     let block_index = self
@@ -226,10 +227,16 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     let outputs = rewards_tx.outputs().unwrap_or(&[]);
 
-                    Self::get_output_amount(outputs, output_index, block_id.clone().into())?
+                    Self::get_output_amount(outputs, output_index, block_id.clone().into())
+                        .cloned()?
                 }
             };
-            total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?;
+            match output_amount {
+                OutputValue::Coin(output_amount) => {
+                    total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?
+                }
+                OutputValue::Asset(_) => { /*For now we don't calculate here tokens*/ }
+            }
         }
         Ok(total)
     }
@@ -241,7 +248,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_total_inputs(inputs)?;
+        let inputs_total = self.calculate_mlt_total_inputs(inputs)?;
         let outputs_total = Self::calculate_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
@@ -261,7 +268,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn calculate_total_outputs(outputs: &[TxOutput]) -> Result<Amount, StateUpdateError> {
         outputs
             .iter()
-            .try_fold(Amount::from_atoms(0), |accum, out| accum + out.value())
+            .try_fold(Amount::from_atoms(0), |accum, out| match out.value() {
+                OutputValue::Coin(value) => accum + *value,
+                OutputValue::Asset(_) => Some(accum),
+            })
             .ok_or(StateUpdateError::OutputAdditionError)
     }
 
@@ -290,7 +300,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_total_inputs(ins),
+            |ins| self.calculate_mlt_total_inputs(ins),
         )?;
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;

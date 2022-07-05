@@ -1,3 +1,18 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #![allow(dead_code)]
 
 use crate::{Error, Store, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
@@ -57,7 +72,9 @@ impl From<Error> for utxo::Error {
 mod test {
     use super::*;
     use crate::store::test::create_rand_block_undo;
-    use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
+    use common::chain::{
+        Destination, OutPoint, OutPointSourceId, OutputPurpose, OutputValue, TxOutput,
+    };
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::{make_pseudo_rng, Rng};
@@ -67,7 +84,7 @@ mod test {
         let random_value = make_pseudo_rng().gen_range(0..u128::MAX);
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
-            Amount::from_atoms(random_value),
+            OutputValue::Coin(Amount::from_atoms(random_value)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));

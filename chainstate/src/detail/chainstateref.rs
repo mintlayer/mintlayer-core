@@ -1,3 +1,18 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::collections::BTreeSet;
 
 use super::{
@@ -9,9 +24,10 @@ use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
-        calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
+        calculate_tx_index_from_block, AssetData, ChainConfig, OutPointSourceId, OutputValue,
+        Transaction,
     },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use logging::log;
@@ -407,46 +423,132 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_duplicate_inputs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // check for duplicate inputs (see CVE-2018-17144)
-        {
-            let mut block_inputs = BTreeSet::new();
-            for tx in block.transactions() {
-                let mut tx_inputs = BTreeSet::new();
-                for input in tx.inputs() {
-                    if !block_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInBlock(
-                            block.get_id(),
-                        ));
-                    }
-                    if !tx_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInTransaction(
-                            tx.get_id(),
-                            block.get_id(),
-                        ));
-                    }
+        let mut block_inputs = BTreeSet::new();
+        for tx in block.transactions() {
+            let mut tx_inputs = BTreeSet::new();
+            for input in tx.inputs() {
+                if !block_inputs.insert(input.outpoint()) {
+                    return Err(CheckBlockTransactionsError::DuplicateInputInBlock(
+                        block.get_id(),
+                    ));
+                }
+                if !tx_inputs.insert(input.outpoint()) {
+                    return Err(CheckBlockTransactionsError::DuplicateInputInTransaction(
+                        tx.get_id(),
+                        block.get_id(),
+                    ));
                 }
             }
         }
+        Ok(())
+    }
 
-        {
-            // check duplicate transactions
-            let mut txs_ids = BTreeSet::new();
-            for tx in block.transactions() {
-                let tx_id = tx.get_id();
-                let already_in_tx_id = txs_ids.get(&tx_id);
-                match already_in_tx_id {
-                    Some(_) => {
-                        return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
-                            tx_id,
-                            block.get_id(),
-                        ))
-                    }
-                    None => txs_ids.insert(tx_id),
-                };
-            }
+    fn check_duplicate_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        // check duplicate transactions
+        let mut txs_ids = BTreeSet::new();
+        for tx in block.transactions() {
+            let tx_id = tx.get_id();
+            let already_in_tx_id = txs_ids.get(&tx_id);
+            match already_in_tx_id {
+                Some(_) => {
+                    return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
+                        tx_id,
+                        block.get_id(),
+                    ))
+                }
+                None => txs_ids.insert(tx_id),
+            };
         }
+        Ok(())
+    }
 
+    fn check_issue_data(
+        &self,
+        token_ticker: &Vec<u8>,
+        amount_to_issue: &Amount,
+        number_of_decimals: &u8,
+        metadata_uri: &Vec<u8>,
+        tx_id: Id<Transaction>,
+        block_id: Id<Block>,
+    ) -> Result<(), CheckBlockTransactionsError> {
+        const MAX_URI_LEN: usize = 1024;
+        const MAX_DEC_COUNT: u8 = 18;
+        const MAX_TICKER_LEN: usize = 5;
+
+        let mut is_correct_data = true;
+
+        // Check token name
+        is_correct_data = is_correct_data
+            && (token_ticker.len() <= MAX_TICKER_LEN)
+            && (!token_ticker.is_empty())
+            && String::from_utf8_lossy(token_ticker).is_ascii();
+        //TODO: Shall we have check for unique token name?
+
+        // Check amount
+        is_correct_data = is_correct_data && amount_to_issue != &Amount::from_atoms(0);
+
+        // Check decimals
+        is_correct_data = is_correct_data && number_of_decimals < &MAX_DEC_COUNT;
+
+        // Check URI
+        is_correct_data = is_correct_data
+            && metadata_uri.len() <= MAX_URI_LEN
+            && String::from_utf8_lossy(metadata_uri).is_ascii();
+
+        match is_correct_data {
+            true => Ok(()),
+            false => Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                tx_id, block_id,
+            )),
+        }
+    }
+
+    fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        // Check assets
+        for tx in block.transactions() {
+            let res: Result<(), CheckBlockTransactionsError> = tx
+                .outputs()
+                .iter()
+                .filter_map(|output| match output.value() {
+                    OutputValue::Coin(_) => None,
+                    OutputValue::Asset(asset) => Some(asset),
+                })
+                .try_for_each(|asset| {
+                    match asset {
+                        AssetData::TokenTransferV1 {
+                            token_id: _,
+                            amount: _,
+                        } => {
+                            todo!()
+                        }
+                        AssetData::TokenIssuanceV1 {
+                            token_ticker,
+                            amount_to_issue,
+                            number_of_decimals,
+                            metadata_uri,
+                        } => self.check_issue_data(
+                            token_ticker,
+                            amount_to_issue,
+                            number_of_decimals,
+                            metadata_uri,
+                            tx.get_id(),
+                            block.get_id(),
+                        )?,
+                    }
+                    Ok(())
+                });
+
+            res?;
+        }
+        Ok(())
+    }
+
+    fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        self.check_duplicate_inputs(block)?;
+        self.check_duplicate_txs(block)?;
+        self.check_tokens(block)?;
         Ok(())
     }
 

@@ -1,9 +1,24 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use crypto::key::{KeyKind, PrivateKey};
 use crypto::random::RngCore;
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::OutputPurpose;
+use crate::chain::{OutputPurpose, OutputValue};
 use crate::{
     chain::{
         block::ConsensusData,
@@ -220,7 +235,7 @@ fn generate_random_invalid_input(g: &mut impl crypto::random::Rng) -> TxInput {
 fn generate_random_invalid_output(g: &mut impl crypto::random::Rng) -> TxOutput {
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     TxOutput::new(
-        Amount::from_atoms(g.next_u64() as u128),
+        OutputValue::Coin(Amount::from_atoms(g.next_u64() as u128)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     )
 }

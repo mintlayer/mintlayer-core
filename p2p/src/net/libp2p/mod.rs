@@ -21,7 +21,10 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse},
+        libp2p::{
+            sync::{SyncRequest, SyncResponse},
+            types::IdentifyInfoWrapper,
+        },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
@@ -31,7 +34,6 @@ use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
     gossipsub::MessageId,
-    identify::IdentifyInfo,
     identity, mplex,
     multiaddr::Protocol,
     noise,
@@ -47,7 +49,9 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
+mod connectivity;
 mod constants;
+mod discovery;
 mod sync;
 mod tests;
 mod types;
@@ -182,7 +186,7 @@ where
         .collect::<Vec<net::types::AddrInfo<T>>>()
 }
 
-impl<T> TryInto<net::types::PeerInfo<T>> for IdentifyInfo
+impl<T> TryInto<net::types::PeerInfo<T>> for IdentifyInfoWrapper
 where
     T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
 {
@@ -209,8 +213,8 @@ where
             peer_id: PeerId::from_public_key(&self.public_key),
             magic_bytes,
             version,
-            agent: Some(self.agent_version),
-            protocols: self.protocols,
+            agent: Some(self.agent_version.clone()),
+            protocols: self.protocols.clone(),
         })
     }
 }
@@ -251,14 +255,14 @@ impl NetworkingService for Libp2pService {
             .outbound_timeout(timeout)
             .boxed();
 
-        // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
-        // pass that information to the backend so it knows to relay the mDNS events to P2P
-        let relay_mdns = strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns);
-        log::trace!("multicast dns enabled {}", relay_mdns);
-
         let swarm = SwarmBuilder::new(
             transport,
-            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, relay_mdns).await,
+            behaviour::Libp2pBehaviour::new(
+                Arc::clone(&chain_config),
+                id_keys,
+                strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns),
+            )
+            .await,
             peer_id,
         )
         .build();
@@ -314,7 +318,7 @@ impl NetworkingService for Libp2pService {
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
-    IdentifyInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
+    IdentifyInfoWrapper: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -369,7 +373,7 @@ where
             types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
                     addr,
-                    peer_info: (*peer_info).try_into()?,
+                    peer_info: peer_info.try_into()?,
                 })
             }
             types::ConnectivityEvent::ConnectionError { addr, error } => {
@@ -378,7 +382,7 @@ where
             types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
                 Ok(ConnectivityEvent::IncomingConnection {
                     addr,
-                    peer_info: (*peer_info).try_into()?,
+                    peer_info: peer_info.try_into()?,
                 })
             }
             types::ConnectivityEvent::ConnectionClosed { peer_id } => {

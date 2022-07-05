@@ -15,7 +15,6 @@ logging = { path = "../logging/" }
 anyhow = "1.0"
 bech32 = "0.9"
 generic-array = "0.14"
-hex-literal = "0.3"
 lazy_static = "1.4"
 merkletree = "0.21"
 parity-scale-codec = "3.1"
@@ -39,6 +38,8 @@ serde_test = "1.0"
 serde_json = "1.0"
 rand = "0.8.5"
 itertools = "0.10"
+test_framework = { path = "../test-framework"}
+chainstate = { path = "../chainstate"}
 
 [target.'cfg(loom)'.dependencies]
 loom = "0.5"
