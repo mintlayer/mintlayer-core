@@ -94,12 +94,11 @@ impl Decode for SchnorrkelPrivateKey {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::random::make_true_rng;
+    use hex::FromHex;
     use schnorrkel::{signing_context, Keypair};
     use serialization::{DecodeAll, Encode};
-    use tari_crypto::tari_utilities::hex::Hex;
-
-    use super::*;
 
     #[test]
     fn key_serialization() {
@@ -127,9 +126,9 @@ mod tests {
 
     #[test]
     fn fixed_keys() {
-        let encoded_sk = Vec::from_hex("414978f2c626250805d5e036249cccae02d6dca262daa8d7a880617da1eeed023effa71123f8172cd5e45b15c92a17fa143aba6010a741353d4dcbe382ae1944").unwrap();
-        let encoded_pk =
-            Vec::from_hex("86a720458a04160e17441c3622c41933094d28b06a38632933689ec89fa8fb3c")
+        let encoded_sk: Vec<u8> = FromHex::from_hex("414978f2c626250805d5e036249cccae02d6dca262daa8d7a880617da1eeed023effa71123f8172cd5e45b15c92a17fa143aba6010a741353d4dcbe382ae1944").unwrap();
+        let encoded_pk: Vec<u8> =
+            FromHex::from_hex("86a720458a04160e17441c3622c41933094d28b06a38632933689ec89fa8fb3c")
                 .unwrap();
 
         let decoded_sk = SchnorrkelPrivateKey::decode_all(&mut encoded_sk.as_slice()).unwrap();
