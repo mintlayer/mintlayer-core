@@ -99,6 +99,9 @@ mod tests {
         let encoded_sk = sk.encode();
         let encoded_pk = pk.encode();
 
+        assert_eq!(encoded_sk.len(), PRIVKEY_LEN);
+        assert_eq!(encoded_pk.len(), PUBKEY_LEN);
+
         let decoded_sk = SchnorrkelPrivateKey::decode_all(&mut encoded_sk.as_slice()).unwrap();
         let decoded_pk = SchnorrkelPublicKey::decode_all(&mut encoded_pk.as_slice()).unwrap();
 
