@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): A. Sinitsyn
+// Author(s): A. Sinitsyn, S. Tkach
 
 use std::sync::Arc;
 
@@ -28,7 +28,7 @@ type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 fn simple_subscribe() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
-        let events = subscribe_n(&mut chainstate, 1);
+        let events = subscribe(&mut chainstate, 1);
 
         // Produce and process a block.
         let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
@@ -69,7 +69,7 @@ fn several_subscribers() {
 
         let mut rng = random::make_pseudo_rng();
         let subscribers = rng.gen_range(8..256);
-        let events = subscribe_n(&mut chainstate, subscribers);
+        let events = subscribe(&mut chainstate, subscribers);
 
         let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
         assert!(!chainstate.events_controller.subscribers().is_empty());
@@ -94,7 +94,7 @@ fn several_subscribers_several_events() {
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
 
-        let events = subscribe_n(&mut chainstate, subscribers);
+        let events = subscribe(&mut chainstate, subscribers);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
         let mut block = chainstate.chain_config.genesis_block().clone();
@@ -116,7 +116,7 @@ fn several_subscribers_several_events() {
     });
 }
 
-// An orphan bock is rejected during processing, so it shouldn't trigger the new tip event.
+// An orphan block is rejected during processing, so it shouldn't trigger the new tip event.
 #[test]
 fn orphan_block() {
     common::concurrency::model(|| {
@@ -126,7 +126,7 @@ fn orphan_block() {
         let mut chainstate =
             Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
 
-        let events = subscribe_n(&mut chainstate, 1);
+        let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
         let block = produce_test_block(chainstate.chain_config.genesis_block(), true);
@@ -149,13 +149,13 @@ fn custom_orphan_error_hook() {
         let mut chainstate =
             Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
 
-        let events = subscribe_n(&mut chainstate, 1);
+        let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
         let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
         // Produce a block with a bad timestamp.
         let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
-            + 2 * chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+            + chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
         let second_block = Block::new(
             vec![],
             Some(first_block.get_id()),
@@ -187,7 +187,7 @@ fn custom_orphan_error_hook() {
 }
 
 // Subscribes to events N times emulating different subscribers.
-fn subscribe_n(chainstate: &mut Chainstate, n: usize) -> EventList {
+fn subscribe(chainstate: &mut Chainstate, n: usize) -> EventList {
     let events = Arc::new(Mutex::new(Vec::new()));
 
     for _ in 0..n {

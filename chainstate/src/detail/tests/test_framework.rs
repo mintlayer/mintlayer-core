@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): A. Sinitsyn
+// Author(s): A. Sinitsyn, S. Tkach
 
 use crate::detail::tests::*;
 use chainstate_storage::BlockchainStorageRead;
