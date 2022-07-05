@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use std::{iter, sync::Mutex};
+use std::sync::Mutex;
 
 use crate::detail::{tests::test_framework::BlockTestFramework, *};
 use chainstate_storage::Store;
