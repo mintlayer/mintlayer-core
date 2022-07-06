@@ -22,7 +22,10 @@ use crate::{
     net::{
         self,
         libp2p::{
-            connectivity,
+            connectivity::{
+                self,
+                types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
+            },
             constants::*,
             sync::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
@@ -422,29 +425,33 @@ impl NetworkBehaviourEventProcess<mdns::MdnsEvent> for Libp2pBehaviour {
     }
 }
 
-impl NetworkBehaviourEventProcess<connectivity::types::ConnectionManagerEvent> for Libp2pBehaviour {
-    fn inject_event(&mut self, event: connectivity::types::ConnectionManagerEvent) {
+impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
+    fn inject_event(&mut self, event: ConnectionManagerEvent) {
         match event {
-            connectivity::types::ConnectionManagerEvent::Behaviour(event) => match event {
-                connectivity::types::BehaviourEvent::InboundAccepted { addr, peer_info } => self
-                    .add_event(Libp2pBehaviourEvent::Connectivity(
+            ConnectionManagerEvent::Behaviour(event) => match event {
+                BehaviourEvent::InboundAccepted { addr, peer_info } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
                         ConnectivityEvent::IncomingConnection { addr, peer_info },
-                    )),
-                connectivity::types::BehaviourEvent::OutboundAccepted { addr, peer_info } => self
-                    .add_event(Libp2pBehaviourEvent::Connectivity(
+                    ))
+                }
+                BehaviourEvent::OutboundAccepted { addr, peer_info } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
                         ConnectivityEvent::ConnectionAccepted { addr, peer_info },
-                    )),
-                connectivity::types::BehaviourEvent::ConnectionClosed { peer_id } => self
-                    .add_event(Libp2pBehaviourEvent::Connectivity(
+                    ))
+                }
+                BehaviourEvent::ConnectionClosed { peer_id } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
                         ConnectivityEvent::ConnectionClosed { peer_id },
-                    )),
-                connectivity::types::BehaviourEvent::ConnectionError { addr, error } => self
-                    .add_event(Libp2pBehaviourEvent::Connectivity(
+                    ))
+                }
+                BehaviourEvent::ConnectionError { addr, error } => {
+                    self.add_event(Libp2pBehaviourEvent::Connectivity(
                         ConnectivityEvent::ConnectionError { addr, error },
-                    )),
+                    ))
+                }
             },
-            connectivity::types::ConnectionManagerEvent::Control(event) => match event {
-                connectivity::types::ControlEvent::CloseConnection { peer_id } => self.add_event(
+            ConnectionManagerEvent::Control(event) => match event {
+                ControlEvent::CloseConnection { peer_id } => self.add_event(
                     Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
                 ),
             },
