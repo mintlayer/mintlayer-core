@@ -2,6 +2,15 @@ use serialization::{Decode, Encode};
 
 use crate::random::make_true_rng;
 
+use self::primitives::VRFReturn;
+
+#[derive(thiserror::Error, Debug, PartialEq, Eq, Clone)]
+pub enum VRFError {
+    #[error("Failed to verify VRF output")]
+    VerificationError,
+}
+
+mod primitives;
 mod schnorrkel;
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
@@ -61,6 +70,12 @@ impl VRFPrivateKey {
     pub(crate) fn get_internal_key(&self) -> &VRFPrivateKeyHolder {
         &self.key
     }
+
+    pub fn produce_vrf<T: AsRef<[u8]>>(&self, message: T) -> VRFReturn {
+        match &self.key {
+            VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf(message).into(),
+        }
+    }
 }
 
 impl VRFPublicKey {
@@ -71,6 +86,18 @@ impl VRFPublicKey {
                     schnorrkel::SchnorrkelPublicKey::from_private_key(k),
                 ),
             },
+        }
+    }
+
+    pub fn verify_vrf<T: AsRef<[u8]>>(
+        &self,
+        message: T,
+        vrf_data: &VRFReturn,
+    ) -> Result<(), VRFError> {
+        match &self.pub_key {
+            VRFPublicKeyHolder::Schnorrkel(pub_key) => {
+                pub_key.verify_generic_vrf(message, vrf_data)
+            }
         }
     }
 }
