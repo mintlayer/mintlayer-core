@@ -15,8 +15,6 @@
 //
 // Author(s): S. Afach
 
-use std::borrow::Cow;
-
 use schnorrkel::vrf::{VRFPreOut, VRFProof};
 use serialization::{Decode, Encode};
 
@@ -88,13 +86,6 @@ impl SchnorrkelVRFReturn {
     pub fn vrf_proof(&self) -> [u8; 64] {
         self.proof.to_bytes()
     }
-}
-
-#[must_use]
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct SchnorrkelVerifiableVRF<'a> {
-    message: Cow<'a, [u8]>,
-    vrf_data: SchnorrkelVRFReturn,
 }
 
 #[cfg(test)]
