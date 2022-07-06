@@ -18,8 +18,13 @@
 //! Multicast DNS (mDNS) discovery behaviour for the libp2p backend
 
 use libp2p::{
+    core::connection::{ConnectedPoint, ConnectionId},
     mdns,
-    swarm::{NetworkBehaviour as SwarmNetworkBehaviour, NetworkBehaviourAction, PollParameters},
+    swarm::{
+        handler::DummyConnectionHandler, NetworkBehaviour as SwarmNetworkBehaviour,
+        NetworkBehaviourAction, PollParameters,
+    },
+    PeerId,
 };
 use logging::log;
 use std::task::{Context, Poll};
@@ -44,6 +49,25 @@ impl Mdns {
             }
         } else {
             Mdns::Disabled
+        }
+    }
+
+    pub fn inject_connection_closed(
+        &mut self,
+        peer_id: &PeerId,
+        connection_id: &ConnectionId,
+        endpoint: &ConnectedPoint,
+        handler: DummyConnectionHandler, // TODO: connectionmanager
+        remaining_established: usize,
+    ) {
+        if let Mdns::Enabled(mdns) = self {
+            return mdns.inject_connection_closed(
+                peer_id,
+                connection_id,
+                endpoint,
+                handler,
+                remaining_established,
+            );
         }
     }
 
