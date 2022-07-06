@@ -165,6 +165,10 @@ mod tests {
 
         let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(&message);
+
+        assert_eq!(vrf_data.vrf_output().len(), 32);
+        assert_eq!(vrf_data.vrf_proof().len(), 64);
+
         pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
     }
 
@@ -183,6 +187,9 @@ mod tests {
         let vrf_data_encoded: Vec<u8> =FromHex::from_hex("0020a63e917e73057b3f3fdad55ceff537f666c1440824a4f4d8a3d0e73cac610a11ce674e1666212263fce00dd9dfd25b16546878f306c30e11f5815efcbfe70b72d60562ae423c928b86af2164830450883630c81987aa3de666b3823c77b507").unwrap();
 
         let vrf_data = VRFReturn::decode_all(&mut vrf_data_encoded.as_slice()).unwrap();
+
+        assert_eq!(vrf_data.vrf_output().len(), 32);
+        assert_eq!(vrf_data.vrf_proof().len(), 64);
 
         pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
     }

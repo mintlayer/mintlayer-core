@@ -30,3 +30,17 @@ impl From<SchnorrkelVRFReturn> for VRFReturn {
         VRFReturn::Schnorrkel(r)
     }
 }
+
+impl VRFReturn {
+    pub fn vrf_output(&self) -> Vec<u8> {
+        match self {
+            VRFReturn::Schnorrkel(d) => d.vrf_output().to_vec(),
+        }
+    }
+
+    pub fn vrf_proof(&self) -> Vec<u8> {
+        match self {
+            VRFReturn::Schnorrkel(d) => d.vrf_proof().to_vec(),
+        }
+    }
+}
