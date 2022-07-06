@@ -34,7 +34,10 @@
 //! The process is the same for inbound connections with the exception that they start right away
 //! in `InboundAccepted` state and start waiting for the `IdentifyInfo` to be received.
 
-use crate::error::{DialError, P2pError, PeerError};
+use crate::{
+    error::{DialError, P2pError, PeerError},
+    net::libp2p::types::IdentifyInfoWrapper,
+};
 use libp2p::{
     core::{
         connection::{ConnectedPoint, ConnectionId},
@@ -202,7 +205,7 @@ impl ConnectionManager {
                 Some(types::ConnectionManagerEvent::Behaviour(
                     types::BehaviourEvent::InboundAccepted {
                         addr: connection.addr().clone(),
-                        peer_info: Box::new(received_info),
+                        peer_info: IdentifyInfoWrapper::new(received_info),
                     },
                 ))
             }
@@ -213,7 +216,7 @@ impl ConnectionManager {
                 Some(types::ConnectionManagerEvent::Behaviour(
                     types::BehaviourEvent::OutboundAccepted {
                         addr: connection.addr().clone(),
-                        peer_info: Box::new(received_info),
+                        peer_info: IdentifyInfoWrapper::new(received_info),
                     },
                 ))
             }

@@ -17,7 +17,7 @@
 
 //! Types and utils used by the `ConnectionManager`
 
-use crate::error::P2pError;
+use crate::{error::P2pError, net::libp2p::types::IdentifyInfoWrapper};
 use libp2p::{identify, Multiaddr, PeerId};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -27,19 +27,19 @@ pub enum ControlEvent {
     CloseConnection { peer_id: PeerId },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 /// Events used to report swarm behaviour to front-end
 pub enum BehaviourEvent {
     /// Inbound connection accepted
     InboundAccepted {
         addr: Multiaddr,
-        peer_info: Box<identify::IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Outbound connection accepted
     OutboundAccepted {
         addr: Multiaddr,
-        peer_info: Box<identify::IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Connection closed
@@ -48,61 +48,6 @@ pub enum BehaviourEvent {
     /// Connection error
     ConnectionError { addr: Multiaddr, error: P2pError },
 }
-
-macro_rules! peer_info_equal {
-    ($a:ident, $b:ident) => {
-        $a.public_key == $b.public_key
-            && $a.protocol_version == $b.protocol_version
-            && $a.agent_version == $b.agent_version
-            && $a.listen_addrs == $b.listen_addrs
-            && $a.protocols == $b.protocols
-            && $a.observed_addr == $b.observed_addr
-    };
-}
-
-impl PartialEq for BehaviourEvent {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (
-                BehaviourEvent::InboundAccepted {
-                    addr: addr1,
-                    peer_info: peer_info1,
-                },
-                BehaviourEvent::InboundAccepted {
-                    addr: addr2,
-                    peer_info: peer_info2,
-                },
-            ) => addr1 == addr2 && peer_info_equal!(peer_info1, peer_info2),
-            (
-                BehaviourEvent::OutboundAccepted {
-                    addr: addr1,
-                    peer_info: peer_info1,
-                },
-                BehaviourEvent::OutboundAccepted {
-                    addr: addr2,
-                    peer_info: peer_info2,
-                },
-            ) => addr1 == addr2 && peer_info_equal!(peer_info1, peer_info2),
-            (
-                BehaviourEvent::ConnectionClosed { peer_id: peer_id1 },
-                BehaviourEvent::ConnectionClosed { peer_id: peer_id2 },
-            ) => peer_id1 == peer_id2,
-            (
-                BehaviourEvent::ConnectionError {
-                    addr: addr1,
-                    error: error1,
-                },
-                BehaviourEvent::ConnectionError {
-                    addr: addr2,
-                    error: error2,
-                },
-            ) => addr1 == addr2 && error1 == error2,
-            _ => false,
-        }
-    }
-}
-
-impl Eq for BehaviourEvent {}
 
 #[derive(Debug, PartialEq, Eq)]
 /// Events emitted by the `ConnectionManager`

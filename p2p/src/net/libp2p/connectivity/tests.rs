@@ -18,7 +18,11 @@
 use super::*;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    net::libp2p::{connectivity::*, types::ConnectivityEvent, DialError},
+    net::libp2p::{
+        connectivity::*,
+        types::{ConnectivityEvent, IdentifyInfoWrapper},
+        DialError,
+    },
 };
 use libp2p::{
     core::connection::{ConnectedPoint, Endpoint},
@@ -224,7 +228,7 @@ async fn register_identify_info() {
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::InboundAccepted {
                 addr: Multiaddr::empty(),
-                peer_info: Box::new(info),
+                peer_info: IdentifyInfoWrapper::new(info),
             },
         )),
     );
@@ -251,7 +255,7 @@ async fn register_identify_info() {
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::OutboundAccepted {
                 addr: Multiaddr::empty(),
-                peer_info: Box::new(info),
+                peer_info: IdentifyInfoWrapper::new(info),
             },
         )),
     );
