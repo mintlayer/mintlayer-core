@@ -18,7 +18,10 @@
 //! Discovery behaviour for libp2p
 
 use libp2p::{
-    core::PeerId,
+    core::{
+        connection::{ConnectedPoint, ConnectionId},
+        PeerId,
+    },
     mdns as libp2pmdns,
     swarm::{handler::DummyConnectionHandler, NetworkBehaviourAction, PollParameters},
     Multiaddr,
@@ -45,6 +48,23 @@ impl DiscoveryManager {
         Self {
             mdns: mdns::Mdns::new(mdns_enabled).await,
         }
+    }
+
+    pub fn inject_connection_closed(
+        &mut self,
+        peer_id: &PeerId,
+        connection_id: &ConnectionId,
+        endpoint: &ConnectedPoint,
+        handler: DummyConnectionHandler, // TODO: connectionmanager
+        remaining_established: usize,
+    ) {
+        self.mdns.inject_connection_closed(
+            peer_id,
+            connection_id,
+            endpoint,
+            handler,
+            remaining_established,
+        );
     }
 
     pub fn poll(
