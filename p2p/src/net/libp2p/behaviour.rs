@@ -27,6 +27,7 @@ use crate::{
                 types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
             },
             constants::*,
+            discovery,
             sync::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
@@ -35,7 +36,7 @@ use crate::{
 use common::chain::config::ChainConfig;
 use libp2p::{
     gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
-    identify, identity, mdns, ping,
+    identify, identity, ping,
     request_response::*,
     swarm::{
         ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
@@ -60,7 +61,6 @@ use std::{
     poll_method = "poll"
 )]
 pub struct Libp2pBehaviour {
-    pub mdns: mdns::Mdns,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
     pub identify: identify::Identify,
@@ -68,7 +68,7 @@ pub struct Libp2pBehaviour {
     pub connmgr: connectivity::ConnectionManager,
 
     #[behaviour(ignore)]
-    pub relay_mdns: bool,
+    pub discovery: discovery::DiscoveryManager,
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
     #[behaviour(ignore)]
@@ -87,7 +87,7 @@ impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
         id_keys: identity::Keypair,
-        relay_mdns: bool,
+        enable_mdns: bool,
     ) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()
             .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
@@ -109,7 +109,6 @@ impl Libp2pBehaviour {
         req_cfg.set_request_timeout(REQ_RESP_TIMEOUT);
 
         let behaviour = Libp2pBehaviour {
-            mdns: mdns::Mdns::new(Default::default()).await.expect("mDNS to succeed"),
             ping: ping::Behaviour::new(
                 ping::Config::new()
                     .with_timeout(PING_TIMEOUT)
@@ -133,7 +132,7 @@ impl Libp2pBehaviour {
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            relay_mdns,
+            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
@@ -153,7 +152,7 @@ impl Libp2pBehaviour {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        _params: &mut impl PollParameters,
+        params: &mut impl PollParameters,
     ) -> Poll<Libp2pNetworkBehaviourAction> {
         match &self.waker {
             Some(waker) => {
@@ -168,7 +167,23 @@ impl Libp2pBehaviour {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
         }
 
-        // TODO: poll discovery
+        if let Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) =
+            self.discovery.poll(cx, params)
+        {
+            match event {
+                discovery::DiscoveryEvent::Discovered(peers) => {
+                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                        Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Discovered { peers }),
+                    ));
+                }
+                discovery::DiscoveryEvent::Expired(peers) => {
+                    println!("expired");
+                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
+                        Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Expired { peers }),
+                    ));
+                }
+            }
+        }
 
         Poll::Pending
     }
@@ -396,32 +411,6 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                         log::error!("CRITICAL: unsupported protocol should have been caught by peer manager");
                     }
                 }
-            }
-        }
-    }
-}
-
-impl NetworkBehaviourEventProcess<mdns::MdnsEvent> for Libp2pBehaviour {
-    fn inject_event(&mut self, event: mdns::MdnsEvent) {
-        // TODO: remove this ugly hack
-        if !self.relay_mdns {
-            return;
-        }
-
-        match event {
-            mdns::MdnsEvent::Discovered(peers) => {
-                self.add_event(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Discovered {
-                        peers: peers.collect(),
-                    },
-                ));
-            }
-            mdns::MdnsEvent::Expired(expired) => {
-                self.add_event(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Expired {
-                        peers: expired.collect(),
-                    },
-                ));
             }
         }
     }

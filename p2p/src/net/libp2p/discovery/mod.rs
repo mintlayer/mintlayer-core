@@ -18,19 +18,12 @@
 //! Discovery behaviour for libp2p
 
 use libp2p::{
-    core::{
-        PeerId,
-    },
+    core::PeerId,
     mdns as libp2pmdns,
-    swarm::{
-        handler::DummyConnectionHandler,
-        NetworkBehaviourAction, PollParameters,
-    },
+    swarm::{handler::DummyConnectionHandler, NetworkBehaviourAction, PollParameters},
     Multiaddr,
 };
-use std::{
-    task::{Context, Poll},
-};
+use std::task::{Context, Poll};
 
 mod mdns;
 
@@ -54,7 +47,7 @@ impl DiscoveryManager {
         }
     }
 
-    fn poll(
+    pub fn poll(
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,
