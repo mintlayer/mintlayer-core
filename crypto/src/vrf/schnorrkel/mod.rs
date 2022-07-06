@@ -69,14 +69,12 @@ impl Decode for SchnorrkelPublicKey {
         Some(PUBKEY_LEN)
     }
 
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         const ERR_MSG: &str = "Failed to read schnorrkel public key";
         let mut v = [0; PUBKEY_LEN];
         input.read(v.as_mut_slice())?;
         let key = schnorrkel::PublicKey::from_bytes(&v)
-            .map_err(|_| parity_scale_codec::Error::from(ERR_MSG))?;
+            .map_err(|_| serialization::Error::from(ERR_MSG))?;
         Ok(Self { key })
     }
 }
@@ -125,14 +123,12 @@ impl Decode for SchnorrkelPrivateKey {
         Some(PRIVKEY_LEN)
     }
 
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         const ERR_MSG: &str = "Failed to read schnorrkel private key";
         let mut v = [0; PRIVKEY_LEN];
         input.read(v.as_mut_slice())?;
         let key = schnorrkel::SecretKey::from_bytes(&v)
-            .map_err(|_| parity_scale_codec::Error::from(ERR_MSG))?;
+            .map_err(|_| serialization::Error::from(ERR_MSG))?;
         Ok(Self { key })
     }
 }

@@ -1,5 +1,9 @@
+use serialization::{Decode, Encode};
+
 use super::schnorrkel::data::SchnorrkelVRFReturn;
 
+#[must_use]
+#[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
 pub enum VRFReturn {
     Schnorrkel(SchnorrkelVRFReturn),
 }

@@ -71,7 +71,7 @@ impl VRFPrivateKey {
         &self.key
     }
 
-    pub fn produce_vrf<T: AsRef<[u8]>>(&self, message: T) -> VRFReturn {
+    pub fn produce_vrf_data<T: AsRef<[u8]>>(&self, message: T) -> VRFReturn {
         match &self.key {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf(message).into(),
         }
@@ -140,5 +140,33 @@ mod tests {
         let decoded_pk = VRFPublicKey::decode_all(&mut encoded_pk.as_slice()).unwrap();
 
         assert_eq!(decoded_pk, VRFPublicKey::from_private_key(&decoded_sk))
+    }
+
+    #[test]
+    fn basic_usage() {
+        let message = b"Hi there! This is my message to you!";
+
+        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(&message);
+        pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
+    }
+
+    #[test]
+    fn select_preserialized_data() {
+        let message = b"Hi there! This is my message to you!";
+
+        let sk_encoded: Vec<u8> = FromHex::from_hex("006a19dc3c9f5c359602cd0097e4e2b9c1a7536face014ccea7c57aae06b9081039a8319ce360837512e3608701d27ae0fbdafec5e98fb2374f0c276b6888acbda").unwrap();
+        let _sk = VRFPrivateKey::decode_all(&mut sk_encoded.as_slice()).unwrap();
+
+        let pk_encoded: Vec<u8> =
+            FromHex::from_hex("00c0158e93e3904b404a12f56493802f3a325939fa780dc0fc415370599be27c68")
+                .unwrap();
+        let pk = VRFPublicKey::decode_all(&mut pk_encoded.as_slice()).unwrap();
+
+        let vrf_data_encoded: Vec<u8> =FromHex::from_hex("0020a63e917e73057b3f3fdad55ceff537f666c1440824a4f4d8a3d0e73cac610a11ce674e1666212263fce00dd9dfd25b16546878f306c30e11f5815efcbfe70b72d60562ae423c928b86af2164830450883630c81987aa3de666b3823c77b507").unwrap();
+
+        let vrf_data = VRFReturn::decode_all(&mut vrf_data_encoded.as_slice()).unwrap();
+
+        pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
     }
 }
