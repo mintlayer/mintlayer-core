@@ -30,6 +30,36 @@ use libp2p::{
 };
 use tokio::sync::oneshot;
 
+#[derive(Debug)]
+pub struct IdentifyInfoWrapper(Box<IdentifyInfo>);
+
+impl IdentifyInfoWrapper {
+    pub fn new(info: IdentifyInfo) -> Self {
+        Self(Box::new(info))
+    }
+}
+
+impl std::ops::Deref for IdentifyInfoWrapper {
+    type Target = Box<IdentifyInfo>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PartialEq for IdentifyInfoWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.public_key == other.0.public_key
+            && self.0.protocol_version == other.0.protocol_version
+            && self.0.agent_version == other.0.agent_version
+            && self.0.listen_addrs == other.0.listen_addrs
+            && self.0.protocols == other.0.protocols
+            && self.0.observed_addr == other.0.observed_addr
+    }
+}
+
+impl Eq for IdentifyInfoWrapper {}
+
 // TODO: rename `response` -> `channel`
 #[derive(Debug)]
 pub enum Command {
@@ -94,13 +124,13 @@ pub enum ConnectivityEvent {
     /// Outbound connection accepted by remote
     ConnectionAccepted {
         addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Inbound connection incoming
     IncomingConnection {
         addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Outbound connection failed
