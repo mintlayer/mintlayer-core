@@ -7,9 +7,7 @@ license = "MIT"
 [dependencies]
 async-trait = "0.1"
 futures = "0.3"
-futures-timer = "3.0"
 itertools = "0.10"
-lazy_static = "1.4"
 parity-scale-codec = "3.1"
 sscanf = "0.2"
 thiserror = "1.0"
@@ -18,7 +16,6 @@ void = "1.0"
 # local dependencies
 common = { path = "../common/" }
 chainstate = { path = "../chainstate/" }
-crypto = { path = "../crypto/" }
 logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
@@ -42,6 +39,7 @@ features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 [dev-dependencies]
 portpicker = "0.1"
 chainstate-storage = { path = "../chainstate-storage" }
+crypto = { path = "../crypto/" }
 
 [dev-dependencies.test-utils]
 version = "0.1"
