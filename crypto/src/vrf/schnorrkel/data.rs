@@ -34,6 +34,9 @@ const SCHNORKEL_RETURN_SIZE: usize = SCHNORKEL_PREOUT_SIZE + SCHNORKEL_PROOF_SIZ
 #[must_use]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SchnorrkelVRFReturn {
+    /// preout is the incomplete version of the output of the VRF
+    /// later, it has to be attached to the input so that it can
+    /// form a complete output
     preout: VRFPreOut,
     proof: VRFProof,
 }
@@ -84,9 +87,6 @@ impl SchnorrkelVRFReturn {
         &self.proof
     }
 
-    /// preout is the incomplete version of the output of the VRF
-    /// later, it has to be attached to the input so that it can
-    /// form a complete output
     pub(super) fn preout(&self) -> &VRFPreOut {
         &self.preout
     }
