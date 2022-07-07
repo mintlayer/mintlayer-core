@@ -25,10 +25,14 @@ use self::primitives::VRFReturn;
 pub enum VRFError {
     #[error("Failed to verify VRF output")]
     VerificationError,
+    #[error("Failed to attach input")]
+    InputAttachError(String),
 }
 
 mod primitives;
 mod schnorrkel;
+
+pub mod transcript;
 
 #[derive(Debug, PartialEq, Eq, Clone, Decode, Encode)]
 pub enum VRFKeyKind {
@@ -124,6 +128,8 @@ mod tests {
     use hex::FromHex;
     use serialization::DecodeAll;
 
+    use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
+
     use super::*;
 
     #[test]
@@ -166,8 +172,32 @@ mod tests {
         let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
         let vrf_data = sk.produce_vrf_data(&message);
 
-        assert_eq!(vrf_data.vrf_output().len(), 32);
-        assert_eq!(vrf_data.vrf_proof().len(), 64);
+        match &vrf_data {
+            VRFReturn::Schnorrkel(d) => {
+                assert_eq!(d.vrf_preout().len(), 32);
+                assert_eq!(d.vrf_proof().len(), 64);
+
+                let transcript = TranscriptAssembler::new(b"some context")
+                    .attach(
+                        b"some label",
+                        TranscriptComponent::RawData(b"Data to commit".to_vec()),
+                    )
+                    .attach(b"some other label", TranscriptComponent::U64(42))
+                    .attach(
+                        b"some third label",
+                        TranscriptComponent::RawData(b"More data to commit".to_vec()),
+                    )
+                    .finalize();
+
+                let _output_value_to_use_in_application: [u8; 32] = d
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                        pk.clone(),
+                        transcript,
+                    )
+                    .unwrap()
+                    .into();
+            }
+        }
 
         pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
     }
@@ -188,8 +218,32 @@ mod tests {
 
         let vrf_data = VRFReturn::decode_all(&mut vrf_data_encoded.as_slice()).unwrap();
 
-        assert_eq!(vrf_data.vrf_output().len(), 32);
-        assert_eq!(vrf_data.vrf_proof().len(), 64);
+        match &vrf_data {
+            VRFReturn::Schnorrkel(d) => {
+                assert_eq!(d.vrf_preout().len(), 32);
+                assert_eq!(d.vrf_proof().len(), 64);
+
+                let transcript = TranscriptAssembler::new(b"some context")
+                    .attach(
+                        b"some label",
+                        TranscriptComponent::RawData(b"Data to commit".to_vec()),
+                    )
+                    .attach(b"some other label", TranscriptComponent::U64(42))
+                    .attach(
+                        b"some third label",
+                        TranscriptComponent::RawData(b"More data to commit".to_vec()),
+                    )
+                    .finalize();
+
+                let _output_value_to_use_in_application: [u8; 32] = d
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                        pk.clone(),
+                        transcript,
+                    )
+                    .unwrap()
+                    .into();
+            }
+        }
 
         pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
     }
