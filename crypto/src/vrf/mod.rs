@@ -130,7 +130,7 @@ mod tests {
 
     use crate::vrf::transcript::{TranscriptAssembler, TranscriptComponent};
 
-    use super::*;
+    use super::{transcript::WrappedTranscript, *};
 
     #[test]
     fn key_serialization() {
@@ -165,6 +165,20 @@ mod tests {
         assert_eq!(decoded_pk, VRFPublicKey::from_private_key(&decoded_sk))
     }
 
+    fn make_arbitrary_transcript() -> WrappedTranscript {
+        TranscriptAssembler::new(b"some context")
+            .attach(
+                b"some label",
+                TranscriptComponent::RawData(b"Data to commit".to_vec()),
+            )
+            .attach(b"some other label", TranscriptComponent::U64(42))
+            .attach(
+                b"some third label",
+                TranscriptComponent::RawData(b"More data to commit".to_vec()),
+            )
+            .finalize()
+    }
+
     #[test]
     fn basic_usage() {
         let message = b"Hi there! This is my message to you!";
@@ -177,22 +191,12 @@ mod tests {
                 assert_eq!(d.vrf_preout().len(), 32);
                 assert_eq!(d.vrf_proof().len(), 64);
 
-                let transcript = TranscriptAssembler::new(b"some context")
-                    .attach(
-                        b"some label",
-                        TranscriptComponent::RawData(b"Data to commit".to_vec()),
-                    )
-                    .attach(b"some other label", TranscriptComponent::U64(42))
-                    .attach(
-                        b"some third label",
-                        TranscriptComponent::RawData(b"More data to commit".to_vec()),
-                    )
-                    .finalize();
+                let transcript = make_arbitrary_transcript();
 
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript,
+                        transcript.into(),
                     )
                     .unwrap()
                     .into();
@@ -223,22 +227,12 @@ mod tests {
                 assert_eq!(d.vrf_preout().len(), 32);
                 assert_eq!(d.vrf_proof().len(), 64);
 
-                let transcript = TranscriptAssembler::new(b"some context")
-                    .attach(
-                        b"some label",
-                        TranscriptComponent::RawData(b"Data to commit".to_vec()),
-                    )
-                    .attach(b"some other label", TranscriptComponent::U64(42))
-                    .attach(
-                        b"some third label",
-                        TranscriptComponent::RawData(b"More data to commit".to_vec()),
-                    )
-                    .finalize();
+                let transcript = make_arbitrary_transcript();
 
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript,
+                        transcript.into(),
                     )
                     .unwrap()
                     .into();

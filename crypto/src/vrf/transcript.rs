@@ -12,6 +12,21 @@ pub struct TranscriptAssembler {
     components: Vec<(&'static [u8], TranscriptComponent)>,
 }
 
+// A wrapper that makes it unnecessary to use the merlin dependency
+pub struct WrappedTranscript(Transcript);
+
+impl From<Transcript> for WrappedTranscript {
+    fn from(t: Transcript) -> Self {
+        WrappedTranscript(t)
+    }
+}
+
+impl From<WrappedTranscript> for Transcript {
+    fn from(t: WrappedTranscript) -> Self {
+        t.0
+    }
+}
+
 impl TranscriptAssembler {
     pub fn new(label: &'static [u8]) -> Self {
         Self {
@@ -26,7 +41,7 @@ impl TranscriptAssembler {
         result
     }
 
-    pub fn finalize(self) -> Transcript {
+    pub fn finalize(self) -> WrappedTranscript {
         let mut transcript = Transcript::new(self.label);
         for component in &self.components {
             match &component.1 {
@@ -35,7 +50,7 @@ impl TranscriptAssembler {
             }
         }
 
-        transcript
+        transcript.into()
     }
 }
 
@@ -63,8 +78,10 @@ mod tests {
 
         // build a random number generator using each transcript and ensure they both arribe to the same values
         let mut g1 = manual_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
-        let mut g2 =
-            assembled_transcript.build_rng().finalize(&mut ChaChaRng::from_seed([0u8; 32]));
+        let mut g2 = assembled_transcript
+            .0
+            .build_rng()
+            .finalize(&mut ChaChaRng::from_seed([0u8; 32]));
 
         for _ in 0..100 {
             assert_eq!(g1.gen::<u64>(), g2.gen::<u64>());
