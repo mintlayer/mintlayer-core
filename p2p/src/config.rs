@@ -13,10 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Args;
-
 /// The p2p subsystem configuration.
-#[derive(Args, Debug)]
+#[derive(serde::Deserialize, Debug)]
 pub struct Config {
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR", default_value = "/ip6/::1/tcp/3031")]

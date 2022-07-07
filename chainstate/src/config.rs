@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::Args;
-
 /// The chainstate subsystem configuration.
-#[derive(Args, Debug)]
+#[derive(serde::Deserialize, Debug)]
 pub struct Config {}

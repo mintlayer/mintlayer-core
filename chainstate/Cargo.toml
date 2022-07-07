@@ -25,7 +25,7 @@ num = "0.4.0"
 proptest = "1.0"
 replace_with = "0.1"
 thiserror = "1.0"
-clap = { version = "3.1", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 mockall = "0.11"

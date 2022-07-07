@@ -15,10 +15,8 @@
 
 use std::net::SocketAddr;
 
-use clap::Args;
-
 /// The rpc subsystem configuration.
-#[derive(Args, Debug)]
+#[derive(serde::Deserialize, Debug)]
 pub struct Config {
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR", default_value = "127.0.0.1:3030")]
