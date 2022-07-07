@@ -223,7 +223,7 @@ mod tests {
             }
         }
 
-        let mut mutated_transcript: Transcript = transcript.clone().into();
+        let mut mutated_transcript: Transcript = transcript.into();
         mutated_transcript.append_u64(b"Forgery", 1337);
 
         pk.verify_vrf(mutated_transcript, &vrf_data)
@@ -244,7 +244,7 @@ mod tests {
 
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
-                        pk.clone(),
+                        pk,
                         transcript.clone().into(),
                     )
                     .unwrap()
