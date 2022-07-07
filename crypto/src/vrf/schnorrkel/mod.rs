@@ -58,7 +58,7 @@ impl SchnorrkelPublicKey {
         vrf_data: &data::SchnorrkelVRFReturn,
     ) -> Result<(), VRFError> {
         self.key
-            .vrf_verify(message.clone(), vrf_data.preout(), vrf_data.proof())
+            .vrf_verify(message, vrf_data.preout(), vrf_data.proof())
             .map_err(|_| VRFError::VerificationError)?;
         Ok(())
     }
