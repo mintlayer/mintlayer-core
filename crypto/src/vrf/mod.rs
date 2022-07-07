@@ -202,6 +202,63 @@ mod tests {
     }
 
     #[test]
+    fn basic_usage_schonorrkel_mutated_message() {
+        let transcript = make_arbitrary_transcript();
+
+        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+
+        match &vrf_data {
+            VRFReturn::Schnorrkel(d) => {
+                assert_eq!(d.vrf_preout().len(), 32);
+                assert_eq!(d.vrf_proof().len(), 64);
+
+                let _output_value_to_use_in_application: [u8; 32] = d
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                        pk.clone(),
+                        transcript.clone().into(),
+                    )
+                    .unwrap()
+                    .into();
+            }
+        }
+
+        let mut mutated_transcript: Transcript = transcript.clone().into();
+        mutated_transcript.append_u64(b"Forgery", 1337);
+
+        pk.verify_vrf(mutated_transcript, &vrf_data)
+            .expect_err("Invalid VRF check succeeded");
+    }
+
+    #[test]
+    fn basic_usage_schnorrkel_invalid_keys() {
+        let transcript = make_arbitrary_transcript();
+
+        let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
+
+        match &vrf_data {
+            VRFReturn::Schnorrkel(d) => {
+                assert_eq!(d.vrf_preout().len(), 32);
+                assert_eq!(d.vrf_proof().len(), 64);
+
+                let _output_value_to_use_in_application: [u8; 32] = d
+                    .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                        pk.clone(),
+                        transcript.clone().into(),
+                    )
+                    .unwrap()
+                    .into();
+            }
+        }
+
+        let (_sk2, pk2) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
+
+        pk2.verify_vrf(transcript.into(), &vrf_data)
+            .expect_err("Invalid VRF check succeeded");
+    }
+
+    #[test]
     fn select_preserialized_data() {
         let transcript = make_arbitrary_transcript();
 
