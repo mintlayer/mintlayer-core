@@ -651,6 +651,7 @@ dependencies = [
  "bech32 0.9.0",
  "bitcoin-bech32",
  "byteorder 1.4.3",
+ "chainstate",
  "crypto",
  "expect-test",
  "generic-array",
@@ -673,6 +674,7 @@ dependencies = [
  "sscanf",
  "static_assertions",
  "strum",
+ "test_framework",
  "thiserror",
 ]
 
@@ -3968,6 +3970,10 @@ dependencies = [
  "subsystem",
  "tokio",
 ]
+
+[[package]]
+name = "test_framework"
+version = "0.1.0"
 
 [[package]]
 name = "testing_logger"

@@ -9,9 +9,9 @@ use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
-        calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
+        calculate_tx_index_from_block, AssetData, ChainConfig, OutPointSourceId, OutputValue,
     },
-    primitives::{BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use logging::log;
@@ -408,8 +408,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // check for duplicate inputs (see CVE-2018-17144)
         {
+            // check for duplicate inputs (see CVE-2018-17144)
             let mut block_inputs = BTreeSet::new();
             for tx in block.transactions() {
                 let mut tx_inputs = BTreeSet::new();
@@ -444,6 +444,77 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     }
                     None => txs_ids.insert(tx_id),
                 };
+            }
+        }
+
+        {
+            // Check assets
+            for tx in block.transactions() {
+                let res: Result<(), CheckBlockTransactionsError> = tx
+                    .outputs()
+                    .iter()
+                    .filter_map(|output| match output.value() {
+                        OutputValue::Coin(_) => None,
+                        OutputValue::Asset(asset) => Some(asset),
+                    })
+                    .map(|asset| {
+                        match asset {
+                            AssetData::TokenTransferV1 { token_id, amount } => {
+                                todo!()
+                            }
+                            AssetData::TokenIssuanceV1 {
+                                token_ticker,
+                                amount_to_issue,
+                                number_of_decimals,
+                                metadata_uri,
+                            } => {
+                                // Check token name
+                                if (token_ticker.len() > 5)
+                                    || !String::from_utf8_lossy(token_ticker).is_ascii()
+                                {
+                                    return Err(
+                                        CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                                            tx.get_id(),
+                                            block.get_id(),
+                                        ),
+                                    );
+                                }
+                                // Check amount
+                                if amount_to_issue == &Amount::from_atoms(0) {
+                                    return Err(
+                                        CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                                            tx.get_id(),
+                                            block.get_id(),
+                                        ),
+                                    );
+                                }
+                                // Check decimals
+                                if number_of_decimals <= &18 {
+                                    return Err(
+                                        CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                                            tx.get_id(),
+                                            block.get_id(),
+                                        ),
+                                    );
+                                }
+                                // Check URI
+                                if (metadata_uri.len() > 1024)
+                                    || (!String::from_utf8_lossy(metadata_uri).is_ascii())
+                                {
+                                    return Err(
+                                        CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                                            tx.get_id(),
+                                            block.get_id(),
+                                        ),
+                                    );
+                                }
+                            }
+                        }
+                        Ok(())
+                    })
+                    .collect();
+
+                res?;
             }
         }
 

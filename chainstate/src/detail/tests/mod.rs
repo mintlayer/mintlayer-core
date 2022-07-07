@@ -41,6 +41,8 @@ mod double_spend_tests;
 #[cfg(test)]
 mod events_tests;
 #[cfg(test)]
+mod normal_tokens;
+#[cfg(test)]
 mod processing_tests;
 #[cfg(test)]
 mod reorgs_tests;
