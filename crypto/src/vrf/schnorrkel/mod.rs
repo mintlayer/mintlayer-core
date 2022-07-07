@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use crate::random::{CryptoRng, Rng};
+use merlin::Transcript;
 use schnorrkel::Keypair;
 use serialization::{Decode, Encode};
 
@@ -25,7 +26,6 @@ use super::{primitives::VRFReturn, VRFError};
 
 const PUBKEY_LEN: usize = 32;
 const PRIVKEY_LEN: usize = 64;
-const SIGNING_CONTEXT_LABEL: &[u8] = b"MintlayerVRF!";
 
 pub mod data;
 
@@ -42,9 +42,9 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_generic_vrf<T: AsRef<[u8]>>(
+    pub fn verify_generic_vrf(
         &self,
-        message: T,
+        message: Transcript,
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match vrf_data {
@@ -52,19 +52,13 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_vrf<T: AsRef<[u8]>>(
+    pub fn verify_vrf(
         &self,
-        message: T,
+        message: Transcript,
         vrf_data: &data::SchnorrkelVRFReturn,
     ) -> Result<(), VRFError> {
-        let ctx = schnorrkel::signing_context(SIGNING_CONTEXT_LABEL);
-
         self.key
-            .vrf_verify(
-                ctx.bytes(message.as_ref()),
-                vrf_data.preout(),
-                vrf_data.proof(),
-            )
+            .vrf_verify(message.clone(), vrf_data.preout(), vrf_data.proof())
             .map_err(|_| VRFError::VerificationError)?;
         Ok(())
     }
@@ -111,14 +105,12 @@ impl SchnorrkelPrivateKey {
         (sk, pk)
     }
 
-    pub fn produce_vrf<T: AsRef<[u8]>>(&self, message: T) -> SchnorrkelVRFReturn {
-        let ctx = schnorrkel::signing_context(SIGNING_CONTEXT_LABEL);
-
+    pub fn produce_vrf(&self, message: Transcript) -> SchnorrkelVRFReturn {
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
             public: self.key.to_public(),
         }
-        .vrf_sign(ctx.bytes(message.as_ref()));
+        .vrf_sign(message);
 
         SchnorrkelVRFReturn::new(io.to_preout(), proof)
     }

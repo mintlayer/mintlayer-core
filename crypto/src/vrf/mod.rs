@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach
 
+use merlin::Transcript;
 use serialization::{Decode, Encode};
 
 use crate::random::make_true_rng;
@@ -92,7 +93,7 @@ impl VRFPrivateKey {
         &self.key
     }
 
-    pub fn produce_vrf_data<T: AsRef<[u8]>>(&self, message: T) -> VRFReturn {
+    pub fn produce_vrf_data(&self, message: Transcript) -> VRFReturn {
         match &self.key {
             VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf(message).into(),
         }
@@ -110,11 +111,7 @@ impl VRFPublicKey {
         }
     }
 
-    pub fn verify_vrf<T: AsRef<[u8]>>(
-        &self,
-        message: T,
-        vrf_data: &VRFReturn,
-    ) -> Result<(), VRFError> {
+    pub fn verify_vrf(&self, message: Transcript, vrf_data: &VRFReturn) -> Result<(), VRFError> {
         match &self.pub_key {
             VRFPublicKeyHolder::Schnorrkel(pub_key) => {
                 pub_key.verify_generic_vrf(message, vrf_data)
@@ -181,34 +178,32 @@ mod tests {
 
     #[test]
     fn basic_usage() {
-        let message = b"Hi there! This is my message to you!";
+        let transcript = make_arbitrary_transcript();
 
         let (sk, pk) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
-        let vrf_data = sk.produce_vrf_data(&message);
+        let vrf_data = sk.produce_vrf_data(transcript.clone().into());
 
         match &vrf_data {
             VRFReturn::Schnorrkel(d) => {
                 assert_eq!(d.vrf_preout().len(), 32);
                 assert_eq!(d.vrf_proof().len(), 64);
 
-                let transcript = make_arbitrary_transcript();
-
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript.into(),
+                        transcript.clone().into(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
+        pk.verify_vrf(transcript.into(), &vrf_data).expect("Valid VRF check failed");
     }
 
     #[test]
     fn select_preserialized_data() {
-        let message = b"Hi there! This is my message to you!";
+        let transcript = make_arbitrary_transcript();
 
         let sk_encoded: Vec<u8> = FromHex::from_hex("006a19dc3c9f5c359602cd0097e4e2b9c1a7536face014ccea7c57aae06b9081039a8319ce360837512e3608701d27ae0fbdafec5e98fb2374f0c276b6888acbda").unwrap();
         let _sk = VRFPrivateKey::decode_all(&mut sk_encoded.as_slice()).unwrap();
@@ -218,7 +213,7 @@ mod tests {
                 .unwrap();
         let pk = VRFPublicKey::decode_all(&mut pk_encoded.as_slice()).unwrap();
 
-        let vrf_data_encoded: Vec<u8> =FromHex::from_hex("0020a63e917e73057b3f3fdad55ceff537f666c1440824a4f4d8a3d0e73cac610a11ce674e1666212263fce00dd9dfd25b16546878f306c30e11f5815efcbfe70b72d60562ae423c928b86af2164830450883630c81987aa3de666b3823c77b507").unwrap();
+        let vrf_data_encoded: Vec<u8> =FromHex::from_hex("00b47d375948c65a57e9782f9ac05e6d66a2364ff0d8a9a2a155447bd439121f3d0749e9b767eec9d50235927519c8f5c5623d49300d5f418d2a91beb71308a50717ea059a9b90055af7eb700ea09307e5db368153e53d91da46f3df513e51270c").unwrap();
 
         let vrf_data = VRFReturn::decode_all(&mut vrf_data_encoded.as_slice()).unwrap();
 
@@ -227,18 +222,16 @@ mod tests {
                 assert_eq!(d.vrf_preout().len(), 32);
                 assert_eq!(d.vrf_proof().len(), 64);
 
-                let transcript = make_arbitrary_transcript();
-
                 let _output_value_to_use_in_application: [u8; 32] = d
                     .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
                         pk.clone(),
-                        transcript.into(),
+                        transcript.clone().into(),
                     )
                     .unwrap()
                     .into();
             }
         }
 
-        pk.verify_vrf(&message, &vrf_data).expect("Valid VRF check failed");
+        pk.verify_vrf(transcript.into(), &vrf_data).expect("Valid VRF check failed");
     }
 }

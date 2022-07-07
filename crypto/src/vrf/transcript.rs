@@ -13,6 +13,7 @@ pub struct TranscriptAssembler {
 }
 
 // A wrapper that makes it unnecessary to use the merlin dependency
+#[derive(Clone)]
 pub struct WrappedTranscript(Transcript);
 
 impl From<Transcript> for WrappedTranscript {
