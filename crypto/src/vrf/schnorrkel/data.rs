@@ -84,6 +84,9 @@ impl SchnorrkelVRFReturn {
         &self.proof
     }
 
+    /// preout is the incomplete version of the output of the VRF
+    /// later, it has to be attached to the input so that it can
+    /// form a complete output
     pub(super) fn preout(&self) -> &VRFPreOut {
         &self.preout
     }
