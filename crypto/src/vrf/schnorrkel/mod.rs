@@ -48,11 +48,11 @@ impl SchnorrkelPublicKey {
         vrf_data: &VRFReturn,
     ) -> Result<(), VRFError> {
         match vrf_data {
-            VRFReturn::Schnorrkel(d) => self.verify_vrf(message, d),
+            VRFReturn::Schnorrkel(d) => self.verify_vrf_data(message, d),
         }
     }
 
-    pub fn verify_vrf(
+    pub fn verify_vrf_data(
         &self,
         message: Transcript,
         vrf_data: &data::SchnorrkelVRFReturn,
