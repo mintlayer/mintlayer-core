@@ -34,7 +34,7 @@ impl From<SchnorrkelVRFReturn> for VRFReturn {
 impl VRFReturn {
     pub fn vrf_output(&self) -> Vec<u8> {
         match self {
-            VRFReturn::Schnorrkel(d) => d.vrf_output().to_vec(),
+            VRFReturn::Schnorrkel(d) => d.vrf_preout().to_vec(),
         }
     }
 

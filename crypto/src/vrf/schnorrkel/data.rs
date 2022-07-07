@@ -79,7 +79,7 @@ impl SchnorrkelVRFReturn {
         &self.preout
     }
 
-    pub fn vrf_output(&self) -> [u8; 32] {
+    pub fn vrf_preout(&self) -> [u8; 32] {
         self.preout.to_bytes()
     }
 
