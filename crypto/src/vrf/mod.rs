@@ -95,7 +95,7 @@ impl VRFPrivateKey {
 
     pub fn produce_vrf_data(&self, message: Transcript) -> VRFReturn {
         match &self.key {
-            VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf(message).into(),
+            VRFPrivateKeyHolder::Schnorrkel(k) => k.produce_vrf_data(message).into(),
         }
     }
 }

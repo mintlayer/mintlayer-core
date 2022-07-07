@@ -105,7 +105,7 @@ impl SchnorrkelPrivateKey {
         (sk, pk)
     }
 
-    pub fn produce_vrf(&self, message: Transcript) -> SchnorrkelVRFReturn {
+    pub fn produce_vrf_data(&self, message: Transcript) -> SchnorrkelVRFReturn {
         let (io, proof, _batchable_proof) = Keypair {
             secret: self.key.clone(),
             public: self.key.to_public(),
