@@ -23,7 +23,10 @@ use libp2p::{
         PeerId,
     },
     mdns as libp2pmdns,
-    swarm::{handler::DummyConnectionHandler, NetworkBehaviourAction, PollParameters},
+    swarm::{
+        handler::DummyConnectionHandler, ConnectionHandler, IntoConnectionHandler,
+        NetworkBehaviour, NetworkBehaviourAction, PollParameters,
+    },
     Multiaddr,
 };
 use std::task::{Context, Poll};
@@ -49,25 +52,42 @@ impl DiscoveryManager {
             mdns: mdns::Mdns::new(mdns_enabled).await,
         }
     }
+}
 
-    pub fn inject_connection_closed(
+impl NetworkBehaviour for DiscoveryManager {
+    type ConnectionHandler = DummyConnectionHandler;
+    type OutEvent = DiscoveryEvent;
+
+    fn new_handler(&mut self) -> Self::ConnectionHandler {
+        DummyConnectionHandler::default()
+    }
+
+    fn inject_event(
+        &mut self,
+        _peer_id: PeerId,
+        _connection: ConnectionId,
+        _event: <<Self::ConnectionHandler as IntoConnectionHandler>::Handler as ConnectionHandler>::OutEvent,
+    ) {
+    }
+
+    fn inject_connection_closed(
         &mut self,
         peer_id: &PeerId,
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
-        handler: DummyConnectionHandler, // TODO: connectionmanager
+        event: DummyConnectionHandler,
         remaining_established: usize,
     ) {
         self.mdns.inject_connection_closed(
             peer_id,
             connection_id,
             endpoint,
-            handler,
+            event,
             remaining_established,
         );
     }
 
-    pub fn poll(
+    fn poll(
         &mut self,
         cx: &mut Context<'_>,
         params: &mut impl PollParameters,

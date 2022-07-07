@@ -66,9 +66,8 @@ pub struct Libp2pBehaviour {
     pub identify: identify::Identify,
     pub sync: RequestResponse<SyncingCodec>,
     pub connmgr: connectivity::ConnectionManager,
-
-    #[behaviour(ignore)]
     pub discovery: discovery::DiscoveryManager,
+
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
     #[behaviour(ignore)]
@@ -152,7 +151,7 @@ impl Libp2pBehaviour {
     fn poll(
         &mut self,
         cx: &mut Context<'_>,
-        params: &mut impl PollParameters,
+        _params: &mut impl PollParameters,
     ) -> Poll<Libp2pNetworkBehaviourAction> {
         match &self.waker {
             Some(waker) => {
@@ -165,24 +164,6 @@ impl Libp2pBehaviour {
 
         if let Some(event) = self.events.pop_front() {
             return Poll::Ready(NetworkBehaviourAction::GenerateEvent(event));
-        }
-
-        if let Poll::Ready(NetworkBehaviourAction::GenerateEvent(event)) =
-            self.discovery.poll(cx, params)
-        {
-            match event {
-                discovery::DiscoveryEvent::Discovered(peers) => {
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                        Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Discovered { peers }),
-                    ));
-                }
-                discovery::DiscoveryEvent::Expired(peers) => {
-                    println!("expired");
-                    return Poll::Ready(NetworkBehaviourAction::GenerateEvent(
-                        Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Expired { peers }),
-                    ));
-                }
-            }
         }
 
         Poll::Pending
@@ -446,6 +427,23 @@ impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
                     Libp2pBehaviourEvent::Control(types::ControlEvent::CloseConnection { peer_id }),
                 ),
             },
+        }
+    }
+}
+
+impl NetworkBehaviourEventProcess<discovery::DiscoveryEvent> for Libp2pBehaviour {
+    fn inject_event(&mut self, event: discovery::DiscoveryEvent) {
+        match event {
+            discovery::DiscoveryEvent::Discovered(peers) => {
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Discovered { peers },
+                ));
+            }
+            discovery::DiscoveryEvent::Expired(peers) => {
+                self.add_event(Libp2pBehaviourEvent::Connectivity(
+                    ConnectivityEvent::Expired { peers },
+                ));
+            }
         }
     }
 }
