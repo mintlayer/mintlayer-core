@@ -24,7 +24,7 @@ async fn test_identify_not_supported() {
     let config = common::chain::config::create_mainnet();
     let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut backend1, _cmd1, _conn1, _gossip1, _sync1) =
-        make_libp2p(config.clone(), addr.clone(), &[], true).await;
+        make_libp2p(config.clone(), addr.clone(), &[], false).await;
 
     let (transport, peer_id, _id_keys) = make_transport_and_keys();
     let mut swarm = SwarmBuilder::new(

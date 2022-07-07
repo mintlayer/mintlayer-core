@@ -57,15 +57,15 @@ impl Mdns {
         peer_id: &PeerId,
         connection_id: &ConnectionId,
         endpoint: &ConnectedPoint,
-        handler: DummyConnectionHandler, // TODO: connectionmanager
+        event: DummyConnectionHandler,
         remaining_established: usize,
     ) {
         if let Mdns::Enabled(mdns) = self {
-            return mdns.inject_connection_closed(
+            mdns.inject_connection_closed(
                 peer_id,
                 connection_id,
                 endpoint,
-                handler,
+                event,
                 remaining_established,
             );
         }
