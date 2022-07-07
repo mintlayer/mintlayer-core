@@ -390,7 +390,6 @@ where
                             err
                         })
                     }
-                    // TODO: pending disconnection events
                     event::SwarmEvent::Disconnect(peer_id, response) => {
                         log::debug!("disconnect peer {} from the swarm", peer_id);
 
