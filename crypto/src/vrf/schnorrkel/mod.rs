@@ -25,7 +25,7 @@ use self::data::SchnorrkelVRFReturn;
 use super::{primitives::VRFReturn, VRFError};
 
 const PUBKEY_LEN: usize = 32;
-const PRIVKEY_LEN: usize = 64;
+const PRIVKEY_LEN: usize = 64; // scalar + nonce
 
 pub mod data;
 
