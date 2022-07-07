@@ -42,7 +42,7 @@ impl SchnorrkelPublicKey {
         }
     }
 
-    pub fn verify_generic_vrf(
+    pub fn verify_generic_vrf_data(
         &self,
         message: Transcript,
         vrf_data: &VRFReturn,

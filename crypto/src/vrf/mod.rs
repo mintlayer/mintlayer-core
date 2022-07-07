@@ -111,10 +111,14 @@ impl VRFPublicKey {
         }
     }
 
-    pub fn verify_vrf(&self, message: Transcript, vrf_data: &VRFReturn) -> Result<(), VRFError> {
+    pub fn verify_vrf_data(
+        &self,
+        message: Transcript,
+        vrf_data: &VRFReturn,
+    ) -> Result<(), VRFError> {
         match &self.pub_key {
             VRFPublicKeyHolder::Schnorrkel(pub_key) => {
-                pub_key.verify_generic_vrf(message, vrf_data)
+                pub_key.verify_generic_vrf_data(message, vrf_data)
             }
         }
     }
@@ -198,7 +202,8 @@ mod tests {
             }
         }
 
-        pk.verify_vrf(transcript.into(), &vrf_data).expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript.into(), &vrf_data)
+            .expect("Valid VRF check failed");
     }
 
     #[test]
@@ -226,7 +231,7 @@ mod tests {
         let mut mutated_transcript: Transcript = transcript.into();
         mutated_transcript.append_u64(b"Forgery", 1337);
 
-        pk.verify_vrf(mutated_transcript, &vrf_data)
+        pk.verify_vrf_data(mutated_transcript, &vrf_data)
             .expect_err("Invalid VRF check succeeded");
     }
 
@@ -254,7 +259,7 @@ mod tests {
 
         let (_sk2, pk2) = VRFPrivateKey::new(VRFKeyKind::Schnorrkel);
 
-        pk2.verify_vrf(transcript.into(), &vrf_data)
+        pk2.verify_vrf_data(transcript.into(), &vrf_data)
             .expect_err("Invalid VRF check succeeded");
     }
 
@@ -289,6 +294,7 @@ mod tests {
             }
         }
 
-        pk.verify_vrf(transcript.into(), &vrf_data).expect("Valid VRF check failed");
+        pk.verify_vrf_data(transcript.into(), &vrf_data)
+            .expect("Valid VRF check failed");
     }
 }
