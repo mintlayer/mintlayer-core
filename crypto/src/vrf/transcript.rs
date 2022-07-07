@@ -29,7 +29,7 @@ pub struct TranscriptAssembler {
     components: Vec<(&'static [u8], TranscriptComponent)>,
 }
 
-// A wrapper that makes it unnecessary to use the merlin dependency
+// A wrapper that makes it unnecessary to directly use the merlin dependency
 #[derive(Clone)]
 pub struct WrappedTranscript(Transcript);
 
