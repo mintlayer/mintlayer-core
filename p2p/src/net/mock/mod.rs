@@ -174,6 +174,10 @@ where
         &self.addr
     }
 
+    async fn ban_peer(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
+        todo!();
+    }
+
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         todo!();
         // match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {

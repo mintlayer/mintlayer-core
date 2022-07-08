@@ -366,6 +366,19 @@ where
         &self.peer_id
     }
 
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        log::debug!("ban peer {}", peer_id);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::BanPeer {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+        rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
+    }
+
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
             types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
