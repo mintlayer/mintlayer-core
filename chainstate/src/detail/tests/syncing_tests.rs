@@ -116,10 +116,10 @@ fn get_headers_genesis() {
         let mut btf = BlockTestFramework::new();
         let genesis = btf.genesis().clone();
 
-        btf.create_chain(&genesis.get_id(), rng.gen_range(100..1000)).unwrap();
+        btf.create_chain(&genesis.get_id(), rng.gen_range(64..128)).unwrap();
         let locator_1 = btf.chainstate.get_locator().unwrap();
 
-        let chain_length = rng.gen_range(1000..2000);
+        let chain_length = rng.gen_range(1200..2000);
         btf.create_chain(&genesis.get_id(), chain_length).unwrap();
         let locator_2 = btf.chainstate.get_locator().unwrap();
         assert_ne!(locator_1, locator_2);
