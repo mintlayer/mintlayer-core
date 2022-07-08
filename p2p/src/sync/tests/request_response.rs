@@ -16,7 +16,8 @@
 // Author(s): A. Altonen
 use super::*;
 use crate::message::*;
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_request_response() {
@@ -42,7 +43,7 @@ async fn test_request_response() {
         request,
     }) = mgr2.handle.poll_next().await
     {
-        assert_eq!(request, Request::HeaderRequest(HeaderRequest::new(vec![])),);
+        assert_eq!(request, Request::HeaderRequest(HeaderRequest::new(vec![])));
 
         mgr2.handle
             .send_response(
@@ -89,35 +90,33 @@ async fn test_multiple_requests_and_responses() {
 
     assert_eq!(request_ids.len(), 2);
 
-    for _ in 0..2 {
-        if let Ok(net::types::SyncingEvent::Request {
-            peer_id: _,
-            request_id,
-            request: _,
-        }) = mgr2.handle.poll_next().await
-        {
-            mgr2.handle
-                .send_response(
-                    request_id,
-                    Response::HeaderResponse(HeaderResponse::new(vec![])),
-                )
-                .await
-                .unwrap();
-        } else {
-            panic!("invalid data received");
+    for i in 0..2 {
+        match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+            Ok(event) => match event {
+                Ok(net::types::SyncingEvent::Request { request_id, .. }) => {
+                    mgr2.handle
+                        .send_response(
+                            request_id,
+                            Response::HeaderResponse(HeaderResponse::new(vec![])),
+                        )
+                        .await
+                        .unwrap();
+                }
+                _ => panic!("invalid event: {:?}", event),
+            },
+            Err(_) => panic!("did not receive `Request` in time, iter {}", i),
         }
     }
 
-    for _ in 0..2 {
-        if let Ok(net::types::SyncingEvent::Response {
-            peer_id: _,
-            request_id,
-            response: _,
-        }) = mgr1.handle.poll_next().await
-        {
-            request_ids.remove(&request_id);
-        } else {
-            panic!("invalid data received");
+    for i in 0..2 {
+        match timeout(Duration::from_secs(15), mgr1.handle.poll_next()).await {
+            Ok(event) => match event {
+                Ok(net::types::SyncingEvent::Response { request_id, .. }) => {
+                    request_ids.remove(&request_id);
+                }
+                _ => panic!("invalid event: {:?}", event),
+            },
+            Err(_) => panic!("did not receive `Response` in time, iter {}", i),
         }
     }
 
@@ -153,11 +152,28 @@ async fn test_request_timeout_error() {
         }
     });
 
-    for _ in 0..3 {
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
-        ));
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Request` in time"),
+    }
+
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Error { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Error` in time"),
+    }
+
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Request` in time"),
     }
 }
 
