@@ -153,11 +153,34 @@ async fn test_request_timeout_error() {
         }
     });
 
-    for _ in 0..3 {
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
-        ));
+    tokio::select! {
+        event = mgr2.handle.poll_next() => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {},
+            _ => panic!("invalid event received {:?}, expected `Request`", event),
+        },
+        _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {
+            panic!("did not receive `Request in time`");
+        }
+    }
+
+    tokio::select! {
+        event = mgr2.handle.poll_next() => match event {
+            Ok(net::types::SyncingEvent::Error { .. }) => {},
+            _ => panic!("invalid event received {:?}, expected `Error`", event),
+        },
+        _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {
+            panic!("did not receive `Error in time`");
+        }
+    }
+
+    tokio::select! {
+        event = mgr2.handle.poll_next() => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {},
+            _ => panic!("invalid event received {:?}, expected `Request`", event),
+        },
+        _ = tokio::time::sleep(std::time::Duration::from_secs(15)) => {
+            panic!("did not receive `Request in time`");
+        }
     }
 }
 
