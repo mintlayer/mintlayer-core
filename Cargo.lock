@@ -2397,10 +2397,12 @@ dependencies = [
  "logging",
  "p2p",
  "rpc",
+ "serde",
  "strum",
  "subsystem",
  "thiserror",
  "tokio",
+ "toml",
 ]
 
 [[package]]

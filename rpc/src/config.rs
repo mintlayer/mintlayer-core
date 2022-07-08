@@ -13,12 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, str::FromStr};
+
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
-#[derive(serde::Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     /// Address to bind RPC to.
-    #[clap(long, value_name = "ADDR", default_value = "127.0.0.1:3030")]
-    pub rpc_addr: SocketAddr,
+    pub address: SocketAddr,
+}
+
+impl Config {
+    /// Creates a new rpc configuration instance.
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            address: SocketAddr::from_str("127.0.0.1:3030")?,
+        })
+    }
 }

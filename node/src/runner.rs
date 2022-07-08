@@ -15,7 +15,7 @@
 
 //! Node initialisation routine.
 
-use crate::options::Options;
+use crate::{config::Config, options::Options};
 use chainstate::rpc::ChainstateRpcServer;
 use common::chain::config::ChainType;
 use p2p::rpc::P2pRpcServer;
@@ -28,16 +28,21 @@ enum Error {
 }
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
-pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
+pub async fn initialize(config: Config) -> anyhow::Result<subsystem::Manager> {
     // Initialize storage and chain configuration
     let storage = chainstate_storage::Store::new_empty()?;
 
     // Chain configuration
-    let chain_config = match opts.net {
-        ChainType::Mainnet => Arc::new(common::chain::config::create_mainnet()),
-        ChainType::Regtest => Arc::new(common::chain::config::create_regtest()),
-        chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
-    };
+    let chain_config = todo!();
+    // let chain_config = match opts.net {
+    //     ChainType::Mainnet => Arc::new(common::chain::config::create_mainnet()),
+    //     ChainType::Regtest => Arc::new(common::chain::config::create_regtest()),
+    //     chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
+    // };
+    // let config: Config = todo!();
+
+    // TODO: FIXME: Early return.
+    todo!();
 
     // INITIALIZE SUBSYSTEMS
 
@@ -52,7 +57,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
             storage.clone(),
             None,
             Default::default(),
-            opts.chainstate_config,
+            config.chainstate,
         )?,
     );
 
@@ -62,7 +67,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
             chainstate.clone(),
-            opts.p2p_config,
+            config.p2p,
         )
         .await
         .expect("The p2p subsystem initialization failed"),
@@ -71,7 +76,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",
-        rpc::Builder::new(opts.rpc_config)
+        rpc::Builder::new(config.rpc)
             .register(chainstate.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())
@@ -83,8 +88,8 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
 }
 
 /// Initialize and run the node
-pub async fn run(opts: Options) -> anyhow::Result<()> {
-    let manager = initialize(opts).await?;
+pub async fn run(config: Config) -> anyhow::Result<()> {
+    let manager = initialize(config).await?;
 
     #[allow(clippy::unit_arg)]
     Ok(manager.main().await)

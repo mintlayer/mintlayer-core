@@ -13,6 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::{Deserialize, Serialize};
+
+use common::chain::config::ChainType;
+
 /// The chainstate subsystem configuration.
-#[derive(serde::Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {}
+
+impl Config {
+    /// Creates a new chainstate configuration isntance.
+    pub fn new(net: ChainType) -> Self {
+        Self {}
+    }
+}

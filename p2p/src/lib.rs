@@ -247,6 +247,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(config.p2p_addr, chain_config, consensus_handle).await?,
+        p2p: P2P::new(config.address, chain_config, consensus_handle).await?,
     })
 }

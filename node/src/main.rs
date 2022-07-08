@@ -15,16 +15,32 @@
 
 //! Top-level node binary
 
-mod options;
-mod runner;
+use std::fs;
+
+use anyhow::{Context, Result};
+
+use logging::log;
+
+use node::{Command, Config, Options};
 
 async fn run() -> anyhow::Result<()> {
-    let opts = options::Options::from_args(std::env::args_os());
-
+    let opts = Options::from_args(std::env::args_os());
     logging::init_logging(opts.log_path.as_ref());
-    logging::log::trace!("Command line options: {:?}", opts);
+    log::trace!("Command line options: {opts:?}");
 
-    runner::run(opts).await
+    match opts.command {
+        Command::CreateConfig { path, net } => {
+            let config = Config::new(net)?;
+            let config = toml::to_string(&config).context("Failed to serialize config")?;
+            log::trace!("Saving config to {path:?}: {config:#?}");
+            fs::write(path, config).context("Failed to write config")?;
+            Ok(())
+        }
+        Command::Run(options) => {
+            let config = Config::read(&options).context("Failed to initialize config")?;
+            node::run(config).await
+        }
+    }
 }
 
 #[tokio::main]

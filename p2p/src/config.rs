@@ -13,10 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use serde::{Deserialize, Serialize};
+
+use common::chain::config::ChainType;
+
 /// The p2p subsystem configuration.
-#[derive(serde::Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     /// Address to bind P2P to.
-    #[clap(long, value_name = "ADDR", default_value = "/ip6/::1/tcp/3031")]
-    pub p2p_addr: String,
+    pub address: String,
+}
+
+impl Config {
+    /// Creates a new p2p configuration instance.
+    pub fn new(net: ChainType) -> Self {
+        Self {
+            address: "/ip/::1/tcp/3031".into(),
+        }
+    }
 }

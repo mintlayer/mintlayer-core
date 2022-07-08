@@ -13,16 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Node configuration options
+//! The node command line options.
 
 use std::{ffi::OsString, path::PathBuf};
 
+use clap::{Args, Parser, Subcommand};
 use strum::VariantNames;
 
 use common::chain::config::ChainType;
 
 /// Mintlayer node executable
-#[derive(clap::Parser, Debug)]
+#[derive(Parser, Debug)]
 #[clap(author, version, about)]
 pub struct Options {
     /// Where to write logs
@@ -33,14 +34,28 @@ pub struct Options {
     #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
     pub net: ChainType,
 
-    #[clap(flatten)]
-    pub chainstate_config: chainstate::Config,
+    #[clap(subcommand)]
+    pub command: Command,
+}
 
-    #[clap(flatten)]
-    pub p2p_config: p2p::Config,
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    Run(RunOptions),
+    /// Create a configuration file.
+    CreateConfig {
+        /// The path where config will be created.
+        #[clap(short, long, default_value = "./mintlayer.toml")]
+        path: PathBuf,
+        /// Blockchain type.
+        #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
+        net: ChainType,
+    },
+}
 
-    #[clap(flatten)]
-    pub rpc_config: rpc::Config,
+#[derive(Args, Debug)]
+pub struct RunOptions {
+    #[clap(short, long, default_value = "./mintlayer.toml")]
+    pub config_path: PathBuf,
 }
 
 impl Options {
