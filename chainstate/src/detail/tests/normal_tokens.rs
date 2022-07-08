@@ -30,7 +30,7 @@ fn process_token(
         0,
         InputWitness::NoSignature(None),
     )];
-    let outputs = vec![TxOutput::new(value, OutputPurpose::Transfer(receiver.clone()))];
+    let outputs = vec![TxOutput::new(value, OutputPurpose::Transfer(receiver))];
     let block = Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
         Some(prev_block_id),
@@ -46,7 +46,7 @@ fn process_token(
 #[test]
 fn token_issue_test() {
     common::concurrency::model(|| {
-        // Process genesis
+        // Process token without errors
         let mut chainstate = setup_chainstate();
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -58,7 +58,6 @@ fn token_issue_test() {
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
 
-        // Try to create TX with incorrect token issue data
         // Name is too long
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
@@ -66,24 +65,68 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = dbg!(process_token(&mut chainstate, value.clone()));
-        assert!(matches!(
-            block_index,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
-                )
-            ))
-        ));
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
 
-        // let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-        // assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
-        // let outputs = vec![TxOutput::new(value, OutputPurpose::Transfer(receiver.clone()))];
         // Doesn't exist name
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
+
         // Name contain not alpha-numeric byte
-        // Issue amount is too big
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: "💖".as_bytes().to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
+
         // Issue amount is too low
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: "USDT".as_bytes().to_vec(),
+            amount_to_issue: Amount::from_atoms(0),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
+
         // Too many decimals
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: "USDT".as_bytes().to_vec(),
+            amount_to_issue: Amount::from_atoms(123456789),
+            number_of_decimals: 123,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
+
         // URI is too long
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_issue(block_index);
     });
+}
+
+fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
+    assert!(matches!(
+        block_index,
+        Err(BlockError::CheckBlockFailed(
+            CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
+            )
+        ))
+    ));
 }
