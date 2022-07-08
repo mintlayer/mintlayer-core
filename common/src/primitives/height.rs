@@ -13,8 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-use std::ops::{Add, Sub};
+use std::{
+    fmt,
+    ops::{Add, Sub},
+};
+
+use serde::{Deserialize, Serialize};
 
 use serialization::{Decode, Encode};
 
@@ -162,7 +166,9 @@ impl BlockHeight {
 
 /////////////////////////////
 
-#[derive(Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode)]
+#[derive(
+    Debug, Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Encode, Decode, Serialize, Deserialize,
+)]
 pub struct BlockDistance(DistanceIntType);
 
 impl BlockDistance {

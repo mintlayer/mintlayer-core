@@ -19,7 +19,6 @@ use crate::{
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
-use common::chain::ChainConfig;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
@@ -154,17 +153,17 @@ where
     ///
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
-        bind_addr: String,
-        config: Arc<ChainConfig>,
+        config: Config,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
+        let config = Arc::new(config);
         let (conn, pubsub, sync) = T::start(
-            bind_addr.parse::<T::Address>().map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
+            config.address.parse::<T::Address>().map_err(|_| {
+                P2pError::ConversionError(ConversionError::InvalidAddress(config.address))
             })?,
             &[],
             Arc::clone(&config),
@@ -232,9 +231,8 @@ impl<T: NetworkingService + 'static> subsystem::Subsystem for P2pInterface<T> {}
 pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
-    chain_config: Arc<ChainConfig>,
-    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     config: Config,
+    consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
@@ -247,6 +245,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(config.address, chain_config, consensus_handle).await?,
+        p2p: P2P::new(config, consensus_handle).await?,
     })
 }

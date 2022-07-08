@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{error, message};
+use crate::{error, message, Config};
 use async_trait::async_trait;
 use common::primitives;
 use std::{
@@ -72,15 +72,13 @@ pub trait NetworkingService {
     ///
     /// `strategies` - list of strategies that are used for peer discovery
     ///
-    /// `topics` - list of pubsub topics that the implementation should subscribe to
-    ///
-    /// `chain_config` - chain config of the node
+    /// `config` - p2p config.
     ///
     /// `timeout` - timeout for outbound connections
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        chain_config: Arc<common::chain::ChainConfig>,
+        config: Arc<Config>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
         Self::ConnectivityHandle,

@@ -26,8 +26,9 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkingService},
+    Config,
 };
-use common::{chain::ChainConfig, primitives::semver};
+use common::primitives::semver;
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
@@ -47,7 +48,7 @@ where
     T: NetworkingService,
 {
     /// Chain config
-    config: Arc<ChainConfig>,
+    config: Arc<Config>,
 
     /// Handle for sending/receiving connectivity events
     handle: T::ConnectivityHandle,
@@ -76,7 +77,7 @@ where
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
+        config: Arc<Config>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
@@ -156,7 +157,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
-        version == self.config.version()
+        version == &self.config.version
     }
 
     /// Handle connection established event
@@ -168,16 +169,16 @@ where
         log::debug!("{}", info);
 
         ensure!(
-            info.magic_bytes == *self.config.magic_bytes(),
+            info.magic_bytes == self.config.magic_bytes,
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                *self.config.magic_bytes(),
+                self.config.magic_bytes,
                 info.magic_bytes,
             ))
         );
         ensure!(
             self.validate_version(&info.version),
             P2pError::ProtocolError(ProtocolError::InvalidVersion(
-                *self.config.version(),
+                self.config.version,
                 info.version
             ))
         );

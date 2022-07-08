@@ -23,7 +23,7 @@ use logging::log;
 
 use node::{Command, Config, Options};
 
-async fn run() -> anyhow::Result<()> {
+async fn run() -> Result<()> {
     let opts = Options::from_args(std::env::args_os());
     logging::init_logging(opts.log_path.as_ref());
     log::trace!("Command line options: {opts:?}");

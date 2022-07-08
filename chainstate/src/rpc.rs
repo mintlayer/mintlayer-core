@@ -94,10 +94,11 @@ mod test {
     ) {
         let storage = chainstate_storage::Store::new_empty().unwrap();
         let cfg = Arc::new(common::chain::config::create_unit_test_config());
+        let config = Config::new();
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "chainstate",
-            crate::make_chainstate(cfg, storage, None, Default::default(), Config {}).unwrap(),
+            crate::make_chainstate(cfg, config, storage, None, Default::default()).unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",

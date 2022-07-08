@@ -27,8 +27,8 @@ use crate::{
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
     },
+    Config,
 };
-use common::chain::config::ChainConfig;
 use libp2p::{
     core::PeerId,
     gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
@@ -92,11 +92,7 @@ type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
         as IntoConnectionHandler>::Handler as ConnectionHandler>::InEvent>;
 
 impl Libp2pBehaviour {
-    pub async fn new(
-        config: Arc<ChainConfig>,
-        id_keys: identity::Keypair,
-        relay_mdns: bool,
-    ) -> Self {
+    pub async fn new(config: Arc<Config>, id_keys: identity::Keypair, relay_mdns: bool) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()
             .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
             .validation_mode(ValidationMode::Strict)
@@ -105,7 +101,7 @@ impl Libp2pBehaviour {
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version();
+        let version = config.version;
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             version.major,

@@ -18,15 +18,13 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event, message,
     net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
+    Config,
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
 };
 use common::{
-    chain::{
-        block::{Block, BlockHeader},
-        config::ChainConfig,
-    },
+    chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
 };
 use futures::FutureExt;
@@ -73,7 +71,7 @@ pub enum SyncState {
 /// peer it's connected to and actively keep track of the peer's state.
 pub struct SyncManager<T: NetworkingService> {
     /// Chain config
-    config: Arc<ChainConfig>,
+    config: Arc<Config>,
 
     /// Syncing state of the local node
     state: SyncState,
@@ -107,7 +105,7 @@ where
     T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
+        config: Arc<Config>,
         handle: T::SyncingCodecHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,

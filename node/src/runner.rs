@@ -54,10 +54,10 @@ pub async fn initialize(config: Config) -> anyhow::Result<subsystem::Manager> {
         "chainstate",
         chainstate::make_chainstate(
             Arc::clone(&chain_config),
+            config.chainstate,
             storage.clone(),
             None,
             Default::default(),
-            config.chainstate,
         )?,
     );
 
@@ -66,8 +66,8 @@ pub async fn initialize(config: Config) -> anyhow::Result<subsystem::Manager> {
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
-            chainstate.clone(),
             config.p2p,
+            chainstate.clone(),
         )
         .await
         .expect("The p2p subsystem initialization failed"),

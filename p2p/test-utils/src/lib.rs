@@ -17,7 +17,10 @@
 
 #![allow(clippy::unwrap_used)]
 
-use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
+use chainstate::{
+    chainstate_interface::ChainstateInterface, make_chainstate, BlockSource,
+    Config as ChainstateConfig,
+};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
@@ -146,10 +149,10 @@ pub async fn start_chainstate(
         "chainstate",
         make_chainstate(
             config,
+            ChainstateConfig::new(),
             storage,
             None,
             Default::default(),
-            chainstate::Config {},
         )
         .unwrap(),
     );

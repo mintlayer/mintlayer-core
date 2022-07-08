@@ -89,6 +89,7 @@ fn setup_chainstate() -> Chainstate {
 fn chainstate_with_config(config: ChainConfig) -> Chainstate {
     Chainstate::new(
         Arc::new(config),
+        todo!(),
         Store::new_empty().unwrap(),
         None,
         Default::default(),

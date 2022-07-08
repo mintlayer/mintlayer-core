@@ -15,13 +15,15 @@
 
 use serde::{Deserialize, Serialize};
 
-use common::chain::config::ChainType;
+use common::{chain::config::ChainType, primitives::semver::SemVer};
 
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
     /// Address to bind P2P to.
     pub address: String,
+    pub version: SemVer,
+    pub magic_bytes: [u8; 4],
 }
 
 impl Config {
@@ -29,6 +31,13 @@ impl Config {
     pub fn new(net: ChainType) -> Self {
         Self {
             address: "/ip/::1/tcp/3031".into(),
+            version: SemVer::new(0, 1, 0),
+            magic_bytes: net.default_magic_bytes(),
         }
+    }
+
+    /// Returns magic bytes as little endian `u32`.
+    pub fn magic_bytes_as_u32(&self) -> u32 {
+        u32::from_le_bytes(self.magic_bytes)
     }
 }

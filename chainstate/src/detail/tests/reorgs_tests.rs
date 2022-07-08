@@ -17,9 +17,12 @@
 
 use std::sync::Mutex;
 
-use crate::detail::tests::{
-    test_framework::{BlockTestFramework, TestBlockParams, TestSpentStatus},
-    *,
+use crate::{
+    detail::tests::{
+        test_framework::{BlockTestFramework, TestBlockParams, TestSpentStatus},
+        *,
+    },
+    Config,
 };
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;
@@ -29,9 +32,10 @@ use common::chain::config::create_unit_test_config;
 fn reorg_simple() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
+        let config_ = Config::new();
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
+            Chainstate::new_no_genesis(config, config_, storage, None, Default::default()).unwrap();
 
         // Process the genesis block.
         chainstate

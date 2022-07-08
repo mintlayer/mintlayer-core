@@ -20,6 +20,7 @@ use crate::{
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
+    Config,
 };
 use async_trait::async_trait;
 use logging::log;
@@ -97,7 +98,7 @@ impl NetworkingService for MockService {
     async fn start(
         addr: Self::Address,
         _strategies: &[Self::DiscoveryStrategy],
-        _config: Arc<common::chain::ChainConfig>,
+        _config: Arc<Config>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
         Self::ConnectivityHandle,

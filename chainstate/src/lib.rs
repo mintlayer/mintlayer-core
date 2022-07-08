@@ -59,13 +59,14 @@ type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
 pub fn make_chainstate(
     chain_config: Arc<ChainConfig>,
+    config: Config,
     chainstate_storage: chainstate_storage::Store,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
-    _config: Config,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
     let cons = Chainstate::new(
         chain_config,
+        config,
         chainstate_storage,
         custom_orphan_error_hook,
         time_getter,

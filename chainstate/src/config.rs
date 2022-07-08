@@ -13,17 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
-use common::chain::config::ChainType;
+use common::primitives::BlockDistance;
 
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {}
+pub struct Config {
+    pub max_block_header_size: usize,
+    pub max_block_size_from_txs: usize,
+    pub max_block_size_from_smart_contracts: usize,
+    pub max_future_block_time_offset: Duration,
+    pub blockreward_maturity: BlockDistance,
+}
 
 impl Config {
     /// Creates a new chainstate configuration isntance.
-    pub fn new(net: ChainType) -> Self {
-        Self {}
+    pub fn new() -> Self {
+        Self {
+            max_block_header_size: 1024,
+            max_block_size_from_txs: 524_288,
+            max_block_size_from_smart_contracts: 524_288,
+            max_future_block_time_offset: Duration::from_secs(60 * 60),
+            blockreward_maturity: BlockDistance::new(500),
+        }
     }
 }

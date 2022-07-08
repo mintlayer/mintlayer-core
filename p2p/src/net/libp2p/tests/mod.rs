@@ -14,10 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::net::{
-    self,
-    libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, types},
+use crate::{
+    net::{
+        self,
+        libp2p::sync::*,
+        libp2p::{backend::Backend, behaviour, types},
+    },
+    Config,
 };
 use futures::prelude::*;
 use libp2p::{
@@ -56,7 +59,7 @@ mod ping;
 
 #[allow(dead_code)]
 pub async fn make_libp2p(
-    config: common::chain::ChainConfig,
+    config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     relay_mdns: bool,
@@ -90,8 +93,8 @@ pub async fn make_libp2p(
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version();
-        let magic = config.magic_bytes();
+        let version = config.version;
+        let magic = config.magic_bytes;
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             version.major,
@@ -156,7 +159,7 @@ pub async fn make_libp2p(
 
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
-    config: common::chain::ChainConfig,
+    config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
@@ -191,8 +194,8 @@ pub async fn make_libp2p_with_ping(
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version();
-        let magic = config.magic_bytes();
+        let version = config.version;
+        let magic = config.magic_bytes;
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             version.major,
@@ -299,9 +302,9 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 }
 
 #[allow(dead_code)]
-pub fn make_identify(config: common::chain::ChainConfig, id_keys: identity::Keypair) -> Identify {
-    let version = config.version();
-    let magic = config.magic_bytes();
+pub fn make_identify(config: Config, id_keys: identity::Keypair) -> Identify {
+    let version = config.version;
+    let magic = config.magic_bytes;
     let protocol = format!(
         "/mintlayer/{}.{}.{}-{:x}",
         version.major,

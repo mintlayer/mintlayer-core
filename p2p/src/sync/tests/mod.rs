@@ -50,10 +50,11 @@ where
     let (tx_swarm, rx_swarm) = mpsc::channel(16);
     let storage = chainstate_storage::Store::new_empty().unwrap();
     let cfg = Arc::new(common::chain::config::create_unit_test_config());
+    let config = ChainstateConfig::new();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "consensus",
-        make_chainstate(cfg, storage, None, Default::default(), ChainstateConfig {}).unwrap(),
+        make_chainstate(cfg, config, storage, None, Default::default()).unwrap(),
     );
     tokio::spawn(async move { man.main().await });
 

@@ -35,7 +35,7 @@ pub struct Config {
 impl Config {
     /// Creates a new `Config` instance for the specified chain type.
     pub fn new(net: ChainType) -> Result<Self> {
-        let chainstate = chainstate::Config::new(net);
+        let chainstate = chainstate::Config::new();
         let p2p = p2p::Config::new(net);
         let rpc = rpc::Config::new()?;
         Ok(Self {

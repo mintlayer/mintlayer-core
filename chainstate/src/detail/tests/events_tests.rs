@@ -121,10 +121,17 @@ fn several_subscribers_several_events() {
 fn orphan_block() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
+        let config_ = Config::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            config,
+            config_,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
@@ -144,10 +151,17 @@ fn orphan_block() {
 fn custom_orphan_error_hook() {
     common::concurrency::model(|| {
         let config = Arc::new(create_unit_test_config());
+        let config_ = Config::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            config,
+            config_,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
@@ -155,7 +169,7 @@ fn custom_orphan_error_hook() {
         let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
         // Produce a block with a bad timestamp.
         let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
-            + chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+            + chainstate.config.max_future_block_time_offset.as_secs() as u32;
         let second_block = Block::new(
             vec![],
             Some(first_block.get_id()),

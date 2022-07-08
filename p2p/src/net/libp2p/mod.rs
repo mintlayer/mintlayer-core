@@ -25,6 +25,7 @@ use crate::{
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
+    Config,
 };
 use async_trait::async_trait;
 use itertools::*;
@@ -230,7 +231,7 @@ impl NetworkingService for Libp2pService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        chain_config: Arc<common::chain::ChainConfig>,
+        config: Arc<Config>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
@@ -258,7 +259,7 @@ impl NetworkingService for Libp2pService {
 
         let swarm = SwarmBuilder::new(
             transport,
-            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, relay_mdns).await,
+            behaviour::Libp2pBehaviour::new(Arc::clone(&config), id_keys, relay_mdns).await,
             peer_id,
         )
         .build();

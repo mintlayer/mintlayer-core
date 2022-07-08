@@ -24,16 +24,14 @@ use crate::{
         types::{PubSubEvent, PubSubTopic, ValidationResult},
         NetworkingService, PubSubService,
     },
+    Config,
 };
 use chainstate::{
     ban_score::BanScore,
     chainstate_interface, BlockError,
     ChainstateError::{FailedToInitializeChainstate, FailedToReadProperty, ProcessBlockError},
 };
-use common::{
-    chain::{block::Block, ChainConfig},
-    primitives::Id,
-};
+use common::{chain::block::Block, primitives::Id};
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
@@ -45,7 +43,7 @@ const CHANNEL_SIZE: usize = 64;
 /// Publish-subscribe message handler
 pub struct PubSubMessageHandler<T: NetworkingService> {
     /// Chain config
-    _chain_config: Arc<ChainConfig>,
+    _chain_config: Arc<Config>,
 
     /// Handle for communication with networking service
     pubsub_handle: T::PubSubHandle,
@@ -73,7 +71,7 @@ where
     /// * `chainstate_handle` -  handle for communication with chainstate
     /// * `rx_pubsub` - RX channel for receiving control events
     pub fn new(
-        _chain_config: Arc<ChainConfig>,
+        _chain_config: Arc<Config>,
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,

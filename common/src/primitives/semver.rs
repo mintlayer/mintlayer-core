@@ -14,9 +14,12 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+use serde::{Deserialize, Serialize};
+
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone, Serialize, Deserialize)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,

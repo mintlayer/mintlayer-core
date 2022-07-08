@@ -37,7 +37,6 @@ use crate::primitives::{semver::SemVer, BlockHeight};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
 #[derive(
@@ -70,7 +69,7 @@ impl ChainType {
         }
     }
 
-    const fn default_magic_bytes(&self) -> [u8; 4] {
+    pub const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
             ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
@@ -88,18 +87,11 @@ pub struct ChainConfig {
     p2p_port: u16,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
-    magic_bytes: [u8; 4],
     genesis_block: Block,
     genesis_block_id: Id<Block>,
-    blockreward_maturity: BlockDistance,
-    max_future_block_time_offset: Duration,
-    version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
     emission_schedule: EmissionSchedule,
-    max_block_header_size: usize,
-    max_block_size_with_standard_txs: usize,
-    max_block_size_with_smart_contracts: usize,
 }
 
 impl ChainConfig {
@@ -113,18 +105,6 @@ impl ChainConfig {
 
     pub fn genesis_block(&self) -> &Block {
         &self.genesis_block
-    }
-
-    pub fn magic_bytes(&self) -> &[u8; 4] {
-        &self.magic_bytes
-    }
-
-    pub fn magic_bytes_as_u32(&self) -> u32 {
-        u32::from_le_bytes(*self.magic_bytes())
-    }
-
-    pub fn version(&self) -> &SemVer {
-        &self.version
     }
 
     pub fn chain_type(&self) -> &ChainType {
@@ -159,42 +139,15 @@ impl ChainConfig {
         self.coin_decimals
     }
 
-    pub fn max_future_block_time_offset(&self) -> &Duration {
-        &self.max_future_block_time_offset
-    }
-
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {
         self.emission_schedule().subsidy(*height).to_amount_atoms()
-    }
-
-    pub fn max_block_header_size(&self) -> usize {
-        self.max_block_header_size
-    }
-
-    pub fn max_block_size_from_txs(&self) -> usize {
-        self.max_block_size_with_standard_txs
-    }
-
-    pub fn max_block_size_from_smart_contracts(&self) -> usize {
-        self.max_block_size_with_smart_contracts
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
-
-    pub const fn blockreward_maturity(&self) -> &BlockDistance {
-        &self.blockreward_maturity
-    }
 }
-
-// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
-const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
-// DSA allows us to have blocks up to 1mb
-const MAX_BLOCK_HEADER_SIZE: usize = 1024;
-const MAX_BLOCK_TXS_SIZE: usize = 524_288;
-const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
@@ -300,13 +253,5 @@ mod tests {
             let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
             assert_eq!(&chain_type.to_string(), chain_type_str);
         }
-    }
-
-    #[test]
-    fn different_magic_bytes() {
-        let config1 = Builder::new(ChainType::Regtest).build();
-        let config2 = Builder::new(ChainType::Regtest).magic_bytes([1, 2, 3, 4]).build();
-
-        assert_ne!(config1.magic_bytes(), config2.magic_bytes());
     }
 }
