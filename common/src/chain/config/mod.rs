@@ -32,8 +32,7 @@ use crate::chain::OutputPurpose;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, H256};
 use crate::primitives::Amount;
-use crate::primitives::BlockDistance;
-use crate::primitives::{semver::SemVer, BlockHeight};
+use crate::primitives::BlockHeight;
 use std::collections::BTreeMap;
 use std::time::Duration;
 

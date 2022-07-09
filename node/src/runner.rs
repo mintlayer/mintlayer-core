@@ -64,13 +64,9 @@ pub async fn initialize(config: Config) -> anyhow::Result<subsystem::Manager> {
     // P2P subsystem
     let p2p = manager.add_subsystem(
         "p2p",
-        p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
-            Arc::clone(&chain_config),
-            config.p2p,
-            chainstate.clone(),
-        )
-        .await
-        .expect("The p2p subsystem initialization failed"),
+        p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(config.p2p, chainstate.clone())
+            .await
+            .expect("The p2p subsystem initialization failed"),
     );
 
     // RPC subsystem

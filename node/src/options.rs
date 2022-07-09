@@ -54,8 +54,11 @@ pub enum Command {
 
 #[derive(Args, Debug)]
 pub struct RunOptions {
+    /// The path to the configuration file.
     #[clap(short, long, default_value = "./mintlayer.toml")]
     pub config_path: PathBuf,
+    #[clap(long, value_name = "ADDR")]
+    pub p2p_addr: Option<String>,
 }
 
 impl Options {

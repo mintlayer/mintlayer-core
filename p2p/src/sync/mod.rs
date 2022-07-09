@@ -227,7 +227,9 @@ where
                     locator
                         .iter()
                         .any(|header| &Some(header.get_id()) == headers[0].prev_block_id())
-                        || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
+                    // TODO: FIXME:
+                    || &Some(todo!()) == headers[0].prev_block_id(),
+                    //|| &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
                     P2pError::ProtocolError(ProtocolError::InvalidMessage),
                 );
             }

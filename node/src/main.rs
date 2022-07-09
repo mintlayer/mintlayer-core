@@ -37,7 +37,7 @@ async fn run() -> Result<()> {
             Ok(())
         }
         Command::Run(options) => {
-            let config = Config::read(&options).context("Failed to initialize config")?;
+            let config = Config::read(options).context("Failed to initialize config")?;
             node::run(config).await
         }
     }

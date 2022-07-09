@@ -47,13 +47,13 @@ impl Config {
 
     /// Reads a configuration from the path specified in options and overrides the provided
     /// parameters.
-    pub fn read(options: &RunOptions) -> Result<Self> {
+    pub fn read(options: RunOptions) -> Result<Self> {
         let config = fs::read_to_string(&options.config_path).context("Failed to read config")?;
-        let mut config = toml::from_str(&config).context("Failed to deserialize config")?;
+        let mut config: Config = toml::from_str(&config).context("Failed to deserialize config")?;
 
-        // if Some(x) = options.x {
-        //     config.x = x;
-        // }
+        if let Some(address) = options.p2p_addr {
+            config.p2p.address = address;
+        }
 
         Ok(config)
     }

@@ -163,7 +163,7 @@ where
         let config = Arc::new(config);
         let (conn, pubsub, sync) = T::start(
             config.address.parse::<T::Address>().map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(config.address))
+                P2pError::ConversionError(ConversionError::InvalidAddress(config.address.clone()))
             })?,
             &[],
             Arc::clone(&config),
