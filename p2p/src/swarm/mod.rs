@@ -191,7 +191,7 @@ where
         );
 
         let peer_id = info.peer_id;
-        self.peers.insert(info.peer_id, peerdb::PeerContext { _info: info });
+        self.peers.insert(info.peer_id, peerdb::PeerContext { _info: info, score: 0 });
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
             .await
@@ -250,6 +250,24 @@ where
 
         self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id)).await?;
         self.peers.remove(&peer_id);
+        Ok(())
+    }
+
+    /// Adjust peer score
+    ///
+    /// If after adjustment the peer score is more than the ban threshold, the peer is banned.
+    async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
+        log::debug!("adjusting score for peer {}, adjustment {}", peer_id, score);
+
+        if let Some(entry) = self.peers.get_mut(&peer_id) {
+            entry.score = entry.score.saturating_add(score);
+
+            if entry.score >= 100 {
+                self.peerdb.ban_peer(&peer_id);
+                return self.handle.ban_peer(peer_id).await;
+            }
+        }
+
         Ok(())
     }
 
@@ -397,6 +415,13 @@ where
                             .send(self.handle.disconnect(peer_id).await)
                             .map_err(|_| P2pError::ChannelClosed)
                     }
+                    event::SwarmEvent::AdjustPeerScore(peer_id, score, response) => {
+                        log::debug!("adjust peer {} score: {}", peer_id, score);
+
+                        response
+                            .send(self.adjust_peer_score(peer_id, score).await)
+                            .map_err(|_| P2pError::ChannelClosed)
+                    }
                     event::SwarmEvent::GetPeerCount(response) => {
                         response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
                     }
@@ -446,9 +471,11 @@ where
                             Ok(())
                         }
                         net::types::ConnectivityEvent::Disconnected { .. } => {
+                            // TODO: add tests
                             Ok(())
                         }
                         net::types::ConnectivityEvent::Misbehaved { .. } => {
+                            // TODO: zzz
                             Ok(())
                         }
                         net::types::ConnectivityEvent::Error { .. } => {

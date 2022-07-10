@@ -38,7 +38,11 @@ use std::collections::{HashMap, HashSet};
 // TODO: store other discovered addresses
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
+    /// Peer information
     pub _info: types::PeerInfo<T>,
+
+    /// Peer score
+    pub score: u32,
 }
 
 /// Peer address information
@@ -62,6 +66,9 @@ pub struct PeerDb<T: NetworkingService> {
 
     /// Pending connections
     pending: HashMap<T::Address, PeerAddrInfo<T>>,
+
+    /// Banned peers
+    banned: HashSet<T::PeerId>,
 }
 
 impl<T: NetworkingService> PeerDb<T> {
@@ -70,6 +77,7 @@ impl<T: NetworkingService> PeerDb<T> {
             peers: HashMap::new(),
             discovered: HashMap::new(),
             pending: HashMap::new(),
+            banned: HashSet::new(),
         }
     }
 
@@ -104,9 +112,9 @@ impl<T: NetworkingService> PeerDb<T> {
         Some(addr)
     }
 
-    /// Chec is the peer ID banned
-    pub fn is_id_banned(&self, _peer_id: &T::PeerId) -> bool {
-        false // TODO: implement
+    /// Check is the peer ID banned
+    pub fn is_id_banned(&self, peer_id: &T::PeerId) -> bool {
+        self.banned.contains(peer_id)
     }
 
     /// Check is the address banned
@@ -156,6 +164,11 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Register peer information to `PeerDb`
     pub fn register_peer_info(&mut self, _info: types::PeerInfo<T>) {
         // TODO: implement
+    }
+
+    /// Ban peer
+    pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
+        self.banned.insert(*peer_id);
     }
 }
 
