@@ -30,7 +30,7 @@ impl Config {
     /// Creates a new p2p configuration instance.
     pub fn new(net: ChainType) -> Self {
         Self {
-            address: "/ip/::1/tcp/3031".into(),
+            address: "/ip6/::1/tcp/3031".into(),
             version: SemVer::new(0, 1, 0),
             magic_bytes: net.default_magic_bytes(),
         }
