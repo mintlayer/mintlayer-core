@@ -436,15 +436,33 @@ where
         match result {
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
-            Err(P2pError::ProtocolError(_err)) => {
-                log::error!("Peer {} commited a protocol error: {}", peer_id, _err);
-                // TODO: self.tx_swarm.report_protocol_error(peer_id, error).await?;
-                Ok(())
+            Err(P2pError::ProtocolError(err)) => {
+                log::error!("Peer {} commited a protocol error: {}", peer_id, err);
+
+                let (tx, rx) = oneshot::channel();
+                self.tx_swarm
+                    .send(event::SwarmEvent::AdjustPeerScore(
+                        peer_id,
+                        err.ban_score(),
+                        tx,
+                    ))
+                    .await
+                    .map_err(P2pError::from)?;
+                rx.await.map_err(P2pError::from)?
             }
             Err(P2pError::ChainstateError(err)) => match err {
                 ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
-                        // TODO: self.tx_swarm.report_chainstate_error(peer_id, error).await?;
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_swarm
+                            .send(event::SwarmEvent::AdjustPeerScore(
+                                peer_id,
+                                err.ban_score(),
+                                tx,
+                            ))
+                            .await
+                            .map_err(P2pError::from)?;
+                        let _ = rx.await.map_err(P2pError::from);
                     }
 
                     Ok(())
@@ -460,6 +478,21 @@ where
             }
             Err(err) => {
                 log::error!("Unexpected error occurred: {}", err);
+
+                if err.ban_score() > 0 {
+                    // TODO: better abstraction over channels
+                    let (tx, rx) = oneshot::channel();
+                    self.tx_swarm
+                        .send(event::SwarmEvent::AdjustPeerScore(
+                            peer_id,
+                            err.ban_score(),
+                            tx,
+                        ))
+                        .await
+                        .map_err(P2pError::from)?;
+                    let _ = rx.await.map_err(P2pError::from);
+                }
+
                 Ok(())
             }
         }

@@ -181,7 +181,13 @@ where
         };
 
         if score > 0 {
-            // TODO: adjust peer score
+            // TODO: better abstraction over channels
+            let (tx, rx) = oneshot::channel();
+            self.tx_swarm
+                .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+                .await
+                .map_err(P2pError::from)?;
+            let _ = rx.await.map_err(P2pError::from)?;
         }
 
         self.pubsub_handle
