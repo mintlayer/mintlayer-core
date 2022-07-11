@@ -27,6 +27,7 @@ use crate::{
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
+use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
@@ -474,9 +475,9 @@ where
                             // TODO: add tests
                             Ok(())
                         }
-                        net::types::ConnectivityEvent::Misbehaved { .. } => {
-                            // TODO: zzz
-                            Ok(())
+                        net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                            let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
+                            self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::Error { .. } => {
                             Ok(())

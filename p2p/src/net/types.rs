@@ -142,13 +142,13 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         error: error::P2pError,
     },
 
-    /// Peer misbehaved
+    /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer
         peer_id: T::PeerId,
 
-        // TODO: fix
-        behaviour: u32,
+        /// Error code of the violation
+        error: error::P2pError,
     },
 }
 

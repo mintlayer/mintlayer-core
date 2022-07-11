@@ -168,8 +168,11 @@ pub enum ConnectivityEvent {
         error: error::P2pError,
     },
 
-    /// Peer misbehaved
-    Misbehaved { peer_id: PeerId, behaviour: u32 },
+    /// Peer misbehaved, adjust its reputation
+    Misbehaved {
+        peer_id: PeerId,
+        error: error::P2pError,
+    },
 }
 
 #[derive(Debug, Clone)]

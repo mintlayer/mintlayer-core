@@ -411,8 +411,8 @@ where
             types::ConnectivityEvent::Error { peer_id, error } => {
                 Ok(ConnectivityEvent::Error { peer_id, error })
             }
-            types::ConnectivityEvent::Misbehaved { peer_id, behaviour } => {
-                Ok(ConnectivityEvent::Misbehaved { peer_id, behaviour })
+            types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
         }
     }
