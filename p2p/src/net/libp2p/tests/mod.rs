@@ -17,16 +17,14 @@
 use crate::net::{
     self,
     libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, connectivity, types},
+    libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
 };
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
     gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify::{Identify, IdentifyConfig},
-    identity,
-    mdns::Mdns,
-    mplex, noise, ping as libp2p_ping,
+    identity, mplex, noise, ping as libp2p_ping,
     request_response::*,
     swarm::NetworkBehaviour,
     swarm::{SwarmBuilder, SwarmEvent},
@@ -59,7 +57,7 @@ pub async fn make_libp2p(
     config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
-    relay_mdns: bool,
+    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -104,7 +102,6 @@ pub async fn make_libp2p(
         );
 
         let mut behaviour = behaviour::Libp2pBehaviour {
-            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping: libp2p_ping::Behaviour::new(
                 libp2p_ping::Config::new()
                     .with_timeout(std::time::Duration::from_secs(60))
@@ -123,7 +120,7 @@ pub async fn make_libp2p(
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            relay_mdns,
+            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
@@ -159,7 +156,7 @@ pub async fn make_libp2p_with_ping(
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
-    relay_mdns: bool,
+    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -204,7 +201,6 @@ pub async fn make_libp2p_with_ping(
         );
 
         let mut behaviour = behaviour::Libp2pBehaviour {
-            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
@@ -218,7 +214,7 @@ pub async fn make_libp2p_with_ping(
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            relay_mdns,
+            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,

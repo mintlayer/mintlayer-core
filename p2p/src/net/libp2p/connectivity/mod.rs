@@ -68,7 +68,7 @@ pub struct ConnectionManager {
     /// Handler for waking when a new event is produced
     waker: Option<Waker>,
 
-    /// Set of events polled by the behviour
+    /// Set of events polled by the behaviour
     events: VecDeque<ConnectionManagerEvent>,
 
     /// Set of known connections
