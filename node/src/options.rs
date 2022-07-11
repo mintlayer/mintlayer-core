@@ -30,10 +30,6 @@ pub struct Options {
     #[clap(long, value_name = "PATH")]
     pub log_path: Option<PathBuf>,
 
-    /// Blockchain type
-    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
-    pub net: ChainType,
-
     #[clap(subcommand)]
     pub command: Command,
 }
@@ -57,6 +53,10 @@ pub struct RunOptions {
     /// The path to the configuration file.
     #[clap(short, long, default_value = "./mintlayer.toml")]
     pub config_path: PathBuf,
+    /// Blockchain type.
+    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
+    net: Option<ChainType>,
+    /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,
 }

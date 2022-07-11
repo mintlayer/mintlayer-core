@@ -20,12 +20,16 @@ use std::fs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use common::chain::config::ChainType;
+use common::chain::config::{ChainConfig, ChainType};
 
 use crate::RunOptions;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Config {
+    /// Shared chain configuration.
+    #[serde(flatten)]
+    chain_config: ChainConfig,
+
     // Subsystems configurations.
     pub chainstate: chainstate::Config,
     pub p2p: p2p::Config,
@@ -35,10 +39,12 @@ pub struct Config {
 impl Config {
     /// Creates a new `Config` instance for the specified chain type.
     pub fn new(net: ChainType) -> Result<Self> {
+        let chain_config = ChainConfig::new(net);
         let chainstate = chainstate::Config::new();
-        let p2p = p2p::Config::new(net);
+        let p2p = p2p::Config::new();
         let rpc = rpc::Config::new()?;
         Ok(Self {
+            chain_config,
             chainstate,
             p2p,
             rpc,

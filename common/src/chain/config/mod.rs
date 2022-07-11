@@ -81,13 +81,8 @@ impl ChainType {
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
-    address_prefix: String,
-    rpc_port: u16,
-    p2p_port: u16,
-    height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: Block,
-    genesis_block_id: Id<Block>,
     target_block_spacing: Duration,
     coin_decimals: u8,
     emission_schedule: EmissionSchedule,
