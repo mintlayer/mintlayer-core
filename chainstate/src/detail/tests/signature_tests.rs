@@ -45,7 +45,7 @@ fn signed_tx() {
                 InputWitness::NoSignature(None),
             );
             let output = TxOutput::new(
-                Amount::from_atoms(100),
+                OutputValue::Coin(Amount::from_atoms(100)),
                 OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
             );
             Transaction::new(0, vec![input], vec![output], 0).unwrap()
@@ -59,7 +59,7 @@ fn signed_tx() {
                 InputWitness::NoSignature(None),
             );
             let output = TxOutput::new(
-                Amount::from_atoms(100),
+                OutputValue::Coin(Amount::from_atoms(100)),
                 OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
             );
             let mut tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();

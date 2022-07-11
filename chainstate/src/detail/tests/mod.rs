@@ -20,34 +20,19 @@
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
 use chainstate_storage::Store;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::config::{create_regtest, create_unit_test_config};
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::{
-    Destination, OutPointSourceId, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
-};
-use common::primitives::{time, H256};
-use common::primitives::{Amount, Id};
-use common::Uint256;
-use crypto::random::{Rng, SliceRandom};
-use serialization::Encode;
-use std::sync::Mutex;
-
-use crate::detail::{tests::test_framework::BlockTestFramework, *};
-use chainstate_storage::Store;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::{create_regtest, create_unit_test_config},
         signature::inputsig::InputWitness,
-        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, H256},
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
 use serialization::Encode;
+use std::sync::Mutex;
 
 mod double_spend_tests;
 mod events_tests;

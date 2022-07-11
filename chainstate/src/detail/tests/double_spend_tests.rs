@@ -234,7 +234,9 @@ fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
         empty_witness(),
     );
     let output = TxOutput::new(
-        Amount::from_atoms(random::make_pseudo_rng().gen_range(100_000..200_000)),
+        OutputValue::Coin(Amount::from_atoms(
+            random::make_pseudo_rng().gen_range(100_000..200_000),
+        )),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
@@ -244,7 +246,9 @@ fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
 fn tx_from_tx(tx: &Transaction) -> Transaction {
     let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
     let output = TxOutput::new(
-        Amount::from_atoms(random::make_pseudo_rng().gen_range(1000..2000)),
+        OutputValue::Coin(Amount::from_atoms(
+            random::make_pseudo_rng().gen_range(1000..2000),
+        )),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
