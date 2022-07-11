@@ -428,7 +428,7 @@ where
         Ok(())
     }
 
-    async fn handle_error(
+    pub async fn handle_error(
         &mut self,
         peer_id: T::PeerId,
         result: crate::Result<()>,

@@ -168,6 +168,7 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Ban peer
     pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
+        // TODO: print more information about the peer
         self.banned.insert(*peer_id);
     }
 }

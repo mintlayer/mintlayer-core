@@ -20,7 +20,7 @@ use futures::StreamExt;
 use libp2p::{
     core::upgrade,
     identify, identity, mplex, noise,
-    swarm::{SwarmBuilder, SwarmEvent},
+    swarm::{DialError, SwarmBuilder, SwarmEvent},
     tcp::TcpConfig,
     PeerId, Swarm, Transport,
 };
@@ -118,4 +118,13 @@ async fn diconnect_closing_connection() {
 
     // try to disconnect already disconnected peer
     assert!(std::matches!(swarm1.disconnect_peer_id(peer_id2), Err(())));
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer() {
+    let (_peer_id1, mut swarm1) = make_dummy_swarm();
+
+    let peer_id = PeerId::random();
+    swarm1.ban_peer_id(peer_id);
+    assert!(std::matches!(swarm1.dial(peer_id), Err(DialError::Banned)));
 }

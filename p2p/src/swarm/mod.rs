@@ -93,6 +93,12 @@ where
         }
     }
 
+    /// Get mutable reference to the `ConnectivityHandle`
+    #[allow(dead_code)]
+    fn handle_mut(&mut self) -> &mut T::ConnectivityHandle {
+        &mut self.handle
+    }
+
     /// Update the list of known peers or known peer's list of addresses
     fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) {
         self.peerdb.discover_peers(peers)
@@ -192,7 +198,13 @@ where
         );
 
         let peer_id = info.peer_id;
-        self.peers.insert(info.peer_id, peerdb::PeerContext { _info: info, score: 0 });
+        self.peers.insert(
+            info.peer_id,
+            peerdb::PeerContext {
+                _info: info,
+                score: 0,
+            },
+        );
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
             .await
@@ -260,13 +272,17 @@ where
     async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
         log::debug!("adjusting score for peer {}, adjustment {}", peer_id, score);
 
-        if let Some(entry) = self.peers.get_mut(&peer_id) {
+        let score = if let Some(entry) = self.peers.get_mut(&peer_id) {
             entry.score = entry.score.saturating_add(score);
+            entry.score
+        } else {
+            score
+        };
 
-            if entry.score >= 100 {
-                self.peerdb.ban_peer(&peer_id);
-                return self.handle.ban_peer(peer_id).await;
-            }
+        // TODO: from config
+        if score >= 100 {
+            self.peerdb.ban_peer(&peer_id);
+            return self.handle.ban_peer(peer_id).await;
         }
 
         Ok(())
@@ -370,7 +386,7 @@ where
     /// # Arguments
     /// `peer_id` - peer ID of the remote peer, if available
     /// `result` - result of the operation that was performed
-    async fn handle_result(
+    pub async fn handle_result(
         &mut self,
         peer_id: Option<T::PeerId>,
         result: crate::Result<()>,
@@ -385,6 +401,7 @@ where
                 log::warn!("non-fatal error occurred: {}", err);
 
                 if let Some(peer_id) = peer_id {
+                    log::info!("adjust peer score for peer {}, reason {}", peer_id, err);
                     return self.adjust_peer_score(peer_id, err.ban_score()).await;
                 }
 
@@ -461,7 +478,9 @@ where
                             self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
-                            self.accept_connection(peer_info).await?;
+                            let peer_id = peer_info.peer_id;
+                            let res = self.accept_connection(peer_info).await;
+                            self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&addr) {
                                 Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?,
