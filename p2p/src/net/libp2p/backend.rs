@@ -231,16 +231,14 @@ impl Backend {
 mod tests {
     use super::*;
     use crate::net::libp2p::{
-        behaviour, connectivity,
+        behaviour, connectivity, discovery,
         sync::{SyncingCodec, SyncingProtocol},
     };
     use libp2p::{
         core::upgrade,
         gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity},
         identify::{Identify, IdentifyConfig},
-        identity,
-        mdns::Mdns,
-        mplex, noise, ping,
+        identity, mplex, noise, ping,
         request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
         tcp::TcpConfig,
@@ -291,13 +289,12 @@ mod tests {
         let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
 
         let behaviour = behaviour::Libp2pBehaviour {
-            mdns: Mdns::new(Default::default()).await.unwrap(),
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
             identify,
             sync,
             connmgr: connectivity::ConnectionManager::new(),
-            relay_mdns: true,
+            discovery: discovery::DiscoveryManager::new(false).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
