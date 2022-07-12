@@ -36,6 +36,7 @@ use std::sync::Mutex;
 
 mod double_spend_tests;
 mod events_tests;
+mod normal_tokens;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;

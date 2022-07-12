@@ -24,10 +24,10 @@ use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
-        calculate_tx_index_from_block, AssetData, ChainConfig, OutPointSourceId, OutputValue,
-        Transaction,
+        calculate_tx_index_from_block, AssetData, ChainConfig, OutPoint, OutPointSourceId,
+        OutputValue, TokenId, Transaction, TxOutput,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
 };
 use logging::log;
@@ -505,6 +505,74 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    fn fetch(&self, outpoint: &OutPoint) -> Result<Transaction, CheckBlockTransactionsError> {
+        let tx_index = self
+            .db_tx
+            .get_mainchain_tx_index(&outpoint.tx_id())
+            .ok()
+            .flatten()
+            .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+        match tx_index.position() {
+            common::chain::SpendablePosition::Transaction(tx_pos) => {
+                let tx = self
+                    .db_tx
+                    .get_mainchain_tx_by_position(tx_pos)
+                    .ok()
+                    .flatten()
+                    .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+
+                Ok(tx)
+            }
+            common::chain::SpendablePosition::BlockReward(_) => {
+                todo!("Block reward in tokens is not allowed")
+            }
+        }
+    }
+
+    fn check_transfer_data(
+        &self,
+        tx: &Transaction,
+        token_id: &TokenId,
+        amount: &Amount,
+    ) -> Result<(), CheckBlockTransactionsError> {
+        let input_tokens: Vec<(H256, Amount)> = tx
+            .inputs()
+            .iter()
+            .filter_map(|input| {
+                let output_index = input.outpoint().output_index() as usize;
+                let prev_tx = self.fetch(input.outpoint()).ok()?;
+                let utxo: TxOutput = prev_tx.outputs().get(output_index).unwrap().clone();
+                match utxo.value() {
+                    OutputValue::Coin(_) => None,
+                    OutputValue::Asset(asset) => Some(match asset {
+                        AssetData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
+                        AssetData::TokenIssuanceV1 {
+                            token_ticker: _,
+                            amount_to_issue,
+                            number_of_decimals: _,
+                            metadata_uri: _,
+                        } => {
+                            let token_id = common::chain::token_id(&prev_tx)?;
+                            (token_id, *amount_to_issue)
+                        }
+                    }),
+                }
+            })
+            .collect();
+        // Exist token in inputs?
+        let (_, origin_amount) = input_tokens
+            .iter()
+            .find(|(input_token_id, _)| input_token_id == token_id)
+            .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+
+        // Exist token issue tx in inputs?
+        // Check amount
+        if origin_amount < amount {
+            return Err(CheckBlockTransactionsError::TokenTransferInputIncorrect);
+        }
+        Ok(())
+    }
+
     fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         // Check assets
         for tx in block.transactions() {
@@ -517,11 +585,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 })
                 .try_for_each(|asset| {
                     match asset {
-                        AssetData::TokenTransferV1 {
-                            token_id: _,
-                            amount: _,
-                        } => {
-                            todo!()
+                        AssetData::TokenTransferV1 { token_id, amount } => {
+                            self.check_transfer_data(tx, token_id, amount)?
                         }
                         AssetData::TokenIssuanceV1 {
                             token_ticker,

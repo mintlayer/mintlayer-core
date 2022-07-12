@@ -1,9 +1,11 @@
 use parity_scale_codec::{Decode, Encode};
 
-pub type TokenId = Vec<u8>;
+pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
 
-use crate::primitives::Amount;
+use crate::primitives::{id::hash_encoded, Amount, H256};
+
+use super::Transaction;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
@@ -43,6 +45,10 @@ pub enum AssetData {
     //     data_hash: NftDataHash,
     //     metadata_uri: Vec<u8>,
     // },
+}
+
+pub fn token_id(tx: &Transaction) -> Option<TokenId> {
+    Some(hash_encoded(tx.inputs().get(0)?))
 }
 
 #[cfg(test)]

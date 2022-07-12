@@ -106,8 +106,10 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInBlock(Id<Block>),
     #[error("Duplicate transaction found in block")]
     DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Incorrect issue transaction {0} in block {1} is incorrect and can't be processed")]
+    #[error("Incorrect issue transaction {0} in block {1}. Transaction can't be processed")]
     TokenIssueTransactionIncorrect(Id<Transaction>, Id<Block>),
+    #[error("Incorrect transfer transaction ")]
+    TokenTransferInputIncorrect,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

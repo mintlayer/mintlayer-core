@@ -11,10 +11,21 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         signature::inputsig::InputWitness,
-        AssetData, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
+        token_id, AssetData, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
+
+fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
+    assert!(matches!(
+        block_index,
+        Err(BlockError::CheckBlockFailed(
+            CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
+            )
+        ))
+    ));
+}
 
 fn process_token(
     chainstate: &mut Chainstate,
@@ -120,13 +131,27 @@ fn token_issue_test() {
     });
 }
 
-fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
-    assert!(matches!(
-        block_index,
-        Err(BlockError::CheckBlockFailed(
-            CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
-            )
-        ))
-    ));
+#[test]
+fn token_transfer_test() {
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+        // Issue a new token
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+
+        // Transfer it
+        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(123456789),
+        });
+        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+    })
 }
