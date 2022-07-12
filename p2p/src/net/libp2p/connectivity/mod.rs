@@ -176,6 +176,22 @@ impl ConnectionManager {
         Err(P2pError::PeerError(PeerError::PeerDoesntExist))
     }
 
+    /// Handle `SwarmEvent::BannedPeer` event
+    ///
+    /// In case the dialed address belonged to a peer that was banned, libp2p emits `BannedPeer`
+    /// event which should be handled by the `ConnectionManager` destroy the connection context
+    /// and informing the front-end about the peer state.
+    pub fn handle_banned_peer(&mut self, peer_id: PeerId) {
+        if let Some(connection) = self.connections.remove(&peer_id) {
+            self.add_event(ConnectionManagerEvent::Behaviour(
+                BehaviourEvent::ConnectionError {
+                    addr: connection.addr().clone(),
+                    error: P2pError::PeerError(PeerError::BannedPeer(peer_id.to_string())),
+                },
+            ));
+        }
+    }
+
     /// Mark that the peer at `addr` is being dialed, wainting for either
     /// connection establishment or dial error
     pub fn dialing(&mut self, peer_id: PeerId, addr: Multiaddr) {

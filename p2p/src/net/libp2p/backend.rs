@@ -81,6 +81,9 @@ impl Backend {
                         let peer_id = *self.swarm.local_peer_id();
                         self.listen_addr = Some(address.with(libp2p::multiaddr::Protocol::P2p(peer_id.into())));
                     }
+                    SwarmEvent::BannedPeer { peer_id, endpoint: _ } => {
+                        self.swarm.behaviour_mut().connmgr.handle_banned_peer(peer_id);
+                    }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(event)) => {
                         self.conn_tx.send(event).await.map_err(P2pError::from)?;
                     }
