@@ -28,18 +28,12 @@ fn path_is_correct() {
 
 #[test]
 fn no_args() {
-    Command::new(BIN_NAME).assert().success();
-    // TODO: Check predicates?..
-    todo!();
-    todo!();
+    Command::new(BIN_NAME).assert().failure();
 }
 
 #[test]
 fn create_config() {
-    Command::new(BIN_NAME).arg("--create-config").assert().success();
-    // TODO: FIXME: Check the config after creation.
-    todo!();
-    todo!();
+    Command::new(BIN_NAME).arg("create-config").assert().success();
 }
 
 // TODO: Create config with args?
