@@ -24,7 +24,6 @@ use crate::{
         types::{PubSubEvent, PubSubTopic, ValidationResult},
         NetworkingService, PubSubService,
     },
-    Config,
 };
 use chainstate::{
     ban_score::BanScore,

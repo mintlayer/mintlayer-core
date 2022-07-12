@@ -230,7 +230,7 @@ impl NetworkingService for Libp2pService {
     async fn start(
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
-        chain_config: Arc<ChainConfig>,
+        chain_config: Arc<common::chain::ChainConfig>,
         timeout: std::time::Duration,
     ) -> crate::Result<(
         Self::ConnectivityHandle,

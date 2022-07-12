@@ -15,7 +15,7 @@
 
 //! The node command line options.
 
-use std::{ffi::OsString, net::SocketAddr, path::PathBuf, time::Duration};
+use std::{ffi::OsString, net::SocketAddr, path::PathBuf};
 
 use clap::{Args, Parser, Subcommand};
 use strum::VariantNames;
@@ -53,9 +53,6 @@ pub struct RunOptions {
     /// The path to the configuration file.
     #[clap(short, long, default_value = "./mintlayer.toml")]
     pub config_path: PathBuf,
-    /// Target block spacing.
-    #[clap(long)]
-    pub target_block_spacing: Option<Duration>,
     /// Maximum header size.
     #[clap(long)]
     pub max_block_header_size: Option<usize>,
@@ -64,7 +61,7 @@ pub struct RunOptions {
     pub max_block_size_from_txs: Option<usize>,
     /// Maximum smart contracts size in a block.
     #[clap(long)]
-    pub max_block_size_from_smart_contracts: usize,
+    pub max_block_size_from_smart_contracts: Option<usize>,
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,

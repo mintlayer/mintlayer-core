@@ -21,7 +21,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     block::Block, ConsensusUpgrade, Destination, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::{BlockHeight, Idable};
+use crate::primitives::BlockHeight;
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -141,7 +141,6 @@ impl Builder {
             chain_type,
             coin_decimals,
             target_block_spacing,
-            genesis_block_id: genesis_block.get_id(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,

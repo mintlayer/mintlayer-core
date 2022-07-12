@@ -26,7 +26,6 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkingService},
-    Config,
 };
 use common::{
     chain::{config::VERSION, ChainConfig},
@@ -160,7 +159,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
-        version == VERSION
+        version == &VERSION
     }
 
     /// Handle connection established event
@@ -172,18 +171,15 @@ where
         log::debug!("{}", info);
 
         ensure!(
-            info.magic_bytes == self.config.magic_bytes,
+            &info.magic_bytes == self.config.magic_bytes(),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                self.config.magic_bytes,
+                self.config.magic_bytes().to_owned(),
                 info.magic_bytes,
             ))
         );
         ensure!(
             self.validate_version(&info.version),
-            P2pError::ProtocolError(ProtocolError::InvalidVersion(
-                self.config.version,
-                info.version
-            ))
+            P2pError::ProtocolError(ProtocolError::InvalidVersion(VERSION, info.version))
         );
         ensure!(
             self.validate_supported_protocols(&info.protocols),

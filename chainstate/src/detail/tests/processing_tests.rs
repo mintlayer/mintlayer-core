@@ -508,8 +508,9 @@ fn consensus_type() {
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let chainstate = chainstate_with_config(config);
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let config = Config::new();
+    let chainstate = chainstate_with_config(chain_config, config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -645,8 +646,9 @@ fn pow() {
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let chainstate = chainstate_with_config(config);
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let config = Config::new();
+    let chainstate = chainstate_with_config(chain_config, config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 

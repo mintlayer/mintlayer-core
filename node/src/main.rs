@@ -17,10 +17,10 @@
 
 use std::fs;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
+use common::chain::{config::ChainType, ChainConfig};
 use logging::log;
-
 use node::{Command, Config, Options};
 
 async fn run() -> Result<()> {
@@ -38,8 +38,15 @@ async fn run() -> Result<()> {
         }
         Command::Run(options) => {
             let config = Config::read(options).context("Failed to initialize config")?;
+            if config.chain_type != ChainType::Mainnet && config.chain_type != ChainType::Regtest {
+                return Err(anyhow!(
+                    "Chain type '{:?}' not yet supported",
+                    config.chain_type
+                ));
+            }
+            let chain_config = ChainConfig::new(config.chain_type);
             log::trace!("Starting with the following config\n: {config:#?}");
-            node::run(config).await
+            node::run(chain_config, config).await
         }
     }
 }

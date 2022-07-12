@@ -22,7 +22,9 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 use std::{collections::BTreeMap, time::Duration};
 
 use hex::FromHex;
+use serde::{Deserialize, Serialize};
 
+use crate::primitives::Idable;
 use crate::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
@@ -31,7 +33,11 @@ use crate::{
         upgrades::NetUpgrades,
         OutputPurpose, PoWChainConfig, UpgradeVersion,
     },
-    primitives::{semver::SemVer, Amount, BlockHeight id::{Id, H256}},
+    primitives::{
+        id::{Id, H256},
+        semver::SemVer,
+        Amount, BlockHeight,
+    },
 };
 
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
@@ -48,6 +54,8 @@ pub const VERSION: SemVer = SemVer::new(0, 1, 0);
     strum::Display,
     strum::EnumVariantNames,
     strum::EnumString,
+    Serialize,
+    Deserialize,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum ChainType {
@@ -67,12 +75,12 @@ impl ChainType {
         }
     }
 
-    pub const fn magic_bytes(&self) -> [u8; 4] {
+    pub const fn magic_bytes(&self) -> &'static [u8; 4] {
         match self {
-            ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
-            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
-            ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
-            ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
+            ChainType::Mainnet => &[0x1a, 0x64, 0xe5, 0xf1],
+            ChainType::Testnet => &[0x2b, 0x7e, 0x19, 0xf6],
+            ChainType::Regtest => &[0xaa, 0xbb, 0xcc, 0xdd],
+            ChainType::Signet => &[0xf3, 0xf7, 0x7b, 0x45],
         }
     }
 }
@@ -80,6 +88,7 @@ impl ChainType {
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
+    height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: Block,
     pub target_block_spacing: Duration,
@@ -97,7 +106,7 @@ impl ChainConfig {
     }
 
     pub fn genesis_block_id(&self) -> Id<Block> {
-        self.genesis_block_id.clone()
+        self.genesis_block.get_id()
     }
 
     pub fn genesis_block(&self) -> &Block {

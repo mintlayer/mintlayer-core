@@ -15,13 +15,10 @@
 //
 // Author(s): A. Altonen
 
-use crate::{
-    net::{
-        self,
-        libp2p::sync::*,
-        libp2p::{backend::Backend, behaviour, types},
-    },
-    Config,
+use crate::net::{
+    self,
+    libp2p::sync::*,
+    libp2p::{backend::Backend, behaviour, types},
 };
 use common::chain::{config::VERSION, ChainConfig};
 use futures::prelude::*;
@@ -62,7 +59,6 @@ mod ping;
 #[allow(dead_code)]
 pub async fn make_libp2p(
     chain_config: ChainConfig,
-    config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     relay_mdns: bool,
@@ -96,7 +92,7 @@ pub async fn make_libp2p(
             .build()
             .expect("configuration to be valid");
 
-        let magic = config.magic_bytes;
+        let magic = chain_config.magic_bytes();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             VERSION.major,
@@ -162,7 +158,6 @@ pub async fn make_libp2p(
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
     chain_config: ChainConfig,
-    config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
@@ -197,7 +192,7 @@ pub async fn make_libp2p_with_ping(
             .build()
             .expect("configuration to be valid");
 
-        let magic = config.magic_bytes;
+        let magic = chain_config.magic_bytes();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
             VERSION.major,
@@ -305,7 +300,7 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 
 #[allow(dead_code)]
 pub fn make_identify(config: ChainConfig, id_keys: identity::Keypair) -> Identify {
-    let magic = config.magic_bytes;
+    let magic = config.magic_bytes();
     let protocol = format!(
         "/mintlayer/{}.{}.{}-{:x}",
         VERSION.major,

@@ -20,16 +20,14 @@ use std::fs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
-use common::chain::config::{ChainConfig, ChainType};
+use common::chain::config::ChainType;
 
 use crate::RunOptions;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
-struct Config {
-    /// Shared chain configuration.
-    #[serde(flatten)]
-    pub chain_config: ChainConfig,
+pub struct Config {
+    pub chain_type: ChainType,
 
     // Subsystems configurations.
     pub chainstate: chainstate::Config,
@@ -39,13 +37,12 @@ struct Config {
 
 impl Config {
     /// Creates a new `Config` instance for the specified chain type.
-    pub fn new(net: ChainType) -> Result<Self> {
-        let chain_config = ChainConfig::new(net);
+    pub fn new(chain_type: ChainType) -> Result<Self> {
         let chainstate = chainstate::Config::new();
         let p2p = p2p::Config::new();
         let rpc = rpc::Config::new()?;
         Ok(Self {
-            chain_config,
+            chain_type,
             chainstate,
             p2p,
             rpc,
@@ -57,11 +54,6 @@ impl Config {
     pub fn read(options: RunOptions) -> Result<Self> {
         let config = fs::read_to_string(&options.config_path).context("Failed to read config")?;
         let mut config: Config = toml::from_str(&config).context("Failed to deserialize config")?;
-
-        // Chain options.
-        if let Some(block_spacing) = options.target_block_spacing {
-            config.chain_config.target_block_spacing = block_spacing;
-        }
 
         // Chainstate options.
         if let Some(max_size) = options.max_block_header_size {
