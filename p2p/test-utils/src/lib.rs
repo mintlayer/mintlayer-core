@@ -30,12 +30,46 @@ use common::{
 };
 use crypto::random::SliceRandom;
 use p2p::net::{mock::MockService, NetworkingService};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
+};
 use tokio::net::{TcpListener, TcpStream};
 
+struct PortAllocator {
+    ports: AtomicU16,
+}
+
+impl PortAllocator {
+    pub fn new(start: Option<u16>) -> Self {
+        Self {
+            ports: AtomicU16::from(start.unwrap_or(49152)),
+        }
+    }
+
+    pub fn get_free_port(&self) -> u16 {
+        loop {
+            let port = self.ports.fetch_add(1, Ordering::Relaxed);
+            if std::net::TcpListener::bind(format!("127.0.0.1:{}", port)).is_ok() {
+                return port;
+            }
+        }
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref ALLOCATOR: PortAllocator = PortAllocator::new(None);
+}
+
+pub fn get_free_port() -> u16 {
+    ALLOCATOR.get_free_port()
+}
+
 pub async fn get_tcp_socket() -> TcpStream {
-    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
+    let port: u16 = ALLOCATOR.get_free_port();
     let addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
     let server = TcpListener::bind(addr).await.unwrap();
 
@@ -54,7 +88,7 @@ where
     T: std::str::FromStr,
     <T as std::str::FromStr>::Err: std::fmt::Debug,
 {
-    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
+    let port: u16 = ALLOCATOR.get_free_port();
     format!("{}{}", addr, port).parse().unwrap()
 }
 

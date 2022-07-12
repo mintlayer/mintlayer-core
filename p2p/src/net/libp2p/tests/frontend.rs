@@ -314,7 +314,7 @@ async fn test_connect_with_timeout() {
     .await
     .unwrap();
 
-    let port = portpicker::pick_unused_port().unwrap();
+    let port = test_utils::get_free_port();
     let mut addr: Multiaddr = format!("/ip6/::1/tcp/{}", port).parse().unwrap();
     addr.push(Protocol::P2p(PeerId::random().into()));
 

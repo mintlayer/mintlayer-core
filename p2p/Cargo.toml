@@ -37,7 +37,6 @@ default-features = false
 features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
 
 [dev-dependencies]
-portpicker = "0.1"
 chainstate-storage = { path = "../chainstate-storage" }
 crypto = { path = "../crypto/" }
 

@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT"
 
 [dependencies]
-portpicker = "0.1"
+lazy_static = "1.4"
 
 # local dependencies
 chainstate-storage = { path = "../../chainstate-storage" }

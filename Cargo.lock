@@ -2553,7 +2553,6 @@ dependencies = [
  "libp2p",
  "logging",
  "parity-scale-codec",
- "portpicker",
  "rpc",
  "serialization",
  "sscanf",
@@ -2742,15 +2741,6 @@ dependencies = [
  "cpufeatures",
  "opaque-debug",
  "universal-hash",
-]
-
-[[package]]
-name = "portpicker"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
-dependencies = [
- "rand 0.8.5",
 ]
 
 [[package]]
@@ -3953,9 +3943,9 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crypto",
+ "lazy_static",
  "libp2p",
  "p2p",
- "portpicker",
  "subsystem",
  "tokio",
 ]
