@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     consensus_validator::TransactionIndexHandle, median_time::calculate_median_time_past,
@@ -24,8 +24,9 @@ use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
-        calculate_tx_index_from_block, AssetData, ChainConfig, OutPoint, OutPointSourceId,
-        OutputValue, TokenId, Transaction, TxOutput,
+        calculate_tx_index_from_block,
+        tokens::{AssetData, TokenId},
+        ChainConfig, OutPoint, OutPointSourceId, OutputValue, Transaction, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable, H256},
     Uint256,
@@ -529,43 +530,55 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
+    fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(H256, Amount)> {
+        let output_index = input.outpoint().output_index() as usize;
+        let prev_tx = self.fetch(input.outpoint()).ok()?;
+        let utxo: TxOutput = prev_tx.outputs().get(output_index).unwrap().clone();
+        match utxo.value() {
+            OutputValue::Coin(_) => None,
+            OutputValue::Asset(asset) => Some(match asset {
+                AssetData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
+                AssetData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                } => {
+                    let token_id = common::chain::token_id(&prev_tx)?;
+                    (token_id, *amount_to_issue)
+                }
+            }),
+        }
+    }
+
     fn check_transfer_data(
         &self,
         tx: &Transaction,
         token_id: &TokenId,
         amount: &Amount,
     ) -> Result<(), CheckBlockTransactionsError> {
-        let input_tokens: Vec<(H256, Amount)> = tx
-            .inputs()
+        let mut total_value_of_input_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
+        tx.inputs().iter().filter_map(|input| self.map_tokens(input)).try_for_each(
+            |(token_id, amount)| {
+                total_value_of_input_tokens.insert(
+                    token_id.clone(),
+                    (total_value_of_input_tokens
+                        .get(&token_id)
+                        .cloned()
+                        .unwrap_or(Amount::from_atoms(0))
+                        + amount)
+                        .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?,
+                );
+                Ok(())
+            },
+        )?;
+
+        // Is token exist in inputs?
+        let (_, origin_amount) = total_value_of_input_tokens
             .iter()
-            .filter_map(|input| {
-                let output_index = input.outpoint().output_index() as usize;
-                let prev_tx = self.fetch(input.outpoint()).ok()?;
-                let utxo: TxOutput = prev_tx.outputs().get(output_index).unwrap().clone();
-                match utxo.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Asset(asset) => Some(match asset {
-                        AssetData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
-                        AssetData::TokenIssuanceV1 {
-                            token_ticker: _,
-                            amount_to_issue,
-                            number_of_decimals: _,
-                            metadata_uri: _,
-                        } => {
-                            let token_id = common::chain::token_id(&prev_tx)?;
-                            (token_id, *amount_to_issue)
-                        }
-                    }),
-                }
-            })
-            .collect();
-        // Exist token in inputs?
-        let (_, origin_amount) = input_tokens
-            .iter()
-            .find(|(input_token_id, _)| input_token_id == token_id)
+            .find(|&(origin_token_id, _)| origin_token_id == token_id)
             .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
 
-        // Exist token issue tx in inputs?
         // Check amount
         if origin_amount < amount {
             return Err(CheckBlockTransactionsError::TokenTransferInputIncorrect);
@@ -583,31 +596,37 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Coin(_) => None,
                     OutputValue::Asset(asset) => Some(asset),
                 })
-                .try_for_each(|asset| {
-                    match asset {
-                        AssetData::TokenTransferV1 { token_id, amount } => {
-                            self.check_transfer_data(tx, token_id, amount)?
-                        }
-                        AssetData::TokenIssuanceV1 {
-                            token_ticker,
-                            amount_to_issue,
-                            number_of_decimals,
-                            metadata_uri,
-                        } => self.check_issue_data(
-                            token_ticker,
-                            amount_to_issue,
-                            number_of_decimals,
-                            metadata_uri,
-                            tx.get_id(),
-                            block.get_id(),
-                        )?,
-                    }
-                    Ok(())
-                });
+                .try_for_each(|asset| self.check_asset(asset, tx, block));
 
             res?;
         }
         Ok(())
+    }
+
+    fn check_asset(
+        &self,
+        asset: &AssetData,
+        tx: &Transaction,
+        block: &Block,
+    ) -> Result<(), CheckBlockTransactionsError> {
+        Ok(match asset {
+            AssetData::TokenTransferV1 { token_id, amount } => {
+                self.check_transfer_data(tx, token_id, amount)?
+            }
+            AssetData::TokenIssuanceV1 {
+                token_ticker,
+                amount_to_issue,
+                number_of_decimals,
+                metadata_uri,
+            } => self.check_issue_data(
+                token_ticker,
+                amount_to_issue,
+                number_of_decimals,
+                metadata_uri,
+                tx.get_id(),
+                block.get_id(),
+            )?,
+        })
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
