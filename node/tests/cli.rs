@@ -17,6 +17,8 @@ use std::path::Path;
 
 use assert_cmd::Command;
 
+use node::{Config, RunOptions};
+
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 
 // This test is only needed because the node name ix hardcoded here, so if the name is changed we
@@ -33,7 +35,36 @@ fn no_args() {
 
 #[test]
 fn create_config() {
-    Command::new(BIN_NAME).arg("create-config").assert().success();
-}
+    let config_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/test_mintlayer.toml");
+    let max_block_header_size = 100;
+    let max_block_size_from_txs = 200;
+    let max_block_size_from_smart_contracts = 300;
 
-// TODO: Create config with args?
+    Command::new(BIN_NAME)
+        .arg("create-config")
+        .arg("--path")
+        .arg(config_path)
+        .assert()
+        .success();
+    let run_options = RunOptions {
+        config_path: config_path.into(),
+        max_block_header_size: Some(max_block_header_size),
+        max_block_size_from_txs: Some(max_block_size_from_txs),
+        max_block_size_from_smart_contracts: Some(max_block_size_from_smart_contracts),
+        p2p_addr: None,
+        rpc_addr: None,
+    };
+    let config = Config::read(run_options).unwrap();
+    assert_eq!(
+        config.chainstate.max_block_header_size,
+        max_block_header_size
+    );
+    assert_eq!(
+        config.chainstate.max_block_size_from_txs,
+        max_block_size_from_txs
+    );
+    assert_eq!(
+        config.chainstate.max_block_size_from_smart_contracts,
+        max_block_size_from_smart_contracts
+    );
+}
