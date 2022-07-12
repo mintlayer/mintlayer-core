@@ -1,0 +1,17 @@
+chain_type = "Mainnet"
+
+[chainstate]
+max_block_header_size = 1024
+max_block_size_from_txs = 524288
+max_block_size_from_smart_contracts = 524288
+blockreward_maturity = 500
+
+[chainstate.max_future_block_time_offset]
+secs = 3600
+nanos = 0
+
+[p2p]
+address = "/ip6/::1/tcp/3031"
+
+[rpc]
+address = "127.0.0.1:3030"

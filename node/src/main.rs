@@ -31,7 +31,6 @@ async fn run() -> Result<()> {
     match opts.command {
         Command::CreateConfig { path, net } => {
             let config = Config::new(net)?;
-            println!("{config:#?}");
             let config = toml::to_string(&config).context("Failed to serialize config")?;
             log::trace!("Saving config to {path:?}\n: {config:#?}");
             fs::write(path, config).context("Failed to write config")?;

@@ -25,8 +25,8 @@ pub struct Config {
     pub max_block_header_size: usize,
     pub max_block_size_from_txs: usize,
     pub max_block_size_from_smart_contracts: usize,
-    pub max_future_block_time_offset: Duration,
     pub blockreward_maturity: BlockDistance,
+    pub max_future_block_time_offset: Duration,
 }
 
 impl Config {
@@ -36,8 +36,8 @@ impl Config {
             max_block_header_size: 1024,
             max_block_size_from_txs: 524_288,
             max_block_size_from_smart_contracts: 524_288,
-            max_future_block_time_offset: Duration::from_secs(60 * 60),
             blockreward_maturity: BlockDistance::new(500),
+            max_future_block_time_offset: Duration::from_secs(60 * 60),
         }
     }
 }
