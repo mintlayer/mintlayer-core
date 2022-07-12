@@ -19,7 +19,8 @@ use assert_cmd::Command;
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
 
-// This tests is only needed because the node name ix hardcoded here, so we get an easy to understand error if the name is changed.
+// This test is only needed because the node name ix hardcoded here, so if the name is changed we
+// get an error that is easy to understand.
 #[test]
 fn path_is_correct() {
     assert!(Path::new(BIN_NAME).is_file());
@@ -27,11 +28,18 @@ fn path_is_correct() {
 
 #[test]
 fn no_args() {
-    Command::new(BIN_NAME).assert().success().stdout(all_predicate());
+    Command::new(BIN_NAME).assert().success();
+    // TODO: Check predicates?..
+    todo!();
+    todo!();
 }
 
 #[test]
 fn create_config() {
     Command::new(BIN_NAME).arg("--create-config").assert().success();
     // TODO: FIXME: Check the config after creation.
+    todo!();
+    todo!();
 }
+
+// TODO: Create config with args?

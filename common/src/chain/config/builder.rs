@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::{collections::BTreeMap, time::Duration};
+
 use super::emission_schedule::{self, *};
 use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
 
@@ -20,9 +22,6 @@ use crate::chain::{
     block::Block, ConsensusUpgrade, Destination, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
 use crate::primitives::{BlockHeight, Idable};
-
-use std::collections::BTreeMap;
-use std::time::Duration;
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -84,9 +83,6 @@ impl GenesisBlockInit {
 #[derive(Clone)]
 pub struct Builder {
     chain_type: ChainType,
-    address_prefix: String,
-    rpc_port: u16,
-    p2p_port: u16,
     target_block_spacing: Duration,
     coin_decimals: u8,
     net_upgrades: NetUpgrades<UpgradeVersion>,
@@ -99,11 +95,8 @@ impl Builder {
     pub fn new(chain_type: ChainType) -> Self {
         Self {
             chain_type,
-            address_prefix: chain_type.default_address_prefix().to_string(),
             coin_decimals: Mlt::DECIMALS,
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
-            p2p_port: 8978,
-            rpc_port: 15234,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
@@ -121,11 +114,8 @@ impl Builder {
     pub fn build(self) -> ChainConfig {
         let Self {
             chain_type,
-            address_prefix,
             coin_decimals,
             target_block_spacing,
-            p2p_port,
-            rpc_port,
             genesis_block,
             emission_schedule,
             net_upgrades,
@@ -149,11 +139,8 @@ impl Builder {
 
         ChainConfig {
             chain_type,
-            address_prefix,
             coin_decimals,
             target_block_spacing,
-            p2p_port,
-            rpc_port,
             genesis_block_id: genesis_block.get_id(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
@@ -178,9 +165,6 @@ macro_rules! builder_method {
 
 impl Builder {
     builder_method!(chain_type: ChainType);
-    builder_method!(address_prefix: String);
-    builder_method!(rpc_port: u16);
-    builder_method!(p2p_port: u16);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);

@@ -18,13 +18,15 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event, message,
     net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
-    Config,
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
 };
 use common::{
-    chain::block::{Block, BlockHeader},
+    chain::{
+        block::{Block, BlockHeader},
+        config::ChainConfig,
+    },
     primitives::{Id, Idable},
 };
 use futures::FutureExt;
@@ -71,7 +73,7 @@ pub enum SyncState {
 /// peer it's connected to and actively keep track of the peer's state.
 pub struct SyncManager<T: NetworkingService> {
     /// Chain config
-    config: Arc<Config>,
+    config: Arc<ChainConfig>,
 
     /// Syncing state of the local node
     state: SyncState,
@@ -105,7 +107,7 @@ where
     T::SyncingCodecHandle: SyncingCodecService<T>,
 {
     pub fn new(
-        config: Arc<Config>,
+        config: Arc<ChainConfig>,
         handle: T::SyncingCodecHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -227,9 +229,7 @@ where
                     locator
                         .iter()
                         .any(|header| &Some(header.get_id()) == headers[0].prev_block_id())
-                    // TODO: FIXME:
-                    || &Some(todo!()) == headers[0].prev_block_id(),
-                    //|| &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
+                        || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
                     P2pError::ProtocolError(ProtocolError::InvalidMessage),
                 );
             }

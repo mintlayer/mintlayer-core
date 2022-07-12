@@ -19,6 +19,7 @@ use crate::{
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
+use common::chain::ChainConfig;
 use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
@@ -153,6 +154,7 @@ where
     ///
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
+        chain_config: Arc<ChainConfig>,
         config: Config,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> crate::Result<Self>
@@ -160,13 +162,12 @@ where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
-        let config = Arc::new(config);
         let (conn, pubsub, sync) = T::start(
             config.address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(config.address.clone()))
             })?,
             &[],
-            Arc::clone(&config),
+            Arc::clone(&chain_config),
             TIMEOUT,
         )
         .await?;
@@ -177,7 +178,7 @@ where
         let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
-        let swarm_config = Arc::clone(&config);
+        let swarm_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
             if let Err(e) = swarm::PeerManager::<T>::new(swarm_config, conn, rx_swarm, tx_p2p_sync)
                 .run()
@@ -189,7 +190,7 @@ where
 
         let sync_handle = consensus_handle.clone();
         let swarm_tx = tx_swarm.clone();
-        let sync_config = Arc::clone(&config);
+        let sync_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
             if let Err(e) = sync::SyncManager::<T>::new(
                 sync_config,
@@ -209,7 +210,7 @@ where
         // TODO: merge with syncmanager when appropriate
         tokio::spawn(async move {
             if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
-                config,
+                chain_config,
                 pubsub,
                 consensus_handle,
                 rx_pubsub,
@@ -231,6 +232,7 @@ impl<T: NetworkingService + 'static> subsystem::Subsystem for P2pInterface<T> {}
 pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
+    chain_config: Arc<ChainConfig>,
     config: Config,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 ) -> crate::Result<P2pInterface<T>>
@@ -245,6 +247,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(config, consensus_handle).await?,
+        p2p: P2P::new(chain_config, config, consensus_handle).await?,
     })
 }

@@ -86,10 +86,10 @@ fn setup_chainstate() -> Chainstate {
     chainstate_with_config(create_unit_test_config())
 }
 
-fn chainstate_with_config(config: ChainConfig) -> Chainstate {
+fn chainstate_with_config(chain_config: ChainConfig, config: Config) -> Chainstate {
     Chainstate::new(
-        Arc::new(config),
-        todo!(),
+        Arc::new(chain_config),
+        config,
         Store::new_empty().unwrap(),
         None,
         Default::default(),

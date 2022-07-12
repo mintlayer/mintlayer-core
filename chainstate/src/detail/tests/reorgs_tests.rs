@@ -31,11 +31,12 @@ use common::chain::config::create_unit_test_config;
 #[test]
 fn reorg_simple() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new_no_genesis(config, config_, storage, None, Default::default()).unwrap();
+            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
+                .unwrap();
 
         // Process the genesis block.
         chainstate

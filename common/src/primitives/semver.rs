@@ -27,7 +27,7 @@ pub struct SemVer {
 }
 
 impl SemVer {
-    pub fn new(major: u8, minor: u8, patch: u16) -> Self {
+    pub const fn new(major: u8, minor: u8, patch: u16) -> Self {
         Self {
             major,
             minor,

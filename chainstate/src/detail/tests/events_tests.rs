@@ -120,13 +120,13 @@ fn several_subscribers_several_events() {
 #[test]
 fn orphan_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut chainstate = Chainstate::new(
+            chain_config,
             config,
-            config_,
             storage,
             Some(orphan_error_hook),
             Default::default(),
@@ -150,13 +150,13 @@ fn orphan_block() {
 #[test]
 fn custom_orphan_error_hook() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut chainstate = Chainstate::new(
+            chain_config,
             config,
-            config_,
             storage,
             Some(orphan_error_hook),
             Default::default(),

@@ -28,7 +28,10 @@ use crate::{
     net::{self, ConnectivityService, NetworkingService},
     Config,
 };
-use common::primitives::semver;
+use common::{
+    chain::{config::VERSION, ChainConfig},
+    primitives::semver,
+};
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
@@ -48,7 +51,7 @@ where
     T: NetworkingService,
 {
     /// Chain config
-    config: Arc<Config>,
+    config: Arc<ChainConfig>,
 
     /// Handle for sending/receiving connectivity events
     handle: T::ConnectivityHandle,
@@ -77,7 +80,7 @@ where
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     pub fn new(
-        config: Arc<Config>,
+        config: Arc<ChainConfig>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
@@ -157,7 +160,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
-        version == &self.config.version
+        version == VERSION
     }
 
     /// Handle connection established event

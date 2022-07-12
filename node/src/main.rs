@@ -32,12 +32,13 @@ async fn run() -> Result<()> {
         Command::CreateConfig { path, net } => {
             let config = Config::new(net)?;
             let config = toml::to_string(&config).context("Failed to serialize config")?;
-            log::trace!("Saving config to {path:?}: {config:#?}");
+            log::trace!("Saving config to {path:?}\n: {config:#?}");
             fs::write(path, config).context("Failed to write config")?;
             Ok(())
         }
         Command::Run(options) => {
             let config = Config::read(options).context("Failed to initialize config")?;
+            log::trace!("Starting with the following config\n: {config:#?}");
             node::run(config).await
         }
     }

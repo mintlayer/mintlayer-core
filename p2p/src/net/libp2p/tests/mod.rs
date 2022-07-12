@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use crate::{
     net::{
         self,
@@ -22,6 +23,7 @@ use crate::{
     },
     Config,
 };
+use common::chain::{config::VERSION, ChainConfig};
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
@@ -59,6 +61,7 @@ mod ping;
 
 #[allow(dead_code)]
 pub async fn make_libp2p(
+    chain_config: ChainConfig,
     config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
@@ -93,13 +96,12 @@ pub async fn make_libp2p(
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version;
         let magic = config.magic_bytes;
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
-            version.major,
-            version.minor,
-            version.patch,
+            VERSION.major,
+            VERSION.minor,
+            VERSION.patch,
             ((magic[0] as u32) << 24)
                 | ((magic[1] as u32) << 16)
                 | ((magic[2] as u32) << 8)
@@ -159,6 +161,7 @@ pub async fn make_libp2p(
 
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
+    chain_config: ChainConfig,
     config: Config,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
@@ -194,13 +197,12 @@ pub async fn make_libp2p_with_ping(
             .build()
             .expect("configuration to be valid");
 
-        let version = config.version;
         let magic = config.magic_bytes;
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
-            version.major,
-            version.minor,
-            version.patch,
+            VERSION.major,
+            VERSION.minor,
+            VERSION.patch,
             ((magic[0] as u32) << 24)
                 | ((magic[1] as u32) << 16)
                 | ((magic[2] as u32) << 8)
@@ -302,14 +304,13 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 }
 
 #[allow(dead_code)]
-pub fn make_identify(config: Config, id_keys: identity::Keypair) -> Identify {
-    let version = config.version;
+pub fn make_identify(config: ChainConfig, id_keys: identity::Keypair) -> Identify {
     let magic = config.magic_bytes;
     let protocol = format!(
         "/mintlayer/{}.{}.{}-{:x}",
-        version.major,
-        version.minor,
-        version.patch,
+        VERSION.major,
+        VERSION.minor,
+        VERSION.patch,
         ((magic[0] as u32) << 24)
             | ((magic[1] as u32) << 16)
             | ((magic[2] as u32) << 8)

@@ -24,11 +24,12 @@ use common::chain::config::{ChainConfig, ChainType};
 
 use crate::RunOptions;
 
+/// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
+struct Config {
     /// Shared chain configuration.
     #[serde(flatten)]
-    chain_config: ChainConfig,
+    pub chain_config: ChainConfig,
 
     // Subsystems configurations.
     pub chainstate: chainstate::Config,
@@ -57,8 +58,30 @@ impl Config {
         let config = fs::read_to_string(&options.config_path).context("Failed to read config")?;
         let mut config: Config = toml::from_str(&config).context("Failed to deserialize config")?;
 
+        // Chain options.
+        if let Some(block_spacing) = options.target_block_spacing {
+            config.chain_config.target_block_spacing = block_spacing;
+        }
+
+        // Chainstate options.
+        if let Some(max_size) = options.max_block_header_size {
+            config.chainstate.max_block_header_size = max_size;
+        }
+        if let Some(max_size) = options.max_block_size_from_txs {
+            config.chainstate.max_block_size_from_txs = max_size;
+        }
+        if let Some(max_size) = options.max_block_size_from_smart_contracts {
+            config.chainstate.max_block_size_from_smart_contracts = max_size;
+        }
+
+        // P2p options.
         if let Some(address) = options.p2p_addr {
             config.p2p.address = address;
+        }
+
+        // Rpc options.
+        if let Some(address) = options.rpc_addr {
+            config.rpc.address = address;
         }
 
         Ok(config)

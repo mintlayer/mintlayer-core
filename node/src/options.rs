@@ -15,7 +15,7 @@
 
 //! The node command line options.
 
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::{Args, Parser, Subcommand};
 use strum::VariantNames;
@@ -53,12 +53,24 @@ pub struct RunOptions {
     /// The path to the configuration file.
     #[clap(short, long, default_value = "./mintlayer.toml")]
     pub config_path: PathBuf,
-    /// Blockchain type.
-    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
-    net: Option<ChainType>,
+    /// Target block spacing.
+    #[clap(long)]
+    pub target_block_spacing: Option<Duration>,
+    /// Maximum header size.
+    #[clap(long)]
+    pub max_block_header_size: Option<usize>,
+    /// Maximum transactions size in a block.
+    #[clap(long)]
+    pub max_block_size_from_txs: Option<usize>,
+    /// Maximum smart contracts size in a block.
+    #[clap(long)]
+    pub max_block_size_from_smart_contracts: usize,
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,
+    /// Address to bind RPC to.
+    #[clap(long, value_name = "ADDR")]
+    pub rpc_addr: Option<SocketAddr>,
 }
 
 impl Options {

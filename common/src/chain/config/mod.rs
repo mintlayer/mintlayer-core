@@ -19,24 +19,23 @@ pub mod emission_schedule;
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
+use std::{collections::BTreeMap, time::Duration};
+
 use hex::FromHex;
 
-use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::block::Block;
-use crate::chain::block::ConsensusData;
-use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::transaction::Destination;
-use crate::chain::transaction::Transaction;
-use crate::chain::upgrades::NetUpgrades;
-use crate::chain::OutputPurpose;
-use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::id::{Id, H256};
-use crate::primitives::Amount;
-use crate::primitives::BlockHeight;
-use std::collections::BTreeMap;
-use std::time::Duration;
+use crate::{
+    chain::{
+        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        signature::inputsig::InputWitness,
+        transaction::{Destination, Transaction},
+        upgrades::NetUpgrades,
+        OutputPurpose, PoWChainConfig, UpgradeVersion,
+    },
+    primitives::{semver::SemVer, Amount, BlockHeight id::{Id, H256}},
+};
 
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+pub const VERSION: SemVer = SemVer::new(0, 1, 0);
 
 #[derive(
     Debug,
@@ -59,7 +58,7 @@ pub enum ChainType {
 }
 
 impl ChainType {
-    const fn default_address_prefix(&self) -> &'static str {
+    const fn address_prefix(&self) -> &'static str {
         match self {
             ChainType::Mainnet => "mtc",
             ChainType::Testnet => "tmt",
@@ -68,7 +67,7 @@ impl ChainType {
         }
     }
 
-    pub const fn default_magic_bytes(&self) -> [u8; 4] {
+    pub const fn magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
             ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
@@ -83,14 +82,18 @@ pub struct ChainConfig {
     chain_type: ChainType,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: Block,
-    target_block_spacing: Duration,
+    pub target_block_spacing: Duration,
     coin_decimals: u8,
     emission_schedule: EmissionSchedule,
 }
 
 impl ChainConfig {
+    pub fn new(chain_type: ChainType) -> Self {
+        Builder::new(chain_type).build()
+    }
+
     pub fn address_prefix(&self) -> &str {
-        &self.address_prefix
+        &self.chain_type.address_prefix()
     }
 
     pub fn genesis_block_id(&self) -> Id<Block> {
@@ -101,20 +104,20 @@ impl ChainConfig {
         &self.genesis_block
     }
 
+    pub fn magic_bytes(&self) -> &[u8; 4] {
+        &self.chain_type.magic_bytes()
+    }
+
+    pub fn magic_bytes_as_u32(&self) -> u32 {
+        u32::from_le_bytes(*self.magic_bytes())
+    }
+
     pub fn chain_type(&self) -> &ChainType {
         &self.chain_type
     }
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
-    }
-
-    pub fn p2p_port(&self) -> u16 {
-        self.p2p_port
-    }
-
-    pub fn rpc_port(&self) -> u16 {
-        self.rpc_port
     }
 
     pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {

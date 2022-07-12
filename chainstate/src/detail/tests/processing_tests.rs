@@ -42,15 +42,20 @@ use crypto::random::{self, Rng};
 #[test]
 fn genesis_peer_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(config.clone(), config_, storage, None, Default::default())
-                .unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config.clone(),
+            config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
         assert_eq!(
             chainstate
-                .process_block(config.genesis_block().clone(), BlockSource::Peer)
+                .process_block(chain_config.genesis_block().clone(), BlockSource::Peer)
                 .unwrap_err(),
             BlockError::InvalidBlockSource
         );
@@ -60,11 +65,12 @@ fn genesis_peer_block() {
 #[test]
 fn process_genesis_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new_no_genesis(config, config_, storage, None, Default::default()).unwrap();
+            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
+                .unwrap();
 
         let block_index = chainstate
             .process_block(
@@ -140,11 +146,12 @@ fn test_orphans_chains() {
 #[test]
 fn empty_chainstate() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let chainstate =
-            Chainstate::new_no_genesis(config, config_, storage, None, Default::default()).unwrap();
+            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
+                .unwrap();
         assert_eq!(chainstate.get_best_block_id().unwrap(), None);
         assert_eq!(
             chainstate
@@ -225,11 +232,12 @@ fn spend_inputs_simple() {
 #[test]
 fn straight_chain() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
-        let config_ = Config::new();
+        let chain_config = Arc::new(create_unit_test_config());
+        let config = Config::new();
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new_no_genesis(config, config_, storage, None, Default::default()).unwrap();
+            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
+                .unwrap();
 
         let genesis_index = chainstate
             .process_block(
