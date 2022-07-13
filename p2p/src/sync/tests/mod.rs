@@ -20,7 +20,7 @@ use crate::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     net::{libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService},
 };
-use chainstate::{make_chainstate, Config as ChainstateConfig};
+use chainstate::{make_chainstate, ChainstateConfig};
 use libp2p::PeerId;
 
 #[cfg(test)]

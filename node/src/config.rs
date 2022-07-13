@@ -21,7 +21,6 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
-use common::chain::config::ChainType;
 use p2p::config::P2pConfig;
 use rpc::RpcConfig;
 
@@ -29,23 +28,20 @@ use crate::RunOptions;
 
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
-    pub chain_type: ChainType,
-
+pub struct NodeConfig {
     // Subsystems configurations.
     pub chainstate: ChainstateConfig,
     pub p2p: P2pConfig,
     pub rpc: RpcConfig,
 }
 
-impl Config {
+impl NodeConfig {
     /// Creates a new `Config` instance for the specified chain type.
-    pub fn new(chain_type: ChainType) -> Result<Self> {
-        let chainstate = chainstate::Config::new();
-        let p2p = p2p::Config::new();
-        let rpc = rpc::Config::new()?;
+    pub fn new() -> Result<Self> {
+        let chainstate = ChainstateConfig::new();
+        let p2p = P2pConfig::new();
+        let rpc = RpcConfig::new()?;
         Ok(Self {
-            chain_type,
             chainstate,
             p2p,
             rpc,
@@ -56,28 +52,30 @@ impl Config {
     /// parameters.
     pub fn read(options: RunOptions) -> Result<Self> {
         let config = fs::read_to_string(&options.config_path).context("Failed to read config")?;
-        let mut config: Config = toml::from_str(&config).context("Failed to deserialize config")?;
+        let mut config: NodeConfig =
+            toml::from_str(&config).context("Failed to deserialize config")?;
 
-        // Chainstate options.
-        if let Some(max_size) = options.max_block_header_size {
-            config.chainstate.max_block_header_size = max_size;
-        }
-        if let Some(max_size) = options.max_block_size_from_txs {
-            config.chainstate.max_block_size_from_txs = max_size;
-        }
-        if let Some(max_size) = options.max_block_size_from_smart_contracts {
-            config.chainstate.max_block_size_from_smart_contracts = max_size;
-        }
-
-        // P2p options.
-        if let Some(address) = options.p2p_addr {
-            config.p2p.address = address;
-        }
-
-        // Rpc options.
-        if let Some(address) = options.rpc_addr {
-            config.rpc.address = address;
-        }
+        todo!();
+        // // Chainstate options.
+        // if let Some(max_size) = options.max_block_header_size {
+        //     config.chainstate.max_block_header_size = max_size;
+        // }
+        // if let Some(max_size) = options.max_block_size_from_txs {
+        //     config.chainstate.max_block_size_from_txs = max_size;
+        // }
+        // if let Some(max_size) = options.max_block_size_from_smart_contracts {
+        //     config.chainstate.max_block_size_from_smart_contracts = max_size;
+        // }
+        //
+        // // P2p options.
+        // if let Some(address) = options.p2p_addr {
+        //     config.p2p.address = address;
+        // }
+        //
+        // // Rpc options.
+        // if let Some(address) = options.rpc_addr {
+        //     config.rpc.address = address;
+        // }
 
         Ok(config)
     }

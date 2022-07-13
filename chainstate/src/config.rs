@@ -13,11 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use serde::{Deserialize, Serialize};
-
-use common::primitives::BlockDistance;
 
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,7 +21,7 @@ pub struct ChainstateConfig {
     // TODO: FIXME!
 }
 
-impl Config {
+impl ChainstateConfig {
     /// Creates a new chainstate configuration isntance.
     pub fn new() -> Self {
         todo!();

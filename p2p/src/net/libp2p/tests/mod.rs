@@ -300,7 +300,7 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 }
 
 #[allow(dead_code)]
-pub fn make_identify(config: ChainConfig, id_keys: identity::Keypair) -> Identify {
+pub fn make_identify(config: common::chain::ChainConfig, id_keys: identity::Keypair) -> Identify {
     let version = config.version();
     let magic = config.magic_bytes();
     let protocol = format!(

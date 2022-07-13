@@ -15,21 +15,32 @@
 
 //! Node initialisation routine.
 
-use crate::config::Config;
+use crate::config::NodeConfig;
 use chainstate::rpc::ChainstateRpcServer;
-use common::chain::config::ChainConfig;
+use common::chain::config::ChainType;
 use p2p::rpc::P2pRpcServer;
 use std::sync::Arc;
 
+#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
+enum Error {
+    #[error("Chain type '{0}' not yet supported")]
+    UnsupportedChain(ChainType),
+}
+
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(
-    chain_config: ChainConfig,
-    config: Config,
+    chain_type: ChainType,
+    node_config: NodeConfig,
 ) -> anyhow::Result<subsystem::Manager> {
     // Initialize storage.
     let storage = chainstate_storage::Store::new_empty()?;
 
-    let chain_config = Arc::new(chain_config);
+    // Initialize chain configuration.
+    let chain_config = Arc::new(match chain_type {
+        ChainType::Mainnet => common::chain::config::create_mainnet(),
+        ChainType::Regtest => common::chain::config::create_regtest(),
+        chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
+    });
 
     // INITIALIZE SUBSYSTEMS
 
@@ -41,7 +52,7 @@ pub async fn initialize(
         "chainstate",
         chainstate::make_chainstate(
             Arc::clone(&chain_config),
-            config.chainstate,
+            node_config.chainstate,
             storage.clone(),
             None,
             Default::default(),
@@ -53,7 +64,7 @@ pub async fn initialize(
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
-            config.p2p,
+            node_config.p2p,
             chainstate.clone(),
         )
         .await
@@ -63,7 +74,7 @@ pub async fn initialize(
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",
-        rpc::Builder::new(config.rpc)
+        rpc::Builder::new(node_config.rpc)
             .register(chainstate.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())
@@ -75,8 +86,8 @@ pub async fn initialize(
 }
 
 /// Initialize and run the node
-pub async fn run(chain_config: ChainConfig, config: Config) -> anyhow::Result<()> {
-    let manager = initialize(chain_config, config).await?;
+pub async fn run(chain_type: ChainType, node_config: NodeConfig) -> anyhow::Result<()> {
+    let manager = initialize(chain_type, node_config).await?;
 
     #[allow(clippy::unit_arg)]
     Ok(manager.main().await)

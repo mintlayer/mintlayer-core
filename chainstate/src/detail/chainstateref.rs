@@ -109,7 +109,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn new_ro(
         chain_config: &'a ChainConfig,
-        chainstete_config: &'a ChainstateConfig,
+        chainstate_config: &'a ChainstateConfig,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,

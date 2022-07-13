@@ -114,7 +114,7 @@ impl Builder {
             max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
             max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
-            max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET
+            max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
             p2p_port: 8978,
             rpc_port: 15234,
@@ -182,6 +182,7 @@ impl Builder {
             target_block_spacing,
             p2p_port,
             rpc_port,
+            genesis_block_id: genesis_block.get_id(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,

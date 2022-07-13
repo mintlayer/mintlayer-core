@@ -39,7 +39,6 @@ use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
-pub const VERSION: SemVer = SemVer::new(0, 1, 0);
 
 #[derive(
     Debug,
@@ -71,7 +70,7 @@ impl ChainType {
         }
     }
 
-    pub const fn default_magic_bytes(&self) -> [u8; 4] {
+    const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
             ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
             ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
@@ -104,10 +103,6 @@ pub struct ChainConfig {
 }
 
 impl ChainConfig {
-    pub fn new(chain_type: ChainType) -> Self {
-        Builder::new(chain_type).build()
-    }
-
     pub fn address_prefix(&self) -> &str {
         &self.address_prefix
     }

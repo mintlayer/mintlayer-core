@@ -164,7 +164,9 @@ where
     {
         let (conn, pubsub, sync) = T::start(
             p2p_config.address.parse::<T::Address>().map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(config.address.clone()))
+                P2pError::ConversionError(ConversionError::InvalidAddress(
+                    p2p_config.address.clone(),
+                ))
             })?,
             &[],
             Arc::clone(&chain_config),

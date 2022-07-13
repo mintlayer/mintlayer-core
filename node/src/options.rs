@@ -36,35 +36,33 @@ pub struct Options {
 
 #[derive(Subcommand, Debug)]
 pub enum Command {
-    Run(RunOptions),
     /// Create a configuration file.
     CreateConfig {
         /// The path where config will be created.
-        #[clap(short, long, default_value = "./mintlayer.toml")]
+        // TODO: Use a system-specific location by default such as `%APPDATA%` on Windows and
+        // `~/Library/Application Support` on Mac.
+        #[clap(short, long, default_value = "./.mintlayer/mintlayer.toml")]
         path: PathBuf,
-        /// Blockchain type.
-        #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
-        net: ChainType,
     },
+    Run(RunOptions),
 }
 
 #[derive(Args, Debug)]
 pub struct RunOptions {
     /// The path to the configuration file.
-    #[clap(short, long, default_value = "./mintlayer.toml")]
+    // TODO: Use a system-specific location by default such as `%APPDATA%` on Windows and
+    // `~/Library/Application Support` on Mac.
+    #[clap(short, long, default_value = "./.mintlayer/mintlayer.toml")]
     pub config_path: PathBuf,
-    /// Maximum header size.
-    #[clap(long)]
-    pub max_block_header_size: Option<usize>,
-    /// Maximum transactions size in a block.
-    #[clap(long)]
-    pub max_block_size_from_txs: Option<usize>,
-    /// Maximum smart contracts size in a block.
-    #[clap(long)]
-    pub max_block_size_from_smart_contracts: Option<usize>,
+
+    /// Blockchain type.
+    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
+    pub net: ChainType,
+
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,
+
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,

@@ -17,11 +17,10 @@
 
 use std::fs;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 
-use common::chain::{config::ChainType, ChainConfig};
 use logging::log;
-use node::{Command, Config, Options};
+use node::{Command, NodeConfig, Options};
 
 async fn run() -> Result<()> {
     let opts = Options::from_args(std::env::args_os());
@@ -29,24 +28,18 @@ async fn run() -> Result<()> {
     log::trace!("Command line options: {opts:?}");
 
     match opts.command {
-        Command::CreateConfig { path, net } => {
-            let config = Config::new(net)?;
+        Command::CreateConfig { path } => {
+            let config = NodeConfig::new()?;
             let config = toml::to_string(&config).context("Failed to serialize config")?;
             log::trace!("Saving config to {path:?}\n: {config:#?}");
             fs::write(path, config).context("Failed to write config")?;
             Ok(())
         }
         Command::Run(options) => {
-            let config = Config::read(options).context("Failed to initialize config")?;
-            if config.chain_type != ChainType::Mainnet && config.chain_type != ChainType::Regtest {
-                return Err(anyhow!(
-                    "Chain type '{:?}' not yet supported",
-                    config.chain_type
-                ));
-            }
-            let chain_config = ChainConfig::new(config.chain_type);
-            log::trace!("Starting with the following config\n: {config:#?}");
-            node::run(chain_config, config).await
+            let chain_type = options.net;
+            let node_config = NodeConfig::read(options).context("Failed to initialize config")?;
+            log::trace!("Starting with the following config\n: {node_config:#?}");
+            node::run(chain_type, node_config).await
         }
     }
 }

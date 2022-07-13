@@ -21,7 +21,7 @@ mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use config::Config;
+pub use config::NodeConfig;
 pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
 
