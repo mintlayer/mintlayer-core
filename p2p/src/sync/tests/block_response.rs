@@ -17,12 +17,13 @@
 use super::*;
 use chainstate::ChainstateError;
 use common::chain::block::consensus_data::PoWData;
+use test_utils::make_libp2p_addr;
 
 // peer doesn't exist
 #[tokio::test]
 async fn peer_doesnt_exist() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     assert_eq!(
         mgr.validate_header_response(&PeerId::random(), vec![]).await,
@@ -36,7 +37,7 @@ async fn valid_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -59,7 +60,7 @@ async fn valid_block_invalid_state() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -77,7 +78,7 @@ async fn valid_block_resubmitted_chainstate() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -104,7 +105,7 @@ async fn invalid_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 

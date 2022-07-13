@@ -83,13 +83,25 @@ where
     )
 }
 
+async fn get_address<T>(handle: &mut T::ConnectivityHandle) -> T::Address
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    loop {
+        if let Some(addr) = handle.local_addr().await.unwrap() {
+            return addr;
+        }
+    }
+}
+
 async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (_conn1_res, conn2_res) =
-        tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+    let addr = get_address::<T>(conn2).await;
+    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
     let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,

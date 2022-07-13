@@ -15,12 +15,13 @@
 //
 // Author(s): A. Altonen
 use super::*;
+use test_utils::make_libp2p_addr;
 
 // handle peer connection event
 #[tokio::test]
 async fn test_peer_connected() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     assert_eq!(mgr.register_peer(PeerId::random()).await, Ok(()));
     assert_eq!(mgr.peers.len(), 1);
@@ -30,7 +31,7 @@ async fn test_peer_connected() {
 #[tokio::test]
 async fn test_peer_reconnected() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     let peer_id = PeerId::random();
     assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
@@ -45,7 +46,7 @@ async fn test_peer_reconnected() {
 #[tokio::test]
 async fn test_peer_disconnected() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // send Connected event to SyncManager
     let peer_id = PeerId::random();

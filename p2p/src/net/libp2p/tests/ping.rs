@@ -20,16 +20,15 @@ use futures::StreamExt;
 use libp2p::{
     ping,
     swarm::{SwarmBuilder, SwarmEvent},
-    Multiaddr,
 };
 use std::time::Duration;
+use test_utils::make_libp2p_addr;
 
 #[tokio::test]
 async fn test_remote_doesnt_respond() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p_with_ping(
         common::chain::config::create_mainnet(),
-        addr.clone(),
+        make_libp2p_addr(),
         &[],
         make_ping(
             Some(Duration::from_secs(2)),
@@ -52,12 +51,8 @@ async fn test_remote_doesnt_respond() {
     )
     .build();
 
-    connect_swarms::<behaviour::Libp2pBehaviour, ping::Behaviour>(
-        addr,
-        &mut backend1.swarm,
-        &mut swarm,
-    )
-    .await;
+    connect_swarms::<behaviour::Libp2pBehaviour, ping::Behaviour>(&mut backend1.swarm, &mut swarm)
+        .await;
 
     loop {
         tokio::select! {
@@ -71,11 +66,10 @@ async fn test_remote_doesnt_respond() {
 
 #[tokio::test]
 async fn test_ping_not_supported() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let config = common::chain::config::create_mainnet();
     let (mut backend1, _cmd, _conn_rx, _gossip_rx, _) = make_libp2p_with_ping(
         config.clone(),
-        addr.clone(),
+        make_libp2p_addr(),
         &[],
         make_ping(
             Some(Duration::from_secs(2)),
@@ -90,7 +84,6 @@ async fn test_ping_not_supported() {
     let mut swarm = SwarmBuilder::new(transport, make_identify(config, id_keys), peer_id).build();
 
     connect_swarms::<behaviour::Libp2pBehaviour, libp2p::identify::Identify>(
-        addr,
         &mut backend1.swarm,
         &mut swarm,
     )

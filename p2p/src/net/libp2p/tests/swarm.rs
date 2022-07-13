@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use super::*;
 use crate::error::P2pError;
 use futures::StreamExt;
 use libp2p::{
@@ -21,8 +22,9 @@ use libp2p::{
     identify, identity, mplex, noise,
     swarm::{SwarmBuilder, SwarmEvent},
     tcp::TcpConfig,
-    Multiaddr, PeerId, Swarm, Transport,
+    PeerId, Swarm, Transport,
 };
+use test_utils::make_libp2p_addr;
 
 // TODO: add more tests at some point
 
@@ -60,8 +62,9 @@ fn make_dummy_swarm() -> (PeerId, Swarm<identify::Identify>) {
 async fn dial_then_disconnect() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    swarm2.listen_on(addr.clone()).unwrap();
+
+    swarm2.listen_on(make_libp2p_addr()).unwrap();
+    let addr = get_address::<identify::Identify>(&mut swarm2).await;
 
     tokio::spawn(async move {
         loop {
@@ -86,8 +89,9 @@ async fn dial_then_disconnect() {
 async fn diconnect_closing_connection() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    swarm2.listen_on(addr.clone()).unwrap();
+
+    swarm2.listen_on(make_libp2p_addr()).unwrap();
+    let addr = get_address(&mut swarm2).await;
 
     tokio::spawn(async move {
         loop {

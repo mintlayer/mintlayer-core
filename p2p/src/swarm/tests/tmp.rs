@@ -24,11 +24,12 @@ use common::chain::config;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use logging::log;
 use std::{net::SocketAddr, sync::Arc};
+use test_utils::make_libp2p_addr;
 
 // try to connect to an address that no one listening on and verify it fails
 #[tokio::test]
 async fn test_swarm_connect_mock() {
-    let addr: SocketAddr = test_utils::make_address("[::1]:");
+    let addr: SocketAddr = "[::1]:0".parse().unwrap();
     let config = Arc::new(config::create_mainnet());
     let mut swarm = make_peer_manager::<MockService>(addr, config).await;
 
@@ -40,9 +41,8 @@ async fn test_swarm_connect_mock() {
 // try to connect to an address that no one listening on and verify it fails
 #[tokio::test]
 async fn test_swarm_connect_libp2p() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let config = Arc::new(config::create_mainnet());
-    let mut swarm = make_peer_manager::<Libp2pService>(addr, config).await;
+    let mut swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     let addr: Multiaddr =
         "/ip6/::1/tcp/6666/p2p/12D3KooWRn14SemPVxwzdQNg8e8Trythiww1FWrNfPbukYBmZEbJ"
@@ -63,12 +63,10 @@ async fn test_swarm_connect_libp2p() {
 #[tokio::test]
 async fn test_auto_connect_libp2p() {
     let config = Arc::new(config::create_mainnet());
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let mut swarm = make_peer_manager::<Libp2pService>(addr, config.clone()).await;
-    let mut swarm2 =
-        make_peer_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config).await;
+    let mut swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config.clone()).await;
+    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
-    let addr = swarm2.handle.local_addr().clone();
+    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
         PeerId::from_multihash(peer).unwrap()
     } else {
@@ -99,18 +97,13 @@ async fn test_auto_connect_libp2p() {
 #[tokio::test]
 async fn connect_outbound_same_network() {
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        config.clone(),
-    )
-    .await;
-    let mut swarm2 =
-        make_peer_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config).await;
+    let mut swarm1 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config.clone()).await;
 
-    let (_conn1_res, _conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().clone()),
-        swarm2.handle.poll_next()
-    );
+    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
+
+    let (_conn1_res, _conn2_res) =
+        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
 
     assert!(std::matches!(
         swarm1.handle.poll_next().await,
@@ -121,8 +114,7 @@ async fn connect_outbound_same_network() {
 #[tokio::test]
 async fn test_validate_supported_protocols() {
     let config = Arc::new(config::create_mainnet());
-    let swarm =
-        make_peer_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config).await;
+    let swarm = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     // all needed protocols
     assert!(swarm.validate_supported_protocols(&[
@@ -169,18 +161,15 @@ async fn test_validate_supported_protocols() {
 #[tokio::test]
 async fn connect_outbound_different_network() {
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::clone(&config),
-    )
-    .await;
+    let mut swarm1 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
+        make_libp2p_addr(),
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
-    let addr = swarm2.handle.local_addr().clone();
+    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
     swarm1.handle.connect(addr).await.unwrap();
 
@@ -194,16 +183,11 @@ async fn connect_outbound_different_network() {
 #[tokio::test]
 async fn connect_inbound_same_network() {
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        config.clone(),
-    )
-    .await;
-    let mut swarm2 =
-        make_peer_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), config).await;
+    let mut swarm1 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config.clone()).await;
+    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().clone()),
+        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
         swarm2.handle.poll_next()
     );
     let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
@@ -219,19 +203,17 @@ async fn connect_inbound_same_network() {
 
 #[tokio::test]
 async fn connect_inbound_different_network() {
-    let mut swarm1 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
+    let mut swarm1 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::new(config::create_mainnet()))
+            .await;
     let mut swarm2 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
+        make_libp2p_addr(),
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
 
     let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().clone()),
+        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
         swarm2.handle.poll_next()
     );
     let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
@@ -251,21 +233,19 @@ async fn connect_inbound_different_network() {
 
 #[tokio::test]
 async fn remote_closes_connection() {
-    let mut swarm1 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
-    let mut swarm2 = make_peer_manager::<Libp2pService>(
-        test_utils::make_address("/ip6/::1/tcp/"),
-        Arc::new(config::create_mainnet()),
-    )
-    .await;
+    let mut swarm1 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::new(config::create_mainnet()))
+            .await;
+    let mut swarm2 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::new(config::create_mainnet()))
+            .await;
+
     let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().clone()),
+        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
         swarm2.handle.poll_next()
     );
     let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+
     assert!(std::matches!(
         conn2_res,
         net::types::ConnectivityEvent::IncomingConnection { .. }

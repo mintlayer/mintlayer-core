@@ -18,8 +18,9 @@
 use super::*;
 use crate::net::libp2p::{behaviour, types::*};
 use futures::StreamExt;
-use libp2p::{gossipsub::IdentTopic as Topic, Multiaddr};
+use libp2p::gossipsub::IdentTopic as Topic;
 use serialization::Encode;
+use test_utils::make_libp2p_addr;
 
 impl PartialEq for types::PubSubEvent {
     fn eq(&self, other: &Self) -> bool {
@@ -40,10 +41,9 @@ impl PartialEq for types::PubSubEvent {
 
 #[tokio::test]
 async fn test_invalid_message() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut backend1, _cmd1, _conn1, _gossip, _sync1) = make_libp2p(
         common::chain::config::create_mainnet(),
-        addr.clone(),
+        make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
         false,
     )
@@ -51,14 +51,13 @@ async fn test_invalid_message() {
 
     let (mut backend2, _cmd2, _conn2, _gossip2, _sync2) = make_libp2p(
         common::chain::config::create_mainnet(),
-        test_utils::make_address("/ip6/::1/tcp/"),
+        make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
         false,
     )
     .await;
 
     connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
-        addr,
         &mut backend1.swarm,
         &mut backend2.swarm,
     )
@@ -102,11 +101,10 @@ async fn test_invalid_message() {
 
 #[tokio::test]
 async fn test_gossipsub_not_supported() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let config = common::chain::config::create_mainnet();
     let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
         config.clone(),
-        addr.clone(),
+        make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
         false,
     )
@@ -115,8 +113,7 @@ async fn test_gossipsub_not_supported() {
     let (transport, peer_id, id_keys) = make_transport_and_keys();
     let mut swarm = SwarmBuilder::new(transport, make_identify(config, id_keys), peer_id).build();
 
-    connect_swarms::<behaviour::Libp2pBehaviour, Identify>(addr, &mut backend1.swarm, &mut swarm)
-        .await;
+    connect_swarms::<behaviour::Libp2pBehaviour, Identify>(&mut backend1.swarm, &mut swarm).await;
 
     loop {
         tokio::select! {
