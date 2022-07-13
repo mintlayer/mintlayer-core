@@ -44,7 +44,7 @@ use super::{
 
 pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
-    chainstate_config: &'a ChainstateConfig,
+    _chainstate_config: &'a ChainstateConfig,
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
@@ -100,7 +100,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
-            chainstate_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,
@@ -116,7 +116,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
-            chainstate_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,

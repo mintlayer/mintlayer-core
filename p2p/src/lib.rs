@@ -42,9 +42,6 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
 
-// TODO: this should come from a config
-const TIMEOUT: Duration = Duration::from_secs(10);
-
 pub struct P2pInterface<T: NetworkingService> {
     p2p: P2P<T>,
 }
@@ -162,6 +159,7 @@ where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
+        let p2p_config = Arc::new(p2p_config);
         let (conn, pubsub, sync) = T::start(
             p2p_config.address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
@@ -170,7 +168,7 @@ where
             })?,
             &[],
             Arc::clone(&chain_config),
-            TIMEOUT,
+            Duration::from_secs(p2p_config.timeout),
         )
         .await?;
 
@@ -182,9 +180,10 @@ where
 
         let swarm_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
-            if let Err(e) = swarm::PeerManager::<T>::new(swarm_config, conn, rx_swarm, tx_p2p_sync)
-                .run()
-                .await
+            if let Err(e) =
+                swarm::PeerManager::<T>::new(swarm_config, p2p_config, conn, rx_swarm, tx_p2p_sync)
+                    .run()
+                    .await
             {
                 log::error!("PeerManager failed: {:?}", e);
             }

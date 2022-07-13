@@ -71,6 +71,14 @@ pub struct RunOptions {
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,
 
+    /// The p2p score threshold after which a peer is baned.
+    #[clap(long)]
+    pub p2p_ban_threshold: Option<u32>,
+
+    /// The p2p timeout value in seconds.
+    #[clap(long)]
+    pub p2p_timeout: Option<u64>,
+
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,

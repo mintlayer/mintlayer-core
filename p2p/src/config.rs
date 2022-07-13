@@ -20,6 +20,10 @@ use serde::{Deserialize, Serialize};
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub address: String,
+    /// The score threshold after which a peer is baned.
+    pub ban_threshold: u32,
+    /// The timeout value in seconds.
+    pub timeout: u64,
 }
 
 impl P2pConfig {
@@ -27,6 +31,8 @@ impl P2pConfig {
     pub fn new() -> Self {
         Self {
             address: "/ip6/::1/tcp/3031".into(),
+            ban_threshold: 100,
+            timeout: 10,
         }
     }
 }

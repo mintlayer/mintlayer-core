@@ -33,6 +33,8 @@ fn no_args() {
     Command::new(BIN_NAME).assert().failure();
 }
 
+// TODO: config with default values.
+
 #[test]
 fn create_config() {
     let config_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/test_mintlayer.toml");

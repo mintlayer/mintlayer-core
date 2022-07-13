@@ -26,6 +26,7 @@ use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
     net::{self, ConnectivityService, NetworkingService},
+    P2pConfig,
 };
 use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver};
@@ -47,8 +48,11 @@ pub struct PeerManager<T>
 where
     T: NetworkingService,
 {
-    /// Chain config
-    config: Arc<ChainConfig>,
+    /// Chain configuration.
+    chain_config: Arc<ChainConfig>,
+
+    /// P2p configuration.
+    p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
     handle: T::ConnectivityHandle,
@@ -77,13 +81,15 @@ where
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     pub fn new(
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
         rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
-            config,
+            chain_config,
+            p2p_config,
             handle,
             rx_swarm,
             tx_sync,
@@ -163,7 +169,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
-        version == self.config.version()
+        version == self.chain_config.version()
     }
 
     /// Handle connection established event
@@ -175,16 +181,16 @@ where
         log::debug!("{}", info);
 
         ensure!(
-            info.magic_bytes == *self.config.magic_bytes(),
+            info.magic_bytes == *self.chain_config.magic_bytes(),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                *self.config.magic_bytes(),
+                *self.chain_config.magic_bytes(),
                 info.magic_bytes,
             ))
         );
         ensure!(
             self.validate_version(&info.version),
             P2pError::ProtocolError(ProtocolError::InvalidVersion(
-                *self.config.version(),
+                *self.chain_config.version(),
                 info.version
             ))
         );
@@ -279,8 +285,7 @@ where
             score
         };
 
-        // TODO: from config
-        if score >= 100 {
+        if score >= self.p2p_config.ban_threshold {
             self.peerdb.ban_peer(&peer_id);
             return self.handle.ban_peer(peer_id).await;
         }
