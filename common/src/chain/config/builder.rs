@@ -124,7 +124,7 @@ impl Builder {
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
-            epoch_length: BlockDistance::from(super::DEFAULT_EPOCH_LENGTH),
+            epoch_length: super::DEFAULT_EPOCH_LENGTH,
             initial_randomness: H256::zero(),
         }
     }
