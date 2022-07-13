@@ -17,14 +17,14 @@ use std::net::SocketAddr;
 
 use jsonrpsee::http_server::{HttpServerBuilder, HttpServerHandle};
 
+use logging::log;
+
+pub use config::RpcConfig;
 pub use jsonrpsee::core::server::rpc_module::Methods;
 pub use jsonrpsee::core::Error;
 pub use jsonrpsee::proc_macros::rpc;
 
-use logging::log;
-
 mod config;
-pub use config::Config;
 
 /// The Result type with RPC-specific error.
 pub type Result<T> = core::result::Result<T, Error>;

@@ -20,7 +20,10 @@ use std::fs;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
+use chainstate::ChainstateConfig;
 use common::chain::config::ChainType;
+use p2p::config::P2pConfig;
+use rpc::RpcConfig;
 
 use crate::RunOptions;
 
@@ -30,9 +33,9 @@ pub struct Config {
     pub chain_type: ChainType,
 
     // Subsystems configurations.
-    pub chainstate: chainstate::Config,
-    pub p2p: p2p::Config,
-    pub rpc: rpc::Config,
+    pub chainstate: ChainstateConfig,
+    pub p2p: P2pConfig,
+    pub rpc: RpcConfig,
 }
 
 impl Config {

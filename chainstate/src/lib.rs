@@ -31,9 +31,11 @@ use common::{
 };
 use detail::{time_getter::TimeGetter, PropertyQueryError};
 
-pub use chainstate_interface_impl::ChainstateInterfaceImpl;
-pub use config::Config;
-pub use detail::{ban_score, BlockError, BlockSource, Chainstate};
+pub use crate::{
+    chainstate_interface_impl::ChainstateInterfaceImpl,
+    config::ChainstateConfig,
+    detail::{ban_score, BlockError, BlockSource, Chainstate},
+};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {

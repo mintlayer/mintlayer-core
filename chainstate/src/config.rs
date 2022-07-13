@@ -21,7 +21,7 @@ use common::primitives::BlockDistance;
 
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
+pub struct ChainstateConfig {
     pub max_block_header_size: usize,
     pub max_block_size_from_txs: usize,
     pub max_block_size_from_smart_contracts: usize,

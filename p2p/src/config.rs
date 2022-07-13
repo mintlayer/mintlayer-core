@@ -17,12 +17,12 @@ use serde::{Deserialize, Serialize};
 
 /// The p2p subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
+pub struct P2pConfig {
     /// Address to bind P2P to.
     pub address: String,
 }
 
-impl Config {
+impl P2pConfig {
     /// Creates a new p2p configuration instance.
     pub fn new() -> Self {
         Self {

@@ -24,9 +24,7 @@ use logging::log;
 use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 
-mod config;
-pub use config::Config;
-
+pub mod config;
 pub mod error;
 pub mod event;
 pub mod message;

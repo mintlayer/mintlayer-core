@@ -20,12 +20,12 @@ use serde::{Deserialize, Serialize};
 
 /// The rpc subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Config {
+pub struct RpcConfig {
     /// Address to bind RPC to.
     pub address: SocketAddr,
 }
 
-impl Config {
+impl RpcConfig {
     /// Creates a new rpc configuration instance.
     pub fn new() -> Result<Self> {
         Ok(Self {
