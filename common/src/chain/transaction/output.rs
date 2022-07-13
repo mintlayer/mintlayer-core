@@ -20,7 +20,7 @@ use crate::{
 use script::Script;
 use serialization::{Decode, Encode};
 
-use self::stakelock::LockedStateData;
+use self::stakelock::LockedStakeData;
 
 pub mod stakelock;
 
@@ -39,7 +39,7 @@ pub enum Destination {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputPurpose {
     Transfer(Destination),
-    StakeLock(LockedStateData),
+    StakeLock(LockedStakeData),
 }
 
 impl OutputPurpose {

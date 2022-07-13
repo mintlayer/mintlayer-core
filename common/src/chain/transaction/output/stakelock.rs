@@ -4,12 +4,12 @@ use serialization::{Decode, Encode};
 use super::Destination;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub struct LockedStateData {
+pub struct LockedStakeData {
     owner: Destination,
     vrf_public_key: VRFPublicKey,
 }
 
-impl LockedStateData {
+impl LockedStakeData {
     pub fn owner(&self) -> &Destination {
         &self.owner
     }
