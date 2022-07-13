@@ -187,6 +187,10 @@ impl ChainConfig {
         self.epoch_length
     }
 
+    pub fn initial_randomness(&self) -> &H256 {
+        &self.initial_randomness
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
