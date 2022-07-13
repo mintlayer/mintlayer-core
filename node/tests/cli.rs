@@ -13,18 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::path::Path;
+use std::{net::SocketAddr, path::Path, str::FromStr};
 
 use assert_cmd::Command;
 
+use common::chain::config::ChainType;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
+const CONFIG_PATH: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/test_mintlayer.toml");
 
 // This test is only needed because the node name ix hardcoded here, so if the name is changed we
 // get an error that is easy to understand.
 #[test]
-fn path_is_correct() {
+fn node_path_is_correct() {
     assert!(Path::new(BIN_NAME).is_file());
 }
 
@@ -33,42 +35,77 @@ fn no_args() {
     Command::new(BIN_NAME).assert().failure();
 }
 
-// TODO: config with default values.
-
 #[test]
-fn create_config() {
-    let config_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/test_mintlayer.toml");
-    let max_block_header_size = 100;
-    let max_block_size_from_txs = 200;
-    let max_block_size_from_smart_contracts = 300;
-
+fn create_default_config() {
     Command::new(BIN_NAME)
         .arg("create-config")
         .arg("--path")
-        .arg(config_path)
+        .arg(CONFIG_PATH)
         .assert()
         .success();
-    // let run_options = RunOptions {
-    //     config_path: config_path.into(),
-    //     max_block_header_size: Some(max_block_header_size),
-    //     max_block_size_from_txs: Some(max_block_size_from_txs),
-    //     max_block_size_from_smart_contracts: Some(max_block_size_from_smart_contracts),
-    //     p2p_addr: None,
-    //     rpc_addr: None,
-    // };
-    // let config = NodeConfig::read(run_options).unwrap();
-    todo!();
-    todo!();
-    // assert_eq!(
-    //     config.chainstate.max_block_header_size,
-    //     max_block_header_size
-    // );
-    // assert_eq!(
-    //     config.chainstate.max_block_size_from_txs,
-    //     max_block_size_from_txs
-    // );
-    // assert_eq!(
-    //     config.chainstate.max_block_size_from_smart_contracts,
-    //     max_block_size_from_smart_contracts
-    // );
+    let options = RunOptions {
+        config_path: CONFIG_PATH.into(),
+        net: ChainType::Mainnet,
+        max_db_commit_attempts: None,
+        max_orphan_blocks: None,
+        p2p_addr: None,
+        p2p_ban_threshold: None,
+        p2p_timeout: None,
+        rpc_addr: None,
+    };
+    let config = NodeConfig::read(options).unwrap();
+
+    assert_eq!(config.chainstate.max_db_commit_attempts, 10);
+    assert_eq!(config.chainstate.max_orphan_blocks, 512);
+
+    assert_eq!(config.p2p.address, "/ip6/::1/tcp/3031");
+    assert_eq!(config.p2p.ban_threshold, 100);
+    assert_eq!(config.p2p.timeout, 10);
+
+    assert_eq!(
+        config.rpc.address,
+        SocketAddr::from_str("127.0.0.1:3030").unwrap()
+    );
+}
+
+// Check that the config fields are overwritten by the run options.
+#[test]
+fn read_config_override_values() {
+    Command::new(BIN_NAME)
+        .arg("create-config")
+        .arg("--path")
+        .arg(CONFIG_PATH)
+        .assert()
+        .success();
+
+    let max_db_commit_attempts = 1;
+    let max_orphan_blocks = 2;
+    let p2p_addr = "address";
+    let p2p_ban_threshold = 3;
+    let p2p_timeout = 10000;
+    let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+
+    let options = RunOptions {
+        config_path: CONFIG_PATH.into(),
+        net: ChainType::Mainnet,
+        max_db_commit_attempts: Some(max_db_commit_attempts),
+        max_orphan_blocks: Some(max_orphan_blocks),
+        p2p_addr: Some(p2p_addr.into()),
+        p2p_ban_threshold: Some(p2p_ban_threshold),
+        p2p_timeout: Some(p2p_timeout),
+        rpc_addr: Some(rpc_addr),
+    };
+    let config = NodeConfig::read(options).unwrap();
+
+    assert_eq!(
+        config.chainstate.max_db_commit_attempts,
+        max_db_commit_attempts
+    );
+    assert_eq!(config.chainstate.max_orphan_blocks, max_orphan_blocks);
+
+    assert_eq!(config.p2p.address, p2p_addr);
+    assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
+    assert_eq!(config.p2p.timeout, p2p_timeout);
+
+    assert_eq!(config.rpc.address, rpc_addr);
 }
