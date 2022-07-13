@@ -18,7 +18,7 @@
 use crate::{
     error::{DialError, P2pError, ProtocolError},
     net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService},
-    swarm::tests::make_peer_manager,
+    swarm::{self, tests::make_peer_manager},
 };
 use common::chain::config;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
@@ -263,4 +263,57 @@ async fn remote_closes_connection() {
         swarm1.handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
+}
+
+#[tokio::test]
+async fn inbound_connection_too_many_peers() {
+    let config = Arc::new(config::create_mainnet());
+    let mut swarm1 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
+
+    let mut swarm2 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
+
+    // add `MAX_ACTIVE_CONNECTIONS` peers so the next peer that joins is rejected
+    for _ in 0..swarm::MAX_ACTIVE_CONNECTIONS {
+        let peer_id = PeerId::random();
+        let info = swarm::peerdb::PeerContext {
+            _info: net::types::PeerInfo {
+                peer_id,
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: vec![
+                    "/meshsub/1.1.0".to_string(),
+                    "/meshsub/1.0.0".to_string(),
+                    "/ipfs/ping/1.0.0".to_string(),
+                    "/ipfs/id/1.0.0".to_string(),
+                    "/ipfs/id/push/1.0.0".to_string(),
+                    "/mintlayer/sync/0.1.0".to_string(),
+                ],
+            },
+            score: 0,
+        };
+
+        swarm1.peers.insert(peer_id, info);
+    }
+    assert_eq!(swarm1.peers.len(), swarm::MAX_ACTIVE_CONNECTIONS);
+
+    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) =
+        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
+    let _conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+    let swarm1_id = *swarm1.handle.peer_id();
+
+    // run the first peer manager in the background and poll events from the peer manager
+    // that tries to connect to the first manager
+    tokio::spawn(async move { swarm1.run().await });
+
+    if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
+        swarm2.handle.poll_next().await
+    {
+        assert_eq!(peer_id, swarm1_id);
+    } else {
+        panic!("invalid event received");
+    }
 }

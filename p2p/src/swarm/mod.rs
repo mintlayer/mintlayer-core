@@ -472,10 +472,23 @@ where
                 event = self.handle.poll_next() => match event {
                     Ok(event) => match event {
                         net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
-                            // TODO: report rejection to networking backend
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_inbound_connection(addr, peer_info).await;
-                            self.handle_result(Some(peer_id), res).await?;
+
+                            match self.accept_inbound_connection(addr, peer_info).await {
+                                Ok(_) => {},
+                                Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
+                                Err(P2pError::PeerError(err)) => {
+                                    log::warn!("peer error for peer {}: {}", peer_id, err);
+                                    self.handle.disconnect(peer_id).await?;
+                                }
+                                Err(P2pError::ProtocolError(err)) => {
+                                    log::warn!("peer error for peer {}: {}", peer_id, err);
+                                    self.adjust_peer_score(peer_id, err.ban_score()).await?;
+                                }
+                                Err(err) => {
+                                    log::error!("unknown error for peer {}: {}", peer_id, err);
+                                }
+                            }
                         }
                         net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                             let peer_id = peer_info.peer_id;
