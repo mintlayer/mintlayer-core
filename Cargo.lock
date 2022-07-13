@@ -2209,6 +2209,7 @@ dependencies = [
 name = "mintlayer-test"
 version = "0.1.0"
 dependencies = [
+ "common",
  "libtest-mimic",
  "node",
  "thiserror",
