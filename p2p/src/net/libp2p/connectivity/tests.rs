@@ -430,3 +430,26 @@ async fn close_connection() {
     assert_eq!(connmgr.close_connection(&peer_id), Ok(()));
     assert_eq!(connmgr.events.front(), None);
 }
+
+#[tokio::test]
+async fn banned_peer() {
+    let mut connmgr = ConnectionManager::new();
+
+    // known connection
+    let peer_id = PeerId::random();
+
+    connmgr.connections.insert(
+        peer_id,
+        types::Connection::new(Multiaddr::empty(), types::ConnectionState::Dialing, None),
+    );
+    connmgr.handle_banned_peer(peer_id);
+    assert_eq!(
+        connmgr.events.front(),
+        Some(&types::ConnectionManagerEvent::Behaviour(
+            types::BehaviourEvent::ConnectionError {
+                addr: Multiaddr::empty(),
+                error: P2pError::PeerError(PeerError::BannedPeer(peer_id.to_string())),
+            },
+        )),
+    );
+}

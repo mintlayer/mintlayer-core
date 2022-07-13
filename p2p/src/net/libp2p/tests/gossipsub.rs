@@ -84,7 +84,7 @@ async fn test_invalid_message() {
             _event = backend1.swarm.select_next_some() => {},
             event = backend2.swarm.select_next_some() =>
                 if let SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Misbehaved { .. })
+                    ConnectivityEvent::Misbehaved { peer_id: _, error: _ })
                 ) = event {
                     break;
             },
@@ -119,7 +119,7 @@ async fn test_gossipsub_not_supported() {
         tokio::select! {
             event = backend1.swarm.select_next_some() => match event {
                 SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(
-                    ConnectivityEvent::Misbehaved { .. })
+                    ConnectivityEvent::Misbehaved { peer_id: _, error: _ })
                 ) => {
                     break;
                 }

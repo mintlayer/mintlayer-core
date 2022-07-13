@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use chainstate::ban_score::BanScore;
 use common::primitives::semver::SemVer;
 use libp2p::{
     gossipsub::error::{
@@ -251,6 +252,70 @@ impl<T> From<libp2p::swarm::handler::ConnectionHandlerUpgrErr<T>> for P2pError {
             ConnectionHandlerUpgrErr::Upgrade(_) => {
                 P2pError::ConnectionError(ConnectionError::Upgrade)
             }
+        }
+    }
+}
+
+impl BanScore for P2pError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            P2pError::ProtocolError(err) => err.ban_score(),
+            P2pError::PublishError(err) => err.ban_score(),
+            P2pError::SubscriptionError(err) => err.ban_score(),
+            P2pError::ConnectionError(_) => 0,
+            P2pError::DialError(_) => 0,
+            P2pError::ChannelClosed => 0,
+            P2pError::PeerError(_) => 0,
+            P2pError::SubsystemFailure => 0,
+            P2pError::ChainstateError(_) => 0,
+            P2pError::DatabaseFailure => 0,
+            P2pError::ConversionError(err) => err.ban_score(),
+            P2pError::Other(_) => 0,
+        }
+    }
+}
+
+impl BanScore for ProtocolError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ProtocolError::DifferentNetwork(_, _) => 100,
+            ProtocolError::InvalidVersion(_, _) => 100,
+            ProtocolError::InvalidMessage => 100,
+            ProtocolError::Incompatible => 100,
+            ProtocolError::Unresponsive => 100,
+            ProtocolError::InvalidProtocol => 100,
+            ProtocolError::InvalidState(_, _) => 100,
+        }
+    }
+}
+
+impl BanScore for PublishError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            PublishError::Duplicate => 0,
+            PublishError::SigningFailed => 0,
+            PublishError::InsufficientPeers => 0,
+            PublishError::MessageTooLarge(_, _) => 100,
+            PublishError::TransformFailed => 0,
+        }
+    }
+}
+
+impl BanScore for SubscriptionError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            SubscriptionError::FailedToPublish(err) => err.ban_score(),
+            SubscriptionError::NotAllowed => 0,
+        }
+    }
+}
+
+impl BanScore for ConversionError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ConversionError::InvalidPeerId(_) => 0,
+            ConversionError::InvalidAddress(_) => 0,
+            ConversionError::DecodeError(_) => 100,
         }
     }
 }

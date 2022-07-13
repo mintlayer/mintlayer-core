@@ -120,6 +120,9 @@ where
     /// Return peer id of the local node
     fn peer_id(&self) -> &T::PeerId;
 
+    /// Ban peer
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
+
     /// Poll events from the network service provider
     ///
     /// There are three types of events that can be received:

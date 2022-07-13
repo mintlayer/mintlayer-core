@@ -18,6 +18,7 @@
 //! Network behaviour configuration for libp2p
 
 use crate::{
+    error::{P2pError, ProtocolError},
     message,
     net::{
         self,
@@ -245,13 +246,12 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                 log::trace!("peer {} subscribed to topic {:?}", peer_id, topic);
             }
             gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
-                // TODO: should not be possible with mintlayer, disconnect?
                 log::info!("peer {} does not support gossipsub", peer_id);
 
                 self.add_event(Libp2pBehaviourEvent::Connectivity(
                     ConnectivityEvent::Misbehaved {
                         peer_id,
-                        behaviour: 0,
+                        error: P2pError::ProtocolError(ProtocolError::Incompatible),
                     },
                 ))
             }
@@ -274,11 +274,10 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
                             propagation_source
                         );
 
-                        // TODO: implement reputation
                         return self.add_event(Libp2pBehaviourEvent::Connectivity(
                             ConnectivityEvent::Misbehaved {
                                 peer_id: propagation_source,
-                                behaviour: 0,
+                                error: P2pError::ProtocolError(ProtocolError::InvalidMessage),
                             },
                         ));
                     }
