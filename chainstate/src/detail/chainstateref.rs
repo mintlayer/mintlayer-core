@@ -557,11 +557,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         token_id: &TokenId,
         amount: &Amount,
     ) -> Result<(), CheckBlockTransactionsError> {
+        // Collect token inputs
         let mut total_value_of_input_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
         tx.inputs().iter().filter_map(|input| self.map_tokens(input)).try_for_each(
             |(token_id, amount)| {
                 total_value_of_input_tokens.insert(
-                    token_id.clone(),
+                    token_id,
                     (total_value_of_input_tokens
                         .get(&token_id)
                         .cloned()
@@ -580,27 +581,110 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
 
         // Check amount
-        if origin_amount < amount {
+        if origin_amount < amount || amount <= &Amount::from_atoms(0) {
             return Err(CheckBlockTransactionsError::TokenTransferInputIncorrect);
+        }
+
+        Ok(())
+    }
+
+    // TODO: Is it need for us?
+    // fn is_token_registered(&self, token_id: &TokenId) -> bool {
+    //     // self.db_tx.get_token_tx(token_id)
+    //     true
+    // }
+
+    // fn register_token(&self, token_id: &TokenId, issuance_tx: &Id<Transaction>) {
+    //     // self.db_tx.set_token_tx(token_id, issuance_tx)?
+    // }
+
+    fn get_issuance_count(tx: &Transaction) -> usize {
+        tx.outputs()
+            .iter()
+            .filter_map(|output| {
+                match matches!(
+                    output.value(),
+                    OutputValue::Asset(AssetData::TokenIssuanceV1 {
+                        token_ticker: _,
+                        amount_to_issue: _,
+                        number_of_decimals: _,
+                        metadata_uri: _,
+                    })
+                ) {
+                    true => Some(()),
+                    false => None,
+                }
+            })
+            .count()
+    }
+
+    fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+        const MAX_ISSUANCE_ALLOWED: usize = 1;
+
+        // Check assets
+        let mut mlt_amount_in_inputs = Amount::from_atoms(0);
+        let mut mlt_amount_in_outputs = Amount::from_atoms(0);
+
+        for tx in block.transactions() {
+            // We can't issue any count of token types in one tx
+            let issuance_count = Self::get_issuance_count(tx);
+            if issuance_count > MAX_ISSUANCE_ALLOWED {
+                return Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                    tx.get_id(),
+                    block.get_id(),
+                ));
+            }
+
+            tx.outputs()
+                .iter()
+                .filter_map(|output| match output.value() {
+                    OutputValue::Coin(coin) => {
+                        mlt_amount_in_outputs = (mlt_amount_in_outputs + *coin)?;
+                        None
+                    }
+                    OutputValue::Asset(asset) => Some(asset),
+                })
+                .try_for_each(|asset| self.check_asset(asset, tx, block))?;
+
+            if self
+                .db_tx
+                .get_best_block_id()
+                .map_err(|_| CheckBlockTransactionsError::TokenTransferInputIncorrect)?
+                .is_some()
+                && issuance_count == MAX_ISSUANCE_ALLOWED
+            {
+                tx.inputs().iter().try_for_each(|input| {
+                    let prev_tx = self.fetch(input.outpoint())?;
+                    let output = prev_tx
+                        .outputs()
+                        .get(input.outpoint().output_index() as usize)
+                        .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+                    match output.value() {
+                        OutputValue::Coin(coin) => {
+                            mlt_amount_in_inputs = (mlt_amount_in_inputs + *coin)
+                                .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+                        }
+                        OutputValue::Asset(_) => { /* skip */ }
+                    };
+                    Ok(())
+                })?;
+
+                // check is fee enough for issuance
+                if !Self::is_issuance_fee_enough(mlt_amount_in_inputs, mlt_amount_in_outputs) {
+                    return Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                        tx.get_id(),
+                        block.get_id(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
 
-    fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // Check assets
-        for tx in block.transactions() {
-            let res: Result<(), CheckBlockTransactionsError> = tx
-                .outputs()
-                .iter()
-                .filter_map(|output| match output.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Asset(asset) => Some(asset),
-                })
-                .try_for_each(|asset| self.check_asset(asset, tx, block));
-
-            res?;
-        }
-        Ok(())
+    fn is_issuance_fee_enough(mlt_amount_in_inputs: Amount, mlt_amount_in_outputs: Amount) -> bool {
+        const MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+        (mlt_amount_in_inputs - mlt_amount_in_outputs).unwrap_or(Amount::from_atoms(0))
+            > MIN_ISSUANCE_FEE
     }
 
     fn check_asset(
@@ -609,7 +693,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx: &Transaction,
         block: &Block,
     ) -> Result<(), CheckBlockTransactionsError> {
-        Ok(match asset {
+        match asset {
             AssetData::TokenTransferV1 { token_id, amount } => {
                 self.check_transfer_data(tx, token_id, amount)?
             }
@@ -618,15 +702,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 amount_to_issue,
                 number_of_decimals,
                 metadata_uri,
-            } => self.check_issue_data(
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
-                tx.get_id(),
-                block.get_id(),
-            )?,
-        })
+            } => {
+                self.check_issue_data(
+                    token_ticker,
+                    amount_to_issue,
+                    number_of_decimals,
+                    metadata_uri,
+                    tx.get_id(),
+                    block.get_id(),
+                )?;
+            }
+        }
+        Ok(())
     }
 
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
@@ -859,6 +946,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Database error on retrieving current best block index")
             .expect("Also only genesis fails at this");
         let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
+
         // Disconnect transactions
         self.disconnect_transactions(&block)?;
         self.db_tx.set_best_block_id(

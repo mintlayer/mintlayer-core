@@ -11,7 +11,7 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         signature::inputsig::InputWitness,
-        token_id, AssetData, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
+        token_id, AssetData, OutputPurpose, OutputValue, TokenId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
@@ -22,6 +22,17 @@ fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
         Err(BlockError::CheckBlockFailed(
             CheckBlockError::CheckTransactionFailed(
                 CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
+            )
+        ))
+    ));
+}
+
+fn assert_token_transfer(block_index: Result<Option<BlockIndex>, BlockError>) {
+    assert!(matches!(
+        block_index,
+        Err(BlockError::CheckBlockFailed(
+            CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::TokenTransferInputIncorrect
             )
         ))
     ));
@@ -153,5 +164,127 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(123456789),
         });
         let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+
+        // Try to transfer exceed amount
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(987654321),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_transfer(block_index);
+
+        // Try to transfer token with wrong id
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id: TokenId::random(),
+            amount: Amount::from_atoms(123456789),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_transfer(block_index);
+
+        // Try to transfer zero amount
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(0),
+        });
+        let block_index = process_token(&mut chainstate, value);
+        assert_token_transfer(block_index);
     })
+}
+
+#[test]
+fn couple_of_token_issuance_in_one_tx() {
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+        let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
+        let receiver = anyonecanspend_address();
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
+        // Create a token issue transaction and block
+        let inputs = vec![TxInput::new(
+            prev_block.transactions()[0].get_id().into(),
+            0,
+            InputWitness::NoSignature(None),
+        )];
+        let outputs = vec![
+            TxOutput::new(value.clone(), OutputPurpose::Transfer(receiver.clone())),
+            TxOutput::new(value, OutputPurpose::Transfer(receiver)),
+        ];
+        let block = Block::new(
+            vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
+            Some(prev_block_id),
+            BlockTimestamp::from_int_seconds(prev_block.timestamp().as_int_seconds() + 1),
+            ConsensusData::None,
+        )
+        .unwrap();
+
+        // Process it
+        assert_token_issue(chainstate.process_block(block, BlockSource::Local));
+    })
+}
+
+#[test]
+fn token_issuance_with_insufficient_fee() {
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+        let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
+        let receiver = anyonecanspend_address();
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
+        // Create a token issue transaction and block
+        let inputs = vec![TxInput::new(
+            prev_block.transactions()[0].get_id().into(),
+            0,
+            InputWitness::NoSignature(None),
+        )];
+
+        let input_coins = match chainstate
+            .get_block(chainstate.get_best_block_id().unwrap().unwrap())
+            .unwrap()
+            .unwrap()
+            .transactions()[0]
+            .outputs()[0]
+            .value()
+        {
+            OutputValue::Coin(coin) => *coin,
+            OutputValue::Asset(_) => unreachable!(),
+        };
+
+        let outputs = vec![
+            TxOutput::new(value, OutputPurpose::Transfer(receiver.clone())),
+            TxOutput::new(
+                OutputValue::Coin((input_coins - Amount::from_atoms(1)).unwrap()),
+                OutputPurpose::Transfer(receiver),
+            ),
+        ];
+        let block = Block::new(
+            vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
+            Some(prev_block_id),
+            BlockTimestamp::from_int_seconds(prev_block.timestamp().as_int_seconds() + 1),
+            ConsensusData::None,
+        )
+        .unwrap();
+
+        // Process it
+        assert_token_issue(chainstate.process_block(block, BlockSource::Local));
+    })
+}
+
+#[test]
+fn transfer_few_tokens() {
+    common::concurrency::model(|| {})
+}
+
+#[test]
+fn test_burn_tokens() {
+    // todo: Burn tokens has not tested yet
 }
