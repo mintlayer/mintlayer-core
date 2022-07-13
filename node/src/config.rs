@@ -55,27 +55,23 @@ impl NodeConfig {
         let mut config: NodeConfig =
             toml::from_str(&config).context("Failed to deserialize config")?;
 
-        todo!();
-        // // Chainstate options.
-        // if let Some(max_size) = options.max_block_header_size {
-        //     config.chainstate.max_block_header_size = max_size;
-        // }
-        // if let Some(max_size) = options.max_block_size_from_txs {
-        //     config.chainstate.max_block_size_from_txs = max_size;
-        // }
-        // if let Some(max_size) = options.max_block_size_from_smart_contracts {
-        //     config.chainstate.max_block_size_from_smart_contracts = max_size;
-        // }
-        //
-        // // P2p options.
-        // if let Some(address) = options.p2p_addr {
-        //     config.p2p.address = address;
-        // }
-        //
-        // // Rpc options.
-        // if let Some(address) = options.rpc_addr {
-        //     config.rpc.address = address;
-        // }
+        // Chainstate options.
+        if let Some(attempts) = options.max_db_commit_attempts {
+            config.chainstate.max_db_commit_attempts = attempts;
+        }
+        if let Some(max_orphans) = options.max_orphan_blocks {
+            config.chainstate.max_orphan_blocks = max_orphans;
+        }
+
+        // P2p options.
+        if let Some(address) = options.p2p_addr {
+            config.p2p.address = address;
+        }
+
+        // Rpc options.
+        if let Some(address) = options.rpc_addr {
+            config.rpc.address = address;
+        }
 
         Ok(config)
     }

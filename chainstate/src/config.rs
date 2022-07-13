@@ -18,13 +18,18 @@ use serde::{Deserialize, Serialize};
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChainstateConfig {
-    // TODO: FIXME!
+    /// The number of maximum attempts to process a block.
+    pub max_db_commit_attempts: usize,
+    /// The maximum capacity of the orphan blocks pool.
+    pub max_orphan_blocks: usize,
 }
 
 impl ChainstateConfig {
     /// Creates a new chainstate configuration isntance.
     pub fn new() -> Self {
-        todo!();
-        Self {}
+        Self {
+            max_db_commit_attempts: 10,
+            max_orphan_blocks: 512,
+        }
     }
 }

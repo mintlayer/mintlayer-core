@@ -59,6 +59,14 @@ pub struct RunOptions {
     #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
     pub net: ChainType,
 
+    /// Blockchain type.
+    #[clap(long)]
+    pub max_db_commit_attempts: Option<usize>,
+
+    /// The maximum capacity of the orphan blocks pool.
+    #[clap(long)]
+    pub max_orphan_blocks: Option<usize>,
+
     /// Address to bind P2P to.
     #[clap(long, value_name = "ADDR")]
     pub p2p_addr: Option<String>,

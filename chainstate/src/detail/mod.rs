@@ -147,11 +147,12 @@ impl Chainstate {
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
+        let orphan_blocks = OrphanBlocksPool::new(chainstate_config.max_orphan_blocks);
         let cons = Self {
             chain_config,
             chainstate_config,
             chainstate_storage,
-            orphan_blocks: OrphanBlocksPool::new_default(),
+            orphan_blocks,
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
             time_getter,
@@ -194,13 +195,10 @@ impl Chainstate {
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        // TODO: move to a configuration object that loads from command line arguments
-        const MAX_DB_COMMIT_COUNT: usize = 10;
-
-        if attempt_number >= MAX_DB_COMMIT_COUNT {
+        if attempt_number >= self.chainstate_config.max_db_commit_attempts {
             Err(BlockError::DatabaseCommitError(
                 block.get_id(),
-                MAX_DB_COMMIT_COUNT,
+                self.chainstate_config.max_db_commit_attempts,
                 db_error,
             ))
         } else {
