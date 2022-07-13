@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#[cfg(test)]
+mod ban;
 mod tmp;
 
 use crate::{

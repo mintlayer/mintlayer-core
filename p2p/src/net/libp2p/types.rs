@@ -30,6 +30,36 @@ use libp2p::{
 };
 use tokio::sync::oneshot;
 
+#[derive(Debug)]
+pub struct IdentifyInfoWrapper(Box<IdentifyInfo>);
+
+impl IdentifyInfoWrapper {
+    pub fn new(info: IdentifyInfo) -> Self {
+        Self(Box::new(info))
+    }
+}
+
+impl std::ops::Deref for IdentifyInfoWrapper {
+    type Target = Box<IdentifyInfo>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl PartialEq for IdentifyInfoWrapper {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.public_key == other.0.public_key
+            && self.0.protocol_version == other.0.protocol_version
+            && self.0.agent_version == other.0.agent_version
+            && self.0.listen_addrs == other.0.listen_addrs
+            && self.0.protocols == other.0.protocols
+            && self.0.observed_addr == other.0.observed_addr
+    }
+}
+
+impl Eq for IdentifyInfoWrapper {}
+
 // TODO: rename `response` -> `channel`
 #[derive(Debug)]
 pub enum Command {
@@ -87,6 +117,17 @@ pub enum Command {
         topics: Vec<Topic>,
         response: oneshot::Sender<crate::Result<()>>,
     },
+
+    /// Get the active listen address
+    ListenAddress {
+        response: oneshot::Sender<Option<Multiaddr>>,
+    },
+
+    /// Ban remote peer
+    BanPeer {
+        peer_id: PeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 #[derive(Debug)]
@@ -94,13 +135,13 @@ pub enum ConnectivityEvent {
     /// Outbound connection accepted by remote
     ConnectionAccepted {
         addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Inbound connection incoming
     IncomingConnection {
         addr: Multiaddr,
-        peer_info: Box<IdentifyInfo>,
+        peer_info: IdentifyInfoWrapper,
     },
 
     /// Outbound connection failed
@@ -127,8 +168,11 @@ pub enum ConnectivityEvent {
         error: error::P2pError,
     },
 
-    /// Peer misbehaved
-    Misbehaved { peer_id: PeerId, behaviour: u32 },
+    /// Peer misbehaved, adjust its reputation
+    Misbehaved {
+        peer_id: PeerId,
+        error: error::P2pError,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -157,6 +201,11 @@ pub enum SyncingEvent {
         request_id: RequestId,
         error: net::types::RequestResponseError,
     },
+}
+
+#[derive(Debug)]
+pub enum ControlEvent {
+    CloseConnection { peer_id: PeerId },
 }
 
 impl From<&net::types::PubSubTopic> for Topic {
@@ -196,17 +245,5 @@ pub enum Libp2pBehaviourEvent {
     Connectivity(ConnectivityEvent),
     Syncing(SyncingEvent),
     PubSub(PubSubEvent),
-}
-
-// TODO: connection manager
-#[derive(Debug)]
-pub enum PendingState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed(Multiaddr),
-
-    /// Connection established for outbound connection
-    OutboundAccepted(Multiaddr),
-
-    /// Connection established for inbound connection
-    InboundAccepted(Multiaddr),
+    Control(ControlEvent),
 }

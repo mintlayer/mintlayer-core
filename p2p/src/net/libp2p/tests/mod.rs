@@ -18,16 +18,14 @@
 use crate::net::{
     self,
     libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, types},
+    libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
 };
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
     gossipsub::{Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify::{Identify, IdentifyConfig},
-    identity,
-    mdns::Mdns,
-    mplex, noise, ping as libp2p_ping,
+    identity, mplex, noise, ping as libp2p_ping,
     request_response::*,
     swarm::NetworkBehaviour,
     swarm::{SwarmBuilder, SwarmEvent},
@@ -36,14 +34,12 @@ use libp2p::{
 };
 use logging::log;
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     iter,
     num::NonZeroU32,
 };
 use tokio::sync::mpsc;
 
-#[cfg(test)]
-mod connectivity;
 #[cfg(test)]
 mod frontend;
 #[cfg(test)]
@@ -54,13 +50,15 @@ mod identify;
 mod mdns;
 #[cfg(test)]
 mod ping;
+#[cfg(test)]
+mod swarm;
 
 #[allow(dead_code)]
 pub async fn make_libp2p(
     config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
-    relay_mdns: bool,
+    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -105,7 +103,6 @@ pub async fn make_libp2p(
         );
 
         let mut behaviour = behaviour::Libp2pBehaviour {
-            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping: libp2p_ping::Behaviour::new(
                 libp2p_ping::Config::new()
                     .with_timeout(std::time::Duration::from_secs(60))
@@ -123,11 +120,10 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            relay_mdns,
+            connmgr: connectivity::ConnectionManager::new(),
+            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
-            established_conns: HashSet::new(),
-            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -161,7 +157,7 @@ pub async fn make_libp2p_with_ping(
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
-    relay_mdns: bool,
+    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -206,7 +202,6 @@ pub async fn make_libp2p_with_ping(
         );
 
         let mut behaviour = behaviour::Libp2pBehaviour {
-            mdns: Mdns::new(Default::default()).await.expect("mdns setup failed"),
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
@@ -219,11 +214,10 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            relay_mdns,
+            connmgr: connectivity::ConnectionManager::new(),
+            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
-            established_conns: HashSet::new(),
-            pending_conns: HashMap::new(),
             waker: None,
         };
 
@@ -251,12 +245,21 @@ pub async fn make_libp2p_with_ping(
     )
 }
 
+async fn get_address<T: NetworkBehaviour>(swarm: &mut Swarm<T>) -> Multiaddr {
+    loop {
+        if let SwarmEvent::NewListenAddr { address, .. } = swarm.select_next_some().await {
+            return address;
+        }
+    }
+}
+
 #[allow(dead_code)]
-pub async fn connect_swarms<A, B>(addr: Multiaddr, swarm1: &mut Swarm<A>, swarm2: &mut Swarm<B>)
+pub async fn connect_swarms<A, B>(swarm1: &mut Swarm<A>, swarm2: &mut Swarm<B>)
 where
     A: NetworkBehaviour,
     B: NetworkBehaviour,
 {
+    let addr = get_address::<A>(swarm1).await;
     swarm2.dial(addr).expect("swarm dial failed");
 
     loop {

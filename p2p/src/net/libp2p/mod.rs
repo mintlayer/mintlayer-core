@@ -21,7 +21,10 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse},
+        libp2p::{
+            sync::{SyncRequest, SyncResponse},
+            types::IdentifyInfoWrapper,
+        },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
     },
@@ -31,7 +34,6 @@ use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
     gossipsub::MessageId,
-    identify::IdentifyInfo,
     identity, mplex,
     multiaddr::Protocol,
     noise,
@@ -47,7 +49,9 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
+mod connectivity;
 mod constants;
+mod discovery;
 mod sync;
 mod tests;
 mod types;
@@ -68,9 +72,6 @@ pub struct Libp2pConnectivityHandle<T>
 where
     T: NetworkingService,
 {
-    /// Address where the network services has been bound
-    bind_addr: Multiaddr,
-
     /// Peer Id of the local node
     peer_id: PeerId,
 
@@ -182,7 +183,7 @@ where
         .collect::<Vec<net::types::AddrInfo<T>>>()
 }
 
-impl<T> TryInto<net::types::PeerInfo<T>> for IdentifyInfo
+impl<T> TryInto<net::types::PeerInfo<T>> for IdentifyInfoWrapper
 where
     T: NetworkingService<PeerId = PeerId, ProtocolId = String>,
 {
@@ -209,8 +210,8 @@ where
             peer_id: PeerId::from_public_key(&self.public_key),
             magic_bytes,
             version,
-            agent: Some(self.agent_version),
-            protocols: self.protocols,
+            agent: Some(self.agent_version.clone()),
+            protocols: self.protocols.clone(),
         })
     }
 }
@@ -251,14 +252,14 @@ impl NetworkingService for Libp2pService {
             .outbound_timeout(timeout)
             .boxed();
 
-        // If mDNS has been specified as a peer discovery strategy for this Libp2pService,
-        // pass that information to the backend so it knows to relay the mDNS events to P2P
-        let relay_mdns = strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns);
-        log::trace!("multicast dns enabled {}", relay_mdns);
-
         let swarm = SwarmBuilder::new(
             transport,
-            behaviour::Libp2pBehaviour::new(Arc::clone(&chain_config), id_keys, relay_mdns).await,
+            behaviour::Libp2pBehaviour::new(
+                Arc::clone(&chain_config),
+                id_keys,
+                strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns),
+            )
+            .await,
             peer_id,
         )
         .build();
@@ -290,7 +291,6 @@ impl NetworkingService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle {
-                bind_addr: bind_addr.with(Protocol::P2p(peer_id.into())),
                 peer_id,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
@@ -314,7 +314,7 @@ impl NetworkingService for Libp2pService {
 impl<T> ConnectivityService<T> for Libp2pConnectivityHandle<T>
 where
     T: NetworkingService<Address = Multiaddr, PeerId = PeerId> + Send,
-    IdentifyInfo: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
+    IdentifyInfoWrapper: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -356,12 +356,27 @@ where
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
-    fn local_addr(&self) -> &T::Address {
-        &self.bind_addr
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(types::Command::ListenAddress { response: tx }).await?;
+        rx.await.map_err(P2pError::from)
     }
 
     fn peer_id(&self) -> &T::PeerId {
         &self.peer_id
+    }
+
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        log::debug!("ban peer {}", peer_id);
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::BanPeer {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+        rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
@@ -369,7 +384,7 @@ where
             types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                 Ok(ConnectivityEvent::ConnectionAccepted {
                     addr,
-                    peer_info: (*peer_info).try_into()?,
+                    peer_info: peer_info.try_into()?,
                 })
             }
             types::ConnectivityEvent::ConnectionError { addr, error } => {
@@ -378,7 +393,7 @@ where
             types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
                 Ok(ConnectivityEvent::IncomingConnection {
                     addr,
-                    peer_info: (*peer_info).try_into()?,
+                    peer_info: peer_info.try_into()?,
                 })
             }
             types::ConnectivityEvent::ConnectionClosed { peer_id } => {
@@ -396,8 +411,8 @@ where
             types::ConnectivityEvent::Error { peer_id, error } => {
                 Ok(ConnectivityEvent::Error { peer_id, error })
             }
-            types::ConnectivityEvent::Misbehaved { peer_id, behaviour } => {
-                Ok(ConnectivityEvent::Misbehaved { peer_id, behaviour })
+            types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
         }
     }

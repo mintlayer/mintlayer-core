@@ -24,10 +24,12 @@ pub mod rngs {
     pub use rand::rngs::OsRng;
 }
 
+#[must_use]
 pub fn make_true_rng() -> impl rand::Rng + rand::CryptoRng {
     rand::rngs::StdRng::from_entropy()
 }
 
+#[must_use]
 pub fn make_pseudo_rng() -> impl rand::Rng {
     rand::rngs::ThreadRng::default()
 }

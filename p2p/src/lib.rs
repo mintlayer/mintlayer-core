@@ -191,7 +191,7 @@ where
         });
 
         let sync_handle = consensus_handle.clone();
-        let swarm_tx = tx_swarm.clone();
+        let tx_swarm_sync = tx_swarm.clone();
         let sync_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
             if let Err(e) = sync::SyncManager::<T>::new(
@@ -199,7 +199,7 @@ where
                 sync,
                 sync_handle,
                 rx_p2p_sync,
-                swarm_tx,
+                tx_swarm_sync,
                 tx_pubsub,
             )
             .run()
@@ -209,12 +209,13 @@ where
             }
         });
 
-        // TODO: merge with syncmanager when appropriate
+        let tx_swarm_pubsub = tx_swarm.clone();
         tokio::spawn(async move {
             if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
                 chain_config,
                 pubsub,
                 consensus_handle,
+                tx_swarm_pubsub,
                 rx_pubsub,
                 &[net::types::PubSubTopic::Blocks],
             )

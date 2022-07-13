@@ -14,7 +14,6 @@ sha3 = "0.10"
 ripemd = "0.1"
 blake2 = "0.10"
 generic-array = "0.14"
-hex = "0.4"
 rand = "0.8"
 tari_crypto = "0.11"
 parity-scale-codec = "3.1"
@@ -24,3 +23,9 @@ num-derive = "0.3"
 num-traits = "0.2"
 chacha20poly1305 = "0.9"
 thiserror = "1.0"
+schnorrkel = "0.10.2"
+merlin = { version = "3.0.0", default-features = false }
+
+[dev-dependencies]
+hex = "0.4"
+rand_chacha = "0.3.1"

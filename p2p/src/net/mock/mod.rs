@@ -166,12 +166,16 @@ where
         todo!();
     }
 
-    fn local_addr(&self) -> &T::Address {
-        &self.addr
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
+        Ok(Some(self.addr))
     }
 
     fn peer_id(&self) -> &T::PeerId {
         &self.addr
+    }
+
+    async fn ban_peer(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
+        todo!();
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
