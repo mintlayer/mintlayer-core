@@ -148,10 +148,7 @@ where
         let (tx, rx) = oneshot::channel();
         self.cmd_tx.send(types::Command::Connect { addr, response: tx }).await?;
 
-        let _ = rx
-            .await
-            .map_err(|e| e)? // channel closed
-            .map_err(|e| e)?; // command failure
+        let _ = rx.await??;
 
         todo!();
         // Ok(
@@ -169,12 +166,16 @@ where
         todo!();
     }
 
-    fn local_addr(&self) -> &T::Address {
-        &self.addr
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
+        Ok(Some(self.addr))
     }
 
     fn peer_id(&self) -> &T::PeerId {
         &self.addr
+    }
+
+    async fn ban_peer(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
+        todo!();
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
@@ -195,7 +196,7 @@ impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
     T: NetworkingService<PeerId = SocketAddr> + Send,
 {
-    async fn publish(&mut self, _message: message::Message) -> crate::Result<()> {
+    async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
     }
 
@@ -225,7 +226,7 @@ where
     async fn send_request(
         &mut self,
         _peer_id: T::PeerId,
-        _message: message::Message,
+        _request: message::Request,
     ) -> crate::Result<T::RequestId> {
         todo!();
     }
@@ -233,7 +234,7 @@ where
     async fn send_response(
         &mut self,
         _request_id: T::RequestId,
-        _message: message::Message,
+        _response: message::Response,
     ) -> crate::Result<()> {
         todo!();
     }

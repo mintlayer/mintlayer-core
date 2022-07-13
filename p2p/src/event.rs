@@ -37,6 +37,9 @@ pub enum SwarmEvent<T: NetworkingService> {
 
     /// Get peer IDs of connected peers
     GetConnectedPeers(oneshot::Sender<Vec<String>>),
+
+    /// Adjust peer score
+    AdjustPeerScore(T::PeerId, u32, oneshot::Sender<crate::Result<()>>),
 }
 
 #[derive(Debug)]

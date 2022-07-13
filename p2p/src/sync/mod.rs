@@ -16,8 +16,7 @@
 // Author(s): A. Altonen
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
-    event,
-    message::{Message, MessageType, SyncingMessage, SyncingRequest, SyncingResponse},
+    event, message,
     net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
 };
 use chainstate::{
@@ -429,7 +428,7 @@ where
         Ok(())
     }
 
-    async fn handle_error(
+    pub async fn handle_error(
         &mut self,
         peer_id: T::PeerId,
         result: crate::Result<()>,
@@ -437,15 +436,33 @@ where
         match result {
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed) => Err(P2pError::ChannelClosed),
-            Err(P2pError::ProtocolError(_err)) => {
-                log::error!("Peer {} commited a protocol error: {}", peer_id, _err);
-                // TODO: self.tx_swarm.report_protocol_error(peer_id, error).await?;
-                Ok(())
+            Err(P2pError::ProtocolError(err)) => {
+                log::error!("Peer {} commited a protocol error: {}", peer_id, err);
+
+                let (tx, rx) = oneshot::channel();
+                self.tx_swarm
+                    .send(event::SwarmEvent::AdjustPeerScore(
+                        peer_id,
+                        err.ban_score(),
+                        tx,
+                    ))
+                    .await
+                    .map_err(P2pError::from)?;
+                rx.await.map_err(P2pError::from)?
             }
             Err(P2pError::ChainstateError(err)) => match err {
                 ProcessBlockError(err) => {
                     if err.ban_score() > 0 {
-                        // TODO: self.tx_swarm.report_chainstate_error(peer_id, error).await?;
+                        let (tx, rx) = oneshot::channel();
+                        self.tx_swarm
+                            .send(event::SwarmEvent::AdjustPeerScore(
+                                peer_id,
+                                err.ban_score(),
+                                tx,
+                            ))
+                            .await
+                            .map_err(P2pError::from)?;
+                        let _ = rx.await.map_err(P2pError::from);
                     }
 
                     Ok(())
@@ -461,6 +478,21 @@ where
             }
             Err(err) => {
                 log::error!("Unexpected error occurred: {}", err);
+
+                if err.ban_score() > 0 {
+                    // TODO: better abstraction over channels
+                    let (tx, rx) = oneshot::channel();
+                    self.tx_swarm
+                        .send(event::SwarmEvent::AdjustPeerScore(
+                            peer_id,
+                            err.ban_score(),
+                            tx,
+                        ))
+                        .await
+                        .map_err(P2pError::from)?;
+                    let _ = rx.await.map_err(P2pError::from);
+                }
+
                 Ok(())
             }
         }
@@ -476,65 +508,65 @@ where
                     SyncingEvent::Request {
                         peer_id,
                         request_id,
-                        request:
-                            Message {
-                                msg: MessageType::Syncing(SyncingMessage::Request(message)),
-                                magic: _,
-                            },
-                    } => {
-                        match message {
-                            SyncingRequest::GetHeaders { locator } => {
-                                log::debug!(
-                                    "process header request (id {:?}) from peer {}",
-                                    request_id, peer_id
-                                );
-                                log::trace!("locator: {:#?}", locator);
+                        request,
+                    } => match request {
+                        message::Request::HeaderRequest(request) => {
+                            log::debug!(
+                                "process header request (id {:?}) from peer {}",
+                                request_id, peer_id
+                            );
+                            log::trace!("locator: {:#?}", request.locator());
 
-                                let result = self.process_header_request(peer_id, request_id, locator).await;
-                                self.handle_error(peer_id, result).await?;
-                            }
-                            SyncingRequest::GetBlocks { block_ids } => {
-                                log::debug!(
-                                    "process block request (id {:?}) from peer {}",
-                                    request_id, peer_id
-                                );
-                                log::trace!("requested block ids: {:#?}", block_ids);
-
-                                let result = self.process_block_request(peer_id, request_id, block_ids).await;
-                                self.handle_error(peer_id, result).await?;
-                            }
+                            let result = self.process_header_request(
+                                peer_id,
+                                request_id,
+                                request.into_locator(),
+                            ).await;
+                            self.handle_error(peer_id, result).await?;
                         }
-                    }
+                        message::Request::BlockRequest(request) => {
+                            log::debug!(
+                                "process block request (id {:?}) from peer {}",
+                                request_id, peer_id
+                            );
+                            log::trace!("requested block ids: {:#?}", request.block_ids());
+
+                            let result = self.process_block_request(
+                                peer_id,
+                                request_id,
+                                request.into_block_ids(),
+                            ).await;
+                            self.handle_error(peer_id, result).await?;
+                        }
+                    },
                     SyncingEvent::Response {
                         peer_id,
                         request_id,
-                        response:
-                            Message {
-                                msg: MessageType::Syncing(SyncingMessage::Response(message)),
-                                magic: _,
-                            },
-                    } => {
-                        match message {
-                            SyncingResponse::Headers { headers } => {
-                                log::debug!(
-                                    "process header response (id {:?}) from peer {}",
-                                    request_id, peer_id
-                                );
-                                log::trace!("received headers: {:#?}", headers);
+                        response,
+                    } => match response {
+                        message::Response::HeaderResponse(response) => {
+                            log::debug!(
+                                "process header response (id {:?}) from peer {}",
+                                request_id, peer_id
+                            );
+                            log::trace!("received headers: {:#?}", response.headers());
 
-                                let result = self.process_header_response(peer_id, headers).await;
-                                self.handle_error(peer_id, result).await?;
-                            }
-                            SyncingResponse::Blocks { blocks } => {
-                                log::debug!(
-                                    "process block response (id {:?}) from peer {}",
-                                    request_id, peer_id
-                                );
-                                log::trace!("# of received blocks: {:#?}", blocks.len());
+                            let result = self.process_header_response(peer_id, response.into_headers()).await;
+                            self.handle_error(peer_id, result).await?;
+                        }
+                        message::Response::BlockResponse(response) => {
+                            log::debug!(
+                                "process block response (id {:?}) from peer {}",
+                                request_id, peer_id
+                            );
+                            log::trace!(
+                                "# of received blocks: {}, block ids: {:#?}",
+                                response.blocks().len(),
+                                response.blocks().iter().map(|block| block.get_id()).collect::<Vec<_>>(),
+                            );
 
-                                let result = self.process_block_response(peer_id, blocks).await;
-                                self.handle_error(peer_id, result).await?;
-                            }
+                            let result = self.process_block_response(peer_id, response.into_blocks()).await;
+                            self.handle_error(peer_id, result).await?;
                         }
                     },
                     SyncingEvent::Error {
@@ -545,13 +577,6 @@ where
                         let result = self.process_error(peer_id, request_id, error).await;
                         self.handle_error(peer_id, result).await?;
                     },
-                    SyncingEvent::Request { peer_id, .. } | SyncingEvent::Response { peer_id, .. } => {
-                        log::error!("received an invalid message from peer {}", peer_id);
-                        self.handle_error(
-                            peer_id,
-                            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
-                        ).await?;
-                    }
                 },
                 event = self.rx_sync.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SyncControlEvent::Connected(peer_id) => {

@@ -14,23 +14,22 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-extern crate test_utils;
 
-use libp2p::{multiaddr::Protocol, Multiaddr};
+use libp2p::multiaddr::Protocol;
 use p2p::net::{
     libp2p::{Libp2pDiscoveryStrategy, Libp2pService},
     types::ConnectivityEvent,
     ConnectivityService, NetworkingService,
 };
 use std::sync::Arc;
+use test_utils::make_libp2p_addr;
 
 // verify that libp2p mdns peer discovery works
 #[tokio::test]
 async fn test_libp2p_peer_discovery() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut serv, _, _) = Libp2pService::start(
-        addr.clone(),
+        make_libp2p_addr(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
@@ -38,9 +37,8 @@ async fn test_libp2p_peer_discovery() {
     .await
     .unwrap();
 
-    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut serv2, _, _) = Libp2pService::start(
-        addr2.clone(),
+        make_libp2p_addr(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),

@@ -21,48 +21,99 @@ use common::{
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum SyncingRequest {
-    #[codec(index = 0)]
-    GetHeaders { locator: Vec<BlockHeader> },
-    #[codec(index = 1)]
-    GetBlocks { block_ids: Vec<Id<Block>> },
+pub struct HeaderRequest {
+    locator: Vec<BlockHeader>,
+}
+
+impl HeaderRequest {
+    pub fn new(locator: Vec<BlockHeader>) -> Self {
+        HeaderRequest { locator }
+    }
+
+    pub fn locator(&self) -> &Vec<BlockHeader> {
+        &self.locator
+    }
+
+    pub fn into_locator(self) -> Vec<BlockHeader> {
+        self.locator
+    }
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum SyncingResponse {
-    #[codec(index = 0)]
-    Headers { headers: Vec<BlockHeader> },
-    #[codec(index = 1)]
-    Blocks { blocks: Vec<Block> },
+pub struct BlockRequest {
+    block_ids: Vec<Id<Block>>,
+}
+
+impl BlockRequest {
+    pub fn new(block_ids: Vec<Id<Block>>) -> Self {
+        Self { block_ids }
+    }
+
+    pub fn block_ids(&self) -> &Vec<Id<Block>> {
+        &self.block_ids
+    }
+
+    pub fn into_block_ids(self) -> Vec<Id<Block>> {
+        self.block_ids
+    }
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum PubSubMessage {
+pub enum Request {
+    #[codec(index = 0)]
+    HeaderRequest(HeaderRequest),
+    #[codec(index = 1)]
+    BlockRequest(BlockRequest),
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct HeaderResponse {
+    headers: Vec<BlockHeader>,
+}
+
+impl HeaderResponse {
+    pub fn new(headers: Vec<BlockHeader>) -> Self {
+        Self { headers }
+    }
+
+    pub fn headers(&self) -> &Vec<BlockHeader> {
+        &self.headers
+    }
+
+    pub fn into_headers(self) -> Vec<BlockHeader> {
+        self.headers
+    }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct BlockResponse {
+    blocks: Vec<Block>,
+}
+
+impl BlockResponse {
+    pub fn new(blocks: Vec<Block>) -> Self {
+        Self { blocks }
+    }
+
+    pub fn blocks(&self) -> &Vec<Block> {
+        &self.blocks
+    }
+
+    pub fn into_blocks(self) -> Vec<Block> {
+        self.blocks
+    }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum Response {
+    #[codec(index = 0)]
+    HeaderResponse(HeaderResponse),
+    #[codec(index = 1)]
+    BlockResponse(BlockResponse),
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum Announcement {
     #[codec(index = 0)]
     Block(Block),
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum SyncingMessage {
-    #[codec(index = 0)]
-    Request(SyncingRequest),
-    #[codec(index = 1)]
-    Response(SyncingResponse),
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum MessageType {
-    #[codec(index = 0)]
-    Syncing(SyncingMessage),
-    #[codec(index = 1)]
-    PubSub(PubSubMessage),
-}
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct Message {
-    /// Magic number identifying mainnet, testnet
-    pub magic: [u8; 4],
-
-    /// Message (GetHeaders, Blocks, etc.)
-    pub msg: MessageType,
 }

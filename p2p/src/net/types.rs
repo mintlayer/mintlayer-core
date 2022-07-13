@@ -142,32 +142,29 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         error: error::P2pError,
     },
 
-    /// Peer misbehaved
+    /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer
         peer_id: T::PeerId,
 
-        // TODO: fix
-        behaviour: u32,
+        /// Error code of the violation
+        error: error::P2pError,
     },
 }
 
 /// Publish-subscribe related events
 #[derive(Debug)]
-pub enum PubSubEvent<T>
-where
-    T: NetworkingService,
-{
-    /// Message received from a PubSub topic
-    MessageReceived {
+pub enum PubSubEvent<T: NetworkingService> {
+    /// Block announcement received from peer
+    Announcement {
         /// Unique ID of the sender
         peer_id: T::PeerId,
 
         /// Unique ID of the message
         message_id: T::MessageId,
 
-        /// Received PubSub message
-        message: message::Message,
+        /// Received data, block/transaction
+        announcement: message::Announcement,
     },
 }
 
@@ -197,7 +194,7 @@ where
         request_id: T::RequestId,
 
         /// Received request
-        request: message::Message,
+        request: message::Request,
     },
 
     /// Incoming response to a sent request
@@ -209,7 +206,7 @@ where
         request_id: T::RequestId,
 
         /// Received response
-        response: message::Message,
+        response: message::Response,
     },
 
     /// Error occurred with syncing codec

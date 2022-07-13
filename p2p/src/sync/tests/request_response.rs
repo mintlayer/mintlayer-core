@@ -15,13 +15,17 @@
 //
 // Author(s): A. Altonen
 use super::*;
+use crate::message::*;
+use std::{collections::HashSet, time::Duration};
+use test_utils::make_libp2p_addr;
+use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_request_response() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -29,12 +33,7 @@ async fn test_request_response() {
     mgr1.handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
@@ -45,25 +44,12 @@ async fn test_request_response() {
         request,
     }) = mgr2.handle.poll_next().await
     {
-        assert_eq!(
-            request,
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![]
-                }))
-            }
-        );
+        assert_eq!(request, Request::HeaderRequest(HeaderRequest::new(vec![])));
 
         mgr2.handle
             .send_response(
                 request_id,
-                Message {
-                    magic: [5, 6, 7, 8],
-                    msg: MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers: vec![],
-                    })),
-                },
+                Response::HeaderResponse(HeaderResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -75,101 +61,67 @@ async fn test_request_response() {
 #[tokio::test]
 async fn test_multiple_requests_and_responses() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    let mut request_ids = HashSet::new();
 
-    mgr1.handle
+    let id = mgr1
+        .handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [1, 2, 3, 4],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
+    request_ids.insert(id);
 
-    mgr1.handle
+    let id = mgr1
+        .handle
         .send_request(
             *conn2.peer_id(),
-            Message {
-                magic: [5, 6, 7, 8],
-                msg: MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                    locator: vec![],
-                })),
-            },
+            Request::HeaderRequest(HeaderRequest::new(vec![])),
         )
         .await
         .unwrap();
+    request_ids.insert(id);
 
-    for _ in 0..2 {
-        if let Ok(net::types::SyncingEvent::Request {
-            peer_id: _,
-            request_id,
-            request,
-        }) = mgr2.handle.poll_next().await
-        {
-            if let Message {
-                magic,
-                msg:
-                    MessageType::Syncing(SyncingMessage::Request(SyncingRequest::GetHeaders {
-                        locator: _,
-                    })),
-            } = request
-            {
-                mgr2.handle
-                    .send_response(
-                        request_id,
-                        Message {
-                            magic,
-                            msg: MessageType::Syncing(SyncingMessage::Response(
-                                SyncingResponse::Headers { headers: vec![] },
-                            )),
-                        },
-                    )
-                    .await
-                    .unwrap();
-            }
-        } else {
-            panic!("invalid data received");
-        }
-    }
+    assert_eq!(request_ids.len(), 2);
 
-    let mut magic_seen = 0;
-    for _ in 0..2 {
-        if let Ok(net::types::SyncingEvent::Response {
-            peer_id: _,
-            request_id: _,
-            response,
-        }) = mgr1.handle.poll_next().await
-        {
-            if let Message {
-                magic,
-                msg:
-                    MessageType::Syncing(SyncingMessage::Response(SyncingResponse::Headers {
-                        headers: _,
-                    })),
-            } = response
-            {
-                if magic == [1, 2, 3, 4] {
-                    magic_seen += 1;
-                } else {
-                    assert_eq!(magic, [5, 6, 7, 8]);
-                    magic_seen += 1;
+    for i in 0..2 {
+        match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+            Ok(event) => match event {
+                Ok(net::types::SyncingEvent::Request { request_id, .. }) => {
+                    mgr2.handle
+                        .send_response(
+                            request_id,
+                            Response::HeaderResponse(HeaderResponse::new(vec![])),
+                        )
+                        .await
+                        .unwrap();
                 }
-            }
-        } else {
-            panic!("invalid data received");
+                _ => panic!("invalid event: {:?}", event),
+            },
+            Err(_) => panic!("did not receive `Request` in time, iter {}", i),
         }
     }
 
-    assert_eq!(magic_seen, 2);
+    for i in 0..2 {
+        match timeout(Duration::from_secs(15), mgr1.handle.poll_next()).await {
+            Ok(event) => match event {
+                Ok(net::types::SyncingEvent::Response { request_id, .. }) => {
+                    request_ids.remove(&request_id);
+                }
+                _ => panic!("invalid event: {:?}", event),
+            },
+            Err(_) => panic!("did not receive `Response` in time, iter {}", i),
+        }
+    }
+
+    assert!(request_ids.is_empty());
 }
 
 // receive getheaders before receiving `Connected` event from swarm manager
@@ -177,9 +129,9 @@ async fn test_multiple_requests_and_responses() {
 #[tokio::test]
 async fn test_request_timeout_error() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -201,11 +153,28 @@ async fn test_request_timeout_error() {
         }
     });
 
-    for _ in 0..3 {
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
-        ));
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Request` in time"),
+    }
+
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Error { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Error` in time"),
+    }
+
+    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        Ok(event) => match event {
+            Ok(net::types::SyncingEvent::Request { .. }) => {}
+            _ => panic!("invalid event: {:?}", event),
+        },
+        Err(_) => panic!("did not receive `Request` in time"),
     }
 }
 
@@ -217,9 +186,9 @@ async fn test_request_timeout_error() {
 #[tokio::test]
 async fn request_timeout() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -250,14 +219,10 @@ async fn request_timeout() {
         assert_eq!(rx.await, Ok(()));
     });
 
-    for _ in 0..4 {
+    for _ in 0..8 {
         assert!(std::matches!(
             mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Request { .. })
-        ));
-        assert!(std::matches!(
-            mgr2.handle.poll_next().await,
-            Ok(net::types::SyncingEvent::Error { .. })
+            Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
         ));
     }
 }

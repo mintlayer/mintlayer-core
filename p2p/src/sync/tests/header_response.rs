@@ -16,13 +16,14 @@
 // Author(s): A. Altonen
 use super::*;
 use crypto::random::{Rng, SliceRandom};
+use test_utils::make_libp2p_addr;
 
 // response contains more than 2000 headers
 #[tokio::test]
 async fn too_many_headers() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -41,7 +42,7 @@ async fn too_many_headers() {
 #[tokio::test]
 async fn empty_response() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -58,7 +59,7 @@ async fn valid_response() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -83,7 +84,7 @@ async fn valid_response() {
 async fn prev_block_is_none() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -101,7 +102,7 @@ async fn header_doesnt_attach_to_local_chain() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -127,7 +128,7 @@ async fn headers_not_in_order() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -154,7 +155,7 @@ async fn invalid_state() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
@@ -179,7 +180,7 @@ async fn invalid_state() {
 #[tokio::test]
 async fn peer_doesnt_exist() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     assert_eq!(
         mgr.validate_header_response(&PeerId::random(), vec![]).await,

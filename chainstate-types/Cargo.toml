@@ -8,8 +8,7 @@ license = "MIT"
 
 [dependencies]
 serialization = { path = "../serialization" }
-logging = { path = "../logging/" }
 common = { path = "../common/" }
-crypto = { path = '../crypto'}
+crypto = { path = "../crypto" }
 
 parity-scale-codec = "3.1"

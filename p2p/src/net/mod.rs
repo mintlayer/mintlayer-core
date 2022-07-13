@@ -113,10 +113,15 @@ where
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider
-    fn local_addr(&self) -> &T::Address;
+    ///
+    /// If the address isn't available yet, `None` is returned
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>>;
 
     /// Return peer id of the local node
     fn peer_id(&self) -> &T::PeerId;
+
+    /// Ban peer
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Poll events from the network service provider
     ///
@@ -134,20 +139,18 @@ pub trait PubSubService<T>
 where
     T: NetworkingService,
 {
-    /// Publish data to the network
+    /// Publish a data announcement on the network
     ///
     /// # Arguments
-    /// `message` - message to be sent
-    async fn publish(&mut self, message: message::Message) -> crate::Result<()>;
+    /// `announcement` - SCALE-encodable block or transaction
+    async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()>;
 
     /// Report message validation result back to the backend
     ///
     /// # Arguments
-    /// `source` - source of the message
-    ///
-    /// `msg_id` - unique ID of the message
-    ///
-    /// `result` - result of validation, see [types::ValidationResult] for more details
+    /// * `source` - source of the message
+    /// * `msg_id` - unique ID of the message
+    /// * `result` - result of validation, see [types::ValidationResult] for more details
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,
@@ -180,25 +183,23 @@ where
     /// Send block/header request to remote
     ///
     /// # Arguments
-    /// `peer_id` - Unique ID of the peer the request is sent to
-    ///
-    /// `message` - request to be sent
+    /// * `peer_id` - Unique ID of the peer the request is sent to
+    /// * `request` - Request to be sent
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
-        message: message::Message,
+        request: message::Request,
     ) -> crate::Result<T::RequestId>;
 
     /// Send block/header response to remote
     ///
     /// # Arguments
-    /// `request_id` - ID of the request this is a response to
-    ///
-    /// `message` - response to be sent
+    /// * `request_id` - ID of the request this is a response to
+    /// * `message` - Response to be sent
     async fn send_response(
         &mut self,
         request_id: T::RequestId,
-        message: message::Message,
+        response: message::Response,
     ) -> crate::Result<()>;
 
     /// Poll syncing-related event from the networking service

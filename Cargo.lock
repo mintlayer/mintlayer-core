@@ -507,7 +507,6 @@ dependencies = [
  "logging",
  "mockall",
  "num",
- "proptest",
  "replace_with",
  "rpc",
  "serde_json",
@@ -529,7 +528,6 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
- "parity-scale-codec",
  "serialization",
  "storage",
  "thiserror",
@@ -542,7 +540,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
- "logging",
  "parity-scale-codec",
  "serialization",
 ]
@@ -655,7 +652,6 @@ dependencies = [
  "expect-test",
  "generic-array",
  "hex",
- "hex-literal",
  "itertools",
  "lazy_static",
  "logging",
@@ -801,12 +797,15 @@ dependencies = [
  "chacha20poly1305",
  "generic-array",
  "hex",
+ "merlin",
  "num",
  "num-derive",
  "num-traits",
  "parity-scale-codec",
  "rand 0.8.5",
+ "rand_chacha 0.3.1",
  "ripemd",
+ "schnorrkel",
  "serialization",
  "sha-1 0.10.0",
  "sha2 0.10.2",
@@ -846,9 +845,9 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "3.2.1"
+version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "90f9d052967f590a76e62eb387bd0bbb1b000182c3cefe5364db6b7211651bc0"
+checksum = "0b9fdf9972b2bd6af2d913799d9ebc165ea4d2e65878e329d9c6b372c4491b61"
 dependencies = [
  "byteorder 1.4.3",
  "digest 0.9.0",
@@ -859,12 +858,12 @@ dependencies = [
 
 [[package]]
 name = "curve25519-dalek"
-version = "4.0.0-pre.2"
+version = "4.0.0-pre.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12dc3116fe595d7847c701796ac1b189bd86b81f4f593c6f775f9d80fb2e29f4"
+checksum = "4033478fbf70d6acf2655ac70da91ee65852d69daf7a67bf7a2f518fb47aafcf"
 dependencies = [
  "byteorder 1.4.3",
- "digest 0.10.3",
+ "digest 0.9.0",
  "rand_core 0.6.3",
  "subtle",
  "zeroize",
@@ -959,7 +958,7 @@ version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
 dependencies = [
- "curve25519-dalek 3.2.1",
+ "curve25519-dalek 3.2.0",
  "ed25519",
  "rand 0.7.3",
  "serde",
@@ -1929,7 +1928,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf2cee1dad1c83325bbd182a8e94555778699cec8a9da00086efb7522c4c15ad"
 dependencies = [
  "bytes",
- "curve25519-dalek 3.2.1",
+ "curve25519-dalek 3.2.0",
  "futures",
  "lazy_static",
  "libp2p-core",
@@ -2061,7 +2060,6 @@ name = "logging"
 version = "0.1.0"
 dependencies = [
  "env_logger",
- "lazy_static",
  "log",
 ]
 
@@ -2554,10 +2552,8 @@ dependencies = [
  "common",
  "crypto",
  "futures",
- "futures-timer",
  "itertools",
  "jsonrpsee",
- "lazy_static",
  "libp2p",
  "logging",
  "parity-scale-codec",
@@ -3363,6 +3359,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "schnorrkel"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "844b7645371e6ecdf61ff246ba1958c29e802881a749ae3fb1993675d210d28d"
+dependencies = [
+ "arrayref",
+ "arrayvec",
+ "curve25519-dalek-ng",
+ "merlin",
+ "rand_core 0.6.3",
+ "serde_bytes",
+ "sha2 0.9.9",
+ "subtle-ng",
+ "zeroize",
+]
+
+[[package]]
 name = "scoped-tls"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3460,6 +3473,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61ea8d54c77f8315140a05f4c7237403bf38b72704d031543aa1d16abbf517d1"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde_bytes"
+version = "0.11.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "212e73464ebcde48d723aa02eb270ba62eff38a9b732df31f33f1b4e145f3a54"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -3657,7 +3679,7 @@ dependencies = [
  "aes-gcm",
  "blake2 0.10.4",
  "chacha20poly1305",
- "curve25519-dalek 4.0.0-pre.2",
+ "curve25519-dalek 4.0.0-pre.1",
  "rand_core 0.6.3",
  "ring",
  "rustc_version 0.4.0",
@@ -3738,7 +3760,6 @@ version = "0.1.0"
 dependencies = [
  "common",
  "logging",
- "serialization",
  "thiserror",
 ]
 
@@ -4667,20 +4688,20 @@ dependencies = [
 
 [[package]]
 name = "x25519-dalek"
-version = "1.2.0"
+version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2392b6b94a576b4e2bf3c5b2757d63f10ada8020a2e4d08ac849ebcf6ea8e077"
+checksum = "5a0c105152107e3b96f6a00a65e86ce82d9b125230e1c4302940eca58ff71f4f"
 dependencies = [
- "curve25519-dalek 3.2.1",
+ "curve25519-dalek 3.2.0",
  "rand_core 0.5.1",
  "zeroize",
 ]
 
 [[package]]
 name = "zeroize"
-version = "1.3.0"
+version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4756f7db3f7b5574938c3eb1c117038b8e07f95ee6718c0efad4ac21508f1efd"
+checksum = "d68d9dcec5f9b43a30d38c49f91dfedfaac384cb8f085faca366c26207dd1619"
 dependencies = [
  "zeroize_derive",
 ]

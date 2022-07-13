@@ -27,6 +27,7 @@ use crate::{
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
+use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
@@ -90,6 +91,12 @@ where
             peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
             pending: HashMap::new(),
         }
+    }
+
+    /// Get mutable reference to the `ConnectivityHandle`
+    #[allow(dead_code)]
+    fn handle_mut(&mut self) -> &mut T::ConnectivityHandle {
+        &mut self.handle
     }
 
     /// Update the list of known peers or known peer's list of addresses
@@ -191,7 +198,13 @@ where
         );
 
         let peer_id = info.peer_id;
-        self.peers.insert(info.peer_id, peerdb::PeerContext { _info: info });
+        self.peers.insert(
+            info.peer_id,
+            peerdb::PeerContext {
+                _info: info,
+                score: 0,
+            },
+        );
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
             .await
@@ -250,6 +263,28 @@ where
 
         self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id)).await?;
         self.peers.remove(&peer_id);
+        Ok(())
+    }
+
+    /// Adjust peer score
+    ///
+    /// If after adjustment the peer score is more than the ban threshold, the peer is banned.
+    async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
+        log::debug!("adjusting score for peer {}, adjustment {}", peer_id, score);
+
+        let score = if let Some(entry) = self.peers.get_mut(&peer_id) {
+            entry.score = entry.score.saturating_add(score);
+            entry.score
+        } else {
+            score
+        };
+
+        // TODO: from config
+        if score >= 100 {
+            self.peerdb.ban_peer(&peer_id);
+            return self.handle.ban_peer(peer_id).await;
+        }
+
         Ok(())
     }
 
@@ -328,7 +363,7 @@ where
                     }
                     Err(err) => {
                         self.peerdb.report_outbound_failure(addr.clone());
-                        self.handle_error(Err(err))?;
+                        self.handle_result(None, Err(err)).await?;
                     }
                 }
             }
@@ -344,7 +379,18 @@ where
     /// Currently only subsystem/channel-related errors are considered fatal.
     /// Other errors are logged as warnings and `Ok(())` is returned as they should
     /// not distrub the operation of `PeerManager`.
-    fn handle_error(&mut self, result: crate::Result<()>) -> crate::Result<()> {
+    ///
+    /// If an error has ban score greater than zero, the peer score is updated and connection
+    /// to that peer is possibly closed if their scored crossed the ban threshold.
+    ///
+    /// # Arguments
+    /// `peer_id` - peer ID of the remote peer, if available
+    /// `result` - result of the operation that was performed
+    pub async fn handle_result(
+        &mut self,
+        peer_id: Option<T::PeerId>,
+        result: crate::Result<()>,
+    ) -> crate::Result<()> {
         match result {
             Ok(_) => Ok(()),
             Err(P2pError::ChannelClosed | P2pError::SubsystemFailure) => {
@@ -353,6 +399,12 @@ where
             }
             Err(err) => {
                 log::warn!("non-fatal error occurred: {}", err);
+
+                if let Some(peer_id) = peer_id {
+                    log::info!("adjust peer score for peer {}, reason {}", peer_id, err);
+                    return self.adjust_peer_score(peer_id, err.ban_score()).await;
+                }
+
                 Ok(())
             }
         }
@@ -374,7 +426,7 @@ where
     /// have any events.
     pub async fn run(&mut self) -> crate::Result<void::Void> {
         loop {
-            let result = tokio::select! {
+            tokio::select! {
                 event = self.rx_swarm.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SwarmEvent::Connect(addr, response) => {
                         log::debug!(
@@ -382,88 +434,94 @@ where
                             addr
                         );
 
-                        self.connect(addr.clone()).await.map(|_| {
+                        let res = self.connect(addr.clone()).await.map(|_| {
                             self.pending.insert(addr.clone(), Some(response));
-                        })
-                        .map_err(|err| {
-                            log::error!("failed to dial peer at address {}: {}", addr, err);
-                            err
-                        })
+                        });
+                        self.handle_result(None, res).await?;
                     }
-                    // TODO: pending disconnection events
                     event::SwarmEvent::Disconnect(peer_id, response) => {
                         log::debug!("disconnect peer {} from the swarm", peer_id);
 
                         response
                             .send(self.handle.disconnect(peer_id).await)
-                            .map_err(|_| P2pError::ChannelClosed)
+                            .map_err(|_| P2pError::ChannelClosed)?;
+                    }
+                    event::SwarmEvent::AdjustPeerScore(peer_id, score, response) => {
+                        log::debug!("adjust peer {} score: {}", peer_id, score);
+
+                        response
+                            .send(self.adjust_peer_score(peer_id, score).await)
+                            .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::GetPeerCount(response) => {
-                        response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
+                        response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)?;
                     }
-                    event::SwarmEvent::GetBindAddress(response) => response
-                        .send(self.handle.local_addr().to_string())
-                        .map_err(|_| P2pError::ChannelClosed),
+                    event::SwarmEvent::GetBindAddress(response) => {
+                        let addr = self.handle.local_addr();
+                        let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
+                        response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
+                    }
                     event::SwarmEvent::GetPeerId(response) => response
                         .send(self.handle.peer_id().to_string())
-                        .map_err(|_| P2pError::ChannelClosed),
+                        .map_err(|_| P2pError::ChannelClosed)?,
                     event::SwarmEvent::GetConnectedPeers(response) => {
                         let peers = self.peers.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
-                        response.send(peers).map_err(|_| P2pError::ChannelClosed)
+                        response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }
                 },
                 event = self.handle.poll_next() => match event {
                     Ok(event) => match event {
                         net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
                             // TODO: report rejection to networking backend
-                            self.accept_inbound_connection(addr, peer_info).await
+                            let peer_id = peer_info.peer_id;
+                            let res = self.accept_inbound_connection(addr, peer_info).await;
+                            self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
-                            self.accept_connection(peer_info).await?;
+                            let peer_id = peer_info.peer_id;
+                            let res = self.accept_connection(peer_info).await;
+                            self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&addr) {
-                                Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
-                                Some(None) => Ok(()),
-                                None => {
-                                    log::error!("connection accepted but it's not pending?");
-                                    Ok(())
-                                }
+                                Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?,
+                                Some(None) => {},
+                                None => log::error!("connection accepted but it's not pending?"),
                             }
                         }
                         net::types::ConnectivityEvent::ConnectionClosed { peer_id } => {
-                            self.close_connection(peer_id).await
+                            let res = self.close_connection(peer_id).await;
+                            self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::ConnectionError { addr, error } => {
-                            self.handle_outbound_error(addr, error)
+                            let res = self.handle_outbound_error(addr, error);
+                            self.handle_result(None, res).await?;
                         }
                         net::types::ConnectivityEvent::Discovered { peers } => {
                             self.peer_discovered(&peers);
-                            Ok(())
                         }
                         net::types::ConnectivityEvent::Expired { peers } => {
                             self.peer_expired(&peers);
-                            Ok(())
                         }
                         net::types::ConnectivityEvent::Disconnected { .. } => {
-                            Ok(())
+                            // TODO: add tests
                         }
-                        net::types::ConnectivityEvent::Misbehaved { .. } => {
-                            Ok(())
+                        net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
+                            let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
+                            self.handle_result(Some(peer_id), res).await?;
                         }
                         net::types::ConnectivityEvent::Error { .. } => {
-                            Ok(())
+                            // TODO:
                         }
                     }
                     Err(err) => {
                         log::error!("failed to read network event: {:?}", err);
-                        Err(err)
+                        self.handle_result(None, Err(err)).await?;
                     }
                 },
-                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL) => { Ok(()) }
-            };
+                _event = tokio::time::sleep(PEER_MGR_HEARTBEAT_INTERVAL) => {}
+            }
 
-            // handle error, exit on fatal errors and finally update peer manager state
-            self.handle_error(result)?;
+            // finally update peer manager state
             self.heartbeat().await?;
         }
     }
