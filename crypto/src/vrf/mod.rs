@@ -89,7 +89,7 @@ impl VRFPrivateKey {
         }
     }
 
-    pub(crate) fn get_internal_key(&self) -> &VRFPrivateKeyHolder {
+    pub(crate) fn internal_key(&self) -> &VRFPrivateKeyHolder {
         &self.key
     }
 
@@ -102,7 +102,7 @@ impl VRFPrivateKey {
 
 impl VRFPublicKey {
     pub fn from_private_key(private_key: &VRFPrivateKey) -> Self {
-        match private_key.get_internal_key() {
+        match private_key.internal_key() {
             VRFPrivateKeyHolder::Schnorrkel(ref k) => VRFPublicKey {
                 pub_key: VRFPublicKeyHolder::Schnorrkel(
                     schnorrkel::SchnorrkelPublicKey::from_private_key(k),
