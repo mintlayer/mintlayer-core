@@ -19,6 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     block::Block, ConsensusUpgrade, Destination, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
+use crate::primitives::H256;
 use crate::primitives::{semver::SemVer, BlockDistance, BlockHeight, Idable};
 
 use std::collections::BTreeMap;
@@ -100,6 +101,7 @@ pub struct Builder {
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     epoch_length: BlockDistance,
+    initial_randomness: H256,
 }
 
 impl Builder {
@@ -123,6 +125,7 @@ impl Builder {
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
             epoch_length: BlockDistance::from(super::DEFAULT_EPOCH_LENGTH),
+            initial_randomness: H256::zero(),
         }
     }
 
@@ -153,6 +156,7 @@ impl Builder {
             emission_schedule,
             net_upgrades,
             epoch_length,
+            initial_randomness,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -191,6 +195,7 @@ impl Builder {
             emission_schedule,
             net_upgrades,
             epoch_length,
+            initial_randomness,
         }
     }
 }

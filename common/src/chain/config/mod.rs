@@ -103,6 +103,7 @@ pub struct ChainConfig {
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
     epoch_length: BlockDistance,
+    initial_randomness: H256,
 }
 
 impl ChainConfig {
