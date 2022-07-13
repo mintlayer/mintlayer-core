@@ -19,27 +19,25 @@ pub mod emission_schedule;
 pub use builder::Builder;
 pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 
-use std::{collections::BTreeMap, time::Duration};
-
 use hex::FromHex;
-use serde::{Deserialize, Serialize};
 
-use crate::primitives::Idable;
-use crate::{
-    chain::{
-        block::{timestamp::BlockTimestamp, Block, ConsensusData},
-        signature::inputsig::InputWitness,
-        transaction::{Destination, Transaction},
-        upgrades::NetUpgrades,
-        OutputPurpose, PoWChainConfig, UpgradeVersion,
-    },
-    primitives::{
-        id::{Id, H256},
-        semver::SemVer,
-        Amount, BlockHeight,
-    },
-};
+use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::block::Block;
+use crate::chain::block::ConsensusData;
+use crate::chain::signature::inputsig::InputWitness;
+use crate::chain::transaction::Destination;
+use crate::chain::transaction::Transaction;
+use crate::chain::upgrades::NetUpgrades;
+use crate::chain::OutputPurpose;
+use crate::chain::{PoWChainConfig, UpgradeVersion};
+use crate::primitives::id::{Id, H256};
+use crate::primitives::Amount;
+use crate::primitives::BlockDistance;
+use crate::primitives::{semver::SemVer, BlockHeight};
+use std::collections::BTreeMap;
+use std::time::Duration;
 
+const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 pub const VERSION: SemVer = SemVer::new(0, 1, 0);
 
@@ -54,8 +52,6 @@ pub const VERSION: SemVer = SemVer::new(0, 1, 0);
     strum::Display,
     strum::EnumVariantNames,
     strum::EnumString,
-    Serialize,
-    Deserialize,
 )]
 #[strum(serialize_all = "kebab-case")]
 pub enum ChainType {
@@ -66,7 +62,7 @@ pub enum ChainType {
 }
 
 impl ChainType {
-    const fn address_prefix(&self) -> &'static str {
+    const fn default_address_prefix(&self) -> &'static str {
         match self {
             ChainType::Mainnet => "mtc",
             ChainType::Testnet => "tmt",
@@ -75,12 +71,12 @@ impl ChainType {
         }
     }
 
-    pub const fn magic_bytes(&self) -> &'static [u8; 4] {
+    pub const fn default_magic_bytes(&self) -> [u8; 4] {
         match self {
-            ChainType::Mainnet => &[0x1a, 0x64, 0xe5, 0xf1],
-            ChainType::Testnet => &[0x2b, 0x7e, 0x19, 0xf6],
-            ChainType::Regtest => &[0xaa, 0xbb, 0xcc, 0xdd],
-            ChainType::Signet => &[0xf3, 0xf7, 0x7b, 0x45],
+            ChainType::Mainnet => [0x1a, 0x64, 0xe5, 0xf1],
+            ChainType::Testnet => [0x2b, 0x7e, 0x19, 0xf6],
+            ChainType::Regtest => [0xaa, 0xbb, 0xcc, 0xdd],
+            ChainType::Signet => [0xf3, 0xf7, 0x7b, 0x45],
         }
     }
 }
@@ -88,12 +84,23 @@ impl ChainType {
 #[derive(Debug, Clone)]
 pub struct ChainConfig {
     chain_type: ChainType,
+    address_prefix: String,
+    rpc_port: u16,
+    p2p_port: u16,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
+    magic_bytes: [u8; 4],
     genesis_block: Block,
-    pub target_block_spacing: Duration,
+    genesis_block_id: Id<Block>,
+    blockreward_maturity: BlockDistance,
+    max_future_block_time_offset: Duration,
+    version: SemVer,
+    target_block_spacing: Duration,
     coin_decimals: u8,
     emission_schedule: EmissionSchedule,
+    max_block_header_size: usize,
+    max_block_size_with_standard_txs: usize,
+    max_block_size_with_smart_contracts: usize,
 }
 
 impl ChainConfig {
@@ -102,11 +109,11 @@ impl ChainConfig {
     }
 
     pub fn address_prefix(&self) -> &str {
-        &self.chain_type.address_prefix()
+        &self.address_prefix
     }
 
     pub fn genesis_block_id(&self) -> Id<Block> {
-        self.genesis_block.get_id()
+        self.genesis_block_id.clone()
     }
 
     pub fn genesis_block(&self) -> &Block {
@@ -114,11 +121,15 @@ impl ChainConfig {
     }
 
     pub fn magic_bytes(&self) -> &[u8; 4] {
-        &self.chain_type.magic_bytes()
+        &self.magic_bytes
     }
 
     pub fn magic_bytes_as_u32(&self) -> u32 {
         u32::from_le_bytes(*self.magic_bytes())
+    }
+
+    pub fn version(&self) -> &SemVer {
+        &self.version
     }
 
     pub fn chain_type(&self) -> &ChainType {
@@ -127,6 +138,14 @@ impl ChainConfig {
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
+    }
+
+    pub fn p2p_port(&self) -> u16 {
+        self.p2p_port
+    }
+
+    pub fn rpc_port(&self) -> u16 {
+        self.rpc_port
     }
 
     pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
@@ -145,15 +164,42 @@ impl ChainConfig {
         self.coin_decimals
     }
 
+    pub fn max_future_block_time_offset(&self) -> &Duration {
+        &self.max_future_block_time_offset
+    }
+
     pub fn block_subsidy_at_height(&self, height: &BlockHeight) -> Amount {
         self.emission_schedule().subsidy(*height).to_amount_atoms()
+    }
+
+    pub fn max_block_header_size(&self) -> usize {
+        self.max_block_header_size
+    }
+
+    pub fn max_block_size_from_txs(&self) -> usize {
+        self.max_block_size_with_standard_txs
+    }
+
+    pub fn max_block_size_from_smart_contracts(&self) -> usize {
+        self.max_block_size_with_smart_contracts
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
     }
+
+    pub const fn blockreward_maturity(&self) -> &BlockDistance {
+        &self.blockreward_maturity
+    }
 }
+
+// If block time is 2 minutes (which is my goal eventually), then 500 is equivalent to 100 in bitcoin's 10 minutes.
+const MAINNET_BLOCKREWARD_MATURITY: BlockDistance = BlockDistance::new(500);
+// DSA allows us to have blocks up to 1mb
+const MAX_BLOCK_HEADER_SIZE: usize = 1024;
+const MAX_BLOCK_TXS_SIZE: usize = 524_288;
+const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
 fn create_mainnet_genesis() -> Block {
     use crate::chain::transaction::{TxInput, TxOutput};
@@ -259,5 +305,13 @@ mod tests {
             let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
             assert_eq!(&chain_type.to_string(), chain_type_str);
         }
+    }
+
+    #[test]
+    fn different_magic_bytes() {
+        let config1 = Builder::new(ChainType::Regtest).build();
+        let config2 = Builder::new(ChainType::Regtest).magic_bytes([1, 2, 3, 4]).build();
+
+        assert_ne!(config1.magic_bytes(), config2.magic_bytes());
     }
 }

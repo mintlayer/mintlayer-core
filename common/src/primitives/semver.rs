@@ -15,11 +15,9 @@
 //
 // Author(s): A. Altonen
 
-use serde::{Deserialize, Serialize};
-
 use serialization::{Decode, Encode};
 
-#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]
 pub struct SemVer {
     pub major: u8,
     pub minor: u8,
@@ -27,7 +25,7 @@ pub struct SemVer {
 }
 
 impl SemVer {
-    pub const fn new(major: u8, minor: u8, patch: u16) -> Self {
+    pub fn new(major: u8, minor: u8, patch: u16) -> Self {
         Self {
             major,
             minor,

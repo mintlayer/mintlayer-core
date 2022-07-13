@@ -14,7 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use crate::{
+    config::P2pConfig,
     error::{ConversionError, P2pError},
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
@@ -153,7 +155,7 @@ where
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
         chain_config: Arc<ChainConfig>,
-        config: Config,
+        p2p_config: P2pConfig,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> crate::Result<Self>
     where
@@ -161,7 +163,7 @@ where
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
         let (conn, pubsub, sync) = T::start(
-            config.address.parse::<T::Address>().map_err(|_| {
+            p2p_config.address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(config.address.clone()))
             })?,
             &[],
@@ -231,7 +233,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
-    config: Config,
+    p2p_config: P2pConfig,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
@@ -245,6 +247,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(chain_config, config, consensus_handle).await?,
+        p2p: P2P::new(chain_config, p2p_config, consensus_handle).await?,
     })
 }

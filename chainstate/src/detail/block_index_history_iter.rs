@@ -75,7 +75,7 @@ mod tests {
         primitives::{time, Idable, H256},
     };
 
-    use crate::{BlockSource, Chainstate, Config};
+    use crate::{BlockSource, Chainstate, ChainstateConfig};
 
     use super::*;
 
@@ -83,11 +83,11 @@ mod tests {
     fn history_iteration() {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
-            let config = Config::new();
+            let chainstte_config = Config::new();
             let storage = Store::new_empty().unwrap();
             let mut chainstate = Chainstate::new(
                 chain_config.clone(),
-                config,
+                chainstte_config,
                 storage,
                 None,
                 Default::default(),

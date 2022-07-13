@@ -28,7 +28,7 @@ use crate::{
         },
     },
 };
-use common::chain::{config::VERSION, ChainConfig};
+use common::chain::config::ChainConfig;
 use libp2p::{
     core::PeerId,
     gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
@@ -105,11 +105,12 @@ impl Libp2pBehaviour {
             .build()
             .expect("configuration to be valid");
 
+        let version = config.version();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
-            VERSION.major,
-            VERSION.minor,
-            VERSION.patch,
+            version.major,
+            version.minor,
+            version.patch,
             config.magic_bytes_as_u32(),
         );
         let mut req_cfg = RequestResponseConfig::default();

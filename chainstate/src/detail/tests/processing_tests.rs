@@ -23,7 +23,7 @@ use crate::{
         pow::error::ConsensusPoWError,
         tests::{test_framework::BlockTestFramework, *},
     },
-    make_chainstate, Config,
+    make_chainstate, ChainstateConfig,
 };
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::{
@@ -43,11 +43,11 @@ use crypto::random::{self, Rng};
 fn genesis_peer_block() {
     common::concurrency::model(|| {
         let chain_config = Arc::new(create_unit_test_config());
-        let config = Config::new();
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
         let mut chainstate = Chainstate::new_no_genesis(
             chain_config.clone(),
-            config,
+            chainstate_config,
             storage,
             None,
             Default::default(),
@@ -66,11 +66,16 @@ fn genesis_peer_block() {
 fn process_genesis_block() {
     common::concurrency::model(|| {
         let chain_config = Arc::new(create_unit_test_config());
-        let config = Config::new();
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
-                .unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
 
         let block_index = chainstate
             .process_block(
@@ -147,11 +152,16 @@ fn test_orphans_chains() {
 fn empty_chainstate() {
     common::concurrency::model(|| {
         let chain_config = Arc::new(create_unit_test_config());
-        let config = Config::new();
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let chainstate =
-            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
-                .unwrap();
+        let chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
         assert_eq!(chainstate.get_best_block_id().unwrap(), None);
         assert_eq!(
             chainstate
@@ -233,11 +243,16 @@ fn spend_inputs_simple() {
 fn straight_chain() {
     common::concurrency::model(|| {
         let chain_config = Arc::new(create_unit_test_config());
-        let config = Config::new();
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(chain_config, config, storage, None, Default::default())
-                .unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
 
         let genesis_index = chainstate
             .process_block(
@@ -509,8 +524,8 @@ fn consensus_type() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let config = Config::new();
-    let chainstate = chainstate_with_config(chain_config, config);
+    let chainstate_config = ChainstateConfig::new();
+    let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -647,8 +662,8 @@ fn pow() {
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let config = Config::new();
-    let chainstate = chainstate_with_config(chain_config, config);
+    let chainstate_config = ChainstateConfig::new();
+    let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -705,7 +720,7 @@ fn blocks_from_the_future() {
 
         let storage = Store::new_empty().unwrap();
         let mut chainstate =
-            Chainstate::new(config, Config::new(), storage, None, time_getter).unwrap();
+            Chainstate::new(config, ChainstateConfig::new(), storage, None, time_getter).unwrap();
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
@@ -728,7 +743,8 @@ fn blocks_from_the_future() {
 
         {
             // submit a block on the threshold of being rejected for being from the future
-            let max_future_offset = chainstate.config.max_future_block_time_offset.as_secs() as u32;
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
 
             let good_block = Block::new(
                 vec![],
@@ -745,7 +761,8 @@ fn blocks_from_the_future() {
 
         {
             // submit a block a second after the allowed threshold in the future
-            let max_future_offset = chainstate.config.max_future_block_time_offset.as_secs() as u32;
+            let max_future_offset =
+                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
 
             let bad_block_in_future = Block::new(
                 vec![],
@@ -783,9 +800,17 @@ fn blocks_from_the_future() {
 
 #[test]
 fn test_mainnet_initialization() {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
+    let chainstate_config = ChainstateConfig::new();
     let storage = Store::new_empty().unwrap();
-    make_chainstate(config, Config::new(), storage, None, Default::default()).unwrap();
+    make_chainstate(
+        chain_config,
+        chainstate_config,
+        storage,
+        None,
+        Default::default(),
+    )
+    .unwrap();
 }
 
 fn make_invalid_pow_block(

@@ -22,22 +22,13 @@ use common::primitives::BlockDistance;
 /// The chainstate subsystem configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ChainstateConfig {
-    pub max_block_header_size: usize,
-    pub max_block_size_from_txs: usize,
-    pub max_block_size_from_smart_contracts: usize,
-    pub blockreward_maturity: BlockDistance,
-    pub max_future_block_time_offset: Duration,
+    // TODO: FIXME!
 }
 
 impl Config {
     /// Creates a new chainstate configuration isntance.
     pub fn new() -> Self {
-        Self {
-            max_block_header_size: 1024,
-            max_block_size_from_txs: 524_288,
-            max_block_size_from_smart_contracts: 524_288,
-            blockreward_maturity: BlockDistance::new(500),
-            max_future_block_time_offset: Duration::from_secs(60 * 60),
-        }
+        todo!();
+        Self {}
     }
 }

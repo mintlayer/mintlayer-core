@@ -85,7 +85,7 @@ fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Res
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::Config;
+    use crate::ChainstateConfig;
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -93,12 +93,19 @@ mod test {
         proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
         let storage = chainstate_storage::Store::new_empty().unwrap();
-        let cfg = Arc::new(common::chain::config::create_unit_test_config());
-        let config = Config::new();
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "chainstate",
-            crate::make_chainstate(cfg, config, storage, None, Default::default()).unwrap(),
+            crate::make_chainstate(
+                chain_config,
+                chainstate_config,
+                storage,
+                None,
+                Default::default(),
+            )
+            .unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",

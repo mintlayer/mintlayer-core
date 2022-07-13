@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use super::*;
 use crate::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
@@ -49,12 +50,19 @@ where
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, rx_swarm) = mpsc::channel(16);
     let storage = chainstate_storage::Store::new_empty().unwrap();
-    let cfg = Arc::new(common::chain::config::create_unit_test_config());
-    let config = ChainstateConfig::new();
+    let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+    let chainstate_config = ChainstateConfig::new();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "consensus",
-        make_chainstate(cfg, config, storage, None, Default::default()).unwrap(),
+        make_chainstate(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap(),
     );
     tokio::spawn(async move { man.main().await });
 

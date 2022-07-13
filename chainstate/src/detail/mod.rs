@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateEvent, Config};
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
 use common::chain::block::{Block, BlockHeader};
@@ -57,7 +57,7 @@ use time_getter::TimeGetter;
 #[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
-    config: Config,
+    chainstate_config: ChainstateConfig,
     chainstate_storage: chainstate_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
@@ -81,7 +81,7 @@ impl Chainstate {
         let db_tx = self.chainstate_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
-            &self.config,
+            &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_rw_ref(),
             self.time_getter.getter(),
@@ -93,7 +93,7 @@ impl Chainstate {
         let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
-            &self.config,
+            &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_ro_ref(),
             self.time_getter.getter(),
@@ -106,7 +106,7 @@ impl Chainstate {
 
     pub fn new(
         chain_config: Arc<ChainConfig>,
-        config: Config,
+        chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
@@ -115,7 +115,7 @@ impl Chainstate {
 
         let mut cons = Self::new_no_genesis(
             chain_config,
-            config,
+            chainstate_config,
             chainstate_storage,
             custom_orphan_error_hook,
             time_getter,
@@ -142,14 +142,14 @@ impl Chainstate {
 
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
-        config: Config,
+        chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         let cons = Self {
             chain_config,
-            config,
+            chainstate_config,
             chainstate_storage,
             orphan_blocks: OrphanBlocksPool::new_default(),
             custom_orphan_error_hook,

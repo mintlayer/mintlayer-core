@@ -56,8 +56,8 @@ impl Builder {
     }
 
     /// New builder pre-populated with RPC info methods
-    pub fn new(config: Config) -> Self {
-        Self::new_empty(config.address).register(RpcInfo.into_rpc())
+    pub fn new(rpc_config: RpcConfig) -> Self {
+        Self::new_empty(rpc_config.address).register(RpcInfo.into_rpc())
     }
 
     /// Add methods handlers to the RPC server
@@ -131,10 +131,10 @@ mod tests {
 
     #[tokio::test]
     async fn rpc_server() -> anyhow::Result<()> {
-        let config = Config {
+        let rpc_config = RpcConfig {
             address: "127.0.0.1:3030".parse().unwrap(),
         };
-        let rpc = Builder::new(config).register(SubsystemRpcImpl.into_rpc()).build().await?;
+        let rpc = Builder::new(rpc_config).register(SubsystemRpcImpl.into_rpc()).build().await?;
 
         let url = format!("http://{}", rpc.address());
         let client = HttpClientBuilder::default().build(url)?;

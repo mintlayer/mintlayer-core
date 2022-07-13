@@ -20,7 +20,6 @@ use crate::net::{
     libp2p::sync::*,
     libp2p::{backend::Backend, behaviour, types},
 };
-use common::chain::{config::VERSION, ChainConfig};
 use futures::prelude::*;
 use libp2p::{
     core::{muxing::StreamMuxerBox, transport::Boxed, upgrade, PeerId},
@@ -58,7 +57,7 @@ mod ping;
 
 #[allow(dead_code)]
 pub async fn make_libp2p(
-    chain_config: ChainConfig,
+    config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     relay_mdns: bool,
@@ -92,12 +91,13 @@ pub async fn make_libp2p(
             .build()
             .expect("configuration to be valid");
 
-        let magic = chain_config.magic_bytes();
+        let version = config.version();
+        let magic = config.magic_bytes();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
-            VERSION.major,
-            VERSION.minor,
-            VERSION.patch,
+            version.major,
+            version.minor,
+            version.patch,
             ((magic[0] as u32) << 24)
                 | ((magic[1] as u32) << 16)
                 | ((magic[2] as u32) << 8)
@@ -157,7 +157,7 @@ pub async fn make_libp2p(
 
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
-    chain_config: ChainConfig,
+    config: common::chain::ChainConfig,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
@@ -192,12 +192,13 @@ pub async fn make_libp2p_with_ping(
             .build()
             .expect("configuration to be valid");
 
-        let magic = chain_config.magic_bytes();
+        let version = config.version();
+        let magic = config.magic_bytes();
         let protocol = format!(
             "/mintlayer/{}.{}.{}-{:x}",
-            VERSION.major,
-            VERSION.minor,
-            VERSION.patch,
+            version.major,
+            version.minor,
+            version.patch,
             ((magic[0] as u32) << 24)
                 | ((magic[1] as u32) << 16)
                 | ((magic[2] as u32) << 8)
@@ -300,12 +301,13 @@ pub fn make_transport_and_keys() -> (Boxed<(PeerId, StreamMuxerBox)>, PeerId, id
 
 #[allow(dead_code)]
 pub fn make_identify(config: ChainConfig, id_keys: identity::Keypair) -> Identify {
+    let version = config.version();
     let magic = config.magic_bytes();
     let protocol = format!(
         "/mintlayer/{}.{}.{}-{:x}",
-        VERSION.major,
-        VERSION.minor,
-        VERSION.patch,
+        version.major,
+        version.minor,
+        version.patch,
         ((magic[0] as u32) << 24)
             | ((magic[1] as u32) << 16)
             | ((magic[2] as u32) << 8)

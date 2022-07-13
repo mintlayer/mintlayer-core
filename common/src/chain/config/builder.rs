@@ -13,15 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeMap, time::Duration};
-
 use super::emission_schedule::{self, *};
 use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, ChainType};
 
 use crate::chain::{
     block::Block, ConsensusUpgrade, Destination, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::BlockHeight;
+use crate::primitives::{semver::SemVer, BlockDistance, BlockHeight, Idable};
+
+use std::collections::BTreeMap;
+use std::time::Duration;
 
 impl ChainType {
     fn default_genesis_init(&self) -> GenesisBlockInit {
@@ -83,8 +84,18 @@ impl GenesisBlockInit {
 #[derive(Clone)]
 pub struct Builder {
     chain_type: ChainType,
+    address_prefix: String,
+    rpc_port: u16,
+    p2p_port: u16,
+    magic_bytes: [u8; 4],
+    blockreward_maturity: BlockDistance,
+    max_future_block_time_offset: Duration,
+    version: SemVer,
     target_block_spacing: Duration,
     coin_decimals: u8,
+    max_block_header_size: usize,
+    max_block_size_with_standard_txs: usize,
+    max_block_size_with_smart_contracts: usize,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
@@ -95,8 +106,18 @@ impl Builder {
     pub fn new(chain_type: ChainType) -> Self {
         Self {
             chain_type,
+            address_prefix: chain_type.default_address_prefix().to_string(),
+            blockreward_maturity: super::MAINNET_BLOCKREWARD_MATURITY,
             coin_decimals: Mlt::DECIMALS,
+            magic_bytes: chain_type.default_magic_bytes(),
+            version: SemVer::new(0, 1, 0),
+            max_block_header_size: super::MAX_BLOCK_HEADER_SIZE,
+            max_block_size_with_standard_txs: super::MAX_BLOCK_TXS_SIZE,
+            max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
+            max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
+            p2p_port: 8978,
+            rpc_port: 15234,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
@@ -114,8 +135,18 @@ impl Builder {
     pub fn build(self) -> ChainConfig {
         let Self {
             chain_type,
+            address_prefix,
+            blockreward_maturity,
             coin_decimals,
+            magic_bytes,
+            version,
+            max_block_header_size,
+            max_block_size_with_standard_txs,
+            max_block_size_with_smart_contracts,
+            max_future_block_time_offset,
             target_block_spacing,
+            p2p_port,
+            rpc_port,
             genesis_block,
             emission_schedule,
             net_upgrades,
@@ -139,8 +170,18 @@ impl Builder {
 
         ChainConfig {
             chain_type,
+            address_prefix,
+            blockreward_maturity,
             coin_decimals,
+            magic_bytes,
+            version,
+            max_block_header_size,
+            max_block_size_with_standard_txs,
+            max_block_size_with_smart_contracts,
+            max_future_block_time_offset,
             target_block_spacing,
+            p2p_port,
+            rpc_port,
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,
@@ -164,8 +205,18 @@ macro_rules! builder_method {
 
 impl Builder {
     builder_method!(chain_type: ChainType);
+    builder_method!(address_prefix: String);
+    builder_method!(rpc_port: u16);
+    builder_method!(p2p_port: u16);
+    builder_method!(magic_bytes: [u8; 4]);
+    builder_method!(blockreward_maturity: BlockDistance);
+    builder_method!(max_future_block_time_offset: Duration);
+    builder_method!(version: SemVer);
     builder_method!(target_block_spacing: Duration);
     builder_method!(coin_decimals: u8);
+    builder_method!(max_block_header_size: usize);
+    builder_method!(max_block_size_with_standard_txs: usize);
+    builder_method!(max_block_size_with_smart_contracts: usize);
     builder_method!(net_upgrades: NetUpgrades<UpgradeVersion>);
 
     /// Set the genesis block to be the unit test version

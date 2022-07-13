@@ -27,10 +27,7 @@ use crate::{
     event,
     net::{self, ConnectivityService, NetworkingService},
 };
-use common::{
-    chain::{config::VERSION, ChainConfig},
-    primitives::semver,
-};
+use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
 use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
@@ -159,7 +156,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
-        version == &VERSION
+        version == self.config.version()
     }
 
     /// Handle connection established event
@@ -171,15 +168,18 @@ where
         log::debug!("{}", info);
 
         ensure!(
-            &info.magic_bytes == self.config.magic_bytes(),
+            info.magic_bytes == *self.config.magic_bytes(),
             P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                self.config.magic_bytes().to_owned(),
+                *self.config.magic_bytes(),
                 info.magic_bytes,
             ))
         );
         ensure!(
             self.validate_version(&info.version),
-            P2pError::ProtocolError(ProtocolError::InvalidVersion(VERSION, info.version))
+            P2pError::ProtocolError(ProtocolError::InvalidVersion(
+                *self.config.version(),
+                info.version
+            ))
         );
         ensure!(
             self.validate_supported_protocols(&info.protocols),

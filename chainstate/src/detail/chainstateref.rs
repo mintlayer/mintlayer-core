@@ -32,7 +32,7 @@ use common::{
 use logging::log;
 use utils::ensure;
 
-use crate::{BlockError, BlockSource, Config};
+use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
@@ -44,7 +44,7 @@ use super::{
 
 pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
-    config: &'a Config,
+    chainstate_config: &'a ChainstateConfig,
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
@@ -93,14 +93,14 @@ impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn new_rw(
         chain_config: &'a ChainConfig,
-        config: &'a Config,
+        chainstate_config: &'a ChainstateConfig,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
-            config,
+            chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,
@@ -109,14 +109,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn new_ro(
         chain_config: &'a ChainConfig,
-        config: &'a Config,
+        chainstete_config: &'a ChainstateConfig,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
-            config,
+            chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,
@@ -371,11 +371,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     CheckBlockError::BlockTimeOrderInvalid,
                 );
 
-                let max_future_offset = self.config.max_future_block_time_offset;
+                let max_future_offset = self.chain_config.max_future_block_time_offset();
                 let current_time = self.current_time();
                 let block_timestamp = block.timestamp();
                 ensure!(
-                    block_timestamp.as_duration_since_epoch() <= current_time + max_future_offset,
+                    block_timestamp.as_duration_since_epoch() <= current_time + *max_future_offset,
                     CheckBlockError::BlockFromTheFuture,
                 );
             }
@@ -400,27 +400,27 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let block_size = block.block_size();
 
         ensure!(
-            block_size.size_from_header() <= self.config.max_block_header_size,
+            block_size.size_from_header() <= self.chain_config.max_block_header_size(),
             BlockSizeError::Header(
                 block_size.size_from_header(),
-                self.config.max_block_header_size,
+                self.chain_config.max_block_header_size()
             )
         );
 
         ensure!(
-            block_size.size_from_txs() <= self.config.max_block_size_from_txs,
+            block_size.size_from_txs() <= self.chain_config.max_block_size_from_txs(),
             BlockSizeError::SizeOfTxs(
                 block_size.size_from_txs(),
-                self.config.max_block_size_from_txs
+                self.chain_config.max_block_size_from_txs()
             )
         );
 
         ensure!(
             block_size.size_from_smart_contracts()
-                <= self.config.max_block_size_from_smart_contracts,
+                <= self.chain_config.max_block_size_from_smart_contracts(),
             BlockSizeError::SizeOfSmartContracts(
                 block_size.size_from_smart_contracts(),
-                self.config.max_block_size_from_smart_contracts
+                self.chain_config.max_block_size_from_smart_contracts()
             )
         );
 
@@ -658,7 +658,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             self.connect_transactions(
                 &block,
                 &new_tip_block_index.block_height(),
-                &self.config.blockreward_maturity,
+                self.chain_config.blockreward_maturity(),
             )?;
         }
 
