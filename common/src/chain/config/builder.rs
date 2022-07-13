@@ -99,6 +99,7 @@ pub struct Builder {
     net_upgrades: NetUpgrades<UpgradeVersion>,
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
+    epoch_length: BlockDistance,
 }
 
 impl Builder {
@@ -121,6 +122,7 @@ impl Builder {
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
+            epoch_length: BlockDistance::from(super::DEFAULT_EPOCH_LENGTH),
         }
     }
 
@@ -150,6 +152,7 @@ impl Builder {
             genesis_block,
             emission_schedule,
             net_upgrades,
+            epoch_length,
         } = self;
 
         let emission_schedule = match emission_schedule {
@@ -187,6 +190,7 @@ impl Builder {
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,
             net_upgrades,
+            epoch_length,
         }
     }
 }

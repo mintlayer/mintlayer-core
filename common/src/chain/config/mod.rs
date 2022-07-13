@@ -38,7 +38,9 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
-pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
+const DEFAULT_EPOCH_LENGTH: BlockDistance =
+    BlockDistance::from_int((5 * 24 * 60 * 60) / (DEFAULT_TARGET_BLOCK_SPACING.as_secs() as i64));
 
 #[derive(
     Debug,
@@ -100,6 +102,7 @@ pub struct ChainConfig {
     max_block_header_size: usize,
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
+    epoch_length: BlockDistance,
 }
 
 impl ChainConfig {
@@ -177,6 +180,10 @@ impl ChainConfig {
 
     pub fn max_block_size_from_smart_contracts(&self) -> usize {
         self.max_block_size_with_smart_contracts
+    }
+
+    pub fn epoch_length(&self) -> BlockDistance {
+        self.epoch_length
     }
 
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config

@@ -169,6 +169,10 @@ impl BlockDistance {
     pub const fn new(distance: DistanceIntType) -> Self {
         Self(distance)
     }
+
+    pub const fn from_int(w: DistanceIntType) -> BlockDistance {
+        BlockDistance(w)
+    }
 }
 
 // Display should be defined for thiserr crate
