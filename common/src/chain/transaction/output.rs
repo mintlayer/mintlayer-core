@@ -39,7 +39,7 @@ pub enum Destination {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputPurpose {
     Transfer(Destination),
-    StakeLock(LockedStakeData),
+    StakeLock(Box<LockedStakeData>),
 }
 
 impl OutputPurpose {
