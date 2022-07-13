@@ -72,9 +72,6 @@ pub struct Libp2pConnectivityHandle<T>
 where
     T: NetworkingService,
 {
-    /// Address where the network services has been bound
-    bind_addr: Multiaddr,
-
     /// Peer Id of the local node
     peer_id: PeerId,
 
@@ -294,7 +291,6 @@ impl NetworkingService for Libp2pService {
 
         Ok((
             Self::ConnectivityHandle {
-                bind_addr: bind_addr.with(Protocol::P2p(peer_id.into())),
                 peer_id,
                 cmd_tx: cmd_tx.clone(),
                 conn_rx,
@@ -360,8 +356,10 @@ where
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
-    fn local_addr(&self) -> &T::Address {
-        &self.bind_addr
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx.send(types::Command::ListenAddress { response: tx }).await?;
+        rx.await.map_err(P2pError::from)
     }
 
     fn peer_id(&self) -> &T::PeerId {

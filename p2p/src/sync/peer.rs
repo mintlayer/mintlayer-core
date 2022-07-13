@@ -122,7 +122,7 @@ mod tests {
     use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
-        let addr: SocketAddr = test_utils::make_address("[::1]:");
+        let addr: SocketAddr = "[::1]:0".parse().unwrap();
         PeerContext::<MockService>::new(addr)
     }
 

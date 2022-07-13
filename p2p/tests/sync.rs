@@ -34,6 +34,7 @@ use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
+use test_utils::make_libp2p_addr;
 use tokio::sync::mpsc;
 
 async fn make_sync_manager<T>(
@@ -81,13 +82,25 @@ where
     )
 }
 
+async fn get_address<T>(handle: &mut T::ConnectivityHandle) -> T::Address
+where
+    T: NetworkingService,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    loop {
+        if let Some(addr) = handle.local_addr().await.unwrap() {
+            return addr;
+        }
+    }
+}
+
 async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    let (_conn1_res, conn2_res) =
-        tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+    let addr = get_address::<T>(conn2).await;
+    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
     let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
@@ -229,11 +242,9 @@ async fn local_and_remote_in_sync() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -269,11 +280,9 @@ async fn remote_ahead_by_7_blocks() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     // add 7 more blocks on top of the best block (which is also known by mgr1)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -362,11 +371,9 @@ async fn local_ahead_by_12_blocks() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _pubsub2, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -481,11 +488,9 @@ async fn remote_local_diff_chains_local_higher() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -625,11 +630,9 @@ async fn remote_local_diff_chains_remote_higher() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _pubsub2, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -768,14 +771,11 @@ async fn two_remote_nodes_different_chains() {
     let mgr3_handle = handle3.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
     let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
 
     // add 5 more blocks for first remote and 7 blocks to second remote
     test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
@@ -877,14 +877,11 @@ async fn two_remote_nodes_same_chains() {
     let mgr3_handle = handle3.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
     let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
@@ -1000,14 +997,11 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     let mgr3_handle = handle3.clone();
 
     let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
     let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle3)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
@@ -1138,11 +1132,9 @@ async fn test_connect_disconnect_resyncing() {
     let mgr2_handle = handle2.clone();
 
     let (mut mgr1, mut conn1, _, _pubsub, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle1)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
     let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/"), handle2)
-            .await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
 
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));

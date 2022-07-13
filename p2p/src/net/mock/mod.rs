@@ -166,8 +166,8 @@ where
         todo!();
     }
 
-    fn local_addr(&self) -> &T::Address {
-        &self.addr
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
+        Ok(Some(self.addr))
     }
 
     fn peer_id(&self) -> &T::PeerId {

@@ -117,6 +117,11 @@ pub enum Command {
         topics: Vec<Topic>,
         response: oneshot::Sender<crate::Result<()>>,
     },
+
+    /// Get the active listen address
+    ListenAddress {
+        response: oneshot::Sender<Option<Multiaddr>>,
+    },
 }
 
 #[derive(Debug)]

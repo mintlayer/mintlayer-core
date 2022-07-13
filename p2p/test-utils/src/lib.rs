@@ -29,10 +29,15 @@ use common::{
     primitives::{time, Amount, Id, Idable, H256},
 };
 use crypto::random::SliceRandom;
+use libp2p::Multiaddr;
 use p2p::net::{mock::MockService, NetworkingService};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
+
+pub fn make_libp2p_addr() -> Multiaddr {
+    "/ip6/::1/tcp/0".parse().unwrap()
+}
 
 pub async fn get_tcp_socket() -> TcpStream {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
@@ -46,16 +51,6 @@ pub async fn get_tcp_socket() -> TcpStream {
     });
 
     TcpStream::connect(addr).await.unwrap()
-}
-
-/// Allocate a port and create a socket address for given NetworkingService
-pub fn make_address<T>(addr: &str) -> T
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    let port: u16 = portpicker::pick_unused_port().expect("No ports free");
-    format!("{}{}", addr, port).parse().unwrap()
 }
 
 pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {

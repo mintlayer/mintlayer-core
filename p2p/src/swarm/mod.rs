@@ -400,9 +400,11 @@ where
                     event::SwarmEvent::GetPeerCount(response) => {
                         response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)
                     }
-                    event::SwarmEvent::GetBindAddress(response) => response
-                        .send(self.handle.local_addr().to_string())
-                        .map_err(|_| P2pError::ChannelClosed),
+                    event::SwarmEvent::GetBindAddress(response) => {
+                        let addr = self.handle.local_addr();
+                        let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
+                        response.send(addr).map_err(|_| P2pError::ChannelClosed)
+                    }
                     event::SwarmEvent::GetPeerId(response) => response
                         .send(self.handle.peer_id().to_string())
                         .map_err(|_| P2pError::ChannelClosed),

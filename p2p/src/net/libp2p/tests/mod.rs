@@ -244,12 +244,21 @@ pub async fn make_libp2p_with_ping(
     )
 }
 
+async fn get_address<T: NetworkBehaviour>(swarm: &mut Swarm<T>) -> Multiaddr {
+    loop {
+        if let SwarmEvent::NewListenAddr { address, .. } = swarm.select_next_some().await {
+            return address;
+        }
+    }
+}
+
 #[allow(dead_code)]
-pub async fn connect_swarms<A, B>(addr: Multiaddr, swarm1: &mut Swarm<A>, swarm2: &mut Swarm<B>)
+pub async fn connect_swarms<A, B>(swarm1: &mut Swarm<A>, swarm2: &mut Swarm<B>)
 where
     A: NetworkBehaviour,
     B: NetworkBehaviour,
 {
+    let addr = get_address::<A>(swarm1).await;
     swarm2.dial(addr).expect("swarm dial failed");
 
     loop {

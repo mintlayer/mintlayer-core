@@ -15,18 +15,19 @@
 //
 // Author(s): A. Altonen
 use super::*;
-use crate::net::libp2p::behaviour;
-use crate::net::libp2p::types::{ConnectivityEvent, Libp2pBehaviourEvent};
+use crate::net::libp2p::{
+    behaviour,
+    types::{ConnectivityEvent, Libp2pBehaviourEvent},
+};
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use libp2p::Multiaddr;
+use test_utils::make_libp2p_addr;
 
 #[tokio::test]
 async fn test_discovered_and_expired() {
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut backend1, _, _conn_rx, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        addr.clone(),
+        make_libp2p_addr(),
         &[],
         true,
     )
@@ -34,14 +35,13 @@ async fn test_discovered_and_expired() {
 
     let (mut backend2, _, _, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
-        test_utils::make_address("/ip6/::1/tcp/"),
+        make_libp2p_addr(),
         &[],
         true,
     )
     .await;
 
     connect_swarms::<behaviour::Libp2pBehaviour, behaviour::Libp2pBehaviour>(
-        addr,
         &mut backend1.swarm,
         &mut backend2.swarm,
     )
@@ -52,7 +52,7 @@ async fn test_discovered_and_expired() {
             event = backend1.swarm.select_next_some() => match event {
                 SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Discovered { peers })) => {
                     if peers.iter().any(|(peer_id, _)| peer_id == backend2.swarm.local_peer_id()) {
-                        backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id()).unwrap();
+                        let _ = backend1.swarm.disconnect_peer_id(*backend2.swarm.local_peer_id());
                     }
                 }
                 SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(ConnectivityEvent::Expired { peers })) => {

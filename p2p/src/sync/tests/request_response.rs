@@ -17,14 +17,15 @@
 use super::*;
 use crate::message::*;
 use std::{collections::HashSet, time::Duration};
+use test_utils::make_libp2p_addr;
 use tokio::time::timeout;
 
 #[tokio::test]
 async fn test_request_response() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -60,9 +61,9 @@ async fn test_request_response() {
 #[tokio::test]
 async fn test_multiple_requests_and_responses() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -128,9 +129,9 @@ async fn test_multiple_requests_and_responses() {
 #[tokio::test]
 async fn test_request_timeout_error() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, _swarm1) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -185,9 +186,9 @@ async fn test_request_timeout_error() {
 #[tokio::test]
 async fn request_timeout() {
     let (mut mgr1, mut conn1, _sync1, _pubsub1, mut swarm_rx) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let (mut mgr2, mut conn2, _sync2, _pubsub2, _swarm2) =
-        make_sync_manager::<Libp2pService>(test_utils::make_address("/ip6/::1/tcp/")).await;
+        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;

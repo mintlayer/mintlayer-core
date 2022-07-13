@@ -147,39 +147,36 @@ mod tests {
             }
         }
 
-        tokio::spawn(async move {
-            let tester2 = MdnsTester {
-                mdns: Mdns::new(true).await,
-                poll_params: TestParams {
-                    peer_id: PeerId::random(),
-                    addr: "/ip6/::1/tcp/8888".parse().unwrap(),
-                },
-            };
-
-            if let NetworkBehaviourAction::GenerateEvent(mdns::MdnsEvent::Discovered(addrs)) =
-                tester2.await
-            {
-                assert_ne!(addrs.len(), 0);
-            } else {
-                panic!("invalid event received")
-            }
-        });
-
-        let tester = MdnsTester {
+        let tester1 = MdnsTester {
             mdns: Mdns::new(true).await,
             poll_params: TestParams {
                 peer_id: PeerId::random(),
                 addr: "/ip6/::1/tcp/9999".parse().unwrap(),
             },
         };
-        assert!(std::matches!(tester.mdns, Mdns::Enabled(_)));
+        let tester2 = MdnsTester {
+            mdns: Mdns::new(true).await,
+            poll_params: TestParams {
+                peer_id: PeerId::random(),
+                addr: "/ip6/::1/tcp/8888".parse().unwrap(),
+            },
+        };
+        assert!(std::matches!(tester1.mdns, Mdns::Enabled(_)));
+        assert!(std::matches!(tester2.mdns, Mdns::Enabled(_)));
 
-        if let NetworkBehaviourAction::GenerateEvent(mdns::MdnsEvent::Discovered(addrs)) =
-            tester.await
-        {
-            assert_ne!(addrs.len(), 0);
-        } else {
-            panic!("invalid event received")
+        tokio::select! {
+            event = tester1 => match event {
+                NetworkBehaviourAction::GenerateEvent(mdns::MdnsEvent::Discovered(addrs)) => {
+                    assert_ne!(addrs.len(), 0);
+                }
+                _ => panic!("invalid event received: {:?}", event),
+            },
+            event = tester2 => match event {
+                NetworkBehaviourAction::GenerateEvent(mdns::MdnsEvent::Discovered(addrs)) => {
+                    assert_ne!(addrs.len(), 0);
+                }
+                _ => panic!("invalid event received: {:?}", event),
+            }
         }
     }
 }
