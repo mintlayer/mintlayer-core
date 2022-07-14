@@ -15,11 +15,19 @@
 
 //! Node initialisation routine.
 
-use crate::config::NodeConfig;
+use std::{fs, sync::Arc};
+
+use anyhow::{Context, Result};
+
 use chainstate::rpc::ChainstateRpcServer;
 use common::chain::config::ChainType;
+use logging::log;
 use p2p::rpc::P2pRpcServer;
-use std::sync::Arc;
+
+use crate::{
+    config::NodeConfig,
+    options::{Command, Options},
+};
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -31,7 +39,7 @@ enum Error {
 pub async fn initialize(
     chain_type: ChainType,
     node_config: NodeConfig,
-) -> anyhow::Result<subsystem::Manager> {
+) -> Result<subsystem::Manager> {
     // Initialize storage.
     let storage = chainstate_storage::Store::new_empty()?;
 
@@ -85,12 +93,25 @@ pub async fn initialize(
     Ok(manager)
 }
 
-/// Initialize and run the node
-pub async fn run(chain_type: ChainType, node_config: NodeConfig) -> anyhow::Result<()> {
-    let manager = initialize(chain_type, node_config).await?;
-
-    #[allow(clippy::unit_arg)]
-    Ok(manager.main().await)
+/// Processes options and potentially runs the node.
+pub async fn run(options: Options) -> Result<()> {
+    match options.command {
+        Command::CreateConfig { path } => {
+            let config = NodeConfig::new()?;
+            let config = toml::to_string(&config).context("Failed to serialize config")?;
+            log::trace!("Saving config to {path:?}\n: {config:#?}");
+            fs::write(path, config).context("Failed to write config")?;
+            Ok(())
+        }
+        Command::Run(options) => {
+            let chain_type = options.net;
+            let node_config = NodeConfig::read(options).context("Failed to initialize config")?;
+            log::trace!("Starting with the following config\n: {node_config:#?}");
+            let manager = initialize(chain_type, node_config).await?;
+            #[allow(clippy::unit_arg)]
+            Ok(manager.main().await)
+        }
+    }
 }
 
 #[rpc::rpc(server, namespace = "node")]

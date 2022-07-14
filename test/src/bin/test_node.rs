@@ -19,7 +19,5 @@ use std::env;
 async fn main() -> Result<(), node::Error> {
     let opts = node::Options::from_args(env::args_os());
     node::init_logging(&opts);
-
-    let config = node::NodeConfig::new()?;
-    node::run(common::chain::config::ChainType, config).await
+    node::run(opts).await
 }
