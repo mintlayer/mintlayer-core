@@ -161,14 +161,14 @@ where
     {
         let p2p_config = Arc::new(p2p_config);
         let (conn, pubsub, sync) = T::start(
-            p2p_config.address.parse::<T::Address>().map_err(|_| {
+            p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
                 P2pError::ConversionError(ConversionError::InvalidAddress(
-                    p2p_config.address.clone(),
+                    p2p_config.bind_address.clone(),
                 ))
             })?,
             &[],
             Arc::clone(&chain_config),
-            Duration::from_secs(p2p_config.timeout),
+            Duration::from_secs(p2p_config.outbound_connection_timeout),
         )
         .await?;
 

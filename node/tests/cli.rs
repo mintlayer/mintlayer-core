@@ -50,7 +50,7 @@ fn create_default_config() {
         max_orphan_blocks: None,
         p2p_addr: None,
         p2p_ban_threshold: None,
-        p2p_timeout: None,
+        p2p_outbound_connection_timeout: None,
         rpc_addr: None,
     };
     let config = NodeConfig::read(options).unwrap();
@@ -58,9 +58,9 @@ fn create_default_config() {
     assert_eq!(config.chainstate.max_db_commit_attempts, 10);
     assert_eq!(config.chainstate.max_orphan_blocks, 512);
 
-    assert_eq!(config.p2p.address, "/ip6/::1/tcp/3031");
+    assert_eq!(config.p2p.bind_address, "/ip6/::1/tcp/3031");
     assert_eq!(config.p2p.ban_threshold, 100);
-    assert_eq!(config.p2p.timeout, 10);
+    assert_eq!(config.p2p.outbound_connection_timeout, 10);
 
     assert_eq!(
         config.rpc.address,
@@ -92,7 +92,7 @@ fn read_config_override_values() {
         max_orphan_blocks: Some(max_orphan_blocks),
         p2p_addr: Some(p2p_addr.into()),
         p2p_ban_threshold: Some(p2p_ban_threshold),
-        p2p_timeout: Some(p2p_timeout),
+        p2p_outbound_connection_timeout: Some(p2p_timeout),
         rpc_addr: Some(rpc_addr),
     };
     let config = NodeConfig::read(options).unwrap();
@@ -103,9 +103,9 @@ fn read_config_override_values() {
     );
     assert_eq!(config.chainstate.max_orphan_blocks, max_orphan_blocks);
 
-    assert_eq!(config.p2p.address, p2p_addr);
+    assert_eq!(config.p2p.bind_address, p2p_addr);
     assert_eq!(config.p2p.ban_threshold, p2p_ban_threshold);
-    assert_eq!(config.p2p.timeout, p2p_timeout);
+    assert_eq!(config.p2p.outbound_connection_timeout, p2p_timeout);
 
     assert_eq!(config.rpc.address, rpc_addr);
 }

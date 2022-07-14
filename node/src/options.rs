@@ -77,7 +77,7 @@ pub struct RunOptions {
 
     /// The p2p timeout value in seconds.
     #[clap(long)]
-    pub p2p_timeout: Option<u64>,
+    pub p2p_outbound_connection_timeout: Option<u64>,
 
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]

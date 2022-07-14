@@ -66,13 +66,13 @@ impl NodeConfig {
 
         // P2p options.
         if let Some(address) = options.p2p_addr {
-            config.p2p.address = address;
+            config.p2p.bind_address = address;
         }
         if let Some(threshold) = options.p2p_ban_threshold {
             config.p2p.ban_threshold = threshold;
         }
-        if let Some(timeout) = options.p2p_timeout {
-            config.p2p.timeout = timeout;
+        if let Some(timeout) = options.p2p_outbound_connection_timeout {
+            config.p2p.outbound_connection_timeout = timeout;
         }
 
         // Rpc options.
