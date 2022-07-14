@@ -104,12 +104,24 @@ pub enum CheckBlockTransactionsError {
     DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
     #[error("Duplicate input in block")]
     DuplicateInputInBlock(Id<Block>),
-    #[error("Duplicate transaction found in block")]
+    #[error("Duplicate transaction {0} found in block {1}")]
     DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Incorrect issue transaction {0} in block {1}. Transaction can't be processed")]
-    TokenIssueTransactionIncorrect(Id<Transaction>, Id<Block>),
-    #[error("Incorrect transfer transaction ")]
-    TokenTransferInputIncorrect,
+    #[error("Incorrect issue transaction {0} in block {1}")]
+    TokenIssueFail(Id<Transaction>, Id<Block>),
+    #[error("Incorrect transfer transaction {0} in block {1}")]
+    TokenTransferFail(Id<Transaction>, Id<Block>),
+    #[error("Too many token issues in transaction {0} in block {1}")]
+    TooManyTokenIssues(Id<Transaction>, Id<Block>),
+    #[error("Coin or asset overflow in transaction {0} in block {1}")]
+    CoinOrAssetOverflow(Id<Transaction>, Id<Block>),
+    #[error("Token fees insuffience {0} in block {1}")]
+    InsuffienceTokenFees(Id<Transaction>, Id<Block>),
+    #[error("Token value in inputs insuffience {0} in block {1}")]
+    InsuffienceTokenValueInInputs(Id<Transaction>, Id<Block>),
+    #[error("Can't fetch tx by outpoint")]
+    FetchFail,
+    #[error("Can't find token in inputs in transaction {0} in block {1}")]
+    NoTokenInInputs(Id<Transaction>, Id<Block>),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

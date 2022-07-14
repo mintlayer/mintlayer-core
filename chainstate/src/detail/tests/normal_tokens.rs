@@ -1,11 +1,25 @@
-use std::vec;
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author(s): A. Sinitsyn
 
+use super::{anyonecanspend_address, setup_chainstate};
 use crate::{
     detail::{CheckBlockError, CheckBlockTransactionsError},
     BlockError, BlockSource, Chainstate,
 };
-
-use super::{anyonecanspend_address, setup_chainstate};
 use chainstate_types::block_index::BlockIndex;
 use common::{
     chain::{
@@ -15,14 +29,16 @@ use common::{
     },
     primitives::{Amount, Idable},
 };
+use std::vec;
 
 fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
     assert!(matches!(
         block_index,
         Err(BlockError::CheckBlockFailed(
-            CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::TokenIssueTransactionIncorrect(_, _)
-            )
+            CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokenIssueFail(
+                _,
+                _
+            ))
         ))
     ));
 }
@@ -32,7 +48,7 @@ fn assert_token_transfer(block_index: Result<Option<BlockIndex>, BlockError>) {
         block_index,
         Err(BlockError::CheckBlockFailed(
             CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::TokenTransferInputIncorrect
+                CheckBlockTransactionsError::TokenTransferFail(_, _)
             )
         ))
     ));
@@ -281,7 +297,37 @@ fn token_issuance_with_insufficient_fee() {
 
 #[test]
 fn transfer_few_tokens() {
-    common::concurrency::model(|| {})
+    common::concurrency::model(|| {
+        // Process token without errors
+        let mut chainstate = setup_chainstate();
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://52292852472.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+
+        // Another token
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDT".to_vec(),
+            amount_to_issue: Amount::from_atoms(123456789),
+            number_of_decimals: 1,
+            metadata_uri: b"https://123456789.org".to_vec(),
+        });
+        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+
+        // One more token
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"PAX".to_vec(),
+            amount_to_issue: Amount::from_atoms(987654321),
+            number_of_decimals: 1,
+            metadata_uri: b"https://987654321.com".to_vec(),
+        });
+        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+    })
 }
 
 #[test]

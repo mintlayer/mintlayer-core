@@ -500,9 +500,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         match is_correct_data {
             true => Ok(()),
-            false => Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
-                tx_id, block_id,
-            )),
+            false => Err(CheckBlockTransactionsError::TokenIssueFail(tx_id, block_id)),
         }
     }
 
@@ -512,7 +510,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .get_mainchain_tx_index(&outpoint.tx_id())
             .ok()
             .flatten()
-            .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+            .ok_or(CheckBlockTransactionsError::FetchFail)?;
         match tx_index.position() {
             common::chain::SpendablePosition::Transaction(tx_pos) => {
                 let tx = self
@@ -520,7 +518,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     .get_mainchain_tx_by_position(tx_pos)
                     .ok()
                     .flatten()
-                    .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+                    .ok_or(CheckBlockTransactionsError::FetchFail)?;
 
                 Ok(tx)
             }
@@ -553,6 +551,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_transfer_data(
         &self,
+        block_id: Id<Block>,
         tx: &Transaction,
         token_id: &TokenId,
         amount: &Amount,
@@ -568,7 +567,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                         .cloned()
                         .unwrap_or(Amount::from_atoms(0))
                         + amount)
-                        .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?,
+                        .ok_or_else(|| {
+                            CheckBlockTransactionsError::CoinOrAssetOverflow(
+                                tx.get_id(),
+                                block_id.clone(),
+                            )
+                        })?,
                 );
                 Ok(())
             },
@@ -578,11 +582,16 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let (_, origin_amount) = total_value_of_input_tokens
             .iter()
             .find(|&(origin_token_id, _)| origin_token_id == token_id)
-            .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+            .ok_or_else(|| {
+                CheckBlockTransactionsError::NoTokenInInputs(tx.get_id(), block_id.clone())
+            })?;
 
         // Check amount
         if origin_amount < amount || amount <= &Amount::from_atoms(0) {
-            return Err(CheckBlockTransactionsError::TokenTransferInputIncorrect);
+            return Err(CheckBlockTransactionsError::InsuffienceTokenValueInInputs(
+                tx.get_id(),
+                block_id,
+            ));
         }
 
         Ok(())
@@ -629,7 +638,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             // We can't issue any count of token types in one tx
             let issuance_count = Self::get_issuance_count(tx);
             if issuance_count > MAX_ISSUANCE_ALLOWED {
-                return Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                return Err(CheckBlockTransactionsError::TooManyTokenIssues(
                     tx.get_id(),
                     block.get_id(),
                 ));
@@ -649,7 +658,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             if self
                 .db_tx
                 .get_best_block_id()
-                .map_err(|_| CheckBlockTransactionsError::TokenTransferInputIncorrect)?
+                .map_err(|_| {
+                    CheckBlockTransactionsError::TokenTransferFail(tx.get_id(), block.get_id())
+                })?
                 .is_some()
                 && issuance_count == MAX_ISSUANCE_ALLOWED
             {
@@ -658,11 +669,21 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     let output = prev_tx
                         .outputs()
                         .get(input.outpoint().output_index() as usize)
-                        .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+                        .ok_or_else(|| {
+                            CheckBlockTransactionsError::NoTokenInInputs(
+                                tx.get_id(),
+                                block.get_id(),
+                            )
+                        })?;
                     match output.value() {
                         OutputValue::Coin(coin) => {
-                            mlt_amount_in_inputs = (mlt_amount_in_inputs + *coin)
-                                .ok_or(CheckBlockTransactionsError::TokenTransferInputIncorrect)?;
+                            mlt_amount_in_inputs =
+                                (mlt_amount_in_inputs + *coin).ok_or_else(|| {
+                                    CheckBlockTransactionsError::CoinOrAssetOverflow(
+                                        tx.get_id(),
+                                        block.get_id(),
+                                    )
+                                })?;
                         }
                         OutputValue::Asset(_) => { /* skip */ }
                     };
@@ -671,7 +692,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
                 // check is fee enough for issuance
                 if !Self::is_issuance_fee_enough(mlt_amount_in_inputs, mlt_amount_in_outputs) {
-                    return Err(CheckBlockTransactionsError::TokenIssueTransactionIncorrect(
+                    return Err(CheckBlockTransactionsError::TokenIssueFail(
                         tx.get_id(),
                         block.get_id(),
                     ));
@@ -695,7 +716,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<(), CheckBlockTransactionsError> {
         match asset {
             AssetData::TokenTransferV1 { token_id, amount } => {
-                self.check_transfer_data(tx, token_id, amount)?
+                self.check_transfer_data(block.get_id(), tx, token_id, amount)?
             }
             AssetData::TokenIssuanceV1 {
                 token_ticker,

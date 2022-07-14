@@ -669,7 +669,6 @@ dependencies = [
  "sscanf",
  "static_assertions",
  "strum",
- "test_framework",
  "thiserror",
 ]
 
@@ -3961,10 +3960,6 @@ dependencies = [
  "subsystem",
  "tokio",
 ]
-
-[[package]]
-name = "test_framework"
-version = "0.1.0"
 
 [[package]]
 name = "testing_logger"
