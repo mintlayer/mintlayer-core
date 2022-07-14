@@ -15,12 +15,12 @@
 //
 // Author(s): A. Altonen
 extern crate test_utils;
+use test_utils::make_libp2p_addr;
 
 use common::chain::{
     block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block},
     transaction::Transaction,
 };
-use libp2p::Multiaddr;
 use p2p::{
     error::{P2pError, PublishError},
     message::Announcement,
@@ -38,18 +38,16 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_libp2p_gossipsub() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        addr1,
+        make_libp2p_addr(),
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
     )
     .await
     .unwrap();
-    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-        addr2,
+        make_libp2p_addr(),
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
@@ -57,8 +55,10 @@ async fn test_libp2p_gossipsub() {
     .await
     .unwrap();
 
-    let (_conn1_res, conn2_res) =
-        tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+    let (_conn1_res, conn2_res) = tokio::join!(
+        conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
+        conn2.poll_next()
+    );
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
@@ -126,8 +126,8 @@ async fn connect_peers(
     peer1: &mut Libp2pConnectivityHandle<Libp2pService>,
     peer2: &mut Libp2pConnectivityHandle<Libp2pService>,
 ) {
-    let (_peer1_res, peer2_res) =
-        tokio::join!(peer1.connect(peer2.local_addr().clone()), peer2.poll_next());
+    let addr = peer2.local_addr().await.unwrap().unwrap();
+    let (_peer1_res, peer2_res) = tokio::join!(peer1.connect(addr), peer2.poll_next());
 
     let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
     let _peer1_id = match peer2_res {
@@ -141,9 +141,8 @@ async fn connect_peers(
 #[tokio::test]
 async fn test_libp2p_gossipsub_3_peers() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        addr1,
+        make_libp2p_addr(),
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
@@ -153,9 +152,8 @@ async fn test_libp2p_gossipsub_3_peers() {
 
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all((0..3).map(|_| async {
-            let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
             let res = Libp2pService::start(
-                addr,
+                make_libp2p_addr(),
                 &[],
                 Arc::clone(&config),
                 std::time::Duration::from_secs(10),
@@ -284,18 +282,8 @@ async fn test_libp2p_gossipsub_3_peers() {
 #[tokio::test]
 async fn test_libp2p_gossipsub_too_big_message() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let addr1: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
     let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        addr1,
-        &[],
-        Arc::clone(&config),
-        std::time::Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
-    let addr2: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-        addr2,
+        make_libp2p_addr(),
         &[],
         Arc::clone(&config),
         std::time::Duration::from_secs(10),
@@ -303,8 +291,19 @@ async fn test_libp2p_gossipsub_too_big_message() {
     .await
     .unwrap();
 
-    let (_conn1_res, conn2_res) =
-        tokio::join!(conn1.connect(conn2.local_addr().clone()), conn2.poll_next());
+    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
+        make_libp2p_addr(),
+        &[],
+        Arc::clone(&config),
+        std::time::Duration::from_secs(10),
+    )
+    .await
+    .unwrap();
+
+    let (_conn1_res, conn2_res) = tokio::join!(
+        conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
+        conn2.poll_next()
+    );
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
         ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,

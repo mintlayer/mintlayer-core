@@ -117,6 +117,17 @@ pub enum Command {
         topics: Vec<Topic>,
         response: oneshot::Sender<crate::Result<()>>,
     },
+
+    /// Get the active listen address
+    ListenAddress {
+        response: oneshot::Sender<Option<Multiaddr>>,
+    },
+
+    /// Ban remote peer
+    BanPeer {
+        peer_id: PeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 #[derive(Debug)]
@@ -157,8 +168,11 @@ pub enum ConnectivityEvent {
         error: error::P2pError,
     },
 
-    /// Peer misbehaved
-    Misbehaved { peer_id: PeerId, behaviour: u32 },
+    /// Peer misbehaved, adjust its reputation
+    Misbehaved {
+        peer_id: PeerId,
+        error: error::P2pError,
+    },
 }
 
 #[derive(Debug, Clone)]

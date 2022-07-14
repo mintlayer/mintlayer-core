@@ -14,15 +14,17 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use super::*;
 use crate::error::P2pError;
 use futures::StreamExt;
 use libp2p::{
     core::upgrade,
     identify, identity, mplex, noise,
-    swarm::{SwarmBuilder, SwarmEvent},
+    swarm::{DialError, SwarmBuilder, SwarmEvent},
     tcp::TcpConfig,
-    Multiaddr, PeerId, Swarm, Transport,
+    PeerId, Swarm, Transport,
 };
+use test_utils::make_libp2p_addr;
 
 // TODO: add more tests at some point
 
@@ -60,8 +62,9 @@ fn make_dummy_swarm() -> (PeerId, Swarm<identify::Identify>) {
 async fn dial_then_disconnect() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    swarm2.listen_on(addr.clone()).unwrap();
+
+    swarm2.listen_on(make_libp2p_addr()).unwrap();
+    let addr = get_address::<identify::Identify>(&mut swarm2).await;
 
     tokio::spawn(async move {
         loop {
@@ -86,8 +89,9 @@ async fn dial_then_disconnect() {
 async fn diconnect_closing_connection() {
     let (_peer_id1, mut swarm1) = make_dummy_swarm();
     let (peer_id2, mut swarm2) = make_dummy_swarm();
-    let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
-    swarm2.listen_on(addr.clone()).unwrap();
+
+    swarm2.listen_on(make_libp2p_addr()).unwrap();
+    let addr = get_address(&mut swarm2).await;
 
     tokio::spawn(async move {
         loop {
@@ -114,4 +118,13 @@ async fn diconnect_closing_connection() {
 
     // try to disconnect already disconnected peer
     assert!(std::matches!(swarm1.disconnect_peer_id(peer_id2), Err(())));
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer() {
+    let (_peer_id1, mut swarm1) = make_dummy_swarm();
+
+    let peer_id = PeerId::random();
+    swarm1.ban_peer_id(peer_id);
+    assert!(std::matches!(swarm1.dial(peer_id), Err(DialError::Banned)));
 }

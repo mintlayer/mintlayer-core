@@ -37,7 +37,7 @@ use common::{
 use futures::FutureExt;
 use logging::log;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
@@ -52,6 +52,9 @@ pub struct PubSubMessageHandler<T: NetworkingService> {
 
     /// Handle for communication with chainstate
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+
+    /// TX channel for sending control events to `PeerManager`
+    tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
 
     /// RX channel for receiving control events from RPC/[`swarm::PeerManager`]
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
@@ -76,6 +79,7 @@ where
         _chain_config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
+        tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
         rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
         topics: &[PubSubTopic],
     ) -> Self {
@@ -83,6 +87,7 @@ where
             _chain_config,
             pubsub_handle,
             chainstate_handle,
+            tx_swarm,
             rx_pubsub,
             topics: topics.to_vec(),
         }
@@ -176,7 +181,13 @@ where
         };
 
         if score > 0 {
-            // TODO: adjust peer score
+            // TODO: better abstraction over channels
+            let (tx, rx) = oneshot::channel();
+            self.tx_swarm
+                .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
+                .await
+                .map_err(P2pError::from)?;
+            let _ = rx.await.map_err(P2pError::from)?;
         }
 
         self.pubsub_handle

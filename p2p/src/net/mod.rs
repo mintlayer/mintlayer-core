@@ -113,10 +113,15 @@ where
     async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Return the socket address of the network service provider
-    fn local_addr(&self) -> &T::Address;
+    ///
+    /// If the address isn't available yet, `None` is returned
+    async fn local_addr(&self) -> crate::Result<Option<T::Address>>;
 
     /// Return peer id of the local node
     fn peer_id(&self) -> &T::PeerId;
+
+    /// Ban peer
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()>;
 
     /// Poll events from the network service provider
     ///

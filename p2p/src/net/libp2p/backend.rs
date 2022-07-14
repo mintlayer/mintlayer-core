@@ -26,7 +26,10 @@ use crate::{
     },
 };
 use futures::StreamExt;
-use libp2p::swarm::{Swarm, SwarmEvent};
+use libp2p::{
+    swarm::{Swarm, SwarmEvent},
+    Multiaddr,
+};
 use logging::log;
 use tokio::sync::mpsc;
 
@@ -45,6 +48,9 @@ pub struct Backend {
 
     /// Sender for outgoing syncing events
     pub(super) sync_tx: mpsc::Sender<types::SyncingEvent>,
+
+    /// Active listen address of the backend
+    listen_addr: Option<Multiaddr>,
 }
 
 impl Backend {
@@ -61,6 +67,7 @@ impl Backend {
             conn_tx,
             gossip_tx,
             sync_tx,
+            listen_addr: None,
         }
     }
 
@@ -71,7 +78,11 @@ impl Backend {
             tokio::select! {
                 event = self.swarm.select_next_some() => match event {
                     SwarmEvent::NewListenAddr { address, .. } => {
-                        log::trace!("new listen address {:?}", address);
+                        let peer_id = *self.swarm.local_peer_id();
+                        self.listen_addr = Some(address.with(libp2p::multiaddr::Protocol::P2p(peer_id.into())));
+                    }
+                    SwarmEvent::BannedPeer { peer_id, endpoint: _ } => {
+                        self.swarm.behaviour_mut().connmgr.handle_banned_peer(peer_id);
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(event)) => {
                         self.conn_tx.send(event).await.map_err(P2pError::from)?;
@@ -223,6 +234,13 @@ impl Backend {
 
                 response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
+            types::Command::ListenAddress { response } => {
+                response.send(self.listen_addr.clone()).map_err(|_| P2pError::ChannelClosed)
+            }
+            types::Command::BanPeer { peer_id, response } => {
+                self.swarm.ban_peer_id(peer_id);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
         }
     }
 }
@@ -242,7 +260,7 @@ mod tests {
         request_response::{ProtocolSupport, RequestResponse, RequestResponseConfig},
         swarm::SwarmBuilder,
         tcp::TcpConfig,
-        Multiaddr, Transport,
+        Transport,
     };
     use std::{
         collections::{HashMap, VecDeque},
@@ -318,7 +336,7 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: test_utils::make_address("/ip6/::1/tcp/"),
+                addr: test_utils::make_libp2p_addr(),
                 response: tx,
             })
             .await;
@@ -342,11 +360,10 @@ mod tests {
 
         tokio::spawn(async move { backend.run().await });
 
-        let addr: Multiaddr = test_utils::make_address("/ip6/::1/tcp/");
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: addr.clone(),
+                addr: test_utils::make_libp2p_addr(),
                 response: tx,
             })
             .await;
@@ -358,7 +375,12 @@ mod tests {
 
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
-        let res = cmd_tx.send(types::Command::Listen { addr, response: tx }).await;
+        let res = cmd_tx
+            .send(types::Command::Listen {
+                addr: test_utils::make_libp2p_addr(),
+                response: tx,
+            })
+            .await;
         assert!(res.is_ok());
 
         let res = rx.await;
