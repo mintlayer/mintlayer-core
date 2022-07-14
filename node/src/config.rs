@@ -51,7 +51,8 @@ impl NodeConfig {
     /// Reads a configuration from the path specified in options and overrides the provided
     /// parameters.
     pub fn read(options: RunOptions) -> Result<Self> {
-        let config = fs::read_to_string(&options.config_path).context("Failed to read config")?;
+        let config = fs::read_to_string(&options.config_path)
+            .with_context(|| format!("Failed to read '{:?}' config", options.config_path))?;
         let mut config: NodeConfig =
             toml::from_str(&config).context("Failed to deserialize config")?;
 
