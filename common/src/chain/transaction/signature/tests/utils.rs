@@ -26,8 +26,8 @@ use crate::{
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
-        Destination, OutputPurpose, OutputValue, Transaction, TransactionCreationError, TxInput,
-        TxOutput,
+        tokens::OutputValue,
+        Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::IntType, Amount, Id, H256},
 };

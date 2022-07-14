@@ -18,7 +18,7 @@
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::amount_sum;
 use common::chain::signature::{verify_signature, Transactable};
-use common::chain::{OutputValue, Transaction};
+use common::chain::{tokens::OutputValue, Transaction};
 use common::{
     chain::{
         block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,

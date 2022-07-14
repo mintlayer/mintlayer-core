@@ -20,7 +20,6 @@ pub mod tokens;
 pub mod transaction;
 mod upgrades;
 
-pub use tokens::*;
 pub use transaction::*;
 
 pub use config::ChainConfig;

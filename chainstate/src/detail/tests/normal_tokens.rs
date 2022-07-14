@@ -25,33 +25,25 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         signature::inputsig::InputWitness,
-        token_id, AssetData, OutputPurpose, OutputValue, TokenId, Transaction, TxInput, TxOutput,
+        tokens::{token_id, AssetData, OutputValue, TokenId},
+        OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Idable},
 };
 use std::vec;
 
-fn assert_token_issue(block_index: Result<Option<BlockIndex>, BlockError>) {
-    assert!(matches!(
-        block_index,
-        Err(BlockError::CheckBlockFailed(
-            CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokenIssueFail(
-                _,
-                _
+macro_rules! assert_token {
+    ($block_index:expr, $err_name:ident) => {
+        assert!(matches!(
+            dbg!($block_index),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::$err_name(
+                    _,
+                    _
+                ))
             ))
-        ))
-    ));
-}
-
-fn assert_token_transfer(block_index: Result<Option<BlockIndex>, BlockError>) {
-    assert!(matches!(
-        block_index,
-        Err(BlockError::CheckBlockFailed(
-            CheckBlockError::CheckTransactionFailed(
-                CheckBlockTransactionsError::TokenTransferFail(_, _)
-            )
-        ))
-    ));
+        ));
+    };
 }
 
 fn process_token(
@@ -103,8 +95,7 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
 
         // Doesn't exist name
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -113,8 +104,7 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
 
         // Name contain not alpha-numeric byte
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -123,8 +113,7 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
 
         // Issue amount is too low
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -133,8 +122,7 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
 
         // Too many decimals
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -143,8 +131,7 @@ fn token_issue_test() {
             number_of_decimals: 123,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
 
         // URI is too long
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -153,8 +140,7 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_issue(block_index);
+        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
     });
 }
 
@@ -186,24 +172,27 @@ fn token_transfer_test() {
             token_id,
             amount: Amount::from_atoms(987654321),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_transfer(block_index);
+        assert_token!(
+            process_token(&mut chainstate, value),
+            InsuffienceTokenValueInInputs
+        );
 
         // Try to transfer token with wrong id
         let value = OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id: TokenId::random(),
             amount: Amount::from_atoms(123456789),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_transfer(block_index);
+        assert_token!(process_token(&mut chainstate, value), NoTokenInInputs);
 
         // Try to transfer zero amount
         let value = OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(0),
         });
-        let block_index = process_token(&mut chainstate, value);
-        assert_token_transfer(block_index);
+        assert_token!(
+            process_token(&mut chainstate, value),
+            InsuffienceTokenValueInInputs
+        );
     })
 }
 
@@ -239,7 +228,10 @@ fn couple_of_token_issuance_in_one_tx() {
         .unwrap();
 
         // Process it
-        assert_token_issue(chainstate.process_block(block, BlockSource::Local));
+        assert_token!(
+            chainstate.process_block(block, BlockSource::Local),
+            TooManyTokenIssues
+        );
     })
 }
 
@@ -291,7 +283,10 @@ fn token_issuance_with_insufficient_fee() {
         .unwrap();
 
         // Process it
-        assert_token_issue(chainstate.process_block(block, BlockSource::Local));
+        assert_token!(
+            chainstate.process_block(block, BlockSource::Local),
+            TokenIssueFail
+        );
     })
 }
 
@@ -332,5 +327,45 @@ fn transfer_few_tokens() {
 
 #[test]
 fn test_burn_tokens() {
-    // todo: Burn tokens has not tested yet
+    common::concurrency::model(|| {
+        let mut chainstate = setup_chainstate();
+        // Issue a new token
+        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            token_ticker: b"USDC".to_vec(),
+            amount_to_issue: Amount::from_atoms(52292852472),
+            number_of_decimals: 1,
+            metadata_uri: b"https://some_site.meta".to_vec(),
+        });
+        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+
+        // Transfer it
+        let token_id = token_id(&block.transactions()[0]).unwrap();
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(123456789),
+        });
+        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+
+        // Try to burn it
+        let value = OutputValue::Asset(AssetData::TokenBurnV1 {
+            token_id,
+            amount_to_burn: Amount::from_atoms(987654321),
+        });
+        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+
+        // Try to transfer burned tokens
+        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(123456789),
+        });
+        assert_token!(process_token(&mut chainstate, value), NoTokenInInputs);
+
+
+        // Try burn more than we have in input
+        // Burn 50% and 50% transfer
+        // Burn 50% and don't add utxo for rest
+        // Burn 100% and then try to transfer it
+    })
 }

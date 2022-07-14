@@ -44,12 +44,12 @@ pub enum AssetData {
         number_of_decimals: u8,
         metadata_uri: Vec<u8>,
     },
-    // // Burning a token or NFT
-    // #[codec(index = 3)]
-    // TokenBurnV1 {
-    //     token_id: TokenId,
-    //     amount_to_burn: Amount,
-    // },
+    // Burning a token or NFT
+    #[codec(index = 3)]
+    TokenBurnV1 {
+        token_id: TokenId,
+        amount_to_burn: Amount,
+    },
     // // Increase amount of tokens
     // #[codec(index = 4)]
     // TokenReissueV1 {

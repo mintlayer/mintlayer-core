@@ -73,7 +73,7 @@ mod test {
     use super::*;
     use crate::store::test::create_rand_block_undo;
     use common::chain::{
-        Destination, OutPoint, OutPointSourceId, OutputPurpose, OutputValue, TxOutput,
+        tokens::OutputValue, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput,
     };
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};

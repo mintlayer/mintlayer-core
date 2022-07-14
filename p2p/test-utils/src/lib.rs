@@ -23,8 +23,9 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         transaction::Transaction,
-        Destination, OutPointSourceId, OutputPurpose, OutputValue, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };

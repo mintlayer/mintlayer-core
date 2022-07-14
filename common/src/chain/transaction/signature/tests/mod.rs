@@ -26,7 +26,8 @@ use super::{
 use crate::{
     chain::{
         signature::{verify_signature, TransactionSigError},
-        Destination, OutPointSourceId, OutputPurpose, OutputValue, Transaction, TxInput, TxOutput,
+        tokens::OutputValue,
+        Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
