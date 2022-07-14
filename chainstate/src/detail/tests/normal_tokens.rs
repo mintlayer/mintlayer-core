@@ -362,7 +362,6 @@ fn test_burn_tokens() {
         });
         assert_token!(process_token(&mut chainstate, value), NoTokenInInputs);
 
-
         // Try burn more than we have in input
         // Burn 50% and 50% transfer
         // Burn 50% and don't add utxo for rest

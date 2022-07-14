@@ -28,7 +28,8 @@ use crate::{
             },
             verify_signature, TransactionSigError,
         },
-        Destination, OutPointSourceId, tokens::OutputValue, Transaction, TxInput, TxOutput,
+        tokens::OutputValue,
+        Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };
