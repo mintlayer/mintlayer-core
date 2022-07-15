@@ -138,17 +138,14 @@ fn verify_vrf_and_get_output(
 
 fn check_stake_kernel_hash(
     epoch_index: u64,
-    target: Uint256,
     random_seed: &H256,
     pos_data: &PoSData,
-    kernel_block_time: BlockTimestamp,
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    ensure!(
-        spender_block_header.timestamp() < kernel_block_time,
-        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_header.timestamp()),
-    );
+    let target: Uint256 = (*pos_data.bits())
+        .try_into()
+        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
 
     let hash_pos: H256 = verify_vrf_and_get_output(
         epoch_index,
@@ -270,18 +267,15 @@ pub fn check_proof_of_stake(
         ConsensusPoSError::KernelOutputAlreadySpent,
     );
 
-    let target: Uint256 = (*pos_data.bits())
-        .try_into()
-        .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
+    ensure!(
+        header.timestamp() < kernel_block_index.block_timestamp(),
+        ConsensusPoSError::TimestampViolation(
+            kernel_block_index.block_timestamp(),
+            header.timestamp()
+        ),
+    );
 
-    let _hash_pos = check_stake_kernel_hash(
-        epoch_index,
-        target,
-        random_seed,
-        pos_data,
-        kernel_block_index.block_timestamp(),
-        &kernel_output,
-        header,
-    )?;
+    let _hash_pos =
+        check_stake_kernel_hash(epoch_index, random_seed, pos_data, &kernel_output, header)?;
     Ok(())
 }
