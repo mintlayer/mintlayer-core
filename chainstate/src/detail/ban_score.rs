@@ -195,6 +195,8 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::KernelAncesteryCheckFailed(_) => 100,
             ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
+            ConsensusPoSError::EpochDataRetrievalQueryError(_, _) => 0,
+            ConsensusPoSError::EpochDataNotFound(_) => 0,
         }
     }
 }

@@ -41,6 +41,7 @@ const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 
 const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 const DEFAULT_EPOCH_LENGTH: BlockDistance =
     BlockDistance::from_int((5 * 24 * 60 * 60) / (DEFAULT_TARGET_BLOCK_SPACING.as_secs() as i64));
+const DEFAULT_EPOCH_SEED_STRIDE: u64 = 2;
 
 #[derive(
     Debug,
@@ -103,6 +104,7 @@ pub struct ChainConfig {
     max_block_size_with_standard_txs: usize,
     max_block_size_with_smart_contracts: usize,
     epoch_length: BlockDistance,
+    epoch_index_seed_stride: u64,
     initial_randomness: H256,
 }
 
@@ -185,6 +187,10 @@ impl ChainConfig {
 
     pub fn epoch_length(&self) -> BlockDistance {
         self.epoch_length
+    }
+
+    pub fn epoch_index_seed_stride(&self) -> u64 {
+        self.epoch_index_seed_stride
     }
 
     pub fn initial_randomness(&self) -> &H256 {

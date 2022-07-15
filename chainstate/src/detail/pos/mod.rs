@@ -68,6 +68,10 @@ pub enum ConsensusPoSError {
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
     VRFDataVerificationFailed(VRFError),
+    #[error("Error while attempting to retrieve epoch data of index {0} with error: {1}")]
+    EpochDataRetrievalQueryError(u64, PropertyQueryError),
+    #[error("Epoch data not found for index: {0}")]
+    EpochDataNotFound(u64),
 }
 
 fn construct_transcript(
@@ -188,7 +192,6 @@ fn ensure_correct_ancestry(
 
 pub fn check_proof_of_stake(
     chain_config: &ChainConfig,
-    random_seed: &H256, // TODO
     header: &BlockHeader,
     pos_data: &PoSData,
     block_index_handle: &dyn BlockIndexHandle,
@@ -224,6 +227,18 @@ pub fn check_proof_of_stake(
 
     let epoch_index =
         chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
+
+    let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
+        let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
+        block_index_handle
+            .get_epoch_data(index_to_retrieve)
+            .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
+            .ok_or_else(|| ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
+            .randomness()
+            .clone()
+    } else {
+        chain_config.initial_randomness().clone()
+    };
 
     ensure_correct_ancestry(
         header,
@@ -276,6 +291,6 @@ pub fn check_proof_of_stake(
     );
 
     let _hash_pos =
-        check_stake_kernel_hash(epoch_index, random_seed, pos_data, &kernel_output, header)?;
+        check_stake_kernel_hash(epoch_index, &random_seed, pos_data, &kernel_output, header)?;
     Ok(())
 }

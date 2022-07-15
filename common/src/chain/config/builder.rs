@@ -101,6 +101,7 @@ pub struct Builder {
     genesis_block: GenesisBlockInit,
     emission_schedule: EmissionScheduleInit,
     epoch_length: BlockDistance,
+    epoch_index_seed_stride: u64,
     initial_randomness: H256,
 }
 
@@ -125,6 +126,7 @@ impl Builder {
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
             epoch_length: super::DEFAULT_EPOCH_LENGTH,
+            epoch_index_seed_stride: super::DEFAULT_EPOCH_SEED_STRIDE,
             initial_randomness: H256::zero(),
         }
     }
@@ -156,6 +158,7 @@ impl Builder {
             emission_schedule,
             net_upgrades,
             epoch_length,
+            epoch_index_seed_stride,
             initial_randomness,
         } = self;
 
@@ -195,6 +198,7 @@ impl Builder {
             emission_schedule,
             net_upgrades,
             epoch_length,
+            epoch_index_seed_stride,
             initial_randomness,
         }
     }
