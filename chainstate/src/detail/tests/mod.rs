@@ -15,8 +15,6 @@
 //
 // Author(s): S. Afach, A. Sinitsyn, S. Tkach
 
-// Author(s): S. Afach, A. Sinitsyn
-
 use crate::detail::tests::test_framework::BlockTestFramework;
 use crate::detail::*;
 use chainstate_storage::Store;
