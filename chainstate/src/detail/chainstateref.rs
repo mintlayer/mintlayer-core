@@ -25,6 +25,7 @@ use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
         calculate_tx_index_from_block,
+        config::MIN_TOKEN_ISSUANCE_FEE,
         tokens::{token_id, AssetData, OutputValue, TokenId},
         ChainConfig, OutPoint, OutPointSourceId, Transaction,
     },
@@ -682,7 +683,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     self.get_total_mlt_inputs(tx, block.get_id())?,
                     self.get_total_mlt_outputs(tx, block.get_id())?,
                 ) {
-                    return Err(CheckBlockTransactionsError::TokenIssueFail(
+                    return Err(CheckBlockTransactionsError::InsuffienceTokenFees(
                         tx.get_id(),
                         block.get_id(),
                     ));
@@ -740,9 +741,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn is_issuance_fee_enough(mlt_amount_in_inputs: Amount, mlt_amount_in_outputs: Amount) -> bool {
-        const MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
         (mlt_amount_in_inputs - mlt_amount_in_outputs).unwrap_or(Amount::from_atoms(0))
-            > MIN_ISSUANCE_FEE
+            > MIN_TOKEN_ISSUANCE_FEE
     }
 
     fn check_burn_data(

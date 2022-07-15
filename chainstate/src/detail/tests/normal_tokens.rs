@@ -52,26 +52,31 @@ fn process_token(
 ) -> Result<Option<BlockIndex>, BlockError> {
     let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
     let receiver = anyonecanspend_address();
-
     let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
     // Create a token issue transaction and block
-    let inputs = prev_block.transactions()[0]
-        .outputs()
+    let inputs = prev_block
+        .transactions()
         .iter()
-        .enumerate()
-        .map(|(output_index, _output)| {
-            TxInput::new(
-                prev_block.transactions()[0].get_id().into(),
-                output_index.try_into().unwrap(),
-                InputWitness::NoSignature(None),
-            )
+        .flat_map(|tx| {
+            tx.outputs()
+                .iter()
+                .enumerate()
+                .map(|(output_index, _output)| {
+                    TxInput::new(
+                        tx.get_id().into(),
+                        output_index.try_into().unwrap(),
+                        InputWitness::NoSignature(None),
+                    )
+                })
+                .collect::<Vec<TxInput>>()
         })
         .collect();
 
-    let outputs = values
+    let outputs: Vec<TxOutput> = values
         .into_iter()
         .map(|value| TxOutput::new(value, OutputPurpose::Transfer(receiver.clone())))
         .collect();
+
     let block = Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
         Some(prev_block_id),
@@ -296,41 +301,46 @@ fn token_issuance_with_insufficient_fee() {
         // Process it
         assert_token!(
             chainstate.process_block(block, BlockSource::Local),
-            TokenIssueFail
+            InsuffienceTokenFees
         );
     })
 }
 
 #[test]
-fn transfer_few_tokens() {
+fn transfer_tokens() {
     common::concurrency::model(|| {
+        const TOTAL_TOKEN_VALUE: Amount = Amount::from_atoms(52292852472);
+
         // Process token without errors
         let mut chainstate = setup_chainstate();
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
+            amount_to_issue: TOTAL_TOKEN_VALUE,
             number_of_decimals: 1,
             metadata_uri: b"https://52292852472.meta".to_vec(),
         })];
         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
+        let token_id = token_id(&block.transactions()[0]).unwrap();
 
-        // Another token
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
-            token_ticker: b"USDT".to_vec(),
-            amount_to_issue: Amount::from_atoms(123456789),
-            number_of_decimals: 1,
-            metadata_uri: b"https://123456789.org".to_vec(),
-        })];
+        // Split token in outputs
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: (TOTAL_TOKEN_VALUE - Amount::from_atoms(123456)).unwrap(),
+            }),
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: Amount::from_atoms(123456),
+            }),
+        ];
         let _ = process_token(&mut chainstate, values).unwrap().unwrap();
 
-        // One more token
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
-            token_ticker: b"PAX".to_vec(),
-            amount_to_issue: Amount::from_atoms(987654321),
-            number_of_decimals: 1,
-            metadata_uri: b"https://987654321.com".to_vec(),
+        // Collect these in one output
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: TOTAL_TOKEN_VALUE,
         })];
         let _ = process_token(&mut chainstate, values).unwrap().unwrap();
     })
