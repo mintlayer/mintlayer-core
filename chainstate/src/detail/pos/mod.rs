@@ -104,19 +104,12 @@ fn extract_vrf_output(
     }
 }
 
-fn check_stake_kernel_hash(
-    target: Uint256,
+fn verify_vrf_and_get_output(
     random_seed: &H256,
     pos_data: &PoSData,
-    kernel_block_time: BlockTimestamp,
-    kernel_output: TxOutput,
+    kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    ensure!(
-        spender_block_header.timestamp() < kernel_block_time,
-        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_header.timestamp()),
-    );
-
     let epoch_index = 0; // TODO
 
     // only locked stake can be staked
@@ -135,13 +128,30 @@ fn check_stake_kernel_hash(
 
     pool_data
         .vrf_public_key()
-        .verify_vrf_data(transcript.clone().into(), &vrf_data)
+        .verify_vrf_data(transcript.clone().into(), vrf_data)
         .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
 
     let vrf_raw_output =
         extract_vrf_output(vrf_data, pool_data.vrf_public_key().clone(), transcript);
 
-    let hash_pos: H256 = vrf_raw_output.into();
+    Ok(vrf_raw_output.into())
+}
+
+fn check_stake_kernel_hash(
+    target: Uint256,
+    random_seed: &H256,
+    pos_data: &PoSData,
+    kernel_block_time: BlockTimestamp,
+    kernel_output: &TxOutput,
+    spender_block_header: &BlockHeader,
+) -> Result<H256, ConsensusPoSError> {
+    ensure!(
+        spender_block_header.timestamp() < kernel_block_time,
+        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_header.timestamp()),
+    );
+
+    let hash_pos: H256 =
+        verify_vrf_and_get_output(random_seed, pos_data, kernel_output, spender_block_header)?;
     let hash_pos_arith: Uint256 = hash_pos.into();
 
     // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes
@@ -261,7 +271,7 @@ pub fn check_proof_of_stake(
         random_seed,
         pos_data,
         kernel_block_index.block_timestamp(),
-        kernel_output,
+        &kernel_output,
         header,
     )?;
     Ok(())
