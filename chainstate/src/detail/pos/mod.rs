@@ -105,13 +105,12 @@ fn extract_vrf_output(
 }
 
 fn verify_vrf_and_get_output(
+    epoch_index: u64,
     random_seed: &H256,
     pos_data: &PoSData,
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    let epoch_index = 0; // TODO
-
     // only locked stake can be staked
     let pool_data = match kernel_output.purpose() {
         common::chain::OutputPurpose::Transfer(_) => {
@@ -138,6 +137,7 @@ fn verify_vrf_and_get_output(
 }
 
 fn check_stake_kernel_hash(
+    epoch_index: u64,
     target: Uint256,
     random_seed: &H256,
     pos_data: &PoSData,
@@ -150,8 +150,13 @@ fn check_stake_kernel_hash(
         ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_header.timestamp()),
     );
 
-    let hash_pos: H256 =
-        verify_vrf_and_get_output(random_seed, pos_data, kernel_output, spender_block_header)?;
+    let hash_pos: H256 = verify_vrf_and_get_output(
+        epoch_index,
+        random_seed,
+        pos_data,
+        kernel_output,
+        spender_block_header,
+    )?;
     let hash_pos_arith: Uint256 = hash_pos.into();
 
     // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes
@@ -185,7 +190,7 @@ fn ensure_correct_ancestry(
 }
 
 pub fn check_proof_of_stake(
-    _chain_config: &ChainConfig,
+    chain_config: &ChainConfig,
     random_seed: &H256, // TODO
     header: &BlockHeader,
     pos_data: &PoSData,
@@ -219,6 +224,9 @@ pub fn check_proof_of_stake(
         .get_block_index(header.prev_block_id().as_ref().expect("There has to be a prev block"))
         .expect("Database error while retrieving prev block index")
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+
+    let epoch_index =
+        chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
 
     ensure_correct_ancestry(
         header,
@@ -267,6 +275,7 @@ pub fn check_proof_of_stake(
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
 
     let _hash_pos = check_stake_kernel_hash(
+        epoch_index,
         target,
         random_seed,
         pos_data,
