@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::block_index::BlockIndex;
+use chainstate_types::{block_index::BlockIndex, epoch_data::EpochData};
 use common::{
     chain::block::Block,
     primitives::{BlockHeight, Id},
@@ -31,4 +31,5 @@ pub trait BlockIndexHandle {
         block_index: &BlockIndex,
         ancestor_height: BlockHeight,
     ) -> Result<BlockIndex, PropertyQueryError>;
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError>;
 }

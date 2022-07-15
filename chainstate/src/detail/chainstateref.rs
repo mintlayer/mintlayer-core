@@ -23,6 +23,7 @@ use super::{
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{
     block_index::BlockIndex,
+    epoch_data::EpochData,
     height_skip::get_skip_height,
     preconnect_data::{BlockPreconnectData, ConsensusExtraData},
 };
@@ -67,6 +68,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
         ancestor_height: BlockHeight,
     ) -> Result<BlockIndex, PropertyQueryError> {
         self.get_ancestor(block_index, ancestor_height)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.get_epoch_data(epoch_index)
     }
 }
 
@@ -155,6 +160,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         self.db_tx
             .get_mainchain_tx_by_position(tx_index)
             .map_err(PropertyQueryError::from)
+    }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError> {
+        self.db_tx.get_epoch_data(epoch_index).map_err(PropertyQueryError::from)
     }
 
     pub fn get_block_id_by_height(
