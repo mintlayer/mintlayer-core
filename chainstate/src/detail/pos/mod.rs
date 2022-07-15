@@ -111,12 +111,12 @@ fn verify_vrf_and_get_output(
     kernel_output: &TxOutput,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    // only locked stake can be staked
     let pool_data = match kernel_output.purpose() {
         common::chain::OutputPurpose::Transfer(_) => {
+            // only pool outputs can be staked
             return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
                 spender_block_header.get_id(),
-            ))
+            ));
         }
         common::chain::OutputPurpose::StakePool(d) => &**d,
     };
