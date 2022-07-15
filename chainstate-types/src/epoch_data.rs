@@ -5,3 +5,9 @@ use serialization::{Decode, Encode};
 pub struct EpochData {
     randomness: H256,
 }
+
+impl EpochData {
+    pub fn randomness(&self) -> &H256 {
+        &self.randomness
+    }
+}
