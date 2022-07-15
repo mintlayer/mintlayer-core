@@ -16,6 +16,7 @@
 //! A mock version of the blockchian storage.
 
 use chainstate_types::block_index::BlockIndex;
+use chainstate_types::epoch_data::EpochData;
 use common::chain::block::Block;
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
@@ -47,6 +48,8 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl crate::BlockchainStorageWrite for Store {
@@ -69,6 +72,10 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     #[allow(clippy::extra_unused_lifetimes)]
@@ -106,6 +113,8 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl storage::traits::TransactionRo for StoreTxRo {
@@ -138,6 +147,8 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 
     impl crate::BlockchainStorageWrite for StoreTxRw {
@@ -161,6 +172,10 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 
     impl storage::traits::TransactionRw for StoreTxRw {

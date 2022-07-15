@@ -16,6 +16,7 @@
 //! Application-level interface for the persistent blockchain storage.
 
 use chainstate_types::block_index::BlockIndex;
+use chainstate_types::epoch_data::EpochData;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
@@ -75,6 +76,9 @@ pub trait BlockchainStorageRead {
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+
+    /// Get mainchain epoch data by its index
+    fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -113,6 +117,12 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+    /// Set the mainchain epoch data of the given epoch index
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+
+    /// Remove the mainchain epoch data of the given epoch index
+    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
 }
 
 /// Queries to get the Utxo

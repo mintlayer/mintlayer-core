@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::block_index::BlockIndex;
+use chainstate_types::epoch_data::EpochData;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPoint;
@@ -70,7 +71,9 @@ storage::decl_schema! {
         // Store for Utxo Entries
         pub DBUtxo: Single,
         // Store for BlockUndo
-        pub DBBlockUndo: Single
+        pub DBBlockUndo: Single,
+        // Store for EpochData
+        pub DBEpochData: Single
     }
 }
 
@@ -153,6 +156,8 @@ impl BlockchainStorageRead for Store {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<Block>>>;
+
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 }
 
@@ -192,6 +197,10 @@ impl BlockchainStorageWrite for Store {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+        fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()>;
+
+        fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()>;
     }
 }
 
@@ -261,6 +270,10 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
     }
+
+    fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>> {
+        self.read::<DBEpochData, _, _>(&epoch_index.encode())
+    }
 }
 
 /// Utxo data storage transaction
@@ -323,6 +336,16 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
         self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
+    }
+
+    fn set_epoch_data(&mut self, epoch_index: u64, epoch_data: &EpochData) -> crate::Result<()> {
+        self.write::<DBEpochData, _, _>(epoch_index.encode(), &epoch_data)
+    }
+    fn del_epoch_data(&mut self, epoch_index: u64) -> crate::Result<()> {
+        self.0
+            .get_mut::<DBEpochData, _>()
+            .del(&epoch_index.encode())
+            .map_err(Into::into)
     }
 }
 
