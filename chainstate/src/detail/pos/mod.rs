@@ -230,14 +230,13 @@ pub fn check_proof_of_stake(
 
     let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
         let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
-        block_index_handle
+        *block_index_handle
             .get_epoch_data(index_to_retrieve)
             .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
-            .ok_or_else(|| ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
+            .ok_or(ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
             .randomness()
-            .clone()
     } else {
-        chain_config.initial_randomness().clone()
+        *chain_config.initial_randomness()
     };
 
     ensure_correct_ancestry(
