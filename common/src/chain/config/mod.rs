@@ -191,6 +191,7 @@ impl ChainConfig {
         &self.initial_randomness
     }
 
+    #[must_use]
     pub fn epoch_index_from_height(&self, height: &BlockHeight) -> u64 {
         let height: u64 = (*height).into();
         let epoch_length: i64 = self.epoch_length.into();
