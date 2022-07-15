@@ -529,7 +529,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
-    fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(H256, Amount)> {
+    // Get TokenId and Amount in input 
+    fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(TokenId, Amount)> {
         let output_index = input.outpoint().output_index() as usize;
         let prev_tx = self.fetch(input.outpoint()).ok()?;
         match prev_tx.outputs().get(output_index)?.value() {
@@ -613,16 +614,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(total_value_of_input_tokens)
     }
 
-    // TODO: Is it need for us?
-    // fn is_token_registered(&self, token_id: &TokenId) -> bool {
-    //     // self.db_tx.get_token_tx(token_id)
-    //     true
-    // }
-
-    // fn register_token(&self, token_id: &TokenId, issuance_tx: &Id<Transaction>) {
-    //     // self.db_tx.set_token_tx(token_id, issuance_tx)?
-    // }
-
     fn get_issuance_count(tx: &Transaction) -> usize {
         tx.outputs()
             .iter()
@@ -655,7 +646,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     block.get_id(),
                 ));
             }
-            // Check assets
+
+            // Calc MLT and check assets
             let mut mlt_amount_in_outputs = Amount::from_atoms(0);
             tx.outputs()
                 .iter()
@@ -779,38 +771,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         // If we burn a piece of the token, we have to check output with the rest tokens
         if origin_amount > amount_to_burn {
-            let transfer_amount = tx
-                .outputs()
-                .iter()
-                .filter_map(|x| match x.value() {
-                    OutputValue::Coin(_) => None,
-                    OutputValue::Asset(asset) => match asset {
-                        AssetData::TokenTransferV1 { token_id, amount } => {
-                            if token_id == burn_token_id {
-                                Some(amount)
-                            } else {
-                                None
-                            }
-                        }
-                        AssetData::TokenIssuanceV1 {
-                            token_ticker: _,
-                            amount_to_issue: _,
-                            number_of_decimals: _,
-                            metadata_uri: _,
-                        } => None,
-                        AssetData::TokenBurnV1 {
-                            token_id: _,
-                            amount_to_burn: _,
-                        } => None,
-                    },
-                })
-                .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
-                .ok_or_else(|| {
-                    CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
-                })?;
 
             // Check whether all tokens burn and transfer
-            if (*amount_to_burn + transfer_amount) != Some(*origin_amount) {
+            if (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?) != Some(*origin_amount) {
                 return Err(CheckBlockTransactionsError::SomeTokensLost(
                     tx.get_id(),
                     block_id.clone(),
@@ -920,6 +883,40 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
         Ok(cached_inputs)
     }
+}
+
+// Calc not burned tokens that were placed in OutputValue::TokenTransfer after partial burn  
+fn get_change_amount(tx: &Transaction, burn_token_id: &H256, block_id: &Id<Block>) -> Result<Amount, CheckBlockTransactionsError> {
+    let change_amount = tx
+        .outputs()
+        .iter()
+        .filter_map(|x| match x.value() {
+            OutputValue::Coin(_) => None,
+            OutputValue::Asset(asset) => match asset {
+                AssetData::TokenTransferV1 { token_id, amount } => {
+                    if token_id == burn_token_id {
+                        Some(amount)
+                    } else {
+                        None
+                    }
+                }
+                AssetData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue: _,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                } => None,
+                AssetData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => None,
+            },
+        })
+        .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
+        .ok_or_else(|| {
+            CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
+        })?;
+    Ok(change_amount)
 }
 
 impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> {
