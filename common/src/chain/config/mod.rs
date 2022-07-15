@@ -191,6 +191,13 @@ impl ChainConfig {
         &self.initial_randomness
     }
 
+    pub fn epoch_index_from_height(&self, height: &BlockHeight) -> u64 {
+        let height: u64 = (*height).into();
+        let epoch_length: i64 = self.epoch_length.into();
+        let epoch_length: u64 = epoch_length.try_into().expect("Invalid negative epoch length");
+        height % epoch_length
+    }
+
     // TODO: this should be part of net-upgrades. There should be no canonical definition of PoW for any chain config
     pub const fn get_proof_of_work_config(&self) -> PoWChainConfig {
         PoWChainConfig::new(self.chain_type)
