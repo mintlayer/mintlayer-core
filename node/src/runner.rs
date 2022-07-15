@@ -104,10 +104,9 @@ pub async fn run(options: Options) -> Result<()> {
             Ok(())
         }
         Command::Run(options) => {
-            let chain_type = options.net;
-            let node_config = NodeConfig::read(options).context("Failed to initialize config")?;
+            let node_config = NodeConfig::read(&options).context("Failed to initialize config")?;
             log::trace!("Starting with the following config\n: {node_config:#?}");
-            let manager = initialize(chain_type, node_config).await?;
+            let manager = initialize(options.net, node_config).await?;
             #[allow(clippy::unit_arg)]
             Ok(manager.main().await)
         }

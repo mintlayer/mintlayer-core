@@ -5,7 +5,7 @@ max_orphan_blocks = 512
 [p2p]
 bind_address = "/ip6/::1/tcp/3031"
 ban_threshold = 100
-timeout = 10
+outbound_connection_timeout = 10
 
 [rpc]
 address = "127.0.0.1:3030"

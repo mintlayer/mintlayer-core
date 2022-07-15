@@ -50,36 +50,65 @@ impl NodeConfig {
 
     /// Reads a configuration from the path specified in options and overrides the provided
     /// parameters.
-    pub fn read(options: RunOptions) -> Result<Self> {
+    pub fn read(options: &RunOptions) -> Result<Self> {
         let config = fs::read_to_string(&options.config_path)
             .with_context(|| format!("Failed to read '{:?}' config", options.config_path))?;
-        let mut config: NodeConfig =
-            toml::from_str(&config).context("Failed to deserialize config")?;
+        let NodeConfig {
+            chainstate,
+            p2p,
+            rpc,
+        } = toml::from_str(&config).context("Failed to deserialize config")?;
 
-        // Chainstate options.
-        if let Some(attempts) = options.max_db_commit_attempts {
-            config.chainstate.max_db_commit_attempts = attempts;
-        }
-        if let Some(max_orphans) = options.max_orphan_blocks {
-            config.chainstate.max_orphan_blocks = max_orphans;
-        }
+        let chainstate = chainstate_config(chainstate, options);
+        let p2p = p2p_config(p2p, options);
+        let rpc = rpc_config(rpc, options);
 
-        // P2p options.
-        if let Some(address) = options.p2p_addr {
-            config.p2p.bind_address = address;
-        }
-        if let Some(threshold) = options.p2p_ban_threshold {
-            config.p2p.ban_threshold = threshold;
-        }
-        if let Some(timeout) = options.p2p_outbound_connection_timeout {
-            config.p2p.outbound_connection_timeout = timeout;
-        }
-
-        // Rpc options.
-        if let Some(address) = options.rpc_addr {
-            config.rpc.address = address;
-        }
-
-        Ok(config)
+        Ok(Self {
+            chainstate,
+            p2p,
+            rpc,
+        })
     }
+}
+
+fn chainstate_config(config: ChainstateConfig, options: &RunOptions) -> ChainstateConfig {
+    let ChainstateConfig {
+        max_db_commit_attempts,
+        max_orphan_blocks,
+    } = config;
+
+    let max_db_commit_attempts = options.max_db_commit_attempts.unwrap_or(max_db_commit_attempts);
+    let max_orphan_blocks = options.max_orphan_blocks.unwrap_or(max_orphan_blocks);
+
+    ChainstateConfig {
+        max_db_commit_attempts,
+        max_orphan_blocks,
+    }
+}
+
+fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
+    let P2pConfig {
+        bind_address,
+        ban_threshold,
+        outbound_connection_timeout,
+    } = config;
+
+    let bind_address = options.p2p_addr.clone().unwrap_or(bind_address);
+    let ban_threshold = options.p2p_ban_threshold.unwrap_or(ban_threshold);
+    let outbound_connection_timeout =
+        options.p2p_outbound_connection_timeout.unwrap_or(outbound_connection_timeout);
+
+    P2pConfig {
+        bind_address,
+        ban_threshold,
+        outbound_connection_timeout,
+    }
+}
+
+fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
+    let RpcConfig { address } = config;
+
+    let address = options.rpc_addr.unwrap_or(address);
+
+    RpcConfig { address }
 }

@@ -53,7 +53,7 @@ fn create_default_config() {
         p2p_outbound_connection_timeout: None,
         rpc_addr: None,
     };
-    let config = NodeConfig::read(options).unwrap();
+    let config = NodeConfig::read(&options).unwrap();
 
     assert_eq!(config.chainstate.max_db_commit_attempts, 10);
     assert_eq!(config.chainstate.max_orphan_blocks, 512);
@@ -95,7 +95,7 @@ fn read_config_override_values() {
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         rpc_addr: Some(rpc_addr),
     };
-    let config = NodeConfig::read(options).unwrap();
+    let config = NodeConfig::read(&options).unwrap();
 
     assert_eq!(
         config.chainstate.max_db_commit_attempts,
