@@ -292,7 +292,6 @@ fn check_arbitraty_data_convertion() {
     ];
     for test_data in &dataset {
         let encoded_data = super::encode(test_hrp, test_data).unwrap();
-        dbg!(&encoded_data);
         let decoded_data = super::decode(&encoded_data).unwrap();
         assert_eq!(test_data, decoded_data.data());
         assert_eq!(test_hrp, decoded_data.hrp());
@@ -342,7 +341,6 @@ fn bech32m_test_random_data(rng: &mut impl Rng, data_length: usize) {
     let random_bytes: Vec<u8> = (0..data_length).map(|_| rng.gen::<u8>()).collect();
 
     let encoded_data = super::encode(&test_hrp, &random_bytes).unwrap();
-    dbg!(&encoded_data);
     let decoded_data = super::decode(&encoded_data).unwrap();
     assert_eq!(random_bytes, decoded_data.data());
     assert_eq!(test_hrp, decoded_data.hrp());

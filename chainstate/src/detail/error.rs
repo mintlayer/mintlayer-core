@@ -114,11 +114,15 @@ pub enum CheckBlockTransactionsError {
     TooManyTokenIssues(Id<Transaction>, Id<Block>),
     #[error("Coin or asset overflow in transaction {0} in block {1}")]
     CoinOrAssetOverflow(Id<Transaction>, Id<Block>),
-    #[error("Token fees insuffience {0} in block {1}")]
+    #[error("Token fees insuffience in transaction {0} in block {1}")]
     InsuffienceTokenFees(Id<Transaction>, Id<Block>),
-    #[error("Token value in inputs insuffience {0} in block {1}")]
+    #[error("Token value in inputs insuffience in transaction {0} in block {1}")]
     InsuffienceTokenValueInInputs(Id<Transaction>, Id<Block>),
-    #[error("Can't fetch tx by outpoint")]
+    #[error("Can't burn zero value in transaction {0} in block {1}")]
+    BurnZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Some of the tokens are lost in transaction {0} in block {1}")]
+    SomeTokensLost(Id<Transaction>, Id<Block>),
+    #[error("Can't fetch transaction by outpoint")]
     FetchFail,
     #[error("Can't find token in inputs in transaction {0} in block {1}")]
     NoTokenInInputs(Id<Transaction>, Id<Block>),

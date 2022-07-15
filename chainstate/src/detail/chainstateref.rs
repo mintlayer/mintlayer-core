@@ -645,8 +645,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         const MAX_ISSUANCE_ALLOWED: usize = 1;
 
-        // Check assets
-
         for tx in block.transactions() {
             // We can't issue any count of token types in one tx
             let issuance_count = Self::get_issuance_count(tx);
@@ -656,7 +654,20 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     block.get_id(),
                 ));
             }
+            // Check assets
+            let mut mlt_amount_in_outputs = Amount::from_atoms(0);
+            tx.outputs()
+                .iter()
+                .filter_map(|output| match output.value() {
+                    OutputValue::Coin(coin) => {
+                        mlt_amount_in_outputs = (mlt_amount_in_outputs + *coin)?;
+                        None
+                    }
+                    OutputValue::Asset(asset) => Some(asset),
+                })
+                .try_for_each(|asset| self.check_asset(asset, tx, block))?;
 
+            // If it is not a genesis and in tx issuance
             if self
                 .db_tx
                 .get_best_block_id()
@@ -666,18 +677,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 .is_some()
                 && issuance_count == MAX_ISSUANCE_ALLOWED
             {
-                let mut mlt_amount_in_outputs = Amount::from_atoms(0);
-                tx.outputs()
-                    .iter()
-                    .filter_map(|output| match output.value() {
-                        OutputValue::Coin(coin) => {
-                            mlt_amount_in_outputs = (mlt_amount_in_outputs + *coin)?;
-                            None
-                        }
-                        OutputValue::Asset(asset) => Some(asset),
-                    })
-                    .try_for_each(|asset| self.check_asset(asset, tx, block))?;
-
                 // check is fee enough for issuance
                 if !Self::is_issuance_fee_enough(
                     self.get_total_mlt_inputs(tx, block.get_id())?,
@@ -750,7 +749,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         tx: &Transaction,
         block_id: &Id<Block>,
-        token_id: &TokenId,
+        burn_token_id: &TokenId,
         amount_to_burn: &Amount,
     ) -> Result<(), CheckBlockTransactionsError> {
         // Collect token inputs
@@ -759,17 +758,64 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // Is token exist in inputs?
         let (_, origin_amount) = total_value_tokens
             .iter()
-            .find(|&(origin_token_id, _)| origin_token_id == token_id)
+            .find(|&(origin_token_id, _)| origin_token_id == burn_token_id)
             .ok_or_else(|| {
                 CheckBlockTransactionsError::NoTokenInInputs(tx.get_id(), block_id.clone())
             })?;
 
         // Check amount
-        if origin_amount < amount_to_burn || amount_to_burn <= &Amount::from_atoms(0) {
+        if origin_amount < amount_to_burn {
             return Err(CheckBlockTransactionsError::InsuffienceTokenValueInInputs(
                 tx.get_id(),
                 block_id.clone(),
             ));
+        }
+        if amount_to_burn == &Amount::from_atoms(0) {
+            return Err(CheckBlockTransactionsError::BurnZeroTokens(
+                tx.get_id(),
+                block_id.clone(),
+            ));
+        }
+
+        // If we burn a piece of the token, we have to check output with the rest tokens
+        if origin_amount > amount_to_burn {
+            let transfer_amount = tx
+                .outputs()
+                .iter()
+                .filter_map(|x| match x.value() {
+                    OutputValue::Coin(_) => None,
+                    OutputValue::Asset(asset) => match asset {
+                        AssetData::TokenTransferV1 { token_id, amount } => {
+                            if token_id == burn_token_id {
+                                Some(amount)
+                            } else {
+                                None
+                            }
+                        }
+                        AssetData::TokenIssuanceV1 {
+                            token_ticker: _,
+                            amount_to_issue: _,
+                            number_of_decimals: _,
+                            metadata_uri: _,
+                        } => None,
+                        AssetData::TokenBurnV1 {
+                            token_id: _,
+                            amount_to_burn: _,
+                        } => None,
+                    },
+                })
+                .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
+                .ok_or_else(|| {
+                    CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
+                })?;
+
+            // Check whether all tokens burn and transfer
+            if (*amount_to_burn + transfer_amount) != Some(*origin_amount) {
+                return Err(CheckBlockTransactionsError::SomeTokensLost(
+                    tx.get_id(),
+                    block_id.clone(),
+                ));
+            }
         }
         Ok(())
     }

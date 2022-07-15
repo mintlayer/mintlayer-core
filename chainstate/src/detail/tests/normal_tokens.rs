@@ -35,7 +35,7 @@ use std::vec;
 macro_rules! assert_token {
     ($block_index:expr, $err_name:ident) => {
         assert!(matches!(
-            dbg!($block_index),
+            $block_index,
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::$err_name(
                     _,
@@ -48,19 +48,30 @@ macro_rules! assert_token {
 
 fn process_token(
     chainstate: &mut Chainstate,
-    value: OutputValue,
+    values: Vec<OutputValue>,
 ) -> Result<Option<BlockIndex>, BlockError> {
     let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
     let receiver = anyonecanspend_address();
 
     let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
     // Create a token issue transaction and block
-    let inputs = vec![TxInput::new(
-        prev_block.transactions()[0].get_id().into(),
-        0,
-        InputWitness::NoSignature(None),
-    )];
-    let outputs = vec![TxOutput::new(value, OutputPurpose::Transfer(receiver))];
+    let inputs = prev_block.transactions()[0]
+        .outputs()
+        .iter()
+        .enumerate()
+        .map(|(output_index, _output)| {
+            TxInput::new(
+                prev_block.transactions()[0].get_id().into(),
+                output_index.try_into().unwrap(),
+                InputWitness::NoSignature(None),
+            )
+        })
+        .collect();
+
+    let outputs = values
+        .into_iter()
+        .map(|value| TxOutput::new(value, OutputPurpose::Transfer(receiver.clone())))
+        .collect();
     let block = Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
         Some(prev_block_id),
@@ -78,69 +89,69 @@ fn token_issue_test() {
     common::concurrency::model(|| {
         // Process token without errors
         let mut chainstate = setup_chainstate();
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        })];
+        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Name is too long
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
 
         // Doesn't exist name
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
 
         // Name contain not alpha-numeric byte
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: "💖".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
 
         // Issue amount is too low
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: "USDT".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(0),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
 
         // Too many decimals
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: "USDT".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(123456789),
             number_of_decimals: 123,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
 
         // URI is too long
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
-        });
-        assert_token!(process_token(&mut chainstate, value), TokenIssueFail);
+        })];
+        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
     });
 }
 
@@ -149,48 +160,48 @@ fn token_transfer_test() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
         // Issue a new token
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        })];
+        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
         let token_id = token_id(&block.transactions()[0]).unwrap();
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(123456789),
-        });
-        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+        })];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
 
         // Try to transfer exceed amount
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(987654321),
-        });
+        })];
         assert_token!(
-            process_token(&mut chainstate, value),
+            process_token(&mut chainstate, values),
             InsuffienceTokenValueInInputs
         );
 
         // Try to transfer token with wrong id
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id: TokenId::random(),
             amount: Amount::from_atoms(123456789),
-        });
-        assert_token!(process_token(&mut chainstate, value), NoTokenInInputs);
+        })];
+        assert_token!(process_token(&mut chainstate, values), NoTokenInInputs);
 
         // Try to transfer zero amount
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(0),
-        });
+        })];
         assert_token!(
-            process_token(&mut chainstate, value),
+            process_token(&mut chainstate, values),
             InsuffienceTokenValueInInputs
         );
     })
@@ -295,76 +306,104 @@ fn transfer_few_tokens() {
     common::concurrency::model(|| {
         // Process token without errors
         let mut chainstate = setup_chainstate();
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://52292852472.meta".to_vec(),
-        });
-        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        })];
+        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Another token
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDT".to_vec(),
             amount_to_issue: Amount::from_atoms(123456789),
             number_of_decimals: 1,
             metadata_uri: b"https://123456789.org".to_vec(),
-        });
-        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+        })];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
 
         // One more token
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"PAX".to_vec(),
             amount_to_issue: Amount::from_atoms(987654321),
             number_of_decimals: 1,
             metadata_uri: b"https://987654321.com".to_vec(),
-        });
-        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
+        })];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
     })
 }
 
 #[test]
 fn test_burn_tokens() {
     common::concurrency::model(|| {
+        const ISSUED_FUNDS: Amount = Amount::from_atoms(123456788);
+        const HALF_ISSUED_FUNDS: Amount = Amount::from_atoms(61728394);
+
         let mut chainstate = setup_chainstate();
         // Issue a new token
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
-            amount_to_issue: Amount::from_atoms(52292852472),
+            amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
-        });
-        let block_index = process_token(&mut chainstate, value.clone()).unwrap().unwrap();
+        })];
+        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-        assert_eq!(block.transactions()[0].outputs()[0].value(), &value);
+        assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
         let token_id = token_id(&block.transactions()[0]).unwrap();
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
-            amount: Amount::from_atoms(123456789),
-        });
-        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
-
-        // Try to burn it
-        let value = OutputValue::Asset(AssetData::TokenBurnV1 {
-            token_id,
-            amount_to_burn: Amount::from_atoms(987654321),
-        });
-        let _ = process_token(&mut chainstate, value).unwrap().unwrap();
-
-        // Try to transfer burned tokens
-        let value = OutputValue::Asset(AssetData::TokenTransferV1 {
-            token_id,
-            amount: Amount::from_atoms(123456789),
-        });
-        assert_token!(process_token(&mut chainstate, value), NoTokenInInputs);
+            amount: ISSUED_FUNDS,
+        })];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
 
         // Try burn more than we have in input
+        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+            token_id,
+            amount_to_burn: (ISSUED_FUNDS * 2).unwrap(),
+        })];
+        assert_token!(
+            process_token(&mut chainstate, values),
+            InsuffienceTokenValueInInputs
+        );
+
+        // Burn 50% and don't add utxo for the rest
+        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+            token_id,
+            amount_to_burn: HALF_ISSUED_FUNDS,
+        })];
+        assert_token!(process_token(&mut chainstate, values), SomeTokensLost);
+
         // Burn 50% and 50% transfer
-        // Burn 50% and don't add utxo for rest
-        // Burn 100% and then try to transfer it
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenBurnV1 {
+                token_id,
+                amount_to_burn: HALF_ISSUED_FUNDS,
+            }),
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: HALF_ISSUED_FUNDS,
+            }),
+        ];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+
+        // Try to burn it all
+        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+            token_id,
+            amount_to_burn: HALF_ISSUED_FUNDS,
+        })];
+        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+
+        // Try to transfer burned tokens
+        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+            token_id,
+            amount: Amount::from_atoms(123456789),
+        })];
+        assert_token!(process_token(&mut chainstate, values), NoTokenInInputs);
     })
 }

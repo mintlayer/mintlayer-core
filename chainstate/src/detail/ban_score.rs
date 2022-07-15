@@ -134,6 +134,8 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::InsuffienceTokenValueInInputs(_, _) => 100,
             CheckBlockTransactionsError::FetchFail => 100,
             CheckBlockTransactionsError::NoTokenInInputs(_, _) => 100,
+            CheckBlockTransactionsError::BurnZeroTokens(_, _) => 100,
+            CheckBlockTransactionsError::SomeTokensLost(_, _) => 100,
         }
     }
 }
