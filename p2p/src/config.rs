@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 pub struct P2pConfig {
     /// Address to bind P2P to.
     pub bind_address: String,
-    /// The score threshold after which a peer is baned.
+    /// The score threshold after which a peer is banned.
     pub ban_threshold: u32,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: u64,

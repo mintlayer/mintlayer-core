@@ -22,14 +22,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RpcConfig {
     /// Address to bind RPC to.
-    pub address: SocketAddr,
+    pub bind_address: SocketAddr,
 }
 
 impl RpcConfig {
     /// Creates a new rpc configuration instance.
     pub fn new() -> Result<Self> {
         Ok(Self {
-            address: SocketAddr::from_str("127.0.0.1:3030")?,
+            bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
         })
     }
 }

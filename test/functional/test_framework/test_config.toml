@@ -8,4 +8,4 @@ ban_threshold = 100
 outbound_connection_timeout = 10
 
 [rpc]
-address = "127.0.0.1:3030"
+bind_address = "127.0.0.1:3030"

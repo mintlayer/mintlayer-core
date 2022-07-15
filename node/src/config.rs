@@ -57,7 +57,7 @@ impl NodeConfig {
             chainstate,
             p2p,
             rpc,
-        } = toml::from_str(&config).context("Failed to deserialize config")?;
+        } = toml::from_str(&config).context("Failed to parse config")?;
 
         let chainstate = chainstate_config(chainstate, options);
         let p2p = p2p_config(p2p, options);
@@ -106,9 +106,9 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
 }
 
 fn rpc_config(config: RpcConfig, options: &RunOptions) -> RpcConfig {
-    let RpcConfig { address } = config;
+    let RpcConfig { bind_address } = config;
 
-    let address = options.rpc_addr.unwrap_or(address);
+    let bind_address = options.rpc_addr.unwrap_or(bind_address);
 
-    RpcConfig { address }
+    RpcConfig { bind_address }
 }
