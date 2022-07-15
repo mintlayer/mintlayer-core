@@ -63,6 +63,8 @@ pub enum ConsensusPoSError {
     PrevBlockIndexNotFound(Id<Block>),
     #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]
     KernelAncesteryCheckFailed(Id<Block>),
+    #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
+    InvalidOutputPurposeInStakeKernel(Id<Block>),
 }
 
 fn check_stake_kernel_hash(
