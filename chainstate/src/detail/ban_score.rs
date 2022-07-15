@@ -194,6 +194,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
             ConsensusPoSError::KernelAncesteryCheckFailed(_) => 100,
             ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
         }
     }
 }

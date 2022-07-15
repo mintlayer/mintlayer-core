@@ -17,9 +17,10 @@ use crate::chain::TxInput;
 use crate::chain::{signature::Transactable, TxOutput};
 use crate::primitives::Compact;
 use crate::Uint256;
+use crypto::vrf::VRFReturn;
 use serialization::{Decode, Encode};
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub enum ConsensusData {
     #[codec(index = 0)]
     None,
@@ -84,18 +85,25 @@ impl ConsensusData {
 }
 
 /// Fake PoS just to test spending block rewards; will be removed at some point in the future
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Encode, Decode)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
 pub struct PoSData {
     kernel_inputs: Vec<TxInput>,
     reward_outputs: Vec<TxOutput>,
+    vrf_data: VRFReturn,
     bits: Compact,
 }
 
 impl PoSData {
-    pub fn new(kernel_inputs: Vec<TxInput>, reward_outputs: Vec<TxOutput>, bits: Compact) -> Self {
+    pub fn new(
+        kernel_inputs: Vec<TxInput>,
+        reward_outputs: Vec<TxOutput>,
+        vrf_data: VRFReturn,
+        bits: Compact,
+    ) -> Self {
         Self {
             kernel_inputs,
             reward_outputs,
+            vrf_data,
             bits,
         }
     }
@@ -110,6 +118,10 @@ impl PoSData {
 
     pub fn bits(&self) -> &Compact {
         &self.bits
+    }
+
+    pub fn vrf_data(&self) -> &VRFReturn {
+        &self.vrf_data
     }
 }
 

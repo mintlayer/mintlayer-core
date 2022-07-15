@@ -22,7 +22,7 @@ use crate::chain::ChainConfig;
 use crate::primitives::id::{Id, Idable, H256};
 use crate::primitives::{id, VersionTag};
 
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
     pub(super) version: VersionTag<1>,
     pub(super) prev_block_id: Option<Id<Block>>,

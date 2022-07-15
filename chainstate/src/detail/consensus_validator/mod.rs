@@ -24,6 +24,7 @@ use common::chain::PoWStatus;
 use common::chain::RequiredConsensus;
 use common::primitives::BlockHeight;
 use common::primitives::Idable;
+use common::primitives::H256;
 
 use crate::detail::pow::work::check_pow_consensus;
 use crate::BlockError;
@@ -141,7 +142,7 @@ fn validate_pos_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
         ConsensusData::None | ConsensusData::PoW(_)=>  Err(ConsensusVerificationError::ConsensusTypeMismatch(
             "Chain configuration says consensus should be empty but block consensus data is not `None`.".into(),
         )),
-        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config, header, pos_data, block_index_handle, transaction_index_handle).map_err(Into::into),
+        ConsensusData::PoS(pos_data) => check_proof_of_stake(chain_config, &H256::zero(), header, pos_data, block_index_handle, transaction_index_handle).map_err(Into::into),
     }
 }
 

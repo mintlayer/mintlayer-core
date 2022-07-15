@@ -1,15 +1,16 @@
-use chainstate_types::{block_index::BlockIndex, stake_modifer::PoSStakeModifier};
+use chainstate_types::block_index::BlockIndex;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
         signature::Transactable,
         ChainConfig, OutputSpentState, TxOutput,
     },
-    primitives::{
-        id::{hash_encoded_to, DefaultHashAlgoStream},
-        Compact, Id, Idable, H256,
-    },
+    primitives::{Compact, Id, Idable, H256},
     Uint256,
+};
+use crypto::vrf::{
+    transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
+    VRFError, VRFPublicKey, VRFReturn,
 };
 use thiserror::Error;
 use utils::ensure;
@@ -65,32 +66,90 @@ pub enum ConsensusPoSError {
     KernelAncesteryCheckFailed(Id<Block>),
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
+    #[error("Failed to verify VRF data with error: {0}")]
+    VRFDataVerificationFailed(VRFError),
+}
+
+fn construct_transcript(
+    epoch_index: u64,
+    random_seed: &H256,
+    spender_block_header: &BlockHeader,
+) -> WrappedTranscript {
+    TranscriptAssembler::new(b"MintlayerStakeVRF")
+        .attach(
+            b"Randomness",
+            TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
+        )
+        .attach(
+            b"Slot",
+            TranscriptComponent::U64(spender_block_header.timestamp().as_int_seconds() as u64),
+        )
+        .attach(b"EpochIndex", TranscriptComponent::U64(epoch_index))
+        .finalize()
+}
+
+fn extract_vrf_output(
+    vrf_data: &VRFReturn,
+    vrf_public_key: VRFPublicKey,
+    transcript: WrappedTranscript,
+) -> [u8; 32] {
+    match &vrf_data {
+        VRFReturn::Schnorrkel(d) => d
+            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
+                vrf_public_key,
+                transcript.into(),
+            )
+            .unwrap()
+            .into(),
+    }
 }
 
 fn check_stake_kernel_hash(
     target: Uint256,
+    random_seed: &H256,
+    pos_data: &PoSData,
     kernel_block_time: BlockTimestamp,
     kernel_output: TxOutput,
-    spender_block_time: BlockTimestamp,
-    prev_stake_modifier: &PoSStakeModifier,
+    spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    use crypto::hash::StreamHasher;
-
     ensure!(
-        spender_block_time < kernel_block_time,
-        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_time),
+        spender_block_header.timestamp() < kernel_block_time,
+        ConsensusPoSError::TimestampViolation(kernel_block_time, spender_block_header.timestamp()),
     );
 
-    let mut hasher = DefaultHashAlgoStream::new();
-    hash_encoded_to(&prev_stake_modifier.value(), &mut hasher);
-    hash_encoded_to(&kernel_output, &mut hasher);
-    hash_encoded_to(&spender_block_time, &mut hasher);
-    let hash_pos: H256 = hasher.finalize().into();
+    let epoch_index = 0; // TODO
+
+    // only locked stake can be staked
+    let pool_data = match kernel_output.purpose() {
+        common::chain::OutputPurpose::Transfer(_) => {
+            return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
+                spender_block_header.get_id(),
+            ))
+        }
+        common::chain::OutputPurpose::StakePool(d) => &**d,
+    };
+
+    let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
+
+    let vrf_data = pos_data.vrf_data();
+
+    pool_data
+        .vrf_public_key()
+        .verify_vrf_data(transcript.clone().into(), &vrf_data)
+        .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
+
+    let vrf_raw_output =
+        extract_vrf_output(vrf_data, pool_data.vrf_public_key().clone(), transcript);
+
+    let hash_pos: H256 = vrf_raw_output.into();
     let hash_pos_arith: Uint256 = hash_pos.into();
+
+    // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes
+    let pool_balance = kernel_output.value().into();
 
     // TODO: the target multiplication can overflow, use Uint512
     ensure!(
-        hash_pos_arith <= target * kernel_output.value().into(),
+        hash_pos_arith <= target * pool_balance,
         ConsensusPoSError::StakeKernelHashTooHigh
     );
 
@@ -117,6 +176,7 @@ fn ensure_correct_ancestry(
 
 pub fn check_proof_of_stake(
     _chain_config: &ChainConfig,
+    random_seed: &H256, // TODO
     header: &BlockHeader,
     pos_data: &PoSData,
     block_index_handle: &dyn BlockIndexHandle,
@@ -196,17 +256,13 @@ pub fn check_proof_of_stake(
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
 
-    let prev_stake_modifier = prev_block_index
-        .preconnect_data()
-        .stake_modifier()
-        .ok_or(ConsensusPoSError::PrevStakeModiferNotFound)?;
-
     let _hash_pos = check_stake_kernel_hash(
         target,
+        random_seed,
+        pos_data,
         kernel_block_index.block_timestamp(),
         kernel_output,
-        header.timestamp(),
-        prev_stake_modifier,
+        header,
     )?;
     Ok(())
 }

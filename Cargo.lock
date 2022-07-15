@@ -501,6 +501,7 @@ dependencies = [
  "chainstate-types",
  "common",
  "crypto",
+ "generic-array",
  "hex",
  "itertools",
  "jsonrpsee",
