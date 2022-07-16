@@ -43,7 +43,7 @@ fn get_locator() {
 
             // Check the locator length.
             let locator = btf.chainstate().get_locator().unwrap();
-            assert_eq!(locator.len(), (blocks as f64).log2().floor() as usize + 2);
+            assert_eq!(locator.len(), (blocks as f64).log2().ceil() as usize + 1);
 
             // Check the locator headers.
             let height = btf
