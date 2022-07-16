@@ -23,10 +23,7 @@ use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, Transact
 use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
-        block::{
-            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
-            Block, BlockHeader,
-        },
+        block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},

@@ -459,7 +459,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
-                self.verify_signatures(tx, spend_height, &median_time_past)?;
+                self.verify_signatures(tx, spend_height, median_time_past)?;
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
@@ -478,7 +478,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         self.verify_signatures(
                             &reward_transactable,
                             spend_height,
-                            &median_time_past,
+                            median_time_past,
                         )?;
 
                         let spender = block.get_id().into();
