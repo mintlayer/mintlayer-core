@@ -313,7 +313,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &self,
         output: &TxOutput,
         spend_height: &BlockHeight,
-        spender_timestamp: &BlockTimestamp,
+        spending_time: &BlockTimestamp,
     ) -> Result<(), StateUpdateError> {
         let timelock = match output.purpose() {
             common::chain::OutputPurpose::Transfer(_) => return Ok(()),
@@ -321,10 +321,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             common::chain::OutputPurpose::StakeLock(_) => return Ok(()),
         };
 
-        // TODO: the comparison with time should be based on BIP-113, i.e., the median time instead of the block timestamp
         let past_lock = match timelock {
             common::chain::timelock::OutputTimeLock::UntilHeight(h) => (spend_height >= h),
-            common::chain::timelock::OutputTimeLock::UntilTime(t) => (spender_timestamp >= t),
+            common::chain::timelock::OutputTimeLock::UntilTime(t) => (spending_time >= t),
         };
 
         if !past_lock {
@@ -338,7 +337,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &self,
         tx: &T,
         spend_height: &BlockHeight,
-        spender_timestamp: &BlockTimestamp,
+        spending_time: &BlockTimestamp,
     ) -> Result<(), StateUpdateError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
@@ -375,7 +374,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
-                    self.check_timelock(output, spend_height, spender_timestamp)?;
+                    self.check_timelock(output, spend_height, spending_time)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
@@ -402,7 +401,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
-                    self.check_timelock(output, spend_height, spender_timestamp)?;
+                    self.check_timelock(output, spend_height, spending_time)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
@@ -444,6 +443,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &mut self,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
+        median_time_past: &BlockTimestamp,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), StateUpdateError> {
         match spend_ref {
@@ -459,7 +459,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
-                self.verify_signatures(tx, spend_height, &block.timestamp())?;
+                self.verify_signatures(tx, spend_height, &median_time_past)?;
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
@@ -478,7 +478,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         self.verify_signatures(
                             &reward_transactable,
                             spend_height,
-                            &block.timestamp(),
+                            &median_time_past,
                         )?;
 
                         let spender = block.get_id().into();

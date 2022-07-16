@@ -23,7 +23,10 @@ use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, Transact
 use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
-        block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
+        block::{
+            calculate_tx_merkle_root, calculate_witness_merkle_root, timestamp::BlockTimestamp,
+            Block, BlockHeader,
+        },
         calculate_tx_index_from_block, ChainConfig, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
@@ -495,11 +498,18 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs<S>, BlockError> {
+        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
+        let median_time_past = calculate_median_time_past(
+            self,
+            &block.prev_block_id().expect("This is never called for genesis"),
+        );
+
         let mut cached_inputs = CachedInputs::new(&self.db_tx);
 
         cached_inputs.spend(
             BlockTransactableRef::BlockReward(block),
             spend_height,
+            &median_time_past,
             blockreward_maturity,
         )?;
 
@@ -507,6 +517,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             cached_inputs.spend(
                 BlockTransactableRef::Transaction(block, tx_num),
                 spend_height,
+                &median_time_past,
                 blockreward_maturity,
             )?;
         }
