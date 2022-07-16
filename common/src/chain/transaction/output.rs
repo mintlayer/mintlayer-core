@@ -20,6 +20,10 @@ use crate::{
 use script::Script;
 use serialization::{Decode, Encode};
 
+use self::timelock::OutputTimeLock;
+
+mod timelock;
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {
     #[codec(index = 0)]
@@ -34,7 +38,11 @@ pub enum Destination {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputPurpose {
+    #[codec(index = 0)]
     Transfer(Destination),
+    #[codec(index = 1)]
+    LockThenTransfer(Destination, OutputTimeLock),
+    #[codec(index = 2)]
     StakeLock(Destination),
 }
 
@@ -42,6 +50,7 @@ impl OutputPurpose {
     pub fn destination(&self) -> &Destination {
         match self {
             OutputPurpose::Transfer(d) => d,
+            OutputPurpose::LockThenTransfer(d, _) => d,
             OutputPurpose::StakeLock(d) => d,
         }
     }
