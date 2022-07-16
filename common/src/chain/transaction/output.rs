@@ -22,7 +22,7 @@ use serialization::{Decode, Encode};
 
 use self::timelock::OutputTimeLock;
 
-mod timelock;
+pub mod timelock;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum Destination {

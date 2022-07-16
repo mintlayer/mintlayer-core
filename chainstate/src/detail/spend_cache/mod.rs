@@ -17,6 +17,7 @@
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::amount_sum;
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::{verify_signature, Transactable};
 use common::chain::Transaction;
 use common::{
@@ -308,7 +309,37 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), StateUpdateError> {
+    fn check_timelock(
+        &self,
+        output: &TxOutput,
+        spend_height: &BlockHeight,
+        spender_timestamp: &BlockTimestamp,
+    ) -> Result<(), StateUpdateError> {
+        let timelock = match output.purpose() {
+            common::chain::OutputPurpose::Transfer(_) => return Ok(()),
+            common::chain::OutputPurpose::LockThenTransfer(_, tl) => tl,
+            common::chain::OutputPurpose::StakeLock(_) => return Ok(()),
+        };
+
+        // TODO: the comparison with time should be based on BIP-113, i.e., the median time instead of the block timestamp
+        let past_lock = match timelock {
+            common::chain::timelock::OutputTimeLock::UntilHeight(h) => (spend_height >= h),
+            common::chain::timelock::OutputTimeLock::UntilTime(t) => (spender_timestamp >= t),
+        };
+
+        if !past_lock {
+            return Err(StateUpdateError::TimelockViolation);
+        }
+
+        Ok(())
+    }
+
+    fn verify_signatures<T: Transactable>(
+        &self,
+        tx: &T,
+        spend_height: &BlockHeight,
+        spender_timestamp: &BlockTimestamp,
+    ) -> Result<(), StateUpdateError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
             None => return Ok(()),
@@ -344,6 +375,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
+                    self.check_timelock(output, spend_height, spender_timestamp)?;
+
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
                 }
@@ -368,6 +401,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         })?;
 
                     // TODO: see if a different treatment should be done for different output purposes
+
+                    self.check_timelock(output, spend_height, spender_timestamp)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
@@ -424,7 +459,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
-                self.verify_signatures(tx)?;
+                self.verify_signatures(tx, spend_height, &block.timestamp())?;
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
@@ -440,7 +475,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         self.precache_inputs(ins)?;
 
                         // verify input signatures
-                        self.verify_signatures(&reward_transactable)?;
+                        self.verify_signatures(
+                            &reward_transactable,
+                            spend_height,
+                            &block.timestamp(),
+                        )?;
 
                         let spender = block.get_id().into();
                         self.apply_spend(ins, spend_height, blockreward_maturity, spender)?;
