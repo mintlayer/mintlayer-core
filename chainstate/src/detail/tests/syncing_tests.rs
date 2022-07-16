@@ -229,13 +229,13 @@ fn filter_already_existing_blocks() {
         // Check that filter_already_existing_blocks retains only unique to other chain blocks.
         let locator = btf1.chainstate.get_locator().unwrap();
         let headers = btf2.chainstate.get_headers(locator).unwrap();
-        assert!(headers.len() > headers2.len());
+        assert!(headers.len() >= headers2.len());
         let headers = btf1.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers2);
 
         let locator = btf2.chainstate.get_locator().unwrap();
         let headers = btf1.chainstate.get_headers(locator).unwrap();
-        assert!(headers.len() > headers1.len());
+        assert!(headers.len() >= headers1.len());
         let headers = btf2.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers1);
     });
