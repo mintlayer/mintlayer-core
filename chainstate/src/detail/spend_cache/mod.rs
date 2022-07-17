@@ -331,8 +331,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             common::chain::timelock::OutputTimeLock::UntilHeight(h) => (spend_height >= h),
             common::chain::timelock::OutputTimeLock::UntilTime(t) => (spending_time >= t),
             common::chain::timelock::OutputTimeLock::ForBlockCount(d) => {
+                let d: i64 =
+                    (*d).try_into().map_err(|_| StateUpdateError::BlockHeightArithmeticError)?;
+                let d = BlockDistance::from(d);
                 *spend_height
-                    >= (source_block_height + *d)
+                    >= (source_block_height + d)
                         .ok_or(StateUpdateError::BlockHeightArithmeticError)?
             }
             common::chain::timelock::OutputTimeLock::ForSeconds(dt) => {
