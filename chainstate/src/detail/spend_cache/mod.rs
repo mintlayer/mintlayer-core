@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_types::block_index::BlockIndex;
 use common::amount_sum;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::{verify_signature, Transactable};
@@ -28,6 +29,7 @@ use common::{
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 use std::collections::{btree_map::Entry, BTreeMap};
+use std::time::Duration;
 
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
@@ -311,6 +313,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_timelock(
         &self,
+        source_block_index: &BlockIndex,
         output: &TxOutput,
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
@@ -321,9 +324,21 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             common::chain::OutputPurpose::StakeLock(_) => return Ok(()),
         };
 
+        let source_block_height = source_block_index.block_height();
+        let source_block_time = source_block_index.block_timestamp();
+
         let past_lock = match timelock {
             common::chain::timelock::OutputTimeLock::UntilHeight(h) => (spend_height >= h),
             common::chain::timelock::OutputTimeLock::UntilTime(t) => (spending_time >= t),
+            common::chain::timelock::OutputTimeLock::ForBlockCount(d) => {
+                *spend_height
+                    >= (source_block_height + *d)
+                        .ok_or(StateUpdateError::BlockHeightArithmeticError)?
+            }
+            common::chain::timelock::OutputTimeLock::ForSeconds(dt) => {
+                spending_time.as_duration_since_epoch()
+                    >= source_block_time.as_duration_since_epoch() + Duration::from_secs(*dt)
+            }
         };
 
         if !past_lock {
@@ -374,7 +389,18 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
-                    self.check_timelock(output, spend_height, spending_time)?;
+                    {
+                        let block_index = self
+                            .db_tx
+                            .get_block_index(tx_pos.block_id())
+                            .map_err(StateUpdateError::from)?
+                            .ok_or_else(|| {
+                                StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(
+                                    tx_pos.block_id().clone(),
+                                )
+                            })?;
+                        self.check_timelock(&block_index, output, spend_height, spending_time)?;
+                    }
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
@@ -401,7 +427,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
-                    self.check_timelock(output, spend_height, spending_time)?;
+                    self.check_timelock(&block_index, output, spend_height, spending_time)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
