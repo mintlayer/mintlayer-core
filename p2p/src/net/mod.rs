@@ -48,9 +48,6 @@ pub trait NetworkingService {
     /// Unique ID assigned to each received request
     type RequestId: Debug + Eq + Hash + Send + Sync;
 
-    /// Enum of different peer discovery strategies that the implementation provides
-    type DiscoveryStrategy;
-
     /// Id that identifies a protocol
     type ProtocolId: Clone + Debug + Display + Eq + PartialEq + Send;
 
@@ -78,7 +75,6 @@ pub trait NetworkingService {
     /// `timeout` - timeout for outbound connections
     async fn start(
         bind_addr: Self::Address,
-        strategies: &[Self::DiscoveryStrategy],
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(

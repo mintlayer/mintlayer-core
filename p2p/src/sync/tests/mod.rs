@@ -67,8 +67,7 @@ where
     tokio::spawn(async move { man.main().await });
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let (conn, _, sync) =
-        T::start(addr, &[], Arc::clone(&config), Default::default()).await.unwrap();
+    let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
         SyncManager::<T>::new(

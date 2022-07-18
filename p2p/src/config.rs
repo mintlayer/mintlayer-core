@@ -24,6 +24,8 @@ pub struct P2pConfig {
     pub ban_threshold: u32,
     /// The outbound connection timeout value in seconds.
     pub outbound_connection_timeout: u64,
+    /// Enable multicast DNS peer discovery
+    pub enable_mdns: bool,
 }
 
 impl P2pConfig {
@@ -39,6 +41,7 @@ impl Default for P2pConfig {
             bind_address: "/ip6/::1/tcp/3031".into(),
             ban_threshold: 100,
             outbound_connection_timeout: 10,
+            enable_mdns: false,
         }
     }
 }

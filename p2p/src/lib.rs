@@ -166,7 +166,6 @@ where
                     p2p_config.bind_address.clone(),
                 ))
             })?,
-            &[],
             Arc::clone(&chain_config),
             Arc::clone(&p2p_config),
         )

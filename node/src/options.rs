@@ -81,6 +81,10 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_outbound_connection_timeout: Option<u64>,
 
+    /// Enable multicast DNS peer discovery
+    #[clap(long)]
+    pub enable_mdns: Option<bool>,
+
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,

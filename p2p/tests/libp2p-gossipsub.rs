@@ -38,22 +38,14 @@ use std::sync::Arc;
 #[tokio::test]
 async fn test_libp2p_gossipsub() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut pubsub1, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
+    let (mut conn2, mut pubsub2, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let (_conn1_res, conn2_res) = tokio::join!(
         conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
@@ -141,25 +133,17 @@ async fn connect_peers(
 #[tokio::test]
 async fn test_libp2p_gossipsub_3_peers() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut pubsub1, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let (mut peer1, mut peer2, mut peer3) = {
         let mut peers = futures::future::join_all((0..3).map(|_| async {
-            let res = Libp2pService::start(
-                make_libp2p_addr(),
-                &[],
-                Arc::clone(&config),
-                Default::default(),
-            )
-            .await
-            .unwrap();
+            let res =
+                Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+                    .await
+                    .unwrap();
             (res.0, res.1)
         }))
         .await;
@@ -282,23 +266,15 @@ async fn test_libp2p_gossipsub_3_peers() {
 #[tokio::test]
 async fn test_libp2p_gossipsub_too_big_message() {
     let config = Arc::new(common::chain::config::create_mainnet());
-    let (mut conn1, mut pubsub1, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, mut pubsub1, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        Default::default(),
-    )
-    .await
-    .unwrap();
+    let (mut conn2, mut pubsub2, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let (_conn1_res, conn2_res) = tokio::join!(
         conn1.connect(conn2.local_addr().await.unwrap().unwrap()),

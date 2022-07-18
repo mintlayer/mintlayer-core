@@ -33,9 +33,6 @@ pub mod backend;
 pub mod types;
 
 #[derive(Debug)]
-pub enum MockDiscoveryStrategy {}
-
-#[derive(Debug)]
 pub struct MockService;
 
 #[derive(Debug, Copy, Clone)]
@@ -85,7 +82,6 @@ where
 #[async_trait]
 impl NetworkingService for MockService {
     type Address = SocketAddr;
-    type DiscoveryStrategy = MockDiscoveryStrategy;
     type PeerId = SocketAddr;
     type ProtocolId = String;
     type RequestId = MockRequestId;
@@ -96,7 +92,6 @@ impl NetworkingService for MockService {
 
     async fn start(
         addr: Self::Address,
-        _strategies: &[Self::DiscoveryStrategy],
         _config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(

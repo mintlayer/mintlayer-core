@@ -59,13 +59,6 @@ mod types;
 
 pub mod behaviour;
 
-/// libp2p-specifc peer discovery strategies
-#[derive(Debug, PartialEq, Eq)]
-pub enum Libp2pDiscoveryStrategy {
-    /// Use mDNS to find peers in the local network
-    MulticastDns,
-}
-
 #[derive(Debug)]
 pub struct Libp2pService;
 
@@ -220,7 +213,6 @@ where
 #[async_trait]
 impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
-    type DiscoveryStrategy = Libp2pDiscoveryStrategy;
     type PeerId = PeerId;
     type ProtocolId = String;
     type RequestId = RequestId;
@@ -231,7 +223,6 @@ impl NetworkingService for Libp2pService {
 
     async fn start(
         bind_addr: Self::Address,
-        strategies: &[Self::DiscoveryStrategy],
         chain_config: Arc<common::chain::ChainConfig>,
         p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(
@@ -259,8 +250,8 @@ impl NetworkingService for Libp2pService {
             transport,
             behaviour::Libp2pBehaviour::new(
                 Arc::clone(&chain_config),
+                Arc::clone(&p2p_config),
                 id_keys,
-                strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns),
             )
             .await,
             peer_id,
