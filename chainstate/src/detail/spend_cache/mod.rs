@@ -183,7 +183,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(output.value())
     }
 
-    fn calculate_mlt_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
+    fn calculate_coins_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
@@ -248,7 +248,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_mlt_total_inputs(inputs)?;
+        let inputs_total = self.calculate_coins_total_inputs(inputs)?;
         let outputs_total = Self::calculate_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
@@ -300,7 +300,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_mlt_total_inputs(ins),
+            |ins| self.calculate_coins_total_inputs(ins),
         )?;
         let outputs_total =
             outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
