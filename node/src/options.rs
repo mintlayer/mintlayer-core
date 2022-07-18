@@ -96,7 +96,7 @@ impl Options {
 
         if options.data_dir == Path::new(DEFAULT_DATA_DIR) {
             options.data_dir = UserDirs::new()
-                .ok_or(anyhow!("Unable to get home directory"))?
+                .ok_or_else(|| anyhow!("Unable to get home directory"))?
                 .home_dir()
                 .join(".mintlayer");
         }

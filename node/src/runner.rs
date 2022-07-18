@@ -106,7 +106,7 @@ pub async fn run(options: Options) -> Result<()> {
             Ok(())
         }
         Command::Run(ref run_options) => {
-            let node_config = NodeConfig::read(&options.config_path(), &run_options)
+            let node_config = NodeConfig::read(&options.config_path(), run_options)
                 .context("Failed to initialize config")?;
             log::trace!("Starting with the following config\n: {node_config:#?}");
             let manager = initialize(run_options.net, node_config).await?;
