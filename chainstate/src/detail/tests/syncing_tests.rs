@@ -43,7 +43,7 @@ fn get_locator() {
 
             // Check the locator length.
             let locator = btf.chainstate().get_locator().unwrap();
-            assert_eq!(locator.len(), (blocks as f64).log2().floor() as usize + 2);
+            assert_eq!(locator.len(), (blocks as f64).log2().ceil() as usize + 1);
 
             // Check the locator headers.
             let height = btf
@@ -229,13 +229,13 @@ fn filter_already_existing_blocks() {
         // Check that filter_already_existing_blocks retains only unique to other chain blocks.
         let locator = btf1.chainstate.get_locator().unwrap();
         let headers = btf2.chainstate.get_headers(locator).unwrap();
-        assert!(headers.len() > headers2.len());
+        assert!(headers.len() >= headers2.len());
         let headers = btf1.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers2);
 
         let locator = btf2.chainstate.get_locator().unwrap();
         let headers = btf1.chainstate.get_headers(locator).unwrap();
-        assert!(headers.len() > headers1.len());
+        assert!(headers.len() >= headers1.len());
         let headers = btf2.chainstate.filter_already_existing_blocks(headers).unwrap();
         assert_eq!(headers, headers1);
     });
