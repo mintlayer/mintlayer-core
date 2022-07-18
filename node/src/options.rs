@@ -59,11 +59,11 @@ pub struct RunOptions {
     #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
     pub net: ChainType,
 
-    /// Blockchain type.
+    /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,
 
-    /// The maximum capacity of the orphan blocks pool.
+    /// The maximum capacity of the orphan blocks pool in blocks.
     #[clap(long)]
     pub max_orphan_blocks: Option<usize>,
 

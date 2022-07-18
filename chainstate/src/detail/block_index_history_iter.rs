@@ -83,11 +83,11 @@ mod tests {
     fn history_iteration() {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
-            let chainstte_config = ChainstateConfig::new();
+            let chainstate_config = ChainstateConfig::new();
             let storage = Store::new_empty().unwrap();
             let mut chainstate = Chainstate::new(
                 chain_config.clone(),
-                chainstte_config,
+                chainstate_config,
                 storage,
                 None,
                 Default::default(),
