@@ -25,7 +25,9 @@ use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
         calculate_tx_index_from_block,
-        config::MIN_TOKEN_ISSUANCE_FEE,
+        config::{
+            TOKEN_MAX_DEC_COUNT, TOKEN_MAX_TICKER_LEN, TOKEN_MAX_URI_LEN, TOKEN_MIN_ISSUANCE_FEE,
+        },
         tokens::{token_id, AssetData, OutputValue, TokenId},
         ChainConfig, OutPoint, OutPointSourceId, Transaction,
     },
@@ -475,15 +477,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx_id: Id<Transaction>,
         block_id: Id<Block>,
     ) -> Result<(), CheckBlockTransactionsError> {
-        const MAX_URI_LEN: usize = 1024;
-        const MAX_DEC_COUNT: u8 = 18;
-        const MAX_TICKER_LEN: usize = 5;
-
         let mut is_correct_data = true;
 
         // Check token name
         is_correct_data = is_correct_data
-            && (token_ticker.len() <= MAX_TICKER_LEN)
+            && (token_ticker.len() <= TOKEN_MAX_TICKER_LEN)
             && (!token_ticker.is_empty())
             && String::from_utf8_lossy(token_ticker).is_ascii();
         //TODO: Shall we have check for unique token name?
@@ -492,11 +490,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         is_correct_data = is_correct_data && amount_to_issue != &Amount::from_atoms(0);
 
         // Check decimals
-        is_correct_data = is_correct_data && number_of_decimals < &MAX_DEC_COUNT;
+        is_correct_data = is_correct_data && number_of_decimals < &TOKEN_MAX_DEC_COUNT;
 
         // Check URI
         is_correct_data = is_correct_data
-            && metadata_uri.len() <= MAX_URI_LEN
+            && metadata_uri.len() <= TOKEN_MAX_URI_LEN
             && String::from_utf8_lossy(metadata_uri).is_ascii();
 
         match is_correct_data {
@@ -736,7 +734,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn is_issuance_fee_enough(mlt_amount_in_inputs: Amount, mlt_amount_in_outputs: Amount) -> bool {
         (mlt_amount_in_inputs - mlt_amount_in_outputs).unwrap_or(Amount::from_atoms(0))
-            > MIN_TOKEN_ISSUANCE_FEE
+            > TOKEN_MIN_ISSUANCE_FEE
     }
 
     fn check_burn_data(

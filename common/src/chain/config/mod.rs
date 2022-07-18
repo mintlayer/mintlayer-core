@@ -39,7 +39,10 @@ use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
-pub const MIN_TOKEN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+pub const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000);
+pub const TOKEN_MAX_URI_LEN: usize = 1024;
+pub const TOKEN_MAX_DEC_COUNT: u8 = 18;
+pub const TOKEN_MAX_TICKER_LEN: usize = 5;
 
 #[derive(
     Debug,
