@@ -15,14 +15,12 @@
 //
 // Author(s): S. Afach
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use super::{OrphanBlocksRef, OrphanBlocksRefMut};
 use common::chain::block::Block;
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-pub const DEFAULT_MAX_ORPHAN_BLOCKS: usize = 512;
 
 // FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
@@ -38,17 +36,7 @@ pub enum OrphanAddError {
 }
 
 impl OrphanBlocksPool {
-    pub fn new_default() -> Self {
-        OrphanBlocksPool {
-            orphan_ids: Vec::new(),
-            orphan_by_id: BTreeMap::new(),
-            orphan_by_prev_id: BTreeMap::new(),
-            max_orphans: DEFAULT_MAX_ORPHAN_BLOCKS,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn new_custom(max_orphans: usize) -> Self {
+    pub fn new(max_orphans: usize) -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
             orphan_by_id: BTreeMap::new(),
@@ -208,9 +196,10 @@ impl OrphanBlocksPool {
 mod tests {
     use super::*;
     use checkers::*;
-    use common::chain::block::Block;
-    use common::primitives::Id;
+    use common::{chain::block::Block, primitives::Id};
     use helpers::*;
+
+    const MAX_ORPHAN_BLOCKS: usize = 512;
 
     mod helpers {
         use super::*;
@@ -324,23 +313,16 @@ mod tests {
     }
 
     #[test]
-    fn test_pool_default() {
-        let orphans_pool = OrphanBlocksPool::new_default();
-        assert_eq!(orphans_pool.max_orphans, DEFAULT_MAX_ORPHAN_BLOCKS);
-        check_empty_pool(&orphans_pool);
-    }
-
-    #[test]
     fn test_pool_custom() {
         let max_orphans = 3;
-        let orphans_pool = OrphanBlocksPool::new_custom(max_orphans);
+        let orphans_pool = OrphanBlocksPool::new(max_orphans);
         assert_eq!(orphans_pool.max_orphans, max_orphans);
         check_empty_pool(&orphans_pool);
     }
 
     #[test]
     fn test_add_one_block_and_clear() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
         let block = gen_random_block();
@@ -357,7 +339,7 @@ mod tests {
 
     #[test]
     fn test_add_blocks_and_clear() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
         let block = gen_random_block();
@@ -406,7 +388,7 @@ mod tests {
     #[test]
     fn test_add_block_exceeds_max() {
         let max_orphans = 3;
-        let mut orphans_pool = OrphanBlocksPool::new_custom(max_orphans);
+        let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
         let blocks = gen_random_blocks(max_orphans as u32 + 2);
 
         blocks.into_iter().for_each(|block| {
@@ -418,7 +400,7 @@ mod tests {
 
     #[test]
     fn test_add_block_repeated() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         let blocks = gen_random_blocks(50);
 
         blocks.iter().for_each(|block| {
@@ -437,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_pool_drop_block() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         let blocks = gen_random_blocks(5);
 
         blocks.iter().for_each(|block| {
@@ -461,7 +443,7 @@ mod tests {
 
     #[test]
     fn test_deepest_child_in_chain() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // In `orphans_by_prev_id`:
         // [
@@ -516,7 +498,7 @@ mod tests {
 
     #[test]
     fn test_deepest_child_common_parent() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         // In `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f) ),
@@ -574,7 +556,7 @@ mod tests {
 
     #[test]
     fn test_prune() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(12);
+        let mut orphans_pool = OrphanBlocksPool::new(12);
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e) )
@@ -646,7 +628,7 @@ mod tests {
 
     #[test]
     fn test_simple_take_all_children_of() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(20);
+        let mut orphans_pool = OrphanBlocksPool::new(20);
 
         let count = 9;
         // in `orphans_by_prev_id`:
@@ -688,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_mix_chain_take_all_children_of() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(20);
+        let mut orphans_pool = OrphanBlocksPool::new(20);
 
         let count = 9;
         // in `orphans_by_prev_id`:

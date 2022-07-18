@@ -83,12 +83,16 @@ fn create_utxo_data(
 }
 
 fn setup_chainstate() -> Chainstate {
-    chainstate_with_config(create_unit_test_config())
+    chainstate_with_config(create_unit_test_config(), ChainstateConfig::new())
 }
 
-fn chainstate_with_config(config: ChainConfig) -> Chainstate {
+fn chainstate_with_config(
+    chain_config: ChainConfig,
+    chainstate_config: ChainstateConfig,
+) -> Chainstate {
     Chainstate::new(
-        Arc::new(config),
+        Arc::new(chain_config),
+        chainstate_config,
         Store::new_empty().unwrap(),
         None,
         Default::default(),
@@ -135,8 +139,9 @@ fn create_new_outputs(tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
 #[ignore]
 #[test]
 fn generate_blocks_for_functional_tests() {
-    let config = create_regtest();
-    let chainstate = chainstate_with_config(config);
+    let chain_config = create_regtest();
+    let chainstate_config = ChainstateConfig::new();
+    let chainstate = chainstate_with_config(chain_config, chainstate_config);
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);

@@ -15,6 +15,7 @@ logging = { path = "../logging" }
 anyhow = "1.0"
 async-trait = "0.1"
 jsonrpsee = { version = "0.14", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 async-trait = "0.1"

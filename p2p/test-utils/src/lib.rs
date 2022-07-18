@@ -17,7 +17,9 @@
 
 #![allow(clippy::unwrap_used)]
 
-use chainstate::{chainstate_interface::ChainstateInterface, make_chainstate, BlockSource};
+use chainstate::{
+    chainstate_interface::ChainstateInterface, make_chainstate, BlockSource, ChainstateConfig,
+};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
@@ -133,13 +135,20 @@ fn anyonecanspend_address() -> Destination {
 }
 
 pub async fn start_chainstate(
-    config: Arc<ChainConfig>,
+    chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
     let storage = chainstate_storage::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",
-        make_chainstate(config, storage, None, Default::default()).unwrap(),
+        make_chainstate(
+            chain_config,
+            ChainstateConfig::new(),
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap(),
     );
     tokio::spawn(async move { man.main().await });
     handle

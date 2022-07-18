@@ -32,7 +32,7 @@ use common::{
 use logging::log;
 use utils::ensure;
 
-use crate::{BlockError, BlockSource};
+use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
     consensus_validator::{self, BlockIndexHandle},
@@ -44,6 +44,7 @@ use super::{
 
 pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
+    _chainstate_config: &'a ChainstateConfig,
     db_tx: S,
     orphan_blocks: O,
     time_getter: &'a TimeGetterFn,
@@ -92,12 +93,14 @@ impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'
 impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn new_rw(
         chain_config: &'a ChainConfig,
+        chainstate_config: &'a ChainstateConfig,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,
@@ -106,12 +109,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn new_ro(
         chain_config: &'a ChainConfig,
+        chainstate_config: &'a ChainstateConfig,
         db_tx: S,
         orphan_blocks: O,
         time_getter: &'a TimeGetterFn,
     ) -> ChainstateRef<'a, S, O> {
         ChainstateRef {
             chain_config,
+            _chainstate_config: chainstate_config,
             db_tx,
             orphan_blocks,
             time_getter,

@@ -109,6 +109,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e22d1f4b888c298a027c99dc9048015fac177587de20fc30232a057dfbe24a21"
 
 [[package]]
+name = "assert_cmd"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93ae1ddd39efd67689deb1979d80bad3bf7f2b09c6e6117c8d1f2443b5e2f83e"
+dependencies = [
+ "bstr",
+ "doc-comment",
+ "predicates",
+ "predicates-core",
+ "predicates-tree",
+ "wait-timeout",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -397,7 +411,9 @@ version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
+ "lazy_static",
  "memchr",
+ "regex-automata",
 ]
 
 [[package]]
@@ -509,6 +525,7 @@ dependencies = [
  "num",
  "replace_with",
  "rpc",
+ "serde",
  "serde_json",
  "serialization",
  "static_assertions",
@@ -929,6 +946,12 @@ dependencies = [
  "byteorder 1.4.3",
  "quick-error 1.2.3",
 ]
+
+[[package]]
+name = "doc-comment"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "downcast"
@@ -2186,6 +2209,7 @@ dependencies = [
 name = "mintlayer-test"
 version = "0.1.0"
 dependencies = [
+ "common",
  "libtest-mimic",
  "node",
  "thiserror",
@@ -2385,6 +2409,7 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "chainstate",
  "chainstate-storage",
  "clap 3.2.5",
@@ -2393,10 +2418,12 @@ dependencies = [
  "logging",
  "p2p",
  "rpc",
+ "serde",
  "strum",
  "subsystem",
  "thiserror",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -2558,6 +2585,7 @@ dependencies = [
  "parity-scale-codec",
  "portpicker",
  "rpc",
+ "serde",
  "serialization",
  "sscanf",
  "subsystem",
@@ -3230,6 +3258,7 @@ dependencies = [
  "async-trait",
  "jsonrpsee",
  "logging",
+ "serde",
  "subsystem",
  "tokio",
 ]

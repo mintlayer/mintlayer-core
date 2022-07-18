@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use crate::{error, message};
 use async_trait::async_trait;
 use common::primitives;
@@ -71,8 +72,6 @@ pub trait NetworkingService {
     /// `bind_addr` - socket address for incoming P2P traffic
     ///
     /// `strategies` - list of strategies that are used for peer discovery
-    ///
-    /// `topics` - list of pubsub topics that the implementation should subscribe to
     ///
     /// `chain_config` - chain config of the node
     ///

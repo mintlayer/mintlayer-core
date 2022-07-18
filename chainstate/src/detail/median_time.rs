@@ -42,7 +42,7 @@ pub fn calculate_median_time_past<H: BlockIndexHandle>(
 
 #[cfg(test)]
 mod test {
-    use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate};
+    use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate, ChainstateConfig};
 
     use super::*;
     use chainstate_storage::Store;
@@ -86,9 +86,16 @@ mod test {
     fn blocks_median_time() {
         common::concurrency::model(|| {
             let chain_config = Arc::new(create_unit_test_config());
+            let chainstate_config = ChainstateConfig::new();
             let storage = Store::new_empty().unwrap();
-            let mut chainstate =
-                Chainstate::new(chain_config, storage, None, Default::default()).unwrap();
+            let mut chainstate = Chainstate::new(
+                chain_config,
+                chainstate_config,
+                storage,
+                None,
+                Default::default(),
+            )
+            .unwrap();
 
             let block_count = 500;
 
@@ -151,7 +158,10 @@ mod test {
             }));
 
             let storage = Store::new_empty().unwrap();
-            let mut chainstate = Chainstate::new(chain_config, storage, None, time_getter).unwrap();
+            let chainstate_config = ChainstateConfig::new();
+            let mut chainstate =
+                Chainstate::new(chain_config, chainstate_config, storage, None, time_getter)
+                    .unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
             let block1_time = current_time.load(Ordering::SeqCst) as u32 + 1;

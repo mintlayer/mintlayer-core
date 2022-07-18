@@ -15,28 +15,27 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+mod config;
 mod detail;
 
+pub mod chainstate_interface;
+pub mod chainstate_interface_impl;
 pub mod rpc;
 
-pub mod chainstate_interface_impl;
-
-pub mod chainstate_interface;
-
-pub use detail::ban_score;
+pub use crate::{
+    chainstate_interface_impl::ChainstateInterfaceImpl,
+    config::ChainstateConfig,
+    detail::{ban_score, BlockError, BlockSource, Chainstate},
+};
 
 use std::sync::Arc;
 
 use chainstate_interface::ChainstateInterface;
-pub use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
-use detail::time_getter::TimeGetter;
-pub use detail::BlockError;
-use detail::PropertyQueryError;
-pub use detail::{BlockSource, Chainstate};
+use detail::{time_getter::TimeGetter, PropertyQueryError};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -59,12 +58,14 @@ type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
 pub fn make_chainstate(
     chain_config: Arc<ChainConfig>,
+    chainstate_config: ChainstateConfig,
     chainstate_storage: chainstate_storage::Store,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {
     let cons = Chainstate::new(
         chain_config,
+        chainstate_config,
         chainstate_storage,
         custom_orphan_error_hook,
         time_getter,

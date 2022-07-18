@@ -13,18 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Top-level node runner as a library
+use serde::{Deserialize, Serialize};
 
-mod config;
-mod options;
-mod runner;
+/// The chainstate subsystem configuration.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ChainstateConfig {
+    /// The number of maximum attempts to process a block.
+    pub max_db_commit_attempts: usize,
+    /// The maximum capacity of the orphan blocks pool.
+    pub max_orphan_blocks: usize,
+}
 
-pub type Error = anyhow::Error;
-
-pub use config::NodeConfig;
-pub use options::{Command, Options, RunOptions};
-pub use runner::{initialize, run};
-
-pub fn init_logging(opts: &Options) {
-    logging::init_logging(opts.log_path.as_ref())
+impl ChainstateConfig {
+    /// Creates a new chainstate configuration isntance.
+    pub fn new() -> Self {
+        Self {
+            max_db_commit_attempts: 10,
+            max_orphan_blocks: 512,
+        }
+    }
 }

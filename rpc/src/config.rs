@@ -13,18 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Top-level node runner as a library
+use std::{net::SocketAddr, str::FromStr};
 
-mod config;
-mod options;
-mod runner;
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
 
-pub type Error = anyhow::Error;
+/// The rpc subsystem configuration.
+#[derive(Serialize, Deserialize, Debug)]
+pub struct RpcConfig {
+    /// Address to bind RPC to.
+    pub bind_address: SocketAddr,
+}
 
-pub use config::NodeConfig;
-pub use options::{Command, Options, RunOptions};
-pub use runner::{initialize, run};
-
-pub fn init_logging(opts: &Options) {
-    logging::init_logging(opts.log_path.as_ref())
+impl RpcConfig {
+    /// Creates a new rpc configuration instance.
+    pub fn new() -> Result<Self> {
+        Ok(Self {
+            bind_address: SocketAddr::from_str("127.0.0.1:3030")?,
+        })
+    }
 }

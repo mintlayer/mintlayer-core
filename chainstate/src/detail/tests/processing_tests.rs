@@ -23,7 +23,7 @@ use crate::{
         pow::error::ConsensusPoWError,
         tests::{test_framework::BlockTestFramework, *},
     },
-    make_chainstate,
+    make_chainstate, ChainstateConfig,
 };
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::{
@@ -42,13 +42,20 @@ use crypto::random::{self, Rng};
 #[test]
 fn genesis_peer_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(config.clone(), storage, None, Default::default()).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config.clone(),
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
         assert_eq!(
             chainstate
-                .process_block(config.genesis_block().clone(), BlockSource::Peer)
+                .process_block(chain_config.genesis_block().clone(), BlockSource::Peer)
                 .unwrap_err(),
             BlockError::InvalidBlockSource
         );
@@ -58,10 +65,17 @@ fn genesis_peer_block() {
 #[test]
 fn process_genesis_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
 
         let block_index = chainstate
             .process_block(
@@ -137,10 +151,17 @@ fn test_orphans_chains() {
 #[test]
 fn empty_chainstate() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let chainstate =
-            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
+        let chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
         assert_eq!(chainstate.get_best_block_id().unwrap(), None);
         assert_eq!(
             chainstate
@@ -221,10 +242,17 @@ fn spend_inputs_simple() {
 #[test]
 fn straight_chain() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate =
-            Chainstate::new_no_genesis(config, storage, None, Default::default()).unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
 
         let genesis_index = chainstate
             .process_block(
@@ -495,8 +523,9 @@ fn consensus_type() {
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let chainstate = chainstate_with_config(config);
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let chainstate_config = ChainstateConfig::new();
+    let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -632,8 +661,9 @@ fn pow() {
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
     // ConsenssuData::None, which agreess with the net_upgrades we defined above.
-    let config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
-    let chainstate = chainstate_with_config(config);
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let chainstate_config = ChainstateConfig::new();
+    let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
@@ -689,7 +719,8 @@ fn blocks_from_the_future() {
         }));
 
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(config, storage, None, time_getter).unwrap();
+        let mut chainstate =
+            Chainstate::new(config, ChainstateConfig::new(), storage, None, time_getter).unwrap();
 
         {
             // ensure no blocks are in chain, so that median time can be the genesis time
@@ -769,9 +800,17 @@ fn blocks_from_the_future() {
 
 #[test]
 fn test_mainnet_initialization() {
-    let config = Arc::new(common::chain::config::create_mainnet());
+    let chain_config = Arc::new(common::chain::config::create_mainnet());
+    let chainstate_config = ChainstateConfig::new();
     let storage = Store::new_empty().unwrap();
-    make_chainstate(config, storage, None, Default::default()).unwrap();
+    make_chainstate(
+        chain_config,
+        chainstate_config,
+        storage,
+        None,
+        Default::default(),
+    )
+    .unwrap();
 }
 
 fn make_invalid_pow_block(

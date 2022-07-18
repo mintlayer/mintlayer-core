@@ -15,11 +15,19 @@
 
 //! Node initialisation routine.
 
-use crate::options::Options;
+use std::{fs, sync::Arc};
+
+use anyhow::{Context, Result};
+
 use chainstate::rpc::ChainstateRpcServer;
 use common::chain::config::ChainType;
+use logging::log;
 use p2p::rpc::P2pRpcServer;
-use std::sync::Arc;
+
+use crate::{
+    config::NodeConfig,
+    options::{Command, Options},
+};
 
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
 enum Error {
@@ -28,16 +36,19 @@ enum Error {
 }
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
-pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
-    // Initialize storage and chain configuration
+pub async fn initialize(
+    chain_type: ChainType,
+    node_config: NodeConfig,
+) -> Result<subsystem::Manager> {
+    // Initialize storage.
     let storage = chainstate_storage::Store::new_empty()?;
 
-    // Chain configuration
-    let chain_config = match opts.net {
-        ChainType::Mainnet => Arc::new(common::chain::config::create_mainnet()),
-        ChainType::Regtest => Arc::new(common::chain::config::create_regtest()),
+    // Initialize chain configuration.
+    let chain_config = Arc::new(match chain_type {
+        ChainType::Mainnet => common::chain::config::create_mainnet(),
+        ChainType::Regtest => common::chain::config::create_regtest(),
         chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
-    };
+    });
 
     // INITIALIZE SUBSYSTEMS
 
@@ -49,6 +60,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         "chainstate",
         chainstate::make_chainstate(
             Arc::clone(&chain_config),
+            node_config.chainstate,
             storage.clone(),
             None,
             Default::default(),
@@ -60,8 +72,8 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
+            node_config.p2p,
             chainstate.clone(),
-            opts.p2p_addr,
         )
         .await
         .expect("The p2p subsystem initialization failed"),
@@ -70,7 +82,7 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     // RPC subsystem
     let _rpc = manager.add_subsystem(
         "rpc",
-        rpc::Builder::new(opts.rpc_addr)
+        rpc::Builder::new(node_config.rpc)
             .register(chainstate.clone().into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())
@@ -81,12 +93,24 @@ pub async fn initialize(opts: Options) -> anyhow::Result<subsystem::Manager> {
     Ok(manager)
 }
 
-/// Initialize and run the node
-pub async fn run(opts: Options) -> anyhow::Result<()> {
-    let manager = initialize(opts).await?;
-
-    #[allow(clippy::unit_arg)]
-    Ok(manager.main().await)
+/// Processes options and potentially runs the node.
+pub async fn run(options: Options) -> Result<()> {
+    match options.command {
+        Command::CreateConfig { path } => {
+            let config = NodeConfig::new()?;
+            let config = toml::to_string(&config).context("Failed to serialize config")?;
+            log::trace!("Saving config to {path:?}\n: {config:#?}");
+            fs::write(path, config).context("Failed to write config")?;
+            Ok(())
+        }
+        Command::Run(options) => {
+            let node_config = NodeConfig::read(&options).context("Failed to initialize config")?;
+            log::trace!("Starting with the following config\n: {node_config:#?}");
+            let manager = initialize(options.net, node_config).await?;
+            #[allow(clippy::unit_arg)]
+            Ok(manager.main().await)
+        }
+    }
 }
 
 #[rpc::rpc(server, namespace = "node")]

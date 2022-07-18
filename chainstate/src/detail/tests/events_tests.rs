@@ -120,11 +120,18 @@ fn several_subscribers_several_events() {
 #[test]
 fn orphan_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            chain_config,
+            chainstate_config,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
@@ -143,11 +150,18 @@ fn orphan_block() {
 #[test]
 fn custom_orphan_error_hook() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            chain_config,
+            chainstate_config,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());

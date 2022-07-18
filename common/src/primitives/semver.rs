@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use serialization::{Decode, Encode};
 
 #[derive(Debug, PartialEq, Eq, Encode, Decode, Copy, Clone)]

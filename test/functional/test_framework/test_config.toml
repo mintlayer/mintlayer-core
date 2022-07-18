@@ -1,0 +1,11 @@
+[chainstate]
+max_db_commit_attempts = 10
+max_orphan_blocks = 512
+
+[p2p]
+bind_address = "/ip6/::1/tcp/3031"
+ban_threshold = 100
+outbound_connection_timeout = 10
+
+[rpc]
+bind_address = "127.0.0.1:3030"

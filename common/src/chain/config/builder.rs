@@ -85,8 +85,6 @@ impl GenesisBlockInit {
 pub struct Builder {
     chain_type: ChainType,
     address_prefix: String,
-    rpc_port: u16,
-    p2p_port: u16,
     magic_bytes: [u8; 4],
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
@@ -116,8 +114,6 @@ impl Builder {
             max_block_size_with_smart_contracts: super::MAX_BLOCK_CONTRACTS_SIZE,
             max_future_block_time_offset: super::DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET,
             target_block_spacing: super::DEFAULT_TARGET_BLOCK_SPACING,
-            p2p_port: 8978,
-            rpc_port: 15234,
             genesis_block: chain_type.default_genesis_init(),
             emission_schedule: EmissionScheduleInit::Mainnet,
             net_upgrades: chain_type.default_net_upgrades(),
@@ -145,8 +141,6 @@ impl Builder {
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
             target_block_spacing,
-            p2p_port,
-            rpc_port,
             genesis_block,
             emission_schedule,
             net_upgrades,
@@ -180,8 +174,6 @@ impl Builder {
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
             target_block_spacing,
-            p2p_port,
-            rpc_port,
             genesis_block_id: genesis_block.get_id(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
@@ -207,8 +199,6 @@ macro_rules! builder_method {
 impl Builder {
     builder_method!(chain_type: ChainType);
     builder_method!(address_prefix: String);
-    builder_method!(rpc_port: u16);
-    builder_method!(p2p_port: u16);
     builder_method!(magic_bytes: [u8; 4]);
     builder_method!(blockreward_maturity: BlockDistance);
     builder_method!(max_future_block_time_offset: Duration);
