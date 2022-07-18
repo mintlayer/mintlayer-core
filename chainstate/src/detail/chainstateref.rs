@@ -549,7 +549,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     amount_to_burn: _,
                 } => {
                     /* Token have burned and can't be transfered */
-                    None?
+                    return None;
                 }
             }),
         }
