@@ -529,7 +529,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
-    // Get TokenId and Amount in input 
+    // Get TokenId and Amount in input
     fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(TokenId, Amount)> {
         let output_index = input.outpoint().output_index() as usize;
         let prev_tx = self.fetch(input.outpoint()).ok()?;
@@ -771,9 +771,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         // If we burn a piece of the token, we have to check output with the rest tokens
         if origin_amount > amount_to_burn {
-
             // Check whether all tokens burn and transfer
-            if (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?) != Some(*origin_amount) {
+            if (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?)
+                != Some(*origin_amount)
+            {
                 return Err(CheckBlockTransactionsError::SomeTokensLost(
                     tx.get_id(),
                     block_id.clone(),
@@ -885,8 +886,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 }
 
-// Calc not burned tokens that were placed in OutputValue::TokenTransfer after partial burn  
-fn get_change_amount(tx: &Transaction, burn_token_id: &H256, block_id: &Id<Block>) -> Result<Amount, CheckBlockTransactionsError> {
+// Calc not burned tokens that were placed in OutputValue::TokenTransfer after partial burn
+fn get_change_amount(
+    tx: &Transaction,
+    burn_token_id: &H256,
+    block_id: &Id<Block>,
+) -> Result<Amount, CheckBlockTransactionsError> {
     let change_amount = tx
         .outputs()
         .iter()
