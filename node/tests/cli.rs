@@ -21,7 +21,8 @@ use common::chain::config::ChainType;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
-const CONFIG_PATH: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/test_mintlayer.toml");
+const DATA_DIR: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/.mintlayer");
+const CONFIG_PATH: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/.mintlayer/config.toml");
 
 // This test is only needed because the node name ix hardcoded here, so if the name is changed we
 // get an error that is easy to understand.
@@ -38,13 +39,16 @@ fn no_args() {
 #[test]
 fn create_default_config() {
     Command::new(BIN_NAME)
+        .arg("--data-dir")
+        .arg(DATA_DIR)
         .arg("create-config")
-        .arg("--path")
-        .arg(CONFIG_PATH)
         .assert()
         .success();
+    assert!(Path::new(DATA_DIR).is_dir());
+    let config_path = Path::new(CONFIG_PATH);
+    assert!(config_path.is_file());
+
     let options = RunOptions {
-        config_path: CONFIG_PATH.into(),
         net: ChainType::Mainnet,
         max_db_commit_attempts: None,
         max_orphan_blocks: None,
@@ -53,7 +57,7 @@ fn create_default_config() {
         p2p_outbound_connection_timeout: None,
         rpc_addr: None,
     };
-    let config = NodeConfig::read(&options).unwrap();
+    let config = NodeConfig::read(config_path, &options).unwrap();
 
     assert_eq!(config.chainstate.max_db_commit_attempts, 10);
     assert_eq!(config.chainstate.max_orphan_blocks, 512);
@@ -72,11 +76,14 @@ fn create_default_config() {
 #[test]
 fn read_config_override_values() {
     Command::new(BIN_NAME)
+        .arg("--data-dir")
+        .arg(DATA_DIR)
         .arg("create-config")
-        .arg("--path")
-        .arg(CONFIG_PATH)
         .assert()
         .success();
+    assert!(Path::new(DATA_DIR).is_dir());
+    let config_path = Path::new(CONFIG_PATH);
+    assert!(config_path.is_file());
 
     let max_db_commit_attempts = 1;
     let max_orphan_blocks = 2;
@@ -86,7 +93,6 @@ fn read_config_override_values() {
     let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
 
     let options = RunOptions {
-        config_path: CONFIG_PATH.into(),
         net: ChainType::Mainnet,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
@@ -95,7 +101,7 @@ fn read_config_override_values() {
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         rpc_addr: Some(rpc_addr),
     };
-    let config = NodeConfig::read(&options).unwrap();
+    let config = NodeConfig::read(config_path, &options).unwrap();
 
     assert_eq!(
         config.chainstate.max_db_commit_attempts,

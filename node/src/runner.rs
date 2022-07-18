@@ -96,17 +96,20 @@ pub async fn initialize(
 /// Processes options and potentially runs the node.
 pub async fn run(options: Options) -> Result<()> {
     match options.command {
-        Command::CreateConfig { path } => {
+        Command::CreateConfig => {
             let config = NodeConfig::new()?;
             let config = toml::to_string(&config).context("Failed to serialize config")?;
+            let path = options.config_path();
             log::trace!("Saving config to {path:?}\n: {config:#?}");
-            fs::write(path, config).context("Failed to write config")?;
+            fs::write(&path, config)
+                .with_context(|| format!("Failed to write config to the '{path:?}' file"))?;
             Ok(())
         }
-        Command::Run(options) => {
-            let node_config = NodeConfig::read(&options).context("Failed to initialize config")?;
+        Command::Run(ref run_options) => {
+            let node_config = NodeConfig::read(&options.config_path(), &run_options)
+                .context("Failed to initialize config")?;
             log::trace!("Starting with the following config\n: {node_config:#?}");
-            let manager = initialize(options.net, node_config).await?;
+            let manager = initialize(run_options.net, node_config).await?;
             #[allow(clippy::unit_arg)]
             Ok(manager.main().await)
         }

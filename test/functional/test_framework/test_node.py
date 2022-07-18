@@ -99,7 +99,7 @@ class TestNode():
         rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
         p2p_addr = p2p_url(self.index)
 
-        config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "test_config.toml")
+        data_dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./mintlayer")
 
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
@@ -107,7 +107,7 @@ class TestNode():
         self.args = [
             self.binary,
             "run",
-            "--config-path={}".format(config_path),
+            "--data-dir={}".format(data_dir_path),
             "--net=regtest",
             "--rpc-addr={}".format(rpc_addr),
             "--p2p-addr={}".format(p2p_addr),

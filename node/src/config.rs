@@ -15,7 +15,7 @@
 
 //! The node configuration.
 
-use std::fs;
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -48,11 +48,10 @@ impl NodeConfig {
         })
     }
 
-    /// Reads a configuration from the path specified in options and overrides the provided
-    /// parameters.
-    pub fn read(options: &RunOptions) -> Result<Self> {
-        let config = fs::read_to_string(&options.config_path)
-            .with_context(|| format!("Failed to read '{:?}' config", options.config_path))?;
+    /// Reads a configuration from the specified path and overrides the provided parameters.
+    pub fn read(config_path: &Path, options: &RunOptions) -> Result<Self> {
+        let config = fs::read_to_string(config_path)
+            .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
             chainstate,
             p2p,
