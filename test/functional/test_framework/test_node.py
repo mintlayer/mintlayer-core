@@ -106,8 +106,8 @@ class TestNode():
         # spam debug.log.
         self.args = [
             self.binary,
-            "run",
             "--data-dir={}".format(data_dir_path),
+            "run",
             "--net=regtest",
             "--rpc-addr={}".format(rpc_addr),
             "--p2p-addr={}".format(p2p_addr),
