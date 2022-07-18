@@ -29,6 +29,12 @@ pub struct P2pConfig {
 impl P2pConfig {
     /// Creates a new p2p configuration instance.
     pub fn new() -> Self {
+        Default::default()
+    }
+}
+
+impl Default for P2pConfig {
+    fn default() -> Self {
         Self {
             bind_address: "/ip6/::1/tcp/3031".into(),
             ban_threshold: 100,

@@ -72,7 +72,7 @@ pub async fn initialize(
         "p2p",
         p2p::make_p2p::<p2p::net::libp2p::Libp2pService>(
             Arc::clone(&chain_config),
-            node_config.p2p,
+            Arc::new(node_config.p2p),
             chainstate.clone(),
         )
         .await

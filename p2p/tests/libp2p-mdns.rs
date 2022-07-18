@@ -32,7 +32,7 @@ async fn test_libp2p_peer_discovery() {
         make_libp2p_addr(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -41,7 +41,7 @@ async fn test_libp2p_peer_discovery() {
         make_libp2p_addr(),
         &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();

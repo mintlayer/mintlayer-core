@@ -42,7 +42,7 @@ async fn test_libp2p_gossipsub() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -50,7 +50,7 @@ async fn test_libp2p_gossipsub() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -145,7 +145,7 @@ async fn test_libp2p_gossipsub_3_peers() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -156,7 +156,7 @@ async fn test_libp2p_gossipsub_3_peers() {
                 make_libp2p_addr(),
                 &[],
                 Arc::clone(&config),
-                std::time::Duration::from_secs(10),
+                Default::default(),
             )
             .await
             .unwrap();
@@ -286,7 +286,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -295,7 +295,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();

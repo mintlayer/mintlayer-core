@@ -17,6 +17,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
+    config,
     error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
     net::{
@@ -232,7 +233,7 @@ impl NetworkingService for Libp2pService {
         bind_addr: Self::Address,
         strategies: &[Self::DiscoveryStrategy],
         chain_config: Arc<common::chain::ChainConfig>,
-        timeout: std::time::Duration,
+        p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
@@ -249,7 +250,9 @@ impl NetworkingService for Libp2pService {
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
-            .outbound_timeout(timeout)
+            .outbound_timeout(std::time::Duration::from_secs(
+                p2p_config.outbound_connection_timeout,
+            ))
             .boxed();
 
         let swarm = SwarmBuilder::new(

@@ -62,7 +62,7 @@ async fn invalid_pubsub_block() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -80,7 +80,7 @@ async fn invalid_pubsub_block() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -139,7 +139,7 @@ async fn invalid_sync_block() {
         make_libp2p_addr(),
         &[],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
