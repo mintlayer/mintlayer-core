@@ -647,15 +647,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 );
             }
 
-            // Calc MLT and check assets
-            let mut mlt_amount_in_outputs = Amount::from_atoms(0);
+            // Check assets
             tx.outputs()
                 .iter()
                 .filter_map(|output| match output.value() {
-                    OutputValue::Coin(coin) => {
-                        mlt_amount_in_outputs = (mlt_amount_in_outputs + *coin)?;
-                        None
-                    }
+                    OutputValue::Coin(_) => None,
                     OutputValue::Asset(asset) => Some(asset),
                 })
                 .try_for_each(|asset| self.check_asset(asset, tx, block))?;
@@ -672,8 +668,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             {
                 // check is fee enough for issuance
                 if !Self::is_issuance_fee_enough(
-                    self.get_total_mlt_inputs(tx, block.get_id())?,
-                    self.get_total_mlt_outputs(tx, block.get_id())?,
+                    self.get_total_coins_in_inputs(tx, block.get_id())?,
+                    self.get_total_coins_in_outputs(tx, block.get_id())?,
                 ) {
                     return Err(CheckBlockTransactionsError::InsuffienceTokenFees(
                         tx.get_id(),
@@ -685,7 +681,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn get_total_mlt_outputs(
+    fn get_total_coins_in_outputs(
         &self,
         tx: &Transaction,
         block_id: Id<Block>,
@@ -704,36 +700,31 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(res)
     }
 
-    fn get_total_mlt_inputs(
+    fn get_total_coins_in_inputs(
         &self,
         tx: &Transaction,
         block_id: Id<Block>,
     ) -> Result<Amount, CheckBlockTransactionsError> {
-        let mut mlt_amount_in_inputs = Amount::from_atoms(0);
-        tx.inputs().iter().try_for_each(|input| {
-            let prev_tx = self.fetch(input.outpoint())?;
-            let output =
-                prev_tx.outputs().get(input.outpoint().output_index() as usize).ok_or_else(
-                    || CheckBlockTransactionsError::NoTokenInInputs(tx.get_id(), block_id.clone()),
-                )?;
-            match output.value() {
-                OutputValue::Coin(coin) => {
-                    mlt_amount_in_inputs = (mlt_amount_in_inputs + *coin).ok_or_else(|| {
-                        CheckBlockTransactionsError::CoinOrAssetOverflow(
-                            tx.get_id(),
-                            block_id.clone(),
-                        )
-                    })?;
-                }
-                OutputValue::Asset(_) => { /* skip */ }
-            };
-            Ok(())
-        })?;
-        Ok(mlt_amount_in_inputs)
+        tx.inputs()
+            .iter()
+            .filter_map(|input| {
+                let prev_tx = self.fetch(input.outpoint()).ok()?;
+                let output = prev_tx.outputs().get(input.outpoint().output_index() as usize)?;
+                Some(output.value().clone())
+            })
+            .filter_map(|output_value| match output_value {
+                OutputValue::Coin(coin) => Some(coin),
+                OutputValue::Asset(_) => None,
+            })
+            .try_fold(Amount::from_atoms(0), |acc, coin| {
+                (acc + coin).ok_or_else(|| {
+                    CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
+                })
+            })
     }
 
-    fn is_issuance_fee_enough(mlt_amount_in_inputs: Amount, mlt_amount_in_outputs: Amount) -> bool {
-        (mlt_amount_in_inputs - mlt_amount_in_outputs).unwrap_or(Amount::from_atoms(0))
+    fn is_issuance_fee_enough(coins_in_inputs: Amount, coins_in_outputs: Amount) -> bool {
+        (coins_in_inputs - coins_in_outputs).unwrap_or(Amount::from_atoms(0))
             > TOKEN_MIN_ISSUANCE_FEE
     }
 
