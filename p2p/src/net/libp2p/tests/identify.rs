@@ -22,8 +22,13 @@ use std::time::Duration;
 #[tokio::test]
 async fn test_identify_not_supported() {
     let config = common::chain::config::create_mainnet();
-    let (mut backend1, _cmd1, _conn1, _gossip1, _sync1) =
-        make_libp2p(config.clone(), test_utils::make_libp2p_addr(), &[], false).await;
+    let (mut backend1, _cmd1, _conn1, _gossip1, _sync1) = make_libp2p(
+        config.clone(),
+        Default::default(),
+        test_utils::make_libp2p_addr(),
+        &[],
+    )
+    .await;
 
     let (transport, peer_id, _id_keys) = make_transport_and_keys();
     let mut swarm = SwarmBuilder::new(

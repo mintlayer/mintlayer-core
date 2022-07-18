@@ -312,7 +312,7 @@ mod tests {
             identify,
             sync,
             connmgr: connectivity::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(false).await,
+            discovery: discovery::DiscoveryManager::new(Default::default()).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,

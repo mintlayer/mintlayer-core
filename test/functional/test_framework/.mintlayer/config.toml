@@ -9,6 +9,7 @@ bind_address = "/ip6/::1/tcp/3031"
 ban_threshold = 100
 outbound_connection_timeout = 10
 enable_mdns = false
+mdns_query_interval = 0
 
 [rpc]
 bind_address = "127.0.0.1:3030"

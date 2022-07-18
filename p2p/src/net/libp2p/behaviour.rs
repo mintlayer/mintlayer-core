@@ -133,7 +133,7 @@ impl Libp2pBehaviour {
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(p2p_config.enable_mdns).await,
+            discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,

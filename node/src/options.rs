@@ -85,6 +85,10 @@ pub struct RunOptions {
     #[clap(long)]
     pub enable_mdns: Option<bool>,
 
+    /// Interval (in milliseconds) at which to poll the network for new peers.
+    #[clap(long)]
+    pub mdns_query_interval: Option<u64>,
+
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,

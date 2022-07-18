@@ -26,6 +26,8 @@ pub struct P2pConfig {
     pub outbound_connection_timeout: u64,
     /// Enable multicast DNS peer discovery
     pub enable_mdns: bool,
+    /// Interval (in milliseconds) at which to poll the network for new peers.
+    pub mdns_query_interval: u64,
 }
 
 impl P2pConfig {
@@ -42,6 +44,7 @@ impl Default for P2pConfig {
             ban_threshold: 100,
             outbound_connection_timeout: 10,
             enable_mdns: false,
+            mdns_query_interval: 0,
         }
     }
 }
