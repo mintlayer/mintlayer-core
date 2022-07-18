@@ -111,7 +111,7 @@ pub enum CheckBlockTransactionsError {
     #[error("Incorrect transfer transaction {0} in block {1}")]
     TokenTransferFail(Id<Transaction>, Id<Block>),
     #[error("Too many token issues in transaction {0} in block {1}")]
-    TooManyTokenIssues(Id<Transaction>, Id<Block>),
+    MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or asset overflow in transaction {0} in block {1}")]
     CoinOrAssetOverflow(Id<Transaction>, Id<Block>),
     #[error("Token fees insuffience in transaction {0} in block {1}")]

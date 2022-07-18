@@ -246,7 +246,7 @@ fn couple_of_token_issuance_in_one_tx() {
         // Process it
         assert_token!(
             chainstate.process_block(block, BlockSource::Local),
-            TooManyTokenIssues
+            MultipleTokenIssuanceInTransaction
         );
     })
 }

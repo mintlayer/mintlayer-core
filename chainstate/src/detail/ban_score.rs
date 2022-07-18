@@ -128,7 +128,7 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::DuplicatedTransactionInBlock(_, _) => 100,
             CheckBlockTransactionsError::TokenIssueFail(_, _) => 100,
             CheckBlockTransactionsError::TokenTransferFail(_, _) => 100,
-            CheckBlockTransactionsError::TooManyTokenIssues(_, _) => 100,
+            CheckBlockTransactionsError::MultipleTokenIssuanceInTransaction(_, _) => 100,
             CheckBlockTransactionsError::CoinOrAssetOverflow(_, _) => 100,
             CheckBlockTransactionsError::InsuffienceTokenFees(_, _) => 100,
             CheckBlockTransactionsError::InsuffienceTokenValueInInputs(_, _) => 100,

@@ -641,10 +641,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             // We can't issue any count of token types in one tx
             let issuance_count = Self::get_issuance_count(tx);
             if issuance_count > MAX_ISSUANCE_ALLOWED {
-                return Err(CheckBlockTransactionsError::TooManyTokenIssues(
-                    tx.get_id(),
-                    block.get_id(),
-                ));
+                return Err(
+                    CheckBlockTransactionsError::MultipleTokenIssuanceInTransaction(
+                        tx.get_id(),
+                        block.get_id(),
+                    ),
+                );
             }
 
             // Calc MLT and check assets
