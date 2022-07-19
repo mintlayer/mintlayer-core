@@ -30,9 +30,11 @@
 //!
 //! TODO: reserved peers
 
-use crate::net::{types, NetworkingService};
-use logging::log;
-use std::collections::{hash_map::Entry, HashMap, HashSet};
+use crate::{
+    error::P2pError,
+    net::{types, NetworkingService},
+};
+use std::collections::{hash_map::Entry, HashMap, HashSet, VecDeque};
 
 // TODO: store active address
 // TODO: store other discovered addresses
@@ -45,21 +47,12 @@ pub struct PeerContext<T: NetworkingService> {
     pub score: u32,
 }
 
-/// Peer address information
-struct PeerAddrInfo<T: NetworkingService> {
-    /// Hashset of IPv4 addresses
-    ip4: HashSet<T::Address>,
-
-    /// Hashset of IPv6 addresses
-    ip6: HashSet<T::Address>,
-}
-
 enum Peer<T: NetworkingService> {
     /// Known peer (`types::PeerInfo<t>` received)
     _Known(PeerContext<T>),
 
-    /// Discovered peer (`types::PeerAddrInfo<T>` received)
-    Discovered(PeerAddrInfo<T>),
+    /// Discovered peer (addresses have been received)
+    Discovered(VecDeque<T::Address>),
 }
 
 // TODO: improve how peers are stored, order by reputation?
@@ -100,35 +93,25 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Get socket address of the next best peer (TODO: in terms of peer score)
     // TODO: rewrite all of this
-    pub fn best_peer_addr(&mut self) -> Option<T::Address> {
+    pub fn best_peer_addr(&mut self) -> crate::Result<Option<T::Address>> {
         // TODO: improve peer selection
         let peer_id = match self.available.iter().next() {
             Some(peer_id) => *peer_id,
-            None => return None,
+            None => return Ok(None),
         };
 
-        let addr = match self.peers.get(&peer_id) {
+        match self.peers.get_mut(&peer_id) {
             Some(Peer::_Known(_)) => {
-                unimplemented!()
+                // TODO: implement
+                Ok(None)
             }
-            Some(Peer::Discovered(peer_info)) => {
-                // TODO: rewrite this, if there are no addressess, the peer is forgotten
-                assert!(!(peer_info.ip4.is_empty() && peer_info.ip6.is_empty()));
-
-                if peer_info.ip6.is_empty() {
-                    peer_info.ip4.iter().next().expect("peer_info.ip4 empty").clone()
-                } else {
-                    peer_info.ip6.iter().next().expect("peer_info.ip6 empty").clone()
-                }
-            }
-            None => {
-                log::error!("PeerDb has an inconsistent state");
-                return None;
-            }
-        };
-
-        self.pending.insert(addr.clone(), peer_id);
-        Some(addr)
+            Some(Peer::Discovered(addr_info)) => addr_info.pop_front().map_or(Ok(None), |addr| {
+                self.available.remove(&peer_id);
+                self.pending.insert(addr.clone(), peer_id);
+                Ok(Some(addr))
+            }),
+            None => Err(P2pError::DatabaseFailure),
+        }
     }
 
     /// Check is the peer ID banned
@@ -147,18 +130,22 @@ impl<T: NetworkingService> PeerDb<T> {
             match self.peers.entry(info.peer_id) {
                 Entry::Occupied(mut entry) => match entry.get_mut() {
                     Peer::Discovered(addr_info) => {
-                        addr_info.ip4.extend(info.ip4.clone());
-                        addr_info.ip6.extend(info.ip6.clone());
+                        // TODO: duplicates
+                        addr_info.extend(info.ip6.clone());
+                        addr_info.extend(info.ip4.clone());
                     }
                     Peer::_Known(_info) => {
                         // TODO: update existing information of a known peer
                     }
                 },
                 Entry::Vacant(entry) => {
-                    entry.insert(Peer::Discovered(PeerAddrInfo {
-                        ip4: HashSet::from_iter(info.ip4.iter().cloned()),
-                        ip6: HashSet::from_iter(info.ip6.iter().cloned()),
-                    }));
+                    entry.insert(Peer::Discovered(VecDeque::from_iter(
+                        info.ip6
+                            .iter()
+                            .cloned()
+                            .chain(info.ip4.iter().cloned())
+                            .collect::<Vec<_>>(),
+                    )));
                     self.available.insert(info.peer_id);
                 }
             }
@@ -196,7 +183,7 @@ impl<T: NetworkingService> PeerDb<T> {
 mod tests {
     use super::*;
     use crate::net::{self, libp2p::Libp2pService};
-    use libp2p::PeerId;
+    use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 
     #[test]
     fn test_peer_discovered_libp2p() {
@@ -209,13 +196,27 @@ mod tests {
         // check that peer with `id` has the correct ipv4 and ipv6 addresses
         let check_peer =
             |peers: &HashMap<<Libp2pService as NetworkingService>::PeerId, Peer<Libp2pService>>,
-             peer_id: libp2p::PeerId,
-             ip4: Vec<<Libp2pService as NetworkingService>::Address>,
-             ip6: Vec<<Libp2pService as NetworkingService>::Address>| {
+             peer_id: PeerId,
+             ip4: Vec<Multiaddr>,
+             ip6: Vec<Multiaddr>| {
                 let (p_ip4, p_ip6) = {
                     match peers.get(&peer_id).unwrap() {
                         Peer::_Known(_) => panic!("invalid peer type"),
-                        Peer::Discovered(info) => (info.ip4.clone(), info.ip6.clone()),
+                        Peer::Discovered(info) => {
+                            let mut ip4 = vec![];
+                            let mut ip6 = vec![];
+
+                            for addr in info {
+                                let components = addr.iter().collect::<Vec<_>>();
+                                if std::matches!(components[0], Protocol::Ip6(_)) {
+                                    ip6.push(addr.clone());
+                                } else {
+                                    ip4.push(addr.clone());
+                                }
+                            }
+
+                            (ip4, ip6)
+                        }
                     }
                 };
 

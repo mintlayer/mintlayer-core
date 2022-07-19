@@ -361,7 +361,7 @@ where
         );
 
         for _ in 0..npeers {
-            if let Some(addr) = self.peerdb.best_peer_addr() {
+            if let Some(addr) = self.peerdb.best_peer_addr()? {
                 match self.connect(addr.clone()).await {
                     Ok(_) => {
                         self.pending.insert(addr, None);
