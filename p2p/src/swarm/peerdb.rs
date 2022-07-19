@@ -32,7 +32,7 @@
 
 use crate::net::{types, NetworkingService};
 use logging::log;
-use std::collections::{HashMap, HashSet};
+use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 // TODO: store active address
 // TODO: store other discovered addresses
@@ -46,69 +46,88 @@ pub struct PeerContext<T: NetworkingService> {
 }
 
 /// Peer address information
-enum PeerAddrInfo<T: NetworkingService> {
-    Raw {
-        /// Hashset of IPv4 addresses
-        ip4: HashSet<T::Address>,
+struct PeerAddrInfo<T: NetworkingService> {
+    /// Hashset of IPv4 addresses
+    ip4: HashSet<T::Address>,
 
-        /// Hashset of IPv6 addresses
-        ip6: HashSet<T::Address>,
-    },
+    /// Hashset of IPv6 addresses
+    ip6: HashSet<T::Address>,
+}
+
+enum Peer<T: NetworkingService> {
+    /// Known peer (`types::PeerInfo<t>` received)
+    _Known(PeerContext<T>),
+
+    /// Discovered peer (`types::PeerAddrInfo<T>` received)
+    Discovered(PeerAddrInfo<T>),
 }
 
 // TODO: improve how peers are stored, order by reputation?
 pub struct PeerDb<T: NetworkingService> {
-    /// Hashmap for peer information
-    peers: HashMap<T::PeerId, PeerContext<T>>,
+    /// Set of peers known to `PeerDb`
+    peers: HashMap<T::PeerId, Peer<T>>,
 
-    /// Hashmap of discovered peers we don't have an active connection with
-    discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
+    /// Set of available (idle) peers
+    available: HashSet<T::PeerId>,
 
     /// Pending connections
-    pending: HashMap<T::Address, PeerAddrInfo<T>>,
+    pending: HashMap<T::Address, T::PeerId>,
 
     /// Banned peers
     banned: HashSet<T::PeerId>,
 }
 
+impl<T: NetworkingService> Default for PeerDb<T> {
+    fn default() -> Self {
+        Self {
+            peers: Default::default(),
+            available: Default::default(),
+            pending: Default::default(),
+            banned: Default::default(),
+        }
+    }
+}
+
 impl<T: NetworkingService> PeerDb<T> {
     pub fn new() -> Self {
-        Self {
-            peers: HashMap::new(),
-            discovered: HashMap::new(),
-            pending: HashMap::new(),
-            banned: HashSet::new(),
-        }
+        Default::default()
     }
 
     /// Get the number of idle (available) peers
     pub fn idle_peer_count(&self) -> usize {
-        self.discovered.len()
+        self.available.len()
     }
 
     /// Get socket address of the next best peer (TODO: in terms of peer score)
+    // TODO: rewrite all of this
     pub fn best_peer_addr(&mut self) -> Option<T::Address> {
         // TODO: improve peer selection
-        let key = match self.discovered.keys().next() {
-            Some(key) => *key,
+        let peer_id = match self.available.iter().next() {
+            Some(peer_id) => *peer_id,
             None => return None,
         };
 
-        // TODO: find a better way to store the addresses
-        let peer_info = self.discovered.remove(&key).expect("peer to exist");
-        let addr = match peer_info {
-            PeerAddrInfo::Raw { ref ip4, ref ip6 } => {
-                assert!(!(ip4.is_empty() && ip6.is_empty()));
+        let addr = match self.peers.get(&peer_id) {
+            Some(Peer::_Known(_)) => {
+                unimplemented!()
+            }
+            Some(Peer::Discovered(peer_info)) => {
+                // TODO: rewrite this, if there are no addressess, the peer is forgotten
+                assert!(!(peer_info.ip4.is_empty() && peer_info.ip6.is_empty()));
 
-                if ip6.is_empty() {
-                    ip4.iter().next().expect("ip4 empty").clone()
+                if peer_info.ip6.is_empty() {
+                    peer_info.ip4.iter().next().expect("peer_info.ip4 empty").clone()
                 } else {
-                    ip6.iter().next().expect("ip6 empty").clone()
+                    peer_info.ip6.iter().next().expect("peer_info.ip6 empty").clone()
                 }
+            }
+            None => {
+                log::error!("PeerDb has an inconsistent state");
+                return None;
             }
         };
 
-        self.pending.insert(addr.clone(), peer_info);
+        self.pending.insert(addr.clone(), peer_id);
         Some(addr)
     }
 
@@ -124,23 +143,23 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Discover new peer addresses
     pub fn discover_peers(&mut self, peers: &[types::AddrInfo<T>]) {
-        log::info!("discovered {} new peers", peers.len());
-
         for info in peers.iter() {
-            // TODO: update peer stats
-            if self.peers.contains_key(&info.id) {
-                continue;
-            }
-
-            match self.discovered.entry(info.id).or_insert_with(|| PeerAddrInfo::Raw {
-                ip4: HashSet::new(),
-                ip6: HashSet::new(),
-            }) {
-                PeerAddrInfo::Raw { ip4, ip6 } => {
-                    log::trace!("discovered ipv4 {:#?}, ipv6 {:#?}", ip4, ip6);
-
-                    ip4.extend(info.ip4.clone());
-                    ip6.extend(info.ip6.clone());
+            match self.peers.entry(info.peer_id) {
+                Entry::Occupied(mut entry) => match entry.get_mut() {
+                    Peer::Discovered(addr_info) => {
+                        addr_info.ip4.extend(info.ip4.clone());
+                        addr_info.ip6.extend(info.ip6.clone());
+                    }
+                    Peer::_Known(_info) => {
+                        // TODO: update existing information of a known peer
+                    }
+                },
+                Entry::Vacant(entry) => {
+                    entry.insert(Peer::Discovered(PeerAddrInfo {
+                        ip4: HashSet::from_iter(info.ip4.iter().cloned()),
+                        ip6: HashSet::from_iter(info.ip6.iter().cloned()),
+                    }));
+                    self.available.insert(info.peer_id);
                 }
             }
         }
@@ -189,15 +208,15 @@ mod tests {
 
         // check that peer with `id` has the correct ipv4 and ipv6 addresses
         let check_peer =
-            |discovered: &HashMap<
-                <Libp2pService as NetworkingService>::PeerId,
-                PeerAddrInfo<Libp2pService>,
-            >,
-             id: libp2p::PeerId,
+            |peers: &HashMap<<Libp2pService as NetworkingService>::PeerId, Peer<Libp2pService>>,
+             peer_id: libp2p::PeerId,
              ip4: Vec<<Libp2pService as NetworkingService>::Address>,
              ip6: Vec<<Libp2pService as NetworkingService>::Address>| {
-                let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
-                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
+                let (p_ip4, p_ip6) = {
+                    match peers.get(&peer_id).unwrap() {
+                        Peer::_Known(_) => panic!("invalid peer type"),
+                        Peer::Discovered(info) => (info.ip4.clone(), info.ip6.clone()),
+                    }
                 };
 
                 assert_eq!(ip4.len(), p_ip4.len());
@@ -215,29 +234,33 @@ mod tests {
         // first add two new peers, both with ipv4 and ipv6 address
         peerdb.discover_peers(&[
             net::types::AddrInfo {
-                id: id_1,
+                peer_id: id_1,
                 ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
                 ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
             },
             net::types::AddrInfo {
-                id: id_2,
+                peer_id: id_2,
                 ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
                 ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
             },
         ]);
 
-        assert_eq!(peerdb.peers.len(), 0);
-        assert_eq!(peerdb.discovered.len(), 2);
+        assert_eq!(peerdb.peers.len(), 2);
+        assert_eq!(
+            peerdb.peers.iter().filter(|x| std::matches!(x.1, Peer::_Known(_))).count(),
+            0
+        );
+        assert_eq!(peerdb.available.len(), 2);
 
         check_peer(
-            &peerdb.discovered,
+            &peerdb.peers,
             id_1,
             vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
             vec!["/ip6/::1/tcp/9091".parse().unwrap()],
         );
 
         check_peer(
-            &peerdb.discovered,
+            &peerdb.peers,
             id_2,
             vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
             vec!["/ip6/::1/tcp/9093".parse().unwrap()],
@@ -246,7 +269,7 @@ mod tests {
         // then discover one new peer and two additional ipv6 addresses for peer 1
         peerdb.discover_peers(&[
             net::types::AddrInfo {
-                id: id_1,
+                peer_id: id_1,
                 ip4: vec![],
                 ip6: vec![
                     "/ip6/::1/tcp/9094".parse().unwrap(),
@@ -254,14 +277,14 @@ mod tests {
                 ],
             },
             net::types::AddrInfo {
-                id: id_3,
+                peer_id: id_3,
                 ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
                 ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
             },
         ]);
 
         check_peer(
-            &peerdb.discovered,
+            &peerdb.peers,
             id_1,
             vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
             vec![
@@ -272,7 +295,7 @@ mod tests {
         );
 
         check_peer(
-            &peerdb.discovered,
+            &peerdb.peers,
             id_3,
             vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
             vec!["/ip6/::1/tcp/9097".parse().unwrap()],

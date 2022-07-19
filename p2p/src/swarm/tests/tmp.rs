@@ -67,7 +67,7 @@ async fn test_auto_connect_libp2p() {
     let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
+    let peer_id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
         PeerId::from_multihash(peer).unwrap()
     } else {
         panic!("invalid multiaddr");
@@ -82,7 +82,7 @@ async fn test_auto_connect_libp2p() {
 
     // "discover" the other libp2p service
     swarm.peer_discovered(&[net::types::AddrInfo {
-        id,
+        peer_id,
         ip4: vec![],
         ip6: vec![addr],
     }]);
