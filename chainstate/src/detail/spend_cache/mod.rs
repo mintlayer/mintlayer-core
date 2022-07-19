@@ -30,6 +30,7 @@ use common::{
 };
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::time::Duration;
+use utils::ensure;
 
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
@@ -344,9 +345,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             }
         };
 
-        if !past_lock {
-            return Err(StateUpdateError::TimelockViolation);
-        }
+        ensure!(past_lock, StateUpdateError::TimelockViolation);
 
         Ok(())
     }
