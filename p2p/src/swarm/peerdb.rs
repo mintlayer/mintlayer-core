@@ -35,6 +35,7 @@ use crate::{
     error::P2pError,
     net::{types, NetworkingService},
 };
+use logging::log;
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
     sync::Arc,
@@ -55,7 +56,15 @@ pub struct PeerContext<T: NetworkingService> {
     pub score: u32,
 }
 
-enum Peer<T: NetworkingService> {
+#[derive(Debug)]
+pub enum BannedPeer<T: NetworkingService> {
+    Known(PeerContext<T>),
+    Discovered(VecDeque<T::Address>),
+    Unknown,
+}
+
+#[derive(Debug)]
+pub enum Peer<T: NetworkingService> {
     /// Active peer
     Active(PeerContext<T>),
 
@@ -63,7 +72,7 @@ enum Peer<T: NetworkingService> {
     Idle(PeerContext<T>),
 
     /// Active/known peer that has been banned
-    Banned(PeerContext<T>),
+    Banned(BannedPeer<T>),
 
     /// Discovered peer (addresses have been received)
     Discovered(VecDeque<T::Address>),
@@ -147,7 +156,11 @@ impl<T: NetworkingService> PeerDb<T> {
         };
 
         match self.peers.get_mut(&peer_id) {
-            Some(Peer::Idle(_info) | Peer::Active(_info) | Peer::Banned(_info)) => {
+            Some(Peer::Idle(_info) | Peer::Active(_info)) => {
+                // TODO: implement
+                Ok(None)
+            }
+            Some(Peer::Banned(_info)) => {
                 // TODO: implement
                 Ok(None)
             }
@@ -170,7 +183,10 @@ impl<T: NetworkingService> PeerDb<T> {
                         addr_info.extend(info.ip6.clone());
                         addr_info.extend(info.ip4.clone());
                     }
-                    Peer::Idle(_info) | Peer::Active(_info) | Peer::Banned(_info) => {
+                    Peer::Idle(_info) | Peer::Active(_info) => {
+                        // TODO: update existing information of a known peer
+                    }
+                    Peer::Banned(_info) => {
                         // TODO: update existing information of a known peer
                     }
                 },
@@ -297,6 +313,36 @@ impl<T: NetworkingService> PeerDb<T> {
         }
     }
 
+    /// Change peer state to `Peer::Banned` and and it to the list of banned peers
+    pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
+        if let Some(entry) = self.peers.remove(peer_id) {
+            let entry = match entry {
+                Peer::Active(inner) | Peer::Idle(inner) => {
+                    log::info!(
+                        "ban known/idle peer {}, peer address {:?}",
+                        peer_id,
+                        inner.address
+                    );
+                    Peer::Banned(BannedPeer::Known(inner))
+                }
+                Peer::Discovered(inner) => {
+                    log::info!(
+                        "ban discovered peer {}, peer addresses {:?}",
+                        peer_id,
+                        inner
+                    );
+                    Peer::Banned(BannedPeer::Discovered(inner))
+                }
+                Peer::Banned(inner) => Peer::Banned(inner),
+            };
+
+            self.peers.insert(*peer_id, entry);
+        }
+
+        self.available.remove(peer_id);
+        self.banned.insert(*peer_id);
+    }
+
     /// Adjust peer score
     ///
     /// If the peer is known, update its existing peer score and if it is not
@@ -309,17 +355,29 @@ impl<T: NetworkingService> PeerDb<T> {
     ///
     /// TODO: implement unbanning
     pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
-        let final_score = match self.peers.get_mut(peer_id) {
-            Some(Peer::Discovered(_)) | None => score,
-            Some(Peer::Idle(info) | Peer::Active(info) | Peer::Banned(info)) => {
-                info.score = info.score.saturating_add(score);
-                info.score
+        let final_score = match self.peers.entry(*peer_id) {
+            Entry::Vacant(entry) => {
+                entry.insert(Peer::Banned(BannedPeer::Unknown));
+                score
             }
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                Peer::Discovered(_) => score,
+                Peer::Banned(inner) => match inner {
+                    BannedPeer::Known(info) => {
+                        info.score = info.score.saturating_add(score);
+                        info.score
+                    }
+                    BannedPeer::Discovered(_) | BannedPeer::Unknown => score,
+                },
+                Peer::Idle(info) | Peer::Active(info) => {
+                    info.score = info.score.saturating_add(score);
+                    info.score
+                }
+            },
         };
 
         if final_score >= self.p2p_config.ban_threshold {
-            self.available.remove(peer_id);
-            self.banned.insert(*peer_id);
+            self.ban_peer(peer_id);
             return true;
         }
 
