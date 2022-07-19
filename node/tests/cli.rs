@@ -39,7 +39,7 @@ fn no_args() {
 #[test]
 fn create_default_config() {
     Command::new(BIN_NAME)
-        .arg("--data-dir")
+        .arg("--datadir")
         .arg(DATA_DIR)
         .arg("create-config")
         .assert()
@@ -76,7 +76,7 @@ fn create_default_config() {
 #[test]
 fn read_config_override_values() {
     Command::new(BIN_NAME)
-        .arg("--data-dir")
+        .arg("--datadir")
         .arg(DATA_DIR)
         .arg("create-config")
         .assert()

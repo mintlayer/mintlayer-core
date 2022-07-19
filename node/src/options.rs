@@ -36,7 +36,7 @@ pub struct Options {
 
     /// The path to the data directory.
     #[clap(short, long, default_value_os_t = default_data_dir())]
-    data_dir: PathBuf,
+    datadir: PathBuf,
 
     #[clap(subcommand)]
     pub command: Command,
@@ -89,10 +89,10 @@ impl Options {
         let options: Options = clap::Parser::parse_from(args);
 
         // We want to check earlier if the directory can be created.
-        fs::create_dir_all(&options.data_dir).with_context(|| {
+        fs::create_dir_all(&options.datadir).with_context(|| {
             format!(
                 "Failed to create the '{:?}' data directory",
-                options.data_dir
+                options.datadir
             )
         })?;
 
@@ -101,7 +101,7 @@ impl Options {
 
     /// Returns a path to the config file.
     pub fn config_path(&self) -> PathBuf {
-        self.data_dir.join(CONFIG_NAME)
+        self.datadir.join(CONFIG_NAME)
     }
 }
 

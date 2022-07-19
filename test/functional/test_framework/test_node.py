@@ -99,14 +99,14 @@ class TestNode():
         rpc_addr = self.init_rpc_url.split("http://")[-1].split('@')[-1]
         p2p_addr = p2p_url(self.index)
 
-        data_dir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./.mintlayer")
+        datadir_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "./.mintlayer")
 
         # Configuration for logging is set as command-line args rather than in the bitcoin.conf file.
         # This means that starting a bitcoind using the temp dir to debug a failed test won't
         # spam debug.log.
         self.args = [
             self.binary,
-            "--data-dir={}".format(data_dir_path),
+            "--datadir={}".format(datadir_path),
             "run",
             "--net=regtest",
             "--rpc-addr={}".format(rpc_addr),
