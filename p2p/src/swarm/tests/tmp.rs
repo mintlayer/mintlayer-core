@@ -23,8 +23,8 @@ use crate::{
 use common::chain::config;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use logging::log;
+use std::{collections::HashSet, net::SocketAddr, sync::Arc};
 use p2p_test_utils::make_libp2p_addr;
-use std::{net::SocketAddr, sync::Arc};
 
 // try to connect to an address that no one listening on and verify it fails
 #[tokio::test]
@@ -278,7 +278,7 @@ async fn inbound_connection_too_many_peers() {
     for _ in 0..swarm::MAX_ACTIVE_CONNECTIONS {
         let peer_id = PeerId::random();
         let info = swarm::peerdb::PeerContext {
-            _info: net::types::PeerInfo {
+            info: net::types::PeerInfo {
                 peer_id,
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -293,6 +293,8 @@ async fn inbound_connection_too_many_peers() {
                 ],
             },
             score: 0,
+            address: None,
+            addresses: HashSet::new(),
         };
 
         swarm1.peers.insert(peer_id, info);

@@ -36,12 +36,16 @@ use crate::{
 };
 use std::collections::{hash_map::Entry, HashMap, HashSet, VecDeque};
 
-// TODO: store active address
-// TODO: store other discovered addresses
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
-    pub _info: types::PeerInfo<T>,
+    pub info: types::PeerInfo<T>,
+
+    /// Peer's active address, if known
+    pub address: Option<T::Address>,
+
+    /// Set of available addresses
+    pub addresses: HashSet<T::Address>,
 
     /// Peer score
     pub score: u32,
@@ -49,13 +53,13 @@ pub struct PeerContext<T: NetworkingService> {
 
 enum Peer<T: NetworkingService> {
     /// Known peer (`types::PeerInfo<t>` received)
-    _Known(PeerContext<T>),
+    Known(PeerContext<T>),
 
     /// Discovered peer (addresses have been received)
     Discovered(VecDeque<T::Address>),
 }
 
-// TODO: improve how peers are stored, order by reputation?
+// TODO: store available peers into a binary heap
 pub struct PeerDb<T: NetworkingService> {
     /// Set of peers known to `PeerDb`
     peers: HashMap<T::PeerId, Peer<T>>,
@@ -101,7 +105,7 @@ impl<T: NetworkingService> PeerDb<T> {
         };
 
         match self.peers.get_mut(&peer_id) {
-            Some(Peer::_Known(_)) => {
+            Some(Peer::Known(_)) => {
                 // TODO: implement
                 Ok(None)
             }
@@ -134,7 +138,7 @@ impl<T: NetworkingService> PeerDb<T> {
                         addr_info.extend(info.ip6.clone());
                         addr_info.extend(info.ip4.clone());
                     }
-                    Peer::_Known(_info) => {
+                    Peer::Known(_info) => {
                         // TODO: update existing information of a known peer
                     }
                 },
@@ -168,13 +172,59 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Register peer information to `PeerDb`
-    pub fn register_peer_info(&mut self, _info: types::PeerInfo<T>) {
-        // TODO: implement
+    ///
+    /// If the peer is known (either fully known or only discovered), its information
+    /// is updated with the new received information. If the peer is unknown to `PeerDb`
+    /// (new inbound connection from an unknown peer), a new entry is created for the peer.
+    ///
+    /// Finally the peer is marked as available so future connection attempts may try to
+    /// dial this peer from the last known address.
+    pub fn register_peer_info(&mut self, address: T::Address, info: types::PeerInfo<T>) {
+        let peer_id = info.peer_id;
+
+        let entry = match self.peers.remove(&peer_id) {
+            Some(Peer::Discovered(addr_info)) => Peer::Known(PeerContext {
+                info,
+                score: 0,
+                address: Some(address),
+                addresses: HashSet::from_iter(addr_info),
+            }),
+            Some(Peer::Known(peer_info)) => Peer::Known(PeerContext {
+                info,
+                score: peer_info.score,
+                address: Some(address),
+                addresses: peer_info.addresses,
+            }),
+            None => Peer::Known(PeerContext {
+                info,
+                score: 0,
+                address: Some(address),
+                addresses: HashSet::new(),
+            }),
+        };
+
+        self.peers.insert(peer_id, entry);
+        self.available.insert(peer_id);
+    }
+
+    /// Mark peer as connected
+    pub fn peer_connected(&mut self, address: T::Address, info: types::PeerInfo<T>) {
+        let peer_id = info.peer_id;
+
+        self.register_peer_info(address.clone(), info);
+        self.available.remove(&peer_id);
+        self.pending.remove(&address);
+    }
+
+    /// Disconnect peer
+    ///
+    /// TODO: explain in more detail
+    pub fn peer_disconnected(&mut self, _peer_id: &T::PeerId) {
+        todo!();
     }
 
     /// Ban peer
     pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
-        // TODO: print more information about the peer
         self.banned.insert(*peer_id);
     }
 }
@@ -201,7 +251,7 @@ mod tests {
              ip6: Vec<Multiaddr>| {
                 let (p_ip4, p_ip6) = {
                     match peers.get(&peer_id).unwrap() {
-                        Peer::_Known(_) => panic!("invalid peer type"),
+                        Peer::Known(_) => panic!("invalid peer type"),
                         Peer::Discovered(info) => {
                             let mut ip4 = vec![];
                             let mut ip6 = vec![];
@@ -248,7 +298,7 @@ mod tests {
 
         assert_eq!(peerdb.peers.len(), 2);
         assert_eq!(
-            peerdb.peers.iter().filter(|x| std::matches!(x.1, Peer::_Known(_))).count(),
+            peerdb.peers.iter().filter(|x| std::matches!(x.1, Peer::Known(_))).count(),
             0
         );
         assert_eq!(peerdb.available.len(), 2);

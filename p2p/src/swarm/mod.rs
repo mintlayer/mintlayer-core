@@ -32,7 +32,13 @@ use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
-use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    str::FromStr,
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
@@ -207,8 +213,10 @@ where
         self.peers.insert(
             info.peer_id,
             peerdb::PeerContext {
-                _info: info,
+                info,
                 score: 0,
+                address: None,
+                addresses: HashSet::new(),
             },
         );
         self.tx_sync
@@ -247,12 +255,7 @@ where
         // knows of all peers and later on if the number of connections falls below
         // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
         if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
-            // TODO: report this peer to peerdb
-            // TODO: close some other connection in favor of this if peerdb knows this
-            //       peer and it has higher reputation than some other peer we're currently
-            //       connected to?
-            self.peerdb.register_peer_info(info);
-            // self.handle.reject_connection(info.peer_id).await?;
+            self.peerdb.register_peer_info(address, info);
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
