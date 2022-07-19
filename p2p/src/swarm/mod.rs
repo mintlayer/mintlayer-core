@@ -32,13 +32,7 @@ use chainstate::ban_score::BanScore;
 use common::{chain::ChainConfig, primitives::semver};
 use futures::FutureExt;
 use logging::log;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-    str::FromStr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, fmt::Debug, str::FromStr, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
@@ -57,14 +51,11 @@ where
     /// Chain configuration.
     chain_config: Arc<ChainConfig>,
 
-    /// P2p configuration.
-    p2p_config: Arc<P2pConfig>,
+    /// P2P configuration.
+    _p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
     handle: T::ConnectivityHandle,
-
-    /// Hashmap for peer information
-    peers: HashMap<T::PeerId, peerdb::PeerContext<T>>,
 
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
@@ -94,14 +85,13 @@ where
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
-            chain_config,
-            p2p_config,
             handle,
             rx_swarm,
             tx_sync,
-            peerdb: peerdb::PeerDb::new(),
-            peers: HashMap::with_capacity(MAX_ACTIVE_CONNECTIONS),
+            peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config)),
             pending: HashMap::new(),
+            chain_config,
+            _p2p_config: p2p_config,
         }
     }
 
@@ -183,8 +173,13 @@ where
     /// The event is received from the networking backend and it's either a result of an incoming
     /// connection from a remote peer or a response to an outbound connection that was initiated
     /// by the node as result of swarm maintenance.
-    async fn accept_connection(&mut self, info: net::types::PeerInfo<T>) -> crate::Result<()> {
-        log::debug!("{}", info);
+    async fn accept_connection(
+        &mut self,
+        address: T::Address,
+        info: net::types::PeerInfo<T>,
+    ) -> crate::Result<()> {
+        let peer_id = info.peer_id;
+        log::debug!("peer {} connected, address {}, {}", peer_id, address, info);
 
         ensure!(
             info.magic_bytes == *self.chain_config.magic_bytes(),
@@ -205,20 +200,11 @@ where
             P2pError::ProtocolError(ProtocolError::Incompatible),
         );
         ensure!(
-            self.peers.get(&info.peer_id).is_none(),
+            !self.peerdb.is_active_peer(&info.peer_id),
             P2pError::PeerError(PeerError::PeerAlreadyExists),
         );
 
-        let peer_id = info.peer_id;
-        self.peers.insert(
-            info.peer_id,
-            peerdb::PeerContext {
-                info,
-                score: 0,
-                address: None,
-                addresses: HashSet::new(),
-            },
-        );
+        self.peerdb.peer_connected(address, info);
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
             .await
@@ -242,6 +228,10 @@ where
         log::debug!("validate inbound connection, inbound address {}", address);
 
         ensure!(
+            !self.peerdb.is_active_peer(&info.peer_id),
+            P2pError::PeerError(PeerError::PeerAlreadyExists),
+        );
+        ensure!(
             self.validate_address(&address),
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
@@ -254,12 +244,12 @@ where
         // accepted even if it's valid. The peer is still reported to the PeerDb which
         // knows of all peers and later on if the number of connections falls below
         // the desired threshold, `PeerManager::heartbeat()` may connect to this peer.
-        if self.peers.len() >= MAX_ACTIVE_CONNECTIONS {
+        if self.peerdb.active_peer_count() >= MAX_ACTIVE_CONNECTIONS {
             self.peerdb.register_peer_info(address, info);
             return Err(P2pError::PeerError(PeerError::TooManyPeers));
         }
 
-        self.accept_connection(info).await
+        self.accept_connection(address, info).await
     }
 
     /// Close connection to a remote peer
@@ -271,25 +261,19 @@ where
         log::debug!("connection closed for peer {}", peer_id);
 
         self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id)).await?;
-        self.peers.remove(&peer_id);
+        self.peerdb.peer_disconnected(&peer_id);
         Ok(())
     }
 
     /// Adjust peer score
     ///
-    /// If after adjustment the peer score is more than the ban threshold, the peer is banned.
+    /// If after adjustment the peer score is more than the ban threshold, the peer is banned
+    /// which makes the `PeerDb` mark is banned and prevents any further connections with the peer
+    /// and also bans the peer in the networking backend.
     async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
         log::debug!("adjusting score for peer {}, adjustment {}", peer_id, score);
 
-        let score = if let Some(entry) = self.peers.get_mut(&peer_id) {
-            entry.score = entry.score.saturating_add(score);
-            entry.score
-        } else {
-            score
-        };
-
-        if score >= self.p2p_config.ban_threshold {
-            self.peerdb.ban_peer(&peer_id);
+        if self.peerdb.adjust_peer_score(&peer_id, score) {
             return self.handle.ban_peer(peer_id).await;
         }
 
@@ -359,7 +343,7 @@ where
         let npeers = std::cmp::min(
             self.peerdb.idle_peer_count(),
             MAX_ACTIVE_CONNECTIONS
-                .saturating_sub(self.peers.len())
+                .saturating_sub(self.peerdb.idle_peer_count())
                 .saturating_sub(self.pending.len()),
         );
 
@@ -462,7 +446,7 @@ where
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::GetPeerCount(response) => {
-                        response.send(self.peers.len()).map_err(|_| P2pError::ChannelClosed)?;
+                        response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::GetBindAddress(response) => {
                         let addr = self.handle.local_addr();
@@ -473,7 +457,11 @@ where
                         .send(self.handle.peer_id().to_string())
                         .map_err(|_| P2pError::ChannelClosed)?,
                     event::SwarmEvent::GetConnectedPeers(response) => {
-                        let peers = self.peers.iter().map(|(id, _)| id.to_string()).collect::<Vec<_>>();
+                        let peers = self.peerdb
+                            .active_peers()
+                            .iter()
+                            .map(|(id, _)| id.to_string())
+                            .collect::<Vec<_>>();
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }
                 },
@@ -500,7 +488,7 @@ where
                         }
                         net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(peer_info).await;
+                            let res = self.accept_connection(addr.clone(), peer_info).await;
                             self.handle_result(Some(peer_id), res).await?;
 
                             match self.pending.remove(&addr) {
