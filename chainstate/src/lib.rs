@@ -18,24 +18,25 @@
 mod config;
 mod detail;
 
+mod chainstate_interface_impl;
+
 pub mod chainstate_interface;
-pub mod chainstate_interface_impl;
 pub mod rpc;
 
 pub use crate::{
-    chainstate_interface_impl::ChainstateInterfaceImpl,
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Chainstate},
+    detail::{ban_score, BlockError, BlockSource},
 };
 
 use std::sync::Arc;
 
 use chainstate_interface::ChainstateInterface;
+use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
     chain::{block::Block, ChainConfig},
     primitives::{BlockHeight, Id},
 };
-use detail::{time_getter::TimeGetter, PropertyQueryError};
+use detail::{time_getter::TimeGetter, Chainstate, PropertyQueryError};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {

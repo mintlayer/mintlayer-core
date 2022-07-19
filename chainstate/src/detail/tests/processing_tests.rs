@@ -36,7 +36,7 @@ use common::{
     Uint256,
 };
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{self, Rng};
+use proptest::prelude::*;
 
 // Check that the genesis block cannot have the `Peer` source.
 #[test]
@@ -238,10 +238,12 @@ fn spend_inputs_simple() {
     });
 }
 
+proptest! {
+#![proptest_config(ProptestConfig::with_cases(1))]
 // Produce and process some blocks.
 #[test]
-fn straight_chain() {
-    common::concurrency::model(|| {
+fn straight_chain(i in 100..200) {
+    common::concurrency::model(move || {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -279,7 +281,7 @@ fn straight_chain() {
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
         let mut prev_block_index = genesis_index;
-        for _ in 0..random::make_pseudo_rng().gen_range(100..200) {
+        for _ in 0..i {
             assert_eq!(
                 chainstate.chainstate_storage.get_best_block_id().ok().flatten().unwrap(),
                 prev_block.get_id()
@@ -303,6 +305,7 @@ fn straight_chain() {
             prev_block = new_block;
         }
     });
+}
 }
 
 #[test]

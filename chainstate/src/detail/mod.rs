@@ -72,6 +72,7 @@ pub enum BlockSource {
 }
 
 impl Chainstate {
+    #[allow(dead_code)]
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
@@ -276,6 +277,7 @@ impl Chainstate {
         self.make_db_tx_ro().get_best_block_id()
     }
 
+    #[allow(dead_code)]
     pub fn get_header_from_height(
         &self,
         height: &BlockHeight,

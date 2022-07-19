@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use crate::detail::tests::*;
 use chainstate_storage::Store;
-use crypto::random::{self, Rng};
+use proptest::prelude::*;
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -61,14 +61,15 @@ fn simple_subscribe() {
     });
 }
 
+proptest! {
+#![proptest_config(ProptestConfig::with_cases(1))]
+
 // Subscribe to events several times, then process a block.
 #[test]
-fn several_subscribers() {
-    common::concurrency::model(|| {
+fn several_subscribers(subscribers in 8..256usize) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = random::make_pseudo_rng();
-        let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut chainstate, subscribers);
 
         let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
@@ -86,13 +87,9 @@ fn several_subscribers() {
 }
 
 #[test]
-fn several_subscribers_several_events() {
-    common::concurrency::model(|| {
+fn several_subscribers_several_events(subscribers in 4..16usize, blocks in 8..128usize) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
-
-        let mut rng = random::make_pseudo_rng();
-        let subscribers = rng.gen_range(4..16);
-        let blocks = rng.gen_range(8..128);
 
         let events = subscribe(&mut chainstate, subscribers);
         assert!(!chainstate.events_controller.subscribers().is_empty());
@@ -114,6 +111,7 @@ fn several_subscribers_several_events() {
         }
         assert_eq!(blocks * subscribers, events.lock().unwrap().len());
     });
+}
 }
 
 // An orphan block is rejected during processing, so it shouldn't trigger the new tip event.

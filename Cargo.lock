@@ -523,6 +523,7 @@ dependencies = [
  "logging",
  "mockall",
  "num",
+ "proptest",
  "replace_with",
  "rpc",
  "serde",

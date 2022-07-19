@@ -24,7 +24,10 @@ use common::{
     },
     primitives::{time, Amount, Id},
 };
-use crypto::random::{self, Rng};
+use proptest::prelude::*;
+
+proptest! {
+#![proptest_config(ProptestConfig::with_cases(1))]
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -39,12 +42,12 @@ use crypto::random::{self, Rng};
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_output_in_the_same_block() {
-    common::concurrency::model(|| {
+fn spend_output_in_the_same_block(atoms1 in 100_000..200_000u128, atoms2 in 1000..2000u128) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
+        let first_tx = tx_from_genesis(&chainstate, atoms1);
+        let second_tx = tx_from_tx(&first_tx, atoms2);
 
         let block = Block::new(
             vec![first_tx, second_tx],
@@ -80,12 +83,12 @@ fn spend_output_in_the_same_block() {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_output_in_the_same_block_invalid_order() {
-    common::concurrency::model(|| {
+fn spend_output_in_the_same_block_invalid_order(atoms1 in 100_000..200_000u128, atoms2 in 1000..2000u128) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
+        let first_tx = tx_from_genesis(&chainstate, atoms1);
+        let second_tx = tx_from_tx(&first_tx, atoms2);
 
         let block = Block::new(
             vec![second_tx, first_tx],
@@ -126,13 +129,13 @@ fn spend_output_in_the_same_block_invalid_order() {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn double_spend_tx_in_the_same_block() {
-    common::concurrency::model(|| {
+fn double_spend_tx_in_the_same_block(atoms1 in 100_000..200_000u128, atoms2 in 1000..2000u128) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
-        let third_tx = tx_from_tx(&first_tx);
+        let first_tx = tx_from_genesis(&chainstate, atoms1);
+        let second_tx = tx_from_tx(&first_tx, atoms2);
+        let third_tx = tx_from_tx(&first_tx, atoms2);
 
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
@@ -177,11 +180,11 @@ fn double_spend_tx_in_the_same_block() {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn double_spend_tx_in_another_block() {
-    common::concurrency::model(|| {
+fn double_spend_tx_in_another_block(atoms1 in 100_000..200_000u128) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
+        let first_tx = tx_from_genesis(&chainstate, atoms1);
         let first_block = Block::new(
             vec![first_tx.clone()],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
@@ -199,7 +202,7 @@ fn double_spend_tx_in_another_block() {
             Some(first_block_id.clone())
         );
 
-        let second_tx = tx_from_genesis(&chainstate);
+        let second_tx = tx_from_genesis(&chainstate, atoms1);
         let second_block = Block::new(
             vec![second_tx],
             Some(first_block_id.clone()),
@@ -224,8 +227,55 @@ fn double_spend_tx_in_another_block() {
     });
 }
 
+// Try to process a block where the second transaction's input is more then first output.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
+#[test]
+fn spend_bigger_output_in_the_same_block(atoms1 in 1000..2000u128, atoms2 in 100_000..200_000u128){
+    common::concurrency::model(move || {
+        let mut chainstate = setup_chainstate();
+
+        let first_tx = tx_from_genesis(&chainstate, atoms1);
+        let second_tx = tx_from_tx(&first_tx, atoms2);
+
+        let block = Block::new(
+            vec![first_tx, second_tx],
+            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            ConsensusData::None,
+        )
+        .expect(ERR_CREATE_BLOCK_FAIL);
+
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
+                Amount::from_atoms(atoms1),
+                Amount::from_atoms(atoms2)
+            ))
+        );
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND)
+                .expect(ERR_STORAGE_FAIL),
+            chainstate.chain_config.genesis_block_id()
+        );
+    });
+}
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
-fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
+fn tx_from_genesis(chainstate: &Chainstate, atoms: u128) -> Transaction {
     let genesis_block_tx_id =
         chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
     let input = TxInput::new(
@@ -234,17 +284,17 @@ fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
         empty_witness(),
     );
     let output = TxOutput::new(
-        Amount::from_atoms(random::make_pseudo_rng().gen_range(100_000..200_000)),
+        Amount::from_atoms(atoms),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
 }
 
 // Creates a transaction with an input based on the specified transaction id.
-fn tx_from_tx(tx: &Transaction) -> Transaction {
+fn tx_from_tx(tx: &Transaction, atoms: u128) -> Transaction {
     let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
     let output = TxOutput::new(
-        Amount::from_atoms(random::make_pseudo_rng().gen_range(1000..2000)),
+        Amount::from_atoms(atoms),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
