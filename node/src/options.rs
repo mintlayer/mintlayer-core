@@ -15,21 +15,15 @@
 
 //! The node command line options.
 
-use std::{
-    ffi::OsString,
-    fs,
-    net::SocketAddr,
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsString, fs, net::SocketAddr, path::PathBuf};
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
 use strum::VariantNames;
 
 use common::chain::config::ChainType;
 
-const DEFAULT_DATA_DIR: &str = "$HOME/.mintlayer";
 const CONFIG_NAME: &str = "config.toml";
 
 /// Mintlayer node executable
@@ -41,7 +35,7 @@ pub struct Options {
     pub log_path: Option<PathBuf>,
 
     /// The path to the data directory.
-    #[clap(short, long, default_value = DEFAULT_DATA_DIR)]
+    #[clap(short, long, default_value_os_t = default_data_dir())]
     data_dir: PathBuf,
 
     #[clap(subcommand)]
@@ -92,14 +86,8 @@ impl Options {
     ///
     /// The data directory is created as a side-effect of the invocation.
     pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
-        let mut options: Options = clap::Parser::parse_from(args);
+        let options: Options = clap::Parser::parse_from(args);
 
-        if options.data_dir == Path::new(DEFAULT_DATA_DIR) {
-            options.data_dir = UserDirs::new()
-                .ok_or_else(|| anyhow!("Unable to get home directory"))?
-                .home_dir()
-                .join(".mintlayer");
-        }
         // We want to check earlier if the directory can be created.
         fs::create_dir_all(&options.data_dir).with_context(|| {
             format!(
@@ -115,4 +103,12 @@ impl Options {
     pub fn config_path(&self) -> PathBuf {
         self.data_dir.join(CONFIG_NAME)
     }
+}
+
+fn default_data_dir() -> PathBuf {
+    UserDirs::new()
+        // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
+        .expect("Unable to get home directory")
+        .home_dir()
+        .join(".mintlayer")
 }
