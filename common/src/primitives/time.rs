@@ -73,6 +73,7 @@ mod tests {
     #[test]
     fn test_time() {
         logging::init_logging::<&std::path::Path>(None);
+        set(Duration::from_secs(1337));
 
         let handle = std::thread::spawn(move || {
             log::info!("p2p time: {}", get().as_secs());
@@ -90,7 +91,6 @@ mod tests {
             log::info!("rpc time: {}", get().as_secs());
             std::thread::sleep(Duration::from_millis(500));
 
-            set(Duration::from_secs(1337));
             assert_eq!(get().as_secs(), 1337);
             log::info!("rpc time: {}", get().as_secs());
             std::thread::sleep(Duration::from_millis(500));
