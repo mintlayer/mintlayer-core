@@ -83,6 +83,7 @@ impl BanScore for StateUpdateError {
             StateUpdateError::SignatureVerificationFailed => 100,
             StateUpdateError::InvalidOutputCount => 100,
             StateUpdateError::BlockHeightArithmeticError => 100,
+            StateUpdateError::BlockTimestampArithmeticError => 100,
             StateUpdateError::InputAdditionError => 100,
             StateUpdateError::DoubleSpendAttempt(_) => 100,
             StateUpdateError::OutputIndexOutOfRange {
@@ -98,7 +99,6 @@ impl BanScore for StateUpdateError {
             // Even though this is an invariant, we consider it a violation to be overly cautious
             StateUpdateError::SerializationInvariantError(_) => 100,
             StateUpdateError::TimeLockViolation => 100,
-            StateUpdateError::BlockTimestampArithmeticError => 100,
         }
     }
 }
