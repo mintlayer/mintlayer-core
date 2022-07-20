@@ -29,3 +29,4 @@ directories = "4"
 
 [dev-dependencies]
 assert_cmd = "2"
+tempdir = "0.3.7"

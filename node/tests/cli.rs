@@ -17,13 +17,13 @@ use std::{net::SocketAddr, path::Path, str::FromStr};
 
 use assert_cmd::Command;
 use directories::UserDirs;
+use tempdir::TempDir;
 
 use common::chain::config::ChainType;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
-const DATA_DIR: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/.mintlayer");
-const CONFIG_PATH: &str = concat!(env!("CARGO_TARGET_TMPDIR"), "/.mintlayer/config.toml");
+const CONFIG_NAME: &str = "config.toml";
 
 // This test is only needed because the node name ix hardcoded here, so if the name is changed we
 // get an error that is easy to understand.
@@ -39,20 +39,21 @@ fn no_args() {
 
 #[test]
 fn create_default_config() {
+    let data_dir = TempDir::new("").unwrap();
+
     Command::new(BIN_NAME)
         .arg("--datadir")
-        .arg(DATA_DIR)
+        .arg(data_dir.path().to_str().unwrap())
         .arg("create-config")
         .assert()
         .success();
-    assert!(Path::new(DATA_DIR).is_dir());
-    let config_path = Path::new(CONFIG_PATH);
+    let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, Path::new(DATA_DIR));
+    assert_eq!(config.data_dir, data_dir.path());
 
     assert_eq!(config.chainstate.max_db_commit_attempts, 10);
     assert_eq!(config.chainstate.max_orphan_blocks, 512);
@@ -70,14 +71,15 @@ fn create_default_config() {
 // Check that the config fields are overwritten by the run options.
 #[test]
 fn read_config_override_values() {
+    let data_dir = TempDir::new("").unwrap();
+
     Command::new(BIN_NAME)
         .arg("--datadir")
-        .arg(DATA_DIR)
+        .arg(data_dir.path().to_str().unwrap())
         .arg("create-config")
         .assert()
         .success();
-    assert!(Path::new(DATA_DIR).is_dir());
-    let config_path = Path::new(CONFIG_PATH);
+    let config_path = data_dir.path().join(CONFIG_NAME);
     assert!(config_path.is_file());
 
     let max_db_commit_attempts = 1;
@@ -96,7 +98,9 @@ fn read_config_override_values() {
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         rpc_addr: Some(rpc_addr),
     };
-    let config = NodeConfig::read(config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &options).unwrap();
+
+    assert_eq!(config.data_dir, data_dir.path());
 
     assert_eq!(
         config.chainstate.max_db_commit_attempts,
@@ -114,45 +118,46 @@ fn read_config_override_values() {
 // Check that the `--conf` option has the precedence over the default data directory value.
 #[test]
 fn custom_config_path() {
+    let temp_dir = TempDir::new("").unwrap();
+    let config_path = temp_dir.path().join(CONFIG_NAME);
+
     Command::new(BIN_NAME)
         .arg("--conf")
-        .arg(CONFIG_PATH)
+        .arg(config_path.to_str().unwrap())
         .arg("create-config")
         .assert()
         .success();
     let data_dir = UserDirs::new().unwrap().home_dir().join(".mintlayer");
     assert!(data_dir.is_dir());
-    let config_path = Path::new(CONFIG_PATH);
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_ne!(config.data_dir, Path::new(DATA_DIR));
     assert_eq!(config.data_dir, data_dir);
 }
 
 // Check that the `--conf` option has the precedence over the `--datadir` option.
 #[test]
 fn custom_config_path_and_data_dir() {
-    let config_path = concat!(env!("CARGO_TARGET_TMPDIR"), "/some/path/config.toml");
+    let data_dir = TempDir::new("").unwrap();
+    let temp_dir = TempDir::new("").unwrap();
+    let config_path = temp_dir.path().join(CONFIG_NAME);
 
     Command::new(BIN_NAME)
         .arg("--datadir")
-        .arg(DATA_DIR)
+        .arg(data_dir.path().to_str().unwrap())
         .arg("--conf")
-        .arg(config_path)
+        .arg(config_path.to_str().unwrap())
         .arg("create-config")
         .assert()
         .success();
-    assert!(Path::new(DATA_DIR).is_dir());
-    let config_path = Path::new(config_path);
     assert!(config_path.is_file());
 
     let options = default_run_options();
-    let config = NodeConfig::read(config_path, &options).unwrap();
+    let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, Path::new(DATA_DIR));
+    assert_eq!(config.data_dir, data_dir.path());
 }
 
 fn default_run_options() -> RunOptions {
