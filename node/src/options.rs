@@ -77,21 +77,21 @@ pub struct RunOptions {
     #[clap(long)]
     pub p2p_ban_threshold: Option<u32>,
 
-    /// The p2p timeout value in seconds.
+    /// Use IPv6 instead of IPv4 for mDNS.
     #[clap(long)]
-    pub p2p_outbound_connection_timeout: Option<u64>,
+    pub p2p_enable_ipv6_mdns_discovery: Option<bool>,
 
     /// Enable multicast DNS peer discovery
     #[clap(long)]
-    pub enable_mdns: Option<bool>,
+    pub p2p_enable_mdns: Option<bool>,
 
     /// Interval (in milliseconds) at which to poll the network for new peers.
     #[clap(long)]
-    pub mdns_query_interval: Option<u64>,
+    pub p2p_mdns_query_interval: Option<u64>,
 
-    /// Use IPv6 instead of IPv4 for mDNS.
+    /// The p2p timeout value in seconds.
     #[clap(long)]
-    pub mdns_enable_ipv6: Option<bool>,
+    pub p2p_outbound_connection_timeout: Option<u64>,
 
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]

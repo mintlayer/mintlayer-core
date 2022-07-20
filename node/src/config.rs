@@ -24,7 +24,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
-use p2p::config::P2pConfig;
+use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
 use crate::RunOptions;
@@ -101,26 +101,23 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
-        enable_mdns,
-        mdns_query_interval,
-        mdns_enable_ipv6,
+        mdns_config: _,
     } = config;
 
     let bind_address = options.p2p_addr.clone().unwrap_or(bind_address);
     let ban_threshold = options.p2p_ban_threshold.unwrap_or(ban_threshold);
     let outbound_connection_timeout =
         options.p2p_outbound_connection_timeout.unwrap_or(outbound_connection_timeout);
-    let enable_mdns = options.enable_mdns.unwrap_or(enable_mdns);
-    let mdns_query_interval = options.mdns_query_interval.unwrap_or(mdns_query_interval);
-    let mdns_enable_ipv6 = options.mdns_enable_ipv6.unwrap_or(mdns_enable_ipv6);
 
     P2pConfig {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
-        enable_mdns,
-        mdns_query_interval,
-        mdns_enable_ipv6,
+        mdns_config: MdnsConfig::from_options(
+            options.p2p_enable_mdns.unwrap_or(false),
+            options.p2p_mdns_query_interval,
+            options.p2p_enable_ipv6_mdns_discovery,
+        ),
     }
 }
 

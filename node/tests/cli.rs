@@ -97,9 +97,9 @@ fn read_config_override_values() {
         p2p_addr: Some(p2p_addr.into()),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
-        enable_mdns: Some(enable_mdns),
-        mdns_query_interval: None,
-        mdns_enable_ipv6: None,
+        p2p_enable_mdns: Some(enable_mdns),
+        p2p_mdns_query_interval: None,
+        p2p_enable_ipv6_mdns_discovery: None,
         rpc_addr: Some(rpc_addr),
     };
     let config = NodeConfig::read(&config_path, &options).unwrap();
@@ -172,9 +172,9 @@ fn default_run_options() -> RunOptions {
         p2p_addr: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,
-        enable_mdns: None,
-        mdns_query_interval: None,
-        mdns_enable_ipv6: None,
+        p2p_enable_mdns: None,
+        p2p_mdns_query_interval: None,
+        p2p_enable_ipv6_mdns_discovery: None,
         rpc_addr: None,
     }
 }

@@ -33,8 +33,7 @@ async fn test_libp2p_peer_discovery() {
         make_libp2p_addr(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            enable_mdns: true,
-            mdns_query_interval: 200,
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
     )
@@ -45,8 +44,7 @@ async fn test_libp2p_peer_discovery() {
         make_libp2p_addr(),
         Arc::clone(&config),
         Arc::new(config::P2pConfig {
-            enable_mdns: true,
-            mdns_query_interval: 200,
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
             ..Default::default()
         }),
     )
