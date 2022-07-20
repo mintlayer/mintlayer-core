@@ -348,7 +348,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             }
         };
 
-        ensure!(past_lock, StateUpdateError::TimelockViolation);
+        ensure!(past_lock, StateUpdateError::TimeLockViolation);
 
         Ok(())
     }

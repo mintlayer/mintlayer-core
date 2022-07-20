@@ -79,7 +79,7 @@ pub enum StateUpdateError {
     #[error("Serialization invariant failed for block `{0}`")]
     SerializationInvariantError(Id<Block>),
     #[error("Timelock rules violated")]
-    TimelockViolation,
+    TimeLockViolation,
 }
 
 impl From<chainstate_storage::Error> for StateUpdateError {

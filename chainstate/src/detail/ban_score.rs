@@ -97,7 +97,7 @@ impl BanScore for StateUpdateError {
             StateUpdateError::RewardAdditionError(_) => 100,
             // Even though this is an invariant, we consider it a violation to be overly cautious
             StateUpdateError::SerializationInvariantError(_) => 100,
-            StateUpdateError::TimelockViolation => 100,
+            StateUpdateError::TimeLockViolation => 100,
         }
     }
 }
