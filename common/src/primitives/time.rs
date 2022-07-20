@@ -93,11 +93,11 @@ mod tests {
             std::thread::sleep(Duration::from_millis(500));
         });
 
+        handle.join();
+
         reset();
         assert_ne!(get().as_secs(), 1337);
         log::info!("rpc time: {}", get().as_secs());
-
-        handle.join();
     }
 
     #[test]
