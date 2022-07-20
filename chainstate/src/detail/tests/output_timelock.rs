@@ -773,7 +773,7 @@ fn output_lock_for_block_count_attempted_overflow() {
                 OutputPurpose::Transfer(anyonecanspend_address()),
             )];
 
-            let inputs = vec![locked_output.clone()];
+            let inputs = vec![locked_output];
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
