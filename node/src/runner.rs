@@ -100,7 +100,7 @@ pub async fn run(options: Options) -> Result<()> {
             let path = options.config_path();
             let config = NodeConfig::new(options.data_dir)?;
             let config = toml::to_string(&config).context("Failed to serialize config")?;
-            log::trace!("Saving config to {:?}\n: {config:#?}", options.config_path);
+            log::trace!("Saving config to {path:?}\n: {config:#?}");
             fs::write(&path, config)
                 .with_context(|| format!("Failed to write config to the '{path:?}' file"))?;
             Ok(())

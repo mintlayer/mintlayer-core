@@ -112,7 +112,7 @@ impl Options {
 
     /// Returns a path to the config file.
     pub fn config_path(&self) -> PathBuf {
-        self.config_path.clone().unwrap_or(self.data_dir.join(CONFIG_NAME))
+        self.config_path.clone().unwrap_or_else(|| self.data_dir.join(CONFIG_NAME))
     }
 }
 
