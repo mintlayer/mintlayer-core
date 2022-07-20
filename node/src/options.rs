@@ -89,6 +89,10 @@ pub struct RunOptions {
     #[clap(long)]
     pub mdns_query_interval: Option<u64>,
 
+    /// Use IPv6 instead of IPv4 for mDNS.
+    #[clap(long)]
+    pub mdns_enable_ipv6: Option<bool>,
+
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,

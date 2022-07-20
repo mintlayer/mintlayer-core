@@ -99,6 +99,7 @@ fn read_config_override_values() {
         p2p_outbound_connection_timeout: Some(p2p_timeout),
         enable_mdns: Some(enable_mdns),
         mdns_query_interval: None,
+        mdns_enable_ipv6: None,
         rpc_addr: Some(rpc_addr),
     };
     let config = NodeConfig::read(&config_path, &options).unwrap();
@@ -173,6 +174,7 @@ fn default_run_options() -> RunOptions {
         p2p_outbound_connection_timeout: None,
         enable_mdns: None,
         mdns_query_interval: None,
+        mdns_enable_ipv6: None,
         rpc_addr: None,
     }
 }

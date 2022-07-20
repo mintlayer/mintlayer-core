@@ -53,7 +53,12 @@ pub struct DiscoveryManager {
 impl DiscoveryManager {
     pub async fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
         Self {
-            mdns: mdns::Mdns::new(p2p_config.enable_mdns, p2p_config.mdns_query_interval).await,
+            mdns: mdns::Mdns::new(
+                p2p_config.enable_mdns,
+                p2p_config.mdns_enable_ipv6,
+                p2p_config.mdns_query_interval,
+            )
+            .await,
         }
     }
 }
