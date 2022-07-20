@@ -97,10 +97,10 @@ pub async fn initialize(
 pub async fn run(options: Options) -> Result<()> {
     match options.command {
         Command::CreateConfig => {
-            let config = NodeConfig::new()?;
-            let config = toml::to_string(&config).context("Failed to serialize config")?;
             let path = options.config_path();
-            log::trace!("Saving config to {path:?}\n: {config:#?}");
+            let config = NodeConfig::new(options.data_dir)?;
+            let config = toml::to_string(&config).context("Failed to serialize config")?;
+            log::trace!("Saving config to {:?}\n: {config:#?}", options.config_path);
             fs::write(&path, config)
                 .with_context(|| format!("Failed to write config to the '{path:?}' file"))?;
             Ok(())

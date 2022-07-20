@@ -15,7 +15,10 @@
 
 //! The node configuration.
 
-use std::{fs, path::Path};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -29,6 +32,11 @@ use crate::RunOptions;
 /// The node configuration.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct NodeConfig {
+    /// The path to the data directory.
+    ///
+    /// By default the config file is created inside of the data directory.
+    pub data_dir: PathBuf,
+
     // Subsystems configurations.
     pub chainstate: ChainstateConfig,
     pub p2p: P2pConfig,
@@ -36,12 +44,13 @@ pub struct NodeConfig {
 }
 
 impl NodeConfig {
-    /// Creates a new `Config` instance for the specified chain type.
-    pub fn new() -> Result<Self> {
+    /// Creates a new `Config` instance with the given data directory path.
+    pub fn new(data_dir: PathBuf) -> Result<Self> {
         let chainstate = ChainstateConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
+            data_dir,
             chainstate,
             p2p,
             rpc,
@@ -53,6 +62,7 @@ impl NodeConfig {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
+            data_dir,
             chainstate,
             p2p,
             rpc,
@@ -63,6 +73,7 @@ impl NodeConfig {
         let rpc = rpc_config(rpc, options);
 
         Ok(Self {
+            data_dir,
             chainstate,
             p2p,
             rpc,

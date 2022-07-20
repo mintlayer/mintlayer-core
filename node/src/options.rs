@@ -24,6 +24,7 @@ use strum::VariantNames;
 
 use common::chain::config::ChainType;
 
+const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
 
 /// Mintlayer node executable
@@ -35,8 +36,12 @@ pub struct Options {
     pub log_path: Option<PathBuf>,
 
     /// The path to the data directory.
-    #[clap(short, long, default_value_os_t = default_data_dir())]
-    datadir: PathBuf,
+    #[clap(short, long = "datadir", default_value_os_t = default_data_dir())]
+    pub data_dir: PathBuf,
+
+    /// The path to the config file.
+    #[clap(short, long = "conf")]
+    config_path: Option<PathBuf>,
 
     #[clap(subcommand)]
     pub command: Command,
@@ -88,20 +93,26 @@ impl Options {
     pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
         let options: Options = clap::Parser::parse_from(args);
 
-        // We want to check earlier if the directory can be created.
-        fs::create_dir_all(&options.datadir).with_context(|| {
+        // We want to check earlier if directories can be created.
+        fs::create_dir_all(&options.data_dir).with_context(|| {
             format!(
                 "Failed to create the '{:?}' data directory",
-                options.datadir
+                options.data_dir
             )
         })?;
+        // Config can potentially be stored in location different from the data directory.
+        if let Some(config_dir) = options.config_path.as_ref().and_then(|p| p.parent()) {
+            fs::create_dir_all(config_dir).with_context(|| {
+                format!("Failed to create the '{config_dir:?}' config directory")
+            })?;
+        }
 
         Ok(options)
     }
 
     /// Returns a path to the config file.
     pub fn config_path(&self) -> PathBuf {
-        self.datadir.join(CONFIG_NAME)
+        self.config_path.clone().unwrap_or(self.data_dir.join(CONFIG_NAME))
     }
 }
 
@@ -110,5 +121,5 @@ fn default_data_dir() -> PathBuf {
         // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
         .expect("Unable to get home directory")
         .home_dir()
-        .join(".mintlayer")
+        .join(DATA_DIR_NAME)
 }
