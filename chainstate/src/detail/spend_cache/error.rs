@@ -57,8 +57,10 @@ pub enum StateUpdateError {
     SignatureVerificationFailed,
     #[error("Invalid output count")]
     InvalidOutputCount,
-    #[error("Block distance calculation for maturity failed")]
+    #[error("Error while calculating block height; possibly an overflow")]
     BlockHeightArithmeticError,
+    #[error("Error while calculating timestamps; possibly an overflow")]
+    BlockTimestampArithmeticError,
     #[error("Input addition error")]
     InputAdditionError,
     #[error("Double-spend attempt")]

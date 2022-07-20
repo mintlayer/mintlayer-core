@@ -344,7 +344,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             }
             OutputTimeLock::ForSeconds(dt) => {
                 spending_time.as_duration_since_epoch()
-                    >= source_block_time.as_duration_since_epoch() + Duration::from_secs(*dt)
+                    >= source_block_time
+                        .as_duration_since_epoch()
+                        .checked_add(Duration::from_secs(*dt))
+                        .ok_or(StateUpdateError::BlockTimestampArithmeticError)?
             }
         };
 
