@@ -596,3 +596,90 @@ fn output_lock_for_block_count() {
         }
     });
 }
+
+#[test]
+fn output_lock_for_lock_count_but_spend_at_same_block() {
+    common::concurrency::model(|| {
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
+        let storage = Store::new_empty().unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
+
+        let block_count_that_unlocks = 10;
+
+        // Process the genesis block.
+        chainstate
+            .process_block(
+                chainstate.chain_config.genesis_block().clone(),
+                BlockSource::Local,
+            )
+            .unwrap();
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            Some(chainstate.chain_config.genesis_block_id())
+        );
+
+        // create the first block, with a locked output
+        {
+            let prev_block = chainstate.chain_config.genesis_block();
+
+            let outputs1 = vec![
+                TxOutput::new(
+                    Amount::from_atoms(100000),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                ),
+                TxOutput::new(
+                    Amount::from_atoms(100000),
+                    OutputPurpose::LockThenTransfer(
+                        anyonecanspend_address(),
+                        OutputTimeLock::ForBlockCount(block_count_that_unlocks),
+                    ),
+                ),
+            ];
+            let inputs1 = vec![TxInput::new(
+                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                0,
+                InputWitness::NoSignature(None),
+            )];
+            let tx1 = Transaction::new(0, inputs1, outputs1, 0).expect(ERR_CREATE_TX_FAIL);
+
+            let outputs2 = vec![TxOutput::new(
+                Amount::from_atoms(50000),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            )];
+            let inputs2 = vec![TxInput::new(
+                OutPointSourceId::Transaction(tx1.get_id()),
+                1,
+                InputWitness::NoSignature(None),
+            )];
+            let tx2 = Transaction::new(0, inputs2, outputs2, 0).expect(ERR_CREATE_TX_FAIL);
+
+            let block = Block::new(
+                vec![tx1, tx2],
+                Some(prev_block.get_id()),
+                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                common::chain::block::ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+            assert_eq!(
+                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            );
+
+            assert_eq!(
+                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                BlockHeight::new(0)
+            );
+        }
+    });
+}
