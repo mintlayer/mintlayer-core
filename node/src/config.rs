@@ -35,7 +35,7 @@ pub struct NodeConfig {
     /// The path to the data directory.
     ///
     /// By default the config file is created inside of the data directory.
-    pub data_dir: PathBuf,
+    pub datadir: PathBuf,
 
     // Subsystems configurations.
     pub chainstate: ChainstateConfig,
@@ -45,12 +45,12 @@ pub struct NodeConfig {
 
 impl NodeConfig {
     /// Creates a new `Config` instance with the given data directory path.
-    pub fn new(data_dir: PathBuf) -> Result<Self> {
+    pub fn new(datadir: PathBuf) -> Result<Self> {
         let chainstate = ChainstateConfig::new();
         let p2p = P2pConfig::new();
         let rpc = RpcConfig::new()?;
         Ok(Self {
-            data_dir,
+            datadir,
             chainstate,
             p2p,
             rpc,
@@ -62,7 +62,7 @@ impl NodeConfig {
         let config = fs::read_to_string(config_path)
             .with_context(|| format!("Failed to read '{config_path:?}' config"))?;
         let NodeConfig {
-            data_dir,
+            datadir,
             chainstate,
             p2p,
             rpc,
@@ -73,7 +73,7 @@ impl NodeConfig {
         let rpc = rpc_config(rpc, options);
 
         Ok(Self {
-            data_dir,
+            datadir,
             chainstate,
             p2p,
             rpc,

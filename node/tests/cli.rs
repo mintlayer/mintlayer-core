@@ -53,7 +53,7 @@ fn create_default_config() {
     let options = default_run_options();
     let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, data_dir.path());
+    assert_eq!(config.datadir, data_dir.path());
 
     assert_eq!(config.chainstate.max_db_commit_attempts, 10);
     assert_eq!(config.chainstate.max_orphan_blocks, 512);
@@ -100,7 +100,7 @@ fn read_config_override_values() {
     };
     let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, data_dir.path());
+    assert_eq!(config.datadir, data_dir.path());
 
     assert_eq!(
         config.chainstate.max_db_commit_attempts,
@@ -134,7 +134,7 @@ fn custom_config_path() {
     let options = default_run_options();
     let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, data_dir);
+    assert_eq!(config.datadir, data_dir);
 }
 
 // Check that the `--conf` option has the precedence over the `--datadir` option.
@@ -157,7 +157,7 @@ fn custom_config_path_and_data_dir() {
     let options = default_run_options();
     let config = NodeConfig::read(&config_path, &options).unwrap();
 
-    assert_eq!(config.data_dir, data_dir.path());
+    assert_eq!(config.datadir, data_dir.path());
 }
 
 fn default_run_options() -> RunOptions {
