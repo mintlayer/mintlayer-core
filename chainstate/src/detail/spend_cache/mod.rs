@@ -319,19 +319,22 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
     ) -> Result<(), StateUpdateError> {
+        use common::chain::timelock::OutputTimeLock;
+        use common::chain::OutputPurpose;
+
         let timelock = match output.purpose() {
-            common::chain::OutputPurpose::Transfer(_) => return Ok(()),
-            common::chain::OutputPurpose::LockThenTransfer(_, tl) => tl,
-            common::chain::OutputPurpose::StakeLock(_) => return Ok(()),
+            OutputPurpose::Transfer(_) => return Ok(()),
+            OutputPurpose::LockThenTransfer(_, tl) => tl,
+            OutputPurpose::StakeLock(_) => return Ok(()),
         };
 
         let source_block_height = source_block_index.block_height();
         let source_block_time = source_block_index.block_timestamp();
 
         let past_lock = match timelock {
-            common::chain::timelock::OutputTimeLock::UntilHeight(h) => (spend_height >= h),
-            common::chain::timelock::OutputTimeLock::UntilTime(t) => (spending_time >= t),
-            common::chain::timelock::OutputTimeLock::ForBlockCount(d) => {
+            OutputTimeLock::UntilHeight(h) => (spend_height >= h),
+            OutputTimeLock::UntilTime(t) => (spending_time >= t),
+            OutputTimeLock::ForBlockCount(d) => {
                 let d: i64 =
                     (*d).try_into().map_err(|_| StateUpdateError::BlockHeightArithmeticError)?;
                 let d = BlockDistance::from(d);
@@ -339,7 +342,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     >= (source_block_height + d)
                         .ok_or(StateUpdateError::BlockHeightArithmeticError)?
             }
-            common::chain::timelock::OutputTimeLock::ForSeconds(dt) => {
+            OutputTimeLock::ForSeconds(dt) => {
                 spending_time.as_duration_since_epoch()
                     >= source_block_time.as_duration_since_epoch() + Duration::from_secs(*dt)
             }
