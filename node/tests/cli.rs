@@ -120,7 +120,8 @@ fn custom_config_path() {
         .arg("create-config")
         .assert()
         .success();
-    assert!(Path::new(DATA_DIR).is_dir());
+    let data_dir = UserDirs::new().unwrap().home_dir().join(".mintlayer");
+    assert!(data_dir.is_dir());
     let config_path = Path::new(CONFIG_PATH);
     assert!(config_path.is_file());
 
@@ -128,9 +129,7 @@ fn custom_config_path() {
     let config = NodeConfig::read(config_path, &options).unwrap();
 
     assert_ne!(config.data_dir, Path::new(DATA_DIR));
-
-    let dirs = UserDirs::new().unwrap();
-    assert_eq!(config.data_dir, dirs.home_dir().join(".mintlayer"))
+    assert_eq!(config.data_dir, data_dir);
 }
 
 // Check that the `--conf` option has the precedence over the `--datadir` option.
