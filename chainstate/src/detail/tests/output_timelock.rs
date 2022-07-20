@@ -86,7 +86,7 @@ fn output_lock_until_height() {
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
-            chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block, BlockSource::Local).unwrap();
 
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
@@ -126,7 +126,7 @@ fn output_lock_until_height() {
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
             assert_eq!(
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
+                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
 
@@ -160,7 +160,7 @@ fn output_lock_until_height() {
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
-            chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block, BlockSource::Local).unwrap();
 
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
@@ -246,7 +246,7 @@ fn output_lock_until_height() {
                 OutputPurpose::Transfer(anyonecanspend_address()),
             )];
 
-            let inputs = vec![locked_output.clone()];
+            let inputs = vec![locked_output];
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
@@ -256,7 +256,7 @@ fn output_lock_until_height() {
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
 
-            chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
+            chainstate.process_block(block, BlockSource::Local).unwrap();
 
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
@@ -341,7 +341,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
             assert_eq!(
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
+                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
 
