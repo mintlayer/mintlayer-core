@@ -20,7 +20,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent};
+use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
 use super::ChainstateInterface;
 
@@ -43,10 +43,10 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> Result<Option<Id<Block>>, ChainstateError>;
         fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, ChainstateError>;
-        fn get_locator(&self) -> Result<Vec<BlockHeader>, ChainstateError>;
+        fn get_locator(&self) -> Result<Locator, ChainstateError>;
         fn get_headers(
             &self,
-            locator: Vec<BlockHeader>,
+            locator: Locator,
         ) -> Result<Vec<BlockHeader>, ChainstateError>;
         fn filter_already_existing_blocks(
             &self,

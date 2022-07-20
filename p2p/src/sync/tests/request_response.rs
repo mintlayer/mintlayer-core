@@ -33,7 +33,7 @@ async fn test_request_response() {
     mgr1.handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(vec![])),
+            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -44,7 +44,10 @@ async fn test_request_response() {
         request,
     }) = mgr2.handle.poll_next().await
     {
-        assert_eq!(request, Request::HeaderRequest(HeaderRequest::new(vec![])));
+        assert_eq!(
+            request,
+            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![])))
+        );
 
         mgr2.handle
             .send_response(
@@ -73,7 +76,7 @@ async fn test_multiple_requests_and_responses() {
         .handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(vec![])),
+            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -83,7 +86,7 @@ async fn test_multiple_requests_and_responses() {
         .handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(vec![])),
+            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();

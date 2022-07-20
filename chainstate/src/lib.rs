@@ -25,7 +25,7 @@ pub mod rpc;
 pub use crate::{
     chainstate_interface_impl::ChainstateInterfaceImpl,
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource, Chainstate},
+    detail::{ban_score, BlockError, BlockSource, Chainstate, Locator},
 };
 
 use std::sync::Arc;

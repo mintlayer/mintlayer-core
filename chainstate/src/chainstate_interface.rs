@@ -23,7 +23,7 @@ use common::{
     primitives::{BlockHeight, Id},
 };
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent};
+use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
@@ -47,14 +47,14 @@ pub trait ChainstateInterface: Send {
     ///
     /// This returns a relatively short sequence even for a long chain. Such sequence can be used
     /// to quickly find a common ancestor between different chains.
-    fn get_locator(&self) -> Result<Vec<BlockHeader>, ChainstateError>;
+    fn get_locator(&self) -> Result<Locator, ChainstateError>;
 
     /// Returns a list of block headers starting from the last locator's block that is in the main
     /// chain.
     ///
     /// The number of returned headers is limited by the `HEADER_LIMIT` constant. The genesis block
     /// header is returned in case there is no common ancestor with a better block height.
-    fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ChainstateError>;
+    fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError>;
 
     /// Removes all headers that are already known to the chain from the given vector.
     fn filter_already_existing_blocks(
