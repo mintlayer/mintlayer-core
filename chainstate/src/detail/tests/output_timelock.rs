@@ -95,9 +95,9 @@ fn output_lock_until_height() {
         }
 
         let locked_output = {
-            let prev_block_at_height =
+            let prev_block_id =
                 chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
             TxInput::new(
                 OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
                 1,
@@ -107,9 +107,9 @@ fn output_lock_until_height() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_at_height =
-                chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -138,9 +138,9 @@ fn output_lock_until_height() {
 
         // create another block, and spend the first input from the previous block
         {
-            let prev_block_at_height =
+            let prev_block_id =
                 chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(10000),
@@ -177,11 +177,9 @@ fn output_lock_until_height() {
             logging::log::info!("Submitting block of height: {}", height);
             // create another block, and spend the first input from the previous block
             {
-                let prev_block_at_height = chainstate
-                    .get_block_id_from_height(&BlockHeight::new(height - 1))
-                    .unwrap()
-                    .unwrap();
-                let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
                 let outputs = vec![TxOutput::new(
                     Amount::from_atoms(5000),
@@ -210,11 +208,9 @@ fn output_lock_until_height() {
 
             // create another block, with no transactions, and get the blockchain to progress
             {
-                let prev_block_at_height = chainstate
-                    .get_block_id_from_height(&BlockHeight::new(height - 1))
-                    .unwrap()
-                    .unwrap();
-                let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
                 let block = Block::new(
                     vec![],
@@ -235,11 +231,14 @@ fn output_lock_until_height() {
         // now we should be able to spend it at block_height_that_unlocks
         {
             let height = block_height_that_unlocks;
-            let prev_block_at_height = chainstate
+            let prev_block_id = chainstate
                 .get_block_id_from_height(&BlockHeight::new(height - 1))
                 .unwrap()
                 .unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
+
+            let tip_id = chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            assert_eq!(tip_id, prev_block_id);
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -426,9 +425,9 @@ fn output_lock_for_block_count() {
         }
 
         let locked_output = {
-            let prev_block_at_height =
+            let prev_block_id =
                 chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
             TxInput::new(
                 OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
                 1,
@@ -438,9 +437,9 @@ fn output_lock_for_block_count() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_at_height =
-                chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -469,9 +468,9 @@ fn output_lock_for_block_count() {
 
         // create another block, and spend the first input from the previous block
         {
-            let prev_block_at_height =
-                chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(10000),
@@ -508,11 +507,9 @@ fn output_lock_for_block_count() {
             logging::log::info!("Submitting block of height: {}", height);
             // create another block, and spend the first input from the previous block
             {
-                let prev_block_at_height = chainstate
-                    .get_block_id_from_height(&BlockHeight::new(height - 1))
-                    .unwrap()
-                    .unwrap();
-                let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
                 let outputs = vec![TxOutput::new(
                     Amount::from_atoms(5000),
@@ -541,11 +538,9 @@ fn output_lock_for_block_count() {
 
             // create another block, with no transactions, and get the blockchain to progress
             {
-                let prev_block_at_height = chainstate
-                    .get_block_id_from_height(&BlockHeight::new(height - 1))
-                    .unwrap()
-                    .unwrap();
-                let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
                 let block = Block::new(
                     vec![],
@@ -566,11 +561,11 @@ fn output_lock_for_block_count() {
         // now we should be able to spend it at block_count_that_unlocks
         {
             let height = block_count_that_unlocks + block_height_with_locked_output;
-            let prev_block_at_height = chainstate
+            let prev_block_id = chainstate
                 .get_block_id_from_height(&BlockHeight::new(height - 1))
                 .unwrap()
                 .unwrap();
-            let prev_block = chainstate.get_block(prev_block_at_height).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
