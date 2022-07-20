@@ -82,9 +82,6 @@ mod tests {
             log::info!("p2p time: {}", get().as_secs());
             assert_eq!(get().as_secs(), 1337);
             std::thread::sleep(Duration::from_secs(1));
-
-            log::info!("p2p time: {}", get().as_secs());
-            assert_ne!(get().as_secs(), 1337);
         });
 
         std::thread::spawn(move || {
@@ -94,11 +91,11 @@ mod tests {
             assert_eq!(get().as_secs(), 1337);
             log::info!("rpc time: {}", get().as_secs());
             std::thread::sleep(Duration::from_millis(500));
-
-            reset();
-            assert_ne!(get().as_secs(), 1337);
-            log::info!("rpc time: {}", get().as_secs());
         });
+
+        reset();
+        assert_ne!(get().as_secs(), 1337);
+        log::info!("rpc time: {}", get().as_secs());
 
         handle.join();
     }
