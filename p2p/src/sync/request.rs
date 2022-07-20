@@ -66,10 +66,7 @@ where
     ///
     /// # Arguments
     /// * `locator` - locator object that shows the state of the local node
-    pub fn make_header_request(
-        &self,
-        locator: Vec<BlockHeader>,
-    ) -> (message::Request, RequestType) {
+    pub fn make_header_request(&self, locator: Locator) -> (message::Request, RequestType) {
         (
             message::Request::HeaderRequest(message::HeaderRequest::new(locator)),
             RequestType::GetHeaders,
@@ -165,7 +162,7 @@ where
     pub async fn send_header_request(
         &mut self,
         peer_id: T::PeerId,
-        locator: Vec<BlockHeader>,
+        locator: Locator,
         retry_count: usize,
     ) -> crate::Result<()> {
         ensure!(

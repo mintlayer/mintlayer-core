@@ -21,6 +21,7 @@ use crate::{
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
+    Locator,
 };
 use common::{
     chain::{
@@ -162,7 +163,7 @@ where
         &mut self,
         _peer_id: T::PeerId,
         request_id: T::RequestId,
-        locator: Vec<BlockHeader>,
+        locator: Locator,
     ) -> crate::Result<()> {
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
@@ -228,7 +229,7 @@ where
                 ensure!(
                     locator
                         .iter()
-                        .any(|header| &Some(header.get_id()) == headers[0].prev_block_id())
+                        .any(|header_id| &Some(header_id.clone()) == headers[0].prev_block_id())
                         || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
                     P2pError::ProtocolError(ProtocolError::InvalidMessage),
                 );
