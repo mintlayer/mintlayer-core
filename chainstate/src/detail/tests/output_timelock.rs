@@ -565,7 +565,7 @@ fn output_lock_for_block_count() {
                 .get_block_id_from_height(&BlockHeight::new(height - 1))
                 .unwrap()
                 .unwrap();
-            let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
