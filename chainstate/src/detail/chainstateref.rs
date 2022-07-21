@@ -888,7 +888,16 @@ fn get_change_amount(
                         None
                     }
                 }
-                AssetData::TokenIssuanceV1 { .. } | AssetData::TokenBurnV1 { .. } => None,
+                AssetData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue: _,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                }
+                | AssetData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => None,
             },
         })
         .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
