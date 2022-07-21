@@ -513,18 +513,20 @@ fn peer_discovered_libp2p() {
         };
 
     // first add two new peers, both with ipv4 and ipv6 address
-    peerdb.discover_peers(&[
-        types::AddrInfo {
+    peerdb.peer_discovered(
+        &types::AddrInfo {
             peer_id: id_1,
             ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
             ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
         },
-        types::AddrInfo {
+    );
+    peerdb.peer_discovered(
+        &types::AddrInfo {
             peer_id: id_2,
             ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
             ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
         },
-    ]);
+    );
 
     assert_eq!(peerdb.peers().len(), 2);
     assert_eq!(
@@ -548,18 +550,20 @@ fn peer_discovered_libp2p() {
     );
 
     // then discover one new peer and two additional ipv6 addresses for peer 1
-    peerdb.discover_peers(&[
-        types::AddrInfo {
+    peerdb.peer_discovered(
+        &types::AddrInfo {
             peer_id: id_1,
             ip4: vec![],
             ip6: vec!["/ip6/::1/tcp/9094".parse().unwrap(), "/ip6/::1/tcp/9095".parse().unwrap()],
         },
-        types::AddrInfo {
+    );
+    peerdb.peer_discovered(
+        &types::AddrInfo {
             peer_id: id_3,
             ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
             ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
         },
-    ]);
+    );
 
     check_peer(
         peerdb.peers(),

@@ -194,32 +194,30 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Discover new peer addresses
-    pub fn discover_peers(&mut self, peers: &[types::AddrInfo<T>]) {
-        for info in peers.iter() {
-            match self.peers.entry(info.peer_id) {
-                Entry::Occupied(mut entry) => match entry.get_mut() {
-                    Peer::Discovered(addr_info) => {
-                        // TODO: duplicates
-                        addr_info.extend(info.ip6.clone());
-                        addr_info.extend(info.ip4.clone());
-                    }
-                    Peer::Idle(_info) | Peer::Active(_info) => {
-                        // TODO: update existing information of a known peer
-                    }
-                    Peer::Banned(_info) => {
-                        // TODO: update existing information of a known peer
-                    }
-                },
-                Entry::Vacant(entry) => {
-                    entry.insert(Peer::Discovered(VecDeque::from_iter(
-                        info.ip6
-                            .iter()
-                            .cloned()
-                            .chain(info.ip4.iter().cloned())
-                            .collect::<Vec<_>>(),
-                    )));
-                    self.available.insert(info.peer_id);
+    pub fn peer_discovered(&mut self, info: &types::AddrInfo<T>) {
+        match self.peers.entry(info.peer_id) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                Peer::Discovered(addr_info) => {
+                    // TODO: duplicates
+                    addr_info.extend(info.ip6.clone());
+                    addr_info.extend(info.ip4.clone());
                 }
+                Peer::Idle(_info) | Peer::Active(_info) => {
+                    // TODO: update existing information of a known peer
+                }
+                Peer::Banned(_info) => {
+                    // TODO: update existing information of a known peer
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(Peer::Discovered(VecDeque::from_iter(
+                    info.ip6
+                        .iter()
+                        .cloned()
+                        .chain(info.ip4.iter().cloned())
+                        .collect::<Vec<_>>(),
+                )));
+                self.available.insert(info.peer_id);
             }
         }
     }

@@ -103,7 +103,9 @@ where
 
     /// Update the list of known peers or known peer's list of addresses
     fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) {
-        self.peerdb.discover_peers(peers)
+        peers.iter().for_each(|peer| {
+            self.peerdb.peer_discovered(peer);
+        })
     }
 
     /// Update the list of known peers or known peer's list of addresses
