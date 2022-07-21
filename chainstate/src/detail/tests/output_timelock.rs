@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use chainstate_storage::{BlockchainStorageRead, Store};
+use chainstate_storage::Store;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block},
@@ -21,10 +21,7 @@ use common::{
 use crate::{
     detail::{
         spend_cache::error::StateUpdateError,
-        tests::{
-            anyonecanspend_address, ERR_BEST_BLOCK_NOT_FOUND, ERR_CREATE_BLOCK_FAIL,
-            ERR_CREATE_TX_FAIL,
-        },
+        tests::{anyonecanspend_address, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL},
     },
     BlockError, BlockSource, Chainstate, ChainstateConfig, TimeGetter,
 };
@@ -35,7 +32,7 @@ fn output_lock_until_height() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -45,21 +42,6 @@ fn output_lock_until_height() {
         .unwrap();
 
         let block_height_that_unlocks = 10;
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
@@ -234,7 +216,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -244,21 +226,6 @@ fn output_lock_until_height_but_spend_at_same_block() {
         .unwrap();
 
         let block_height_that_unlocks = 10;
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         {
@@ -321,7 +288,7 @@ fn output_lock_for_block_count() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -332,21 +299,6 @@ fn output_lock_for_block_count() {
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
@@ -518,7 +470,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -528,21 +480,6 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
         .unwrap();
 
         let block_count_that_unlocks = 10;
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         {
@@ -605,7 +542,7 @@ fn output_lock_for_block_count_attempted_overflow() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -615,21 +552,6 @@ fn output_lock_for_block_count_attempted_overflow() {
         .unwrap();
 
         let block_count_that_unlocks = u64::MAX;
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
@@ -683,23 +605,7 @@ fn output_lock_until_time() {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
         let mut chainstate =
-            Chainstate::new_no_genesis(chain_config, chainstate_config, storage, None, time_getter)
-                .unwrap();
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
+            Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
         current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
@@ -878,7 +784,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -886,21 +792,6 @@ fn output_lock_until_time_but_spend_at_same_block() {
             Default::default(),
         )
         .unwrap();
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 3;
@@ -972,23 +863,7 @@ fn output_lock_for_seconds() {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
         let mut chainstate =
-            Chainstate::new_no_genesis(chain_config, chainstate_config, storage, None, time_getter)
-                .unwrap();
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
+            Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
         current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
@@ -1162,7 +1037,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -1170,21 +1045,6 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             Default::default(),
         )
         .unwrap();
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         {
@@ -1247,7 +1107,7 @@ fn output_lock_for_seconds_attempted_overflow() {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new_no_genesis(
+        let mut chainstate = Chainstate::new(
             chain_config,
             chainstate_config,
             storage,
@@ -1255,21 +1115,6 @@ fn output_lock_for_seconds_attempted_overflow() {
             Default::default(),
         )
         .unwrap();
-
-        // Process the genesis block.
-        chainstate
-            .process_block(
-                chainstate.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .unwrap();
-        assert_eq!(
-            chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(chainstate.chain_config.genesis_block_id())
-        );
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
