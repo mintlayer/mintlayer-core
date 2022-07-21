@@ -19,15 +19,11 @@ use std::iter;
 
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use chainstate_storage::BlockchainStorageRead;
-use proptest::prelude::*;
-
-proptest! {
-#![proptest_config(ProptestConfig::with_cases(1))]
 
 // Generate some blocks and check that a locator is of expected length.
 #[test]
-fn get_locator(new_blocks in 1..2000usize) {
-    common::concurrency::model(move || {
+fn get_locator() {
+    common::concurrency::model(|| {
         let mut btf = BlockTestFramework::new();
 
         // There is only one (genesis) block.
@@ -36,9 +32,11 @@ fn get_locator(new_blocks in 1..2000usize) {
         assert_eq!(btf.genesis().header(), &locator[0]);
 
         // Expand the chain several times.
+        let mut rng = make_seedable_rng(None);
         let mut blocks = 1;
         let mut last_block = btf.genesis().clone();
         for _ in 0..8 {
+            let new_blocks = rng.gen_range(1..2000);
             last_block = btf.create_chain(&last_block.get_id(), new_blocks).unwrap();
             blocks += new_blocks;
 
@@ -65,13 +63,14 @@ fn get_locator(new_blocks in 1..2000usize) {
 
 // Check that new blocks (produced after a locator is created) are returned.
 #[test]
-fn get_headers(initial_blocks_count in 1000usize..2000,
-               blocks_count in 1000usize..i64::from(HEADER_LIMIT).try_into().unwrap()) {
-    common::concurrency::model(move || {
-        let header_limit:usize = i64::from(HEADER_LIMIT).try_into().unwrap();
+fn get_headers() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+        let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
+
         let mut btf = BlockTestFramework::new();
         let mut last_block = btf.genesis().clone();
-        last_block = btf.create_chain(&last_block.get_id(), initial_blocks_count).unwrap();
+        last_block = btf.create_chain(&last_block.get_id(), rng.gen_range(1000..2000)).unwrap();
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
         let locator = btf.chainstate().get_locator().unwrap();
@@ -90,7 +89,7 @@ fn get_headers(initial_blocks_count in 1000usize..2000,
                 .unwrap();
             Some(last_block.header().clone())
         })
-        .take(blocks_count)
+        .take(rng.gen_range(1000..header_limit))
         .collect();
 
         let headers = btf.chainstate().get_headers(locator.clone()).unwrap();
@@ -109,38 +108,42 @@ fn get_headers(initial_blocks_count in 1000usize..2000,
 // Create two chains that only share the genesis block and verify that the header is attached to
 // the genesis.
 #[test]
-fn get_headers_genesis(chain1_length in 64..128usize, chain2_length in 1000..2000usize) {
-    common::concurrency::model(move || {
+fn get_headers_genesis() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+
         let mut btf = BlockTestFramework::new();
         let genesis = btf.genesis().clone();
 
-        btf.create_chain(&genesis.get_id(), chain1_length).unwrap();
+        btf.create_chain(&genesis.get_id(), rng.gen_range(64..128)).unwrap();
         let locator_1 = btf.chainstate.get_locator().unwrap();
 
-        btf.create_chain(&genesis.get_id(), chain2_length).unwrap();
+        let chain_length = rng.gen_range(1200..2000);
+        btf.create_chain(&genesis.get_id(), chain_length).unwrap();
         let locator_2 = btf.chainstate.get_locator().unwrap();
         assert_ne!(locator_1, locator_2);
         assert!(locator_1.len() < locator_2.len());
 
         let headers = btf.chainstate.get_headers(locator_1).unwrap();
         assert_eq!(headers[0].prev_block_id(), &Some(genesis.get_id()));
-        assert_eq!(headers.len(), chain2_length);
+        assert_eq!(headers.len(), chain_length);
     });
 }
 
 // Create two chains that branch at some point, both with some unique blocks. Verify that the first
 // returned header is attached to a block that is known to both chains.
 #[test]
-fn get_headers_branching_chains(common_height in 100..10_000usize,
-                                chain1_length in 100..2500usize,
-                                chain2_length in 2500..5000usize) {
-    common::concurrency::model(move || {
+fn get_headers_branching_chains() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+        let common_height = rng.gen_range(100..10_000);
+
         let mut btf = BlockTestFramework::new();
         let common_block = btf.create_chain(&btf.genesis().get_id(), common_height).unwrap();
 
-        btf.create_chain(&common_block.get_id(), chain1_length).unwrap();
+        btf.create_chain(&common_block.get_id(), rng.gen_range(100..2500)).unwrap();
         let locator = btf.chainstate.get_locator().unwrap();
-        btf.create_chain(&common_block.get_id(), chain2_length).unwrap();
+        btf.create_chain(&common_block.get_id(), rng.gen_range(2500..5000)).unwrap();
 
         let headers = btf.chainstate.get_headers(locator).unwrap();
         let id = headers[0].prev_block_id().as_ref().unwrap();
@@ -151,14 +154,16 @@ fn get_headers_branching_chains(common_height in 100..10_000usize,
 // Create two separate chains that share some blocks. Verify that the first returned header is
 // attached to some block known for both chains.
 #[test]
-fn get_headers_different_chains(i in 100..250, chain1_length in 32..256usize, chain2_length in 256..512usize) {
-    common::concurrency::model(move || {
+fn get_headers_different_chains() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
 
         let mut prev = btf1.genesis().clone();
         assert_eq!(&prev, btf2.genesis());
-        for _ in 0..i {
+        for _ in 0..rng.gen_range(100..250) {
             prev = btf1.random_block(&prev, None);
             btf1.add_special_block(prev.clone()).unwrap();
             btf2.add_special_block(prev.clone()).unwrap();
@@ -168,8 +173,8 @@ fn get_headers_different_chains(i in 100..250, chain1_length in 32..256usize, ch
             );
         }
 
-        btf1.create_chain(&prev.get_id(), chain1_length).unwrap();
-        btf2.create_chain(&prev.get_id(), chain2_length).unwrap();
+        btf1.create_chain(&prev.get_id(), rng.gen_range(32..256)).unwrap();
+        btf2.create_chain(&prev.get_id(), rng.gen_range(256..512)).unwrap();
 
         let locator = btf1.chainstate.get_locator().unwrap();
         let headers = btf2.chainstate.get_headers(locator).unwrap();
@@ -184,13 +189,15 @@ fn get_headers_different_chains(i in 100..250, chain1_length in 32..256usize, ch
 }
 
 #[test]
-fn filter_already_existing_blocks(special_blocks in 8..16, limit in 32..256) {
-    common::concurrency::model(move || {
+fn filter_already_existing_blocks() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
 
         let mut prev1 = btf1.genesis().clone();
-        for _ in 0..special_blocks {
+        for _ in 0..rng.gen_range(8..16) {
             prev1 = btf1.random_block(&prev1, None);
             btf1.add_special_block(prev1.clone()).unwrap();
             btf2.add_special_block(prev1.clone()).unwrap();
@@ -200,6 +207,7 @@ fn filter_already_existing_blocks(special_blocks in 8..16, limit in 32..256) {
             );
         }
 
+        let limit = rng.gen_range(32..256);
         let mut prev2 = prev1.clone();
         let mut headers1 = vec![];
         let mut headers2 = vec![];
@@ -234,13 +242,15 @@ fn filter_already_existing_blocks(special_blocks in 8..16, limit in 32..256) {
 
 // Try to use headers that aren't attached to the chain.
 #[test]
-fn filter_already_existing_blocks_detached_headers(special_blocks in 8..16, headers_limit in 3..10) {
-    common::concurrency::model(move || {
+fn filter_already_existing_blocks_detached_headers() {
+    common::concurrency::model(|| {
+        let mut rng = make_seedable_rng(None);
+
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
 
         let mut prev = btf1.genesis().clone();
-        for _ in 0..special_blocks {
+        for _ in 0..rng.gen_range(8..16) {
             prev = btf1.random_block(&prev, None);
             btf1.add_special_block(prev.clone()).unwrap();
             btf2.add_special_block(prev.clone()).unwrap();
@@ -250,7 +260,7 @@ fn filter_already_existing_blocks_detached_headers(special_blocks in 8..16, head
             );
         }
 
-        let headers = (0..headers_limit)
+        let headers = (0..rng.gen_range(3..10))
             .map(|_| {
                 prev = btf2.random_block(&prev, None);
                 btf2.add_special_block(prev.clone()).unwrap();
@@ -267,5 +277,4 @@ fn filter_already_existing_blocks_detached_headers(special_blocks in 8..16, head
             ))
         );
     });
-}
 }

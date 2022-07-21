@@ -523,7 +523,7 @@ dependencies = [
  "logging",
  "mockall",
  "num",
- "proptest",
+ "rand_chacha 0.3.1",
  "replace_with",
  "rpc",
  "serde",

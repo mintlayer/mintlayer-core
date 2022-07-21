@@ -15,6 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn, S. Tkach
 
+use std::env;
 use std::sync::Mutex;
 
 use crate::detail::{tests::test_framework::BlockTestFramework, *};
@@ -29,7 +30,9 @@ use common::{
     primitives::{time, Amount, Id, H256},
     Uint256,
 };
-use crypto::random::{Rng, SliceRandom};
+use crypto::random::{Rng, SeedableRng, SliceRandom};
+use hex::{FromHex, ToHex};
+use rand_chacha::ChaChaRng;
 use serialization::Encode;
 
 mod double_spend_tests;
@@ -58,6 +61,16 @@ fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
 }
 
+#[must_use]
+fn make_seedable_rng(seed_opt: Option<&str>) -> impl Rng {
+    let seed = match seed_opt {
+        Some(s) => FromHex::from_hex(s).expect("seed is invalid"),
+        None => crypto::random::make_true_rng().gen::<[u8; 32]>(),
+    };
+    log::warn!("Seed for the range is: {}", seed.encode_hex_upper::<String>());
+    ChaChaRng::from_seed(seed)
+}
+
 fn create_utxo_data(
     tx_id: &Id<Transaction>,
     index: usize,
@@ -83,6 +96,7 @@ fn create_utxo_data(
 }
 
 fn setup_chainstate() -> Chainstate {
+    logging::init_logging::<&std::path::Path>(None);
     chainstate_with_config(create_unit_test_config(), ChainstateConfig::new())
 }
 

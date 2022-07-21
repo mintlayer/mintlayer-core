@@ -24,10 +24,6 @@ use common::{
     },
     primitives::{time, Amount, Id},
 };
-use proptest::prelude::*;
-
-proptest! {
-#![proptest_config(ProptestConfig::with_cases(1))]
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -42,12 +38,13 @@ proptest! {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_output_in_the_same_block(tx1_output_value in 100_000..200_000u128, atoms2 in 1000..2000u128) {
-    common::concurrency::model(move || {
+fn spend_output_in_the_same_block() {
+    common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, atoms2);
+        let mut rng = make_seedable_rng(None);
+        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![first_tx, second_tx],
@@ -83,12 +80,13 @@ fn spend_output_in_the_same_block(tx1_output_value in 100_000..200_000u128, atom
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_output_in_the_same_block_invalid_order(tx1_output_value in 100_000..200_000u128, atoms2 in 1000..2000u128) {
-    common::concurrency::model(move || {
+fn spend_output_in_the_same_block_invalid_order() {
+    common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, atoms2);
+        let mut rng = make_seedable_rng(None);
+        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![second_tx, first_tx],
@@ -129,13 +127,14 @@ fn spend_output_in_the_same_block_invalid_order(tx1_output_value in 100_000..200
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn double_spend_tx_in_the_same_block(tx1_output_value in 100_000..200_000u128, atoms2 in 1000..2000u128) {
-    common::concurrency::model(move || {
+fn double_spend_tx_in_the_same_block() {
+    common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, atoms2);
-        let third_tx = tx_from_tx(&first_tx, atoms2);
+        let mut rng = make_seedable_rng(None);
+        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
@@ -180,13 +179,14 @@ fn double_spend_tx_in_the_same_block(tx1_output_value in 100_000..200_000u128, a
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn double_spend_tx_in_another_block(tx1_output_value in 100_000..200_000u128) {
-    common::concurrency::model(move || {
+fn double_spend_tx_in_another_block() {
+    common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
+        let mut rng = make_seedable_rng(None);
+        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
         let first_block = Block::new(
-        vec![first_tx.clone()],
+            vec![first_tx.clone()],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
             BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
             ConsensusData::None,
@@ -202,7 +202,7 @@ fn double_spend_tx_in_another_block(tx1_output_value in 100_000..200_000u128) {
             Some(first_block_id.clone())
         );
 
-        let second_tx = tx_from_genesis(&chainstate, tx1_output_value);
+        let second_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
         let second_block = Block::new(
             vec![second_tx],
             Some(first_block_id.clone()),
@@ -240,12 +240,15 @@ fn double_spend_tx_in_another_block(tx1_output_value in 100_000..200_000u128) {
 // | +-------------------+ |
 // +-----------------------+
 #[test]
-fn spend_bigger_output_in_the_same_block(tx1_output_value in 1000..2000u128, atoms2 in 100_000..200_000u128){
+fn spend_bigger_output_in_the_same_block() {
     common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
+        let mut rng = make_seedable_rng(None);
+        let tx1_output_value = rng.gen_range(1000..2000);
+        let tx2_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
-        let second_tx = tx_from_tx(&first_tx, atoms2);
+        let second_tx = tx_from_tx(&first_tx, tx2_output_value);
 
         let block = Block::new(
             vec![first_tx, second_tx],
@@ -259,7 +262,7 @@ fn spend_bigger_output_in_the_same_block(tx1_output_value in 1000..2000u128, ato
             chainstate.process_block(block, BlockSource::Local).unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
                 Amount::from_atoms(tx1_output_value),
-                Amount::from_atoms(atoms2)
+                Amount::from_atoms(tx2_output_value)
             ))
         );
         assert_eq!(
@@ -271,7 +274,6 @@ fn spend_bigger_output_in_the_same_block(tx1_output_value in 1000..2000u128, ato
             chainstate.chain_config.genesis_block_id()
         );
     });
-}
 }
 
 // Creates a transaction with an input based on the first transaction from the genesis block.
