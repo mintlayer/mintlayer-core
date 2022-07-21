@@ -65,13 +65,13 @@ fn get_locator(new_blocks in 1..2000usize) {
 
 // Check that new blocks (produced after a locator is created) are returned.
 #[test]
-fn get_headers(initial_blocks in 1000usize..2000,
-               blocks in 1000usize..i64::from(HEADER_LIMIT).try_into().unwrap()) {
+fn get_headers(initial_blocks_count in 1000usize..2000,
+               blocks_count in 1000usize..i64::from(HEADER_LIMIT).try_into().unwrap()) {
     common::concurrency::model(move || {
         let header_limit:usize = i64::from(HEADER_LIMIT).try_into().unwrap();
         let mut btf = BlockTestFramework::new();
         let mut last_block = btf.genesis().clone();
-        last_block = btf.create_chain(&last_block.get_id(), initial_blocks).unwrap();
+        last_block = btf.create_chain(&last_block.get_id(), initial_blocks_count).unwrap();
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
         let locator = btf.chainstate().get_locator().unwrap();
@@ -90,7 +90,7 @@ fn get_headers(initial_blocks in 1000usize..2000,
                 .unwrap();
             Some(last_block.header().clone())
         })
-        .take(blocks)
+        .take(blocks_count)
         .collect();
 
         let headers = btf.chainstate().get_headers(locator.clone()).unwrap();
@@ -100,7 +100,7 @@ fn get_headers(initial_blocks in 1000usize..2000,
         assert_eq!(expected[0].prev_block_id(), &Some(locator[0].get_id()));
 
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
-        btf.create_chain(&last_block.get_id(), header_limit- expected.len()).unwrap();
+        btf.create_chain(&last_block.get_id(), header_limit - expected.len()).unwrap();
         let headers = btf.chainstate().get_headers(locator).unwrap();
         assert_eq!(headers.len(), header_limit);
     });

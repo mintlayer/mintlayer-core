@@ -55,7 +55,7 @@ pub mod time_getter;
 use time_getter::TimeGetter;
 
 #[must_use]
-pub struct Chainstate {
+pub(crate) struct Chainstate {
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: chainstate_storage::Store,
@@ -73,7 +73,7 @@ pub enum BlockSource {
 
 impl Chainstate {
     #[allow(dead_code)]
-    pub fn wait_for_all_events(&self) {
+    pub(crate) fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
 
@@ -101,11 +101,11 @@ impl Chainstate {
         )
     }
 
-    pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
+    pub(crate) fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
         self.events_controller.subscribe_to_events(handler);
     }
 
-    pub fn new(
+    pub(crate) fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
@@ -208,7 +208,7 @@ impl Chainstate {
         }
     }
 
-    pub fn attempt_to_process_block(
+    pub(crate) fn attempt_to_process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
@@ -259,7 +259,7 @@ impl Chainstate {
     }
 
     /// returns the block index of the new tip
-    pub fn process_block(
+    pub(crate) fn process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
@@ -267,47 +267,47 @@ impl Chainstate {
         self.attempt_to_process_block(block, block_source, 0)
     }
 
-    pub fn preliminary_block_check(&self, block: Block) -> Result<Block, BlockError> {
+    pub(crate) fn preliminary_block_check(&self, block: Block) -> Result<Block, BlockError> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)
     }
 
-    pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
+    pub(crate) fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_id()
     }
 
     #[allow(dead_code)]
-    pub fn get_header_from_height(
+    pub(crate) fn get_header_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<BlockHeader>, PropertyQueryError> {
         self.make_db_tx_ro().get_header_from_height(height)
     }
 
-    pub fn get_block_id_from_height(
+    pub(crate) fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<Block>>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_id_by_height(height)
     }
 
-    pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub(crate) fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.make_db_tx_ro().get_block(id)
     }
 
-    pub fn get_block_index(
+    pub(crate) fn get_block_index(
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_index(id)
     }
 
-    pub fn get_best_block_index(&self) -> Result<Option<BlockIndex>, PropertyQueryError> {
+    pub(crate) fn get_best_block_index(&self) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_index()
     }
 
-    pub fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    pub(crate) fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         let best_block_index = chainstate_ref
             .get_best_block_index()?
@@ -325,14 +325,14 @@ impl Chainstate {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub fn get_block_height_in_main_chain(
+    pub(crate) fn get_block_height_in_main_chain(
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockHeight>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_height_in_main_chain(id)
     }
 
-    pub fn get_headers(
+    pub(crate) fn get_headers(
         &self,
         locator: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
@@ -366,7 +366,7 @@ impl Chainstate {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub fn filter_already_existing_blocks(
+    pub(crate) fn filter_already_existing_blocks(
         &self,
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {

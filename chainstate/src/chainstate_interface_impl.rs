@@ -24,12 +24,12 @@ use crate::{
     ChainstateError, ChainstateEvent, ChainstateInterface,
 };
 
-pub struct ChainstateInterfaceImpl {
+pub(crate) struct ChainstateInterfaceImpl {
     chainstate: detail::Chainstate,
 }
 
 impl ChainstateInterfaceImpl {
-    pub fn new(chainstate: detail::Chainstate) -> Self {
+    pub(crate) fn new(chainstate: detail::Chainstate) -> Self {
         Self { chainstate }
     }
 }

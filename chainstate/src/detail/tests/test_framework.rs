@@ -26,7 +26,7 @@ use common::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
-pub enum TestSpentStatus {
+pub(crate) enum TestSpentStatus {
     Spent,
     Unspent,
     NotInMainchain,
@@ -34,7 +34,7 @@ pub enum TestSpentStatus {
 
 // TODO: See https://github.com/mintlayer/mintlayer-core/issues/274 for details.
 #[allow(dead_code)]
-pub enum TestBlockParams {
+pub(crate) enum TestBlockParams {
     NoErrors,
     TxCount(usize),
     Fee(Amount),
@@ -42,13 +42,13 @@ pub enum TestBlockParams {
     SpendFrom(Id<Block>),
 }
 
-pub struct BlockTestFramework {
+pub(crate) struct BlockTestFramework {
     pub chainstate: Chainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
 impl BlockTestFramework {
-    pub fn with_chainstate(chainstate: Chainstate) -> Self {
+    pub(crate) fn with_chainstate(chainstate: Chainstate) -> Self {
         let genesis_index = chainstate
             .chainstate_storage
             .get_block_index(&chainstate.chain_config.genesis_block_id())
@@ -60,12 +60,16 @@ impl BlockTestFramework {
         }
     }
 
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let chainstate = setup_chainstate();
         Self::with_chainstate(chainstate)
     }
 
-    pub fn random_block(&self, parent_block: &Block, params: Option<&[TestBlockParams]>) -> Block {
+    pub(crate) fn random_block(
+        &self,
+        parent_block: &Block,
+        params: Option<&[TestBlockParams]>,
+    ) -> Block {
         let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
             parent_block.transactions().iter().flat_map(create_new_outputs).unzip();
 
@@ -104,16 +108,16 @@ impl BlockTestFramework {
         .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
-    pub fn genesis(&self) -> &Block {
+    pub(crate) fn genesis(&self) -> &Block {
         self.chainstate.chain_config.genesis_block()
     }
 
-    pub fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
+    pub(crate) fn get_block_index(&self, id: &Id<Block>) -> BlockIndex {
         self.chainstate.chainstate_storage.get_block_index(id).ok().flatten().unwrap()
     }
 
     /// Creates and processes a given amount of blocks. Returns the last produced block.
-    pub fn create_chain(
+    pub(crate) fn create_chain(
         &mut self,
         parent_block_id: &Id<Block>,
         count_blocks: usize,
@@ -133,7 +137,10 @@ impl BlockTestFramework {
         Ok(block)
     }
 
-    pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
+    pub(crate) fn add_special_block(
+        &mut self,
+        block: Block,
+    ) -> Result<Option<BlockIndex>, BlockError> {
         let id = block.get_id();
         let block_index = self.chainstate.process_block(block, BlockSource::Local)?;
         self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
@@ -142,7 +149,7 @@ impl BlockTestFramework {
         Ok(block_index)
     }
 
-    pub fn get_spent_status(
+    pub(crate) fn get_spent_status(
         &self,
         tx_id: &Id<Transaction>,
         output_index: u32,
@@ -181,7 +188,7 @@ impl BlockTestFramework {
         }
     }
 
-    pub fn test_block(
+    pub(crate) fn test_block(
         &self,
         block_id: &Id<Block>,
         prev_block_id: Option<&Id<Block>>,
@@ -220,7 +227,7 @@ impl BlockTestFramework {
         self.check_block_at_height(block_index.block_height().next_height(), next_block_id);
     }
 
-    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
+    pub(crate) fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         let block_index = self
             .chainstate
             .chainstate_storage
@@ -237,11 +244,14 @@ impl BlockTestFramework {
         }
     }
 
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub(crate) fn get_block(
+        &self,
+        block_id: Id<Block>,
+    ) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
     }
 
-    pub fn chainstate(&mut self) -> &mut Chainstate {
+    pub(crate) fn chainstate(&mut self) -> &mut Chainstate {
         &mut self.chainstate
     }
 }

@@ -242,7 +242,7 @@ proptest! {
 #![proptest_config(ProptestConfig::with_cases(1))]
 // Produce and process some blocks.
 #[test]
-fn straight_chain(i in 100..200) {
+fn straight_chain(blocks_count in 100..200) {
     common::concurrency::model(move || {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
@@ -281,7 +281,7 @@ fn straight_chain(i in 100..200) {
 
         let mut prev_block = chainstate.chain_config.genesis_block().clone();
         let mut prev_block_index = genesis_index;
-        for _ in 0..i {
+        for _ in 0..blocks_count {
             assert_eq!(
                 chainstate.chainstate_storage.get_best_block_id().ok().flatten().unwrap(),
                 prev_block.get_id()
