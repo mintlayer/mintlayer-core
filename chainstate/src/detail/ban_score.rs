@@ -18,6 +18,7 @@ use crate::BlockError;
 use super::{
     pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError, BlockSizeError,
     CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
+    TokensError,
 };
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -119,6 +120,26 @@ impl BanScore for CheckBlockError {
     }
 }
 
+impl BanScore for TokensError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            TokensError::IssueErrorIncorrectTicker(_, _) => 100,
+            TokensError::IssueErrorIncorrectAmount(_, _) => 100,
+            TokensError::IssueErrorTooManyDecimals(_, _) => 100,
+            TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
+            TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
+            TokensError::CoinOrAssetOverflow(_, _) => 100,
+            TokensError::InsuffienceTokenFees(_, _) => 0,
+            TokensError::InsuffienceTokenValueInInputs(_, _) => 100,
+            TokensError::BurnZeroTokens(_, _) => 100,
+            TokensError::SomeTokensLost(_, _) => 100,
+            TokensError::NoTokenInInputs(_, _) => 100,
+            TokensError::NoTxInMainChainByOutpoint => 100,
+            TokensError::BlockRewardOutputCantBeUsedInTokenTx => 100,
+        }
+    }
+}
+
 impl BanScore for CheckBlockTransactionsError {
     fn ban_score(&self) -> u32 {
         match self {
@@ -126,16 +147,7 @@ impl BanScore for CheckBlockTransactionsError {
             CheckBlockTransactionsError::DuplicateInputInTransaction(_, _) => 100,
             CheckBlockTransactionsError::DuplicateInputInBlock(_) => 100,
             CheckBlockTransactionsError::DuplicatedTransactionInBlock(_, _) => 100,
-            CheckBlockTransactionsError::TokenIssueFail(_, _) => 100,
-            CheckBlockTransactionsError::TokenTransferFail(_, _) => 100,
-            CheckBlockTransactionsError::MultipleTokenIssuanceInTransaction(_, _) => 100,
-            CheckBlockTransactionsError::CoinOrAssetOverflow(_, _) => 100,
-            CheckBlockTransactionsError::InsuffienceTokenFees(_, _) => 100,
-            CheckBlockTransactionsError::InsuffienceTokenValueInInputs(_, _) => 100,
-            CheckBlockTransactionsError::FetchFail => 100,
-            CheckBlockTransactionsError::NoTokenInInputs(_, _) => 100,
-            CheckBlockTransactionsError::BurnZeroTokens(_, _) => 100,
-            CheckBlockTransactionsError::SomeTokensLost(_, _) => 100,
+            CheckBlockTransactionsError::CheckTokensError(err) => err.ban_score(),
         }
     }
 }

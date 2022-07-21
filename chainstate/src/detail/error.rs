@@ -97,20 +97,16 @@ pub enum CheckBlockError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum CheckBlockTransactionsError {
-    #[error("Blockchain storage error: {0}")]
-    StorageError(chainstate_storage::Error),
-    #[error("Duplicate input in transaction {0} in block {1}")]
-    DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
-    #[error("Duplicate input in block")]
-    DuplicateInputInBlock(Id<Block>),
-    #[error("Duplicate transaction {0} found in block {1}")]
-    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
-    #[error("Incorrect issue transaction {0} in block {1}")]
-    TokenIssueFail(Id<Transaction>, Id<Block>),
-    #[error("Incorrect transfer transaction {0} in block {1}")]
-    TokenTransferFail(Id<Transaction>, Id<Block>),
-    #[error("Too many token issues in transaction {0} in block {1}")]
+pub enum TokensError {
+    #[error("Incorrect ticker in issue transaction {0} in block {1}")]
+    IssueErrorIncorrectTicker(Id<Transaction>, Id<Block>),
+    #[error("Incorrect amount in issue transaction {0} in block {1}")]
+    IssueErrorIncorrectAmount(Id<Transaction>, Id<Block>),
+    #[error("Too many decimals in issue transaction {0} in block {1}")]
+    IssueErrorTooManyDecimals(Id<Transaction>, Id<Block>),
+    #[error("Incorrect metadata URI in issue transaction {0} in block {1}")]
+    IssueErrorIncorrectMetadataURI(Id<Transaction>, Id<Block>),
+    #[error("Too many tokens issued in transaction {0} in block {1}")]
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or asset overflow in transaction {0} in block {1}")]
     CoinOrAssetOverflow(Id<Transaction>, Id<Block>),
@@ -122,10 +118,26 @@ pub enum CheckBlockTransactionsError {
     BurnZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Some of the tokens are lost in transaction {0} in block {1}")]
     SomeTokensLost(Id<Transaction>, Id<Block>),
-    #[error("Can't fetch transaction by outpoint")]
-    FetchFail,
     #[error("Can't find token in inputs in transaction {0} in block {1}")]
     NoTokenInInputs(Id<Transaction>, Id<Block>),
+    #[error("Can't fetch transaction inputs in main chain by outpoint")]
+    NoTxInMainChainByOutpoint,
+    #[error("Block reward output can't be used in tokens transaction")]
+    BlockRewardOutputCantBeUsedInTokenTx,
+}
+
+#[derive(Error, Debug, PartialEq, Eq, Clone)]
+pub enum CheckBlockTransactionsError {
+    #[error("Blockchain storage error: {0}")]
+    StorageError(chainstate_storage::Error),
+    #[error("Duplicate input in transaction {0} in block {1}")]
+    DuplicateInputInTransaction(Id<Transaction>, Id<Block>),
+    #[error("Duplicate input in block")]
+    DuplicateInputInBlock(Id<Block>),
+    #[error("Duplicate transaction {0} found in block {1}")]
+    DuplicatedTransactionInBlock(Id<Transaction>, Id<Block>),
+    #[error("Tokens error: {0}")]
+    CheckTokensError(TokensError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -17,7 +17,7 @@
 
 use super::{anyonecanspend_address, setup_chainstate};
 use crate::{
-    detail::{CheckBlockError, CheckBlockTransactionsError},
+    detail::{CheckBlockError, CheckBlockTransactionsError, TokensError},
     BlockError, BlockSource, Chainstate,
 };
 use chainstate_types::block_index::BlockIndex;
@@ -31,20 +31,6 @@ use common::{
     primitives::{Amount, Idable},
 };
 use std::vec;
-
-macro_rules! assert_token {
-    ($block_index:expr, $err_name:ident) => {
-        assert!(matches!(
-            $block_index,
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::$err_name(
-                    _,
-                    _
-                ))
-            ))
-        ));
-    };
-}
 
 fn process_token(
     chainstate: &mut Chainstate,
@@ -104,32 +90,59 @@ fn token_issue_test() {
         let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
-        // Name is too long
+        // Ticker is too long
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorIncorrectTicker(_, _)
+                    )
+                )
+            ))
+        ));
 
-        // Doesn't exist name
+        // Doesn't exist ticker
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorIncorrectTicker(_, _)
+                    )
+                )
+            ))
+        ));
 
-        // Name contain not alpha-numeric byte
+        // Ticker contain not alpha-numeric byte
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: "💖".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorIncorrectTicker(_, _)
+                    )
+                )
+            ))
+        ));
 
         // Issue amount is too low
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -138,7 +151,16 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorIncorrectAmount(_, _)
+                    )
+                )
+            ))
+        ));
 
         // Too many decimals
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -147,7 +169,16 @@ fn token_issue_test() {
             number_of_decimals: 123,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorTooManyDecimals(_, _)
+                    )
+                )
+            ))
+        ));
 
         // URI is too long
         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
@@ -156,7 +187,16 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
         })];
-        assert_token!(process_token(&mut chainstate, values), TokenIssueFail);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                    )
+                )
+            ))
+        ));
     });
 }
 
@@ -188,27 +228,49 @@ fn token_transfer_test() {
             token_id,
             amount: Amount::from_atoms(987654321),
         })];
-        assert_token!(
+        assert!(matches!(
             process_token(&mut chainstate, values),
-            InsuffienceTokenValueInInputs
-        );
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::InsuffienceTokenValueInInputs(_, _)
+                    )
+                )
+            ))
+        ));
 
         // Try to transfer token with wrong id
         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id: TokenId::random(),
             amount: Amount::from_atoms(123456789),
         })];
-        assert_token!(process_token(&mut chainstate, values), NoTokenInInputs);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(TokensError::NoTokenInInputs(
+                        _,
+                        _
+                    ))
+                )
+            ))
+        ));
 
         // Try to transfer zero amount
         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(0),
         })];
-        assert_token!(
+        assert!(matches!(
             process_token(&mut chainstate, values),
-            InsuffienceTokenValueInInputs
-        );
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::InsuffienceTokenValueInInputs(_, _)
+                    )
+                )
+            ))
+        ));
     })
 }
 
@@ -244,10 +306,16 @@ fn couple_of_token_issuance_in_one_tx() {
         .unwrap();
 
         // Process it
-        assert_token!(
+        assert!(matches!(
             chainstate.process_block(block, BlockSource::Local),
-            MultipleTokenIssuanceInTransaction
-        );
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::MultipleTokenIssuanceInTransaction(_, _)
+                    )
+                )
+            ))
+        ));
     })
 }
 
@@ -299,10 +367,16 @@ fn token_issuance_with_insufficient_fee() {
         .unwrap();
 
         // Process it
-        assert_token!(
+        assert!(matches!(
             chainstate.process_block(block, BlockSource::Local),
-            InsuffienceTokenFees
-        );
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::InsuffienceTokenFees(_, _)
+                    )
+                )
+            ))
+        ));
     })
 }
 
@@ -377,17 +451,33 @@ fn test_burn_tokens() {
             token_id,
             amount_to_burn: (ISSUED_FUNDS * 2).unwrap(),
         })];
-        assert_token!(
+        assert!(matches!(
             process_token(&mut chainstate, values),
-            InsuffienceTokenValueInInputs
-        );
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::InsuffienceTokenValueInInputs(_, _)
+                    )
+                )
+            ))
+        ));
 
         // Burn 50% and don't add utxo for the rest
         let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
-        assert_token!(process_token(&mut chainstate, values), SomeTokensLost);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(TokensError::SomeTokensLost(
+                        _,
+                        _
+                    ))
+                )
+            ))
+        ));
 
         // Burn 50% and 50% transfer
         let values = vec![
@@ -414,6 +504,16 @@ fn test_burn_tokens() {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
-        assert_token!(process_token(&mut chainstate, values), NoTokenInInputs);
+        assert!(matches!(
+            process_token(&mut chainstate, values),
+            Err(BlockError::CheckBlockFailed(
+                CheckBlockError::CheckTransactionFailed(
+                    CheckBlockTransactionsError::CheckTokensError(TokensError::NoTokenInInputs(
+                        _,
+                        _
+                    ))
+                )
+            ))
+        ));
     })
 }

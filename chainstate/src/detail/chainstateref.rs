@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     consensus_validator::TransactionIndexHandle, median_time::calculate_median_time_past,
-    time_getter::TimeGetterFn,
+    time_getter::TimeGetterFn, TokensError,
 };
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
 use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
@@ -476,53 +476,64 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         metadata_uri: &Vec<u8>,
         tx_id: Id<Transaction>,
         block_id: Id<Block>,
-    ) -> Result<(), CheckBlockTransactionsError> {
-        let mut is_correct_data = true;
-
-        // Check token name
-        is_correct_data = is_correct_data
-            && (token_ticker.len() <= TOKEN_MAX_TICKER_LEN)
-            && (!token_ticker.is_empty())
-            && String::from_utf8_lossy(token_ticker).is_ascii();
+    ) -> Result<(), TokensError> {
         //TODO: Shall we have check for unique token name?
 
+        // Check token name
+        if token_ticker.len() > TOKEN_MAX_TICKER_LEN
+            || token_ticker.is_empty()
+            || !String::from_utf8_lossy(token_ticker).is_ascii()
+        {
+            return Err(TokensError::IssueErrorIncorrectTicker(tx_id, block_id));
+        }
+
         // Check amount
-        is_correct_data = is_correct_data && amount_to_issue != &Amount::from_atoms(0);
+        if amount_to_issue == &Amount::from_atoms(0) {
+            return Err(TokensError::IssueErrorIncorrectAmount(tx_id, block_id));
+        }
 
         // Check decimals
-        is_correct_data = is_correct_data && number_of_decimals < &TOKEN_MAX_DEC_COUNT;
+        if number_of_decimals > &TOKEN_MAX_DEC_COUNT {
+            return Err(TokensError::IssueErrorTooManyDecimals(tx_id, block_id));
+        }
 
         // Check URI
-        is_correct_data = is_correct_data
-            && metadata_uri.len() <= TOKEN_MAX_URI_LEN
-            && String::from_utf8_lossy(metadata_uri).is_ascii();
-
-        match is_correct_data {
-            true => Ok(()),
-            false => Err(CheckBlockTransactionsError::TokenIssueFail(tx_id, block_id)),
+        if metadata_uri.len() > TOKEN_MAX_URI_LEN
+            || !String::from_utf8_lossy(metadata_uri).is_ascii()
+        {
+            return Err(TokensError::IssueErrorIncorrectMetadataURI(tx_id, block_id));
         }
+        Ok(())
     }
 
-    fn fetch(&self, outpoint: &OutPoint) -> Result<Transaction, CheckBlockTransactionsError> {
+    fn fetch_tx_by_output(
+        &self,
+        outpoint: &OutPoint,
+    ) -> Result<Transaction, CheckBlockTransactionsError> {
         let tx_index = self
             .db_tx
             .get_mainchain_tx_index(&outpoint.tx_id())
-            .ok()
-            .flatten()
-            .ok_or(CheckBlockTransactionsError::FetchFail)?;
+            .map_err(CheckBlockTransactionsError::StorageError)?
+            .ok_or(CheckBlockTransactionsError::CheckTokensError(
+                TokensError::NoTxInMainChainByOutpoint,
+            ))?;
         match tx_index.position() {
             common::chain::SpendablePosition::Transaction(tx_pos) => {
                 let tx = self
                     .db_tx
                     .get_mainchain_tx_by_position(tx_pos)
-                    .ok()
-                    .flatten()
-                    .ok_or(CheckBlockTransactionsError::FetchFail)?;
+                    .map_err(CheckBlockTransactionsError::StorageError)?
+                    .ok_or(CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::NoTxInMainChainByOutpoint,
+                    ))?;
 
                 Ok(tx)
             }
             common::chain::SpendablePosition::BlockReward(_) => {
-                todo!("Block reward in tokens is not allowed")
+                // Block reward in tokens is not allowed
+                Err(CheckBlockTransactionsError::CheckTokensError(
+                    TokensError::BlockRewardOutputCantBeUsedInTokenTx,
+                ))
             }
         }
     }
@@ -530,7 +541,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     // Get TokenId and Amount in input
     fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(TokenId, Amount)> {
         let output_index = input.outpoint().output_index() as usize;
-        let prev_tx = self.fetch(input.outpoint()).ok()?;
+        let prev_tx = self.fetch_tx_by_output(input.outpoint()).ok()?;
         match prev_tx.outputs().get(output_index)?.value() {
             OutputValue::Coin(_) => None,
             OutputValue::Asset(asset) => Some(match asset {
@@ -561,7 +572,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx: &Transaction,
         token_id: &TokenId,
         amount: &Amount,
-    ) -> Result<(), CheckBlockTransactionsError> {
+    ) -> Result<(), TokensError> {
         // Collect token inputs
         let total_value_tokens = self.get_total_value_tokens(tx, &block_id)?;
 
@@ -569,13 +580,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let (_, origin_amount) = total_value_tokens
             .iter()
             .find(|&(origin_token_id, _)| origin_token_id == token_id)
-            .ok_or_else(|| {
-                CheckBlockTransactionsError::NoTokenInInputs(tx.get_id(), block_id.clone())
-            })?;
+            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id.clone()))?;
 
         // Check amount
         if origin_amount < amount || amount <= &Amount::from_atoms(0) {
-            return Err(CheckBlockTransactionsError::InsuffienceTokenValueInInputs(
+            return Err(TokensError::InsuffienceTokenValueInInputs(
                 tx.get_id(),
                 block_id,
             ));
@@ -588,7 +597,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         tx: &Transaction,
         block_id: &Id<Block>,
-    ) -> Result<BTreeMap<H256, Amount>, CheckBlockTransactionsError> {
+    ) -> Result<BTreeMap<H256, Amount>, TokensError> {
         let mut total_value_of_input_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
         tx.inputs().iter().filter_map(|input| self.map_tokens(input)).try_for_each(
             |(token_id, amount)| {
@@ -600,10 +609,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                         .unwrap_or(Amount::from_atoms(0))
                         + amount)
                         .ok_or_else(|| {
-                            CheckBlockTransactionsError::CoinOrAssetOverflow(
-                                tx.get_id(),
-                                block_id.clone(),
-                            )
+                            TokensError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
                         })?,
                 );
                 Ok(())
@@ -639,12 +645,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             // We can't issue any count of token types in one tx
             let issuance_count = Self::get_issuance_count(tx);
             if issuance_count > MAX_ISSUANCE_ALLOWED {
-                return Err(
-                    CheckBlockTransactionsError::MultipleTokenIssuanceInTransaction(
-                        tx.get_id(),
-                        block.get_id(),
-                    ),
-                );
+                return Err(CheckBlockTransactionsError::CheckTokensError(
+                    TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
+                ));
             }
 
             // Check assets
@@ -654,26 +657,26 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Coin(_) => None,
                     OutputValue::Asset(asset) => Some(asset),
                 })
-                .try_for_each(|asset| self.check_asset(asset, tx, block))?;
+                .try_for_each(|asset| self.check_asset(asset, tx, block))
+                .map_err(CheckBlockTransactionsError::CheckTokensError)?;
 
             // If it is not a genesis and in tx issuance
             if self
                 .db_tx
                 .get_best_block_id()
-                .map_err(|_| {
-                    CheckBlockTransactionsError::TokenTransferFail(tx.get_id(), block.get_id())
-                })?
+                .map_err( CheckBlockTransactionsError::StorageError)?
                 .is_some()
                 && issuance_count == MAX_ISSUANCE_ALLOWED
             {
                 // check is fee enough for issuance
                 if !Self::is_issuance_fee_enough(
-                    self.get_total_coins_in_inputs(tx, block.get_id())?,
-                    self.get_total_coins_in_outputs(tx, block.get_id())?,
+                    self.get_total_coins_in_inputs(tx, block.get_id())
+                        .map_err(CheckBlockTransactionsError::CheckTokensError)?,
+                    self.get_total_coins_in_outputs(tx, block.get_id())
+                        .map_err(CheckBlockTransactionsError::CheckTokensError)?,
                 ) {
-                    return Err(CheckBlockTransactionsError::InsuffienceTokenFees(
-                        tx.get_id(),
-                        block.get_id(),
+                    return Err(CheckBlockTransactionsError::CheckTokensError(
+                        TokensError::InsuffienceTokenFees(tx.get_id(), block.get_id()),
                     ));
                 }
             }
@@ -685,7 +688,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         tx: &Transaction,
         block_id: Id<Block>,
-    ) -> Result<Amount, CheckBlockTransactionsError> {
+    ) -> Result<Amount, TokensError> {
         let res: Amount = tx
             .outputs()
             .iter()
@@ -694,9 +697,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 OutputValue::Asset(_) => None,
             })
             .try_fold(Amount::from_atoms(0), |acc, coin| acc + *coin)
-            .ok_or_else(|| {
-                CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id)
-            })?;
+            .ok_or_else(|| TokensError::CoinOrAssetOverflow(tx.get_id(), block_id))?;
         Ok(res)
     }
 
@@ -704,11 +705,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         &self,
         tx: &Transaction,
         block_id: Id<Block>,
-    ) -> Result<Amount, CheckBlockTransactionsError> {
+    ) -> Result<Amount, TokensError> {
         tx.inputs()
             .iter()
             .filter_map(|input| {
-                let prev_tx = self.fetch(input.outpoint()).ok()?;
+                let prev_tx = self.fetch_tx_by_output(input.outpoint()).ok()?;
                 let output = prev_tx.outputs().get(input.outpoint().output_index() as usize)?;
                 Some(output.value().clone())
             })
@@ -717,9 +718,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 OutputValue::Asset(_) => None,
             })
             .try_fold(Amount::from_atoms(0), |acc, coin| {
-                (acc + coin).ok_or_else(|| {
-                    CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
-                })
+                (acc + coin)
+                    .ok_or_else(|| TokensError::CoinOrAssetOverflow(tx.get_id(), block_id.clone()))
             })
     }
 
@@ -734,7 +734,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_id: &Id<Block>,
         burn_token_id: &TokenId,
         amount_to_burn: &Amount,
-    ) -> Result<(), CheckBlockTransactionsError> {
+    ) -> Result<(), TokensError> {
         // Collect token inputs
         let total_value_tokens = self.get_total_value_tokens(tx, block_id)?;
 
@@ -742,22 +742,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let (_, origin_amount) = total_value_tokens
             .iter()
             .find(|&(origin_token_id, _)| origin_token_id == burn_token_id)
-            .ok_or_else(|| {
-                CheckBlockTransactionsError::NoTokenInInputs(tx.get_id(), block_id.clone())
-            })?;
+            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id.clone()))?;
 
         // Check amount
         if origin_amount < amount_to_burn {
-            return Err(CheckBlockTransactionsError::InsuffienceTokenValueInInputs(
+            return Err(TokensError::InsuffienceTokenValueInInputs(
                 tx.get_id(),
                 block_id.clone(),
             ));
         }
         if amount_to_burn == &Amount::from_atoms(0) {
-            return Err(CheckBlockTransactionsError::BurnZeroTokens(
-                tx.get_id(),
-                block_id.clone(),
-            ));
+            return Err(TokensError::BurnZeroTokens(tx.get_id(), block_id.clone()));
         }
 
         // If we burn a piece of the token, we have to check output with the rest tokens
@@ -766,10 +761,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             if (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?)
                 != Some(*origin_amount)
             {
-                return Err(CheckBlockTransactionsError::SomeTokensLost(
-                    tx.get_id(),
-                    block_id.clone(),
-                ));
+                return Err(TokensError::SomeTokensLost(tx.get_id(), block_id.clone()));
             }
         }
         Ok(())
@@ -780,7 +772,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         asset: &AssetData,
         tx: &Transaction,
         block: &Block,
-    ) -> Result<(), CheckBlockTransactionsError> {
+    ) -> Result<(), TokensError> {
         match asset {
             AssetData::TokenTransferV1 { token_id, amount } => {
                 self.check_transfer_data(block.get_id(), tx, token_id, amount)?;
@@ -882,7 +874,7 @@ fn get_change_amount(
     tx: &Transaction,
     burn_token_id: &H256,
     block_id: &Id<Block>,
-) -> Result<Amount, CheckBlockTransactionsError> {
+) -> Result<Amount, TokensError> {
     let change_amount = tx
         .outputs()
         .iter()
@@ -900,9 +892,7 @@ fn get_change_amount(
             },
         })
         .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
-        .ok_or_else(|| {
-            CheckBlockTransactionsError::CoinOrAssetOverflow(tx.get_id(), block_id.clone())
-        })?;
+        .ok_or_else(|| TokensError::CoinOrAssetOverflow(tx.get_id(), block_id.clone()))?;
     Ok(change_amount)
 }
 
