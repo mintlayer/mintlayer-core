@@ -103,7 +103,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
 
 impl PoW {
     /// The difference (in block time) between the current block and 2016th block before the current one.
-    fn actual_timespan(&self, prev_block_blocktime: u32, retarget_blocktime: u32) -> u64 {
+    fn actual_timespan(&self, prev_block_blocktime: u64, retarget_blocktime: u64) -> u64 {
         // TODO: this needs to be fixed because it could suffer from an underflow
         let actual_timespan = (prev_block_blocktime - retarget_blocktime) as u64;
 
@@ -186,7 +186,7 @@ impl PoW {
 
     fn next_work_required_for_min_difficulty(
         &self,
-        new_block_time: u32,
+        new_block_time: u64,
         prev_block_index: &BlockIndex,
         prev_block_bits: Compact,
     ) -> Compact {

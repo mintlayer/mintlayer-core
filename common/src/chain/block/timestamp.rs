@@ -17,10 +17,12 @@ use parity_scale_codec::{Decode, Encode};
 use std::time::Duration;
 use thiserror::Error;
 
+pub type BlockTimestampInternalType = u64;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, PartialOrd, Ord)]
 pub struct BlockTimestamp {
     #[codec(compact)]
-    timestamp: u32,
+    timestamp: BlockTimestampInternalType,
 }
 
 impl std::fmt::Display for BlockTimestamp {
@@ -31,12 +33,12 @@ impl std::fmt::Display for BlockTimestamp {
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum TimestampError {
-    #[error("Duration cannot fit in a u32: {0:?}")]
-    DurationTooLargeForU32(Duration),
+    #[error("Duration cannot fit in a timestamp: {0:?}")]
+    DurationTooLargeForTimestamp(Duration),
 }
 
 impl BlockTimestamp {
-    pub fn from_int_seconds(timestamp: u32) -> Self {
+    pub fn from_int_seconds(timestamp: BlockTimestampInternalType) -> Self {
         Self { timestamp }
     }
 
@@ -45,7 +47,7 @@ impl BlockTimestamp {
             timestamp: duration
                 .as_secs()
                 .try_into()
-                .map_err(|_| TimestampError::DurationTooLargeForU32(duration))?,
+                .map_err(|_| TimestampError::DurationTooLargeForTimestamp(duration))?,
         };
         Ok(result)
     }
@@ -54,7 +56,7 @@ impl BlockTimestamp {
         Duration::from_secs(self.timestamp as u64)
     }
 
-    pub fn as_int_seconds(&self) -> u32 {
+    pub fn as_int_seconds(&self) -> BlockTimestampInternalType {
         self.timestamp
     }
 }

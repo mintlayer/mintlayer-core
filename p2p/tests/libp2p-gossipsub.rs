@@ -75,7 +75,7 @@ async fn test_libp2p_gossipsub() {
                 Block::new(
                     vec![],
                     None,
-                    BlockTimestamp::from_int_seconds(1337u32),
+                    BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
                 )
                 .unwrap(),
@@ -99,13 +99,13 @@ async fn test_libp2p_gossipsub() {
         message_id: _,
         announcement: Announcement::Block(block),
     } = res2.unwrap();
-    assert_eq!(block.timestamp().as_int_seconds(), 1337u32);
+    assert_eq!(block.timestamp().as_int_seconds(), 1337u64);
     pubsub2
         .publish(Announcement::Block(
             Block::new(
                 vec![],
                 None,
-                BlockTimestamp::from_int_seconds(1338u32),
+                BlockTimestamp::from_int_seconds(1338u64),
                 ConsensusData::None,
             )
             .unwrap(),
@@ -119,7 +119,7 @@ async fn test_libp2p_gossipsub() {
         message_id: _,
         announcement: Announcement::Block(block),
     } = res1.unwrap();
-    assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u32));
+    assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
 }
 
 async fn connect_peers(
@@ -188,7 +188,7 @@ async fn test_libp2p_gossipsub_3_peers() {
                 Block::new(
                     vec![],
                     None,
-                    BlockTimestamp::from_int_seconds(1337u32),
+                    BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
                 )
                 .unwrap(),
@@ -320,7 +320,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
         Block::new(
             txs,
             None,
-            BlockTimestamp::from_int_seconds(1337u32),
+            BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
         )
         .unwrap(),
