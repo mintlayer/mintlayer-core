@@ -664,7 +664,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             if self
                 .db_tx
                 .get_best_block_id()
-                .map_err( CheckBlockTransactionsError::StorageError)?
+                .map_err(CheckBlockTransactionsError::StorageError)?
                 .is_some()
                 && issuance_count == MAX_ISSUANCE_ALLOWED
             {
