@@ -388,8 +388,9 @@ impl Chainstate {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
+        let config = &self.chain_config;
         // verify that the first block attaches to our chain
-        if let Some(id) = first_block.prev_block_id().classify(&self.chain_config).block_id() {
+        if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
             utils::ensure!(
                 self.get_block_index(&id)?.is_some(),
                 PropertyQueryError::BlockNotFound(id.clone())

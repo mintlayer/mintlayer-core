@@ -303,7 +303,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let id = self
             .get_block_id_by_height(height)?
             .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))?;
-        let id = id.classify(self.chain_config).block_id().expect("Genesis has no header");
+        let id = id.classify(self.chain_config).chain_block_id().expect("Genesis has no header");
         Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
     }
 
@@ -669,7 +669,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .get_best_block_id()
             .expect("Best block not initialized")
             .classify(self.chain_config)
-            .block_id()
+            .chain_block_id()
             .expect("Cannot disconnect genesis");
 
         // Optionally, we can double-check that the tip is what we're discconnecting

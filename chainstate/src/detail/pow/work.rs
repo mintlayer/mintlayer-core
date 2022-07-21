@@ -75,7 +75,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
             let prev_block_id = header
                 .prev_block_id()
                 .classify(chain_config)
-                .block_id()
+                .chain_block_id()
                 .expect("If PoWStatus is `Onging` then we cannot be at genesis");
 
             let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {

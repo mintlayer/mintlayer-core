@@ -104,7 +104,7 @@ fn orphans_chains() {
             .get_best_block_id()
             .unwrap()
             .classify(&chainstate.chain_config)
-            .block_id()
+            .chain_block_id()
             .unwrap();
         assert_eq!(
             last_block_index.block_height(),

@@ -72,7 +72,7 @@ impl GenBlockId {
         matches!(self, GenBlockId::Genesis(_))
     }
 
-    pub fn block_id(self) -> Option<Id<Block>> {
+    pub fn chain_block_id(self) -> Option<Id<Block>> {
         match self {
             GenBlockId::Genesis(_) => None,
             GenBlockId::Block(id) => Some(id),
