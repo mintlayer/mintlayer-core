@@ -615,7 +615,6 @@ fn output_lock_for_block_count_attempted_overflow() {
         .unwrap();
 
         let block_count_that_unlocks = u64::MAX;
-        let block_height_with_locked_output = 1;
 
         // Process the genesis block.
         chainstate
@@ -633,54 +632,11 @@ fn output_lock_for_block_count_attempted_overflow() {
         );
 
         // create the first block, with a locked output
-        {
-            let prev_block = chainstate.chain_config.genesis_block();
-
-            let outputs = vec![
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::LockThenTransfer(
-                        anyonecanspend_address(),
-                        OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-                    ),
-                ),
-            ];
-
-            let inputs = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
-                0,
-                InputWitness::NoSignature(None),
-            )];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(block_height_with_locked_output)
-            );
-        }
-
-        let locked_output = {
-            let prev_block_id =
-                chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-            TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
-                1,
-                InputWitness::NoSignature(None),
-            )
-        };
+        let locked_output = add_block_with_locked_output(
+            &mut chainstate,
+            OutputTimeLock::ForBlockCount(block_count_that_unlocks),
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+        );
 
         // attempt to create the next block, and attempt to spend the locked output
         {
@@ -1292,6 +1248,76 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
                 BlockHeight::new(0)
+            );
+        }
+    });
+}
+
+#[test]
+fn output_lock_for_seconds_attempted_overflow() {
+    common::concurrency::model(|| {
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
+        let storage = Store::new_empty().unwrap();
+        let mut chainstate = Chainstate::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            storage,
+            None,
+            Default::default(),
+        )
+        .unwrap();
+
+        // Process the genesis block.
+        chainstate
+            .process_block(
+                chainstate.chain_config.genesis_block().clone(),
+                BlockSource::Local,
+            )
+            .unwrap();
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND),
+            Some(chainstate.chain_config.genesis_block_id())
+        );
+
+        // create the first block, with a locked output
+        let locked_output = add_block_with_locked_output(
+            &mut chainstate,
+            OutputTimeLock::ForSeconds(u64::MAX),
+            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+        );
+
+        // attempt to create the next block, and attempt to spend the locked output
+        {
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+
+            let outputs = vec![TxOutput::new(
+                Amount::from_atoms(5000),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            )];
+
+            let inputs = vec![locked_output];
+
+            let block = Block::new(
+                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
+                Some(prev_block.get_id()),
+                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                common::chain::block::ConsensusData::None,
+            )
+            .expect(ERR_CREATE_BLOCK_FAIL);
+            assert_eq!(
+                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+                BlockError::StateUpdateFailed(StateUpdateError::BlockTimestampArithmeticError)
+            );
+
+            assert_eq!(
+                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                BlockHeight::new(1)
             );
         }
     });
