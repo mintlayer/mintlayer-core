@@ -583,12 +583,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id.clone()))?;
 
         // Check amount
-        if origin_amount < amount || amount <= &Amount::from_atoms(0) {
-            return Err(TokensError::InsuffienceTokenValueInInputs(
-                tx.get_id(),
-                block_id,
-            ));
-        }
+        ensure!(
+            origin_amount >= amount && amount > &Amount::from_atoms(0),
+            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
+        );
 
         Ok(())
     }
@@ -649,11 +647,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         for tx in block.transactions() {
             // We can't issue any count of token types in one tx
             let issuance_count = Self::get_issuance_count(tx);
-            if issuance_count > MAX_ISSUANCE_ALLOWED {
-                return Err(CheckBlockTransactionsError::CheckTokensError(
+            ensure!(
+                issuance_count <= MAX_ISSUANCE_ALLOWED,
+                CheckBlockTransactionsError::CheckTokensError(
                     TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
-                ));
-            }
+                )
+            );
 
             // Check assets
             tx.outputs()
@@ -674,16 +673,19 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 && issuance_count == MAX_ISSUANCE_ALLOWED
             {
                 // check is fee enough for issuance
-                if !Self::is_issuance_fee_enough(
-                    self.get_total_coins_in_inputs(tx, block.get_id())
-                        .map_err(CheckBlockTransactionsError::CheckTokensError)?,
-                    self.get_total_coins_in_outputs(tx, block.get_id())
-                        .map_err(CheckBlockTransactionsError::CheckTokensError)?,
-                ) {
-                    return Err(CheckBlockTransactionsError::CheckTokensError(
+                let total_coins_in_inputs = self
+                    .get_total_coins_in_inputs(tx, block.get_id())
+                    .map_err(CheckBlockTransactionsError::CheckTokensError)?;
+                let total_coins_in_outputs = self
+                    .get_total_coins_in_outputs(tx, block.get_id())
+                    .map_err(CheckBlockTransactionsError::CheckTokensError)?;
+
+                ensure!(
+                    Self::is_issuance_fee_enough(total_coins_in_inputs, total_coins_in_outputs),
+                    CheckBlockTransactionsError::CheckTokensError(
                         TokensError::InsuffienceTokenFees(tx.get_id(), block.get_id()),
-                    ));
-                }
+                    )
+                );
             }
         }
         Ok(())
@@ -750,24 +752,23 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id.clone()))?;
 
         // Check amount
-        if origin_amount < amount_to_burn {
-            return Err(TokensError::InsuffienceTokenValueInInputs(
-                tx.get_id(),
-                block_id.clone(),
-            ));
-        }
-        if amount_to_burn == &Amount::from_atoms(0) {
-            return Err(TokensError::BurnZeroTokens(tx.get_id(), block_id.clone()));
-        }
+        ensure!(
+            origin_amount >= amount_to_burn,
+            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id.clone())
+        );
+        ensure!(
+            amount_to_burn != &Amount::from_atoms(0),
+            TokensError::BurnZeroTokens(tx.get_id(), block_id.clone())
+        );
 
         // If we burn a piece of the token, we have to check output with the rest tokens
         if origin_amount > amount_to_burn {
             // Check whether all tokens burn and transfer
-            if (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?)
-                != Some(*origin_amount)
-            {
-                return Err(TokensError::SomeTokensLost(tx.get_id(), block_id.clone()));
-            }
+            ensure!(
+                (*amount_to_burn + get_change_amount(tx, burn_token_id, block_id)?)
+                    == Some(*origin_amount),
+                TokensError::SomeTokensLost(tx.get_id(), block_id.clone())
+            );
         }
         Ok(())
     }
