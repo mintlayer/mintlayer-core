@@ -93,7 +93,7 @@ fn chainstate_with_config(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct TestBlockInfo {
+pub struct TestBlockInfo {
     pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
     pub(crate) id: Id<GenBlock>,
 }

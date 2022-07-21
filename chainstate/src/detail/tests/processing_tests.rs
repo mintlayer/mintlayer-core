@@ -67,7 +67,7 @@ fn process_genesis_block() {
 }
 
 #[test]
-fn test_orphans_chains() {
+fn orphans_chains() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
         assert_eq!(
@@ -121,7 +121,7 @@ fn test_orphans_chains() {
 
 #[test]
 #[should_panic(expected = "Best block ID not initialized")]
-fn test_empty_chainstate_no_genesis() {
+fn empty_chainstate_no_genesis() {
     common::concurrency::model(|| {
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
@@ -757,7 +757,7 @@ fn blocks_from_the_future() {
 }
 
 #[test]
-fn test_mainnet_initialization() {
+fn mainnet_initialization() {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let chainstate_config = ChainstateConfig::new();
     let storage = Store::new_empty().unwrap();
