@@ -71,6 +71,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial]
     fn test_time() {
         logging::init_logging::<&std::path::Path>(None);
         set(Duration::from_secs(1337));
@@ -95,6 +96,7 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_mocked() {
         assert_eq!(get_mocked(), None);
 
