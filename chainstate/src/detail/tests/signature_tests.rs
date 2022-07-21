@@ -78,7 +78,7 @@ fn signed_tx() {
         let block = Block::new(
             vec![tx_1, tx_2],
             Some(chainstate.chain_config.genesis_block().get_id()),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .unwrap();

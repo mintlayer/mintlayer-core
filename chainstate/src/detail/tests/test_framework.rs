@@ -98,7 +98,7 @@ impl BlockTestFramework {
         Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
             Some(prev_block_hash),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL)

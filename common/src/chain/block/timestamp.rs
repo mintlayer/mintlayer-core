@@ -15,7 +15,6 @@
 
 use parity_scale_codec::{Decode, Encode};
 use std::time::Duration;
-use thiserror::Error;
 
 pub type BlockTimestampInternalType = u64;
 
@@ -31,22 +30,16 @@ impl std::fmt::Display for BlockTimestamp {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum TimestampError {
-    #[error("Duration cannot fit in a timestamp: {0:?}")]
-    DurationTooLargeForTimestamp(Duration),
-}
-
 impl BlockTimestamp {
     pub fn from_int_seconds(timestamp: BlockTimestampInternalType) -> Self {
         Self { timestamp }
     }
 
-    pub fn from_duration_since_epoch(duration: Duration) -> Result<Self, TimestampError> {
+    pub fn from_duration_since_epoch(duration: Duration) -> Self {
         let result = Self {
             timestamp: duration.as_secs(),
         };
-        Ok(result)
+        result
     }
 
     pub fn as_duration_since_epoch(&self) -> Duration {
