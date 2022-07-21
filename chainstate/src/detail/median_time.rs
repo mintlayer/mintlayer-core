@@ -48,7 +48,10 @@ mod test {
     use chainstate_storage::Store;
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, ConsensusData},
+            block::{
+                timestamp::{BlockTimestamp, BlockTimestampInternalType},
+                ConsensusData,
+            },
             config::create_unit_test_config,
         },
         primitives::{time, Idable},
@@ -58,7 +61,7 @@ mod test {
         time::Duration,
     };
 
-    fn make_block(prev_block: Id<Block>, time: u32) -> Block {
+    fn make_block(prev_block: Id<Block>, time: BlockTimestampInternalType) -> Block {
         Block::new(
             vec![],
             Some(prev_block),
@@ -68,7 +71,11 @@ mod test {
         .expect("Block creation failed")
     }
 
-    fn chain_blocks(count: usize, initial_prev: Id<Block>, initial_time: u32) -> Vec<Block> {
+    fn chain_blocks(
+        count: usize,
+        initial_prev: Id<Block>,
+        initial_time: BlockTimestampInternalType,
+    ) -> Vec<Block> {
         let mut res = vec![];
         let mut prev = initial_prev;
         let mut time = initial_time;
@@ -102,7 +109,7 @@ mod test {
             let blocks = chain_blocks(
                 block_count,
                 chainstate.chain_config.genesis_block_id(),
-                time::get().as_secs() as u32,
+                time::get().as_secs(),
             );
 
             for block in &blocks {
@@ -164,11 +171,11 @@ mod test {
                     .unwrap();
 
             // we use unordered block times, and ensure that the median will be in the right spot
-            let block1_time = current_time.load(Ordering::SeqCst) as u32 + 1;
-            let block2_time = current_time.load(Ordering::SeqCst) as u32 + 20;
-            let block3_time = current_time.load(Ordering::SeqCst) as u32 + 10;
-            let block4_time = current_time.load(Ordering::SeqCst) as u32 + 18;
-            let block5_time = current_time.load(Ordering::SeqCst) as u32 + 17;
+            let block1_time = current_time.load(Ordering::SeqCst) + 1;
+            let block2_time = current_time.load(Ordering::SeqCst) + 20;
+            let block3_time = current_time.load(Ordering::SeqCst) + 10;
+            let block4_time = current_time.load(Ordering::SeqCst) + 18;
+            let block5_time = current_time.load(Ordering::SeqCst) + 17;
 
             let block1 = make_block(chainstate.chain_config.genesis_block_id(), block1_time);
             let block2 = make_block(block1.get_id(), block2_time);

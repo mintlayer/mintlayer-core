@@ -744,13 +744,13 @@ fn blocks_from_the_future() {
         {
             // submit a block on the threshold of being rejected for being from the future
             let max_future_offset =
-                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+                chainstate.chain_config.max_future_block_time_offset().as_secs();
 
             let good_block = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
                 BlockTimestamp::from_int_seconds(
-                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset,
+                    current_time.load(Ordering::SeqCst) + max_future_offset,
                 ),
                 ConsensusData::None,
             )
@@ -762,13 +762,13 @@ fn blocks_from_the_future() {
         {
             // submit a block a second after the allowed threshold in the future
             let max_future_offset =
-                chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+                chainstate.chain_config.max_future_block_time_offset().as_secs();
 
             let bad_block_in_future = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
                 BlockTimestamp::from_int_seconds(
-                    current_time.load(Ordering::SeqCst) as u32 + max_future_offset + 1,
+                    current_time.load(Ordering::SeqCst) + max_future_offset + 1,
                 ),
                 ConsensusData::None,
             )
@@ -785,7 +785,7 @@ fn blocks_from_the_future() {
             let bad_block_from_past = Block::new(
                 vec![],
                 Some(chainstate.chain_config.genesis_block_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32 - 1),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) - 1),
                 ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);

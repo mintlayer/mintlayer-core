@@ -139,7 +139,7 @@ mod tests {
         let header = Block::new(
             vec![],
             None,
-            BlockTimestamp::from_int_seconds(1337u32),
+            BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
         )
         .unwrap()

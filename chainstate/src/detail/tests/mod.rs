@@ -120,7 +120,7 @@ fn produce_test_block_with_consensus_data(
         } else {
             Some(Id::new(prev_block.get_id().get()))
         },
-        BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+        BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
     )
     .expect(ERR_CREATE_BLOCK_FAIL)
