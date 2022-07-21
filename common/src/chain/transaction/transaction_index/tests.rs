@@ -273,7 +273,7 @@ fn generate_random_invalid_block() -> Block {
             .map(|_| generate_random_invalid_transaction(&mut rng))
             .collect::<Vec<_>>()
     };
-    let time = rng.next_u32();
+    let time = rng.next_u64();
     let prev_id = Some(Id::new(generate_random_h256(&mut rng)));
 
     Block::new(

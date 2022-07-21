@@ -49,7 +49,7 @@ fn spend_output_in_the_same_block() {
         let block = Block::new(
             vec![first_tx, second_tx],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -90,7 +90,7 @@ fn spend_output_in_the_same_block_invalid_order() {
         let block = Block::new(
             vec![second_tx, first_tx],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -137,7 +137,7 @@ fn double_spend_tx_in_the_same_block() {
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -185,7 +185,7 @@ fn double_spend_tx_in_another_block() {
         let first_block = Block::new(
             vec![first_tx.clone()],
             Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -203,7 +203,7 @@ fn double_spend_tx_in_another_block() {
         let second_block = Block::new(
             vec![second_tx],
             Some(first_block_id.clone()),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
