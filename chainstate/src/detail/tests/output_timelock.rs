@@ -1,4 +1,5 @@
 use std::{
+    ops::Add,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -608,13 +609,15 @@ fn output_lock_until_time() {
             Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
-        current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
         let lock_time = genesis_timestamp.as_int_seconds() + 3;
+        let mut block_times = vec![genesis_timestamp.as_int_seconds()];
 
+        block_times.push(block_times.last().unwrap() + 1);
+        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
-            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+            BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
         );
 
         // Attempt to create the next block, and attempt to spend the locked output.
@@ -633,7 +636,7 @@ fn output_lock_until_time() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -665,12 +668,13 @@ fn output_lock_until_time() {
                 InputWitness::NoSignature(None),
             )];
 
-            current_time.fetch_add(1, Ordering::SeqCst);
+            block_times.push(block_times.last().unwrap() + 1);
+            current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -683,65 +687,61 @@ fn output_lock_until_time() {
         }
 
         // Create several blocks to adjust the median time.
-        {
-            for height in 3..6 {
+        while median_block_time(&block_times) < lock_time {
+            let height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
+            // Check that the output still cannot be spent.
+            {
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+
+                let outputs = vec![TxOutput::new(
+                    Amount::from_atoms(5000),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )];
+
+                let inputs = vec![locked_output.clone()];
+
+                block_times.push(block_times.last().unwrap() + 1);
+                current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+
+                let block = Block::new(
+                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
+                    Some(prev_block.get_id()),
+                    BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
+                    common::chain::block::ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
                 assert_eq!(
-                    BlockHeight::new(height - 1),
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height()
+                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
+                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
                 );
-                // Check that the output still cannot be spent.
-                {
-                    let prev_block_id =
-                        chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                    let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    let outputs = vec![TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    )];
+                assert_eq!(
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                    height
+                );
+            }
 
-                    let inputs = vec![locked_output.clone()];
+            // Create another block, with no transactions, and get the blockchain to progress.
+            {
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    current_time.fetch_add(1, Ordering::SeqCst);
+                let block = Block::new(
+                    vec![],
+                    Some(prev_block.get_id()),
+                    BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
+                    common::chain::block::ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
+                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
 
-                    let block = Block::new(
-                        vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                        Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
-                        common::chain::block::ConsensusData::None,
-                    )
-                    .expect(ERR_CREATE_BLOCK_FAIL);
-                    assert_eq!(
-                        chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                        BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                    );
-
-                    assert_eq!(
-                        chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                        BlockHeight::new(height - 1)
-                    );
-                }
-
-                // Create another block, with no transactions, and get the blockchain to progress.
-                {
-                    let prev_block_id =
-                        chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                    let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
-                    let block = Block::new(
-                        vec![],
-                        Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
-                        common::chain::block::ConsensusData::None,
-                    )
-                    .expect(ERR_CREATE_BLOCK_FAIL);
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                    assert_eq!(
-                        chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                        BlockHeight::new(height)
-                    );
-                }
+                assert_eq!(
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                    height.add(BlockDistance::new(1)).unwrap()
+                );
             }
         }
 
@@ -750,6 +750,7 @@ fn output_lock_until_time() {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
             let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+            let prev_height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -758,12 +759,13 @@ fn output_lock_until_time() {
 
             let inputs = vec![locked_output];
 
-            current_time.fetch_add(1, Ordering::SeqCst);
+            block_times.push(block_times.last().unwrap() + 1);
+            current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -772,7 +774,7 @@ fn output_lock_until_time() {
 
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(6)
+                prev_height.add(BlockDistance::new(1)).unwrap()
             );
         }
     });
@@ -866,13 +868,17 @@ fn output_lock_for_seconds() {
             Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
-        current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
+        let mut block_times = vec![genesis_timestamp.as_int_seconds()];
 
-        let lock_seconds = 100;
+        block_times.push(block_times.last().unwrap() + 1);
+        current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+        let lock_seconds = 3;
+        let unlock_time = block_times.last().unwrap() + lock_seconds;
+
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::ForSeconds(lock_seconds),
-            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+            BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
         );
 
         // Attempt to create the next block, and attempt to spend the locked output.
@@ -891,7 +897,7 @@ fn output_lock_for_seconds() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -923,10 +929,13 @@ fn output_lock_for_seconds() {
                 InputWitness::NoSignature(None),
             )];
 
+            block_times.push(block_times.last().unwrap() + 1);
+            current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -938,65 +947,64 @@ fn output_lock_for_seconds() {
             );
         }
 
+        println!();
+
         // Create several blocks to adjust the median time.
-        current_time.fetch_add(lock_seconds, Ordering::SeqCst);
-        {
-            for height in 3..6 {
+        while median_block_time(&block_times) < unlock_time {
+            let height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
+            // Check that the output still cannot be spent.
+            {
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+
+                let outputs = vec![TxOutput::new(
+                    Amount::from_atoms(5000),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )];
+
+                let inputs = vec![locked_output.clone()];
+
+                block_times.push(block_times.last().unwrap() + 1);
+                current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+
+                let block = Block::new(
+                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
+                    Some(prev_block.get_id()),
+                    BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
+                    common::chain::block::ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
                 assert_eq!(
-                    BlockHeight::new(height - 1),
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height()
+                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
+                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
                 );
-                // Check that the output still cannot be spent.
-                {
-                    let prev_block_id =
-                        chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                    let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    let outputs = vec![TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    )];
+                assert_eq!(
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                    height
+                );
+            }
 
-                    let inputs = vec![locked_output.clone()];
+            // Create another block, with no transactions, and get the blockchain to progress.
+            {
+                let prev_block_id =
+                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    let block = Block::new(
-                        vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                        Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
-                        common::chain::block::ConsensusData::None,
-                    )
-                    .expect(ERR_CREATE_BLOCK_FAIL);
-                    assert_eq!(
-                        chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                        BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                    );
+                let block = Block::new(
+                    vec![],
+                    Some(prev_block.get_id()),
+                    BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
+                    common::chain::block::ConsensusData::None,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL);
+                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
 
-                    assert_eq!(
-                        chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                        BlockHeight::new(height - 1)
-                    );
-                }
-
-                // Create another block, with no transactions, and get the blockchain to progress.
-                {
-                    let prev_block_id =
-                        chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                    let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
-                    let block = Block::new(
-                        vec![],
-                        Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
-                        common::chain::block::ConsensusData::None,
-                    )
-                    .expect(ERR_CREATE_BLOCK_FAIL);
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                    assert_eq!(
-                        chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                        BlockHeight::new(height)
-                    );
-                }
+                assert_eq!(
+                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                    height.add(BlockDistance::new(1)).unwrap()
+                );
             }
         }
 
@@ -1005,6 +1013,7 @@ fn output_lock_for_seconds() {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
             let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+            let prev_height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -1013,10 +1022,13 @@ fn output_lock_for_seconds() {
 
             let inputs = vec![locked_output];
 
+            block_times.push(block_times.last().unwrap() + 1);
+            current_time.store(*block_times.last().unwrap(), Ordering::SeqCst);
+
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1025,7 +1037,7 @@ fn output_lock_for_seconds() {
 
             assert_eq!(
                 chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(6)
+                prev_height.add(BlockDistance::new(1)).unwrap()
             );
         }
     });
@@ -1206,4 +1218,11 @@ fn add_block_with_locked_output(
         1,
         InputWitness::NoSignature(None),
     )
+}
+
+fn median_block_time(times: &[u64]) -> u64 {
+    // Only the last 11 blocks are used for calculating the median time.
+    assert!(times.len() <= 11);
+
+    times[times.len() / 2]
 }
