@@ -15,7 +15,7 @@
 //
 // Author(s): A. Sinitsyn
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
