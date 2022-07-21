@@ -506,7 +506,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn fetch_tx_by_output(
+    fn fetch_tx_by_outpoint(
         &self,
         outpoint: &OutPoint,
     ) -> Result<Transaction, CheckBlockTransactionsError> {
@@ -541,7 +541,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     // Get TokenId and Amount in input
     fn map_tokens(&self, input: &common::chain::TxInput) -> Option<(TokenId, Amount)> {
         let output_index = input.outpoint().output_index() as usize;
-        let prev_tx = self.fetch_tx_by_output(input.outpoint()).ok()?;
+        let prev_tx = self.fetch_tx_by_outpoint(input.outpoint()).ok()?;
         match prev_tx.outputs().get(output_index)?.value() {
             OutputValue::Coin(_) => None,
             OutputValue::Asset(asset) => Some(match asset {
@@ -716,7 +716,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         tx.inputs()
             .iter()
             .filter_map(|input| {
-                let prev_tx = self.fetch_tx_by_output(input.outpoint()).ok()?;
+                let prev_tx = self.fetch_tx_by_outpoint(input.outpoint()).ok()?;
                 let output = prev_tx.outputs().get(input.outpoint().output_index() as usize)?;
                 Some(output.value().clone())
             })
