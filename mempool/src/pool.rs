@@ -88,6 +88,7 @@ where
 
 fn get_relay_fee(tx: &Transaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
+    eprintln!("get_relay_fee - encoded_size {:?}", tx.encoded_size());
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
@@ -753,6 +754,7 @@ where
     }
 
     fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
+        eprintln!("rbf_checks");
         let conflicts = tx
             .inputs()
             .iter()
@@ -803,9 +805,14 @@ where
         tx: &Transaction,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
+        eprintln!("tx fee is {:?}", self.try_get_fee(tx)?);
         let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
             .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
         let relay_fee = get_relay_fee(tx);
+        eprintln!(
+            "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
+            total_conflict_fees, additional_fees, relay_fee
+        );
         (additional_fees >= relay_fee)
             .then(|| ())
             .ok_or(TxValidationError::InsufficientFeesToRelayRBF)
@@ -1760,6 +1767,10 @@ mod tests {
     }
 
     fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
+        eprintln!(
+            "tx_replace_tx: original_fee: {:?}, replacement_fee {:?}",
+            original_fee, replacement_fee
+        );
         let mut mempool = setup();
         let outpoint = mempool
             .available_outpoints(true)
@@ -1782,11 +1793,16 @@ mod tests {
         let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
             .expect("should be able to spend here");
         let original_id = original.get_id();
+        eprintln!("created a tx with fee {:?}", mempool.try_get_fee(&original));
         mempool.add_transaction(original)?;
 
         let flags = 0;
         let replacement = tx_spend_input(&mempool, input, replacement_fee, flags, locktime)
             .expect("should be able to spend here");
+        eprintln!(
+            "created a replacement with fee {:?}",
+            mempool.try_get_fee(&replacement)
+        );
         mempool.add_transaction(replacement)?;
         assert!(!mempool.contains_transaction(&original_id));
 
@@ -1842,7 +1858,7 @@ mod tests {
         let relay_fee = get_relay_fee_from_tx_size(TX_SPEND_INPUT_SIZE);
         let replacement_fee = Amount::from_atoms(relay_fee + 100);
         test_replace_tx(Amount::from_atoms(100), replacement_fee)?;
-        let res = test_replace_tx(Amount::from_atoms(100), Amount::from_atoms(relay_fee + 99));
+        let res = test_replace_tx(Amount::from_atoms(300), replacement_fee);
         assert!(matches!(
             res,
             Err(Error::TxValidationError(
@@ -1903,7 +1919,7 @@ mod tests {
     }
 
     // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
-    const TX_SPEND_INPUT_SIZE: usize = 84;
+    const TX_SPEND_INPUT_SIZE: usize = 213;
 
     fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
         mempool: &MempoolImpl<ChainStateMock, T, M>,
@@ -2498,7 +2514,7 @@ mod tests {
             rolling_fee,
             *INCREMENTAL_RELAY_FEE_RATE + FeeRate::of_tx(child_0_fee, child_0.encoded_size())
         );
-        assert_eq!(rolling_fee, FeeRate::new(3561));
+        assert_eq!(rolling_fee, FeeRate::new(3582));
         log::debug!(
             "minimum rolling fee after child_0's eviction {:?}",
             rolling_fee
