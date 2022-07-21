@@ -2441,7 +2441,6 @@ dependencies = [
  "p2p",
  "rpc",
  "serde",
- "strum",
  "subsystem",
  "tempdir",
  "thiserror",

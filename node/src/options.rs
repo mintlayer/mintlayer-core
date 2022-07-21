@@ -20,9 +20,6 @@ use std::{ffi::OsString, fs, net::SocketAddr, path::PathBuf};
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
-use strum::VariantNames;
-
-use common::chain::config::ChainType;
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -51,8 +48,8 @@ pub struct Options {
 pub enum Command {
     /// Create a configuration file.
     CreateConfig,
-    Run(RunOptions),
-    RunRegtest(RegtestOptions),
+    Mainnet(RunOptions),
+    Regtest(RegtestOptions),
 }
 
 /// Run the mainnet node.
@@ -86,7 +83,49 @@ pub struct RunOptions {
 /// Run the regtest node.
 #[derive(Args, Debug)]
 pub struct RegtestOptions {
-    // TODO: FIXME
+    #[clap(flatten)]
+    pub run_options: RunOptions,
+    #[clap(flatten)]
+    pub chain_config: ChainConfigOptions,
+}
+
+#[derive(Args, Debug)]
+pub struct ChainConfigOptions {
+    /// Address prefix.
+    #[clap(long)]
+    chain_address_prefix: Option<String>,
+
+    /// Block reward maturity.
+    #[clap(long)]
+    chain_blockreward_maturity: Option<i64>,
+
+    /// The maximum future block offset in seconds.
+    #[clap(long)]
+    chain_max_future_block_time_offset: Option<u64>,
+
+    /// The chain version (major.minor.path).
+    #[clap(long)]
+    chain_version: Option<String>,
+
+    /// Target block spacing in seconds.
+    #[clap(long)]
+    target_block_spacing: Option<u64>,
+
+    /// Coin decimals.
+    #[clap(long)]
+    coin_decimals: Option<u8>,
+
+    /// The maximum block header size in bytes.
+    #[clap(long)]
+    max_block_header_size: Option<usize>,
+
+    /// The maximum transactions size in block in bytes.
+    #[clap(long)]
+    max_block_size_with_standard_txs: Option<usize>,
+
+    /// The maximum smart contracts size ib block in bytes.
+    #[clap(long)]
+    max_block_size_with_smart_contracts: Option<usize>,
 }
 
 impl Options {

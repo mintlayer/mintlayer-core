@@ -15,40 +15,29 @@
 
 //! Node initialisation routine.
 
-use std::{fs, sync::Arc};
+use std::{fs, path::Path, sync::Arc};
 
 use anyhow::{Context, Result};
 
 use chainstate::rpc::ChainstateRpcServer;
-use common::chain::config::ChainType;
+use common::chain::config::ChainConfig;
 use logging::log;
 use p2p::rpc::P2pRpcServer;
 
 use crate::{
     config::NodeConfig,
-    options::{Command, Options},
+    options::{Command, Options, RunOptions},
 };
-
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
-enum Error {
-    #[error("Chain type '{0}' not yet supported")]
-    UnsupportedChain(ChainType),
-}
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
 pub async fn initialize(
-    chain_type: ChainType,
+    chain_config: ChainConfig,
     node_config: NodeConfig,
 ) -> Result<subsystem::Manager> {
+    let chain_config = Arc::new(chain_config);
+
     // Initialize storage.
     let storage = chainstate_storage::Store::new_empty()?;
-
-    // Initialize chain configuration.
-    let chain_config = Arc::new(match chain_type {
-        ChainType::Mainnet => common::chain::config::create_mainnet(),
-        ChainType::Regtest => common::chain::config::create_regtest(),
-        chain_ty => return Err(Error::UnsupportedChain(chain_ty).into()),
-    });
 
     // INITIALIZE SUBSYSTEMS
 
@@ -105,15 +94,33 @@ pub async fn run(options: Options) -> Result<()> {
                 .with_context(|| format!("Failed to write config to the '{path:?}' file"))?;
             Ok(())
         }
-        Command::Run(ref run_options) => {
-            let node_config = NodeConfig::read(&options.config_path(), run_options)
-                .context("Failed to initialize config")?;
-            log::trace!("Starting with the following config\n: {node_config:#?}");
-            let manager = initialize(run_options.net, node_config).await?;
-            manager.main().await;
-            Ok(())
+        Command::Mainnet(ref run_options) => {
+            let chain_config = common::chain::config::create_mainnet();
+            start(&options.config_path(), run_options, chain_config).await
+        }
+        Command::Regtest(ref regtest_options) => {
+            let chain_config = common::chain::config::create_regtest();
+            start(
+                &options.config_path(),
+                &regtest_options.run_options,
+                chain_config,
+            )
+            .await
         }
     }
+}
+
+async fn start(
+    config_path: &Path,
+    run_options: &RunOptions,
+    chain_config: ChainConfig,
+) -> Result<()> {
+    let node_config =
+        NodeConfig::read(config_path, run_options).context("Failed to initialize config")?;
+    log::trace!("Starting with the following config\n: {node_config:#?}");
+    let manager = initialize(chain_config, node_config).await?;
+    manager.main().await;
+    Ok(())
 }
 
 #[rpc::rpc(server, namespace = "node")]

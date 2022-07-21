@@ -19,7 +19,6 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempdir::TempDir;
 
-use common::chain::config::ChainType;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
@@ -90,7 +89,6 @@ fn read_config_override_values() {
     let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
 
     let options = RunOptions {
-        net: ChainType::Mainnet,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
         p2p_addr: Some(p2p_addr.into()),
@@ -162,7 +160,6 @@ fn custom_config_path_and_data_dir() {
 
 fn default_run_options() -> RunOptions {
     RunOptions {
-        net: ChainType::Mainnet,
         max_db_commit_attempts: None,
         max_orphan_blocks: None,
         p2p_addr: None,
