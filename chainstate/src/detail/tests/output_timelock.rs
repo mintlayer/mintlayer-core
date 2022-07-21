@@ -65,7 +65,7 @@ fn output_lock_until_height() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -84,7 +84,7 @@ fn output_lock_until_height() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -119,7 +119,7 @@ fn output_lock_until_height() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -154,7 +154,7 @@ fn output_lock_until_height() {
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                     Some(prev_block.get_id()),
-                    BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                    BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
                 .expect(ERR_CREATE_BLOCK_FAIL);
@@ -178,7 +178,7 @@ fn output_lock_until_height() {
                 let block = Block::new(
                     vec![],
                     Some(prev_block.get_id()),
-                    BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                    BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
                 .expect(ERR_CREATE_BLOCK_FAIL);
@@ -213,7 +213,7 @@ fn output_lock_until_height() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -298,7 +298,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
             let block = Block::new(
                 vec![tx1, tx2],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -352,7 +352,7 @@ fn output_lock_for_block_count() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -371,7 +371,7 @@ fn output_lock_for_block_count() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -406,7 +406,7 @@ fn output_lock_for_block_count() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -441,7 +441,7 @@ fn output_lock_for_block_count() {
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                     Some(prev_block.get_id()),
-                    BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                    BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
                 .expect(ERR_CREATE_BLOCK_FAIL);
@@ -465,7 +465,7 @@ fn output_lock_for_block_count() {
                 let block = Block::new(
                     vec![],
                     Some(prev_block.get_id()),
-                    BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                    BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
                 .expect(ERR_CREATE_BLOCK_FAIL);
@@ -497,7 +497,7 @@ fn output_lock_for_block_count() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -582,7 +582,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             let block = Block::new(
                 vec![tx1, tx2],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -635,7 +635,7 @@ fn output_lock_for_block_count_attempted_overflow() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -654,7 +654,7 @@ fn output_lock_for_block_count_attempted_overflow() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -711,7 +711,7 @@ fn output_lock_until_time() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
-            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
         );
 
         // Attempt to create the next block, and attempt to spend the locked output.
@@ -730,7 +730,7 @@ fn output_lock_until_time() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -767,7 +767,7 @@ fn output_lock_until_time() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -804,7 +804,7 @@ fn output_lock_until_time() {
                     let block = Block::new(
                         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                         Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                         common::chain::block::ConsensusData::None,
                     )
                     .expect(ERR_CREATE_BLOCK_FAIL);
@@ -825,16 +825,13 @@ fn output_lock_until_time() {
                         chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
                     let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    let block =
-                        Block::new(
-                            vec![],
-                            Some(prev_block.get_id()),
-                            BlockTimestamp::from_int_seconds(
-                                current_time.load(Ordering::SeqCst) as u32
-                            ),
-                            common::chain::block::ConsensusData::None,
-                        )
-                        .expect(ERR_CREATE_BLOCK_FAIL);
+                    let block = Block::new(
+                        vec![],
+                        Some(prev_block.get_id()),
+                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                        common::chain::block::ConsensusData::None,
+                    )
+                    .expect(ERR_CREATE_BLOCK_FAIL);
                     chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
 
                     assert_eq!(
@@ -863,7 +860,7 @@ fn output_lock_until_time() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -949,7 +946,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
             let block = Block::new(
                 vec![tx1, tx2],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1006,7 +1003,7 @@ fn output_lock_for_seconds() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::ForSeconds(lock_seconds),
-            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+            BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
         );
 
         // Attempt to create the next block, and attempt to spend the locked output.
@@ -1025,7 +1022,7 @@ fn output_lock_for_seconds() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1060,7 +1057,7 @@ fn output_lock_for_seconds() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1096,10 +1093,10 @@ fn output_lock_for_seconds() {
                     let block = Block::new(
                         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                         Some(prev_block.get_id()),
-                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                         common::chain::block::ConsensusData::None,
                     )
-                        .expect(ERR_CREATE_BLOCK_FAIL);
+                    .expect(ERR_CREATE_BLOCK_FAIL);
                     assert_eq!(
                         chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
                         BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
@@ -1117,16 +1114,13 @@ fn output_lock_for_seconds() {
                         chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
                     let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
-                    let block =
-                        Block::new(
-                            vec![],
-                            Some(prev_block.get_id()),
-                            BlockTimestamp::from_int_seconds(
-                                current_time.load(Ordering::SeqCst) as u32
-                            ),
-                            common::chain::block::ConsensusData::None,
-                        )
-                        .expect(ERR_CREATE_BLOCK_FAIL);
+                    let block = Block::new(
+                        vec![],
+                        Some(prev_block.get_id()),
+                        BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
+                        common::chain::block::ConsensusData::None,
+                    )
+                    .expect(ERR_CREATE_BLOCK_FAIL);
                     chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
 
                     assert_eq!(
@@ -1153,7 +1147,7 @@ fn output_lock_for_seconds() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst) as u32),
+                BlockTimestamp::from_int_seconds(current_time.load(Ordering::SeqCst)),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1236,7 +1230,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             let block = Block::new(
                 vec![tx1, tx2],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);
@@ -1287,7 +1281,7 @@ fn output_lock_for_seconds_attempted_overflow() {
         let locked_output = add_block_with_locked_output(
             &mut chainstate,
             OutputTimeLock::ForSeconds(u64::MAX),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
@@ -1306,7 +1300,7 @@ fn output_lock_for_seconds_attempted_overflow() {
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
                 Some(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
             .expect(ERR_CREATE_BLOCK_FAIL);

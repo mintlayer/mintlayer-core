@@ -17,6 +17,7 @@ serde = { version = "1", features = ["derive"] }
 # local dependencies
 common = { path = "../common/" }
 chainstate = { path = "../chainstate/" }
+chainstate-types = { path = "../chainstate-types/" }
 logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }

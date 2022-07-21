@@ -21,8 +21,8 @@ use crate::{
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
-    Locator,
 };
+use chainstate_types::locator::Locator;
 use common::{
     chain::{
         block::{Block, BlockHeader},
