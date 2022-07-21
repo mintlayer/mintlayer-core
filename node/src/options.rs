@@ -52,15 +52,12 @@ pub enum Command {
     /// Create a configuration file.
     CreateConfig,
     Run(RunOptions),
+    RunRegtest(RegtestOptions),
 }
 
-/// Run the node.
+/// Run the mainnet node.
 #[derive(Args, Debug)]
 pub struct RunOptions {
-    /// Blockchain type.
-    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
-    pub net: ChainType,
-
     /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,
@@ -84,6 +81,12 @@ pub struct RunOptions {
     /// Address to bind RPC to.
     #[clap(long, value_name = "ADDR")]
     pub rpc_addr: Option<SocketAddr>,
+}
+
+/// Run the regtest node.
+#[derive(Args, Debug)]
+pub struct RegtestOptions {
+    // TODO: FIXME
 }
 
 impl Options {

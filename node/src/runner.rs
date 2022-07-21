@@ -110,8 +110,8 @@ pub async fn run(options: Options) -> Result<()> {
                 .context("Failed to initialize config")?;
             log::trace!("Starting with the following config\n: {node_config:#?}");
             let manager = initialize(run_options.net, node_config).await?;
-            #[allow(clippy::unit_arg)]
-            Ok(manager.main().await)
+            manager.main().await;
+            Ok(())
         }
     }
 }
