@@ -702,10 +702,7 @@ fn output_lock_until_time() {
         );
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
-        current_time.store(
-            (genesis_timestamp.as_int_seconds() + 1).into(),
-            Ordering::SeqCst,
-        );
+        current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
         let lock_time = genesis_timestamp.as_int_seconds() + 3;
 
         let locked_output = add_block_with_locked_output(
@@ -994,10 +991,7 @@ fn output_lock_for_seconds() {
         );
 
         let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
-        current_time.store(
-            (genesis_timestamp.as_int_seconds() + 1).into(),
-            Ordering::SeqCst,
-        );
+        current_time.store(genesis_timestamp.as_int_seconds() + 1, Ordering::SeqCst);
 
         let lock_seconds = 100;
         let locked_output = add_block_with_locked_output(
