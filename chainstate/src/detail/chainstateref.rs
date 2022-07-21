@@ -621,21 +621,26 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn get_issuance_count(tx: &Transaction) -> usize {
         tx.outputs()
             .iter()
-            .filter_map(|output| {
-                match matches!(
-                    output.value(),
-                    OutputValue::Asset(AssetData::TokenIssuanceV1 {
-                        token_ticker: _,
-                        amount_to_issue: _,
-                        number_of_decimals: _,
-                        metadata_uri: _,
-                    })
-                ) {
-                    true => Some(()),
-                    false => None,
-                }
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Asset(asset) => Some(asset),
             })
-            .count()
+            .fold(0, |accum, asset| match asset {
+                AssetData::TokenTransferV1 {
+                    token_id: _,
+                    amount: _,
+                } => accum,
+                AssetData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue: _,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                } => accum + 1,
+                AssetData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => accum,
+            })
     }
 
     fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
