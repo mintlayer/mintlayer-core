@@ -44,10 +44,7 @@ impl BlockTimestamp {
 
     pub fn from_duration_since_epoch(duration: Duration) -> Result<Self, TimestampError> {
         let result = Self {
-            timestamp: duration
-                .as_secs()
-                .try_into()
-                .map_err(|_| TimestampError::DurationTooLargeForTimestamp(duration))?,
+            timestamp: duration.as_secs(),
         };
         Ok(result)
     }
