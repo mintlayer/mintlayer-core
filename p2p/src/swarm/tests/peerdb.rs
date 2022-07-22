@@ -19,10 +19,10 @@ use super::*;
 use crate::{
     config,
     net::{libp2p::Libp2pService, types},
-    swarm::peerdb::{Peer, PeerContext, PeerDb},
+    swarm::peerdb::{Peer, PeerDb},
 };
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
     let peer_id = PeerId::random();
@@ -45,18 +45,37 @@ fn make_peer_info() -> (PeerId, types::PeerInfo<Libp2pService>) {
     )
 }
 
-fn make_peer_ctx() -> (PeerId, PeerContext<Libp2pService>) {
-    let (peer_id, info) = make_peer_info();
+fn add_active_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+    let (id, info) = make_peer_info();
+    peerdb.peer_connected(Multiaddr::empty(), info);
 
-    (
+    id
+}
+
+fn add_idle_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+    let (id, info) = make_peer_info();
+    peerdb.register_peer_info(Multiaddr::empty(), info);
+
+    id
+}
+
+fn add_discovered_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+    let peer_id = PeerId::random();
+    peerdb.peer_discovered(&types::AddrInfo {
         peer_id,
-        PeerContext {
-            info,
-            address: None,
-            addresses: Default::default(),
-            score: 0,
-        },
-    )
+        ip4: vec![],
+        ip6: vec![],
+    });
+
+    peer_id
+}
+
+fn add_banned_peer(peerdb: &mut PeerDb<Libp2pService>) -> PeerId {
+    let (id, info) = make_peer_info();
+    peerdb.register_peer_info(Multiaddr::empty(), info);
+    peerdb.ban_peer(&id);
+
+    id
 }
 
 #[test]
@@ -68,8 +87,7 @@ fn num_active_peers() {
 
     // add three active peers
     for _ in 0..3 {
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Active(ctx));
+        let _id = add_active_peer(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 0);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -77,9 +95,7 @@ fn num_active_peers() {
 
     // add 2 idle peers
     for _ in 0..2 {
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Idle(ctx));
-        peerdb.available().insert(id);
+        let _id = add_idle_peer(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 2);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -87,19 +103,15 @@ fn num_active_peers() {
 
     // add 4 discovered peers
     for _ in 0..2 {
-        let id = PeerId::random();
-        peerdb.peers().insert(id, Peer::Discovered(Default::default()));
-        peerdb.available().insert(id);
+        let _id = add_discovered_peer(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 4);
     assert_eq!(peerdb.active_peer_count(), 3);
     assert_eq!(peerdb.peers().len(), 7);
 
-    // add 5 banned peers
+    // add 5 banned peesrs
     for _ in 0..5 {
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Banned(either::Left(ctx)));
-        peerdb.banned().insert(id);
+        let _id = add_banned_peer(&mut peerdb);
     }
     assert_eq!(peerdb.idle_peer_count(), 4);
     assert_eq!(peerdb.active_peer_count(), 3);
@@ -110,61 +122,48 @@ fn num_active_peers() {
 fn is_active_peer() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
-    let (id1, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id1, Peer::Active(ctx));
+    let id1 = add_active_peer(&mut peerdb);
     assert!(peerdb.is_active_peer(&id1));
 
-    let (id2, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id2, Peer::Idle(ctx));
+    let id2 = add_idle_peer(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id2));
 
-    let id3 = PeerId::random();
-    peerdb.peers().insert(id3, Peer::Discovered(Default::default()));
+    let id3 = add_discovered_peer(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id3));
 
-    let (id4, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id4, Peer::Banned(either::Left(ctx)));
+    let id4 = add_banned_peer(&mut peerdb);
     assert!(!peerdb.is_active_peer(&id4));
 }
 
 #[test]
-fn adjust_peer_score() {
-    // peer banned after adjustment
-    {
-        let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
+fn adjust_peer_score_normal_threshold() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Active(ctx));
-        peerdb.available().insert(id);
-        assert!(peerdb.adjust_peer_score(&id, 100));
-        assert!(peerdb.banned().contains(&id));
-    }
+    let id = add_active_peer(&mut peerdb);
+    assert!(peerdb.adjust_peer_score(&id, 100));
+    assert!(peerdb.banned().contains(&id));
+}
 
-    // higher threshold, no ban
-    {
-        let mut config = config::P2pConfig::new();
-        config.ban_threshold = 200;
-        let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
+#[test]
+fn adjust_peer_score_higher_threshold() {
+    let mut config = config::P2pConfig::new();
+    config.ban_threshold = 200;
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Active(ctx));
-        peerdb.available().insert(id);
-        assert!(!peerdb.adjust_peer_score(&id, 100));
-        assert!(!peerdb.banned().contains(&id));
-    }
+    let id = add_active_peer(&mut peerdb);
+    assert!(!peerdb.adjust_peer_score(&id, 100));
+    assert!(!peerdb.banned().contains(&id));
+}
 
-    // lower threshold, ban for more minor offense
-    {
-        let mut config = config::P2pConfig::new();
-        config.ban_threshold = 20;
-        let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
+#[test]
+fn adjust_peer_score_lower_threshold() {
+    let mut config = config::P2pConfig::new();
+    config.ban_threshold = 20;
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config));
 
-        let (id, ctx) = make_peer_ctx();
-        peerdb.peers().insert(id, Peer::Active(ctx));
-        peerdb.available().insert(id);
-        assert!(peerdb.adjust_peer_score(&id, 30));
-        assert!(peerdb.banned().contains(&id));
-    }
+    let id = add_active_peer(&mut peerdb);
+    assert!(peerdb.adjust_peer_score(&id, 30));
+    assert!(peerdb.banned().contains(&id));
 }
 
 #[test]
@@ -177,9 +176,7 @@ fn ban_peer() {
     assert_eq!(peerdb.banned().len(), 1);
 
     // idle peer
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Idle(ctx));
-    peerdb.available().insert(id);
+    let id = add_banned_peer(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -190,9 +187,7 @@ fn ban_peer() {
     assert!(!peerdb.available().contains(&id));
 
     // active peer
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Active(ctx));
-    peerdb.available().insert(id);
+    let id = add_active_peer(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -203,9 +198,7 @@ fn ban_peer() {
     assert!(!peerdb.available().contains(&id));
 
     // discovered peer
-    let (id, _ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Discovered(Default::default()));
-    peerdb.available().insert(id);
+    let id = add_discovered_peer(&mut peerdb);
     peerdb.ban_peer(&id);
 
     assert!(std::matches!(
@@ -217,45 +210,56 @@ fn ban_peer() {
 }
 
 #[test]
-fn peer_disconnected() {
+fn peer_disconnected_unknown() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
     // unknown peer doesn't cause any changes
     assert_eq!(peerdb.peers().len(), 0);
     peerdb.peer_disconnected(&PeerId::random());
     assert_eq!(peerdb.peers().len(), 0);
+}
+
+#[test]
+fn peer_disconnected_idle() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
     // idle peer
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Idle(ctx));
-    peerdb.available().insert(id);
+    let id = add_idle_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
     assert!(peerdb.available().contains(&id));
+}
 
-    // discovered peer
-    let (id, _ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Discovered(Default::default()));
-    peerdb.available().insert(id);
+#[test]
+fn peer_disconnected_discovered() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
+
+    let id = add_discovered_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(
         peerdb.peers().get(&id),
         Some(Peer::Discovered(_))
     ));
     assert!(peerdb.available().contains(&id));
+}
 
-    // banned peer
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Banned(either::Left(ctx)));
+#[test]
+fn peer_disconnected_banned() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
+
+    let id = add_banned_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(
         peerdb.peers().get(&id),
         Some(Peer::Banned(_))
     ));
+}
 
-    // active peer
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Active(ctx));
+#[test]
+fn peer_disconnected_active() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
+
+    let id = add_active_peer(&mut peerdb);
     peerdb.peer_disconnected(&id);
     assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
     assert!(peerdb.available().contains(&id));
@@ -267,28 +271,26 @@ fn peer_connected_discovered() {
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     // register information for a discovered peer
-    let (id, info) = make_peer_info();
-    peerdb.peers().insert(
-        id,
-        Peer::Discovered(VecDeque::from([
-            remote_addr.clone(),
-            "/ip6/::1/tcp/8889".parse().unwrap(),
-        ])),
-    );
-    peerdb.pending().insert(remote_addr.clone(), id);
+    let (peer_id, info) = make_peer_info();
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id,
+        ip4: vec![],
+        ip6: vec![remote_addr.clone(), "/ip6/::1/tcp/8889".parse().unwrap()],
+    });
     assert!(std::matches!(
-        peerdb.peers().get(&id),
+        peerdb.peers().get(&peer_id),
         Some(Peer::Discovered(_))
     ));
+    assert!(peerdb.take_best_peer_addr().unwrap().is_some());
 
     assert!(peerdb.pending().contains_key(&remote_addr));
     peerdb.peer_connected(remote_addr.clone(), info);
 
     assert!(std::matches!(
-        peerdb.peers().get(&id),
+        peerdb.peers().get(&peer_id),
         Some(Peer::Active(_))
     ));
-    assert!(!peerdb.available().contains(&id));
+    assert!(!peerdb.available().contains(&peer_id));
     assert!(!peerdb.pending().contains_key(&remote_addr));
 }
 
@@ -297,18 +299,14 @@ fn peer_connected_idle() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
-    // register information for a discovered peer
-    let (id, info) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Idle(info));
+    let (id, info) = make_peer_info();
+    let (_id, mut new_info) = make_peer_info();
+    new_info.peer_id = id;
 
-    peerdb.pending().insert(remote_addr.clone(), id);
-    assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
+    peerdb.register_peer_info(Multiaddr::empty(), info);
+    assert!(peerdb.available().contains(&id));
 
-    let (_id, mut info) = make_peer_info();
-    info.peer_id = id;
-
-    assert!(peerdb.pending().contains_key(&remote_addr));
-    peerdb.peer_connected(remote_addr.clone(), info);
+    peerdb.peer_connected(remote_addr.clone(), new_info);
 
     assert!(std::matches!(
         peerdb.peers().get(&id),
@@ -339,34 +337,37 @@ fn peer_connected_unknown() {
     assert!(!peerdb.pending().contains_key(&remote_addr));
 }
 
-// update is ignored for banned and active peers
 #[test]
-fn peer_connected_banned_and_active() {
+fn peer_connected_active() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
     // active peer
-    let (id1, ctx1) = make_peer_ctx();
-    let (_id, info1) = make_peer_info();
+    let id1 = add_active_peer(&mut peerdb);
+    let (_id, mut info1) = make_peer_info();
+    info1.peer_id = id1;
 
-    peerdb.peers().insert(id1, Peer::Active(ctx1));
     peerdb.peer_connected(Multiaddr::empty(), info1);
     assert!(std::matches!(
         peerdb.peers().get(&id1),
         Some(Peer::Active(_))
     ));
     assert!(!peerdb.available().contains(&id1));
+}
 
-    // banned peer
-    let (id2, ctx2) = make_peer_ctx();
-    let (_id, info2) = make_peer_info();
+#[test]
+fn peer_connected_banned() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
-    peerdb.peers().insert(id2, Peer::Banned(either::Left(ctx2)));
+    let id2 = add_banned_peer(&mut peerdb);
+    let (_id, mut info2) = make_peer_info();
+    info2.peer_id = id2;
+
     peerdb.peer_connected(Multiaddr::empty(), info2);
     assert!(std::matches!(
         peerdb.peers().get(&id2),
         Some(Peer::Banned(_))
     ));
-    assert!(!peerdb.available().contains(&id1));
+    assert!(!peerdb.available().contains(&id2));
 }
 
 #[test]
@@ -375,24 +376,25 @@ fn register_peer_info_discovered_peer() {
     let remote_addr: Multiaddr = "/ip6/::1/tcp/8888".parse().unwrap();
 
     // register information for a discovered peer
-    let (id, info) = make_peer_info();
-    peerdb.peers().insert(
-        id,
-        Peer::Discovered(VecDeque::from([
-            remote_addr.clone(),
-            "/ip6/::1/tcp/8889".parse().unwrap(),
-        ])),
-    );
-    peerdb.pending().insert(remote_addr.clone(), id);
+    let (peer_id, info) = make_peer_info();
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id,
+        ip4: vec![],
+        ip6: vec![remote_addr.clone(), "/ip6/::1/tcp/8889".parse().unwrap()],
+    });
     assert!(std::matches!(
-        peerdb.peers().get(&id),
+        peerdb.peers().get(&peer_id),
         Some(Peer::Discovered(_))
     ));
+    assert!(peerdb.take_best_peer_addr().unwrap().is_some());
 
     assert!(peerdb.pending().get(&remote_addr).is_some());
     peerdb.register_peer_info(remote_addr, info);
-    assert!(std::matches!(peerdb.peers().get(&id), Some(Peer::Idle(_))));
-    assert!(peerdb.available().contains(&id));
+    assert!(std::matches!(
+        peerdb.peers().get(&peer_id),
+        Some(Peer::Idle(_))
+    ));
+    assert!(peerdb.available().contains(&peer_id));
 }
 
 // for idle peers the information is updated
@@ -400,8 +402,7 @@ fn register_peer_info_discovered_peer() {
 fn register_peer_info_idle_peer() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
-    let (id, ctx) = make_peer_ctx();
-    peerdb.peers().insert(id, Peer::Idle(ctx));
+    let id = add_idle_peer(&mut peerdb);
     if let Some(Peer::Idle(ctx)) = peerdb.peers().get(&id) {
         assert_eq!(ctx.info.magic_bytes, [1, 2, 3, 4]);
     } else {
@@ -433,34 +434,35 @@ fn register_peer_info_unknown_peer() {
     assert!(peerdb.available().contains(&id));
 }
 
-// update is ignored for banned and active peers
 #[test]
-fn register_peer_info_banned_and_active() {
+fn register_peer_info_active() {
     let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
-    // active peer
-    let (id1, ctx1) = make_peer_ctx();
+    let id1 = add_active_peer(&mut peerdb);
     let (_id, info1) = make_peer_info();
 
-    peerdb.peers().insert(id1, Peer::Active(ctx1));
     peerdb.register_peer_info(Multiaddr::empty(), info1);
     assert!(std::matches!(
         peerdb.peers().get(&id1),
         Some(Peer::Active(_))
     ));
     assert!(!peerdb.available().contains(&id1));
+}
+
+#[test]
+fn register_peer_info_banned() {
+    let mut peerdb = PeerDb::<Libp2pService>::new(Arc::new(config::P2pConfig::new()));
 
     // banned peer
-    let (id2, ctx2) = make_peer_ctx();
+    let id2 = add_banned_peer(&mut peerdb);
     let (_id, info2) = make_peer_info();
 
-    peerdb.peers().insert(id2, Peer::Banned(either::Left(ctx2)));
     peerdb.register_peer_info(Multiaddr::empty(), info2);
     assert!(std::matches!(
         peerdb.peers().get(&id2),
         Some(Peer::Banned(_))
     ));
-    assert!(!peerdb.available().contains(&id1));
+    assert!(!peerdb.available().contains(&id2));
 }
 
 #[test]
@@ -513,20 +515,16 @@ fn peer_discovered_libp2p() {
         };
 
     // first add two new peers, both with ipv4 and ipv6 address
-    peerdb.peer_discovered(
-        &types::AddrInfo {
-            peer_id: id_1,
-            ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-            ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-        },
-    );
-    peerdb.peer_discovered(
-        &types::AddrInfo {
-            peer_id: id_2,
-            ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-            ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-        },
-    );
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id: id_1,
+        ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
+        ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
+    });
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id: id_2,
+        ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
+        ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
+    });
 
     assert_eq!(peerdb.peers().len(), 2);
     assert_eq!(
@@ -550,20 +548,16 @@ fn peer_discovered_libp2p() {
     );
 
     // then discover one new peer and two additional ipv6 addresses for peer 1
-    peerdb.peer_discovered(
-        &types::AddrInfo {
-            peer_id: id_1,
-            ip4: vec![],
-            ip6: vec!["/ip6/::1/tcp/9094".parse().unwrap(), "/ip6/::1/tcp/9095".parse().unwrap()],
-        },
-    );
-    peerdb.peer_discovered(
-        &types::AddrInfo {
-            peer_id: id_3,
-            ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-            ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-        },
-    );
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id: id_1,
+        ip4: vec![],
+        ip6: vec!["/ip6/::1/tcp/9094".parse().unwrap(), "/ip6/::1/tcp/9095".parse().unwrap()],
+    });
+    peerdb.peer_discovered(&types::AddrInfo {
+        peer_id: id_3,
+        ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
+        ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
+    });
 
     check_peer(
         peerdb.peers(),

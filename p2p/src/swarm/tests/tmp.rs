@@ -23,8 +23,8 @@ use crate::{
 use common::chain::config;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use logging::log;
-use std::{net::SocketAddr, sync::Arc};
 use p2p_test_utils::make_libp2p_addr;
+use std::{net::SocketAddr, sync::Arc};
 
 // try to connect to an address that no one listening on and verify it fails
 #[tokio::test]

@@ -181,7 +181,7 @@ where
         info: net::types::PeerInfo<T>,
     ) -> crate::Result<()> {
         let peer_id = info.peer_id;
-        log::debug!("peer {} connected, address {}, {}", peer_id, address, info);
+        log::debug!("peer {peer_id} connected, address {address}, {info}");
 
         ensure!(
             info.magic_bytes == *self.chain_config.magic_bytes(),
@@ -227,7 +227,7 @@ where
         address: T::Address,
         info: net::types::PeerInfo<T>,
     ) -> crate::Result<()> {
-        log::debug!("validate inbound connection, inbound address {}", address);
+        log::debug!("validate inbound connection, inbound address {address}");
 
         ensure!(
             !self.peerdb.is_active_peer(&info.peer_id),
@@ -260,7 +260,7 @@ where
     /// or by the [`PeerManager::heartbeat()`] function which has decided to cull
     /// this connection in favor of another potential connection.
     async fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
-        log::debug!("connection closed for peer {}", peer_id);
+        log::debug!("connection closed for peer {peer_id}");
 
         self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id)).await?;
         self.peerdb.peer_disconnected(&peer_id);
@@ -273,7 +273,7 @@ where
     /// which makes the `PeerDb` mark is banned and prevents any further connections with the peer
     /// and also bans the peer in the networking backend.
     async fn adjust_peer_score(&mut self, peer_id: T::PeerId, score: u32) -> crate::Result<()> {
-        log::debug!("adjusting score for peer {}, adjustment {}", peer_id, score);
+        log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
         if self.peerdb.adjust_peer_score(&peer_id, score) {
             return self.handle.ban_peer(peer_id).await;
@@ -350,7 +350,7 @@ where
         );
 
         for _ in 0..npeers {
-            if let Some(addr) = self.peerdb.best_peer_addr()? {
+            if let Some(addr) = self.peerdb.take_best_peer_addr()? {
                 match self.connect(addr.clone()).await {
                     Ok(_) => {
                         self.pending.insert(addr, None);
@@ -392,10 +392,10 @@ where
                 result
             }
             Err(err) => {
-                log::warn!("non-fatal error occurred: {}", err);
+                log::warn!("non-fatal error occurred: {err}");
 
                 if let Some(peer_id) = peer_id {
-                    log::info!("adjust peer score for peer {}, reason {}", peer_id, err);
+                    log::info!("adjust peer score for peer {peer_id}, reason {err}");
                     return self.adjust_peer_score(peer_id, err.ban_score()).await;
                 }
 
@@ -423,10 +423,7 @@ where
             tokio::select! {
                 event = self.rx_swarm.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     event::SwarmEvent::Connect(addr, response) => {
-                        log::debug!(
-                            "try to establish outbound connection to peer at address {:?}",
-                            addr
-                        );
+                        log::debug!("try to establish outbound connection to peer at address {addr}");
 
                         let res = self.connect(addr.clone()).await.map(|_| {
                             self.pending.insert(addr.clone(), Some(response));
@@ -434,14 +431,14 @@ where
                         self.handle_result(None, res).await?;
                     }
                     event::SwarmEvent::Disconnect(peer_id, response) => {
-                        log::debug!("disconnect peer {} from the swarm", peer_id);
+                        log::debug!("disconnect peer {peer_id} from the swarm");
 
                         response
                             .send(self.handle.disconnect(peer_id).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::AdjustPeerScore(peer_id, score, response) => {
-                        log::debug!("adjust peer {} score: {}", peer_id, score);
+                        log::debug!("adjust peer {peer_id} score: {score}");
 
                         response
                             .send(self.adjust_peer_score(peer_id, score).await)
@@ -476,15 +473,15 @@ where
                                 Ok(_) => {},
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
-                                    log::warn!("peer error for peer {}: {}", peer_id, err);
+                                    log::warn!("peer error for peer {peer_id}: {err}");
                                     self.handle.disconnect(peer_id).await?;
                                 }
                                 Err(P2pError::ProtocolError(err)) => {
-                                    log::warn!("peer error for peer {}: {}", peer_id, err);
+                                    log::warn!("peer error for peer {peer_id}: {err}");
                                     self.adjust_peer_score(peer_id, err.ban_score()).await?;
                                 }
                                 Err(err) => {
-                                    log::error!("unknown error for peer {}: {}", peer_id, err);
+                                    log::error!("unknown error for peer {peer_id}: {err}");
                                 }
                             }
                         }
@@ -525,7 +522,7 @@ where
                         }
                     }
                     Err(err) => {
-                        log::error!("failed to read network event: {:?}", err);
+                        log::error!("failed to read network event: {err:?}");
                         self.handle_result(None, Err(err)).await?;
                     }
                 },

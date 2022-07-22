@@ -116,9 +116,10 @@ impl<T: NetworkingService> PeerDb<T> {
     pub fn active_peer_count(&self) -> usize {
         self.peers
             .len()
-            .saturating_sub(self.pending.len())
-            .saturating_sub(self.available.len())
-            .saturating_sub(self.banned.len())
+            .checked_sub(self.pending.len())
+            .and_then(|acc| acc.checked_sub(self.available.len()))
+            .and_then(|acc| acc.checked_sub(self.banned.len()))
+            .expect("`PeerDb` state to be consistent")
     }
 
     pub fn active_peers(&self) -> Vec<(&T::PeerId, &PeerContext<T>)> {
@@ -126,29 +127,29 @@ impl<T: NetworkingService> PeerDb<T> {
             .iter()
             .filter_map(|(id, info)| match info {
                 Peer::Active(inner) => Some((id, inner)),
-                _ => None,
+                Peer::Idle(_) | Peer::Banned(_) | Peer::Discovered(_) => None,
             })
             .collect::<Vec<_>>()
     }
 
-    /// Get mutable reference to the peer store
-    pub fn peers(&mut self) -> &mut HashMap<T::PeerId, Peer<T>> {
-        &mut self.peers
+    /// Get reference to the peer store
+    pub fn peers(&mut self) -> &HashMap<T::PeerId, Peer<T>> {
+        &self.peers
     }
 
-    /// Get mutable reference to the available peer store
-    pub fn available(&mut self) -> &mut HashSet<T::PeerId> {
-        &mut self.available
+    /// Get reference to the available peer store
+    pub fn available(&mut self) -> &HashSet<T::PeerId> {
+        &self.available
     }
 
-    /// Get mutable reference to the pending peer store
-    pub fn pending(&mut self) -> &mut HashMap<T::Address, T::PeerId> {
-        &mut self.pending
+    /// Get reference to the pending peer store
+    pub fn pending(&mut self) -> &HashMap<T::Address, T::PeerId> {
+        &self.pending
     }
 
-    /// Get mutable reference to the banned peer store
-    pub fn banned(&mut self) -> &mut HashSet<T::PeerId> {
-        &mut self.banned
+    /// Get reference to the banned peer store
+    pub fn banned(&mut self) -> &HashSet<T::PeerId> {
+        &self.banned
     }
 
     /// Check is the peer ID banned
@@ -168,7 +169,7 @@ impl<T: NetworkingService> PeerDb<T> {
 
     /// Get socket address of the next best peer (TODO: in terms of peer score)
     // TODO: rewrite all of this
-    pub fn best_peer_addr(&mut self) -> crate::Result<Option<T::Address>> {
+    pub fn take_best_peer_addr(&mut self) -> crate::Result<Option<T::Address>> {
         // TODO: improve peer selection
         let peer_id = match self.available.iter().next() {
             Some(peer_id) => *peer_id,
@@ -211,11 +212,7 @@ impl<T: NetworkingService> PeerDb<T> {
             },
             Entry::Vacant(entry) => {
                 entry.insert(Peer::Discovered(VecDeque::from_iter(
-                    info.ip6
-                        .iter()
-                        .cloned()
-                        .chain(info.ip4.iter().cloned())
-                        .collect::<Vec<_>>(),
+                    info.ip6.iter().cloned().chain(info.ip4.iter().cloned()).collect::<Vec<_>>(),
                 )));
                 self.available.insert(info.peer_id);
             }
