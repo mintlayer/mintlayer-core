@@ -131,6 +131,8 @@ pub enum PropertyQueryError {
         block_height: BlockHeight,
         ancestor_height: BlockHeight,
     },
+    #[error("Genesis block has no header")]
+    GenesisHeaderRequested,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -303,7 +303,10 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         let id = self
             .get_block_id_by_height(height)?
             .ok_or(PropertyQueryError::BlockForHeightNotFound(*height))?;
-        let id = id.classify(self.chain_config).chain_block_id().expect("Genesis has no header");
+        let id = id
+            .classify(self.chain_config)
+            .chain_block_id()
+            .ok_or(PropertyQueryError::GenesisHeaderRequested)?;
         Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
     }
 
