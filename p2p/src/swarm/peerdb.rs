@@ -118,6 +118,7 @@ impl<T: NetworkingService> PeerDb<T> {
             .len()
             .saturating_sub(self.pending.len())
             .saturating_sub(self.available.len())
+            .saturating_sub(self.banned.len())
     }
 
     pub fn active_peers(&self) -> Vec<(&T::PeerId, &PeerContext<T>)> {
@@ -128,6 +129,26 @@ impl<T: NetworkingService> PeerDb<T> {
                 _ => None,
             })
             .collect::<Vec<_>>()
+    }
+
+    /// Get mutable reference to the peer store
+    pub fn peers(&mut self) -> &mut HashMap<T::PeerId, Peer<T>> {
+        &mut self.peers
+    }
+
+    /// Get mutable reference to the available peer store
+    pub fn available(&mut self) -> &mut HashSet<T::PeerId> {
+        &mut self.available
+    }
+
+    /// Get mutable reference to the pending peer store
+    pub fn pending(&mut self) -> &mut HashMap<T::Address, T::PeerId> {
+        &mut self.pending
+    }
+
+    /// Get mutable reference to the banned peer store
+    pub fn banned(&mut self) -> &mut HashSet<T::PeerId> {
+        &mut self.banned
     }
 
     /// Check is the peer ID banned
@@ -143,7 +164,6 @@ impl<T: NetworkingService> PeerDb<T> {
     /// Check if the peers is part of our active swarm
     pub fn is_active_peer(&self, peer_id: &T::PeerId) -> bool {
         std::matches!(self.peers.get(peer_id), Some(Peer::Active(_)))
-            && !self.banned.contains(peer_id)
     }
 
     /// Get socket address of the next best peer (TODO: in terms of peer score)
@@ -231,30 +251,39 @@ impl<T: NetworkingService> PeerDb<T> {
         let peer_id = info.peer_id;
 
         let entry = match self.peers.remove(&peer_id) {
-            Some(Peer::Discovered(addr_info)) => Peer::Idle(PeerContext {
-                info,
-                score: 0,
-                address: Some(address),
-                addresses: HashSet::from_iter(addr_info),
-            }),
-            Some(Peer::Idle(peer_info)) => Peer::Idle(PeerContext {
-                info,
-                score: peer_info.score,
-                address: Some(address),
-                addresses: peer_info.addresses,
-            }),
-            None => Peer::Idle(PeerContext {
-                info,
-                score: 0,
-                address: Some(address),
-                addresses: HashSet::new(),
-            }),
+            Some(Peer::Discovered(addr_info)) => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: 0,
+                    address: Some(address.clone()),
+                    addresses: HashSet::from_iter(addr_info),
+                })
+            }
+            Some(Peer::Idle(peer_info)) => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: peer_info.score,
+                    address: Some(address.clone()),
+                    addresses: peer_info.addresses,
+                })
+            }
+            None => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: 0,
+                    address: Some(address.clone()),
+                    addresses: HashSet::new(),
+                })
+            }
             Some(entry @ Peer::Active(_)) => entry,
             Some(entry @ Peer::Banned(_)) => entry,
         };
 
         self.peers.insert(peer_id, entry);
-        self.available.insert(peer_id);
+        self.pending.remove(&address);
     }
 
     /// Mark peer as connected
@@ -382,132 +411,5 @@ impl<T: NetworkingService> PeerDb<T> {
         }
 
         false
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::net::{self, libp2p::Libp2pService};
-    use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
-
-    #[test]
-    fn test_peer_discovered_libp2p() {
-        let mut peerdb = PeerDb::new(Arc::new(config::P2pConfig::new()));
-
-        let id_1: libp2p::PeerId = PeerId::random();
-        let id_2: libp2p::PeerId = PeerId::random();
-        let id_3: libp2p::PeerId = PeerId::random();
-
-        // check that peer with `id` has the correct ipv4 and ipv6 addresses
-        let check_peer =
-            |peers: &HashMap<<Libp2pService as NetworkingService>::PeerId, Peer<Libp2pService>>,
-             peer_id: PeerId,
-             ip4: Vec<Multiaddr>,
-             ip6: Vec<Multiaddr>| {
-                let (p_ip4, p_ip6) = {
-                    match peers.get(&peer_id).unwrap() {
-                        Peer::Idle(_) => panic!("invalid peer type"),
-                        Peer::Active(_) => panic!("invalid peer type"),
-                        Peer::Banned(_) => panic!("invalid peer type"),
-                        Peer::Discovered(info) => {
-                            let mut ip4 = vec![];
-                            let mut ip6 = vec![];
-
-                            for addr in info {
-                                let components = addr.iter().collect::<Vec<_>>();
-                                if std::matches!(components[0], Protocol::Ip6(_)) {
-                                    ip6.push(addr.clone());
-                                } else {
-                                    ip4.push(addr.clone());
-                                }
-                            }
-
-                            (ip4, ip6)
-                        }
-                    }
-                };
-
-                assert_eq!(ip4.len(), p_ip4.len());
-                assert_eq!(ip6.len(), p_ip6.len());
-
-                for ip in ip4.iter() {
-                    assert!(p_ip4.contains(ip));
-                }
-
-                for ip in ip6.iter() {
-                    assert!(p_ip6.contains(ip));
-                }
-            };
-
-        // first add two new peers, both with ipv4 and ipv6 address
-        peerdb.discover_peers(&[
-            net::types::AddrInfo {
-                peer_id: id_1,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-            },
-            net::types::AddrInfo {
-                peer_id: id_2,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-            },
-        ]);
-
-        assert_eq!(peerdb.peers.len(), 2);
-        assert_eq!(
-            peerdb.peers.iter().filter(|x| std::matches!(x.1, Peer::Idle(_))).count(),
-            0
-        );
-        assert_eq!(peerdb.available.len(), 2);
-
-        check_peer(
-            &peerdb.peers,
-            id_1,
-            vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-        );
-
-        check_peer(
-            &peerdb.peers,
-            id_2,
-            vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-        );
-
-        // then discover one new peer and two additional ipv6 addresses for peer 1
-        peerdb.discover_peers(&[
-            net::types::AddrInfo {
-                peer_id: id_1,
-                ip4: vec![],
-                ip6: vec![
-                    "/ip6/::1/tcp/9094".parse().unwrap(),
-                    "/ip6/::1/tcp/9095".parse().unwrap(),
-                ],
-            },
-            net::types::AddrInfo {
-                peer_id: id_3,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-            },
-        ]);
-
-        check_peer(
-            &peerdb.peers,
-            id_1,
-            vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-            vec![
-                "/ip6/::1/tcp/9091".parse().unwrap(),
-                "/ip6/::1/tcp/9094".parse().unwrap(),
-                "/ip6/::1/tcp/9095".parse().unwrap(),
-            ],
-        );
-
-        check_peer(
-            &peerdb.peers,
-            id_3,
-            vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-        );
     }
 }
