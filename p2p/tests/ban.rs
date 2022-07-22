@@ -30,7 +30,7 @@ use p2p::{
     sync::SyncManager,
 };
 use std::sync::Arc;
-use test_utils::make_libp2p_addr;
+use test_utils::{make_libp2p_addr, TestBlockInfo};
 use tokio::sync::mpsc;
 
 async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
@@ -90,9 +90,8 @@ async fn invalid_pubsub_block() {
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
     // create few blocks so `pubsub2` has something to send to `pubsub1`
-    let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
-    let best_block = handle.call(move |this| this.get_block(id)).await.unwrap().unwrap().unwrap();
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &best_block, 3);
+    let best_block = TestBlockInfo::from_genesis(config.genesis_block());
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
     tokio::spawn(async move {
         tx_pubsub.send(PubSubControlEvent::InitialBlockDownloadDone).await.unwrap();
@@ -154,9 +153,8 @@ async fn invalid_sync_block() {
     );
 
     // create few blocks and offer an orphan block to the `SyncManager`
-    let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
-    let best_block = handle.call(move |this| this.get_block(id)).await.unwrap().unwrap().unwrap();
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &best_block, 3);
+    let best_block = TestBlockInfo::from_genesis(config.genesis_block());
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
     // register random peer to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation

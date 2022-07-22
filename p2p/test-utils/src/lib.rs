@@ -26,9 +26,10 @@ use common::{
         config::ChainConfig,
         signature::inputsig::InputWitness,
         transaction::Transaction,
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose, TxInput,
+        TxOutput,
     },
-    primitives::{time, Amount, Id, Idable, H256},
+    primitives::{time, Amount, Id, Idable},
 };
 use crypto::random::SliceRandom;
 use libp2p::Multiaddr;
@@ -59,67 +60,100 @@ pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
 }
 
-fn create_utxo_data(
-    _config: &ChainConfig,
-    tx_id: &Id<Transaction>,
-    index: usize,
-    output: &TxOutput,
-) -> Option<(TxInput, TxOutput)> {
-    if output.value() > Amount::from_atoms(1) {
-        Some((
-            TxInput::new(
-                OutPointSourceId::Transaction(tx_id.clone()),
-                index as u32,
-                nosig_random_witness(),
-            ),
-            TxOutput::new(
-                (output.value() - Amount::from_atoms(1)).unwrap(),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ),
-        ))
-    } else {
-        None
+pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestBlockInfo {
+    pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
+    pub(crate) id: Id<GenBlock>,
+}
+
+impl TestBlockInfo {
+    pub fn from_block(blk: &Block) -> Self {
+        let txns = blk
+            .transactions()
+            .iter()
+            .map(|tx| {
+                (
+                    OutPointSourceId::Transaction(tx.get_id()),
+                    tx.outputs().clone(),
+                )
+            })
+            .collect();
+        let id = blk.get_id().into();
+        Self { txns, id }
+    }
+
+    pub fn from_genesis(genesis: &Genesis) -> Self {
+        let id: Id<GenBlock> = genesis.get_id().into();
+        let outsrc = OutPointSourceId::BlockReward(id.clone());
+        let txns = vec![(outsrc, genesis.utxos().to_vec())];
+        Self { txns, id }
+    }
+
+    pub async fn from_id(ci: &ChainstateHandle, config: &ChainConfig, id: Id<GenBlock>) -> Self {
+        match id.classify(config) {
+            GenBlockId::Genesis(_) => Self::from_genesis(config.genesis_block()),
+            GenBlockId::Block(id) => {
+                let block = ci.call(|this| this.get_block(id)).await.unwrap().unwrap().unwrap();
+                Self::from_block(&block)
+            }
+        }
+    }
+
+    pub async fn from_tip(handle: &ChainstateHandle, config: &ChainConfig) -> Self {
+        let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
+        Self::from_id(handle, config, id).await
     }
 }
 
-fn produce_test_block(config: &ChainConfig, prev_block: &Block, orphan: bool) -> Block {
-    produce_test_block_with_consensus_data(config, prev_block, orphan, ConsensusData::None)
+fn create_utxo_data(
+    outsrc: OutPointSourceId,
+    index: usize,
+    output: &TxOutput,
+) -> Option<(TxInput, TxOutput)> {
+    let new_value = (output.value() - Amount::from_atoms(1)).unwrap();
+    if new_value == Amount::from_atoms(0) {
+        return None;
+    }
+    Some((
+        TxInput::new(outsrc, index as u32, nosig_random_witness()),
+        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+    ))
+}
+
+fn produce_test_block(config: &ChainConfig, prev_block: TestBlockInfo) -> Block {
+    produce_test_block_with_consensus_data(config, prev_block, ConsensusData::None)
 }
 
 fn produce_test_block_with_consensus_data(
-    config: &ChainConfig,
-    prev_block: &Block,
-    orphan: bool,
+    _config: &ChainConfig,
+    prev_block: TestBlockInfo,
     consensus_data: ConsensusData,
 ) -> Block {
     // For each output we create a new input and output that will placed into a new block.
     // If value of original output is less than 1 then output will disappear in a new block.
     // Otherwise, value will be decreasing for 1.
     let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-        .transactions()
-        .iter()
-        .flat_map(|tx| create_new_outputs(config, tx))
+        .txns
+        .into_iter()
+        .flat_map(|(outsrc, outs)| create_new_outputs(outsrc, &outs))
         .unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect("not to fail")],
-        if orphan {
-            Some(Id::new(H256::random()))
-        } else {
-            Some(Id::new(prev_block.get_id().get()))
-        },
+        prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
     )
     .expect("not to fail")
 }
 
-fn create_new_outputs(config: &ChainConfig, tx: &Transaction) -> Vec<(TxInput, TxOutput)> {
-    tx.outputs()
-        .iter()
+fn create_new_outputs(srcid: OutPointSourceId, outs: &[TxOutput]) -> Vec<(TxInput, TxOutput)> {
+    outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(config, &tx.get_id(), index, output))
-        .collect::<Vec<(TxInput, TxOutput)>>()
+        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output))
+        .collect()
 }
 
 fn nosig_random_witness() -> InputWitness {
@@ -154,17 +188,20 @@ pub async fn start_chainstate(
     handle
 }
 
-pub fn create_block(config: Arc<ChainConfig>, parent: &Block) -> Block {
-    produce_test_block(&config, parent, false)
+pub fn create_block(config: Arc<ChainConfig>, parent: TestBlockInfo) -> Block {
+    produce_test_block(&config, parent)
 }
 
-pub fn create_n_blocks(config: Arc<ChainConfig>, parent: &Block, nblocks: usize) -> Vec<Block> {
+pub fn create_n_blocks(
+    config: Arc<ChainConfig>,
+    mut prev: TestBlockInfo,
+    nblocks: usize,
+) -> Vec<Block> {
     let mut blocks: Vec<Block> = Vec::new();
-    let mut prev = parent.clone();
 
     for _ in 0..nblocks {
-        let block = create_block(Arc::clone(&config), &prev);
-        prev = block.clone();
+        let block = create_block(Arc::clone(&config), prev);
+        prev = TestBlockInfo::from_block(&block);
         blocks.push(block.clone());
     }
 
@@ -189,8 +226,14 @@ pub async fn add_more_blocks(
     nblocks: usize,
 ) {
     let id = handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
-    let best_block = handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
+    let base_block = match id.classify(&config) {
+        GenBlockId::Genesis(_id) => TestBlockInfo::from_genesis(config.genesis_block()),
+        GenBlockId::Block(id) => {
+            let best_block = handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
+            TestBlockInfo::from_block(&best_block.unwrap())
+        }
+    };
 
-    let blocks = create_n_blocks(config, &best_block.unwrap(), nblocks);
+    let blocks = create_n_blocks(config, base_block, nblocks);
     import_blocks(handle, blocks).await;
 }

@@ -15,16 +15,16 @@
 //
 // Author(s): S. Afach
 
+use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use chainstate_types::block_index::BlockIndex;
 use common::amount_sum;
 use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::signature::{verify_signature, Transactable};
 use common::chain::Transaction;
 use common::{
     chain::{
-        block::Block, calculate_tx_index_from_block, OutPoint, OutPointSourceId, SpendablePosition,
-        Spender, TxInput, TxMainChainIndex, TxOutput,
+        calculate_tx_index_from_block, Block, ChainConfig, GenBlock, GenBlockId, OutPoint,
+        OutPointSourceId, SpendablePosition, Spender, TxInput, TxMainChainIndex, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -53,12 +53,14 @@ pub struct ConsumedCachedInputs {
 pub struct CachedInputs<'a, S> {
     db_tx: &'a S,
     inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    chain_config: &'a ChainConfig,
 }
 
 impl<'a, S> CachedInputs<'a, S> {
-    pub fn new(db_tx: &'a S) -> Self {
+    pub fn new(db_tx: &'a S, chain_config: &'a ChainConfig) -> Self {
         Self {
             db_tx,
+            chain_config,
             inputs: BTreeMap::new(),
         }
     }
@@ -109,6 +111,20 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
+    pub fn get_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex<'a>>, StateUpdateError> {
+        match block_id.classify(self.chain_config) {
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(self.chain_config))),
+            GenBlockId::Block(id) => self
+                .db_tx
+                .get_block_index(&id)
+                .map(|b| b.map(GenBlockIndex::Block))
+                .map_err(StateUpdateError::from),
+        }
+    }
+
     fn remove_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), StateUpdateError> {
         let tx_index = CachedInputsOperation::Erase;
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
@@ -119,11 +135,16 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_blockreward_maturity(
         &self,
-        spending_block_id: &Id<Block>,
+        spending_block_id: &Id<GenBlock>,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), StateUpdateError> {
-        let source_block_index = self.db_tx.get_block_index(spending_block_id)?;
+        let spending_block_id = match spending_block_id.classify(self.chain_config) {
+            GenBlockId::Block(id) => id,
+            // TODO Handle premine maturity here or using some other mechanism (output time lock)
+            GenBlockId::Genesis(_) => return Ok(()),
+        };
+        let source_block_index = self.db_tx.get_block_index(&spending_block_id)?;
         let source_block_index =
             source_block_index.ok_or(StateUpdateError::InvariantBrokenSourceBlockIndexNotFound)?;
         let source_height = source_block_index.block_height();
@@ -218,18 +239,15 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     Self::get_output_amount(tx.outputs(), output_index, tx.get_id().into())?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self
-                        .db_tx
-                        .get_block_index(block_id)
-                        .map_err(StateUpdateError::from)?
-                        .ok_or_else(|| {
-                            StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone())
-                        })?;
+                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
+                        // TODO get rid of this coercion
+                        let block_id = Id::new(block_id.get());
+                        StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
+                    })?;
 
-                    let rewards_tx = block_index.block_header().block_reward_transactable();
+                    let rewards_tx = block_index.block_reward_transactable();
 
                     let outputs = rewards_tx.outputs().unwrap_or(&[]);
-
                     Self::get_output_amount(outputs, output_index, block_id.clone().into())?
                 }
             };
@@ -314,7 +332,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_timelock(
         &self,
-        source_block_index: &BlockIndex,
+        source_block_index: &GenBlockIndex,
         output: &TxOutput,
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
@@ -407,22 +425,25 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                                     tx_pos.block_id().clone(),
                                 )
                             })?;
-                        self.check_timelock(&block_index, output, spend_height, spending_time)?;
+                        self.check_timelock(
+                            &GenBlockIndex::Block(block_index),
+                            output,
+                            spend_height,
+                            spending_time,
+                        )?;
                     }
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self
-                        .db_tx
-                        .get_block_index(block_id)
-                        .map_err(StateUpdateError::from)?
-                        .ok_or_else(|| {
-                            StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id.clone())
-                        })?;
+                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
+                        // TODO get rid of the coercion
+                        let block_id = Id::new(block_id.get());
+                        StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
+                    })?;
 
-                    let reward_tx = block_index.block_header().block_reward_transactable();
+                    let reward_tx = block_index.block_reward_transactable();
 
                     let output = reward_tx
                         .outputs()

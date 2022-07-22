@@ -15,7 +15,7 @@
 
 use chainstate_types::locator::Locator;
 use common::{
-    chain::block::{Block, BlockHeader},
+    chain::block::{Block, BlockHeader, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
@@ -53,25 +53,22 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
             .map_err(ChainstateError::ProcessBlockError)
     }
 
-    fn get_best_block_id(&self) -> Result<Id<Block>, ChainstateError> {
-        Ok(self
-            .chainstate
+    fn get_best_block_id(&self) -> Result<Id<GenBlock>, ChainstateError> {
+        self.chainstate
             .get_best_block_id()
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .expect("There always must be a best block"))
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
-        Ok(self
-            .chainstate
-            .get_block_height_in_main_chain(block_id)
-            .map_err(ChainstateError::FailedToReadProperty)?
-            .is_some())
+        self.chainstate
+            .get_block_height_in_main_chain(&block_id.clone().into())
+            .map_err(ChainstateError::FailedToReadProperty)
+            .map(|ht| ht.is_some())
     }
 
     fn get_block_height_in_main_chain(
         &self,
-        block_id: &Id<Block>,
+        block_id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, ChainstateError> {
         self.chainstate
             .get_block_height_in_main_chain(block_id)
@@ -81,7 +78,7 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
     fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
-    ) -> Result<Option<Id<Block>>, ChainstateError> {
+    ) -> Result<Option<Id<GenBlock>>, ChainstateError> {
         self.chainstate
             .get_block_id_from_height(height)
             .map_err(ChainstateError::FailedToReadProperty)

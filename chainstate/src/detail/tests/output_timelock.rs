@@ -9,19 +9,20 @@ use std::{
 use chainstate_storage::Store;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block},
+        block::{timestamp::BlockTimestamp, Block, GenBlock},
         config::create_unit_test_config,
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
         OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount, BlockDistance, BlockHeight, Idable},
+    primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
 
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
         spend_cache::error::StateUpdateError,
+        tests::TestBlockInfo,
         tests::{anyonecanspend_address, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL},
     },
     BlockError, BlockSource, Chainstate, ChainstateConfig, TimeGetter,
@@ -65,7 +66,7 @@ fn output_lock_until_height() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -85,7 +86,7 @@ fn output_lock_until_height() {
         {
             let prev_block_id =
                 chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id.clone());
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(10000),
@@ -93,14 +94,14 @@ fn output_lock_until_height() {
             )];
 
             let inputs = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                prev_block_info.txns[0].0.clone(),
                 0,
                 InputWitness::NoSignature(None),
             )];
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -134,7 +135,7 @@ fn output_lock_until_height() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block_id.clone()),
+                    prev_block_id.clone(),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -154,7 +155,7 @@ fn output_lock_until_height() {
             {
                 let block = Block::new(
                     vec![],
-                    Some(prev_block_id),
+                    prev_block_id,
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -188,7 +189,7 @@ fn output_lock_until_height() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -239,7 +240,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
                 ),
             ];
             let inputs1 = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                 0,
                 InputWitness::NoSignature(None),
             )];
@@ -258,7 +259,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
 
             let block = Block::new(
                 vec![tx1, tx2],
-                Some(prev_block.get_id()),
+                <Id<GenBlock>>::from(prev_block.get_id()),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -315,7 +316,7 @@ fn output_lock_for_block_count() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -335,7 +336,7 @@ fn output_lock_for_block_count() {
         {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id);
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(10000),
@@ -343,14 +344,14 @@ fn output_lock_for_block_count() {
             )];
 
             let inputs = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                prev_block_info.txns[0].0.clone(),
                 0,
                 InputWitness::NoSignature(None),
             )];
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                prev_block_info.id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -383,7 +384,7 @@ fn output_lock_for_block_count() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block_id.clone()),
+                    prev_block_id.clone(),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -403,7 +404,7 @@ fn output_lock_for_block_count() {
             {
                 let block = Block::new(
                     vec![],
-                    Some(prev_block_id),
+                    prev_block_id,
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -434,7 +435,7 @@ fn output_lock_for_block_count() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -485,7 +486,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
                 ),
             ];
             let inputs1 = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                 0,
                 InputWitness::NoSignature(None),
             )];
@@ -504,7 +505,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
 
             let block = Block::new(
                 vec![tx1, tx2],
-                Some(prev_block.get_id()),
+                <Id<GenBlock>>::from(prev_block.get_id()),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -560,7 +561,7 @@ fn output_lock_for_block_count_attempted_overflow() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -626,7 +627,7 @@ fn output_lock_until_time() {
             assert_eq!(
                 calculate_median_time_past(
                     &chainstate.make_db_tx_ro(),
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id()
+                    &chainstate.get_best_block_index().unwrap().unwrap().block_id()
                 )
                 .as_int_seconds(),
                 median_block_time(&block_times[..=height])
@@ -643,7 +644,7 @@ fn output_lock_until_time() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block_id.clone()),
+                    prev_block_id.clone(),
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -663,7 +664,7 @@ fn output_lock_until_time() {
             {
                 let block = Block::new(
                     vec![],
-                    Some(prev_block_id),
+                    prev_block_id,
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -691,7 +692,7 @@ fn output_lock_until_time() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 // The block that is being validated isn't taken into account when calculating the
                 // median time, so any time can be used here.
                 BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
@@ -745,7 +746,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
                 ),
             ];
             let inputs1 = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                 0,
                 InputWitness::NoSignature(None),
             )];
@@ -764,7 +765,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
 
             let block = Block::new(
                 vec![tx1, tx2],
-                Some(prev_block.get_id()),
+                <Id<GenBlock>>::from(prev_block.get_id()),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -831,7 +832,7 @@ fn output_lock_for_seconds() {
             assert_eq!(
                 calculate_median_time_past(
                     &chainstate.make_db_tx_ro(),
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id()
+                    &chainstate.get_best_block_index().unwrap().unwrap().block_id()
                 )
                 .as_int_seconds(),
                 median_block_time(&block_times[..=height])
@@ -848,7 +849,7 @@ fn output_lock_for_seconds() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block_id.clone()),
+                    prev_block_id.clone(),
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -868,7 +869,7 @@ fn output_lock_for_seconds() {
             {
                 let block = Block::new(
                     vec![],
-                    Some(prev_block_id),
+                    prev_block_id,
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -896,7 +897,7 @@ fn output_lock_for_seconds() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block_id),
+                prev_block_id,
                 // The block that is being validated isn't taken into account when calculating the
                 // median time, so any time can be used here.
                 BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
@@ -947,7 +948,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
                 ),
             ];
             let inputs1 = vec![TxInput::new(
-                OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                 0,
                 InputWitness::NoSignature(None),
             )];
@@ -966,7 +967,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
 
             let block = Block::new(
                 vec![tx1, tx2],
-                Some(prev_block.get_id()),
+                <Id<GenBlock>>::from(prev_block.get_id()),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -1010,7 +1011,6 @@ fn output_lock_for_seconds_attempted_overflow() {
         {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -1021,7 +1021,7 @@ fn output_lock_for_seconds_attempted_overflow() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                prev_block_id,
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -1048,7 +1048,7 @@ fn add_block_with_locked_output(
     // Find the last block.
     let current_height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
     let prev_block_id = chainstate.get_block_id_from_height(&current_height).unwrap().unwrap();
-    let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
+    let prev_block_info = TestBlockInfo::from_id(chainstate, prev_block_id.clone());
 
     // Create and add a new block.
     let outputs = vec![
@@ -1063,14 +1063,14 @@ fn add_block_with_locked_output(
     ];
 
     let inputs = vec![TxInput::new(
-        OutPointSourceId::Transaction(prev_block.transactions().get(0).unwrap().get_id()),
+        prev_block_info.txns[0].0.clone(),
         0,
         InputWitness::NoSignature(None),
     )];
 
     let block = Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-        Some(prev_block.get_id()),
+        prev_block_id,
         timestamp,
         common::chain::block::ConsensusData::None,
     )
@@ -1083,9 +1083,9 @@ fn add_block_with_locked_output(
     );
 
     let block_id = chainstate.get_block_id_from_height(&new_height).unwrap().unwrap();
-    let block = chainstate.get_block(block_id).unwrap().unwrap();
+    let block_info = TestBlockInfo::from_id(chainstate, block_id);
     TxInput::new(
-        OutPointSourceId::Transaction(block.transactions().get(0).unwrap().get_id()),
+        block_info.txns[0].0.clone(),
         1,
         InputWitness::NoSignature(None),
     )

@@ -16,8 +16,7 @@
 #![allow(dead_code)]
 
 use crate::{Error, Store, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
-use common::chain::block::Block;
-use common::chain::OutPoint;
+use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
 use utxo::{utxo_storage::UtxosPersistentStorage, BlockUndo, Utxo};
 
@@ -42,10 +41,10 @@ impl UtxosPersistentStorage for UtxoDBImpl {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error> {
         self.store.get_utxo(outpoint).map_err(|e| e.into())
     }
-    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), utxo::Error> {
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), utxo::Error> {
         self.store.set_best_block_for_utxos(block_id).map_err(|e| e.into())
     }
-    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, utxo::Error> {
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, utxo::Error> {
         self.store.get_best_block_for_utxos().map_err(|e| e.into())
     }
 
@@ -88,10 +87,7 @@ mod test {
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.
-        let id = {
-            let utxo_id: Id<Block> = Id::new(H256::random());
-            OutPointSourceId::BlockReward(utxo_id)
-        };
+        let id = OutPointSourceId::BlockReward(Id::new(H256::random()));
 
         let outpoint = OutPoint::new(id, 0);
 
@@ -113,12 +109,15 @@ mod test {
 
         // test block id
         let block_id: Id<Block> = Id::new(H256::random());
-        assert!(db_interface.set_best_block_id(&block_id).is_ok());
+        assert!(db_interface.set_best_block_id(&block_id.into()).is_ok());
 
-        let block_id = db_interface
-            .get_best_block_id()
-            .expect("query should not fail")
-            .expect("should return the block id");
+        let block_id = Id::new(
+            db_interface
+                .get_best_block_id()
+                .expect("query should not fail")
+                .expect("should return the block id")
+                .get(),
+        );
 
         // undo checking
         let undo = create_rand_block_undo(10, 10, BlockHeight::new(10));

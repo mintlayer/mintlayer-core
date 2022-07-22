@@ -16,7 +16,10 @@
 // Author(s): S. Afach
 
 use super::{OrphanAddError, OrphanBlocksPool};
-use common::{chain::block::Block, primitives::Id};
+use common::{
+    chain::{Block, GenBlock},
+    primitives::Id,
+};
 
 pub trait OrphanBlocks {
     fn len(&self) -> usize;
@@ -26,7 +29,7 @@ pub trait OrphanBlocks {
 pub trait OrphanBlocksMut: OrphanBlocks {
     fn clear(&mut self);
     fn add_block(&mut self, block: Block) -> Result<(), OrphanAddError>;
-    fn take_all_children_of(&mut self, block_id: &Id<Block>) -> Vec<Block>;
+    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block>;
 }
 
 pub struct OrphanBlocksRef<'a> {
@@ -78,7 +81,7 @@ impl<'a> OrphanBlocksMut for OrphanBlocksRefMut<'a> {
         self.inner.add_block(block)
     }
 
-    fn take_all_children_of(&mut self, block_id: &Id<Block>) -> Vec<Block> {
+    fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block> {
         self.inner.take_all_children_of(block_id)
     }
 }
