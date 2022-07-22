@@ -55,7 +55,6 @@ fn output_lock_until_height() {
         {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -66,7 +65,7 @@ fn output_lock_until_height() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                Some(prev_block_id),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -121,12 +120,11 @@ fn output_lock_until_height() {
                 chainstate.get_best_block_index().unwrap().unwrap().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+
             // create another block, and spend the first input from the previous block
             {
-                let prev_block_id =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
                 let outputs = vec![TxOutput::new(
                     Amount::from_atoms(5000),
                     OutputPurpose::Transfer(anyonecanspend_address()),
@@ -136,7 +134,7 @@ fn output_lock_until_height() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block.get_id()),
+                    Some(prev_block_id.clone()),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -154,13 +152,9 @@ fn output_lock_until_height() {
 
             // create another block, with no transactions, and get the blockchain to progress
             {
-                let prev_block_id =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
                 let block = Block::new(
                     vec![],
-                    Some(prev_block.get_id()),
+                    Some(prev_block_id),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -181,7 +175,6 @@ fn output_lock_until_height() {
                 .get_block_id_from_height(&BlockHeight::new(height - 1))
                 .unwrap()
                 .unwrap();
-            let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
 
             let tip_id = chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
             assert_eq!(tip_id, prev_block_id);
@@ -195,7 +188,7 @@ fn output_lock_until_height() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                Some(prev_block_id),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -312,7 +305,6 @@ fn output_lock_for_block_count() {
         {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -323,7 +315,7 @@ fn output_lock_for_block_count() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                Some(prev_block_id),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -378,12 +370,10 @@ fn output_lock_for_block_count() {
                 chainstate.get_best_block_index().unwrap().unwrap().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
+            let prev_block_id =
+                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
             // create another block, and spend the first input from the previous block
             {
-                let prev_block_id =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
                 let outputs = vec![TxOutput::new(
                     Amount::from_atoms(5000),
                     OutputPurpose::Transfer(anyonecanspend_address()),
@@ -393,7 +383,7 @@ fn output_lock_for_block_count() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    Some(prev_block.get_id()),
+                    Some(prev_block_id.clone()),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -411,13 +401,9 @@ fn output_lock_for_block_count() {
 
             // create another block, with no transactions, and get the blockchain to progress
             {
-                let prev_block_id =
-                    chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-                let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
-
                 let block = Block::new(
                     vec![],
-                    Some(prev_block.get_id()),
+                    Some(prev_block_id),
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -438,7 +424,6 @@ fn output_lock_for_block_count() {
                 .get_block_id_from_height(&BlockHeight::new(height - 1))
                 .unwrap()
                 .unwrap();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -449,7 +434,7 @@ fn output_lock_for_block_count() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                Some(prev_block_id),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
@@ -565,7 +550,6 @@ fn output_lock_for_block_count_attempted_overflow() {
         {
             let prev_block_id =
                 chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
-            let prev_block = chainstate.get_block(prev_block_id).unwrap().unwrap();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -576,7 +560,7 @@ fn output_lock_for_block_count_attempted_overflow() {
 
             let block = Block::new(
                 vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                Some(prev_block.get_id()),
+                Some(prev_block_id),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 common::chain::block::ConsensusData::None,
             )
