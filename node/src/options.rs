@@ -15,12 +15,17 @@
 
 //! The node command line options.
 
-use std::{ffi::OsString, net::SocketAddr, path::PathBuf};
+use std::{ffi::OsString, fs, net::SocketAddr, path::PathBuf};
 
+use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
+use directories::UserDirs;
 use strum::VariantNames;
 
 use common::chain::config::ChainType;
+
+const DATA_DIR_NAME: &str = ".mintlayer";
+const CONFIG_NAME: &str = "config.toml";
 
 /// Mintlayer node executable
 #[derive(Parser, Debug)]
@@ -30,6 +35,14 @@ pub struct Options {
     #[clap(long, value_name = "PATH")]
     pub log_path: Option<PathBuf>,
 
+    /// The path to the data directory.
+    #[clap(short, long = "datadir", default_value_os_t = default_data_dir())]
+    pub data_dir: PathBuf,
+
+    /// The path to the config file.
+    #[clap(short, long = "conf")]
+    config_path: Option<PathBuf>,
+
     #[clap(subcommand)]
     pub command: Command,
 }
@@ -37,24 +50,13 @@ pub struct Options {
 #[derive(Subcommand, Debug)]
 pub enum Command {
     /// Create a configuration file.
-    CreateConfig {
-        /// The path where config will be created.
-        // TODO: Use a system-specific location by default such as `%APPDATA%` on Windows and
-        // `~/Library/Application Support` on Mac.
-        #[clap(short, long, default_value = "./.mintlayer/mintlayer.toml")]
-        path: PathBuf,
-    },
+    CreateConfig,
     Run(RunOptions),
 }
 
+/// Run the node.
 #[derive(Args, Debug)]
 pub struct RunOptions {
-    /// The path to the configuration file.
-    // TODO: Use a system-specific location by default such as `%APPDATA%` on Windows and
-    // `~/Library/Application Support` on Mac.
-    #[clap(short, long, default_value = "./.mintlayer/mintlayer.toml")]
-    pub config_path: PathBuf,
-
     /// Blockchain type.
     #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
     pub net: ChainType,
@@ -85,7 +87,39 @@ pub struct RunOptions {
 }
 
 impl Options {
-    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Self {
-        clap::Parser::parse_from(args)
+    /// Constructs an instance by parsing the given arguments.
+    ///
+    /// The data directory is created as a side-effect of the invocation.
+    pub fn from_args<A: Into<OsString> + Clone>(args: impl IntoIterator<Item = A>) -> Result<Self> {
+        let options: Options = clap::Parser::parse_from(args);
+
+        // We want to check earlier if directories can be created.
+        fs::create_dir_all(&options.data_dir).with_context(|| {
+            format!(
+                "Failed to create the '{:?}' data directory",
+                options.data_dir
+            )
+        })?;
+        // Config can potentially be stored in location different from the data directory.
+        if let Some(config_dir) = options.config_path.as_ref().and_then(|p| p.parent()) {
+            fs::create_dir_all(config_dir).with_context(|| {
+                format!("Failed to create the '{config_dir:?}' config directory")
+            })?;
+        }
+
+        Ok(options)
     }
+
+    /// Returns a path to the config file.
+    pub fn config_path(&self) -> PathBuf {
+        self.config_path.clone().unwrap_or_else(|| self.data_dir.join(CONFIG_NAME))
+    }
+}
+
+fn default_data_dir() -> PathBuf {
+    UserDirs::new()
+        // Expect here is OK because `Parser::parse_from` panics anyway in case of error.
+        .expect("Unable to get home directory")
+        .home_dir()
+        .join(DATA_DIR_NAME)
 }

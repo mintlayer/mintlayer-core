@@ -98,7 +98,7 @@ mod tests {
             let block1 = Block::new(
                 vec![],
                 Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
             .expect("Block creation failed");
@@ -107,7 +107,7 @@ mod tests {
             let block2 = Block::new(
                 vec![],
                 Some(block1.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
             .expect("Block creation failed");
@@ -116,7 +116,7 @@ mod tests {
             let block3 = Block::new(
                 vec![],
                 Some(block2.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+                BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
             .expect("Block creation failed");

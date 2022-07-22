@@ -39,6 +39,8 @@ pub mod ban_score;
 mod block_index_history_iter;
 mod median_time;
 
+pub use chainstate_types::locator::Locator;
+
 mod chainstateref;
 
 type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
@@ -307,22 +309,23 @@ impl Chainstate {
         self.make_db_tx_ro().get_best_block_index()
     }
 
-    pub(crate) fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
+        itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
+    }
+
+    pub(crate) fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         let best_block_index = chainstate_ref
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
         let height = best_block_index.block_height();
 
-        let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
-            .take_while(|i| (height - BlockDistance::new(*i)).is_some())
-            .map(|i| {
-                chainstate_ref.get_header_from_height(
-                    &(height - BlockDistance::new(i)).expect("distance to be valid"),
-                )
-            });
+        let headers = Self::locator_tip_distances()
+            .map_while(|dist| height - dist)
+            .map(|ht| chainstate_ref.get_block_id_by_height(&ht));
 
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+            .map(Locator::new)
     }
 
     pub(crate) fn get_block_height_in_main_chain(
@@ -334,14 +337,14 @@ impl Chainstate {
 
     pub(crate) fn get_headers(
         &self,
-        locator: Vec<BlockHeader>,
+        locator: Locator,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         // use genesis block if no common ancestor with better block height is found
         let chainstate_ref = self.make_db_tx_ro();
         let mut best = BlockHeight::new(0);
 
-        for header in locator.iter() {
-            if let Some(block_index) = chainstate_ref.get_block_index(&header.get_id())? {
+        for header_id in locator.iter() {
+            if let Some(block_index) = chainstate_ref.get_block_index(header_id)? {
                 if chainstate_ref.is_block_in_main_chain(&block_index)? {
                     best = block_index.block_height();
                     break;

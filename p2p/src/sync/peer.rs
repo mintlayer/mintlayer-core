@@ -18,6 +18,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::NetworkingService,
 };
+use chainstate::Locator;
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},
@@ -35,7 +36,7 @@ pub enum PeerSyncState {
     UploadingBlocks(Id<Block>),
 
     /// Peer is uploading headers to local node
-    UploadingHeaders(Vec<BlockHeader>),
+    UploadingHeaders(Locator),
 
     /// Peer is idling and can be used for block requests
     Idle,
@@ -66,7 +67,7 @@ impl<T: NetworkingService> PeerContext<T> {
         }
     }
 
-    pub fn new_with_locator(_peer_id: T::PeerId, locator: Vec<BlockHeader>) -> Self {
+    pub fn new_with_locator(_peer_id: T::PeerId, locator: Locator) -> Self {
         Self {
             _peer_id,
             state: PeerSyncState::UploadingHeaders(locator),
@@ -138,7 +139,7 @@ mod tests {
         let header = Block::new(
             vec![],
             None,
-            BlockTimestamp::from_int_seconds(1337u32),
+            BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
         )
         .unwrap()

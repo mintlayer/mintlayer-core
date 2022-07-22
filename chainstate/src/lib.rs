@@ -25,7 +25,7 @@ pub mod rpc;
 
 pub use crate::{
     config::ChainstateConfig,
-    detail::{ban_score, BlockError, BlockSource},
+    detail::{ban_score, BlockError, BlockSource, Locator},
 };
 
 use std::sync::Arc;

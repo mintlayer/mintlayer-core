@@ -21,7 +21,7 @@ use utils::eventhandler::EventHandler;
 
 use crate::{
     detail::{self, BlockSource},
-    ChainstateError, ChainstateEvent, ChainstateInterface,
+    ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 
 pub(crate) struct ChainstateInterfaceImpl {
@@ -92,11 +92,11 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
             .map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_locator(&self) -> Result<Vec<BlockHeader>, ChainstateError> {
+    fn get_locator(&self) -> Result<Locator, ChainstateError> {
         self.chainstate.get_locator().map_err(ChainstateError::FailedToReadProperty)
     }
 
-    fn get_headers(&self, locator: Vec<BlockHeader>) -> Result<Vec<BlockHeader>, ChainstateError> {
+    fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, ChainstateError> {
         self.chainstate
             .get_headers(locator)
             .map_err(ChainstateError::FailedToReadProperty)

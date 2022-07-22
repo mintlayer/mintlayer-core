@@ -20,6 +20,12 @@ use std::iter;
 use crate::detail::tests::{test_framework::BlockTestFramework, *};
 use chainstate_storage::BlockchainStorageRead;
 
+#[test]
+fn locator_distances() {
+    let distances: Vec<i64> = Chainstate::locator_tip_distances().take(7).map(From::from).collect();
+    assert_eq!(distances, vec![0, 1, 2, 4, 8, 16, 32]);
+}
+
 // Generate some blocks and check that a locator is of expected length.
 #[test]
 fn get_locator() {
@@ -29,7 +35,7 @@ fn get_locator() {
         // There is only one (genesis) block.
         let locator = btf.chainstate().get_locator().unwrap();
         assert_eq!(locator.len(), 1);
-        assert_eq!(btf.genesis().header(), &locator[0]);
+        assert_eq!(&btf.genesis().get_id(), &locator[0]);
 
         // Expand the chain several times.
         let mut rng = make_seedable_rng(None);
@@ -50,11 +56,11 @@ fn get_locator() {
                 .get_block_height_in_main_chain(&last_block.get_id())
                 .unwrap()
                 .unwrap();
-            assert_eq!(&locator[0], last_block.header());
+            assert_eq!(&locator[0], &last_block.get_id());
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = height - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate().get_header_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate().get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -96,7 +102,7 @@ fn get_headers() {
         assert_eq!(headers, expected);
         // Because both the locator and chainstate are tracking the same chain, the first header of
         // the locator is always the parent of the first new block.
-        assert_eq!(expected[0].prev_block_id(), &Some(locator[0].get_id()));
+        assert_eq!(expected[0].prev_block_id(), &Some(locator[0].clone()));
 
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
         btf.create_chain(&last_block.get_id(), header_limit - expected.len()).unwrap();
