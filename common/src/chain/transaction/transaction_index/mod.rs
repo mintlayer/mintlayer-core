@@ -15,19 +15,19 @@
 
 use super::Transaction;
 use crate::{
-    chain::{Block, GenBlock, GenBlockId, Genesis},
+    chain::{Block, GenBlock},
     primitives::{Id, Idable},
 };
 use serialization::{Decode, Encode};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum Spender {
+    /// Spending a transaction output
     #[codec(index = 0)]
     RegularInput(Id<Transaction>),
+    /// Spending a block reward or a premine in genesis
     #[codec(index = 1)]
-    StakeKernel(Id<Block>),
-    #[codec(index = 2)]
-    Premine(Id<Genesis>),
+    BlockInput(Id<GenBlock>),
 }
 
 impl From<Id<Transaction>> for Spender {
@@ -38,22 +38,13 @@ impl From<Id<Transaction>> for Spender {
 
 impl From<Id<Block>> for Spender {
     fn from(spender: Id<Block>) -> Spender {
-        Spender::StakeKernel(spender)
+        Spender::BlockInput(spender.into())
     }
 }
 
-impl From<Id<Genesis>> for Spender {
-    fn from(spender: Id<Genesis>) -> Spender {
-        Spender::Premine(spender)
-    }
-}
-
-impl From<GenBlockId> for Spender {
-    fn from(spender: GenBlockId) -> Spender {
-        match spender {
-            GenBlockId::Block(id) => id.into(),
-            GenBlockId::Genesis(id) => id.into(),
-        }
+impl From<Id<GenBlock>> for Spender {
+    fn from(block_id: Id<GenBlock>) -> Spender {
+        Spender::BlockInput(block_id)
     }
 }
 

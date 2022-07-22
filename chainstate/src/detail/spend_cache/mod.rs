@@ -245,8 +245,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let rewards_tx = block_index.block_reward_transactable();
 
                     let outputs = rewards_tx.outputs().unwrap_or(&[]);
-                    let spender = block_id.classify(self.chain_config).into();
-                    Self::get_output_amount(outputs, output_index, spender)?
+                    Self::get_output_amount(outputs, output_index, block_id.clone().into())?
                 }
             };
             total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?;
