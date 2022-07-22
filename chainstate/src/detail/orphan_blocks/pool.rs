@@ -50,6 +50,8 @@ impl OrphanBlocksPool {
     }
 
     fn drop_block(&mut self, block_id: &Id<Block>) {
+        use std::collections::btree_map::Entry;
+
         // remove from the map
         let block = self.orphan_by_id.remove(block_id).expect("Entry missing from the map");
         let prev_block_id = block.prev_block_id();
@@ -58,7 +60,6 @@ impl OrphanBlocksPool {
         self.orphan_ids.retain(|id| *id != *block_id);
 
         // remove from the prevs
-        use std::collections::btree_map::Entry;
         match self.orphan_by_prev_id.entry(prev_block_id) {
             Entry::Vacant(_) => panic!("Orphan pool parent map inconsistent"),
             Entry::Occupied(mut entry) => {
