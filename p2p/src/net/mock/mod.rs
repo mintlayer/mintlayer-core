@@ -23,7 +23,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use logging::log;
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    hash::Hash,
+    net::SocketAddr,
+    sync::Arc,
+};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
@@ -47,6 +51,9 @@ where
 {
     /// Socket address of the network service provider
     addr: SocketAddr,
+
+    /// Peer ID of remote
+    peer_id: types::MockPeerId,
 
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
@@ -82,7 +89,7 @@ where
 #[async_trait]
 impl NetworkingService for MockService {
     type Address = SocketAddr;
-    type PeerId = SocketAddr;
+    type PeerId = types::MockPeerId;
     type ProtocolId = String;
     type RequestId = MockRequestId;
     type MessageId = MockMessageId;
@@ -122,6 +129,7 @@ impl NetworkingService for MockService {
             Self::ConnectivityHandle {
                 addr,
                 cmd_tx: cmd_tx.clone(),
+                peer_id: types::MockPeerId::from_socket_address(&addr),
                 _conn_rx,
                 _marker: Default::default(),
             },
@@ -142,7 +150,7 @@ impl NetworkingService for MockService {
 #[async_trait]
 impl<T> ConnectivityService<T> for MockConnectivityHandle<T>
 where
-    T: NetworkingService<Address = SocketAddr, PeerId = SocketAddr> + Send,
+    T: NetworkingService<Address = SocketAddr, PeerId = types::MockPeerId> + Send,
 {
     async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
         log::debug!("try to establish outbound connection, address {:?}", addr);
@@ -173,7 +181,7 @@ where
     }
 
     fn peer_id(&self) -> &T::PeerId {
-        &self.addr
+        &self.peer_id
     }
 
     async fn ban_peer(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
@@ -196,7 +204,7 @@ where
 #[async_trait]
 impl<T> PubSubService<T> for MockPubSubHandle<T>
 where
-    T: NetworkingService<PeerId = SocketAddr> + Send,
+    T: NetworkingService<PeerId = types::MockPeerId> + Send,
 {
     async fn publish(&mut self, _announcement: message::Announcement) -> crate::Result<()> {
         todo!();
@@ -223,7 +231,7 @@ where
 #[async_trait]
 impl<T> SyncingCodecService<T> for MockSyncingCodecHandle<T>
 where
-    T: NetworkingService<PeerId = SocketAddr, RequestId = MockRequestId> + Send,
+    T: NetworkingService<PeerId = types::MockPeerId, RequestId = MockRequestId> + Send,
 {
     async fn send_request(
         &mut self,

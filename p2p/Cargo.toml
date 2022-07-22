@@ -16,6 +16,7 @@ void = "1.0"
 
 # local dependencies
 common = { path = "../common/" }
+crypto = { path = "../crypto/" }
 chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
 rpc = { path = "../rpc/" }
