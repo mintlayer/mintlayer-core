@@ -1222,7 +1222,5 @@ fn add_block_with_locked_output(
 
 fn median_block_time(times: &[u64]) -> u64 {
     // Only the last 11 blocks are used for calculating the median time.
-    assert!(times.len() <= 11);
-
-    times[times.len() / 2]
+    *times.iter().take(11).nth(times.len() / 2).unwrap()
 }
