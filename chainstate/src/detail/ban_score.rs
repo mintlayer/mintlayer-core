@@ -37,10 +37,8 @@ impl BanScore for BlockError {
             BlockError::BestBlockLoadError(_) => 0,
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip => 0,
-            BlockError::InvariantErrorPrevBlockNotFound => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
             BlockError::PrevBlockNotFound => 100,
-            BlockError::InvalidBlockSource => 100,
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
@@ -52,7 +50,6 @@ impl BanScore for OrphanCheckError {
     fn ban_score(&self) -> u32 {
         match self {
             OrphanCheckError::StorageError(_) => 0,
-            OrphanCheckError::PrevBlockIdNotFound => 100,
             OrphanCheckError::PrevBlockIndexNotFound(_) => 100,
             OrphanCheckError::LocalOrphan => 0,
         }

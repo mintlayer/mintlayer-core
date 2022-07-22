@@ -155,9 +155,6 @@ where
                 err @ BlockError::InvariantErrorInvalidTip => {
                     (ValidationResult::Ignore, err.ban_score())
                 }
-                err @ BlockError::InvariantErrorPrevBlockNotFound => {
-                    (ValidationResult::Ignore, err.ban_score())
-                }
                 err @ BlockError::DatabaseCommitError(_, _, _) => {
                     (ValidationResult::Ignore, err.ban_score())
                 }
@@ -171,7 +168,6 @@ where
                     (ValidationResult::Ignore, err.ban_score())
                 }
                 err @ BlockError::PrevBlockNotFound => (ValidationResult::Reject, err.ban_score()),
-                err @ BlockError::InvalidBlockSource => (ValidationResult::Reject, err.ban_score()),
                 err @ BlockError::BlockProofCalculationError(_) => {
                     (ValidationResult::Reject, err.ban_score())
                 }
