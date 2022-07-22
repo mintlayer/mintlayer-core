@@ -15,7 +15,6 @@
 //
 // Author(s): S. Afach, A. Sinitsyn, S. Tkach
 
-use std::env;
 use std::sync::Mutex;
 
 use crate::detail::{tests::test_framework::BlockTestFramework, *};
@@ -50,6 +49,19 @@ const ERR_STORAGE_FAIL: &str = "Storage failure";
 const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
 const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
+#[must_use]
+fn make_seedable_rng(seed_opt: Option<&str>) -> impl Rng {
+    let seed = match seed_opt {
+        Some(s) => FromHex::from_hex(s).expect("seed is invalid"),
+        None => crypto::random::make_true_rng().gen::<[u8; 32]>(),
+    };
+    log::warn!(
+        "Seed for the range is: {}",
+        seed.encode_hex_upper::<String>()
+    );
+    ChaChaRng::from_seed(seed)
+}
+
 fn empty_witness() -> InputWitness {
     let mut rng = crypto::random::make_pseudo_rng();
     let mut msg: Vec<u8> = (1..100).collect();
@@ -59,16 +71,6 @@ fn empty_witness() -> InputWitness {
 
 fn anyonecanspend_address() -> Destination {
     Destination::AnyoneCanSpend
-}
-
-#[must_use]
-fn make_seedable_rng(seed_opt: Option<&str>) -> impl Rng {
-    let seed = match seed_opt {
-        Some(s) => FromHex::from_hex(s).expect("seed is invalid"),
-        None => crypto::random::make_true_rng().gen::<[u8; 32]>(),
-    };
-    log::warn!("Seed for the range is: {}", seed.encode_hex_upper::<String>());
-    ChaChaRng::from_seed(seed)
 }
 
 fn create_utxo_data(
