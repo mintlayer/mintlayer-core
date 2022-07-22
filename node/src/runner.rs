@@ -15,18 +15,21 @@
 
 //! Node initialisation routine.
 
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, path::Path, sync::Arc, time::Duration};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use chainstate::rpc::ChainstateRpcServer;
-use common::chain::config::ChainConfig;
+use common::{
+    chain::config::{Builder as ChainConfigBuilder, ChainConfig, ChainType},
+    primitives::{semver::SemVer, BlockDistance},
+};
 use logging::log;
 use p2p::rpc::P2pRpcServer;
 
 use crate::{
     config::NodeConfig,
-    options::{Command, Options, RunOptions},
+    options::{ChainConfigOptions, Command, Options, RunOptions},
 };
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
@@ -99,7 +102,7 @@ pub async fn run(options: Options) -> Result<()> {
             start(&options.config_path(), run_options, chain_config).await
         }
         Command::Regtest(ref regtest_options) => {
-            let chain_config = common::chain::config::create_regtest();
+            let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
             start(
                 &options.config_path(),
                 &regtest_options.run_options,
@@ -121,6 +124,54 @@ async fn start(
     let manager = initialize(chain_config, node_config).await?;
     manager.main().await;
     Ok(())
+}
+
+fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
+    let ChainConfigOptions {
+        chain_address_prefix,
+        chain_blockreward_maturity,
+        chain_max_future_block_time_offset,
+        chain_version,
+        chain_target_block_spacing,
+        chain_coin_decimals,
+        chain_max_block_header_size,
+        chain_max_block_size_with_standard_txs,
+        chain_max_block_size_with_smart_contracts,
+    } = options;
+
+    let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
+
+    // TODO: Figure something better.
+    if let Some(address_prefix) = chain_address_prefix {
+        builder = builder.address_prefix(address_prefix.to_owned());
+    }
+    if let Some(blockreward_maturity) = chain_blockreward_maturity {
+        builder = builder.blockreward_maturity(BlockDistance::new(*blockreward_maturity));
+    }
+    if let Some(max_future_block_time_offset) = chain_max_future_block_time_offset {
+        builder = builder
+            .max_future_block_time_offset(Duration::from_secs(*max_future_block_time_offset));
+    }
+    if let Some(version) = chain_version {
+        builder = builder.version(SemVer::try_from(version.as_str()).map_err(|e| anyhow!(e))?);
+    }
+    if let Some(target_block_spacing) = chain_target_block_spacing {
+        builder = builder.target_block_spacing(Duration::from_secs(*target_block_spacing));
+    }
+    if let Some(coin_decimals) = chain_coin_decimals {
+        builder = builder.coin_decimals(*coin_decimals);
+    }
+    if let Some(max_block_header_size) = chain_max_block_header_size {
+        builder = builder.max_block_header_size(*max_block_header_size);
+    }
+    if let Some(max_block_size_with_standard_txs) = chain_max_block_size_with_standard_txs {
+        builder = builder.max_block_size_with_standard_txs(*max_block_size_with_standard_txs);
+    }
+    if let Some(max_block_size_with_smart_contracts) = chain_max_block_size_with_smart_contracts {
+        builder = builder.max_block_size_with_smart_contracts(*max_block_size_with_smart_contracts);
+    }
+
+    Ok(builder.build())
 }
 
 #[rpc::rpc(server, namespace = "node")]

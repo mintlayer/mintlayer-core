@@ -93,39 +93,39 @@ pub struct RegtestOptions {
 pub struct ChainConfigOptions {
     /// Address prefix.
     #[clap(long)]
-    chain_address_prefix: Option<String>,
+    pub chain_address_prefix: Option<String>,
 
     /// Block reward maturity.
     #[clap(long)]
-    chain_blockreward_maturity: Option<i64>,
+    pub chain_blockreward_maturity: Option<i64>,
 
     /// The maximum future block offset in seconds.
     #[clap(long)]
-    chain_max_future_block_time_offset: Option<u64>,
+    pub chain_max_future_block_time_offset: Option<u64>,
 
     /// The chain version (major.minor.path).
     #[clap(long)]
-    chain_version: Option<String>,
+    pub chain_version: Option<String>,
 
     /// Target block spacing in seconds.
     #[clap(long)]
-    target_block_spacing: Option<u64>,
+    pub chain_target_block_spacing: Option<u64>,
 
     /// Coin decimals.
     #[clap(long)]
-    coin_decimals: Option<u8>,
+    pub chain_coin_decimals: Option<u8>,
 
     /// The maximum block header size in bytes.
     #[clap(long)]
-    max_block_header_size: Option<usize>,
+    pub chain_max_block_header_size: Option<usize>,
 
     /// The maximum transactions size in block in bytes.
     #[clap(long)]
-    max_block_size_with_standard_txs: Option<usize>,
+    pub chain_max_block_size_with_standard_txs: Option<usize>,
 
     /// The maximum smart contracts size ib block in bytes.
     #[clap(long)]
-    max_block_size_with_smart_contracts: Option<usize>,
+    pub chain_max_block_size_with_smart_contracts: Option<usize>,
 }
 
 impl Options {
