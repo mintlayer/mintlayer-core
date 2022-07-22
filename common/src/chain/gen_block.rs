@@ -62,6 +62,7 @@ impl Id<GenBlock> {
 
 /// Classified generalized block
 // TODO: Consider if this should be used more often, or even replace Id<GenBlock>
+#[derive(Eq, PartialEq, Clone, Debug)]
 pub enum GenBlockId {
     Genesis(Id<Genesis>),
     Block(Id<Block>),

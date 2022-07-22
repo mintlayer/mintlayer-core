@@ -56,7 +56,7 @@ fn process_genesis_block() {
         let chainstate = chainstate.make_db_tx_ro();
 
         // Check the genesis block is properly set up
-        assert_eq!(chainstate.get_best_block_id(), Ok(genesis_id.clone()));
+        assert_eq!(chainstate.get_best_block_id(), Ok(genesis_id));
         let genesis_index = chainstate.get_gen_block_index(&genesis_id).unwrap().unwrap();
         assert_eq!(genesis_index.block_height(), BlockHeight::from(0));
         assert_eq!(genesis_index.block_id(), genesis_id.clone());
@@ -304,7 +304,7 @@ fn get_ancestor() {
     // we aggressively test the simple ancestor calculation for all previous heights up to genesis
     for i in 1..=split.block_height().into() {
         assert_eq!(
-            <Id<GenBlock>>::from(btf.index_at(i as usize).block_id().clone()),
+            <Id<GenBlock>>::from(*btf.index_at(i as usize).block_id()),
             btf.chainstate
                 .make_db_tx()
                 .get_ancestor(&split, i.into())
@@ -510,9 +510,7 @@ fn consensus_type() {
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
     let block_without_consensus_data = produce_test_block_with_consensus_data(
-        TestBlockInfo::from_block(
-            &btf.get_block(btf.index_at(4).block_id().clone()).unwrap().unwrap(),
-        ),
+        TestBlockInfo::from_block(&btf.get_block(*btf.index_at(4).block_id()).unwrap().unwrap()),
         ConsensusData::None,
     );
 
@@ -525,7 +523,7 @@ fn consensus_type() {
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
-        let prev_block = btf.get_block(btf.index_at(i - 1).block_id().clone()).unwrap().unwrap();
+        let prev_block = btf.get_block(*btf.index_at(i - 1).block_id()).unwrap().unwrap();
         let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
@@ -544,7 +542,7 @@ fn consensus_type() {
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
     // fail.
-    let prev_block = btf.get_block(btf.index_at(9).block_id().clone()).unwrap().unwrap();
+    let prev_block = btf.get_block(*btf.index_at(9).block_id()).unwrap().unwrap();
     let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
     let bits = min_difficulty.into();
     assert!(
@@ -563,7 +561,7 @@ fn consensus_type() {
     btf.create_chain(&prev_block.get_id().into(), 5).expect("chain creation");
 
     // At height 15 we are again proof of work, ignoring consensus should fail
-    let prev_block = btf.get_block(btf.index_at(14).block_id().clone()).unwrap().unwrap();
+    let prev_block = btf.get_block(*btf.index_at(14).block_id()).unwrap().unwrap();
     let block_without_consensus_data = produce_test_block_with_consensus_data(
         TestBlockInfo::from_block(&prev_block),
         ConsensusData::None,
@@ -578,7 +576,7 @@ fn consensus_type() {
 
     // Mining should work
     for i in 15..20 {
-        let prev_block = btf.get_block(btf.index_at(i - 1).block_id().clone()).unwrap().unwrap();
+        let prev_block = btf.get_block(*btf.index_at(i - 1).block_id()).unwrap().unwrap();
         let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);

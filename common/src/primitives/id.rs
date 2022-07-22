@@ -80,6 +80,8 @@ impl<T: ?Sized> Clone for Id<T> {
     }
 }
 
+impl<T: ?Sized> Copy for Id<T> {}
+
 impl<T: ?Sized> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.id.fmt(f)

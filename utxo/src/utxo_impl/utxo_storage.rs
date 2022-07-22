@@ -158,12 +158,12 @@ impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
         block_id: &Id<GenBlock>,
     ) -> Result<(), crate::utxo_impl::Error> {
         // TODO: fix; don't store in general block id
-        self.best_block_id = Some(block_id.clone());
+        self.best_block_id = Some(*block_id);
         Ok(())
     }
     fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::utxo_impl::Error> {
         // TODO: fix; don't get general block id
-        Ok(self.best_block_id.clone())
+        Ok(self.best_block_id)
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
@@ -470,7 +470,7 @@ mod test {
 
             let utxos = ConsumedUtxoCache {
                 container: utxos,
-                best_block: new_best_block_hash.clone(),
+                best_block: new_best_block_hash,
             };
 
             let mut db_interface = UtxoInMemoryDBImpl::new();

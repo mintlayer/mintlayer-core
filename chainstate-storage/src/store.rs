@@ -699,12 +699,12 @@ pub(crate) mod test {
         let mut store = Store::new_empty().unwrap();
 
         // store is empty, so no undo data should be found.
-        assert_eq!(store.get_undo_data(id0.clone()), Ok(None));
+        assert_eq!(store.get_undo_data(id0), Ok(None));
 
         // add undo data and check if it is there
-        assert_eq!(store.add_undo_data(id0.clone(), &block_undo0), Ok(()));
+        assert_eq!(store.add_undo_data(id0, &block_undo0), Ok(()));
         assert_eq!(
-            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
 
@@ -714,19 +714,19 @@ pub(crate) mod test {
         // create id:
         let id1: Id<Block> = Id::new(H256::random());
 
-        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
-        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
-        assert_eq!(
-            store.get_undo_data(id0.clone()).unwrap().unwrap(),
-            block_undo0.clone()
-        );
-        assert_eq!(store.del_undo_data(id1.clone()), Ok(()));
-        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(store.get_undo_data(id1), Ok(None));
+        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(
             store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
-        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(store.del_undo_data(id1), Ok(()));
+        assert_eq!(store.get_undo_data(id1), Ok(None));
+        assert_eq!(
+            store.get_undo_data(id0).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
     }
 }

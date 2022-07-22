@@ -46,7 +46,7 @@ pub(crate) fn get_starting_block_time(
         Ok(bi) => bi,
         Err(err) => {
             return Err(ConsensusPoWError::AncestorAtHeightNotFound(
-                block_index.block_id().clone(),
+                *block_index.block_id(),
                 retarget_height,
                 err,
             ))
