@@ -18,6 +18,7 @@
 use std::{fs, path::Path, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
+use paste::paste;
 
 use chainstate::rpc::ChainstateRpcServer;
 use common::{
@@ -141,35 +142,34 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
 
     let mut builder = ChainConfigBuilder::new(ChainType::Regtest);
 
-    // TODO: Figure something better.
-    if let Some(address_prefix) = chain_address_prefix {
-        builder = builder.address_prefix(address_prefix.to_owned());
+    macro_rules! update_builder {
+        ($field: ident) => {
+            paste! {
+                if let Some(val) = [<chain_ $field>] {
+                    builder = builder.$field(val.to_owned());
+                }
+            }
+        };
+        ($field: ident, $converter: stmt) => {
+            paste! {
+                if let Some(val) = [<chain_ $field>] {
+                    builder = builder.$field($converter(val.to_owned()));
+                }
+            }
+        };
     }
-    if let Some(blockreward_maturity) = chain_blockreward_maturity {
-        builder = builder.blockreward_maturity(BlockDistance::new(*blockreward_maturity));
-    }
-    if let Some(max_future_block_time_offset) = chain_max_future_block_time_offset {
-        builder = builder
-            .max_future_block_time_offset(Duration::from_secs(*max_future_block_time_offset));
-    }
+
+    update_builder!(address_prefix);
+    update_builder!(blockreward_maturity, BlockDistance::new);
+    update_builder!(max_future_block_time_offset, Duration::from_secs);
     if let Some(version) = chain_version {
         builder = builder.version(SemVer::try_from(version.as_str()).map_err(|e| anyhow!(e))?);
     }
-    if let Some(target_block_spacing) = chain_target_block_spacing {
-        builder = builder.target_block_spacing(Duration::from_secs(*target_block_spacing));
-    }
-    if let Some(coin_decimals) = chain_coin_decimals {
-        builder = builder.coin_decimals(*coin_decimals);
-    }
-    if let Some(max_block_header_size) = chain_max_block_header_size {
-        builder = builder.max_block_header_size(*max_block_header_size);
-    }
-    if let Some(max_block_size_with_standard_txs) = chain_max_block_size_with_standard_txs {
-        builder = builder.max_block_size_with_standard_txs(*max_block_size_with_standard_txs);
-    }
-    if let Some(max_block_size_with_smart_contracts) = chain_max_block_size_with_smart_contracts {
-        builder = builder.max_block_size_with_smart_contracts(*max_block_size_with_smart_contracts);
-    }
+    update_builder!(target_block_spacing, Duration::from_secs);
+    update_builder!(coin_decimals);
+    update_builder!(max_block_header_size);
+    update_builder!(max_block_size_with_standard_txs);
+    update_builder!(max_block_size_with_smart_contracts);
 
     Ok(builder.build())
 }
