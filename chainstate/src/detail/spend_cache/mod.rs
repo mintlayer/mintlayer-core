@@ -15,21 +15,24 @@
 //
 // Author(s): S. Afach
 
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    time::Duration,
+};
+
 use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use common::amount_sum;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::signature::{verify_signature, Transactable};
-use common::chain::Transaction;
 use common::{
+    amount_sum,
     chain::{
-        calculate_tx_index_from_block, Block, ChainConfig, GenBlock, GenBlockId, OutPoint,
-        OutPointSourceId, SpendablePosition, Spender, TxInput, TxMainChainIndex, TxOutput,
+        block::timestamp::BlockTimestamp,
+        calculate_tx_index_from_block,
+        signature::{verify_signature, Transactable},
+        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
+        Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
-use std::time::Duration;
 use utils::ensure;
 
 mod cached_operation;
