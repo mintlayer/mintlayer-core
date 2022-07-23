@@ -54,8 +54,7 @@ fn output_lock_until_height() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -177,7 +176,7 @@ fn output_lock_until_height() {
                 .unwrap()
                 .unwrap();
 
-            let tip_id = chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let tip_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
             assert_eq!(tip_id, prev_block_id);
 
             let outputs = vec![TxOutput::new(
@@ -304,8 +303,7 @@ fn output_lock_for_block_count() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -334,8 +332,7 @@ fn output_lock_for_block_count() {
 
         // create another block, and spend the first input from the previous block
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
             let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id);
 
             let outputs = vec![TxOutput::new(
@@ -549,8 +546,7 @@ fn output_lock_for_block_count_attempted_overflow() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -680,8 +676,7 @@ fn output_lock_until_time() {
 
         // Check that the output can now be spent.
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -885,8 +880,7 @@ fn output_lock_for_seconds() {
 
         // Check that the output can now be spent.
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -1009,8 +1003,7 @@ fn output_lock_for_seconds_attempted_overflow() {
 
         // attempt to create the next block, and attempt to spend the locked output
         {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(5000),
@@ -1094,5 +1087,5 @@ fn add_block_with_locked_output(
 fn median_block_time(times: &[u64]) -> u64 {
     // Only the last 11 blocks are used for calculating the median time.
     assert!(times.len() < 11);
-    *times.iter().nth(times.len() / 2).unwrap()
+    times[times.len() / 2]
 }
