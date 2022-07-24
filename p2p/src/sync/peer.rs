@@ -138,7 +138,7 @@ mod tests {
         let mut peer = new_mock_peersyncstate();
         let header = Block::new(
             vec![],
-            None,
+            Id::new(common::primitives::H256([0x07; 32])),
             BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
         )

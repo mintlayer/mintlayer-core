@@ -13,22 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::block_index::BlockIndex;
-use common::{chain::block::Block, primitives::Id};
+use super::{consensus_validator::BlockIndexHandle, GenBlockIndex};
+use common::{chain::GenBlock, primitives::Id};
 use logging::log;
-
-use super::consensus_validator::BlockIndexHandle;
 
 /// An iterator that starts at some block starting from a given it, and at every `next()` member call will provide the previous block index,
 /// The last viable block index is of the genesis block
 pub struct BlockIndexHistoryIterator<'a, H> {
-    next_id: Option<Id<Block>>,
+    next_id: Option<Id<GenBlock>>,
     block_index_handle: &'a H,
 }
 
 impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
     #[must_use]
-    pub fn new(starting_id: Id<Block>, block_index_handle: &'a H) -> Self {
+    pub fn new(starting_id: Id<GenBlock>, block_index_handle: &'a H) -> Self {
         Self {
             next_id: Some(starting_id),
             block_index_handle,
@@ -37,17 +35,13 @@ impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
 }
 
 impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
-    type Item = BlockIndex;
+    type Item = GenBlockIndex<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let result = match &self.next_id {
-            Some(next_id) => {
-                self.block_index_handle.get_block_index(next_id).expect("Database error")
-            }
-            None => return None,
-        };
-
-        let bi = match result {
+        let next_id = self.next_id.as_ref()?;
+        let block_index =
+            self.block_index_handle.get_gen_block_index(next_id).expect("Database error");
+        let block_index = match block_index {
             Some(bi) => bi,
             None => {
                 log::error!("CRITICAL: Invariant error; attempted to read id of a non-existent block index in iterator with id {:?}", self.next_id);
@@ -56,9 +50,12 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
             }
         };
 
-        self.next_id = bi.prev_block_id().clone();
+        self.next_id = match &block_index {
+            GenBlockIndex::Genesis(_) => None,
+            GenBlockIndex::Block(blkidx) => Some(blkidx.prev_block_id().clone()),
+        };
 
-        Some(bi)
+        Some(block_index)
     }
 }
 
@@ -69,7 +66,7 @@ mod tests {
     use chainstate_storage::Store;
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, ConsensusData},
+            block::{timestamp::BlockTimestamp, Block, ConsensusData},
             config::create_unit_test_config,
         },
         primitives::{time, Idable, H256},
@@ -97,7 +94,7 @@ mod tests {
             // put three blocks in a chain after genesis
             let block1 = Block::new(
                 vec![],
-                Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+                chainstate.chain_config.genesis_block_id(),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
@@ -106,7 +103,7 @@ mod tests {
 
             let block2 = Block::new(
                 vec![],
-                Some(block1.get_id()),
+                block1.get_id().into(),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
@@ -115,7 +112,7 @@ mod tests {
 
             let block3 = Block::new(
                 vec![],
-                Some(block2.get_id()),
+                block2.get_id().into(),
                 BlockTimestamp::from_duration_since_epoch(time::get()),
                 ConsensusData::None,
             )
@@ -125,13 +122,14 @@ mod tests {
             ///// test history iterator - start from tip
             {
                 let chainstate_ref = chainstate.make_db_tx_ro();
-                let mut iter = BlockIndexHistoryIterator::new(block3.get_id(), &chainstate_ref);
-                assert_eq!(iter.next().unwrap().block_id(), &block3.get_id());
-                assert_eq!(iter.next().unwrap().block_id(), &block2.get_id());
-                assert_eq!(iter.next().unwrap().block_id(), &block1.get_id());
+                let mut iter =
+                    BlockIndexHistoryIterator::new(block3.get_id().into(), &chainstate_ref);
+                assert_eq!(iter.next().unwrap().block_id(), block3.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), block2.get_id());
+                assert_eq!(iter.next().unwrap().block_id(), block1.get_id());
                 assert_eq!(
                     iter.next().unwrap().block_id(),
-                    &chain_config.genesis_block_id()
+                    chain_config.genesis_block_id()
                 );
                 assert!(iter.next().is_none());
             }
@@ -145,7 +143,7 @@ mod tests {
                 );
                 assert_eq!(
                     iter.next().unwrap().block_id(),
-                    &chain_config.genesis_block_id()
+                    chain_config.genesis_block_id(),
                 );
                 assert!(iter.next().is_none());
             }

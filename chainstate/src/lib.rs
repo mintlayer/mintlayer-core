@@ -33,7 +33,7 @@ use std::sync::Arc;
 use chainstate_interface::ChainstateInterface;
 use chainstate_interface_impl::ChainstateInterfaceImpl;
 use common::{
-    chain::{block::Block, ChainConfig},
+    chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
 use detail::{time_getter::TimeGetter, Chainstate, PropertyQueryError};

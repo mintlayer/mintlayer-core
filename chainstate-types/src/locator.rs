@@ -15,22 +15,22 @@
 //
 // Author(s): L. Kuklinek
 
-use common::chain::block::Block;
+use common::chain::GenBlock;
 use common::primitives::Id;
 use serialization::{Decode, Encode};
 
 /// Locator is a list of block IDs at exponentially increasing distance from the tip
 #[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
-pub struct Locator(Vec<Id<Block>>);
+pub struct Locator(Vec<Id<GenBlock>>);
 
 impl Locator {
     /// A new locator
-    pub fn new(entries: Vec<Id<Block>>) -> Locator {
+    pub fn new(entries: Vec<Id<GenBlock>>) -> Locator {
         Locator(entries)
     }
 
     /// Get iterator over locator entries
-    pub fn iter(&self) -> impl Iterator<Item = &Id<Block>> + ExactSizeIterator {
+    pub fn iter(&self) -> impl Iterator<Item = &Id<GenBlock>> + ExactSizeIterator {
         self.0.iter()
     }
 
@@ -41,14 +41,14 @@ impl Locator {
     }
 
     /// Convert into a vector.
-    pub fn into_vec(self) -> Vec<Id<Block>> {
+    pub fn into_vec(self) -> Vec<Id<GenBlock>> {
         self.0
     }
 }
 
 impl std::ops::Index<usize> for Locator {
-    type Output = Id<Block>;
-    fn index(&self, i: usize) -> &Id<Block> {
+    type Output = Id<GenBlock>;
+    fn index(&self, i: usize) -> &Id<GenBlock> {
         &self.0[i]
     }
 }

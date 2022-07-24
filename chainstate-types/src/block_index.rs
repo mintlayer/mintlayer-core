@@ -14,8 +14,7 @@
 // limitations under the License.
 
 use common::chain::block::block_header::BlockHeader;
-use common::chain::block::Block;
-use common::chain::ChainConfig;
+use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id, Idable};
 use common::Uint256;
 use serialization::{Decode, Encode};
@@ -27,7 +26,7 @@ use common::chain::block::timestamp::BlockTimestamp;
 pub struct BlockIndex {
     block_id: Id<Block>,
     block_header: BlockHeader,
-    skip: Option<Id<Block>>,
+    skip: Id<GenBlock>,
     chain_trust: Uint256,
     height: BlockHeight,
     time_max: BlockTimestamp,
@@ -37,7 +36,7 @@ impl BlockIndex {
     pub fn new(
         block: &Block,
         chain_trust: Uint256,
-        some_ancestor: Option<Id<Block>>,
+        some_ancestor: Id<GenBlock>,
         height: BlockHeight,
         time_max: BlockTimestamp,
     ) -> Self {
@@ -56,12 +55,8 @@ impl BlockIndex {
         &self.block_id
     }
 
-    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> &Id<GenBlock> {
         self.block_header.prev_block_id()
-    }
-
-    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.block_header.is_genesis(chain_config)
     }
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
@@ -84,8 +79,8 @@ impl BlockIndex {
         &self.block_header
     }
 
-    pub fn some_ancestor(&self) -> Option<&Id<Block>> {
-        self.skip.as_ref()
+    pub fn some_ancestor(&self) -> &Id<GenBlock> {
+        &self.skip
     }
 
     pub fn into_block_header(self) -> BlockHeader {

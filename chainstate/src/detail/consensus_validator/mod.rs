@@ -16,9 +16,7 @@
 use common::chain::block::BlockHeader;
 use common::chain::block::ConsensusData;
 use common::chain::config::ChainConfig;
-use common::chain::PoWStatus;
-use common::chain::RequiredConsensus;
-use common::primitives::BlockHeight;
+use common::chain::{PoWStatus, RequiredConsensus};
 use common::primitives::Idable;
 
 use crate::detail::pow::work::check_pow_consensus;
@@ -36,36 +34,24 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     header: &BlockHeader,
     block_index_handle: &H,
 ) -> Result<(), ConsensusVerificationError> {
-    let block_height = if header.is_genesis(chain_config) {
-        BlockHeight::from(0)
-    } else {
-        let prev_block_id = header
-            .prev_block_id()
-            .clone()
-            .expect("Block not genesis so must have a prev_block_id");
+    let prev_block_id = header.prev_block_id().clone();
 
-        let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
-            Ok(bi) => bi,
-            Err(err) => {
-                return Err(ConsensusVerificationError::PrevBlockLoadError(
-                    prev_block_id,
-                    header.get_id(),
-                    err,
-                ))
+    let prev_block_height = block_index_handle
+        .get_gen_block_index(&prev_block_id)
+        .map_err({
+            let prev_block_id = prev_block_id.clone();
+            |err| {
+                ConsensusVerificationError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
             }
-        };
+        })?
+        .ok_or_else(|| {
+            ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())
+        })?
+        .block_height();
 
-        prev_block_index
-            .ok_or_else(|| {
-                ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())
-            })?
-            .block_height()
-            .checked_add(1)
-            .expect("max block height reached")
-    };
+    let block_height = prev_block_height.next_height();
     let consensus_status = chain_config.net_upgrade().consensus_status(block_height);
-    do_validate(chain_config, header, &consensus_status, block_index_handle)?;
-    Ok(())
+    do_validate(chain_config, header, &consensus_status, block_index_handle)
 }
 
 fn validate_pow_consensus<H: BlockIndexHandle>(

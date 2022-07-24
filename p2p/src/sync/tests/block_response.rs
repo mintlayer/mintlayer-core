@@ -17,7 +17,7 @@
 use super::*;
 use chainstate::ChainstateError;
 use common::chain::block::consensus_data::PoWData;
-use test_utils::make_libp2p_addr;
+use test_utils::{make_libp2p_addr, TestBlockInfo};
 
 // peer doesn't exist
 #[tokio::test]
@@ -41,7 +41,11 @@ async fn valid_block() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), 1);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        1,
+    );
     let first = blocks[0].header().clone();
     mgr.peers
         .get_mut(&peer_id)
@@ -64,7 +68,11 @@ async fn valid_block_invalid_state() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), 1);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        1,
+    );
 
     assert_eq!(
         mgr.validate_block_response(&peer_id, blocks).await,
@@ -82,7 +90,11 @@ async fn valid_block_resubmitted_chainstate() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), 1);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        1,
+    );
     let first = blocks[0].header().clone();
     mgr.peers
         .get_mut(&peer_id)
@@ -109,7 +121,11 @@ async fn invalid_block() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let mut blocks = test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), 1);
+    let mut blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        1,
+    );
     let first = blocks[0].header().clone();
     mgr.peers
         .get_mut(&peer_id)

@@ -48,7 +48,7 @@ fn spend_output_in_the_same_block() {
 
         let block = Block::new(
             vec![first_tx, second_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            Id::new(chainstate.chain_config.genesis_block_id().get()),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -61,7 +61,7 @@ fn spend_output_in_the_same_block() {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(block_id)
+            Some(<Id<GenBlock>>::from(block_id))
         );
     });
 }
@@ -90,7 +90,7 @@ fn spend_output_in_the_same_block_invalid_order() {
 
         let block = Block::new(
             vec![second_tx, first_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            chainstate.chain_config.genesis_block_id(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -138,7 +138,7 @@ fn double_spend_tx_in_the_same_block() {
 
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            chainstate.chain_config.genesis_block_id(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -187,7 +187,7 @@ fn double_spend_tx_in_another_block() {
         let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
         let first_block = Block::new(
             vec![first_tx.clone()],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            chainstate.chain_config.genesis_block_id(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -199,13 +199,13 @@ fn double_spend_tx_in_another_block() {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(first_block_id.clone())
+            Some(first_block_id.clone().into())
         );
 
         let second_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
         let second_block = Block::new(
             vec![second_tx],
-            Some(first_block_id.clone()),
+            first_block_id.clone().into(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -252,7 +252,7 @@ fn spend_bigger_output_in_the_same_block() {
 
         let block = Block::new(
             vec![first_tx, second_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
+            chainstate.chain_config.genesis_block_id(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
@@ -278,10 +278,9 @@ fn spend_bigger_output_in_the_same_block() {
 
 // Creates a transaction with an input based on the first transaction from the genesis block.
 fn tx_from_genesis(chainstate: &Chainstate, output_value: u128) -> Transaction {
-    let genesis_block_tx_id =
-        chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+    let genesis_block_id = chainstate.chain_config.genesis_block_id();
     let input = TxInput::new(
-        OutPointSourceId::Transaction(genesis_block_tx_id),
+        OutPointSourceId::BlockReward(genesis_block_id),
         0,
         empty_witness(),
     );
