@@ -417,7 +417,7 @@ where
                             assert_eq!(block_ids.len(), 1);
                             self.send_block_request(
                                 peer_id,
-                                block_ids.get(0).expect("block id to exist").clone(),
+                                *block_ids.get(0).expect("block id to exist"),
                                 request.retry_count + 1,
                             )
                             .await?;

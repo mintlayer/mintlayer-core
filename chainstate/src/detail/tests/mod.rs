@@ -116,7 +116,7 @@ impl TestBlockInfo {
 
     fn from_genesis(genesis: &Genesis) -> Self {
         let id: Id<GenBlock> = genesis.get_id().into();
-        let outsrc = OutPointSourceId::BlockReward(id.clone());
+        let outsrc = OutPointSourceId::BlockReward(id);
         let txns = vec![(outsrc, genesis.utxos().to_vec())];
         Self { txns, id }
     }

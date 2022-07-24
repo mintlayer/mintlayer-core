@@ -333,7 +333,7 @@ async fn remote_ahead_by_7_blocks() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -550,7 +550,7 @@ async fn remote_local_diff_chains_local_higher() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -692,7 +692,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -839,7 +839,7 @@ async fn two_remote_nodes_different_chains() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -961,7 +961,7 @@ async fn two_remote_nodes_same_chains() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -1095,7 +1095,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -1208,7 +1208,7 @@ async fn test_connect_disconnect_resyncing() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
