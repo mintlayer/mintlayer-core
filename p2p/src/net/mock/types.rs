@@ -71,10 +71,16 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
+#[derive(Debug)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
     pub net: common::chain::config::ChainType,
     pub version: common::primitives::semver::SemVer,
     pub agent: Option<String>,
     pub protocols: Vec<String>,
+}
+
+#[derive(Debug)]
+pub enum PeerEvent {
+    Dummy,
 }

@@ -16,15 +16,37 @@
 // Author(s): A. Altonen
 use crate::{
     error::{DialError, P2pError},
-    net::mock::types,
+    net::mock::{peer, socket, types},
 };
 use futures::FutureExt;
 use logging::log;
-use std::{io::ErrorKind, net::SocketAddr};
+use std::{collections::HashMap, io::ErrorKind, net::SocketAddr};
 use tokio::{
     net::{TcpListener, TcpStream},
-    sync::mpsc,
+    sync::{mpsc, oneshot},
 };
+
+struct PeerContext {
+    peer_id: types::MockPeerId,
+    tx: mpsc::Sender<types::PeerEvent>,
+    state: ConnectionState,
+}
+
+#[derive(Debug)]
+enum ConnectionState {
+    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
+    Dialed {
+        tx: oneshot::Sender<crate::Result<types::MockPeerInfo>>,
+    },
+
+    /// Connection established for outbound connection
+    OutboundAccepted {
+        tx: oneshot::Sender<crate::Result<types::MockPeerInfo>>,
+    },
+
+    /// Connection established for inbound connection
+    InboundAccepted { addr: SocketAddr },
+}
 
 pub struct Backend {
     /// Socket address of the backend
@@ -35,6 +57,15 @@ pub struct Backend {
 
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::Receiver<types::Command>,
+
+    /// Active peers
+    peers: HashMap<types::MockPeerId, PeerContext>,
+
+    /// RX channel for receiving events from peers
+    peer_chan: (
+        mpsc::Sender<(types::MockPeerId, types::PeerEvent)>,
+        mpsc::Receiver<(types::MockPeerId, types::PeerEvent)>,
+    ),
 
     /// TX channel for sending events to the frontend
     conn_tx: mpsc::Sender<types::ConnectivityEvent>,
@@ -63,6 +94,8 @@ impl Backend {
             conn_tx,
             _pubsub_tx,
             timeout,
+            peers: HashMap::new(),
+            peer_chan: mpsc::channel(64),
         }
     }
 
@@ -70,13 +103,36 @@ impl Backend {
         loop {
             tokio::select! {
                 event = self.socket.accept() => match event {
-                    Ok(socket) => self.conn_tx.send(types::ConnectivityEvent::IncomingConnection {
-                        peer_id: socket.1,
-                        socket: socket.0,
-                    }).await?,
+                    Ok(info) => {
+                        let (tx, rx) = mpsc::channel(16);
+                        let peer_id = types::MockPeerId::from_socket_address(&info.1);
+                        let socket = socket::MockSocket::new(info.0);
+
+                        self.peers.insert(peer_id, PeerContext {
+                            peer_id,
+                            tx,
+                            state: ConnectionState::InboundAccepted { addr: info.1 },
+                        });
+
+                        let tx = self.peer_chan.0.clone();
+                        tokio::spawn(async move {
+                            if let Err(e) = peer::Peer::new(peer_id, socket, tx, rx).start().await {
+                                log::error!("peer failed: {:?}", e);
+                            }
+                        });
+                    }
                     Err(e) => {
                         log::error!("accept() failed: {:?}", e);
                         return Err(P2pError::Other("accept() failed"));
+                    }
+                },
+                event = self.peer_chan.1.recv().fuse() => {
+                    let (_peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
+
+                    match event {
+                        types::PeerEvent::Dummy => {
+                            todo!();
+                        }
                     }
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
