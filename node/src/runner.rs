@@ -15,14 +15,16 @@
 
 //! Node initialisation routine.
 
-use std::{fs, path::Path, sync::Arc, time::Duration};
+use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
 use paste::paste;
 
 use chainstate::rpc::ChainstateRpcServer;
 use common::{
-    chain::config::{Builder as ChainConfigBuilder, ChainConfig, ChainType},
+    chain::config::{
+        Builder as ChainConfigBuilder, ChainConfig, ChainType, EmissionScheduleTabular,
+    },
     primitives::{semver::SemVer, BlockDistance},
 };
 use logging::log;
@@ -140,6 +142,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_version,
         chain_target_block_spacing,
         chain_coin_decimals,
+        chain_emission_schedule,
         chain_max_block_header_size,
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
@@ -173,6 +176,10 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
     update_builder!(coin_decimals);
+    if let Some(val) = chain_emission_schedule {
+        builder =
+            builder.emission_schedule_tabular(EmissionScheduleTabular::from_str(val.as_str())?);
+    }
     update_builder!(max_block_header_size);
     update_builder!(max_block_size_with_standard_txs);
     update_builder!(max_block_size_with_smart_contracts);

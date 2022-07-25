@@ -51,6 +51,9 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_coin_decimals: Option<u8>,
 
+    /// Emission schedule (`<initial_supply>+<initial_subsidy>[, <height>+<subsidy>]`).
+    pub chain_emission_schedule: Option<String>,
+
     /// The maximum block header size in bytes.
     #[clap(long)]
     pub chain_max_block_header_size: Option<usize>,
