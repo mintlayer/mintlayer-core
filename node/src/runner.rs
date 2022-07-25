@@ -144,11 +144,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
 
     macro_rules! update_builder {
         ($field: ident) => {
-            paste! {
-                if let Some(val) = [<chain_ $field>] {
-                    builder = builder.$field(val.to_owned());
-                }
-            }
+            update_builder!($field, std::convert::identity)
         };
         ($field: ident, $converter: stmt) => {
             paste! {
