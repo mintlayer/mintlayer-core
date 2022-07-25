@@ -15,6 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::message;
+use crate::net::mock::types::Message;
 use bytes::{Buf, BytesMut};
 use serialization::{Decode, Encode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -23,13 +24,6 @@ use tokio_util::codec::{Decoder, Encoder};
 use utils::ensure;
 
 const MAX: usize = 10 * 1024 * 1024;
-
-#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub enum Message {
-    Announcement(message::Announcement),
-    Request(message::Request),
-    Response(message::Response),
-}
 
 struct MessageDecoder {}
 

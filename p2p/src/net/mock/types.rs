@@ -15,7 +15,9 @@
 //
 // Author(s): A. Altonen
 use crate::{message, net};
+use common::{chain::config, primitives::semver};
 use crypto::random::{make_pseudo_rng, Rng};
+use serialization::{Decode, Encode};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -80,7 +82,54 @@ pub struct MockPeerInfo {
     pub protocols: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
+    PeerInfoReceived {
+        network: config::ChainType,
+        version: semver::SemVer,
+        protocols: Vec<Protocol>,
+    },
+}
+
+/// Events sent by the mock backend to peers
+#[derive(Debug)]
+pub enum MockEvent {
     Dummy,
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub struct Protocol {
+    name: String,
+    version: semver::SemVer,
+}
+
+impl Protocol {
+    pub fn new(name: &str, version: semver::SemVer) -> Self {
+        Self {
+            name: name.to_string(),
+            version,
+        }
+    }
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum HandshakeMessage {
+    Hello {
+        version: common::primitives::semver::SemVer,
+        network: [u8; 4],
+        protocols: Vec<Protocol>,
+    },
+    HelloAck {
+        version: common::primitives::semver::SemVer,
+        network: [u8; 4],
+        protocols: Vec<Protocol>,
+    },
+}
+
+#[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
+pub enum Message {
+    Handshake(HandshakeMessage),
+    Announcement(message::Announcement),
+    Request(message::Request),
+    Response(message::Response),
 }

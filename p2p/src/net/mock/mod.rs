@@ -114,6 +114,7 @@ impl NetworkingService for MockService {
             let mut mock = backend::Backend::new(
                 addr,
                 socket,
+                Arc::clone(&_config),
                 cmd_rx,
                 conn_tx,
                 pubsub_tx,

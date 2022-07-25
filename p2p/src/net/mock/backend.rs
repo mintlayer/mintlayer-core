@@ -18,8 +18,10 @@ use crate::{
     error::{DialError, P2pError},
     net::mock::{peer, socket, types},
 };
+use common::chain::ChainConfig;
 use futures::FutureExt;
 use logging::log;
+use std::sync::Arc;
 use std::{collections::HashMap, io::ErrorKind, net::SocketAddr};
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -28,7 +30,7 @@ use tokio::{
 
 struct PeerContext {
     peer_id: types::MockPeerId,
-    tx: mpsc::Sender<types::PeerEvent>,
+    tx: mpsc::Sender<types::MockEvent>,
     state: ConnectionState,
 }
 
@@ -54,6 +56,9 @@ pub struct Backend {
 
     /// Socket for listening to incoming connections
     socket: TcpListener,
+
+    /// Chain config
+    config: Arc<ChainConfig>,
 
     /// RX channel for receiving commands from the frontend
     cmd_rx: mpsc::Receiver<types::Command>,
@@ -81,6 +86,7 @@ impl Backend {
     pub fn new(
         addr: SocketAddr,
         socket: TcpListener,
+        config: Arc<ChainConfig>,
         cmd_rx: mpsc::Receiver<types::Command>,
         conn_tx: mpsc::Sender<types::ConnectivityEvent>,
         _pubsub_tx: mpsc::Sender<types::PubSubEvent>,
@@ -92,6 +98,7 @@ impl Backend {
             socket,
             cmd_rx,
             conn_tx,
+            config,
             _pubsub_tx,
             timeout,
             peers: HashMap::new(),
@@ -115,8 +122,17 @@ impl Backend {
                         });
 
                         let tx = self.peer_chan.0.clone();
+                        let config = Arc::clone(&self.config);
+
                         tokio::spawn(async move {
-                            if let Err(e) = peer::Peer::new(peer_id, socket, tx, rx).start().await {
+                            if let Err(e) = peer::Peer::new(
+                                peer_id,
+                                peer::Role::Inbound,
+                                config,
+                                socket,
+                                tx,
+                                rx
+                            ).start().await {
                                 log::error!("peer failed: {:?}", e);
                             }
                         });
@@ -127,11 +143,19 @@ impl Backend {
                     }
                 },
                 event = self.peer_chan.1.recv().fuse() => {
-                    let (_peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
+                    let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
 
                     match event {
-                        types::PeerEvent::Dummy => {
-                            todo!();
+                        types::PeerEvent::PeerInfoReceived { network, version, protocols } => {
+                            match self.peers.remove(&peer_id).expect("zzz").state {
+                                ConnectionState::Dialed { .. } => panic!("zzz"),
+                                ConnectionState::InboundAccepted { addr } => {
+                                    todo!();
+                                }
+                                ConnectionState::OutboundAccepted { tx } => {
+                                    todo!();
+                                }
+                            }
                         }
                     }
                 },

@@ -41,6 +41,19 @@ pub fn make_libp2p_addr() -> Multiaddr {
     "/ip6/::1/tcp/0".parse().unwrap()
 }
 
+pub fn make_mock_addr() -> SocketAddr {
+    "[::1]:0".parse().unwrap()
+}
+
+pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
+    let addr = make_mock_addr();
+    let server = TcpListener::bind(addr).await.unwrap();
+    let peer_fut = TcpStream::connect(server.local_addr().unwrap());
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
+}
+
 pub async fn get_tcp_socket() -> TcpStream {
     let port: u16 = portpicker::pick_unused_port().expect("No ports free");
     let addr: SocketAddr = format!("[::1]:{}", port).parse().unwrap();
