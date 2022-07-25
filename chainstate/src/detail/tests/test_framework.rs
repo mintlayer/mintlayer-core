@@ -26,7 +26,7 @@ use common::{
 };
 
 #[derive(Debug, Eq, PartialEq)]
-pub(crate) enum TestSpentStatus {
+pub enum TestSpentStatus {
     Spent,
     Unspent,
     NotInMainchain,
@@ -34,7 +34,7 @@ pub(crate) enum TestSpentStatus {
 
 // TODO: See https://github.com/mintlayer/mintlayer-core/issues/274 for details.
 #[allow(dead_code)]
-pub(crate) enum TestBlockParams {
+pub enum TestBlockParams {
     NoErrors,
     TxCount(usize),
     Fee(Amount),
@@ -42,20 +42,20 @@ pub(crate) enum TestBlockParams {
     SpendFrom(Id<Block>),
 }
 
-pub(crate) struct BlockTestFramework {
+pub struct BlockTestFramework {
     pub chainstate: Chainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
 impl BlockTestFramework {
-    pub(crate) fn with_chainstate(chainstate: Chainstate) -> Self {
+    pub fn with_chainstate(chainstate: Chainstate) -> Self {
         Self {
             chainstate,
             block_indexes: Vec::new(),
         }
     }
 
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let chainstate = setup_chainstate();
         Self::with_chainstate(chainstate)
     }
@@ -64,11 +64,12 @@ impl BlockTestFramework {
         &self,
         parent_info: TestBlockInfo,
         params: Option<&[TestBlockParams]>,
+        rng: &mut impl Rng,
     ) -> Block {
         let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_info
             .txns
             .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o))
+            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
             .unzip();
 
         let mut prev_block_hash = parent_info.id;
@@ -119,21 +120,19 @@ impl BlockTestFramework {
         &mut self,
         parent_block_id: &Id<GenBlock>,
         count_blocks: usize,
+        rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, BlockError> {
         let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, parent_block_id.clone());
 
         for _ in 0..count_blocks {
-            let block = produce_test_block(test_block_info);
+            let block = produce_test_block(test_block_info, rng);
             test_block_info = TestBlockInfo::from_block(&block);
             self.add_special_block(block.clone())?;
         }
         Ok(test_block_info.id)
     }
 
-    pub(crate) fn add_special_block(
-        &mut self,
-        block: Block,
-    ) -> Result<Option<BlockIndex>, BlockError> {
+    pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
         let id = block.get_id();
         let block_index = self.chainstate.process_block(block, BlockSource::Local)?;
         self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
@@ -142,7 +141,7 @@ impl BlockTestFramework {
         Ok(block_index)
     }
 
-    pub(crate) fn get_spent_status(
+    pub fn get_spent_status(
         &self,
         tx_id: &Id<Transaction>,
         output_index: u32,
@@ -183,7 +182,7 @@ impl BlockTestFramework {
         }
     }
 
-    pub(crate) fn test_block(
+    pub fn test_block(
         &self,
         block_id: &Id<Block>,
         prev_block_id: &Id<GenBlock>,
@@ -217,7 +216,7 @@ impl BlockTestFramework {
         self.check_block_at_height(block_index.block_height().next_height(), next_block_id);
     }
 
-    pub(crate) fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
+    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
         let block_index = self
             .chainstate
             .chainstate_storage
@@ -234,14 +233,11 @@ impl BlockTestFramework {
         }
     }
 
-    pub(crate) fn get_block(
-        &self,
-        block_id: Id<Block>,
-    ) -> Result<Option<Block>, PropertyQueryError> {
+    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
     }
 
-    pub(crate) fn chainstate(&mut self) -> &mut Chainstate {
+    pub fn chainstate(&mut self) -> &mut Chainstate {
         &mut self.chainstate
     }
 

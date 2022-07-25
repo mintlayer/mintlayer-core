@@ -16,8 +16,8 @@
 // Author(s): A. Altonen
 use super::*;
 use crate::message::*;
+use p2p_test_utils::make_libp2p_addr;
 use std::{collections::HashSet, time::Duration};
-use test_utils::make_libp2p_addr;
 use tokio::time::timeout;
 
 #[tokio::test]

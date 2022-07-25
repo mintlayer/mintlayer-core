@@ -14,8 +14,8 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-extern crate test_utils;
-use test_utils::make_libp2p_addr;
+extern crate p2p_test_utils;
+use p2p_test_utils::make_libp2p_addr;
 
 use common::chain::{
     block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block},

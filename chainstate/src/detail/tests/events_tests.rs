@@ -29,10 +29,12 @@ fn simple_subscribe() {
         let mut chainstate = setup_chainstate();
         let events = subscribe(&mut chainstate, 1);
 
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         // Produce and process a block.
-        let first_block = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let first_block = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
         assert!(!chainstate.events_controller.subscribers().is_empty());
         chainstate.process_block(first_block.clone(), BlockSource::Local).unwrap();
         chainstate.wait_for_all_events();
@@ -47,7 +49,7 @@ fn simple_subscribe() {
         }
 
         // Process one more block.
-        let second_block = produce_test_block(TestBlockInfo::from_block(&first_block));
+        let second_block = produce_test_block(TestBlockInfo::from_block(&first_block), &mut rng);
         chainstate.process_block(second_block.clone(), BlockSource::Local).unwrap();
         chainstate.wait_for_all_events();
 
@@ -67,13 +69,15 @@ fn simple_subscribe() {
 fn several_subscribers() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
-        let mut rng = make_seedable_rng(None);
+
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut chainstate, subscribers);
 
-        let block = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let block = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
 
         assert!(!chainstate.events_controller.subscribers().is_empty());
         chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -93,7 +97,7 @@ fn several_subscribers_several_events() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
 
@@ -102,7 +106,7 @@ fn several_subscribers_several_events() {
 
         let mut block_info = TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block());
         for _ in 0..blocks {
-            let block = produce_test_block(block_info);
+            let block = produce_test_block(block_info, &mut rng);
             block_info = TestBlockInfo::from_block(&block);
             let index = chainstate
                 .process_block(block.clone(), BlockSource::Local)
@@ -140,8 +144,11 @@ fn orphan_block() {
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+
         let block = produce_test_block(
             TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()).orphan(),
+            &mut rng,
         );
         assert_eq!(
             chainstate.process_block(block, BlockSource::Local).unwrap_err(),
@@ -172,9 +179,12 @@ fn custom_orphan_error_hook() {
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
-        let first_block = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+
+        let first_block = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
         // Produce a block with a bad timestamp.
         let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
             + chainstate.chain_config.max_future_block_time_offset().as_secs();

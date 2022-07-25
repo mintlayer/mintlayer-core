@@ -60,7 +60,7 @@ pub mod time_getter;
 use time_getter::TimeGetter;
 
 #[must_use]
-pub(crate) struct Chainstate {
+pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
     chainstate_storage: chainstate_storage::Store,
@@ -78,7 +78,7 @@ pub enum BlockSource {
 
 impl Chainstate {
     #[allow(dead_code)]
-    pub(crate) fn wait_for_all_events(&self) {
+    pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
 
@@ -106,11 +106,11 @@ impl Chainstate {
         )
     }
 
-    pub(crate) fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
+    pub fn subscribe_to_events(&mut self, handler: ChainstateEventHandler) {
         self.events_controller.subscribe_to_events(handler);
     }
 
-    pub(crate) fn new(
+    pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
@@ -206,7 +206,7 @@ impl Chainstate {
         }
     }
 
-    pub(crate) fn attempt_to_process_block(
+    pub fn attempt_to_process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
@@ -253,7 +253,7 @@ impl Chainstate {
     }
 
     /// returns the block index of the new tip
-    pub(crate) fn process_block(
+    pub fn process_block(
         &mut self,
         block: Block,
         block_source: BlockSource,
@@ -297,14 +297,14 @@ impl Chainstate {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn get_header_from_height(
+    pub fn get_header_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<BlockHeader>, PropertyQueryError> {
         self.make_db_tx_ro().get_header_from_height(height)
     }
 
-    pub(crate) fn get_block_id_from_height(
+    pub fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
     ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
@@ -313,11 +313,11 @@ impl Chainstate {
             .map(|res| res.map(Into::into))
     }
 
-    pub(crate) fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
+    pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.make_db_tx_ro().get_block(id)
     }
 
-    pub(crate) fn get_block_index(
+    pub fn get_block_index(
         &self,
         id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
@@ -332,7 +332,7 @@ impl Chainstate {
         itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
     }
 
-    pub(crate) fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
+    pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         let best_block_index = chainstate_ref
             .get_best_block_index()?
@@ -347,17 +347,14 @@ impl Chainstate {
             .map(Locator::new)
     }
 
-    pub(crate) fn get_block_height_in_main_chain(
+    pub fn get_block_height_in_main_chain(
         &self,
         id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_height_in_main_chain(id)
     }
 
-    pub(crate) fn get_headers(
-        &self,
-        locator: Locator,
-    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    pub fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         // use genesis block if no common ancestor with better block height is found
         let chainstate_ref = self.make_db_tx_ro();
         let mut best = BlockHeight::new(0);
@@ -388,7 +385,7 @@ impl Chainstate {
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
     }
 
-    pub(crate) fn filter_already_existing_blocks(
+    pub fn filter_already_existing_blocks(
         &self,
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {

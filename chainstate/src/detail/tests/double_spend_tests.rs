@@ -42,8 +42,9 @@ fn spend_output_in_the_same_block() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
-        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
@@ -84,8 +85,9 @@ fn spend_output_in_the_same_block_invalid_order() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
-        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
@@ -131,8 +133,9 @@ fn double_spend_tx_in_the_same_block() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
-        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
         let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
@@ -183,8 +186,9 @@ fn double_spend_tx_in_another_block() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
-        let first_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let first_block = Block::new(
             vec![first_tx.clone()],
             chainstate.chain_config.genesis_block_id(),
@@ -202,7 +206,8 @@ fn double_spend_tx_in_another_block() {
             Some(first_block_id.clone().into())
         );
 
-        let second_tx = tx_from_genesis(&chainstate, rng.gen_range(100_000..200_000));
+        let tx2_output_value = rng.gen_range(100_000..200_000);
+        let second_tx = tx_from_genesis(&chainstate, &mut rng, tx2_output_value);
         let second_block = Block::new(
             vec![second_tx],
             first_block_id.clone().into(),
@@ -244,10 +249,10 @@ fn spend_bigger_output_in_the_same_block() {
     common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let tx1_output_value = rng.gen_range(1000..2000);
         let tx2_output_value = rng.gen_range(100_000..200_000);
-        let first_tx = tx_from_genesis(&chainstate, tx1_output_value);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, tx2_output_value);
 
         let block = Block::new(
@@ -277,12 +282,12 @@ fn spend_bigger_output_in_the_same_block() {
 }
 
 // Creates a transaction with an input based on the first transaction from the genesis block.
-fn tx_from_genesis(chainstate: &Chainstate, output_value: u128) -> Transaction {
+fn tx_from_genesis(chainstate: &Chainstate, rng: &mut impl Rng, output_value: u128) -> Transaction {
     let genesis_block_id = chainstate.chain_config.genesis_block_id();
     let input = TxInput::new(
         OutPointSourceId::BlockReward(genesis_block_id),
         0,
-        empty_witness(),
+        empty_witness(rng),
     );
     let output = TxOutput::new(
         Amount::from_atoms(output_value),

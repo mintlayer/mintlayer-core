@@ -21,8 +21,8 @@ use p2p::net::{
     types::ConnectivityEvent,
     ConnectivityService, NetworkingService,
 };
+use p2p_test_utils::make_libp2p_addr;
 use std::sync::Arc;
-use test_utils::make_libp2p_addr;
 
 // verify that libp2p mdns peer discovery works
 #[tokio::test]

@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 #![allow(unused)]
-extern crate test_utils;
+extern crate p2p_test_utils;
 
 use libp2p::Multiaddr;
 use p2p::{
@@ -29,8 +29,8 @@ use p2p::{
     pubsub::PubSubMessageHandler,
     sync::SyncManager,
 };
+use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
 use std::sync::Arc;
-use test_utils::{make_libp2p_addr, TestBlockInfo};
 use tokio::sync::mpsc;
 
 async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
@@ -56,7 +56,7 @@ async fn invalid_pubsub_block() {
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let handle = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
     let (mut conn1, pubsub, _sync) = Libp2pService::start(
         make_libp2p_addr(),
@@ -91,7 +91,7 @@ async fn invalid_pubsub_block() {
 
     // create few blocks so `pubsub2` has something to send to `pubsub1`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
+    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
     tokio::spawn(async move {
         tx_pubsub.send(PubSubControlEvent::InitialBlockDownloadDone).await.unwrap();
@@ -132,7 +132,7 @@ async fn invalid_sync_block() {
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
     let config = Arc::new(common::chain::config::create_unit_test_config());
-    let handle = test_utils::start_chainstate(Arc::clone(&config)).await;
+    let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
     let (mut conn1, _, sync1) = Libp2pService::start(
         make_libp2p_addr(),
@@ -154,7 +154,7 @@ async fn invalid_sync_block() {
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
+    let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
     // register random peer to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation

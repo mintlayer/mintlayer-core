@@ -523,7 +523,6 @@ dependencies = [
  "logging",
  "mockall",
  "num",
- "rand_chacha 0.3.1",
  "replace_with",
  "rpc",
  "serde",
@@ -531,6 +530,7 @@ dependencies = [
  "serialization",
  "static_assertions",
  "subsystem",
+ "test-utils",
  "thiserror",
  "tokio",
  "utils",
@@ -548,6 +548,7 @@ dependencies = [
  "num-traits",
  "serialization",
  "storage",
+ "test-utils",
  "thiserror",
  "utxo",
 ]
@@ -2606,6 +2607,7 @@ dependencies = [
  "jsonrpsee",
  "libp2p",
  "logging",
+ "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
  "rpc",
@@ -2613,11 +2615,25 @@ dependencies = [
  "serialization",
  "sscanf",
  "subsystem",
- "test-utils",
  "thiserror",
  "tokio",
  "utils",
  "void",
+]
+
+[[package]]
+name = "p2p-test-utils"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "crypto",
+ "libp2p",
+ "p2p",
+ "portpicker",
+ "subsystem",
+ "tokio",
 ]
 
 [[package]]
@@ -4068,15 +4084,9 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "chainstate",
- "chainstate-storage",
- "common",
  "crypto",
- "libp2p",
- "p2p",
- "portpicker",
- "subsystem",
- "tokio",
+ "logging",
+ "rand_chacha 0.3.1",
 ]
 
 [[package]]

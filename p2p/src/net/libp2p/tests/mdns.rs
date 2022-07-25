@@ -21,7 +21,7 @@ use crate::net::libp2p::{
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
-use test_utils::make_libp2p_addr;
+use p2p_test_utils::make_libp2p_addr;
 
 #[tokio::test]
 async fn test_discovered_and_expired() {

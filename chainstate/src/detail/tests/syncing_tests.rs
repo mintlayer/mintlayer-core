@@ -45,12 +45,12 @@ fn get_locator() {
         assert_eq!(&locator[0], &btf.genesis().get_id());
 
         // Expand the chain several times.
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let mut blocks = 1;
         let mut last_block_id: Id<GenBlock> = btf.genesis().get_id().into();
         for _ in 0..8 {
             let new_blocks = rng.gen_range(1..2000);
-            last_block_id = btf.create_chain(&last_block_id, new_blocks).unwrap();
+            last_block_id = btf.create_chain(&last_block_id, new_blocks, &mut rng).unwrap();
             blocks += new_blocks;
 
             // Check the locator length.
@@ -78,12 +78,14 @@ fn get_locator() {
 #[test]
 fn get_headers() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
+        let headers_count = rng.gen_range(1000..header_limit);
+        let blocks_count = rng.gen_range(1000..2000);
 
         let mut btf = BlockTestFramework::new();
         let mut last_block_id = btf.genesis().get_id().into();
-        last_block_id = btf.create_chain(&last_block_id, rng.gen_range(1000..2000)).unwrap();
+        last_block_id = btf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
         let locator = btf.chainstate().get_locator().unwrap();
@@ -94,16 +96,16 @@ fn get_headers() {
 
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
-            let block = produce_test_block(TestBlockInfo::from_id(
-                btf.chainstate(),
-                last_block_id.clone(),
-            ));
+            let block = produce_test_block(
+                TestBlockInfo::from_id(btf.chainstate(), last_block_id.clone()),
+                &mut rng,
+            );
             last_block_id = block.get_id().into();
             let header = block.header().clone();
             btf.chainstate().process_block(block, BlockSource::Peer).unwrap().unwrap();
             Some(header)
         })
-        .take(rng.gen_range(1000..header_limit))
+        .take(headers_count)
         .collect();
 
         let headers = btf.chainstate().get_headers(locator.clone()).unwrap();
@@ -113,7 +115,8 @@ fn get_headers() {
         assert_eq!(expected[0].prev_block_id(), &locator[0]);
 
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
-        btf.create_chain(&last_block_id, header_limit - expected.len()).unwrap();
+        btf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng)
+            .unwrap();
         let headers = btf.chainstate().get_headers(locator).unwrap();
         assert_eq!(headers.len(), header_limit);
     });
@@ -124,16 +127,16 @@ fn get_headers() {
 #[test]
 fn get_headers_genesis() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let mut btf = BlockTestFramework::new();
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
 
-        btf.create_chain(&genesis_id, rng.gen_range(64..128)).unwrap();
+        btf.create_chain(&genesis_id, rng.gen_range(64..128), &mut rng).unwrap();
         let locator_1 = btf.chainstate.get_locator().unwrap();
 
         let chain_length = rng.gen_range(1200..2000);
-        btf.create_chain(&genesis_id, chain_length).unwrap();
+        btf.create_chain(&genesis_id, chain_length, &mut rng).unwrap();
         let locator_2 = btf.chainstate.get_locator().unwrap();
         assert_ne!(locator_1, locator_2);
         assert!(locator_1.len() < locator_2.len());
@@ -149,16 +152,17 @@ fn get_headers_genesis() {
 #[test]
 fn get_headers_branching_chains() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let common_height = rng.gen_range(100..10_000);
 
         let mut btf = BlockTestFramework::new();
-        let common_block_id =
-            btf.create_chain(&btf.genesis().get_id().into(), common_height).unwrap();
+        let common_block_id = btf
+            .create_chain(&btf.genesis().get_id().into(), common_height, &mut rng)
+            .unwrap();
 
-        btf.create_chain(&common_block_id, rng.gen_range(100..2500)).unwrap();
+        btf.create_chain(&common_block_id, rng.gen_range(100..2500), &mut rng).unwrap();
         let locator = btf.chainstate.get_locator().unwrap();
-        btf.create_chain(&common_block_id, rng.gen_range(2500..5000)).unwrap();
+        btf.create_chain(&common_block_id, rng.gen_range(2500..5000), &mut rng).unwrap();
 
         let headers = btf.chainstate.get_headers(locator).unwrap();
         let id = headers[0].prev_block_id();
@@ -171,7 +175,7 @@ fn get_headers_branching_chains() {
 #[test]
 fn get_headers_different_chains() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
@@ -179,7 +183,7 @@ fn get_headers_different_chains() {
         let mut prev = TestBlockInfo::from_genesis(btf1.genesis());
         assert_eq!(&prev, &TestBlockInfo::from_genesis(btf2.genesis()));
         for _ in 0..rng.gen_range(100..250) {
-            let block = btf1.random_block(prev, None);
+            let block = btf1.random_block(prev, None, &mut rng);
             prev = TestBlockInfo::from_block(&block);
             btf1.add_special_block(block.clone()).unwrap();
             btf2.add_special_block(block.clone()).unwrap();
@@ -189,8 +193,8 @@ fn get_headers_different_chains() {
             );
         }
 
-        btf1.create_chain(&prev.id, rng.gen_range(32..256)).unwrap();
-        btf2.create_chain(&prev.id, rng.gen_range(256..512)).unwrap();
+        btf1.create_chain(&prev.id, rng.gen_range(32..256), &mut rng).unwrap();
+        btf2.create_chain(&prev.id, rng.gen_range(256..512), &mut rng).unwrap();
 
         let locator = btf1.chainstate.get_locator().unwrap();
         let headers = btf2.chainstate.get_headers(locator).unwrap();
@@ -207,14 +211,14 @@ fn get_headers_different_chains() {
 #[test]
 fn filter_already_existing_blocks() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
 
         let mut prev1 = TestBlockInfo::from_genesis(btf1.genesis());
         for _ in 0..rng.gen_range(8..16) {
-            let block = btf1.random_block(prev1, None);
+            let block = btf1.random_block(prev1, None, &mut rng);
             prev1 = TestBlockInfo::from_block(&block);
             btf1.add_special_block(block.clone()).unwrap();
             btf2.add_special_block(block.clone()).unwrap();
@@ -232,13 +236,13 @@ fn filter_already_existing_blocks() {
         // Add random blocks to both chains.
         for i in 0..(limit * 2) {
             if i <= limit {
-                let block = btf1.random_block(prev1, None);
+                let block = btf1.random_block(prev1, None, &mut rng);
                 prev1 = TestBlockInfo::from_block(&block);
                 headers1.push(block.header().clone());
                 btf1.add_special_block(block).unwrap();
             }
 
-            let block = btf1.random_block(prev2, None);
+            let block = btf1.random_block(prev2, None, &mut rng);
             prev2 = TestBlockInfo::from_block(&block);
             headers2.push(block.header().clone());
             btf2.add_special_block(block).unwrap();
@@ -263,14 +267,14 @@ fn filter_already_existing_blocks() {
 #[test]
 fn filter_already_existing_blocks_detached_headers() {
     common::concurrency::model(|| {
-        let mut rng = make_seedable_rng(None);
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
 
         let mut prev = TestBlockInfo::from_genesis(btf1.genesis());
         for _ in 0..rng.gen_range(8..16) {
-            let block = btf1.random_block(prev, None);
+            let block = btf1.random_block(prev, None, &mut rng);
             prev = TestBlockInfo::from_block(&block);
             btf1.add_special_block(block.clone()).unwrap();
             btf2.add_special_block(block.clone()).unwrap();
@@ -282,7 +286,7 @@ fn filter_already_existing_blocks_detached_headers() {
 
         let mut headers = Vec::new();
         for _ in 0..rng.gen_range(3..10) {
-            let block = btf2.random_block(prev, None);
+            let block = btf2.random_block(prev, None, &mut rng);
             prev = TestBlockInfo::from_block(&block);
             headers.push(block.header().clone());
             btf2.add_special_block(block).unwrap();

@@ -75,14 +75,16 @@ fn orphans_chains() {
         );
 
         // Process the orphan block
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let genesis_block = chainstate.chain_config.genesis_block().clone();
-        let missing_block = produce_test_block(TestBlockInfo::from_genesis(&genesis_block));
+        let missing_block =
+            produce_test_block(TestBlockInfo::from_genesis(&genesis_block), &mut rng);
 
         // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
         let mut current_block = missing_block.clone();
         for orphan_count in 1..MAX_ORPHANS_COUNT_IN_TEST {
-            current_block = produce_test_block(TestBlockInfo::from_block(&current_block));
+            current_block = produce_test_block(TestBlockInfo::from_block(&current_block), &mut rng);
             assert_eq!(
                 chainstate.process_block(current_block.clone(), BlockSource::Local).unwrap_err(),
                 BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
@@ -144,9 +146,11 @@ fn spend_inputs_simple() {
         let mut chainstate = setup_chainstate();
 
         // Create a new block
-        let block = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let block = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
@@ -203,6 +207,7 @@ fn straight_chain() {
         )
         .unwrap();
 
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let genesis_index = chainstate
             .make_db_tx_ro()
             .get_gen_block_index(&chainstate.chain_config.genesis_block_id())
@@ -223,7 +228,7 @@ fn straight_chain() {
         let mut block_index = GenBlockIndex::Genesis(&chain_config_clone);
         let mut prev_block = TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block());
 
-        for _ in 0..make_seedable_rng(None).gen_range(100..200) {
+        for _ in 0..rng.gen_range(100..200) {
             assert_eq!(
                 chainstate.chainstate_storage.get_best_block_id().unwrap().unwrap(),
                 prev_block.id
@@ -236,7 +241,7 @@ fn straight_chain() {
                 .flatten()
                 .expect("Unable to get best block ID");
             assert_eq!(best_block_id, block_index.block_id());
-            let new_block = produce_test_block(prev_block);
+            let new_block = produce_test_block(prev_block, &mut rng);
             let new_block_index = chainstate
                 .process_block(new_block.clone(), BlockSource::Peer)
                 .ok()
@@ -260,7 +265,8 @@ fn straight_chain() {
 fn get_ancestor_invalid_height() {
     let mut btf = BlockTestFramework::new();
     let height = 1;
-    btf.create_chain(&btf.genesis().get_id().into(), height).unwrap();
+    let mut rng = make_seedable_rng!(Seed::from_entropy());
+    btf.create_chain(&btf.genesis().get_id().into(), height, &mut rng).unwrap();
     let last_block_index = btf.block_indexes.last().expect("last block in first chain").clone();
 
     let invalid_height = height + 1;
@@ -288,7 +294,8 @@ fn get_ancestor() {
     const ANCESTOR_HEIGHT: usize = 50;
     const FIRST_CHAIN_HEIGHT: usize = 500;
     const SECOND_CHAIN_LENGTH: usize = 300;
-    btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT)
+    let mut rng = make_seedable_rng!(Seed::from_entropy());
+    btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
 
     let ancestor = GenBlockIndex::Block(btf.index_at(ANCESTOR_HEIGHT).clone());
@@ -313,8 +320,12 @@ fn get_ancestor() {
     }
 
     // Create the first chain and test get_ancestor for this chain's  last block
-    btf.create_chain(&split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
-        .expect("second chain");
+    btf.create_chain(
+        &split.block_id(),
+        FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT,
+        &mut rng,
+    )
+    .expect("second chain");
     let last_block_in_first_chain =
         GenBlockIndex::Block(btf.block_indexes.last().expect("last block in first chain").clone());
 
@@ -363,8 +374,12 @@ fn get_ancestor() {
     );
 
     // Create a second chain and test get_ancestor for this chain's last block
-    btf.create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
-        .expect("second chain");
+    btf.create_chain(
+        &split.block_id(),
+        SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
+        &mut rng,
+    )
+    .expect("second chain");
     let last_block_in_second_chain =
         GenBlockIndex::Block(btf.block_indexes.last().expect("last block in first chain").clone());
     assert_eq!(
@@ -389,21 +404,30 @@ fn last_common_ancestor() {
     const FIRST_CHAIN_HEIGHT: usize = 500;
     const SECOND_CHAIN_LENGTH: usize = 300;
 
-    btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT)
+    let mut rng = make_seedable_rng!(Seed::from_entropy());
+    btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
     let config_clone = btf.chainstate.chain_config.clone();
     let genesis = GenBlockIndex::Genesis(&config_clone);
     let split = GenBlockIndex::Block(btf.index_at(SPLIT_HEIGHT).clone());
 
     // First branch of fork
-    btf.create_chain(&split.block_id(), FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT)
-        .expect("Chain creation to succeed");
+    btf.create_chain(
+        &split.block_id(),
+        FIRST_CHAIN_HEIGHT - SPLIT_HEIGHT,
+        &mut rng,
+    )
+    .expect("Chain creation to succeed");
     let last_block_in_first_chain =
         GenBlockIndex::Block(btf.block_indexes.last().expect("last block in first chain").clone());
 
     // Second branch of fork
-    btf.create_chain(&split.block_id(), SECOND_CHAIN_LENGTH - SPLIT_HEIGHT)
-        .expect("second chain");
+    btf.create_chain(
+        &split.block_id(),
+        SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
+        &mut rng,
+    )
+    .expect("second chain");
     let last_block_in_second_chain =
         GenBlockIndex::Block(btf.block_indexes.last().expect("last block in first chain").clone());
 
@@ -488,12 +512,14 @@ fn consensus_type() {
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let mut rng = make_seedable_rng!(Seed::from_entropy());
 
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
     let pow_block = produce_test_block_with_consensus_data(
         TestBlockInfo::from_genesis(btf.genesis()),
         ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])),
+        &mut rng,
     );
 
     assert!(matches!(
@@ -504,7 +530,8 @@ fn consensus_type() {
     ));
 
     // Create 4 more blocks with Consensus Nonw
-    btf.create_chain(&btf.genesis().get_id().into(), 4).expect("chain creation");
+    btf.create_chain(&btf.genesis().get_id().into(), 4, &mut rng)
+        .expect("chain creation");
 
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
@@ -513,6 +540,7 @@ fn consensus_type() {
             &btf.get_block(btf.index_at(4).block_id().clone()).unwrap().unwrap(),
         ),
         ConsensusData::None,
+        &mut rng,
     );
 
     assert!(matches!(
@@ -525,7 +553,8 @@ fn consensus_type() {
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
         let prev_block = btf.get_block(btf.index_at(i - 1).block_id().clone()).unwrap().unwrap();
-        let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
+        let mut mined_block =
+            btf.random_block(TestBlockInfo::from_block(&prev_block), None, &mut rng);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         assert!(crate::detail::pow::work::mine(
@@ -544,7 +573,7 @@ fn consensus_type() {
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
     // fail.
     let prev_block = btf.get_block(btf.index_at(9).block_id().clone()).unwrap().unwrap();
-    let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
+    let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None, &mut rng);
     let bits = min_difficulty.into();
     assert!(
         crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
@@ -559,13 +588,15 @@ fn consensus_type() {
     ));
 
     // Create blocks 10-14 without consensus data as required by net_upgrades
-    btf.create_chain(&prev_block.get_id().into(), 5).expect("chain creation");
+    btf.create_chain(&prev_block.get_id().into(), 5, &mut rng)
+        .expect("chain creation");
 
     // At height 15 we are again proof of work, ignoring consensus should fail
     let prev_block = btf.get_block(btf.index_at(14).block_id().clone()).unwrap().unwrap();
     let block_without_consensus_data = produce_test_block_with_consensus_data(
         TestBlockInfo::from_block(&prev_block),
         ConsensusData::None,
+        &mut rng,
     );
 
     assert!(matches!(
@@ -578,7 +609,8 @@ fn consensus_type() {
     // Mining should work
     for i in 15..20 {
         let prev_block = btf.get_block(btf.index_at(i - 1).block_id().clone()).unwrap().unwrap();
-        let mut mined_block = btf.random_block(TestBlockInfo::from_block(&prev_block), None);
+        let mut mined_block =
+            btf.random_block(TestBlockInfo::from_block(&prev_block), None, &mut rng);
         let bits = min_difficulty.into();
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         assert!(crate::detail::pow::work::mine(
@@ -625,12 +657,13 @@ fn pow() {
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
+    let mut rng = make_seedable_rng!(Seed::from_entropy());
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
     let prev_block = TestBlockInfo::from_genesis(btf.genesis());
-    let mut random_invalid_block = btf.random_block(prev_block, None);
+    let mut random_invalid_block = btf.random_block(prev_block, None, &mut rng);
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
     let res = btf.add_special_block(random_invalid_block.clone());

@@ -74,11 +74,12 @@ mod test {
     use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::{make_pseudo_rng, Rng};
+    use crypto::random::Rng;
+    use test_utils::{make_seedable_rng, random::*};
 
     fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
-        let random_value = make_pseudo_rng().gen_range(0..u128::MAX);
+        let random_value = make_seedable_rng!(Seed::from_entropy()).gen_range(0..u128::MAX);
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             Amount::from_atoms(random_value),
@@ -120,7 +121,8 @@ mod test {
         );
 
         // undo checking
-        let undo = create_rand_block_undo(10, 10, BlockHeight::new(10));
+        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let undo = create_rand_block_undo(&mut rng, 10, 10, BlockHeight::new(10));
 
         assert!(db_interface.set_undo_data(block_id.clone(), &undo).is_ok());
         assert_eq!(db_interface.get_undo_data(block_id.clone()), Ok(Some(undo)));
