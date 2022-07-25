@@ -102,6 +102,10 @@ pub async fn run(options: Options) -> Result<()> {
             let chain_config = common::chain::config::create_mainnet();
             start(&options.config_path(), run_options, chain_config).await
         }
+        Command::Testnet(ref run_options) => {
+            let chain_config = ChainConfigBuilder::new(ChainType::Testnet).build();
+            start(&options.config_path(), run_options, chain_config).await
+        }
         Command::Regtest(ref regtest_options) => {
             let chain_config = regtest_chain_config(&regtest_options.chain_config)?;
             start(

@@ -48,11 +48,13 @@ pub struct Options {
 pub enum Command {
     /// Create a configuration file.
     CreateConfig,
+    /// Run the mainnet node.
     Mainnet(RunOptions),
+    /// Run the testnet node.
+    Testnet(RunOptions),
     Regtest(RegtestOptions),
 }
 
-/// Run the mainnet node.
 #[derive(Args, Debug)]
 pub struct RunOptions {
     /// The number of maximum attempts to process a block.
