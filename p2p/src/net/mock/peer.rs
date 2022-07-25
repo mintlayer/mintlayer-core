@@ -76,11 +76,7 @@ impl Peer {
                             )));
                         }
 
-                        (
-                            common::chain::config::ChainType::Mainnet,
-                            version,
-                            protocols,
-                        )
+                        (network, version, protocols)
                     } else {
                         return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                     };
@@ -137,11 +133,7 @@ impl Peer {
                         )));
                     }
 
-                    (
-                        common::chain::config::ChainType::Mainnet,
-                        version,
-                        protocols,
-                    )
+                    (network, version, protocols)
                 } else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
@@ -229,7 +221,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    network: common::chain::config::ChainType::Mainnet,
+                    network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),
@@ -286,7 +278,7 @@ mod tests {
             Ok((
                 peer_id,
                 types::PeerEvent::PeerInfoReceived {
-                    network: common::chain::config::ChainType::Mainnet,
+                    network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
                         types::Protocol::new("floodsub", *config.version()),

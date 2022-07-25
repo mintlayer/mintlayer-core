@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{message, net};
-use common::{chain::config, primitives::semver};
+use common::primitives::semver;
 use crypto::random::{make_pseudo_rng, Rng};
 use serialization::{Decode, Encode};
 use std::{
@@ -23,19 +23,24 @@ use std::{
     hash::{Hash, Hasher},
     net::SocketAddr,
 };
-use tokio::{net::TcpStream, sync::oneshot};
+use tokio::sync::oneshot;
 
 pub enum Command {
     Connect {
-        addr: SocketAddr,
-        response: oneshot::Sender<crate::Result<TcpStream>>,
+        address: SocketAddr,
+        response: oneshot::Sender<crate::Result<()>>,
     },
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent {
-    IncomingConnection {
+    InboundAccepted {
         peer_id: SocketAddr,
-        socket: TcpStream,
+        peer_info: MockPeerInfo,
+    },
+    OutboundAccepted {
+        address: SocketAddr,
+        peer_info: MockPeerInfo,
     },
 }
 
@@ -73,19 +78,19 @@ impl std::fmt::Display for MockPeerId {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MockPeerInfo {
     pub peer_id: MockPeerId,
-    pub net: common::chain::config::ChainType,
+    pub network: [u8; 4],
     pub version: common::primitives::semver::SemVer,
     pub agent: Option<String>,
-    pub protocols: Vec<String>,
+    pub protocols: Vec<Protocol>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
     PeerInfoReceived {
-        network: config::ChainType,
+        network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
     },
@@ -109,6 +114,10 @@ impl Protocol {
             name: name.to_string(),
             version,
         }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
     }
 }
 
