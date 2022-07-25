@@ -85,7 +85,7 @@ fn output_lock_until_height() {
         {
             let prev_block_id =
                 chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id.clone());
+            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id);
 
             let outputs = vec![TxOutput::new(
                 Amount::from_atoms(10000),
@@ -120,8 +120,7 @@ fn output_lock_until_height() {
                 chainstate.get_best_block_index().unwrap().unwrap().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             // create another block, and spend the first input from the previous block
             {
@@ -134,7 +133,7 @@ fn output_lock_until_height() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id.clone(),
+                    prev_block_id,
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -368,8 +367,7 @@ fn output_lock_for_block_count() {
                 chainstate.get_best_block_index().unwrap().unwrap().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
             // create another block, and spend the first input from the previous block
             {
                 let outputs = vec![TxOutput::new(
@@ -381,7 +379,7 @@ fn output_lock_for_block_count() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id.clone(),
+                    prev_block_id,
                     BlockTimestamp::from_duration_since_epoch(time::get()),
                     common::chain::block::ConsensusData::None,
                 )
@@ -617,8 +615,7 @@ fn output_lock_until_time() {
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             assert_eq!(
                 calculate_median_time_past(
@@ -640,7 +637,7 @@ fn output_lock_until_time() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id.clone(),
+                    prev_block_id,
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -821,8 +818,7 @@ fn output_lock_for_seconds() {
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
-            let prev_block_id =
-                chainstate.get_best_block_index().unwrap().unwrap().block_id().clone();
+            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
             assert_eq!(
                 calculate_median_time_past(
@@ -844,7 +840,7 @@ fn output_lock_for_seconds() {
 
                 let block = Block::new(
                     vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id.clone(),
+                    prev_block_id,
                     BlockTimestamp::from_int_seconds(*block_time),
                     common::chain::block::ConsensusData::None,
                 )
@@ -1041,7 +1037,7 @@ fn add_block_with_locked_output(
     // Find the last block.
     let current_height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
     let prev_block_id = chainstate.get_block_id_from_height(&current_height).unwrap().unwrap();
-    let prev_block_info = TestBlockInfo::from_id(chainstate, prev_block_id.clone());
+    let prev_block_info = TestBlockInfo::from_id(chainstate, prev_block_id);
 
     // Create and add a new block.
     let outputs = vec![

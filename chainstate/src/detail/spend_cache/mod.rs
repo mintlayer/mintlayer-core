@@ -421,7 +421,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             .map_err(StateUpdateError::from)?
                             .ok_or_else(|| {
                                 StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(
-                                    tx_pos.block_id().clone(),
+                                    *tx_pos.block_id(),
                                 )
                             })?;
                         self.check_timelock(
