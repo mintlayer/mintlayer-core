@@ -15,19 +15,22 @@
 //
 // Author(s): S. Afach
 
+use std::collections::{btree_map::Entry, BTreeMap};
+
 use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
-use common::amount_sum;
-use common::chain::signature::{verify_signature, Transactable};
-use common::chain::Transaction;
 use common::{
+    amount_sum,
     chain::{
-        calculate_tx_index_from_block, Block, ChainConfig, GenBlock, GenBlockId, OutPoint,
-        OutPointSourceId, SpendablePosition, Spender, TxInput, TxMainChainIndex, TxOutput,
+        block::timestamp::BlockTimestamp,
+        calculate_tx_index_from_block,
+        signature::{verify_signature, Transactable},
+        Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
+        Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
-use std::collections::{btree_map::Entry, BTreeMap};
+use utils::ensure;
 
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
@@ -327,7 +330,55 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn verify_signatures<T: Transactable>(&self, tx: &T) -> Result<(), StateUpdateError> {
+    fn check_timelock(
+        &self,
+        source_block_index: &GenBlockIndex,
+        output: &TxOutput,
+        spend_height: &BlockHeight,
+        spending_time: &BlockTimestamp,
+    ) -> Result<(), StateUpdateError> {
+        use common::chain::timelock::OutputTimeLock;
+        use common::chain::OutputPurpose;
+
+        let timelock = match output.purpose() {
+            OutputPurpose::Transfer(_) => return Ok(()),
+            OutputPurpose::LockThenTransfer(_, tl) => tl,
+            OutputPurpose::StakeLock(_) => return Ok(()),
+        };
+
+        let source_block_height = source_block_index.block_height();
+        let source_block_time = source_block_index.block_timestamp();
+
+        let past_lock = match timelock {
+            OutputTimeLock::UntilHeight(h) => (spend_height >= h),
+            OutputTimeLock::UntilTime(t) => (spending_time >= t),
+            OutputTimeLock::ForBlockCount(d) => {
+                let d: i64 =
+                    (*d).try_into().map_err(|_| StateUpdateError::BlockHeightArithmeticError)?;
+                let d = BlockDistance::from(d);
+                *spend_height
+                    >= (source_block_height + d)
+                        .ok_or(StateUpdateError::BlockHeightArithmeticError)?
+            }
+            OutputTimeLock::ForSeconds(dt) => {
+                *spending_time
+                    >= source_block_time
+                        .add_int_seconds(*dt)
+                        .ok_or(StateUpdateError::BlockTimestampArithmeticError)?
+            }
+        };
+
+        ensure!(past_lock, StateUpdateError::TimeLockViolation);
+
+        Ok(())
+    }
+
+    fn verify_signatures<T: Transactable>(
+        &self,
+        tx: &T,
+        spend_height: &BlockHeight,
+        spending_time: &BlockTimestamp,
+    ) -> Result<(), StateUpdateError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
             None => return Ok(()),
@@ -363,6 +414,24 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                     // TODO: see if a different treatment should be done for different output purposes
 
+                    {
+                        let block_index = self
+                            .db_tx
+                            .get_block_index(tx_pos.block_id())
+                            .map_err(StateUpdateError::from)?
+                            .ok_or_else(|| {
+                                StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(
+                                    *tx_pos.block_id(),
+                                )
+                            })?;
+                        self.check_timelock(
+                            &GenBlockIndex::Block(block_index),
+                            output,
+                            spend_height,
+                            spending_time,
+                        )?;
+                    }
+
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
                 }
@@ -385,6 +454,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         })?;
 
                     // TODO: see if a different treatment should be done for different output purposes
+
+                    self.check_timelock(&block_index, output, spend_height, spending_time)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
                         .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
@@ -426,6 +497,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &mut self,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
+        median_time_past: &BlockTimestamp,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), StateUpdateError> {
         match spend_ref {
@@ -441,7 +513,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 self.check_transferred_amounts_and_get_fee(tx)?;
 
                 // verify input signatures
-                self.verify_signatures(tx)?;
+                self.verify_signatures(tx, spend_height, median_time_past)?;
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
@@ -457,7 +529,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         self.precache_inputs(ins)?;
 
                         // verify input signatures
-                        self.verify_signatures(&reward_transactable)?;
+                        self.verify_signatures(
+                            &reward_transactable,
+                            spend_height,
+                            median_time_past,
+                        )?;
 
                         let spender = block.get_id().into();
                         self.apply_spend(ins, spend_height, blockreward_maturity, spender)?;

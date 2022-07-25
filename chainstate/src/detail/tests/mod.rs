@@ -35,6 +35,7 @@ use serialization::Encode;
 
 mod double_spend_tests;
 mod events_tests;
+mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;

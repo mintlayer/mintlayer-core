@@ -504,11 +504,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<CachedInputs<S>, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
+        // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
+        let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
+        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
         cached_inputs.spend(
             BlockTransactableRef::BlockReward(block),
             spend_height,
+            &median_time_past,
             blockreward_maturity,
         )?;
 
@@ -516,6 +519,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             cached_inputs.spend(
                 BlockTransactableRef::Transaction(block, tx_num),
                 spend_height,
+                &median_time_past,
                 blockreward_maturity,
             )?;
         }
