@@ -157,14 +157,19 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
                 }
             }
         };
+        ($field: ident, $converter: stmt, map_err) => {
+            paste! {
+                if let Some(val) = [<chain_ $field>] {
+                    builder = builder.$field($converter(val.to_owned()).map_err(|e| anyhow!(e))?);
+                }
+            }
+        };
     }
 
     update_builder!(address_prefix);
     update_builder!(blockreward_maturity, BlockDistance::new);
     update_builder!(max_future_block_time_offset, Duration::from_secs);
-    if let Some(version) = chain_version {
-        builder = builder.version(SemVer::try_from(version.as_str()).map_err(|e| anyhow!(e))?);
-    }
+    update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
     update_builder!(coin_decimals);
     update_builder!(max_block_header_size);
