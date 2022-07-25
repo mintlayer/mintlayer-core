@@ -6,6 +6,7 @@ license = "MIT"
 
 [dependencies]
 async-trait = "0.1"
+bytes = "1.1"
 either = "1.7"
 futures = "0.3"
 itertools = "0.10"
@@ -41,6 +42,11 @@ features = ["derive"]
 version = "1"
 default-features = false
 features = ["io-util", "macros", "net", "rt", "rt-multi-thread", "sync", "time"]
+
+[dependencies.tokio-util]
+version = "0.7"
+default-features = false
+features = ["codec"]
 
 [dev-dependencies]
 portpicker = "0.1"

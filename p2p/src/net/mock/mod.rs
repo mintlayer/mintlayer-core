@@ -23,17 +23,14 @@ use crate::{
 };
 use async_trait::async_trait;
 use logging::log;
-use std::{
-    hash::Hash,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
 
 pub mod backend;
+pub mod socket;
 pub mod types;
 
 #[derive(Debug)]

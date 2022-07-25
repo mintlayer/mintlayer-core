@@ -33,8 +33,7 @@ use common::{
 };
 use crypto::random::SliceRandom;
 use libp2p::Multiaddr;
-use p2p::net::{mock::MockService, NetworkingService};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
@@ -54,10 +53,6 @@ pub async fn get_tcp_socket() -> TcpStream {
     });
 
     TcpStream::connect(addr).await.unwrap()
-}
-
-pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
 }
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;

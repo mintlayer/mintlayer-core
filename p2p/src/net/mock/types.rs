@@ -15,13 +15,13 @@
 //
 // Author(s): A. Altonen
 use crate::{message, net};
-use tokio::{net::TcpStream, sync::oneshot};
+use crypto::random::{make_pseudo_rng, Rng};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
     net::SocketAddr,
 };
-use crypto::random::{make_pseudo_rng, Rng};
+use tokio::{net::TcpStream, sync::oneshot};
 
 pub enum Command {
     Connect {
@@ -78,4 +78,3 @@ pub struct MockPeerInfo {
     pub agent: Option<String>,
     pub protocols: Vec<String>,
 }
-
