@@ -15,12 +15,11 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use crate::detail::orphan_blocks::OrphanBlocksPool;
-use crate::ChainstateEvent;
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
-use common::chain::block::{Block, BlockHeader};
 use common::chain::config::ChainConfig;
+use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
@@ -41,7 +40,12 @@ pub mod ban_score;
 mod block_index_history_iter;
 mod median_time;
 
+pub use chainstate_types::locator::Locator;
+
 mod chainstateref;
+mod gen_block_index;
+
+use gen_block_index::GenBlockIndex;
 
 type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRo;
@@ -59,6 +63,7 @@ use time_getter::TimeGetter;
 #[must_use]
 pub struct Chainstate {
     chain_config: Arc<ChainConfig>,
+    chainstate_config: ChainstateConfig,
     chainstate_storage: chainstate_storage::Store,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
@@ -82,6 +87,7 @@ impl Chainstate {
         let db_tx = self.chainstate_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
+            &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_rw_ref(),
             self.time_getter.getter(),
@@ -93,6 +99,7 @@ impl Chainstate {
         let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
+            &self.chainstate_config,
             db_tx,
             self.orphan_blocks.as_ro_ref(),
             self.time_getter.getter(),
@@ -105,60 +112,58 @@ impl Chainstate {
 
     pub fn new(
         chain_config: Arc<ChainConfig>,
+        chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
+        use chainstate_storage::BlockchainStorageRead;
 
-        let mut cons = Self::new_no_genesis(
-            chain_config,
-            chainstate_storage,
-            custom_orphan_error_hook,
-            time_getter,
-        )?;
-
-        let best_block_id = cons.get_best_block_id().map_err(|e| {
+        let best_block_id = chainstate_storage.get_best_block_id().map_err(|e| {
             ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
         })?;
 
+        let mut chainstate = Self::new_no_genesis(
+            chain_config,
+            chainstate_config,
+            chainstate_storage,
+            custom_orphan_error_hook,
+            time_getter,
+        );
+
         if best_block_id.is_none() {
-            cons.process_block(
-                cons.chain_config.genesis_block().clone(),
-                BlockSource::Local,
-            )
-            .map_err(|e| {
-                ChainstateError::FailedToInitializeChainstate(format!(
-                    "Genesis block processing error: {:?}",
-                    e
-                ))
-            })?;
+            chainstate
+                .process_genesis()
+                .map_err(crate::ChainstateError::ProcessBlockError)?;
         }
-        Ok(cons)
+        Ok(chainstate)
     }
 
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
+        chainstate_config: ChainstateConfig,
         chainstate_storage: chainstate_storage::Store,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
-    ) -> Result<Self, crate::ChainstateError> {
-        let cons = Self {
+    ) -> Self {
+        let orphan_blocks = OrphanBlocksPool::new(chainstate_config.max_orphan_blocks);
+        Self {
             chain_config,
+            chainstate_config,
             chainstate_storage,
-            orphan_blocks: OrphanBlocksPool::new_default(),
+            orphan_blocks,
             custom_orphan_error_hook,
             events_controller: EventsController::new(),
             time_getter,
-        };
-        Ok(cons)
+        }
     }
 
     fn broadcast_new_tip_event(&self, new_block_index: &Option<BlockIndex>) {
         match new_block_index {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.block_height();
-                let new_id = new_block_index.block_id().clone();
+                let new_id = *new_block_index.block_id();
                 self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
@@ -167,7 +172,7 @@ impl Chainstate {
 
     /// returns the new block index, which is the new tip, if any
     fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans = self.orphan_blocks.take_all_children_of(last_processed_block);
+        let orphans = self.orphan_blocks.take_all_children_of(&(*last_processed_block).into());
         let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
             .into_iter()
             .map(|blk| self.process_block(blk, BlockSource::Local))
@@ -189,13 +194,10 @@ impl Chainstate {
         block_source: BlockSource,
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        // TODO: move to a configuration object that loads from command line arguments
-        const MAX_DB_COMMIT_COUNT: usize = 10;
-
-        if attempt_number >= MAX_DB_COMMIT_COUNT {
+        if attempt_number >= self.chainstate_config.max_db_commit_attempts {
             Err(BlockError::DatabaseCommitError(
                 block.get_id(),
-                MAX_DB_COMMIT_COUNT,
+                self.chainstate_config.max_db_commit_attempts,
                 db_error,
             ))
         } else {
@@ -211,10 +213,6 @@ impl Chainstate {
         attempt_number: usize,
     ) -> Result<Option<BlockIndex>, BlockError> {
         log::info!("Processing block: {}", block.get_id());
-
-        if block.is_genesis(&self.chain_config) && block_source != BlockSource::Local {
-            return Err(BlockError::InvalidBlockSource);
-        }
 
         let mut chainstate_ref = self.make_db_tx();
 
@@ -263,13 +261,37 @@ impl Chainstate {
         self.attempt_to_process_block(block, block_source, 0)
     }
 
+    /// Initialize chainstate with genesis block
+    pub fn process_genesis(&mut self) -> Result<(), BlockError> {
+        use chainstate_storage::{BlockchainStorageWrite, TransactionRw};
+
+        // Gather information about genesis.
+        let genesis = self.chain_config.genesis_block();
+        let genesis_id = self.chain_config.genesis_block_id();
+        let utxo_count = genesis.utxos().len() as u32;
+        let genesis_index = common::chain::TxMainChainIndex::new(genesis_id.into(), utxo_count)
+            .expect("Genesis not constructed correctly");
+
+        // Initialize storage with given info
+        let mut db_tx = self.chainstate_storage.transaction_rw();
+        db_tx.set_best_block_id(&genesis_id).map_err(BlockError::StorageError)?;
+        db_tx
+            .set_block_id_at_height(&BlockHeight::zero(), &genesis_id)
+            .map_err(BlockError::StorageError)?;
+        db_tx
+            .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
+            .map_err(BlockError::StorageError)?;
+        db_tx.commit().expect("Genesis database initialization failed");
+        Ok(())
+    }
+
     pub fn preliminary_block_check(&self, block: Block) -> Result<Block, BlockError> {
         let chainstate_ref = self.make_db_tx_ro();
         chainstate_ref.check_block(&block)?;
         Ok(block)
     }
 
-    pub fn get_best_block_id(&self) -> Result<Option<Id<Block>>, PropertyQueryError> {
+    pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_id()
     }
 
@@ -283,8 +305,10 @@ impl Chainstate {
     pub fn get_block_id_from_height(
         &self,
         height: &BlockHeight,
-    ) -> Result<Option<Id<Block>>, PropertyQueryError> {
-        self.make_db_tx_ro().get_block_id_by_height(height)
+    ) -> Result<Option<Id<GenBlock>>, PropertyQueryError> {
+        self.make_db_tx_ro()
+            .get_block_id_by_height(height)
+            .map(|res| res.map(Into::into))
     }
 
     pub fn get_block(&self, id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
@@ -298,46 +322,44 @@ impl Chainstate {
         self.make_db_tx_ro().get_block_index(id)
     }
 
-    pub fn get_best_block_index(&self) -> Result<Option<BlockIndex>, PropertyQueryError> {
+    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex<'_>>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_index()
     }
 
-    pub fn get_locator(&self) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
+        itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
+    }
+
+    pub fn get_locator(&self) -> Result<Locator, PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
         let best_block_index = chainstate_ref
             .get_best_block_index()?
             .ok_or(PropertyQueryError::BestBlockIndexNotFound)?;
         let height = best_block_index.block_height();
 
-        let headers = itertools::iterate(0, |&i| if i == 0 { 1 } else { i * 2 })
-            .take_while(|i| (height - BlockDistance::new(*i)).is_some())
-            .map(|i| {
-                chainstate_ref.get_header_from_height(
-                    &(height - BlockDistance::new(i)).expect("distance to be valid"),
-                )
-            });
+        let headers = Self::locator_tip_distances()
+            .map_while(|dist| height - dist)
+            .map(|ht| chainstate_ref.get_block_id_by_height(&ht));
 
         itertools::process_results(headers, |iter| iter.flatten().collect::<Vec<_>>())
+            .map(Locator::new)
     }
 
     pub fn get_block_height_in_main_chain(
         &self,
-        id: &Id<Block>,
+        id: &Id<GenBlock>,
     ) -> Result<Option<BlockHeight>, PropertyQueryError> {
         self.make_db_tx_ro().get_block_height_in_main_chain(id)
     }
 
-    pub fn get_headers(
-        &self,
-        locator: Vec<BlockHeader>,
-    ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
+    pub fn get_headers(&self, locator: Locator) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         // use genesis block if no common ancestor with better block height is found
         let chainstate_ref = self.make_db_tx_ro();
         let mut best = BlockHeight::new(0);
 
-        for header in locator.iter() {
-            if let Some(block_index) = chainstate_ref.get_block_index(&header.get_id())? {
-                if chainstate_ref.is_block_in_main_chain(&block_index)? {
+        for block_id in locator.iter() {
+            if let Some(block_index) = chainstate_ref.get_gen_block_index(block_id)? {
+                if chainstate_ref.is_block_in_main_chain(block_id)? {
                     best = block_index.block_height();
                     break;
                 }
@@ -366,14 +388,13 @@ impl Chainstate {
         headers: Vec<BlockHeader>,
     ) -> Result<Vec<BlockHeader>, PropertyQueryError> {
         let first_block = headers.get(0).ok_or(PropertyQueryError::InvalidInputEmpty)?;
+        let config = &self.chain_config;
         // verify that the first block attaches to our chain
-        match first_block.prev_block_id() {
-            None => return Err(PropertyQueryError::InvalidInputForPrevBlock),
-            Some(id) => {
-                if self.get_block_index(id)?.is_none() {
-                    return Err(PropertyQueryError::BlockNotFound(id.clone()));
-                }
-            }
+        if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
+            utils::ensure!(
+                self.get_block_index(&id)?.is_some(),
+                PropertyQueryError::BlockNotFound(id)
+            );
         }
 
         let res = headers

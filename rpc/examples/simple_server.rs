@@ -78,9 +78,10 @@ async fn main() -> anyhow::Result<()> {
     let mut app = subsystem::Manager::new("rpc-example");
     app.install_signal_handlers();
     let some_subsystem = app.add_subsystem("some_subsys", SomeSubsystem(0));
+    let rpc_config = rpc::RpcConfig::new()?;
     let _rpc_subsystem = app.add_subsystem(
         "rpc",
-        rpc::Builder::new("127.0.0.1:3030".parse().expect("address parse error"))
+        rpc::Builder::new(rpc_config)
             .register(some_subsystem.clone().into_rpc())
             .build()
             .await?,

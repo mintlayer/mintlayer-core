@@ -22,18 +22,14 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::block::Block;
-use crate::chain::block::ConsensusData;
-use crate::chain::signature::inputsig::InputWitness;
 use crate::chain::transaction::Destination;
-use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
+use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::id::{Id, H256};
-use crate::primitives::Amount;
-use crate::primitives::BlockDistance;
-use crate::primitives::{semver::SemVer, BlockHeight};
+use crate::primitives::id::Id;
+use crate::primitives::semver::SemVer;
+use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -87,13 +83,11 @@ impl ChainType {
 pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
-    rpc_port: u16,
-    p2p_port: u16,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
-    genesis_block: Block,
-    genesis_block_id: Id<Block>,
+    genesis_block: Genesis,
+    genesis_block_id: Id<GenBlock>,
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -113,11 +107,11 @@ impl ChainConfig {
         &self.address_prefix
     }
 
-    pub fn genesis_block_id(&self) -> Id<Block> {
-        self.genesis_block_id.clone()
+    pub fn genesis_block_id(&self) -> Id<GenBlock> {
+        self.genesis_block_id
     }
 
-    pub fn genesis_block(&self) -> &Block {
+    pub fn genesis_block(&self) -> &Genesis {
         &self.genesis_block
     }
 
@@ -139,14 +133,6 @@ impl ChainConfig {
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
-    }
-
-    pub fn p2p_port(&self) -> u16 {
-        self.p2p_port
-    }
-
-    pub fn rpc_port(&self) -> u16 {
-        self.rpc_port
     }
 
     pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
@@ -222,8 +208,8 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
-fn create_mainnet_genesis() -> Block {
-    use crate::chain::transaction::{TxInput, TxOutput};
+fn create_mainnet_genesis() -> Genesis {
+    use crate::chain::transaction::TxOutput;
 
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
@@ -238,53 +224,36 @@ fn create_mainnet_genesis() -> Block {
     )
     .expect("Decoding genesis mint destination shouldn't fail");
 
-    let genesis_message = b"".to_vec();
-    let input = TxInput::new(
-        Id::<Transaction>::new(H256::zero()).into(),
-        0,
-        InputWitness::NoSignature(Some(genesis_message)),
-    );
+    let genesis_message = String::new();
+
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
         OutputPurpose::Transfer(genesis_mint_destination),
     );
-    let tx = Transaction::new(0, vec![input], vec![output], 0)
-        .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(
-        vec![tx],
-        None,
+    Genesis::new(
+        genesis_message,
         BlockTimestamp::from_int_seconds(1639975460),
-        ConsensusData::None,
+        vec![output],
     )
-    .expect("Error creating genesis block")
 }
 
-fn create_unit_test_genesis(premine_destination: Destination) -> Block {
-    use crate::chain::transaction::{TxInput, TxOutput};
+fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
+    use crate::chain::transaction::TxOutput;
 
-    let genesis_message = b"".to_vec();
-    let input = TxInput::new(
-        Id::<Transaction>::new(H256::zero()).into(),
-        0,
-        InputWitness::NoSignature(Some(genesis_message)),
-    );
+    let genesis_message = String::new();
 
     let output = TxOutput::new(
         Amount::from_atoms(100000000000000),
         OutputPurpose::Transfer(premine_destination),
     );
-    let tx = Transaction::new(0, vec![input], vec![output], 0)
-        .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(
-        vec![tx],
-        None,
+    Genesis::new(
+        genesis_message,
         BlockTimestamp::from_int_seconds(1639975460),
-        ConsensusData::None,
+        vec![output],
     )
-    .expect("Error creating genesis block")
 }
 
 pub fn create_mainnet() -> ChainConfig {

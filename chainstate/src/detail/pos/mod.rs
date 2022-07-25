@@ -1,9 +1,8 @@
-use chainstate_types::block_index::BlockIndex;
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
         signature::Transactable,
-        ChainConfig, OutputSpentState, TxOutput,
+        ChainConfig, GenBlock, OutputSpentState, TxOutput,
     },
     primitives::{Compact, Id, Idable, H256},
     Uint256,
@@ -17,6 +16,7 @@ use utils::ensure;
 
 use super::{
     consensus_validator::{BlockIndexHandle, TransactionIndexHandle},
+    gen_block_index::GenBlockIndex,
     PropertyQueryError,
 };
 
@@ -43,9 +43,9 @@ pub enum ConsensusPoSError {
     #[error("Output already spent")]
     KernelOutputAlreadySpent,
     #[error("Kernel block index load error with block id: {0}")]
-    KernelBlockIndexLoadError(Id<Block>),
+    KernelBlockIndexLoadError(Id<GenBlock>),
     #[error("Kernel block index not found with block id: {0}")]
-    KernelBlockIndexNotFound(Id<Block>),
+    KernelBlockIndexNotFound(Id<GenBlock>),
     #[error("Kernel input transaction retrieval error: {0}")]
     KernelTransactionRetrievalFailed(PropertyQueryError),
     #[error("Kernel output index out of range: {0}")]
@@ -53,9 +53,9 @@ pub enum ConsensusPoSError {
     #[error("Kernel input transaction not found")]
     KernelTransactionNotFound,
     #[error("Kernel header output load error")]
-    KernelHeaderOutputDoesNotExist(Id<Block>),
+    KernelHeaderOutputDoesNotExist(Id<GenBlock>),
     #[error("Kernel header index out of range. Block id: {0} and index {1}")]
-    KernelHeaderOutputIndexOutOfRange(Id<Block>, u32),
+    KernelHeaderOutputIndexOutOfRange(Id<GenBlock>, u32),
     #[error("Bits to target conversion failed {0:?}")]
     BitsToTargetConversionFailed(Compact),
     #[error("Could not find previous block's stake modifer")]
@@ -116,12 +116,14 @@ fn verify_vrf_and_get_output(
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
     let pool_data = match kernel_output.purpose() {
-        common::chain::OutputPurpose::Transfer(_) => {
+        common::chain::OutputPurpose::Transfer(_)
+        | common::chain::OutputPurpose::LockThenTransfer(_, _) => {
             // only pool outputs can be staked
             return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
                 spender_block_header.get_id(),
             ));
         }
+
         common::chain::OutputPurpose::StakePool(d) => &**d,
     };
 
@@ -175,10 +177,14 @@ fn check_stake_kernel_hash(
 /// Ensures that the kernel_block_index is an ancestor of header
 fn ensure_correct_ancestry(
     header: &BlockHeader,
-    prev_block_index: &BlockIndex,
-    kernel_block_index: &BlockIndex,
+    prev_block_index: &GenBlockIndex,
+    kernel_block_index: &GenBlockIndex,
     block_index_handle: &dyn BlockIndexHandle,
 ) -> Result<(), ConsensusPoSError> {
+    let prev_block_index = match prev_block_index {
+        GenBlockIndex::Block(bi) => bi,
+        GenBlockIndex::Genesis(_) => return Ok(()),
+    };
     let kernel_block_header_as_ancestor = block_index_handle
         .get_ancestor(prev_block_index, kernel_block_index.block_height())
         .map_err(|_| ConsensusPoSError::KernelAncesteryCheckFailed(header.get_id()))?;
@@ -216,12 +222,12 @@ pub fn check_proof_of_stake(
     let kernel_block_id = kernel_tx_index.position().block_id_anyway();
 
     let kernel_block_index = block_index_handle
-        .get_block_index(kernel_block_id)
-        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id.clone()))?
-        .ok_or_else(|| ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id.clone()))?;
+        .get_gen_block_index(&kernel_block_id)
+        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
+        .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
 
     let prev_block_index = block_index_handle
-        .get_block_index(header.prev_block_id().as_ref().expect("There has to be a prev block"))
+        .get_gen_block_index(header.prev_block_id())
         .expect("Database error while retrieving prev block index")
         .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
 
@@ -258,14 +264,13 @@ pub fn check_proof_of_stake(
             })?
             .clone(),
         common::chain::SpendablePosition::BlockReward(block_id) => kernel_block_index
-            .block_header()
             .block_reward_transactable()
             .outputs()
-            .ok_or_else(|| ConsensusPoSError::KernelHeaderOutputDoesNotExist(block_id.clone()))?
+            .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
             .get(kernel_outpoint.output_index() as usize)
             .ok_or_else(|| {
                 ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
-                    block_id.clone(),
+                    *block_id,
                     kernel_outpoint.output_index(),
                 )
             })?

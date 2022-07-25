@@ -19,6 +19,7 @@ use chainstate_types::block_index::BlockIndex;
 use chainstate_types::epoch_data::EpochData;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
+use common::chain::GenBlock;
 use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::primitives::{BlockHeight, Id};
@@ -55,7 +56,7 @@ pub trait BlockchainStorageRead {
     fn get_storage_version(&self) -> crate::Result<u32>;
 
     /// Get the hash of the best block
-    fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+    fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
     fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
 
@@ -75,7 +76,7 @@ pub trait BlockchainStorageRead {
     ) -> crate::Result<Option<Transaction>>;
 
     /// Get mainchain block by its height
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>>;
+    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
     /// Get mainchain epoch data by its index
     fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
@@ -87,7 +88,7 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
     /// Set the hash of the best block
-    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+    fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
 
     // Set the block index
     fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
@@ -112,7 +113,7 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     fn set_block_id_at_height(
         &mut self,
         height: &BlockHeight,
-        block_id: &Id<Block>,
+        block_id: &Id<GenBlock>,
     ) -> crate::Result<()>;
 
     /// Remove block id from given mainchain height
@@ -130,7 +131,7 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 // using the UtxoDB.
 pub(crate) trait UtxoRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
 }
 
 /// Queries to update the Utxo
@@ -139,7 +140,7 @@ pub(crate) trait UtxoRead {
 pub(crate) trait UtxoWrite: UtxoRead {
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 }
 
 pub(crate) trait UndoRead {

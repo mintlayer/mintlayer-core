@@ -15,20 +15,18 @@
 //
 // Author(s): S. Afach
 
+use std::{collections::BTreeMap, sync::Arc};
+
 use super::{OrphanBlocksRef, OrphanBlocksRefMut};
-use common::chain::block::Block;
+use common::chain::{Block, GenBlock};
 use common::primitives::{Id, Idable};
 use crypto::random::SliceRandom;
-use std::collections::BTreeMap;
-use std::sync::Arc;
-
-pub const DEFAULT_MAX_ORPHAN_BLOCKS: usize = 512;
 
 // FIXME: The Arc here is unnecessary: https://github.com/mintlayer/mintlayer-core/issues/164
 pub struct OrphanBlocksPool {
     orphan_ids: Vec<Id<Block>>,
     orphan_by_id: BTreeMap<Id<Block>, Arc<Block>>,
-    orphan_by_prev_id: BTreeMap<Id<Block>, Vec<Arc<Block>>>,
+    orphan_by_prev_id: BTreeMap<Id<GenBlock>, Vec<Arc<Block>>>,
     max_orphans: usize,
 }
 
@@ -38,17 +36,7 @@ pub enum OrphanAddError {
 }
 
 impl OrphanBlocksPool {
-    pub fn new_default() -> Self {
-        OrphanBlocksPool {
-            orphan_ids: Vec::new(),
-            orphan_by_id: BTreeMap::new(),
-            orphan_by_prev_id: BTreeMap::new(),
-            max_orphans: DEFAULT_MAX_ORPHAN_BLOCKS,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn new_custom(max_orphans: usize) -> Self {
+    pub fn new(max_orphans: usize) -> Self {
         OrphanBlocksPool {
             orphan_ids: Vec::new(),
             orphan_by_id: BTreeMap::new(),
@@ -62,53 +50,24 @@ impl OrphanBlocksPool {
     }
 
     fn drop_block(&mut self, block_id: &Id<Block>) {
-        let block = self
-            .orphan_by_id
-            .get(block_id)
-            .expect("Entry was found before calling this")
-            .clone();
+        use std::collections::btree_map::Entry;
 
         // remove from the map
-        self.orphan_by_id.remove(block_id).expect("Entry was found before calling this");
+        let block = self.orphan_by_id.remove(block_id).expect("Entry missing from the map");
+        let prev_block_id = block.prev_block_id();
 
-        {
-            // remove from the vector
-            let index = self
-                .orphan_ids
-                .iter()
-                .position(|id| *id == *block_id)
-                .expect("Must be there since we inserted it");
-            self.orphan_ids.remove(index);
-        }
+        // remove from the vector
+        self.orphan_ids.retain(|id| *id != *block_id);
 
         // remove from the prevs
-        let prevs = self
-            .orphan_by_prev_id
-            .get_mut(
-                &block
-                    .prev_block_id()
-                    // TODO: Check this part due to Block type now has optional hash_prev_block
-                    .expect("Corrupted orphan key"),
-            )
-            .expect("This should always be there since it was added with the other map");
-        assert!(!prevs.is_empty());
-        if prevs.len() == 1 {
-            // if this is the only element left, we remove the whole vector
-            self.orphan_by_prev_id
-                .remove(
-                    &block
-                        .prev_block_id()
-                        // TODO: Check this part due to Block type now has optional hash_prev_block
-                        .expect("Corrupted orphan key"),
-                )
-                .expect("Was already found before");
-        } else {
-            // we find the element that matches the block id
-            let index = prevs
-                .iter()
-                .position(|blk| blk.get_id() == *block_id)
-                .expect("Must be there since we inserted it");
-            prevs.remove(index);
+        match self.orphan_by_prev_id.entry(prev_block_id) {
+            Entry::Vacant(_) => panic!("Orphan pool parent map inconsistent"),
+            Entry::Occupied(mut entry) => {
+                entry.get_mut().retain(|blk| blk.get_id() != *block_id);
+                if entry.get().is_empty() {
+                    entry.remove();
+                }
+            }
         }
     }
 
@@ -116,7 +75,7 @@ impl OrphanBlocksPool {
     fn del_one_deepest_child(&mut self, block_id: &Id<Block>) {
         let next_block = self
             .orphan_by_prev_id
-            .get(block_id)
+            .get(&(*block_id).into())
             .map(|v| v.get(0).expect("This list should never be empty as we always delete empty vectors from the map"))
             .cloned();
         match next_block {
@@ -132,7 +91,7 @@ impl OrphanBlocksPool {
             return;
         }
         let id = self.orphan_ids.choose(&mut crypto::random::make_pseudo_rng());
-        let id = id.expect("As orphans can never be empty, this should always return").clone();
+        let id = *id.expect("As orphans can never be empty, this should always return");
 
         self.del_one_deepest_child(&id);
     }
@@ -145,15 +104,10 @@ impl OrphanBlocksPool {
         }
 
         let rc_block = Arc::new(block);
-        self.orphan_by_id.insert(block_id.clone(), rc_block.clone());
+        self.orphan_by_id.insert(block_id, rc_block.clone());
         self.orphan_ids.push(block_id);
         self.orphan_by_prev_id
-            .entry(
-                rc_block
-                    .prev_block_id()
-                    // TODO: Check this part due to Block type now has optional hash_prev_block
-                    .expect("Corrupted orphan key"),
-            )
+            .entry(rc_block.prev_block_id())
             .or_default()
             .push(rc_block.clone());
         Ok(())
@@ -174,7 +128,7 @@ impl OrphanBlocksPool {
     /// take all the blocks that share the same parent
     /// this is useful when a new tip is set, and we want to connect all its unorphaned children
     #[allow(dead_code)]
-    pub fn take_all_children_of(&mut self, block_id: &Id<Block>) -> Vec<Block> {
+    pub fn take_all_children_of(&mut self, block_id: &Id<GenBlock>) -> Vec<Block> {
         let res = self.orphan_by_prev_id.get_mut(block_id);
         let mut res = match res {
             None => {
@@ -208,9 +162,10 @@ impl OrphanBlocksPool {
 mod tests {
     use super::*;
     use checkers::*;
-    use common::chain::block::Block;
-    use common::primitives::Id;
+    use common::{chain::block::Block, primitives::Id};
     use helpers::*;
+
+    const MAX_ORPHAN_BLOCKS: usize = 512;
 
     mod helpers {
         use super::*;
@@ -228,14 +183,14 @@ mod tests {
             gen_block_from_id(None)
         }
 
-        pub fn gen_block_from_id(prev_block_id: Option<Id<Block>>) -> Block {
+        pub fn gen_block_from_id(prev_block_id: Option<Id<GenBlock>>) -> Block {
             let mut rng = crypto::random::make_pseudo_rng();
 
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
                 vec![tx],
-                Some(prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into())),
+                prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,
             )
@@ -248,13 +203,13 @@ mod tests {
 
         pub fn gen_blocks_chain_starting_from_id(
             count: u32,
-            prev_block_id: Option<Id<Block>>,
+            prev_block_id: Option<Id<GenBlock>>,
         ) -> Vec<Block> {
             let mut blocks = vec![gen_block_from_id(prev_block_id)];
 
             (1..count).into_iter().for_each(|_| {
                 let prev_block_id = blocks.last().map(|block| block.get_id());
-                blocks.push(gen_block_from_id(prev_block_id));
+                blocks.push(gen_block_from_id(prev_block_id.map(Into::into)));
             });
 
             blocks
@@ -275,7 +230,7 @@ mod tests {
 
             (0..count)
                 .into_iter()
-                .map(|_| gen_block_from_id(Some(prev_block_id.clone())))
+                .map(|_| gen_block_from_id(Some(prev_block_id.into())))
                 .collect()
         }
     }
@@ -300,10 +255,7 @@ mod tests {
             assert!(orphans_pool.orphan_ids.contains(&block.get_id()));
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
-            if let Some(blocks) = orphans_pool
-                .orphan_by_prev_id
-                .get(&block.prev_block_id().expect("Prev block not found"))
-            {
+            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.prev_block_id()) {
                 assert!(blocks.contains(&Arc::new(block.clone())))
             } else {
                 panic!(
@@ -324,23 +276,16 @@ mod tests {
     }
 
     #[test]
-    fn test_pool_default() {
-        let orphans_pool = OrphanBlocksPool::new_default();
-        assert_eq!(orphans_pool.max_orphans, DEFAULT_MAX_ORPHAN_BLOCKS);
-        check_empty_pool(&orphans_pool);
-    }
-
-    #[test]
     fn test_pool_custom() {
         let max_orphans = 3;
-        let orphans_pool = OrphanBlocksPool::new_custom(max_orphans);
+        let orphans_pool = OrphanBlocksPool::new(max_orphans);
         assert_eq!(orphans_pool.max_orphans, max_orphans);
         check_empty_pool(&orphans_pool);
     }
 
     #[test]
     fn test_add_one_block_and_clear() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
         let block = gen_random_block();
@@ -357,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_add_blocks_and_clear() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
         let block = gen_random_block();
@@ -367,7 +312,7 @@ mod tests {
         check_block_existence_and_pool_length(&orphans_pool, &block, 1);
 
         // add another block that connects to the first one
-        let conn_block = gen_block_from_id(Some(block.get_id()));
+        let conn_block = gen_block_from_id(Some(block.get_id().into()));
         assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
         assert_eq!(orphans_pool.len(), 2);
@@ -389,9 +334,7 @@ mod tests {
                 .expect("it should return the block specified by `rand_id`")
         };
 
-        let sim_block = gen_block_from_id(Some(
-            rand_block.prev_block_id().expect("Prev block not found"),
-        ));
+        let sim_block = gen_block_from_id(Some(rand_block.prev_block_id()));
         assert!(orphans_pool.add_block(sim_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &sim_block, 3);
 
@@ -406,7 +349,7 @@ mod tests {
     #[test]
     fn test_add_block_exceeds_max() {
         let max_orphans = 3;
-        let mut orphans_pool = OrphanBlocksPool::new_custom(max_orphans);
+        let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
         let blocks = gen_random_blocks(max_orphans as u32 + 2);
 
         blocks.into_iter().for_each(|block| {
@@ -418,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_add_block_repeated() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         let blocks = gen_random_blocks(50);
 
         blocks.iter().for_each(|block| {
@@ -437,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_pool_drop_block() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         let blocks = gen_random_blocks(5);
 
         blocks.iter().for_each(|block| {
@@ -454,14 +397,12 @@ mod tests {
 
         assert!(!orphans_pool.orphan_by_id.contains_key(&rand_block.get_id()));
         assert!(!orphans_pool.orphan_ids.contains(&rand_block.get_id()));
-        assert!(!orphans_pool
-            .orphan_by_prev_id
-            .contains_key(&rand_block.prev_block_id().expect("Prev block not found")));
+        assert!(!orphans_pool.orphan_by_prev_id.contains_key(&rand_block.prev_block_id()));
     }
 
     #[test]
     fn test_deepest_child_in_chain() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // In `orphans_by_prev_id`:
         // [
@@ -477,16 +418,13 @@ mod tests {
             assert!(orphans_pool.is_already_an_orphan(&block.get_id()));
 
             // check that relationship of the prev_id and the block is 1-to-1.
-            if let Some(blocks) = orphans_pool
-                .orphan_by_prev_id
-                .get(&block.prev_block_id().expect("Prev block not found"))
-            {
+            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&block.prev_block_id()) {
                 assert_eq!(blocks.len(), 1);
             } else {
                 panic!(
                     "block {:?} not found for key {:?}",
                     block,
-                    block.prev_block_id().expect("Prev block not found")
+                    block.prev_block_id()
                 );
             }
         });
@@ -505,9 +443,7 @@ mod tests {
 
         // the last block should be deleted.
         assert!(!orphans_pool.orphan_by_id.contains_key(&last_block.get_id()));
-        assert!(!orphans_pool
-            .orphan_by_prev_id
-            .contains_key(&last_block.prev_block_id().expect("Prev block not found")));
+        assert!(!orphans_pool.orphan_by_prev_id.contains_key(&last_block.prev_block_id()));
         check_pool_length(&orphans_pool, blocks.len() - 1);
 
         // the first block should still exist.
@@ -516,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_deepest_child_common_parent() {
-        let mut orphans_pool = OrphanBlocksPool::new_default();
+        let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
         // In `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f) ),
@@ -529,19 +465,13 @@ mod tests {
             assert!(orphans_pool.is_already_an_orphan(&block_id));
 
             // check that the number of blocks for the same key, increases too.
-            if let Some(blocks) = orphans_pool
-                .orphan_by_prev_id
-                .get(&b.prev_block_id().expect("Prev block not found"))
-            {
+            if let Some(blocks) = orphans_pool.orphan_by_prev_id.get(&b.prev_block_id()) {
                 assert_eq!(blocks.len(), idx + 1);
 
                 let block_id = &blocks[idx].get_id();
                 assert_eq!(&b.get_id(), block_id);
             } else {
-                panic!(
-                    "no blocks found for key {:?}",
-                    b.prev_block_id().expect("Prev block not found")
-                );
+                panic!("no blocks found for key {:?}", b.prev_block_id());
             }
         });
 
@@ -558,23 +488,20 @@ mod tests {
         assert!(!orphans_pool.orphan_by_id.contains_key(&random_block.get_id()));
         assert!(!orphans_pool.orphan_ids.contains(&random_block.get_id()));
 
-        if let Some(in_blocks) = orphans_pool
-            .orphan_by_prev_id
-            .get(&random_block.prev_block_id().expect("Prev block not found"))
-        {
+        if let Some(in_blocks) = orphans_pool.orphan_by_prev_id.get(&random_block.prev_block_id()) {
             assert_eq!(in_blocks.len(), blocks.len() - 1);
         } else {
             panic!(
                 "there should still be {:?} elements in id: {:#?}",
                 (blocks.len() - 1),
-                random_block.prev_block_id().expect("Prev block not found")
+                random_block.prev_block_id()
             );
         }
     }
 
     #[test]
     fn test_prune() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(12);
+        let mut orphans_pool = OrphanBlocksPool::new(12);
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e) )
@@ -594,7 +521,7 @@ mod tests {
         //  ( e, j ),
         //  ( j, k )
         // ]
-        let extra_sim_blocks = gen_blocks_chain_starting_from_id(2, Some(sim_block_id));
+        let extra_sim_blocks = gen_blocks_chain_starting_from_id(2, Some(sim_block_id.into()));
 
         // generate blocks with conn's block id as parent
         let conn_block_id = conn_blocks.last().expect("it should return last element").get_id();
@@ -646,7 +573,7 @@ mod tests {
 
     #[test]
     fn test_simple_take_all_children_of() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(20);
+        let mut orphans_pool = OrphanBlocksPool::new(20);
 
         let count = 9;
         // in `orphans_by_prev_id`:
@@ -672,8 +599,7 @@ mod tests {
         let sim_parent_id = sim_blocks
             .first()
             .expect("this should return the first element")
-            .prev_block_id()
-            .expect("Prev block not found");
+            .prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 
@@ -688,7 +614,7 @@ mod tests {
 
     #[test]
     fn test_mix_chain_take_all_children_of() {
-        let mut orphans_pool = OrphanBlocksPool::new_custom(20);
+        let mut orphans_pool = OrphanBlocksPool::new(20);
 
         let count = 9;
         // in `orphans_by_prev_id`:
@@ -714,7 +640,7 @@ mod tests {
                 .expect("should return any block in sim_blocks")
                 .get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
-            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id));
+            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id.into()));
             conn_blocks.append(&mut blocks);
         }
 
@@ -743,8 +669,7 @@ mod tests {
         let sim_parent_id = sim_blocks
             .first()
             .expect("this should return the first element")
-            .prev_block_id()
-            .expect("Prev block not found");
+            .prev_block_id();
         let children = orphans_pool.take_all_children_of(&sim_parent_id);
         assert_eq!(children.len(), sim_blocks.len());
 

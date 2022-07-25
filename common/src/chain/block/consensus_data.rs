@@ -31,8 +31,8 @@ pub enum ConsensusData {
 }
 
 pub struct BlockRewardTransactable<'a> {
-    inputs: Option<&'a [TxInput]>,
-    outputs: Option<&'a [TxOutput]>,
+    pub(in crate::chain) inputs: Option<&'a [TxInput]>,
+    pub(in crate::chain) outputs: Option<&'a [TxOutput]>,
 }
 
 impl<'a> Transactable for BlockRewardTransactable<'a> {

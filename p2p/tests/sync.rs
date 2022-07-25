@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use chainstate::{chainstate_interface::ChainstateInterface, BlockSource};
 use common::{
-    chain::{block::Block, config::ChainConfig},
+    chain::{config::ChainConfig, GenBlock},
     primitives::{Id, Idable},
 };
 use p2p::{
@@ -34,7 +34,7 @@ use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
-use test_utils::make_libp2p_addr;
+use test_utils::{make_libp2p_addr, TestBlockInfo};
 use tokio::sync::mpsc;
 
 async fn make_sync_manager<T>(
@@ -119,8 +119,11 @@ async fn init_chainstate_2(
 ) {
     let handle1 = test_utils::start_chainstate(Arc::clone(&config)).await;
     let handle2 = test_utils::start_chainstate(Arc::clone(&config)).await;
-    let blocks =
-        test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        num_blocks,
+    );
 
     test_utils::import_blocks(&handle1, blocks.clone()).await;
     test_utils::import_blocks(&handle2, blocks).await;
@@ -139,8 +142,11 @@ async fn init_chainstate_3(
     let handle1 = test_utils::start_chainstate(Arc::clone(&config)).await;
     let handle2 = test_utils::start_chainstate(Arc::clone(&config)).await;
     let handle3 = test_utils::start_chainstate(Arc::clone(&config)).await;
-    let blocks =
-        test_utils::create_n_blocks(Arc::clone(&config), config.genesis_block(), num_blocks);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_genesis(config.genesis_block()),
+        num_blocks,
+    );
 
     test_utils::import_blocks(&handle1, blocks.clone()).await;
     test_utils::import_blocks(&handle2, blocks.clone()).await;
@@ -156,7 +162,7 @@ async fn same_tip(
     get_tip(handle1).await == get_tip(handle2).await
 }
 
-async fn get_tip(handle: &subsystem::Handle<Box<dyn ChainstateInterface>>) -> Id<Block> {
+async fn get_tip(handle: &subsystem::Handle<Box<dyn ChainstateInterface>>) -> Id<GenBlock> {
     handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap()
 }
 
@@ -327,7 +333,7 @@ async fn remote_ahead_by_7_blocks() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -544,7 +550,7 @@ async fn remote_local_diff_chains_local_higher() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -686,7 +692,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -833,7 +839,7 @@ async fn two_remote_nodes_different_chains() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -884,9 +890,11 @@ async fn two_remote_nodes_same_chains() {
         make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
-    let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
-    let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_tip(&mgr2_handle, &config).await,
+        32,
+    );
 
     test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     test_utils::import_blocks(&mgr3_handle, blocks).await;
@@ -953,7 +961,7 @@ async fn two_remote_nodes_same_chains() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -1004,9 +1012,11 @@ async fn two_remote_nodes_same_chains_new_blocks() {
         make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
-    let id = mgr2_handle.call(move |this| this.get_best_block_id()).await.unwrap().unwrap();
-    let parent = mgr2_handle.call(move |this| this.get_block(id)).await.unwrap().unwrap();
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 32);
+    let blocks = test_utils::create_n_blocks(
+        Arc::clone(&config),
+        TestBlockInfo::from_tip(&mgr2_handle, &config).await,
+        32,
+    );
 
     test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
     test_utils::import_blocks(&mgr3_handle, blocks).await;
@@ -1065,13 +1075,11 @@ async fn two_remote_nodes_same_chains_new_blocks() {
 
                 if gethdr_received.insert(dest_peer_id) {
                     if blocks.is_empty() {
-                        let parent = mgr2_handle
-                            .call(move |this| this.get_block(this.get_best_block_id().unwrap()))
-                            .await
-                            .unwrap()
-                            .unwrap();
-                        blocks =
-                            test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 10);
+                        blocks = test_utils::create_n_blocks(
+                            Arc::clone(&config),
+                            TestBlockInfo::from_tip(&mgr2_handle, &config).await,
+                            10,
+                        );
                     }
 
                     if dest_peer_id == conn2.peer_id() {
@@ -1087,7 +1095,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let msg = Response::BlockResponse(BlockResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
@@ -1159,15 +1167,8 @@ async fn test_connect_disconnect_resyncing() {
         Ok(ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    let parent = mgr1_handle
-        .call(move |this| {
-            let id = this.get_best_block_id().unwrap();
-            this.get_block(id)
-        })
-        .await
-        .unwrap()
-        .unwrap();
-    let blocks = test_utils::create_n_blocks(Arc::clone(&config), &parent.unwrap(), 7);
+    let parent_info = TestBlockInfo::from_tip(&mgr1_handle, &config).await;
+    let blocks = test_utils::create_n_blocks(Arc::clone(&config), parent_info, 7);
     test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
 
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
@@ -1207,7 +1208,7 @@ async fn test_connect_disconnect_resyncing() {
                 request: Request::BlockRequest(request),
             } => {
                 assert_eq!(request.block_ids().len(), 1);
-                let id = request.block_ids()[0].clone();
+                let id = request.block_ids()[0];
                 let blocks = vec![mgr2_handle
                     .call(move |this| this.get_block(id))
                     .await

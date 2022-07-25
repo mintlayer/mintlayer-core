@@ -21,6 +21,7 @@ use crate::{
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
+    Locator,
 };
 use common::{
     chain::{
@@ -162,7 +163,7 @@ where
         &mut self,
         _peer_id: T::PeerId,
         request_id: T::RequestId,
-        locator: Vec<BlockHeader>,
+        locator: Locator,
     ) -> crate::Result<()> {
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
@@ -225,11 +226,11 @@ where
         // and that the received headers are in order
         match peer.state() {
             peer::PeerSyncState::UploadingHeaders(ref locator) => {
+                let genesis_id = self.config.genesis_block_id();
+                let mut locator = locator.iter().chain(std::iter::once(&genesis_id));
+                let anchor_point = headers[0].prev_block_id();
                 ensure!(
-                    locator
-                        .iter()
-                        .any(|header| &Some(header.get_id()) == headers[0].prev_block_id())
-                        || &Some(self.config.genesis_block_id()) == headers[0].prev_block_id(),
+                    locator.any(|id| anchor_point == id),
                     P2pError::ProtocolError(ProtocolError::InvalidMessage),
                 );
             }
@@ -238,7 +239,7 @@ where
 
         for (a, b) in itertools::zip(&headers, &headers[1..]) {
             ensure!(
-                b.prev_block_id() == &Some(a.get_id()),
+                b.prev_block_id() == &a.get_id(),
                 P2pError::ProtocolError(ProtocolError::InvalidMessage),
             );
         }
@@ -416,7 +417,7 @@ where
                             assert_eq!(block_ids.len(), 1);
                             self.send_block_request(
                                 peer_id,
-                                block_ids.get(0).expect("block id to exist").clone(),
+                                *block_ids.get(0).expect("block id to exist"),
                                 request.retry_count + 1,
                             )
                             .await?;

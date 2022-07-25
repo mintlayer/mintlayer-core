@@ -71,39 +71,32 @@ mod tests {
     use super::*;
 
     #[test]
+    #[serial_test::serial]
     fn test_time() {
         logging::init_logging::<&std::path::Path>(None);
+        set(Duration::from_secs(1337));
 
-        let handle = std::thread::spawn(move || {
-            log::info!("p2p time: {}", get().as_secs());
-            std::thread::sleep(Duration::from_secs(1));
+        log::info!("p2p time: {}", get().as_secs());
+        std::thread::sleep(Duration::from_secs(1));
 
-            log::info!("p2p time: {}", get().as_secs());
-            assert_eq!(get().as_secs(), 1337);
-            std::thread::sleep(Duration::from_secs(1));
+        log::info!("p2p time: {}", get().as_secs());
+        assert_eq!(get().as_secs(), 1337);
+        std::thread::sleep(Duration::from_secs(1));
 
-            log::info!("p2p time: {}", get().as_secs());
-            assert_ne!(get().as_secs(), 1337);
-        });
+        log::info!("rpc time: {}", get().as_secs());
+        std::thread::sleep(Duration::from_millis(500));
 
-        std::thread::spawn(move || {
-            log::info!("rpc time: {}", get().as_secs());
-            std::thread::sleep(Duration::from_millis(500));
+        assert_eq!(get().as_secs(), 1337);
+        log::info!("rpc time: {}", get().as_secs());
+        std::thread::sleep(Duration::from_millis(500));
 
-            set(Duration::from_secs(1337));
-            assert_eq!(get().as_secs(), 1337);
-            log::info!("rpc time: {}", get().as_secs());
-            std::thread::sleep(Duration::from_millis(500));
-
-            reset();
-            assert_ne!(get().as_secs(), 1337);
-            log::info!("rpc time: {}", get().as_secs());
-        });
-
-        handle.join();
+        reset();
+        assert_ne!(get().as_secs(), 1337);
+        log::info!("rpc time: {}", get().as_secs());
     }
 
     #[test]
+    #[serial_test::serial]
     fn test_mocked() {
         assert_eq!(get_mocked(), None);
 

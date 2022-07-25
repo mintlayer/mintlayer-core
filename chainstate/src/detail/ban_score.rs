@@ -38,10 +38,8 @@ impl BanScore for BlockError {
             BlockError::BestBlockLoadError(_) => 0,
             BlockError::InvariantErrorFailedToFindNewChainPath(_, _, _) => 0,
             BlockError::InvariantErrorInvalidTip => 0,
-            BlockError::InvariantErrorPrevBlockNotFound => 0,
             // Even though this should've been caught by orphans check, its mere presence means a peer sent a block they're not supposed to send
             BlockError::PrevBlockNotFound => 100,
-            BlockError::InvalidBlockSource => 100,
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
@@ -54,7 +52,6 @@ impl BanScore for OrphanCheckError {
     fn ban_score(&self) -> u32 {
         match self {
             OrphanCheckError::StorageError(_) => 0,
-            OrphanCheckError::PrevBlockIdNotFound => 100,
             OrphanCheckError::PrevBlockIndexNotFound(_) => 100,
             OrphanCheckError::LocalOrphan => 0,
         }
@@ -85,6 +82,7 @@ impl BanScore for StateUpdateError {
             StateUpdateError::SignatureVerificationFailed => 100,
             StateUpdateError::InvalidOutputCount => 100,
             StateUpdateError::BlockHeightArithmeticError => 100,
+            StateUpdateError::BlockTimestampArithmeticError => 100,
             StateUpdateError::InputAdditionError => 100,
             StateUpdateError::DoubleSpendAttempt(_) => 100,
             StateUpdateError::OutputIndexOutOfRange {
@@ -99,6 +97,7 @@ impl BanScore for StateUpdateError {
             StateUpdateError::RewardAdditionError(_) => 100,
             // Even though this is an invariant, we consider it a violation to be overly cautious
             StateUpdateError::SerializationInvariantError(_) => 100,
+            StateUpdateError::TimeLockViolation => 100,
         }
     }
 }
@@ -109,7 +108,6 @@ impl BanScore for CheckBlockError {
             CheckBlockError::StorageError(_) => 0,
             CheckBlockError::MerkleRootMismatch => 100,
             CheckBlockError::WitnessMerkleRootMismatch => 100,
-            CheckBlockError::InvalidBlockNoPrevBlock => 100,
             // even though this may be an invariant error, we treat it strictly
             CheckBlockError::PrevBlockNotFound(_, _) => 100,
             CheckBlockError::BlockTimeOrderInvalid => 100,

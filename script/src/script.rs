@@ -240,7 +240,7 @@ impl Script {
 
     /// Returns the script data
     pub fn as_bytes(&self) -> &[u8] {
-        &*self.0
+        &self.0
     }
 
     /// Returns a copy of the script data

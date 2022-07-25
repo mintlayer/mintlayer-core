@@ -31,7 +31,9 @@ fn simple_subscribe() {
         let events = subscribe(&mut chainstate, 1);
 
         // Produce and process a block.
-        let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
+        let first_block = produce_test_block(TestBlockInfo::from_genesis(
+            chainstate.chain_config.genesis_block(),
+        ));
         assert!(!chainstate.events_controller.subscribers().is_empty());
         chainstate.process_block(first_block.clone(), BlockSource::Local).unwrap();
         chainstate.wait_for_all_events();
@@ -46,7 +48,7 @@ fn simple_subscribe() {
         }
 
         // Process one more block.
-        let second_block = produce_test_block(&first_block, false);
+        let second_block = produce_test_block(TestBlockInfo::from_block(&first_block));
         chainstate.process_block(second_block.clone(), BlockSource::Local).unwrap();
         chainstate.wait_for_all_events();
 
@@ -66,12 +68,14 @@ fn simple_subscribe() {
 fn several_subscribers() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
-
         let mut rng = random::make_pseudo_rng();
         let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut chainstate, subscribers);
 
-        let block = produce_test_block(chainstate.chain_config.genesis_block(), false);
+        let block = produce_test_block(TestBlockInfo::from_genesis(
+            chainstate.chain_config.genesis_block(),
+        ));
+
         assert!(!chainstate.events_controller.subscribers().is_empty());
         chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
         chainstate.wait_for_all_events();
@@ -97,9 +101,10 @@ fn several_subscribers_several_events() {
         let events = subscribe(&mut chainstate, subscribers);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
-        let mut block = chainstate.chain_config.genesis_block().clone();
+        let mut block_info = TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block());
         for _ in 0..blocks {
-            block = produce_test_block(&block, false);
+            let block = produce_test_block(block_info);
+            block_info = TestBlockInfo::from_block(&block);
             let index = chainstate
                 .process_block(block.clone(), BlockSource::Local)
                 .ok()
@@ -120,16 +125,25 @@ fn several_subscribers_several_events() {
 #[test]
 fn orphan_block() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            chain_config,
+            chainstate_config,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
-        let block = produce_test_block(chainstate.chain_config.genesis_block(), true);
+        let block = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()).orphan(),
+        );
         assert_eq!(
             chainstate.process_block(block, BlockSource::Local).unwrap_err(),
             BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
@@ -143,22 +157,31 @@ fn orphan_block() {
 #[test]
 fn custom_orphan_error_hook() {
     common::concurrency::model(|| {
-        let config = Arc::new(create_unit_test_config());
+        let chain_config = Arc::new(create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate =
-            Chainstate::new(config, storage, Some(orphan_error_hook), Default::default()).unwrap();
+        let mut chainstate = Chainstate::new(
+            chain_config,
+            chainstate_config,
+            storage,
+            Some(orphan_error_hook),
+            Default::default(),
+        )
+        .unwrap();
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
 
-        let first_block = produce_test_block(chainstate.chain_config.genesis_block(), false);
+        let first_block = produce_test_block(TestBlockInfo::from_genesis(
+            chainstate.chain_config.genesis_block(),
+        ));
         // Produce a block with a bad timestamp.
         let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
-            + chainstate.chain_config.max_future_block_time_offset().as_secs() as u32;
+            + chainstate.chain_config.max_future_block_time_offset().as_secs();
         let second_block = Block::new(
             vec![],
-            Some(first_block.get_id()),
+            first_block.get_id().into(),
             BlockTimestamp::from_int_seconds(timestamp),
             ConsensusData::None,
         )

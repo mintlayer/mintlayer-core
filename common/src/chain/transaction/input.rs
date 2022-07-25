@@ -14,7 +14,8 @@
 // limitations under the License.
 
 use crate::chain::{
-    block::Block, transaction::signature::inputsig::InputWitness, transaction::Transaction,
+    transaction::signature::inputsig::InputWitness, transaction::Transaction, Block, GenBlock,
+    Genesis,
 };
 use crate::primitives::{Id, H256};
 use serialization::{Decode, Encode};
@@ -24,7 +25,7 @@ pub enum OutPointSourceId {
     #[codec(index = 0)]
     Transaction(Id<Transaction>),
     #[codec(index = 1)]
-    BlockReward(Id<Block>),
+    BlockReward(Id<GenBlock>),
 }
 
 impl From<Id<Transaction>> for OutPointSourceId {
@@ -33,9 +34,21 @@ impl From<Id<Transaction>> for OutPointSourceId {
     }
 }
 
+impl From<Id<GenBlock>> for OutPointSourceId {
+    fn from(id: Id<GenBlock>) -> OutPointSourceId {
+        OutPointSourceId::BlockReward(id)
+    }
+}
+
 impl From<Id<Block>> for OutPointSourceId {
     fn from(id: Id<Block>) -> OutPointSourceId {
-        OutPointSourceId::BlockReward(id)
+        OutPointSourceId::BlockReward(id.into())
+    }
+}
+
+impl From<Id<Genesis>> for OutPointSourceId {
+    fn from(id: Id<Genesis>) -> OutPointSourceId {
+        OutPointSourceId::BlockReward(id.into())
     }
 }
 

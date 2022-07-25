@@ -15,17 +15,19 @@
 
 use super::Transaction;
 use crate::{
-    chain::block::Block,
+    chain::{Block, GenBlock},
     primitives::{Id, Idable},
 };
 use serialization::{Decode, Encode};
 
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum Spender {
+    /// Spending a transaction output
     #[codec(index = 0)]
     RegularInput(Id<Transaction>),
+    /// Spending a block reward or a premine in genesis
     #[codec(index = 1)]
-    StakeKernel(Id<Block>),
+    BlockInput(Id<GenBlock>),
 }
 
 impl From<Id<Transaction>> for Spender {
@@ -36,7 +38,13 @@ impl From<Id<Transaction>> for Spender {
 
 impl From<Id<Block>> for Spender {
     fn from(spender: Id<Block>) -> Spender {
-        Spender::StakeKernel(spender)
+        Spender::BlockInput(spender.into())
+    }
+}
+
+impl From<Id<GenBlock>> for Spender {
+    fn from(block_id: Id<GenBlock>) -> Spender {
+        Spender::BlockInput(block_id)
     }
 }
 
@@ -95,7 +103,7 @@ pub enum SpendError {
 #[derive(Clone, Debug, PartialEq, Eq, Encode, Decode)]
 pub enum SpendablePosition {
     Transaction(TxMainChainPosition),
-    BlockReward(Id<Block>),
+    BlockReward(Id<GenBlock>),
 }
 
 impl From<TxMainChainPosition> for SpendablePosition {
@@ -106,15 +114,21 @@ impl From<TxMainChainPosition> for SpendablePosition {
 
 impl From<Id<Block>> for SpendablePosition {
     fn from(pos: Id<Block>) -> SpendablePosition {
+        SpendablePosition::BlockReward(pos.into())
+    }
+}
+
+impl From<Id<GenBlock>> for SpendablePosition {
+    fn from(pos: Id<GenBlock>) -> SpendablePosition {
         SpendablePosition::BlockReward(pos)
     }
 }
 
 impl SpendablePosition {
-    pub fn block_id_anyway(&self) -> &Id<Block> {
+    pub fn block_id_anyway(&self) -> Id<GenBlock> {
         match self {
-            SpendablePosition::Transaction(pos) => pos.block_id(),
-            SpendablePosition::BlockReward(id) => id,
+            SpendablePosition::Transaction(pos) => (*pos.block_id()).into(),
+            SpendablePosition::BlockReward(id) => *id,
         }
     }
 }

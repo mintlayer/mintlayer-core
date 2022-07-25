@@ -17,8 +17,7 @@ use chainstate_types::block_index::BlockIndex;
 use chainstate_types::epoch_data::EpochData;
 use common::chain::block::Block;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::OutPoint;
-use common::chain::OutPointSourceId;
+use common::chain::{GenBlock, OutPoint, OutPointSourceId};
 use common::primitives::{BlockHeight, Id, Idable};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
@@ -30,7 +29,7 @@ use crate::{
 };
 
 mod well_known {
-    use super::{Block, Codec, Id};
+    use super::{Codec, GenBlock, Id};
 
     /// Pre-defined database keys
     pub trait Entry {
@@ -51,8 +50,8 @@ mod well_known {
     }
 
     declare_entry!(StoreVersion: u32);
-    declare_entry!(BestBlockId: Id<Block>);
-    declare_entry!(UtxosBestBlockId: Id<Block>);
+    declare_entry!(BestBlockId: Id<GenBlock>);
+    declare_entry!(UtxosBestBlockId: Id<GenBlock>);
 }
 
 storage::decl_schema! {
@@ -138,7 +137,7 @@ macro_rules! delegate_to_transaction {
 impl BlockchainStorageRead for Store {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
-        fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
 
@@ -155,7 +154,7 @@ impl BlockchainStorageRead for Store {
         fn get_block_id_by_height(
             &self,
             height: &BlockHeight,
-        ) -> crate::Result<Option<Id<Block>>>;
+        ) -> crate::Result<Option<Id<GenBlock>>>;
 
         fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
@@ -164,7 +163,7 @@ impl BlockchainStorageRead for Store {
 impl UtxoRead for Store {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-        fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>>;
+        fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
     }
 }
 
@@ -177,7 +176,7 @@ impl UndoRead for Store {
 impl BlockchainStorageWrite for Store {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
-        fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()>;
+        fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
         fn set_block_index(&mut self, block_index: &BlockIndex) -> crate::Result<()>;
         fn add_block(&mut self, block: &Block) -> crate::Result<()>;
         fn del_block(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -193,7 +192,7 @@ impl BlockchainStorageWrite for Store {
         fn set_block_id_at_height(
             &mut self,
             height: &BlockHeight,
-            block_id: &Id<Block>,
+            block_id: &Id<GenBlock>,
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
@@ -208,7 +207,7 @@ impl UtxoWrite for Store {
     delegate_to_transaction! {
         fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
-        fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()>;
+        fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
     }
 }
 
@@ -233,7 +232,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     }
 
     /// Get the hash of the best block
-    fn get_best_block_id(&self) -> crate::Result<Option<Id<Block>>> {
+    fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
         self.read_value::<well_known::BestBlockId>()
     }
 
@@ -267,7 +266,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
         }
     }
 
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<Block>>> {
+    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
     }
 
@@ -282,7 +281,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxoRead for StoreTx<Tx> {
         self.read::<DBUtxo, _, _>(&outpoint.encode())
     }
 
-    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<Block>>> {
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>> {
         self.read_value::<well_known::UtxosBestBlockId>()
     }
 }
@@ -298,7 +297,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
         self.write_value::<well_known::StoreVersion>(&version)
     }
 
-    fn set_best_block_id(&mut self, id: &Id<Block>) -> crate::Result<()> {
+    fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()> {
         self.write_value::<well_known::BestBlockId>(id)
     }
 
@@ -329,7 +328,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     fn set_block_id_at_height(
         &mut self,
         height: &BlockHeight,
-        block_id: &Id<Block>,
+        block_id: &Id<GenBlock>,
     ) -> crate::Result<()> {
         self.write::<DBBlockByHeight, _, _>(height.encode(), block_id)
     }
@@ -360,7 +359,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxoWrite for StoreTx<Tx> {
         self.0.get_mut::<DBUtxo, _>().del(&key).map_err(Into::into)
     }
 
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<Block>) -> crate::Result<()> {
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()> {
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
     }
 }
@@ -467,14 +466,14 @@ pub(crate) mod test {
         let tx1 = Transaction::new(0xbbccddee, vec![], vec![], 34).unwrap();
         let block0 = Block::new(
             vec![tx0.clone()],
-            Some(Id::new(H256::default())),
+            Id::new(H256::default()),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
         )
         .unwrap();
         let block1 = Block::new(
             vec![tx1.clone()],
-            Some(Id::new(block0.get_id().get())),
+            Id::new(block0.get_id().get()),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
         )
@@ -525,10 +524,10 @@ pub(crate) mod test {
 
         // Test setting and retrieving best chain id
         assert_eq!(store.get_best_block_id(), Ok(None));
-        assert_eq!(store.set_best_block_id(&block0.get_id()), Ok(()));
-        assert_eq!(store.get_best_block_id(), Ok(Some(block0.get_id())));
-        assert_eq!(store.set_best_block_id(&block1.get_id()), Ok(()));
-        assert_eq!(store.get_best_block_id(), Ok(Some(block1.get_id())));
+        assert_eq!(store.set_best_block_id(&block0.get_id().into()), Ok(()));
+        assert_eq!(store.get_best_block_id(), Ok(Some(block0.get_id().into())));
+        assert_eq!(store.set_best_block_id(&block1.get_id().into()), Ok(()));
+        assert_eq!(store.get_best_block_id(), Ok(Some(block1.get_id().into())));
 
         // Chain index operations
         let idx_tx0 = TxMainChainIndex::new(pos_tx0.into(), 1).expect("Tx index creation failed");
@@ -724,12 +723,12 @@ pub(crate) mod test {
         let mut store = Store::new_empty().unwrap();
 
         // store is empty, so no undo data should be found.
-        assert_eq!(store.get_undo_data(id0.clone()), Ok(None));
+        assert_eq!(store.get_undo_data(id0), Ok(None));
 
         // add undo data and check if it is there
-        assert_eq!(store.add_undo_data(id0.clone(), &block_undo0), Ok(()));
+        assert_eq!(store.add_undo_data(id0, &block_undo0), Ok(()));
         assert_eq!(
-            store.get_undo_data(id0.clone()).unwrap().unwrap(),
+            store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
 
@@ -739,19 +738,19 @@ pub(crate) mod test {
         // create id:
         let id1: Id<Block> = Id::new(H256::random());
 
-        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
-        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
-        assert_eq!(
-            store.get_undo_data(id0.clone()).unwrap().unwrap(),
-            block_undo0.clone()
-        );
-        assert_eq!(store.del_undo_data(id1.clone()), Ok(()));
-        assert_eq!(store.get_undo_data(id1.clone()), Ok(None));
+        assert_eq!(store.get_undo_data(id1), Ok(None));
+        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(
             store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
-        assert_eq!(store.add_undo_data(id1.clone(), &block_undo1), Ok(()));
+        assert_eq!(store.del_undo_data(id1), Ok(()));
+        assert_eq!(store.get_undo_data(id1), Ok(None));
+        assert_eq!(
+            store.get_undo_data(id0).unwrap().unwrap(),
+            block_undo0.clone()
+        );
+        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
     }
 }

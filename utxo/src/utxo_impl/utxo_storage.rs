@@ -20,16 +20,15 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use crate::{BlockUndo, Error};
-use common::chain::block::Block;
-use common::chain::OutPoint;
+use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{Id, H256};
 
 pub trait UtxosPersistentStorage {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
-    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::Error>;
-    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, crate::Error>;
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error>;
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error>;
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error>;
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error>;
@@ -73,7 +72,7 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
         self.get_utxo(outpoint).is_some()
     }
 
-    fn best_block_hash(&self) -> Option<Id<Block>> {
+    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
         match self.0.get_best_block_id() {
             Ok(opt_id) => opt_id,
             Err(e) => {
@@ -124,7 +123,7 @@ impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
 struct UtxoInMemoryDBImpl {
     store: BTreeMap<OutPoint, Utxo>,
     undo_store: HashMap<H256, BlockUndo>,
-    best_block_id: Option<Id<Block>>,
+    best_block_id: Option<Id<GenBlock>>,
 }
 
 impl UtxoInMemoryDBImpl {
@@ -154,14 +153,17 @@ impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
         let res = self.store.get(outpoint);
         Ok(res.cloned())
     }
-    fn set_best_block_id(&mut self, block_id: &Id<Block>) -> Result<(), crate::utxo_impl::Error> {
+    fn set_best_block_id(
+        &mut self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<(), crate::utxo_impl::Error> {
         // TODO: fix; don't store in general block id
-        self.best_block_id = Some(block_id.clone());
+        self.best_block_id = Some(*block_id);
         Ok(())
     }
-    fn get_best_block_id(&self) -> Result<Option<Id<Block>>, crate::utxo_impl::Error> {
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::utxo_impl::Error> {
         // TODO: fix; don't get general block id
-        Ok(self.best_block_id.clone())
+        Ok(self.best_block_id)
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
@@ -226,18 +228,14 @@ mod test {
     }
 
     fn create_block(
-        prev_block_id: Id<Block>,
+        prev_block_id: Id<GenBlock>,
         inputs: Vec<TxInput>,
         max_num_of_outputs: usize,
         num_of_txs: usize,
     ) -> Block {
         let txs = create_transactions(inputs, max_num_of_outputs, num_of_txs);
-        Block::new_with_no_consensus(
-            txs,
-            Some(prev_block_id),
-            BlockTimestamp::from_int_seconds(1),
-        )
-        .expect("should be able to create a block")
+        Block::new_with_no_consensus(txs, prev_block_id, BlockTimestamp::from_int_seconds(1))
+            .expect("should be able to create a block")
     }
 
     /// populate the db with random values, for testing.
@@ -245,8 +243,8 @@ mod test {
     fn initialize_db(
         db_interface: &mut UtxoInMemoryDBImpl,
         tx_outputs_size: u32,
-    ) -> (Id<Block>, Vec<OutPoint>) {
-        let best_block_id: Id<Block> = Id::new(H256::random());
+    ) -> (Id<GenBlock>, Vec<OutPoint>) {
+        let best_block_id: Id<GenBlock> = Id::new(H256::random());
         assert!(db_interface.set_best_block_id(&best_block_id).is_ok());
 
         // let's populate the db with outputs.
@@ -344,7 +342,7 @@ mod test {
             }
 
             // flush to db
-            view.set_best_block(block.get_id());
+            view.set_best_block(block.get_id().into());
             assert!(flush_to_base(view, &mut db).is_ok());
 
             (block, block_undo)
@@ -389,7 +387,7 @@ mod test {
 
             // get the block_undo.
             let block_undo = db
-                .get_undo_data(current_best_block_id)
+                .get_undo_data(Id::new(current_best_block_id.get()))
                 .expect("query should not fail")
                 .expect("should return the undo file");
 
@@ -400,12 +398,9 @@ mod test {
             let mut view = UtxosCache::default();
             // set the best block to the previous one
             {
-                view.set_best_block(block.prev_block_id().unwrap());
+                view.set_best_block(block.prev_block_id());
                 // the best block id should be the same as the old one.
-                assert_eq!(
-                    view.best_block_hash().unwrap(),
-                    block.prev_block_id().unwrap()
-                );
+                assert_eq!(view.best_block_hash().unwrap(), block.prev_block_id());
             }
 
             // get the block txinputs, and add them to the view.
@@ -445,7 +440,7 @@ mod test {
             let tx_inputs: Vec<TxInput> = (0..rnd)
                 .into_iter()
                 .map(|i| {
-                    let id: Id<Block> = Id::new(H256::random());
+                    let id: Id<GenBlock> = Id::new(H256::random());
                     let id = OutPointSourceId::BlockReward(id);
 
                     TxInput::new(id, i, InputWitness::NoSignature(None))
@@ -475,7 +470,7 @@ mod test {
 
             let utxos = ConsumedUtxoCache {
                 container: utxos,
-                best_block: new_best_block_hash.clone(),
+                best_block: new_best_block_hash,
             };
 
             let mut db_interface = UtxoInMemoryDBImpl::new();

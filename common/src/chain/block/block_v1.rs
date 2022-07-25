@@ -67,7 +67,7 @@ impl BlockV1 {
         &self.transactions
     }
 
-    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
         &self.header.prev_block_id
     }
 }

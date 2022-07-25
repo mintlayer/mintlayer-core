@@ -16,14 +16,12 @@
 //TODO: remove once the functions are used.
 #![allow(dead_code)]
 use crate::{Error, TxUndo};
-use common::chain::{OutPoint, OutPointSourceId, Transaction, TxOutput};
+use common::chain::{GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput};
 use common::primitives::{BlockHeight, Id, Idable};
 use logging::log;
+use serialization::{Decode, Encode};
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
-
-use common::chain::block::Block;
-use serialization::{Decode, Encode};
 
 pub mod utxo_storage;
 
@@ -106,7 +104,7 @@ pub trait UtxosView {
     fn has_utxo(&self, outpoint: &OutPoint) -> bool;
 
     /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Option<Id<Block>>;
+    fn best_block_hash(&self) -> Option<Id<GenBlock>>;
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;
@@ -117,7 +115,7 @@ pub trait UtxosView {
 #[derive(Clone)]
 pub struct ConsumedUtxoCache {
     container: BTreeMap<OutPoint, UtxoEntry>,
-    best_block: Id<Block>,
+    best_block: Id<GenBlock>,
 }
 
 pub trait FlushableUtxoView {
@@ -134,7 +132,7 @@ pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> R
 #[derive(Clone, Default)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
-    current_block_hash: Option<Id<Block>>,
+    current_block_hash: Option<Id<GenBlock>>,
     utxos: BTreeMap<OutPoint, UtxoEntry>,
     //TODO: do we need this?
     memory_usage: usize,
@@ -242,7 +240,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    pub fn set_best_block(&mut self, block_hash: Id<Block>) {
+    pub fn set_best_block(&mut self, block_hash: Id<GenBlock>) {
         self.current_block_hash = Some(block_hash);
     }
 
@@ -424,8 +422,8 @@ impl<'a> UtxosView for UtxosCache<'a> {
         self.get_utxo(outpoint).is_some()
     }
 
-    fn best_block_hash(&self) -> Option<Id<Block>> {
-        self.current_block_hash.clone().or_else(||
+    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
+        self.current_block_hash.or_else(||
             // if the block_hash is empty in this view, use parent's `get_best_block_hash`.
             self.parent.and_then(|parent| parent.best_block_hash()))
     }

@@ -46,7 +46,7 @@ pub(crate) fn get_starting_block_time(
         Ok(bi) => bi,
         Err(err) => {
             return Err(ConsensusPoWError::AncestorAtHeightNotFound(
-                block_index.block_id().clone(),
+                *block_index.block_id(),
                 retarget_height,
                 err,
             ))
@@ -96,8 +96,8 @@ pub mod special_rules {
     /// Checks if it took > 20 minutes to find a block
     pub fn block_production_stalled(
         target_spacing_in_secs: u64,
-        new_block_time: u32,
-        prev_block_time: u32,
+        new_block_time: u64,
+        prev_block_time: u64,
     ) -> bool {
         new_block_time as u64 > (prev_block_time as u64 + (target_spacing_in_secs * 2))
     }
