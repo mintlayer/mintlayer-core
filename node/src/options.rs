@@ -111,10 +111,6 @@ pub struct ChainConfigOptions {
     #[clap(long)]
     pub chain_target_block_spacing: Option<u64>,
 
-    /// Coin decimals.
-    #[clap(long)]
-    pub chain_coin_decimals: Option<u8>,
-
     /// The maximum block header size in bytes.
     #[clap(long)]
     pub chain_max_block_header_size: Option<usize>,
