@@ -16,7 +16,7 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::key::{PublicKey, Signature};
-use parity_scale_codec::{Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     address::pubkeyhash::PublicKeyHash, chain::signature::TransactionSigError, primitives::H256,

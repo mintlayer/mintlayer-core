@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::time::Duration;
 
 pub type BlockTimestampInternalType = u64;
