@@ -81,8 +81,8 @@ impl From<MerkleTreeFormError> for BlockCreationError {
     }
 }
 
-// TODO: add #[must_use] on Block object. This is postponed because it'll cause lots of conflicts when we split genesis from other blocks
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[must_use]
 pub enum Block {
     V1(BlockV1),
 }
