@@ -16,7 +16,7 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::hash::StreamHasher;
-use parity_scale_codec::Encode;
+use serialization::Encode;
 
 use crate::{
     chain::TxInput,

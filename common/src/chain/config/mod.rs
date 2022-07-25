@@ -193,7 +193,7 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
+    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
         &mut genesis_mint_pubkeyhash_encoded.as_slice(),
     )
     .expect("Decoding genesis mint destination shouldn't fail");

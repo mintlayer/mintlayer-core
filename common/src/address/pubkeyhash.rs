@@ -15,7 +15,7 @@
 
 use crypto::key::PublicKey;
 use generic_array::sequence::Split;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use crate::{construct_fixed_hash, primitives::id::DefaultHashAlgo};
 
