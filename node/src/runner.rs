@@ -30,7 +30,8 @@ use p2p::rpc::P2pRpcServer;
 
 use crate::{
     config::NodeConfig,
-    options::{ChainConfigOptions, Command, Options, RunOptions},
+    options::{Command, Options, RunOptions},
+    regtest_options::ChainConfigOptions,
 };
 
 /// Initialize the node, giving caller the opportunity to add more subsystems before start.
@@ -125,7 +126,7 @@ async fn start(
 ) -> Result<()> {
     let node_config =
         NodeConfig::read(config_path, run_options).context("Failed to initialize config")?;
-    log::trace!("Starting with the following config\n: {node_config:#?}");
+    log::info!("Starting with the following config:\n {node_config:#?}");
     let manager = initialize(chain_config, node_config).await?;
     manager.main().await;
     Ok(())
