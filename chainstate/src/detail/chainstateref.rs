@@ -196,7 +196,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             Some(ht) => ht,
         };
         let bid = self.get_block_id_by_height(&ht)?;
-        Ok(bid == Some(block_id.clone()))
+        Ok(bid == Some(*block_id))
     }
 
     /// Allow to read from storage the previous block and return itself BlockIndex
@@ -206,7 +206,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<GenBlockIndex<'a>, PropertyQueryError> {
         let prev_block_id = block_index.prev_block_id();
         self.get_gen_block_index(prev_block_id)?
-            .ok_or_else(|| PropertyQueryError::PrevBlockIndexNotFound(prev_block_id.clone()))
+            .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
     }
 
     pub fn get_ancestor(
@@ -319,8 +319,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             GenBlockId::Genesis(_) => return Ok(Some(BlockHeight::zero())),
         };
         let block_index = self.get_block_index(&id)?;
-        let block_index =
-            block_index.ok_or_else(|| PropertyQueryError::BlockNotFound(id.clone()))?;
+        let block_index = block_index.ok_or(PropertyQueryError::BlockNotFound(id))?;
         if block_index.block_id() == &id {
             Ok(Some(block_index.block_height()))
         } else {
@@ -335,7 +334,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<Vec<BlockIndex>, PropertyQueryError> {
         let mut result = Vec::new();
         let mut block_index = new_tip_block_index.clone();
-        while !self.is_block_in_main_chain(&block_index.block_id().clone().into())? {
+        while !self.is_block_in_main_chain(&(*block_index.block_id()).into())? {
             result.push(block_index.clone());
             block_index = match self.get_previous_block_index(&block_index)? {
                 GenBlockIndex::Genesis(_) => break,
@@ -350,9 +349,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_block_index(&self, block_index: &BlockIndex) -> Result<(), BlockError> {
         // BlockIndex is already known or block exists
         if self.db_tx.get_block_index(block_index.block_id())?.is_some() {
-            return Err(BlockError::BlockAlreadyExists(
-                block_index.block_id().clone(),
-            ));
+            return Err(BlockError::BlockAlreadyExists(*block_index.block_id()));
         }
         // TODO: Will be expanded
         Ok(())
@@ -483,7 +480,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn get_block_from_index(&self, block_index: &BlockIndex) -> Result<Option<Block>, BlockError> {
-        Ok(self.db_tx.get_block(block_index.block_id().clone())?)
+        Ok(self.db_tx.get_block(*block_index.block_id())?)
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
@@ -572,7 +569,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         last_to_remain_connected: &Id<GenBlock>,
     ) -> Result<(), BlockError> {
         let mut to_disconnect = GenBlockIndex::Block(to_disconnect.clone());
-        while to_disconnect.block_id().clone() != *last_to_remain_connected {
+        while to_disconnect.block_id() != *last_to_remain_connected {
             let to_disconnect_block = match to_disconnect {
                 GenBlockIndex::Genesis(_) => panic!("Attempt to disconnect genesis"),
                 GenBlockIndex::Block(block_index) => block_index,
@@ -589,8 +586,8 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     ) -> Result<(), BlockError> {
         let new_chain = self.get_new_chain(new_block_index).map_err(|e| {
             BlockError::InvariantErrorFailedToFindNewChainPath(
-                new_block_index.block_id().clone(),
-                best_block_id.clone(),
+                *new_block_index.block_id(),
+                *best_block_id,
                 e,
             )
         })?;
@@ -659,9 +656,9 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         self.db_tx.set_block_id_at_height(
             &new_tip_block_index.block_height(),
-            &new_tip_block_index.block_id().clone().into(),
+            &(*new_tip_block_index.block_id()).into(),
         )?;
-        self.db_tx.set_best_block_id(&new_tip_block_index.block_id().clone().into())?;
+        self.db_tx.set_best_block_id(&(*new_tip_block_index.block_id()).into())?;
         Ok(())
     }
 

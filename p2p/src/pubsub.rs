@@ -240,7 +240,7 @@ where
                 block_id = block_rx.recv().fuse() => {
                     let block_id = block_id.ok_or(P2pError::ChannelClosed)?;
 
-                    match self.chainstate_handle.call(|this| this.get_block(block_id)).await?? {
+                    match self.chainstate_handle.call(move |this| this.get_block(block_id)).await?? {
                         Some(block) => self.announce_block(block).await?,
                         None => log::error!("CRITICAL: best block not available"),
                     }

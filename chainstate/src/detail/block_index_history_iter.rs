@@ -52,7 +52,7 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
 
         self.next_id = match &block_index {
             GenBlockIndex::Genesis(_) => None,
-            GenBlockIndex::Block(blkidx) => Some(blkidx.prev_block_id().clone()),
+            GenBlockIndex::Block(blkidx) => Some(*blkidx.prev_block_id()),
         };
 
         Some(block_index)

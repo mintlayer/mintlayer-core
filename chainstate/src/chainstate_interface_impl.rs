@@ -61,7 +61,7 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
 
     fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> Result<bool, ChainstateError> {
         self.chainstate
-            .get_block_height_in_main_chain(&block_id.clone().into())
+            .get_block_height_in_main_chain(&(*block_id).into())
             .map_err(ChainstateError::FailedToReadProperty)
             .map(|ht| ht.is_some())
     }

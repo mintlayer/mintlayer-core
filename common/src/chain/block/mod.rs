@@ -184,7 +184,7 @@ impl Block {
 
     pub fn prev_block_id(&self) -> Id<GenBlock> {
         match &self {
-            Block::V1(blk) => blk.prev_block_id().clone(),
+            Block::V1(blk) => *blk.prev_block_id(),
         }
     }
 

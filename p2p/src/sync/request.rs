@@ -140,7 +140,7 @@ where
         );
 
         // send request to remote peer and start tracking its progress
-        let (wanted_blocks, request_type) = self.make_block_request(vec![block_id.clone()]);
+        let (wanted_blocks, request_type) = self.make_block_request(vec![block_id]);
         self.send_request(peer_id, wanted_blocks, request_type, retry_count).await?;
 
         self.peers

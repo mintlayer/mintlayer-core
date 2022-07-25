@@ -423,7 +423,7 @@ impl<'a> UtxosView for UtxosCache<'a> {
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        self.current_block_hash.clone().or_else(||
+        self.current_block_hash.or_else(||
             // if the block_hash is empty in this view, use parent's `get_best_block_hash`.
             self.parent.and_then(|parent| parent.best_block_hash()))
     }

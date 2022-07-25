@@ -102,7 +102,7 @@ impl ChainConfig {
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
-        self.genesis_block_id.clone()
+        self.genesis_block_id
     }
 
     pub fn genesis_block(&self) -> &Genesis {

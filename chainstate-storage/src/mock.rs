@@ -334,7 +334,7 @@ mod tests {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));
-            let expected_id: Id<GenBlock> = block1_id.clone().into();
+            let expected_id: Id<GenBlock> = block1_id.into();
             tx.expect_set_best_block_id()
                 .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));
@@ -368,7 +368,7 @@ mod tests {
         let mut store = MockStore::new();
         store.expect_transaction_rw().returning(move || {
             let mut tx = MockStoreTxRw::new();
-            tx.expect_get_best_block_id().return_const(Ok(Some(top_id.clone())));
+            tx.expect_get_best_block_id().return_const(Ok(Some(top_id)));
             tx.expect_abort().return_const(Ok(()));
             tx
         });
@@ -386,7 +386,7 @@ mod tests {
             let mut tx = MockStoreTxRw::new();
             tx.expect_get_best_block_id().return_const(Ok(Some(block0.get_id().into())));
             tx.expect_add_block().return_const(Ok(()));
-            let expected_id: Id<GenBlock> = block1_id.clone().into();
+            let expected_id: Id<GenBlock> = block1_id.into();
             tx.expect_set_best_block_id()
                 .with(mockall::predicate::eq(expected_id))
                 .return_const(Ok(()));

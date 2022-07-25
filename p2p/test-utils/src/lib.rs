@@ -86,7 +86,7 @@ impl TestBlockInfo {
 
     pub fn from_genesis(genesis: &Genesis) -> Self {
         let id: Id<GenBlock> = genesis.get_id().into();
-        let outsrc = OutPointSourceId::BlockReward(id.clone());
+        let outsrc = OutPointSourceId::BlockReward(id);
         let txns = vec![(outsrc, genesis.utxos().to_vec())];
         Self { txns, id }
     }
@@ -95,8 +95,8 @@ impl TestBlockInfo {
         match id.classify(config) {
             GenBlockId::Genesis(_) => Self::from_genesis(config.genesis_block()),
             GenBlockId::Block(id) => {
-                let block = ci.call(|this| this.get_block(id)).await.unwrap().unwrap().unwrap();
-                Self::from_block(&block)
+                let block = ci.call(move |this| this.get_block(id)).await.unwrap().unwrap();
+                Self::from_block(&block.unwrap())
             }
         }
     }
