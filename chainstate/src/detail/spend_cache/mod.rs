@@ -15,10 +15,7 @@
 //
 // Author(s): S. Afach
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    time::Duration,
-};
+use std::collections::{btree_map::Entry, BTreeMap};
 
 use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
@@ -364,10 +361,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         .ok_or(StateUpdateError::BlockHeightArithmeticError)?
             }
             OutputTimeLock::ForSeconds(dt) => {
-                spending_time.as_duration_since_epoch()
+                *spending_time
                     >= source_block_time
-                        .as_duration_since_epoch()
-                        .checked_add(Duration::from_secs(*dt))
+                        .add_int_seconds(*dt)
                         .ok_or(StateUpdateError::BlockTimestampArithmeticError)?
             }
         };

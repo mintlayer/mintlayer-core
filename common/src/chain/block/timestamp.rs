@@ -48,4 +48,20 @@ impl BlockTimestamp {
     pub fn as_int_seconds(&self) -> BlockTimestampInternalType {
         self.timestamp
     }
+
+    pub fn add_int_seconds(&self, seconds: BlockTimestampInternalType) -> Option<BlockTimestamp> {
+        self.timestamp.checked_add(seconds).map(|ts| Self { timestamp: ts })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_iteration() {
+        let timestamp = BlockTimestamp::from_int_seconds(u64::MAX);
+        let timestamp_next = timestamp.add_int_seconds(1);
+        assert!(timestamp_next.is_none());
+    }
 }
