@@ -27,7 +27,7 @@ use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
 use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::id::Id;
+use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight};
 use std::collections::BTreeMap;
@@ -71,8 +71,7 @@ pub struct ChainConfig {
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
-    genesis_block: Genesis,
-    genesis_block_id: Id<GenBlock>,
+    genesis_block: WithId<Genesis>,
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -90,10 +89,10 @@ impl ChainConfig {
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
-        self.genesis_block_id
+        self.genesis_block.get_id().into()
     }
 
-    pub fn genesis_block(&self) -> &Genesis {
+    pub fn genesis_block(&self) -> &WithId<Genesis> {
         &self.genesis_block
     }
 
