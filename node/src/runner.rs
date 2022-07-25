@@ -134,6 +134,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
         chain_max_future_block_time_offset,
         chain_version,
         chain_target_block_spacing,
+        chain_coin_decimals,
         chain_max_block_header_size,
         chain_max_block_size_with_standard_txs,
         chain_max_block_size_with_smart_contracts,
@@ -166,6 +167,7 @@ fn regtest_chain_config(options: &ChainConfigOptions) -> Result<ChainConfig> {
     update_builder!(max_future_block_time_offset, Duration::from_secs);
     update_builder!(version, SemVer::try_from, map_err);
     update_builder!(target_block_spacing, Duration::from_secs);
+    update_builder!(coin_decimals);
     update_builder!(max_block_header_size);
     update_builder!(max_block_size_with_standard_txs);
     update_builder!(max_block_size_with_smart_contracts);
