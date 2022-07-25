@@ -314,7 +314,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
     pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     pubsub2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
 
-    let txs = (0..(200_000))
+    let txs = (0..200_000)
         .map(|_| Transaction::new(0, vec![], vec![], 0).unwrap())
         .collect::<Vec<_>>();
     let message = Announcement::Block(
