@@ -18,7 +18,7 @@ use crate::{
     error::{P2pError, ProtocolError},
     net::NetworkingService,
 };
-use chainstate_types::locator::Locator;
+use chainstate::Locator;
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::{Id, Idable},

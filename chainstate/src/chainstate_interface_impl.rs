@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::locator::Locator;
 use common::{
     chain::block::{Block, BlockHeader, GenBlock},
     primitives::{BlockHeight, Id},
@@ -22,7 +21,7 @@ use utils::eventhandler::EventHandler;
 
 use crate::{
     detail::{self, BlockSource},
-    ChainstateError, ChainstateEvent, ChainstateInterface,
+    ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 
 pub struct ChainstateInterfaceImpl {

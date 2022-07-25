@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use chainstate_types::locator::Locator;
+use chainstate::Locator;
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::Id,

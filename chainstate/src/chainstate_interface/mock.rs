@@ -15,13 +15,12 @@
 
 use std::sync::Arc;
 
-use chainstate_types::locator::Locator;
 use common::{
     chain::block::{Block, BlockHeader, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent};
+use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
 use super::ChainstateInterface;
 

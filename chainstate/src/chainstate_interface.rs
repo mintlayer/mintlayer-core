@@ -18,13 +18,12 @@ pub mod mock;
 
 use std::sync::Arc;
 
-use chainstate_types::locator::Locator;
 use common::{
     chain::block::{Block, BlockHeader, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
-use crate::{detail::BlockSource, ChainstateError, ChainstateEvent};
+use crate::{detail::BlockSource, ChainstateError, ChainstateEvent, Locator};
 
 pub trait ChainstateInterface: Send {
     fn subscribe_to_events(&mut self, handler: Arc<dyn Fn(ChainstateEvent) + Send + Sync>);
