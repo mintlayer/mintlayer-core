@@ -272,7 +272,7 @@ fn straight_chain(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor_invalid_height(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::new();
+    let mut btf = BlockTestFramework::default();
     let height = 1;
     btf.create_chain(&btf.genesis().get_id().into(), height, &mut rng).unwrap();
     let last_block_index = btf.block_indexes.last().expect("last block in first chain").clone();
@@ -298,7 +298,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::new();
+    let mut btf = BlockTestFramework::default();
 
     // We will create two chains that split at height 100
     const SPLIT_HEIGHT: usize = 100;
@@ -411,7 +411,7 @@ fn get_ancestor(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn last_common_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::new();
+    let mut btf = BlockTestFramework::default();
 
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;

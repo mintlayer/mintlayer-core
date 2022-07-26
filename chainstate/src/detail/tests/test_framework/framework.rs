@@ -15,15 +15,156 @@
 //
 // Author(s): A. Sinitsyn, S. Tkach
 
-use crate::detail::tests::*;
 use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
-        block::ConsensusData, Block, GenBlock, Genesis, OutputSpentState, Transaction, TxInput,
-        TxOutput,
+        block::{timestamp::BlockTimestamp, ConsensusData},
+        config::{Builder as ChainConfigBuilder, ChainType},
+        signature::inputsig::InputWitness,
+        Block, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, OutputSpentState,
+        Transaction, TxInput, TxOutput,
     },
-    primitives::{Id, Idable, H256},
+    primitives::{time, Amount, Id, Idable, H256},
 };
+use crypto::random::Rng;
+
+use crate::{
+    detail::{
+        tests::{
+            create_new_outputs, produce_test_block,
+            test_framework::{BlockTestFrameworkBuilder, ProcessBlockBuilder},
+            TestBlockInfo, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL,
+        },
+        BlockIndex, GenBlockIndex, TimeGetter,
+    },
+    BlockError, BlockHeight, BlockSource, Chainstate, ChainstateConfig, PropertyQueryError,
+};
+
+/// The `Chainstate` wrapper that simplifies operations and checks in the tests.
+pub struct BlockTestFramework {
+    // TODO: FIXME: Private fields?
+    pub chainstate: Chainstate,
+    // TODO: FIXME: Remove?..
+    pub block_indexes: Vec<BlockIndex>,
+}
+
+impl BlockTestFramework {
+    /// Creates a new `BlockTestFramework` instance using a builder api.
+    pub fn new() -> BlockTestFrameworkBuilder {
+        BlockTestFrameworkBuilder::new()
+    }
+
+    /// Processes a new block with the parameters specified using `ProcessBlockBuilder`.
+    pub fn process_block(&mut self) -> ProcessBlockBuilder {
+        ProcessBlockBuilder::new(self)
+    }
+
+    /// Creates and processes a given amount of blocks. Returns the if of the last produced block.
+    pub fn create_chain(
+        &mut self,
+        parent_block_id: &Id<GenBlock>,
+        count_blocks: usize,
+        rng: &mut impl Rng,
+    ) -> Result<Id<GenBlock>, BlockError> {
+        let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
+
+        for _ in 0..count_blocks {
+            // TODO: FIXME:
+            let block = produce_test_block(prev_block, rng);
+            prev_block = TestBlockInfo::from_block(&block);
+            self.add_special_block(block.clone())?;
+
+            // // The value of each output is decreased by a random amount to produce a new input and output.
+            // let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
+            //     .txns
+            //     .into_iter()
+            //     .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+            //     .unzip();
+            // let transaction = Transaction::new(0, inputs, outputs, 0).unwrap();
+            //
+            // self.process_block()
+            //     .with_transactions(vec![transaction])
+            //     .with_prev_block_hash(prev_block.id)
+            //     .process()
+            //     .unwrap();
+
+            // let block = produce_test_block(test_block_info, rng);
+            // test_block_info = TestBlockInfo::from_block(&block);
+            // self.add_special_block(block.clone())?;
+
+            /*
+                        fn produce_test_block_with_consensus_data(
+                prev_block: TestBlockInfo,
+                consensus_data: ConsensusData,
+                rng: &mut impl Rng,
+            ) -> Block {
+                // The value of each output is decreased by a random amount to produce a new input and output.
+                let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
+                    .txns
+                    .into_iter()
+                    .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+                    .unzip();
+
+                Block::new(
+                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
+                    prev_block.id,
+                    BlockTimestamp::from_duration_since_epoch(time::get()),
+                    consensus_data,
+                )
+                .expect(ERR_CREATE_BLOCK_FAIL)
+            }
+                         */
+        }
+
+        Ok(prev_block.id)
+    }
+
+    /// Returns the genesis block of the chain.
+    pub fn genesis(&self) -> &Genesis {
+        self.chainstate.chain_config.genesis_block()
+    }
+}
+
+impl Default for BlockTestFramework {
+    fn default() -> Self {
+        Self::new().build()
+    }
+}
+
+#[test]
+fn build_test_framework() {
+    let chain_type = ChainType::Mainnet;
+    let max_db_commit_attempts = 10;
+
+    let tf = BlockTestFramework::new()
+        .with_chain_config(
+            ChainConfigBuilder::new(chain_type)
+                .net_upgrades(NetUpgrades::unit_tests())
+                .genesis_unittest(Destination::AnyoneCanSpend)
+                .build(),
+        )
+        .with_chainstate_config(ChainstateConfig {
+            max_db_commit_attempts,
+            ..Default::default()
+        })
+        .with_time_getter(TimeGetter::default())
+        .build();
+
+    assert_eq!(
+        tf.chainstate.chainstate_config.max_db_commit_attempts,
+        max_db_commit_attempts
+    );
+    assert_eq!(tf.chainstate.chain_config.chain_type(), &chain_type);
+}
+
+#[test]
+fn process_block() {
+    let mut tf = BlockTestFramework::default();
+    tf.process_block().process().unwrap();
+}
+
+// TODO: FIXME ///////////////////////////////////////////////////////
+// TODO: FIXME: Check everything below.
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum TestSpentStatus {
@@ -42,22 +183,13 @@ pub enum TestBlockParams {
     SpendFrom(Id<Block>),
 }
 
-pub struct BlockTestFramework {
-    pub chainstate: Chainstate,
-    pub block_indexes: Vec<BlockIndex>,
-}
-
 impl BlockTestFramework {
+    // TODO: FIXME: Remove unused?..
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
         Self {
             chainstate,
             block_indexes: Vec::new(),
         }
-    }
-
-    pub fn new() -> Self {
-        let chainstate = setup_chainstate();
-        Self::with_chainstate(chainstate)
     }
 
     pub fn random_block(
@@ -107,29 +239,8 @@ impl BlockTestFramework {
         .expect(ERR_CREATE_BLOCK_FAIL)
     }
 
-    pub fn genesis(&self) -> &Genesis {
-        self.chainstate.chain_config.genesis_block()
-    }
-
     pub fn get_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
         self.chainstate.make_db_tx_ro().get_gen_block_index(id).unwrap().unwrap()
-    }
-
-    /// Creates and processes a given amount of blocks. Returns the last produced block.
-    pub(in crate::detail::tests) fn create_chain(
-        &mut self,
-        parent_block_id: &Id<GenBlock>,
-        count_blocks: usize,
-        rng: &mut impl Rng,
-    ) -> Result<Id<GenBlock>, BlockError> {
-        let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
-
-        for _ in 0..count_blocks {
-            let block = produce_test_block(test_block_info, rng);
-            test_block_info = TestBlockInfo::from_block(&block);
-            self.add_special_block(block.clone())?;
-        }
-        Ok(test_block_info.id)
     }
 
     pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
