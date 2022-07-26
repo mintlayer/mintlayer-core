@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use super::*;
-use test_utils::make_libp2p_addr;
+use p2p_test_utils::make_libp2p_addr;
 
 // handle peer connection event
 #[tokio::test]

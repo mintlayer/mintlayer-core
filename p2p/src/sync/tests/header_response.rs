@@ -16,7 +16,7 @@
 // Author(s): A. Altonen
 use super::*;
 use crypto::random::{Rng, SliceRandom};
-use test_utils::{make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
 
 // response contains more than 2000 headers
 #[tokio::test]
@@ -27,7 +27,7 @@ async fn too_many_headers() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let headers = test_utils::create_n_blocks(
+    let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         2001,
@@ -67,7 +67,7 @@ async fn valid_response() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let headers = test_utils::create_n_blocks(
+    let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         rng.gen_range(1..100),
@@ -94,7 +94,7 @@ async fn header_doesnt_attach_to_local_chain() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let headers = test_utils::create_n_blocks(
+    let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         rng.gen_range(2..100),
@@ -120,7 +120,7 @@ async fn headers_not_in_order() {
     let peer_id = PeerId::random();
     mgr.register_peer(peer_id).await.unwrap();
 
-    let mut headers = test_utils::create_n_blocks(
+    let mut headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         rng.gen_range(5..100),
@@ -149,7 +149,7 @@ async fn invalid_state() {
 
     mgr.peers.get_mut(&peer_id).unwrap().set_state(peer::PeerSyncState::Unknown);
 
-    let headers = test_utils::create_n_blocks(
+    let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         rng.gen_range(1..100),

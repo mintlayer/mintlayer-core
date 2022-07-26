@@ -28,9 +28,12 @@ use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
-#[test]
-fn reorg_simple() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_simple(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -51,9 +54,10 @@ fn reorg_simple() {
             Some(chainstate.chain_config.genesis_block_id())
         );
 
-        let block_a = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let block_a = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
         chainstate.process_block(block_a.clone(), BlockSource::Local).unwrap();
         assert_eq!(
             chainstate
@@ -64,9 +68,10 @@ fn reorg_simple() {
         );
 
         // Produce the parallel chain.
-        let block_b = produce_test_block(TestBlockInfo::from_genesis(
-            chainstate.chain_config.genesis_block(),
-        ));
+        let block_b = produce_test_block(
+            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
+            &mut rng,
+        );
         assert_ne!(block_a.get_id(), block_b.get_id());
         chainstate.process_block(block_b.clone(), BlockSource::Local).unwrap();
         assert_ne!(
@@ -85,7 +90,7 @@ fn reorg_simple() {
         );
 
         // Produce one more block that causes a reorg.
-        let block_c = produce_test_block(TestBlockInfo::from_block(&block_b));
+        let block_c = produce_test_block(TestBlockInfo::from_block(&block_b), &mut rng);
         assert!(chainstate.process_block(block_c.clone(), BlockSource::Local).is_ok());
         assert_eq!(
             chainstate
@@ -97,19 +102,22 @@ fn reorg_simple() {
     });
 }
 
-#[test]
-fn test_very_long_reorgs() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_very_long_reorgs(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut btf = BlockTestFramework::new();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut btf, &events);
 
-        check_simple_fork(&mut btf, &events);
-        check_make_alternative_chain_longer(&mut btf, &events);
-        check_reorg_to_first_chain(&mut btf, &events);
-        check_spend_tx_in_failed_block(&mut btf, &events);
-        check_spend_tx_in_other_fork(&mut btf);
-        check_fork_that_double_spends(&mut btf);
+        check_simple_fork(&mut btf, &events, &mut rng);
+        check_make_alternative_chain_longer(&mut btf, &events, &mut rng);
+        check_reorg_to_first_chain(&mut btf, &events, &mut rng);
+        check_spend_tx_in_failed_block(&mut btf, &events, &mut rng);
+        check_spend_tx_in_other_fork(&mut btf, &mut rng);
+        check_fork_that_double_spends(&mut btf, &mut rng);
 
         //  Try to create a block that has too much fee
         //      genesis -> b1 (0) -> b2 (1) -> b5 (2) -> b6 (3)
@@ -128,7 +136,11 @@ fn test_very_long_reorgs() {
     });
 }
 
-fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventList) {
+fn check_spend_tx_in_failed_block(
+    btf: &mut BlockTestFramework,
+    events: &EventList,
+    rng: &mut impl Rng,
+) {
     // Check spending of a transaction in a block which failed to connect
     //
     //+-- 0x07e3…6fe4 (H:8,M,B:10)
@@ -139,7 +151,11 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventLi
     const NEW_CHAIN_END_ON: usize = 11;
 
     assert!(btf
-        .create_chain(&(*btf.index_at(NEW_CHAIN_START_ON).block_id()).into(), 5,)
+        .create_chain(
+            &(*btf.index_at(NEW_CHAIN_START_ON).block_id()).into(),
+            5,
+            rng
+        )
         .is_ok());
     check_last_event(btf, events);
 
@@ -153,13 +169,14 @@ fn check_spend_tx_in_failed_block(btf: &mut BlockTestFramework, events: &EventLi
     let double_spend_block = btf.random_block(
         TestBlockInfo::from_block(&block),
         Some(&[TestBlockParams::SpendFrom(*btf.index_at(NEW_CHAIN_END_ON).block_id())]),
+        rng,
     );
     assert!(btf.add_special_block(double_spend_block).is_ok());
     // Cause reorg on a failed block
-    assert!(btf.create_chain(&(*btf.index_at(12).block_id()).into(), 1).is_err());
+    assert!(btf.create_chain(&(*btf.index_at(12).block_id()).into(), 1, rng).is_err());
 }
 
-fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
+fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework, rng: &mut impl Rng) {
     // # Attempt to spend a transaction created on a different fork
     //
     // +-- 0x4273…c93c (H:7,M,B:10)
@@ -173,7 +190,11 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
     const NEW_CHAIN_START_ON: usize = 5;
     const NEW_CHAIN_END_ON: usize = 9;
     assert!(btf
-        .create_chain(&(*btf.index_at(NEW_CHAIN_START_ON).block_id()).into(), 1)
+        .create_chain(
+            &(*btf.index_at(NEW_CHAIN_START_ON).block_id()).into(),
+            1,
+            rng
+        )
         .is_ok());
     let block = btf
         .chainstate
@@ -184,14 +205,15 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework) {
     let double_spend_block = btf.random_block(
         TestBlockInfo::from_block(&block),
         Some(&[TestBlockParams::SpendFrom(*btf.index_at(3).block_id())]),
+        rng,
     );
     let block_id = double_spend_block.get_id();
     assert!(btf.add_special_block(double_spend_block).is_ok());
     // Cause reorg on a failed block
-    assert!(btf.create_chain(&block_id.into(), 10).is_err());
+    assert!(btf.create_chain(&block_id.into(), 10, rng).is_err());
 }
 
-fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
+fn check_fork_that_double_spends(btf: &mut BlockTestFramework, rng: &mut impl Rng) {
     // # Try to create a fork that double-spends
     // +-- 0x6e45…e8e8 (H:0,P:0)
     //         +-- 0xe090…995e (H:1,M,P:1)
@@ -213,11 +235,16 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFramework) {
     let double_spend_block = btf.random_block(
         TestBlockInfo::from_block(&block),
         Some(&[TestBlockParams::SpendFrom(*btf.index_at(6).block_id())]),
+        rng,
     );
     assert!(btf.add_special_block(double_spend_block).is_err());
 }
 
-fn check_reorg_to_first_chain(btf: &mut BlockTestFramework, events: &EventList) {
+fn check_reorg_to_first_chain(
+    btf: &mut BlockTestFramework,
+    events: &EventList,
+    rng: &mut impl Rng,
+) {
     //  ... and back to the first chain.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -230,7 +257,7 @@ fn check_reorg_to_first_chain(btf: &mut BlockTestFramework, events: &EventList) 
     // > H - Height, M - main chain, B - block
     //
     let block_id: Id<GenBlock> = (*btf.index_at(2).block_id()).into();
-    assert!(btf.create_chain(&block_id, 2).is_ok());
+    assert!(btf.create_chain(&block_id, 2, rng).is_ok());
     check_last_event(btf, events);
 
     // b3
@@ -271,7 +298,11 @@ fn check_reorg_to_first_chain(btf: &mut BlockTestFramework, events: &EventList) 
     assert!(btf.is_block_in_main_chain(btf.index_at(6).block_id()));
 }
 
-fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &EventList) {
+fn check_make_alternative_chain_longer(
+    btf: &mut BlockTestFramework,
+    events: &EventList,
+    rng: &mut impl Rng,
+) {
     //  Now we add another block to make the alternative chain longer.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -289,7 +320,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
         .get_block(*btf.block_indexes.last().unwrap().block_id())
         .unwrap()
         .unwrap();
-    let block = btf.random_block(TestBlockInfo::from_block(&block), None);
+    let block = btf.random_block(TestBlockInfo::from_block(&block), None, rng);
     assert!(btf.add_special_block(block).is_ok());
     check_last_event(btf, events);
     // b3
@@ -312,7 +343,7 @@ fn check_make_alternative_chain_longer(btf: &mut BlockTestFramework, events: &Ev
     assert!(btf.is_block_in_main_chain(btf.index_at(4).block_id()));
 }
 
-fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
+fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList, rng: &mut impl Rng) {
     //  Fork like this:
     //
     //  +-- 0x6e45…e8e8 (H:0,B:0) = genesis
@@ -323,9 +354,9 @@ fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList) {
     //
     // Nothing should happen at this point. We saw B2 first so it takes priority.
     // Don't reorg to a chain of the same length
-    assert!(btf.create_chain(&btf.genesis().get_id().into(), 2).is_ok());
+    assert!(btf.create_chain(&btf.genesis().get_id().into(), 2, rng).is_ok());
     check_last_event(btf, events);
-    assert!(btf.create_chain(&(*btf.index_at(1).block_id()).into(), 1).is_ok());
+    assert!(btf.create_chain(&(*btf.index_at(1).block_id()).into(), 1, rng).is_ok());
     check_last_event(btf, events);
 
     btf.test_block(

@@ -22,8 +22,8 @@ use crate::{
 };
 use common::chain::config;
 use libp2p::{Multiaddr, PeerId};
+use p2p_test_utils::make_libp2p_addr;
 use std::sync::Arc;
-use test_utils::make_libp2p_addr;
 
 // ban peer whose connected to us
 #[tokio::test]

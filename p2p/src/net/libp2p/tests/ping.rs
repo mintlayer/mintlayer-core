@@ -21,8 +21,8 @@ use libp2p::{
     ping,
     swarm::{SwarmBuilder, SwarmEvent},
 };
+use p2p_test_utils::make_libp2p_addr;
 use std::time::Duration;
-use test_utils::make_libp2p_addr;
 
 #[tokio::test]
 async fn test_remote_doesnt_respond() {

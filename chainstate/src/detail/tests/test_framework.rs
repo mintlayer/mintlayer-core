@@ -64,11 +64,12 @@ impl BlockTestFramework {
         &self,
         parent_info: TestBlockInfo,
         params: Option<&[TestBlockParams]>,
+        rng: &mut impl Rng,
     ) -> Block {
         let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_info
             .txns
             .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o))
+            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
             .unzip();
 
         let mut prev_block_hash = parent_info.id;
@@ -119,11 +120,12 @@ impl BlockTestFramework {
         &mut self,
         parent_block_id: &Id<GenBlock>,
         count_blocks: usize,
+        rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, BlockError> {
         let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
 
         for _ in 0..count_blocks {
-            let block = produce_test_block(test_block_info);
+            let block = produce_test_block(test_block_info, rng);
             test_block_info = TestBlockInfo::from_block(&block);
             self.add_special_block(block.clone())?;
         }

@@ -19,8 +19,8 @@ use super::*;
 use crate::net::libp2p::{behaviour, types::*};
 use futures::StreamExt;
 use libp2p::gossipsub::IdentTopic as Topic;
+use p2p_test_utils::make_libp2p_addr;
 use serialization::Encode;
-use test_utils::make_libp2p_addr;
 
 impl PartialEq for types::PubSubEvent {
     fn eq(&self, other: &Self) -> bool {

@@ -164,6 +164,8 @@ mod tests {
     use checkers::*;
     use common::{chain::block::Block, primitives::Id};
     use helpers::*;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     const MAX_ORPHAN_BLOCKS: usize = 512;
 
@@ -175,17 +177,15 @@ mod tests {
         use common::primitives::H256;
         use crypto::random::Rng;
 
-        pub fn gen_random_blocks(count: u32) -> Vec<Block> {
-            (0..count).into_iter().map(|_| gen_random_block()).collect::<Vec<_>>()
+        pub fn gen_random_blocks(rng: &mut impl Rng, count: u32) -> Vec<Block> {
+            (0..count).into_iter().map(|_| gen_random_block(rng)).collect::<Vec<_>>()
         }
 
-        pub fn gen_random_block() -> Block {
-            gen_block_from_id(None)
+        pub fn gen_random_block(rng: &mut impl Rng) -> Block {
+            gen_block_from_id(rng, None)
         }
 
-        pub fn gen_block_from_id(prev_block_id: Option<Id<GenBlock>>) -> Block {
-            let mut rng = crypto::random::make_pseudo_rng();
-
+        pub fn gen_block_from_id(rng: &mut impl Rng, prev_block_id: Option<Id<GenBlock>>) -> Block {
             let tx = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
             Block::new(
@@ -197,40 +197,40 @@ mod tests {
             .unwrap()
         }
 
-        pub fn gen_blocks_chain(count: u32) -> Vec<Block> {
-            gen_blocks_chain_starting_from_id(count, None)
+        pub fn gen_blocks_chain(rng: &mut impl Rng, count: u32) -> Vec<Block> {
+            gen_blocks_chain_starting_from_id(rng, count, None)
         }
 
         pub fn gen_blocks_chain_starting_from_id(
+            rng: &mut impl Rng,
             count: u32,
             prev_block_id: Option<Id<GenBlock>>,
         ) -> Vec<Block> {
-            let mut blocks = vec![gen_block_from_id(prev_block_id)];
+            let mut blocks = vec![gen_block_from_id(rng, prev_block_id)];
 
             (1..count).into_iter().for_each(|_| {
                 let prev_block_id = blocks.last().map(|block| block.get_id());
-                blocks.push(gen_block_from_id(prev_block_id.map(Into::into)));
+                blocks.push(gen_block_from_id(rng, prev_block_id.map(Into::into)));
             });
 
             blocks
         }
 
-        pub fn gen_blocks_with_common_parent(count: u32) -> Vec<Block> {
-            gen_blocks_with_common_parent_id(count, None)
+        pub fn gen_blocks_with_common_parent(rng: &mut impl Rng, count: u32) -> Vec<Block> {
+            gen_blocks_with_common_parent_id(rng, count, None)
         }
 
         pub fn gen_blocks_with_common_parent_id(
+            rng: &mut impl Rng,
             count: u32,
             prev_block_id: Option<Id<Block>>,
         ) -> Vec<Block> {
-            let mut rng = crypto::random::make_pseudo_rng();
-
             let prev_block_id =
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into());
 
             (0..count)
                 .into_iter()
-                .map(|_| gen_block_from_id(Some(prev_block_id.into())))
+                .map(|_| gen_block_from_id(rng, Some(prev_block_id.into())))
                 .collect()
         }
     }
@@ -283,12 +283,15 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_one_block_and_clear() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_one_block_and_clear(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
-        let block = gen_random_block();
+        let mut rng = make_seedable_rng(seed);
+        let block = gen_random_block(&mut rng);
         assert!(orphans_pool.add_block(block.clone()).is_ok());
 
         // check if block was really inserted
@@ -300,27 +303,28 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_blocks_and_clear() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_blocks_and_clear(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
-        let block = gen_random_block();
+        let mut rng = make_seedable_rng(seed);
+        let block = gen_random_block(&mut rng);
         assert!(orphans_pool.add_block(block.clone()).is_ok());
         assert_eq!(orphans_pool.len(), 1);
 
         check_block_existence_and_pool_length(&orphans_pool, &block, 1);
 
         // add another block that connects to the first one
-        let conn_block = gen_block_from_id(Some(block.get_id().into()));
+        let conn_block = gen_block_from_id(&mut rng, Some(block.get_id().into()));
         assert!(orphans_pool.add_block(conn_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &conn_block, 2);
         assert_eq!(orphans_pool.len(), 2);
 
         // check that there is only 2 key-value pair in `orphans_by_prev_id`
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 2);
-
-        let mut rng = crypto::random::make_pseudo_rng();
 
         // add another block with the parent id of any of the 2 blocks above
         let rand_block = {
@@ -334,7 +338,7 @@ mod tests {
                 .expect("it should return the block specified by `rand_id`")
         };
 
-        let sim_block = gen_block_from_id(Some(rand_block.prev_block_id()));
+        let sim_block = gen_block_from_id(&mut rng, Some(rand_block.prev_block_id()));
         assert!(orphans_pool.add_block(sim_block.clone()).is_ok());
         check_block_existence_and_pool_length(&orphans_pool, &sim_block, 3);
 
@@ -346,11 +350,14 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_block_exceeds_max() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_block_exceeds_max(#[case] seed: Seed) {
         let max_orphans = 3;
         let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
-        let blocks = gen_random_blocks(max_orphans as u32 + 2);
+        let mut rng = make_seedable_rng(seed);
+        let blocks = gen_random_blocks(&mut rng, max_orphans as u32 + 2);
 
         blocks.into_iter().for_each(|block| {
             assert!(orphans_pool.add_block(block).is_ok());
@@ -359,16 +366,17 @@ mod tests {
         check_pool_length(&orphans_pool, max_orphans);
     }
 
-    #[test]
-    fn test_add_block_repeated() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_block_repeated(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-        let blocks = gen_random_blocks(50);
+        let mut rng = make_seedable_rng(seed);
+        let blocks = gen_random_blocks(&mut rng, 50);
 
         blocks.iter().for_each(|block| {
             assert!(orphans_pool.add_block(block.clone()).is_ok());
         });
-
-        let mut rng = crypto::random::make_pseudo_rng();
 
         let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
@@ -378,17 +386,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_pool_drop_block() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_pool_drop_block(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-        let blocks = gen_random_blocks(5);
+        let mut rng = make_seedable_rng(seed);
+        let blocks = gen_random_blocks(&mut rng, 5);
 
         blocks.iter().for_each(|block| {
             assert!(orphans_pool.add_block(block.clone()).is_ok());
         });
         check_pool_length(&orphans_pool, blocks.len());
-
-        let mut rng = crypto::random::make_pseudo_rng();
 
         let rand_block = blocks.choose(&mut rng).expect("this should return any block");
 
@@ -400,9 +409,12 @@ mod tests {
         assert!(!orphans_pool.orphan_by_prev_id.contains_key(&rand_block.prev_block_id()));
     }
 
-    #[test]
-    fn test_deepest_child_in_chain() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_deepest_child_in_chain(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
+        let mut rng = make_seedable_rng(seed);
 
         // In `orphans_by_prev_id`:
         // [
@@ -411,7 +423,7 @@ mod tests {
         //  ( c, d ),
         //  ( d, e ),
         // ]
-        let blocks = gen_blocks_chain(4);
+        let blocks = gen_blocks_chain(&mut rng, 4);
 
         blocks.iter().for_each(|block| {
             assert!(orphans_pool.add_block(block.clone()).is_ok());
@@ -450,14 +462,17 @@ mod tests {
         check_block_existence(&orphans_pool, first_block);
     }
 
-    #[test]
-    fn test_deepest_child_common_parent() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_deepest_child_common_parent(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
+        let mut rng = make_seedable_rng(seed);
         // In `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f) ),
         // ]
-        let blocks = gen_blocks_with_common_parent(5);
+        let blocks = gen_blocks_with_common_parent(&mut rng, 5);
 
         blocks.iter().enumerate().for_each(|(idx, b)| {
             let block_id = b.get_id();
@@ -478,8 +493,6 @@ mod tests {
         assert_eq!(orphans_pool.orphan_by_prev_id.len(), 1);
         assert_eq!(orphans_pool.orphan_ids.len(), blocks.len());
 
-        let mut rng = crypto::random::make_pseudo_rng();
-
         // delete a random block
         let random_block = blocks.choose(&mut rng).expect("returns any block");
         orphans_pool.del_one_deepest_child(&random_block.get_id());
@@ -499,21 +512,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_prune() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_prune(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(12);
+        let mut rng = make_seedable_rng(seed);
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e) )
         // ]
-        let sim_blocks = gen_blocks_with_common_parent(4);
+        let sim_blocks = gen_blocks_with_common_parent(&mut rng, 4);
 
         // [
         //  ( f, g ),
         //  ( g, h ),
         //  ( h, i ),
         // ]
-        let conn_blocks = gen_blocks_chain(3);
+        let conn_blocks = gen_blocks_chain(&mut rng, 3);
 
         // generate a chain using one of sim's blocks.
         let sim_block_id = sim_blocks.last().expect("it should return the last element").get_id();
@@ -521,14 +537,15 @@ mod tests {
         //  ( e, j ),
         //  ( j, k )
         // ]
-        let extra_sim_blocks = gen_blocks_chain_starting_from_id(2, Some(sim_block_id.into()));
+        let extra_sim_blocks =
+            gen_blocks_chain_starting_from_id(&mut rng, 2, Some(sim_block_id.into()));
 
         // generate blocks with conn's block id as parent
         let conn_block_id = conn_blocks.last().expect("it should return last element").get_id();
         // [
         //  ( i, (l,m,n) )
         // ]
-        let extra_conn_blocks = gen_blocks_with_common_parent_id(3, Some(conn_block_id));
+        let extra_conn_blocks = gen_blocks_with_common_parent_id(&mut rng, 3, Some(conn_block_id));
 
         //[
         //  ( a, (b,c,d,e) ),
@@ -558,7 +575,7 @@ mod tests {
         check_pool_length(&orphans_pool, orphans_pool.max_orphans - 1);
 
         // add a random block
-        let random_block = gen_random_block();
+        let random_block = gen_random_block(&mut rng);
         assert!(orphans_pool.add_block(random_block.clone()).is_ok());
         check_block_existence_and_pool_length(
             &orphans_pool,
@@ -571,22 +588,25 @@ mod tests {
         check_pool_length(&orphans_pool, orphans_pool.max_orphans - 1);
     }
 
-    #[test]
-    fn test_simple_take_all_children_of() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_simple_take_all_children_of(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(20);
+        let mut rng = make_seedable_rng(seed);
 
         let count = 9;
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f,g,h,i,j) )
         // ]
-        let sim_blocks = gen_blocks_with_common_parent(count);
+        let sim_blocks = gen_blocks_with_common_parent(&mut rng, count);
 
         // in `orphans_by_prev_id`:
         // [
         //  (k,l), (l,m), (m,n), (n,o), (o,p), (p,q), (q,r), (r,s), (s,t))
         // ]
-        let conn_blocks = gen_blocks_chain(count);
+        let conn_blocks = gen_blocks_chain(&mut rng, count);
         let conn_blocks_len = conn_blocks.len();
 
         // alternate adding of blocks
@@ -612,16 +632,19 @@ mod tests {
         check_pool_length(&orphans_pool, conn_blocks_len);
     }
 
-    #[test]
-    fn test_mix_chain_take_all_children_of() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_mix_chain_take_all_children_of(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(20);
+        let mut rng = make_seedable_rng(seed);
 
         let count = 9;
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f,g,h,i,j) )
         // ]
-        let sim_blocks = gen_blocks_with_common_parent(count);
+        let sim_blocks = gen_blocks_with_common_parent(&mut rng, count);
 
         let mut conn_blocks: Vec<Block> = vec![];
         // let's use 2 random blocks of sim_blocks to generate a chain of blocks
@@ -636,11 +659,12 @@ mod tests {
         // ]
         for _ in 0..2 {
             let rand_block_id = sim_blocks
-                .choose(&mut crypto::random::make_pseudo_rng())
+                .choose(&mut rng)
                 .expect("should return any block in sim_blocks")
                 .get_id();
             // generate a chain of 3 blocks for `rand_block_id` as parent.
-            let mut blocks = gen_blocks_chain_starting_from_id(3, Some(rand_block_id.into()));
+            let mut blocks =
+                gen_blocks_chain_starting_from_id(&mut rng, 3, Some(rand_block_id.into()));
             conn_blocks.append(&mut blocks);
         }
 

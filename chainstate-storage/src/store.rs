@@ -412,7 +412,9 @@ pub(crate) mod test {
     use common::chain::{Destination, OutputPurpose, TxOutput};
     use common::primitives::{Amount, H256};
     use crypto::key::{KeyKind, PrivateKey};
-    use crypto::random::{make_pseudo_rng, Rng};
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
     use utxo::{BlockUndo, TxUndo};
 
     #[test]
@@ -643,9 +645,9 @@ pub(crate) mod test {
     }
 
     /// returns a tuple of utxo and outpoint, for testing.
-    fn create_rand_utxo(block_height: u64) -> Utxo {
+    fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
         // just a random value generated, and also a random `is_block_reward` value.
-        let random_value = make_pseudo_rng().gen_range(0..(u128::MAX - 1));
+        let random_value = rng.gen_range(0..(u128::MAX - 1));
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
             Amount::from_atoms(random_value),
@@ -663,6 +665,7 @@ pub(crate) mod test {
     /// `max_lim_of_utxos` - sets the maximum limit of utxos of a random TxUndo.
     /// `max_lim_of_tx_undos` - the maximum limit of TxUndos in the BlockUndo.
     pub fn create_rand_block_undo(
+        rng: &mut impl Rng,
         max_lim_of_utxos: u8,
         max_lim_of_tx_undos: u8,
         block_height: BlockHeight,
@@ -671,15 +674,15 @@ pub(crate) mod test {
 
         let mut block_undo: Vec<TxUndo> = vec![];
 
-        let undo_rng = make_pseudo_rng().gen_range(1..max_lim_of_tx_undos);
+        let undo_rng = rng.gen_range(1..max_lim_of_tx_undos);
         for _ in 0..undo_rng {
             let mut tx_undo = vec![];
 
-            let utxo_rng = make_pseudo_rng().gen_range(1..max_lim_of_utxos);
+            let utxo_rng = rng.gen_range(1..max_lim_of_utxos);
             for i in 0..utxo_rng {
                 counter += u64::from(i);
 
-                tx_undo.push(create_rand_utxo(counter));
+                tx_undo.push(create_rand_utxo(rng, counter));
             }
 
             block_undo.push(TxUndo::new(tx_undo));
@@ -689,9 +692,12 @@ pub(crate) mod test {
     }
 
     #[cfg(not(loom))]
-    #[test]
-    fn undo_test() {
-        let block_undo0 = create_rand_block_undo(10, 5, BlockHeight::new(1));
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn undo_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let block_undo0 = create_rand_block_undo(&mut rng, 10, 5, BlockHeight::new(1));
         // create id:
         let id0: Id<Block> = Id::new(H256::random());
 
@@ -710,7 +716,7 @@ pub(crate) mod test {
 
         // insert, remove, and reinsert the next block_undo
 
-        let block_undo1 = create_rand_block_undo(5, 10, BlockHeight::new(2));
+        let block_undo1 = create_rand_block_undo(&mut rng, 5, 10, BlockHeight::new(2));
         // create id:
         let id1: Id<Block> = Id::new(H256::random());
 

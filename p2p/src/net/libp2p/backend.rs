@@ -336,7 +336,7 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: test_utils::make_libp2p_addr(),
+                addr: p2p_test_utils::make_libp2p_addr(),
                 response: tx,
             })
             .await;
@@ -347,7 +347,7 @@ mod tests {
         assert!(res.unwrap().is_ok());
     }
 
-    // verify that binding twice to the same network inteface fails
+    // verify that binding twice to the same network interface fails
     #[ignore]
     #[tokio::test]
     async fn test_command_listen_addrinuse() {
@@ -363,7 +363,7 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: test_utils::make_libp2p_addr(),
+                addr: p2p_test_utils::make_libp2p_addr(),
                 response: tx,
             })
             .await;
@@ -377,7 +377,7 @@ mod tests {
         let (tx, rx) = oneshot::channel();
         let res = cmd_tx
             .send(types::Command::Listen {
-                addr: test_utils::make_libp2p_addr(),
+                addr: p2p_test_utils::make_libp2p_addr(),
                 response: tx,
             })
             .await;
