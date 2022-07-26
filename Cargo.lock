@@ -547,6 +547,7 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
+ "rstest",
  "serialization",
  "storage",
  "test-utils",

@@ -74,6 +74,7 @@ mod test {
     use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
+    use crypto::random::Rng;
     use rstest::*;
     use test_utils::random::*;
 
@@ -81,7 +82,7 @@ mod test {
         // just a random value generated, and also a random `is_block_reward` value.
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
-            Amount::from_atoms(random_value),
+            Amount::from_atoms(output_value),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
