@@ -73,3 +73,47 @@ impl<T: Idable> std::ops::Deref for WithId<T> {
         self.as_ref()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[derive(Eq, PartialEq, Debug, Clone, serialization::Encode)]
+    struct TestStruct {
+        num: u64,
+        blurb: String,
+    }
+
+    impl Idable for TestStruct {
+        type Tag = TestStruct;
+        fn get_id(&self) -> Id<Self::Tag> {
+            Id::new(super::super::hash_encoded(self))
+        }
+    }
+
+    #[test]
+    fn owned() {
+        let data = TestStruct {
+            num: 1337,
+            blurb: "Hello!".into(),
+        };
+
+        let data_clone = data.clone();
+        let wrapped = WithId::new(data);
+        assert_eq!(data_clone.get_id(), wrapped.get_id());
+        assert_eq!(data_clone, WithId::take(wrapped));
+    }
+
+    #[test]
+    fn borrowed() {
+        let data = TestStruct {
+            num: 42,
+            blurb: "Goodbye!".into(),
+        };
+
+        // Check it works with references too so IDs can be pre-calculated for borrowed data.
+        let data_id = data.get_id();
+        let wrapped: WithId<&TestStruct> = WithId::new(&data);
+        assert_eq!(data_id, wrapped.get_id());
+    }
+}
