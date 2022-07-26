@@ -51,7 +51,7 @@ async fn test_request_response() {
         mgr2.peer_sync_handle
             .send_response(
                 request_id,
-                Response::HeaderResponse(HeaderResponse::new(vec![])),
+                Response::HeaderResponse(HeadersResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -100,7 +100,7 @@ async fn test_multiple_requests_and_responses() {
                     mgr2.peer_sync_handle
                         .send_response(
                             request_id,
-                            Response::HeaderResponse(HeaderResponse::new(vec![])),
+                            Response::HeaderResponse(HeadersResponse::new(vec![])),
                         )
                         .await
                         .unwrap();

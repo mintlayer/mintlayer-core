@@ -67,11 +67,11 @@ pub enum Request {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct HeaderResponse {
+pub struct HeadersResponse {
     headers: Vec<BlockHeader>,
 }
 
-impl HeaderResponse {
+impl HeadersResponse {
     pub fn new(headers: Vec<BlockHeader>) -> Self {
         Self { headers }
     }
@@ -86,11 +86,11 @@ impl HeaderResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockResponse {
+pub struct BlocksResponse {
     blocks: Vec<Block>,
 }
 
-impl BlockResponse {
+impl BlocksResponse {
     pub fn new(blocks: Vec<Block>) -> Self {
         Self { blocks }
     }
@@ -107,9 +107,9 @@ impl BlockResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
-    HeaderResponse(HeaderResponse),
+    HeaderResponse(HeadersResponse),
     #[codec(index = 1)]
-    BlockResponse(BlockResponse),
+    BlockResponse(BlocksResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
