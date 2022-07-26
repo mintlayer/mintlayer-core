@@ -260,8 +260,9 @@ impl RollingFeeRate {
             (current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
                 / (halflife.as_secs() as f64),
         );
-        self.rolling_minimum_fee_rate =
-            FeeRate::new((self.rolling_minimum_fee_rate.tokens_per_kb() as f64 / divisor) as u128);
+        self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
+            (self.rolling_minimum_fee_rate.tokens_per_kb() as f64 / divisor) as u128,
+        ));
 
         log::trace!(
             "decay_fee: new fee rate:  {:?}",
@@ -276,7 +277,7 @@ impl RollingFeeRate {
     pub(crate) fn new(creation_time: Time) -> Self {
         Self {
             block_since_last_rolling_fee_bump: false,
-            rolling_minimum_fee_rate: FeeRate::new(0),
+            rolling_minimum_fee_rate: FeeRate::new(Amount::from_atoms(0)),
             last_rolling_fee_update: creation_time,
         }
     }
@@ -574,7 +575,7 @@ where
     pub(crate) fn get_update_min_fee_rate(&self) -> FeeRate {
         let rolling_fee_rate = self.rolling_fee_rate.get();
         if !rolling_fee_rate.block_since_last_rolling_fee_bump
-            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(0)
+            || rolling_fee_rate.rolling_minimum_fee_rate == FeeRate::new(Amount::from_atoms(0))
         {
             return rolling_fee_rate.rolling_minimum_fee_rate;
         } else if self.clock.get_time()
@@ -602,7 +603,7 @@ where
 
     fn drop_rolling_fee(&self) {
         let mut rolling_fee_rate = self.rolling_fee_rate.get();
-        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(0);
+        rolling_fee_rate.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(0));
         self.rolling_fee_rate.set(rolling_fee_rate)
     }
 

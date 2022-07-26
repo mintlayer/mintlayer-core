@@ -1,8 +1,8 @@
 use common::primitives::amount::Amount;
 
 lazy_static::lazy_static! {
-    pub(crate) static ref INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(1000);
-    pub(crate) static ref INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(500);
+    pub(crate) static ref INCREMENTAL_RELAY_FEE_RATE: FeeRate = FeeRate::new(Amount::from_atoms(1000));
+    pub(crate) static ref INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -11,8 +11,10 @@ pub(crate) struct FeeRate {
 }
 
 impl FeeRate {
-    pub(crate) fn new(tokens_per_kb: u128) -> Self {
-        Self { tokens_per_kb }
+    pub(crate) fn new(tokens_per_kb: Amount) -> Self {
+        Self {
+            tokens_per_kb: tokens_per_kb.into(),
+        }
     }
 
     pub(crate) fn of_tx(fee: Amount, tx_size: usize) -> Self {
