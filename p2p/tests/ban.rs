@@ -15,8 +15,6 @@
 //
 // Author(s): A. Altonen
 #![allow(unused)]
-extern crate p2p_test_utils;
-
 use libp2p::Multiaddr;
 use p2p::{
     error::{P2pError, PublishError},

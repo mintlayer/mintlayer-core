@@ -14,7 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-extern crate p2p_test_utils;
 use p2p_test_utils::make_libp2p_addr;
 
 use common::chain::{

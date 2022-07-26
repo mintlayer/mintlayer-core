@@ -64,7 +64,7 @@ In addition to maintaining each connection individually by exchanging `Ping`/`Po
 
 The peers exchange messages directly between each other and apart from blocks and transactions which are most likely published on a separate gossip topics (instead of being exchanged directly between peers), all messages form a request/response pairs. It's a violation of the protocol not to respond to a request with a proper response, even with an empty response if the data query could not be fulfilled. The transport channel is available for use while a request/response pair is still in progress meaning the communication is not blocked for other uses socket before the response for the request is heard.
 
-Each message contains at least the header which indicates the message type it carries, the network this message originated from and whether the message carries any paylaod. Table below depicts the header format.
+Each message contains at least the header which indicates the message type it carries, the network this message originated from and whether the message carries any payload. Table below depicts the header format.
 
 | Length | Description | Type | Comments |
 |--------|-------------|------|----------|
@@ -116,7 +116,7 @@ The random nonce carried in the `Pong` message must be the same that was in the 
 | Length | Description | Type | Comments |
 |--------|-------------|------|----------|
 | 1 bytes | Length | `u8` | Number of peer entries
-| N bytes | Peers | `Vec<u8>` | Byte vector containing SCALE-encodeded vector of `(socket address, services)` tuples.
+| N bytes | Peers | `Vec<u8>` | Byte vector containing SCALE-encoded vector of `(socket address, services)` tuples.
 
 #### PexAck
 
