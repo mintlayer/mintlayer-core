@@ -4,7 +4,14 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
+[features]
+default = [ 'inmemory' ]
+# Enable the in-memory backend
+inmemory = [ 'storage-inmemory' ]
+
 [dependencies]
-common = { path = "../common"}
-logging = { path = '../logging' }
-thiserror = "1.0"
+storage-core = { path = "core" }
+storage-inmemory = { path = "inmemory", optional = true }
+
+[dev-dependencies]
+common = { path = "../common" }

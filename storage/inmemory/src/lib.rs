@@ -13,10 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::schema::{self, Schema};
-use crate::Data;
 use common::sync;
 use std::collections::BTreeMap;
+use storage_core::{
+    schema::{self, Schema},
+    traits, transaction, Data,
+};
 
 // These store the data
 type StoreMapSingle = BTreeMap<Data, Data>;
@@ -85,7 +87,7 @@ impl<Sch: Schema> Clone for Store<Sch> {
     }
 }
 
-impl<Sch: 'static + Schema> crate::traits::Backend<Sch> for Store<Sch> {}
+impl<Sch: 'static + Schema> traits::Backend<Sch> for Store<Sch> {}
 
 pub trait InitStore: Schema {
     fn init() -> BTreeMap<&'static str, StoreMap>;
@@ -117,7 +119,7 @@ impl<Sch: InitStore> Store<Sch> {
     }
 }
 
-impl<'tx, Sch: 'static + Schema> crate::traits::Transactional<'tx, Sch> for Store<Sch> {
+impl<'tx, Sch: 'static + Schema> traits::Transactional<'tx, Sch> for Store<Sch> {
     type TransactionRo = TransactionRo<'tx, Sch>;
     type TransactionRw = TransactionRw<'tx, Sch>;
 
@@ -153,7 +155,7 @@ impl<'st, Sch: Schema> TransactionRo<'st, Sch> {
     }
 }
 
-impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRo<'st, Sch> {
+impl<'st, 'm, Sch: Schema> traits::GetMapRef<'m, Sch> for TransactionRo<'st, Sch> {
     type MapRef = SingleMapView<'m>;
 
     fn get<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx self) -> Self::MapRef {
@@ -199,7 +201,7 @@ impl<'st, Sch: Schema> TransactionRw<'st, Sch> {
     }
 }
 
-impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRw<'st, Sch> {
+impl<'st, 'm, Sch: Schema> traits::GetMapRef<'m, Sch> for TransactionRw<'st, Sch> {
     type MapRef = SingleMapRef<'m>;
 
     fn get<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx self) -> Self::MapRef {
@@ -212,7 +214,7 @@ impl<'st, 'm, Sch: Schema> crate::traits::GetMapRef<'m, Sch> for TransactionRw<'
     }
 }
 
-impl<'st, 'm, Sch: Schema> crate::traits::GetMapMut<'m, Sch> for TransactionRw<'st, Sch> {
+impl<'st, 'm, Sch: Schema> traits::GetMapMut<'m, Sch> for TransactionRw<'st, Sch> {
     type MapMut = SingleMapMut<'m>;
 
     fn get_mut<'tx: 'm, DBIdx: schema::DBIndex, I>(&'tx mut self) -> Self::MapMut {
@@ -225,16 +227,16 @@ impl<'st, 'm, Sch: Schema> crate::traits::GetMapMut<'m, Sch> for TransactionRw<'
     }
 }
 
-impl<'st, Sch: Schema> crate::transaction::TransactionRo for TransactionRo<'st, Sch> {
-    type Error = crate::Error;
+impl<'st, Sch: Schema> transaction::TransactionRo for TransactionRo<'st, Sch> {
+    type Error = storage_core::Error;
 
     fn finalize(self) -> Result<(), Self::Error> {
         Ok(())
     }
 }
 
-impl<'st, Sch: Schema> crate::transaction::TransactionRw for TransactionRw<'st, Sch> {
-    type Error = crate::Error;
+impl<'st, Sch: Schema> transaction::TransactionRw for TransactionRw<'st, Sch> {
+    type Error = storage_core::Error;
 
     /// Commit a transaction
     fn commit(mut self) -> Result<(), Self::Error> {
@@ -262,8 +264,8 @@ impl<'tx> SingleMapView<'tx> {
     }
 }
 
-impl crate::traits::MapRef for SingleMapView<'_> {
-    fn get(&self, key: &[u8]) -> crate::Result<Option<&[u8]>> {
+impl traits::MapRef for SingleMapView<'_> {
+    fn get(&self, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
         Ok(self.0.get(key).map(AsRef::as_ref))
     }
 }
@@ -280,8 +282,8 @@ impl<'tx> SingleMapRef<'tx> {
     }
 }
 
-impl crate::traits::MapRef for SingleMapRef<'_> {
-    fn get(&self, key: &[u8]) -> crate::Result<Option<&[u8]>> {
+impl traits::MapRef for SingleMapRef<'_> {
+    fn get(&self, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
         let res = match &self.delta.get(key) {
             Some(val) => val.as_ref(),
             None => self.store.get(key),
@@ -302,8 +304,8 @@ impl<'tx> SingleMapMut<'tx> {
     }
 }
 
-impl crate::traits::MapRef for SingleMapMut<'_> {
-    fn get(&self, key: &[u8]) -> crate::Result<Option<&[u8]>> {
+impl traits::MapRef for SingleMapMut<'_> {
+    fn get(&self, key: &[u8]) -> storage_core::Result<Option<&[u8]>> {
         let res = match &self.delta.get(key) {
             Some(val) => val.as_ref(),
             None => self.store.get(key),
@@ -312,14 +314,17 @@ impl crate::traits::MapRef for SingleMapMut<'_> {
     }
 }
 
-impl crate::traits::MapMut for SingleMapMut<'_> {
-    fn put(&mut self, key: Data, val: Data) -> crate::Result<()> {
+impl traits::MapMut for SingleMapMut<'_> {
+    fn put(&mut self, key: Data, val: Data) -> storage_core::Result<()> {
         self.delta.insert(key, Some(val));
         Ok(())
     }
 
-    fn del(&mut self, key: &[u8]) -> crate::Result<()> {
+    fn del(&mut self, key: &[u8]) -> storage_core::Result<()> {
         self.delta.insert(key.to_vec(), None);
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;
