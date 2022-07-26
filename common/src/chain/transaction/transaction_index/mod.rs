@@ -127,8 +127,8 @@ impl From<Id<GenBlock>> for SpendablePosition {
 impl SpendablePosition {
     pub fn block_id_anyway(&self) -> Id<GenBlock> {
         match self {
-            SpendablePosition::Transaction(pos) => pos.block_id().clone().into(),
-            SpendablePosition::BlockReward(id) => id.clone(),
+            SpendablePosition::Transaction(pos) => (*pos.block_id()).into(),
+            SpendablePosition::BlockReward(id) => *id,
         }
     }
 }

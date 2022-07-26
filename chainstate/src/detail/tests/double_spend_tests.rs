@@ -66,7 +66,6 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(<Id<GenBlock>>::from(block_id))
         );
-        panic!();
     });
 }
 
@@ -212,14 +211,14 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(first_block_id.clone().into())
+            Some(first_block_id.into())
         );
 
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let second_tx = tx_from_genesis(&chainstate, &mut rng, tx2_output_value);
         let second_block = Block::new(
             vec![second_tx],
-            first_block_id.clone().into(),
+            first_block_id.into(),
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )

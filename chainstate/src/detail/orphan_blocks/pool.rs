@@ -75,7 +75,7 @@ impl OrphanBlocksPool {
     fn del_one_deepest_child(&mut self, block_id: &Id<Block>) {
         let next_block = self
             .orphan_by_prev_id
-            .get(&block_id.clone().into())
+            .get(&(*block_id).into())
             .map(|v| v.get(0).expect("This list should never be empty as we always delete empty vectors from the map"))
             .cloned();
         match next_block {
@@ -91,7 +91,7 @@ impl OrphanBlocksPool {
             return;
         }
         let id = self.orphan_ids.choose(&mut crypto::random::make_pseudo_rng());
-        let id = id.expect("As orphans can never be empty, this should always return").clone();
+        let id = *id.expect("As orphans can never be empty, this should always return");
 
         self.del_one_deepest_child(&id);
     }
@@ -104,7 +104,7 @@ impl OrphanBlocksPool {
         }
 
         let rc_block = Arc::new(block);
-        self.orphan_by_id.insert(block_id.clone(), rc_block.clone());
+        self.orphan_by_id.insert(block_id, rc_block.clone());
         self.orphan_ids.push(block_id);
         self.orphan_by_prev_id
             .entry(rc_block.prev_block_id())
@@ -230,7 +230,7 @@ mod tests {
 
             (0..count)
                 .into_iter()
-                .map(|_| gen_block_from_id(rng, Some(prev_block_id.clone().into())))
+                .map(|_| gen_block_from_id(rng, Some(prev_block_id.into())))
                 .collect()
         }
     }

@@ -58,14 +58,10 @@ async fn invalid_pubsub_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, pubsub, _sync) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        std::time::Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, pubsub, _sync) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let mut pubsub1 = PubSubMessageHandler::<Libp2pService>::new(
         Arc::clone(&config),
@@ -76,14 +72,10 @@ async fn invalid_pubsub_block() {
         &[net::types::PubSubTopic::Blocks],
     );
 
-    let (mut conn2, mut pubsub2, _) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        std::time::Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let (mut conn2, mut pubsub2, _) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     // connect the services together, spawn `pubsub1` into the background
     // and subscriber to events
@@ -134,14 +126,10 @@ async fn invalid_sync_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, _, sync1) = Libp2pService::start(
-        make_libp2p_addr(),
-        &[],
-        Arc::clone(&config),
-        std::time::Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let (mut conn1, _, sync1) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
 
     let mut sync1 = SyncManager::<Libp2pService>::new(
         Arc::clone(&config),

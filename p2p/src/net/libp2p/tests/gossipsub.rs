@@ -43,17 +43,17 @@ impl PartialEq for types::PubSubEvent {
 async fn test_invalid_message() {
     let (mut backend1, _cmd1, _conn1, _gossip, _sync1) = make_libp2p(
         common::chain::config::create_mainnet(),
+        Default::default(),
         make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
-        false,
     )
     .await;
 
     let (mut backend2, _cmd2, _conn2, _gossip2, _sync2) = make_libp2p(
         common::chain::config::create_mainnet(),
+        Default::default(),
         make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
-        false,
     )
     .await;
 
@@ -104,9 +104,9 @@ async fn test_gossipsub_not_supported() {
     let config = common::chain::config::create_mainnet();
     let (mut backend1, _cmd, _conn_rx, _gossip_rx, _sync_rx) = make_libp2p(
         config.clone(),
+        Default::default(),
         make_libp2p_addr(),
         &[net::types::PubSubTopic::Blocks],
-        false,
     )
     .await;
 

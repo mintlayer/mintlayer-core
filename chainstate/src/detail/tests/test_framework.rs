@@ -80,7 +80,7 @@ impl BlockTestFramework {
                         let block = self
                             .chainstate
                             .chainstate_storage
-                            .get_block(block_id.clone())
+                            .get_block(*block_id)
                             .unwrap()
                             .unwrap();
 
@@ -122,7 +122,7 @@ impl BlockTestFramework {
         count_blocks: usize,
         rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, BlockError> {
-        let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, parent_block_id.clone());
+        let mut test_block_info = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
 
         for _ in 0..count_blocks {
             let block = produce_test_block(test_block_info, rng);
@@ -149,7 +149,7 @@ impl BlockTestFramework {
         let tx_index = self
             .chainstate
             .chainstate_storage
-            .get_mainchain_tx_index(&OutPointSourceId::from(tx_id.clone()))
+            .get_mainchain_tx_index(&OutPointSourceId::from(*tx_id))
             .unwrap()?;
         tx_index.get_spent_state(output_index).ok()
     }
@@ -176,8 +176,7 @@ impl BlockTestFramework {
                 .chainstate_storage
                 .get_block_id_by_height(&block_height)
                 .unwrap();
-            let expected_block_id: Option<Id<GenBlock>> =
-                expected_block_id.map(|id| id.clone().into());
+            let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
             assert_eq!(real_next_block_id, expected_block_id);
         }
     }
@@ -196,7 +195,7 @@ impl BlockTestFramework {
                     let block = self
                         .chainstate
                         .chainstate_storage
-                        .get_block(block_index.block_id().clone())
+                        .get_block(*block_index.block_id())
                         .unwrap()
                         .unwrap();
                     for tx in block.transactions() {

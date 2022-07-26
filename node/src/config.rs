@@ -24,7 +24,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use chainstate::ChainstateConfig;
-use p2p::config::P2pConfig;
+use p2p::config::{MdnsConfig, P2pConfig};
 use rpc::RpcConfig;
 
 use crate::RunOptions;
@@ -101,6 +101,7 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
+        mdns_config: _,
     } = config;
 
     let bind_address = options.p2p_addr.clone().unwrap_or(bind_address);
@@ -112,6 +113,11 @@ fn p2p_config(config: P2pConfig, options: &RunOptions) -> P2pConfig {
         bind_address,
         ban_threshold,
         outbound_connection_timeout,
+        mdns_config: MdnsConfig::from_options(
+            options.p2p_enable_mdns.unwrap_or(false),
+            options.p2p_mdns_query_interval,
+            options.p2p_enable_ipv6_mdns_discovery,
+        ),
     }
 }
 

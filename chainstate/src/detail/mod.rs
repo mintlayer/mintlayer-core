@@ -163,7 +163,7 @@ impl Chainstate {
         match new_block_index {
             Some(ref new_block_index) => {
                 let new_height = new_block_index.block_height();
-                let new_id = new_block_index.block_id().clone();
+                let new_id = *new_block_index.block_id();
                 self.events_controller.broadcast(ChainstateEvent::NewTip(new_id, new_height))
             }
             None => (),
@@ -172,7 +172,7 @@ impl Chainstate {
 
     /// returns the new block index, which is the new tip, if any
     fn process_orphans(&mut self, last_processed_block: &Id<Block>) -> Option<BlockIndex> {
-        let orphans = self.orphan_blocks.take_all_children_of(&last_processed_block.clone().into());
+        let orphans = self.orphan_blocks.take_all_children_of(&(*last_processed_block).into());
         let (block_indexes, block_errors): (Vec<Option<BlockIndex>>, Vec<BlockError>) = orphans
             .into_iter()
             .map(|blk| self.process_block(blk, BlockSource::Local))
@@ -269,9 +269,8 @@ impl Chainstate {
         let genesis = self.chain_config.genesis_block();
         let genesis_id = self.chain_config.genesis_block_id();
         let utxo_count = genesis.utxos().len() as u32;
-        let genesis_index =
-            common::chain::TxMainChainIndex::new(genesis_id.clone().into(), utxo_count)
-                .expect("Genesis not constructed correctly");
+        let genesis_index = common::chain::TxMainChainIndex::new(genesis_id.into(), utxo_count)
+            .expect("Genesis not constructed correctly");
 
         // Initialize storage with given info
         let mut db_tx = self.chainstate_storage.transaction_rw();
@@ -395,7 +394,7 @@ impl Chainstate {
         if let Some(id) = first_block.prev_block_id().classify(config).chain_block_id() {
             utils::ensure!(
                 self.get_block_index(&id)?.is_some(),
-                PropertyQueryError::BlockNotFound(id.clone())
+                PropertyQueryError::BlockNotFound(id)
             );
         }
 

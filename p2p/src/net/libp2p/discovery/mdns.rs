@@ -17,6 +17,7 @@
 
 //! Multicast DNS (mDNS) discovery behaviour for the libp2p backend
 
+use crate::config;
 use libp2p::{
     core::connection::{ConnectedPoint, ConnectionId},
     mdns,
@@ -38,17 +39,27 @@ pub enum Mdns {
 }
 
 impl Mdns {
-    pub async fn new(enabled: bool) -> Self {
-        if enabled {
-            match mdns::Mdns::new(Default::default()).await {
-                Ok(mdns) => Mdns::Enabled(Box::new(mdns)),
-                Err(err) => {
-                    log::error!("Failed to initialize mDNS: {:?}", err);
-                    Mdns::Disabled
+    pub async fn new(config: &config::MdnsConfig) -> Self {
+        match config {
+            config::MdnsConfig::Enabled {
+                query_interval,
+                enable_ipv6_mdns_discovery,
+            } => {
+                match mdns::Mdns::new(mdns::MdnsConfig {
+                    ttl: Default::default(),
+                    query_interval: std::time::Duration::from_millis(*query_interval),
+                    enable_ipv6: *enable_ipv6_mdns_discovery,
+                })
+                .await
+                {
+                    Ok(mdns) => Mdns::Enabled(Box::new(mdns)),
+                    Err(err) => {
+                        log::error!("Failed to initialize mDNS: {:?}", err);
+                        Mdns::Disabled
+                    }
                 }
             }
-        } else {
-            Mdns::Disabled
+            config::MdnsConfig::Disabled => Mdns::Disabled,
         }
     }
 
@@ -96,7 +107,7 @@ mod tests {
 
     #[tokio::test]
     async fn mdns_disabled() {
-        let mdns = Mdns::new(false).await;
+        let mdns = Mdns::new(&config::MdnsConfig::new()).await;
         assert!(std::matches!(mdns, Mdns::Disabled));
     }
 
@@ -148,14 +159,22 @@ mod tests {
         }
 
         let tester1 = MdnsTester {
-            mdns: Mdns::new(true).await,
+            mdns: Mdns::new(&config::MdnsConfig::Enabled {
+                query_interval: 200,
+                enable_ipv6_mdns_discovery: false,
+            })
+            .await,
             poll_params: TestParams {
                 peer_id: PeerId::random(),
                 addr: "/ip6/::1/tcp/9999".parse().unwrap(),
             },
         };
         let tester2 = MdnsTester {
-            mdns: Mdns::new(true).await,
+            mdns: Mdns::new(&config::MdnsConfig::Enabled {
+                query_interval: 200,
+                enable_ipv6_mdns_discovery: false,
+            })
+            .await,
             poll_params: TestParams {
                 peer_id: PeerId::random(),
                 addr: "/ip6/::1/tcp/8888".parse().unwrap(),

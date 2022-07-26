@@ -31,7 +31,7 @@ pub enum GenBlockIndex<'a> {
 impl<'a> GenBlockIndex<'a> {
     pub fn block_id(&self) -> Id<GenBlock> {
         match self {
-            GenBlockIndex::Block(b) => b.block_id().clone().into(),
+            GenBlockIndex::Block(b) => (*b.block_id()).into(),
             GenBlockIndex::Genesis(c) => c.genesis_block_id(),
         }
     }

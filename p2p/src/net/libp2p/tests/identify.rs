@@ -24,9 +24,9 @@ async fn test_identify_not_supported() {
     let config = common::chain::config::create_mainnet();
     let (mut backend1, _cmd1, _conn1, _gossip1, _sync1) = make_libp2p(
         config.clone(),
+        Default::default(),
         p2p_test_utils::make_libp2p_addr(),
         &[],
-        false,
     )
     .await;
 

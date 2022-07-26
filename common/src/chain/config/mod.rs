@@ -36,19 +36,7 @@ use std::time::Duration;
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    strum::Display,
-    strum::EnumVariantNames,
-    strum::EnumString,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -102,7 +90,7 @@ impl ChainConfig {
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
-        self.genesis_block_id.clone()
+        self.genesis_block_id
     }
 
     pub fn genesis_block(&self) -> &Genesis {
@@ -193,7 +181,7 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
+    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
         &mut genesis_mint_pubkeyhash_encoded.as_slice(),
     )
     .expect("Decoding genesis mint destination shouldn't fail");
@@ -256,19 +244,6 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
-    }
-
-    #[test]
-    fn chain_type_names() {
-        use strum::VariantNames;
-
-        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
-        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
-
-        for chain_type_str in ChainType::VARIANTS {
-            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
-            assert_eq!(&chain_type.to_string(), chain_type_str);
-        }
     }
 
     #[test]

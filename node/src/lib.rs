@@ -17,6 +17,7 @@
 
 mod config;
 mod options;
+mod regtest_options;
 mod runner;
 
 pub type Error = anyhow::Error;

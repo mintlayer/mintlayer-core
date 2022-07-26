@@ -82,6 +82,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[must_use]
 pub enum Block {
     V1(BlockV1),
 }
@@ -183,7 +184,7 @@ impl Block {
 
     pub fn prev_block_id(&self) -> Id<GenBlock> {
         match &self {
-            Block::V1(blk) => blk.prev_block_id().clone(),
+            Block::V1(blk) => *blk.prev_block_id(),
         }
     }
 
@@ -213,7 +214,7 @@ mod tests {
 
     fn check_block_tag(block: &Block) {
         let encoded_block = block.encode();
-        let first_byte = *encoded_block.get(0).unwrap();
+        let first_byte = *encoded_block.first().unwrap();
         assert_eq!(1, first_byte);
 
         let Block::V1(blockv1) = block;

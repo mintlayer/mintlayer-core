@@ -15,9 +15,12 @@
 //
 // Author(s): A. Altonen
 use super::*;
-use crate::net::libp2p::{
-    behaviour,
-    types::{ConnectivityEvent, Libp2pBehaviourEvent},
+use crate::{
+    config,
+    net::libp2p::{
+        behaviour,
+        types::{ConnectivityEvent, Libp2pBehaviourEvent},
+    },
 };
 use futures::StreamExt;
 use libp2p::swarm::SwarmEvent;
@@ -27,17 +30,23 @@ use p2p_test_utils::make_libp2p_addr;
 async fn test_discovered_and_expired() {
     let (mut backend1, _, _conn_rx, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
+        Arc::new(config::P2pConfig {
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            ..Default::default()
+        }),
         make_libp2p_addr(),
         &[],
-        true,
     )
     .await;
 
     let (mut backend2, _, _, _, _) = make_libp2p(
         common::chain::config::create_mainnet(),
+        Arc::new(config::P2pConfig {
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            ..Default::default()
+        }),
         make_libp2p_addr(),
         &[],
-        true,
     )
     .await;
 

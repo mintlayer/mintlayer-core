@@ -4,9 +4,10 @@ on:
       - master
       - staging
 
-name: Clippy check
+name: Static code checks
 jobs:
   clippy_check_ubuntu:
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -41,3 +42,10 @@ jobs:
             -W clippy::items_after_statements
             -W clippy::fallible_impl_from
             -W clippy::string_slice
+
+  codegrep:
+    name: Grep code for issues
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - run: ./.github/scripts/codegrep.sh

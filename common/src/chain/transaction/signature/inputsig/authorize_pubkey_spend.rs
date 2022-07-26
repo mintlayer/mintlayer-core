@@ -16,7 +16,7 @@
 // Author(s): S. Afach & L. Kuklinek
 
 use crypto::key::Signature;
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use crate::{chain::signature::TransactionSigError, primitives::H256};
 

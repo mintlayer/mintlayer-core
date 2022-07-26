@@ -37,6 +37,7 @@ use test_utils::random::*;
 
 mod double_spend_tests;
 mod events_tests;
+mod output_timelock;
 mod processing_tests;
 mod reorgs_tests;
 mod signature_tests;
@@ -117,7 +118,7 @@ impl TestBlockInfo {
 
     fn from_genesis(genesis: &Genesis) -> Self {
         let id: Id<GenBlock> = genesis.get_id().into();
-        let outsrc = OutPointSourceId::BlockReward(id.clone());
+        let outsrc = OutPointSourceId::BlockReward(id);
         let txns = vec![(outsrc, genesis.utxos().to_vec())];
         Self { txns, id }
     }

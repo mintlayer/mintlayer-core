@@ -34,15 +34,12 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle>(
     header: &BlockHeader,
     block_index_handle: &H,
 ) -> Result<(), ConsensusVerificationError> {
-    let prev_block_id = header.prev_block_id().clone();
+    let prev_block_id = *header.prev_block_id();
 
     let prev_block_height = block_index_handle
         .get_gen_block_index(&prev_block_id)
-        .map_err({
-            let prev_block_id = prev_block_id.clone();
-            |err| {
-                ConsensusVerificationError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
-            }
+        .map_err(|err| {
+            ConsensusVerificationError::PrevBlockLoadError(prev_block_id, header.get_id(), err)
         })?
         .ok_or_else(|| {
             ConsensusVerificationError::PrevBlockNotFound(prev_block_id, header.get_id())

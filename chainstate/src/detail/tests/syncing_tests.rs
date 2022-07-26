@@ -101,7 +101,7 @@ fn get_headers(#[case] seed: Seed) {
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
             let block = produce_test_block(
-                TestBlockInfo::from_id(btf.chainstate(), last_block_id.clone()),
+                TestBlockInfo::from_id(btf.chainstate(), last_block_id),
                 &mut rng,
             );
             last_block_id = block.get_id().into();
@@ -208,12 +208,12 @@ fn get_headers_different_chains(#[case] seed: Seed) {
 
         let locator = btf1.chainstate.get_locator().unwrap();
         let headers = btf2.chainstate.get_headers(locator).unwrap();
-        let id = headers[0].prev_block_id().clone();
+        let id = *headers[0].prev_block_id();
         let _ = btf1.get_block_index(&id); // This panics if the ID is not found
 
         let locator = btf2.chainstate.get_locator().unwrap();
         let headers = btf1.chainstate.get_headers(locator).unwrap();
-        let id = headers[0].prev_block_id().clone();
+        let id = *headers[0].prev_block_id();
         let _ = btf2.get_block_index(&id); // This panics if the ID is not found
     });
 }

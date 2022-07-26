@@ -157,7 +157,7 @@ mod test {
         let tx =
             Transaction::new(flags, vec![], vec![], lock_time).expect("Failed to create test tx");
         let encoded_tx = tx.encode();
-        assert_eq!(tx.version_byte(), *encoded_tx.get(0).unwrap());
+        assert_eq!(tx.version_byte(), *encoded_tx.first().unwrap());
 
         // let's ensure that flags comes right after that
         assert_eq!(u32::decode(&mut &encoded_tx[1..5]).unwrap(), flags);
