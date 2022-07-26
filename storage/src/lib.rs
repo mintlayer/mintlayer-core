@@ -78,51 +78,14 @@
 //! });
 //! ```
 
-mod basic;
-pub mod error;
-pub mod schema;
-pub mod traits;
-pub mod transaction;
+// Re-export core abstractions
+pub use storage_core::*;
 
-// Reexport items from the temporary basic implementation.
-pub use basic::Store;
-pub use error::Error;
-pub use transaction::{abort, commit};
+// Re-export the in-memory storage
+#[cfg(feature = "inmemory")]
+pub use storage_inmemory as inmemory;
 
-pub type Data = Vec<u8>;
-pub type Result<T> = std::result::Result<T, Error>;
-
-#[cfg(test)]
-mod test {
-    use crate::traits::*;
-
-    crate::decl_schema! {
-        MySchema {
-            MyMap: Single,
-        }
-    }
-
-    type MyStore = crate::Store<MySchema>;
-
-    fn generic_aborted_write<St: Backend<MySchema>>(store: &St) -> crate::Result<()> {
-        store.transaction_rw().run(|tx| {
-            tx.get_mut::<MyMap, _>().put(b"hello".to_vec(), b"world".to_vec())?;
-            crate::abort(())
-        })
-    }
-
-    #[test]
-    fn test_abort() {
-        common::concurrency::model(|| {
-            let store = MyStore::default();
-
-            let r = generic_aborted_write(&store);
-            assert_eq!(r, Ok(()));
-
-            let r = store
-                .transaction_ro()
-                .run(|tx| Ok(tx.get::<MyMap, _>().get(b"hello")?.is_some()));
-            assert_eq!(r, Ok(false));
-        })
-    }
-}
+// TODO Just a temporary re-export for backwards compatibility. When multiple backend functionality
+//      is implemented, users will be required to pick and initialize the backend themselves.
+#[cfg(feature = "inmemory")]
+pub use inmemory::Store;

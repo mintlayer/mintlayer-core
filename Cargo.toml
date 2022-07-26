@@ -12,7 +12,6 @@ edition = "2021"
 [workspace]
 members = [
   "common",        # everything else, until it's moved to another crate
-  "storage",       # storage abstraction layer and its implementation
   "crypto",        # cryptographic primitives and their interfaces
   "chainstate",    # code on chainstate of blocks and transactions
   "script",        # bitcoin script and its interfaces
@@ -23,6 +22,9 @@ members = [
   "serialization/core",    # serialization core tools
   "serialization/tagged",  # serialization for direct/tagged encoding style
   "serialization/tagged/derive",  # direct/tagged encoding style derive macros
+  "storage",       # storage abstraction layer and its implementation
+  "storage/core",  # Core backend-agnostic storage abstraction
+  "storage/inmemory",      # In-memory storage backend implementation
   "subsystem",     # Utilities for working with concurrent subsystems
   "node",          # node executable
   "wallet",        # wallet executable
@@ -33,7 +35,6 @@ members = [
 
 default-members = [
   "common",
-  "storage",
   "crypto",
   "chainstate",
   "script",
@@ -41,6 +42,7 @@ default-members = [
   "p2p",
   "rpc",
   "serialization",
+  "storage",
   "subsystem",
   "node",
   "wallet",

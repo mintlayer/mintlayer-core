@@ -3846,8 +3846,24 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "storage-core",
+ "storage-inmemory",
+]
+
+[[package]]
+name = "storage-core"
+version = "0.1.0"
+dependencies = [
  "logging",
  "thiserror",
+]
+
+[[package]]
+name = "storage-inmemory"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "storage-core",
 ]
 
 [[package]]

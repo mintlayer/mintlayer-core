@@ -1,0 +1,13 @@
+[package]
+name = "storage-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+
+# Local dependencies
+logging = { path = '../../logging' }
+
+# External dependencies
+thiserror = "1.0"
