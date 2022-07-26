@@ -155,7 +155,7 @@ impl Peer {
 
     pub async fn start(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        if let Err(e) = self.handshake().await {
+        if let Err(_err) = self.handshake().await {
             // TODO: inform backend
         }
 

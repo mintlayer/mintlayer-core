@@ -29,13 +29,20 @@ use std::{net::SocketAddr, sync::Arc};
 // try to connect to an address that no one listening on and verify it fails
 #[tokio::test]
 async fn test_swarm_connect_mock() {
-    let addr: SocketAddr = "[::1]:0".parse().unwrap();
+    let addr = p2p_test_utils::make_mock_addr();
     let config = Arc::new(config::create_mainnet());
     let mut swarm = make_peer_manager::<MockService>(addr, config).await;
 
     let addr: SocketAddr = "[::1]:1".parse().unwrap();
-    // TODO:
-    let _ = swarm.connect(addr).await;
+    swarm.connect(addr).await.unwrap();
+
+    assert!(std::matches!(
+        swarm.handle.poll_next().await,
+        Ok(net::types::ConnectivityEvent::ConnectionError {
+            address: _,
+            error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
+        })
+    ));
 }
 
 // try to connect to an address that no one listening on and verify it fails

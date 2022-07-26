@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::{message, net};
+use crate::{error, message, net};
 use common::primitives::semver;
 use crypto::random::{make_pseudo_rng, Rng};
 use serialization::{Decode, Encode};
@@ -41,6 +41,10 @@ pub enum ConnectivityEvent {
     OutboundAccepted {
         address: SocketAddr,
         peer_info: MockPeerInfo,
+    },
+    ConnectionError {
+        address: SocketAddr,
+        error: error::P2pError,
     },
 }
 

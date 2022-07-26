@@ -220,6 +220,12 @@ where
                     peer_info: peer_info.try_into()?,
                 })
             }
+            types::ConnectivityEvent::ConnectionError { address, error } => {
+                Ok(ConnectivityEvent::ConnectionError {
+                    address,
+                    error,
+                })
+            }
         }
     }
 }

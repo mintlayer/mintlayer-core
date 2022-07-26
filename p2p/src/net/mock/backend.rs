@@ -26,6 +26,7 @@ use std::{collections::HashMap, io::ErrorKind, net::SocketAddr};
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::{mpsc, oneshot},
+    time::timeout,
 };
 
 struct PeerContext {
@@ -130,6 +131,54 @@ impl Backend {
         Ok(())
     }
 
+    async fn connect(
+        &mut self,
+        address: SocketAddr,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        if self.address == address {
+            response
+                .send(Err(P2pError::DialError(DialError::IoError(
+                    ErrorKind::AddrNotAvailable,
+                ))))
+                .map_err(|_| P2pError::ChannelClosed)?;
+        } else {
+            response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
+        }
+
+        match timeout(self.timeout, TcpStream::connect(address)).await {
+            Ok(event) => match event {
+                Ok(socket) => {
+                    self.create_peer(
+                        socket,
+                        types::MockPeerId::from_socket_address(&address),
+                        peer::Role::Outbound,
+                        ConnectionState::OutboundAccepted { address },
+                    )
+                    .await
+                }
+                Err(err) => self
+                    .conn_tx
+                    .send(types::ConnectivityEvent::ConnectionError {
+                        address,
+                        error: err.into(),
+                    })
+                    .await
+                    .map_err(P2pError::from),
+            },
+            Err(_err) => self
+                .conn_tx
+                .send(types::ConnectivityEvent::ConnectionError {
+                    address,
+                    error: P2pError::DialError(DialError::IoError(
+                        std::io::ErrorKind::ConnectionRefused,
+                    )),
+                })
+                .await
+                .map_err(P2pError::from),
+        }
+    }
+
     pub async fn run(&mut self) -> crate::Result<()> {
         loop {
             tokio::select! {
@@ -188,32 +237,7 @@ impl Backend {
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { address, response } => {
-                        if self.address == address {
-                            let _ = response.send(Err(
-                                P2pError::DialError(DialError::IoError(ErrorKind::AddrNotAvailable))
-                            ));
-                            continue;
-                        }
-
-                        tokio::select! {
-                            _ = tokio::time::sleep(self.timeout) => {
-                                let _ = response.send(Err(P2pError::DialError(
-                                    DialError::IoError(std::io::ErrorKind::ConnectionRefused))
-                                ));
-                            }
-                            res = TcpStream::connect(address) => match res {
-                                Ok(socket) => {
-                                    self.create_peer(
-                                        socket,
-                                        types::MockPeerId::from_socket_address(&address),
-                                        peer::Role::Outbound,
-                                        ConnectionState::OutboundAccepted { address }
-                                    ).await?;
-                                    response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
-                                },
-                                Err(e) => { let _ = response.send(Err(e.into())); },
-                            }
-                        }
+                        self.connect(address, response).await?;
                     }
                 }
             }
