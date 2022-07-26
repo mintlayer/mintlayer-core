@@ -939,7 +939,8 @@ where
             .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
-                if now - entry.creation_time > self.max_tx_age {
+                let expired = now.saturating_sub(entry.creation_time) > self.max_tx_age;
+                if expired {
                     log::trace!(
                         "Evicting tx {} which was created at {:?}. It is now {:?}",
                         entry.tx_id(),
