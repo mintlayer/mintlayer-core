@@ -176,58 +176,62 @@ where
         let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
-        let swarm_config = Arc::clone(&chain_config);
-        tokio::spawn(async move {
-            if let Err(e) = swarm::PeerManager::<T>::new(
-                swarm_config,
-                Arc::clone(&p2p_config),
-                conn,
-                rx_swarm,
-                tx_p2p_sync,
-            )
-            .run()
-            .await
-            {
-                log::error!("PeerManager failed: {:?}", e);
-            }
-        });
+        {
+            let chain_config = Arc::clone(&chain_config);
+            tokio::spawn(async move {
+                if let Err(e) = swarm::PeerManager::<T>::new(
+                    chain_config,
+                    Arc::clone(&p2p_config),
+                    conn,
+                    rx_swarm,
+                    tx_p2p_sync,
+                )
+                .run()
+                .await
+                {
+                    log::error!("PeerManager failed: {:?}", e);
+                }
+            });
+        }
+        {
+            let consensus_handle = consensus_handle.clone();
+            let tx_swarm = tx_swarm.clone();
+            let chain_config = Arc::clone(&chain_config);
+            tokio::spawn(async move {
+                if let Err(e) = sync::SyncManager::<T>::new(
+                    chain_config,
+                    sync,
+                    consensus_handle,
+                    rx_p2p_sync,
+                    tx_swarm,
+                    tx_pubsub,
+                )
+                .run()
+                .await
+                {
+                    log::error!("SyncManager failed: {:?}", e);
+                }
+            });
+        }
 
-        let sync_handle = consensus_handle.clone();
-        let tx_swarm_sync = tx_swarm.clone();
-        let sync_config = Arc::clone(&chain_config);
-        tokio::spawn(async move {
-            if let Err(e) = sync::SyncManager::<T>::new(
-                sync_config,
-                sync,
-                sync_handle,
-                rx_p2p_sync,
-                tx_swarm_sync,
-                tx_pubsub,
-            )
-            .run()
-            .await
-            {
-                log::error!("SyncManager failed: {:?}", e);
-            }
-        });
-
-        let tx_swarm_pubsub = tx_swarm.clone();
-        tokio::spawn(async move {
-            if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
-                chain_config,
-                pubsub,
-                consensus_handle,
-                tx_swarm_pubsub,
-                rx_pubsub,
-                &[net::types::PubSubTopic::Blocks],
-            )
-            .run()
-            .await
-            {
-                log::error!("PubSubMessageHandler failed: {:?}", e);
-            }
-        });
-
+        {
+            let tx_swarm = tx_swarm.clone();
+            tokio::spawn(async move {
+                if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
+                    chain_config,
+                    pubsub,
+                    consensus_handle,
+                    tx_swarm,
+                    rx_pubsub,
+                    &[net::types::PubSubTopic::Blocks],
+                )
+                .run()
+                .await
+                {
+                    log::error!("PubSubMessageHandler failed: {:?}", e);
+                }
+            });
+        }
         Ok(Self { tx_swarm, _tx_sync })
     }
 }
