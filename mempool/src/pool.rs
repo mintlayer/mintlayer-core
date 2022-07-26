@@ -256,10 +256,9 @@ impl RollingFeeRate {
             halflife,
         );
 
-        let divisor = 2f64.powf(
-            (current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
-                / (halflife.as_secs() as f64),
-        );
+        let divisor = ((current_time.as_secs() - self.last_rolling_fee_update.as_secs()) as f64
+            / (halflife.as_secs() as f64))
+            .exp2();
         self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
             (self.rolling_minimum_fee_rate.tokens_per_kb() as f64 / divisor) as u128,
         ));
