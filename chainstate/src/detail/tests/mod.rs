@@ -31,9 +31,9 @@ use common::{
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
-use rstest::*;
+use rstest::rstest;
 use serialization::Encode;
-use test_utils::random::*;
+use test_utils::random::{make_seedable_rng, Seed};
 
 mod double_spend_tests;
 mod events_tests;

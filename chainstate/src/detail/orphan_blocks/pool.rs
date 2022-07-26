@@ -164,8 +164,8 @@ mod tests {
     use checkers::*;
     use common::{chain::block::Block, primitives::Id};
     use helpers::*;
-    use rstest::*;
-    use test_utils::random::*;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     const MAX_ORPHAN_BLOCKS: usize = 512;
 

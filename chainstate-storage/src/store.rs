@@ -413,8 +413,8 @@ pub(crate) mod test {
     use common::primitives::{Amount, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;
-    use rstest::*;
-    use test_utils::random::*;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
     use utxo::{BlockUndo, TxUndo};
 
     #[test]

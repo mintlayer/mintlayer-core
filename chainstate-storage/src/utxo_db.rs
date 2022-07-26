@@ -75,8 +75,8 @@ mod test {
     use common::primitives::{Amount, BlockHeight, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;
-    use rstest::*;
-    use test_utils::random::*;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.

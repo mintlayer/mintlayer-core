@@ -15,6 +15,7 @@
 
 use crypto::random::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
+use std::{num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Seed(pub u64);
@@ -26,6 +27,15 @@ impl Seed {
 
     pub fn from_u64(v: u64) -> Self {
         Seed(v)
+    }
+}
+
+impl FromStr for Seed {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = s.parse::<u64>()?;
+        Ok(Seed::from_u64(v))
     }
 }
 

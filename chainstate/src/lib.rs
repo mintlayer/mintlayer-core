@@ -15,10 +15,9 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
+mod chainstate_interface_impl;
 mod config;
 mod detail;
-
-mod chainstate_interface_impl;
 
 pub mod chainstate_interface;
 pub mod rpc;
