@@ -36,19 +36,7 @@ use std::time::Duration;
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
 pub const DEFAULT_TARGET_BLOCK_SPACING: Duration = Duration::from_secs(120);
 
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    strum::Display,
-    strum::EnumVariantNames,
-    strum::EnumString,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -256,19 +244,6 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
-    }
-
-    #[test]
-    fn chain_type_names() {
-        use strum::VariantNames;
-
-        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
-        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
-
-        for chain_type_str in ChainType::VARIANTS {
-            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
-            assert_eq!(&chain_type.to_string(), chain_type_str);
-        }
     }
 
     #[test]
