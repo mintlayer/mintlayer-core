@@ -87,7 +87,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     /// TX channel for sending control events to swarm
     tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
 
-    /// TX channel for sending control events to pubsub
+    /// TX channel for sending control events to pubsub (used to tell pubsub that syncing to best block is done)
     tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
 
     /// Hashmap of connected peers
@@ -134,6 +134,9 @@ where
 
     /// Get mutable reference to the handle
     pub fn handle_mut(&mut self) -> &mut T::SyncingCodecHandle {
+        // TODO: get rid of this function as it's used only in tests; perhaps a better way to do this is by
+        // creating p2p objects and make them communicate together instead of having access to internal
+        // private parts of the sync manager
         &mut self.peer_sync_handle
     }
 
