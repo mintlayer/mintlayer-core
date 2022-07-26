@@ -16,7 +16,7 @@
 use chainstate_types::block_index::BlockIndex;
 use common::chain::block::{consensus_data::BlockRewardTransactable, timestamp::BlockTimestamp};
 use common::chain::{GenBlock, Genesis};
-use common::primitives::{id::WithId, BlockHeight, Id};
+use common::primitives::{id::WithId, BlockHeight, Id, Idable};
 use common::Uint256;
 
 /// Generalized block index
@@ -31,7 +31,7 @@ impl<'a> GenBlockIndex<'a> {
     pub fn block_id(&self) -> Id<GenBlock> {
         match self {
             GenBlockIndex::Block(b) => (*b.block_id()).into(),
-            GenBlockIndex::Genesis(g) => g.id().into(),
+            GenBlockIndex::Genesis(g) => g.get_id().into(),
         }
     }
 
