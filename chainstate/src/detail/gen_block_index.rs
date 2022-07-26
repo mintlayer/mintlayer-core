@@ -15,8 +15,8 @@
 
 use chainstate_types::block_index::BlockIndex;
 use common::chain::block::{consensus_data::BlockRewardTransactable, timestamp::BlockTimestamp};
-use common::chain::{ChainConfig, GenBlock};
-use common::primitives::{BlockHeight, Id};
+use common::chain::{GenBlock, Genesis};
+use common::primitives::{id::WithId, BlockHeight, Id, Idable};
 use common::Uint256;
 
 /// Generalized block index
@@ -24,50 +24,49 @@ use common::Uint256;
 #[allow(clippy::large_enum_variant)]
 pub enum GenBlockIndex<'a> {
     Block(BlockIndex),
-    // TODO: This could contain just Genesis + pre-calculated ID
-    Genesis(&'a ChainConfig),
+    Genesis(&'a WithId<Genesis>),
 }
 
 impl<'a> GenBlockIndex<'a> {
     pub fn block_id(&self) -> Id<GenBlock> {
         match self {
             GenBlockIndex::Block(b) => (*b.block_id()).into(),
-            GenBlockIndex::Genesis(c) => c.genesis_block_id(),
+            GenBlockIndex::Genesis(g) => g.get_id().into(),
         }
     }
 
     pub fn block_timestamp(&self) -> BlockTimestamp {
         match self {
             GenBlockIndex::Block(b) => b.block_timestamp(),
-            GenBlockIndex::Genesis(c) => c.genesis_block().timestamp(),
+            GenBlockIndex::Genesis(g) => g.timestamp(),
         }
     }
 
     pub fn chain_timestamps_max(&self) -> BlockTimestamp {
         match self {
             GenBlockIndex::Block(b) => b.chain_timestamps_max(),
-            GenBlockIndex::Genesis(c) => c.genesis_block().timestamp(),
+            GenBlockIndex::Genesis(g) => g.timestamp(),
         }
     }
 
     pub fn block_height(&self) -> BlockHeight {
         match self {
             GenBlockIndex::Block(b) => b.block_height(),
-            GenBlockIndex::Genesis(_c) => BlockHeight::zero(),
+            GenBlockIndex::Genesis(_g) => BlockHeight::zero(),
         }
     }
 
     pub fn chain_trust(&self) -> &Uint256 {
         match self {
             GenBlockIndex::Block(b) => b.chain_trust(),
-            GenBlockIndex::Genesis(_c) => &Uint256::ZERO,
+            GenBlockIndex::Genesis(_g) => &Uint256::ZERO,
         }
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
         match self {
             GenBlockIndex::Block(b) => b.block_header().block_reward_transactable(),
-            GenBlockIndex::Genesis(c) => c.genesis_block().block_reward_transactable(),
+            GenBlockIndex::Genesis(g) => g.block_reward_transactable(),
         }
     }
 }
