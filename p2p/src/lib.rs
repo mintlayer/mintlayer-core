@@ -170,6 +170,11 @@ where
         )
         .await?;
 
+        // p2p creates its components (such as PeerManager/swarm, sync, pubsub, etc) and makes communications with them in two possible ways:
+        // 1. Fire-and-forget
+        // 2. Request and wait for response
+        // The difference between these types is that enums that contain the events *can* have a oneshot::channel object that should be used to send the response.
+
         // TODO: think about these channel sizes
         let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
