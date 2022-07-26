@@ -87,6 +87,7 @@ impl<T: NetworkingService> PeerContext<T> {
         &mut self,
         header: &BlockHeader,
     ) -> crate::Result<Option<BlockHeader>> {
+        // TODO: change to match
         if let PeerSyncState::UploadingBlocks(expected) = &self.state {
             ensure!(
                 expected == &header.get_id(),
