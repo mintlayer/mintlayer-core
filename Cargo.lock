@@ -331,26 +331,14 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitvec"
-version = "0.20.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7774144344a4faa177370406a7ff5f1da24303817368584c6206c8303eb07848"
-dependencies = [
- "funty 1.1.0",
- "radium 0.6.2",
- "tap",
- "wyz 0.2.0",
-]
-
-[[package]]
-name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bc2832c24239b0141d5674bb9174f9d68a8b5b3f2753311927c172ca46f7e9c"
 dependencies = [
- "funty 2.0.0",
- "radium 0.7.0",
+ "funty",
+ "radium",
  "tap",
- "wyz 0.5.0",
+ "wyz",
 ]
 
 [[package]]
@@ -573,7 +561,7 @@ name = "chainstate-types"
 version = "0.1.0"
 dependencies = [
  "common",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "serialization",
  "storage",
  "thiserror",
@@ -692,7 +680,7 @@ dependencies = [
  "logging",
  "loom",
  "merkletree",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "proptest",
  "rand 0.8.5",
  "rustc-hex",
@@ -836,7 +824,7 @@ dependencies = [
  "num",
  "num-derive",
  "num-traits",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
  "ripemd",
@@ -1123,12 +1111,6 @@ name = "fuchsia-cprng"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
-
-[[package]]
-name = "funty"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fed34cd105917e91daa4da6b3728c47b068749d6a62c59811f06ed2ac71d9da7"
 
 [[package]]
 name = "funty"
@@ -2195,7 +2177,7 @@ dependencies = [
  "lazy_static",
  "logging",
  "mockall",
- "parity-scale-codec 2.3.1",
+ "parity-scale-codec",
  "serialization",
  "thiserror",
  "utils",
@@ -2639,7 +2621,7 @@ dependencies = [
  "libp2p",
  "logging",
  "p2p-test-utils",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "portpicker",
  "rpc",
  "serde",
@@ -2669,42 +2651,16 @@ dependencies = [
 
 [[package]]
 name = "parity-scale-codec"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373b1a4c1338d9cd3d1fa53b3a11bdab5ab6bd80a20f7f7becd76953ae2be909"
-dependencies = [
- "arrayvec",
- "bitvec 0.20.4",
- "byte-slice-cast",
- "impl-trait-for-tuples",
- "parity-scale-codec-derive 2.3.1",
- "serde",
-]
-
-[[package]]
-name = "parity-scale-codec"
 version = "3.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9182e4a71cae089267ab03e67c99368db7cd877baf50f931e5d6d4b71e195ac0"
 dependencies = [
  "arrayvec",
- "bitvec 1.0.1",
+ "bitvec",
  "byte-slice-cast",
  "impl-trait-for-tuples",
- "parity-scale-codec-derive 3.1.3",
+ "parity-scale-codec-derive",
  "serde",
-]
-
-[[package]]
-name = "parity-scale-codec-derive"
-version = "2.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1557010476e0595c9b568d16dcfb81b93cdeb157612726f5170d31aa707bed27"
-dependencies = [
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -3103,12 +3059,6 @@ checksum = "3bcdf212e9776fbcb2d23ab029360416bb1706b1aea2d1a5ba002727cbcab804"
 dependencies = [
  "proc-macro2",
 ]
-
-[[package]]
-name = "radium"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "643f8f41a8ebc4c5dc4515c82bb8abd397b527fc20fd681b7c011c2aee5d44fb"
 
 [[package]]
 name = "radium"
@@ -3563,7 +3513,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "logging",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "proptest",
  "serialization",
  "thiserror",
@@ -3722,7 +3672,7 @@ version = "0.1.0"
 dependencies = [
  "arraytools",
  "hex-literal",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "rand 0.8.5",
 ]
 
@@ -3730,7 +3680,7 @@ dependencies = [
 name = "serialization-tagged"
 version = "0.1.0"
 dependencies = [
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "proptest",
  "serialization",
  "serialization-core",
@@ -4522,7 +4472,7 @@ dependencies = [
  "crypto",
  "itertools",
  "logging",
- "parity-scale-codec 3.1.5",
+ "parity-scale-codec",
  "serialization",
  "thiserror",
 ]
@@ -4904,12 +4854,6 @@ name = "windows_x86_64_msvc"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
-
-[[package]]
-name = "wyz"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85e60b0d1b5f99db2556934e21937020776a5d31520bf169e851ac44e6420214"
 
 [[package]]
 name = "wyz"
