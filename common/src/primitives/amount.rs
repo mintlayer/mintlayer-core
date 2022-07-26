@@ -339,6 +339,14 @@ mod tests {
     }
 
     #[test]
+    fn sum_empty() {
+        assert_eq!(
+            vec![].into_iter().sum::<Option<Amount>>(),
+            Some(Amount::from_atoms(0))
+        )
+    }
+
+    #[test]
     fn sub_underflow() {
         assert_eq!(Amount { val: IntType::MIN } - Amount { val: 1 }, None);
     }
