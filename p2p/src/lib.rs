@@ -203,7 +203,7 @@ where
             let tx_swarm = tx_swarm.clone();
             let chain_config = Arc::clone(&chain_config);
             tokio::spawn(async move {
-                if let Err(e) = sync::SyncManager::<T>::new(
+                if let Err(e) = sync::BlockSyncManager::<T>::new(
                     chain_config,
                     sync,
                     consensus_handle,

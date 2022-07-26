@@ -26,7 +26,7 @@ use p2p::{
         self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
         NetworkingService, SyncingCodecService,
     },
-    sync::SyncManager,
+    sync::BlockSyncManager,
     sync::SyncState,
 };
 use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
@@ -40,7 +40,7 @@ async fn make_sync_manager<T>(
     addr: T::Address,
     handle: subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> (
-    SyncManager<T>,
+    BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::Sender<SyncControlEvent<T>>,
     mpsc::Receiver<PubSubControlEvent>,
@@ -59,7 +59,7 @@ where
     let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        SyncManager::<T>::new(
+        BlockSyncManager::<T>::new(
             Arc::clone(&config),
             sync,
             handle,
@@ -159,7 +159,7 @@ async fn get_tip(handle: &subsystem::Handle<Box<dyn ChainstateInterface>>) -> Id
 }
 
 async fn process_header_request<T>(
-    mgr: &mut SyncManager<T>,
+    mgr: &mut BlockSyncManager<T>,
     handle: &subsystem::Handle<Box<dyn ChainstateInterface>>,
 ) -> Result<(), P2pError>
 where
@@ -188,7 +188,7 @@ where
     }
 }
 
-async fn advance_mgr_state<T>(mgr: &mut SyncManager<T>) -> Result<(), P2pError>
+async fn advance_mgr_state<T>(mgr: &mut BlockSyncManager<T>) -> Result<(), P2pError>
 where
     T: NetworkingService,
     T::SyncingCodecHandle: SyncingCodecService<T>,

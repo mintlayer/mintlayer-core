@@ -33,7 +33,7 @@ mod request_response;
 async fn make_sync_manager<T>(
     addr: T::Address,
 ) -> (
-    SyncManager<T>,
+    BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::Sender<SyncControlEvent<T>>,
     mpsc::Receiver<PubSubControlEvent>,
@@ -68,7 +68,7 @@ where
     let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        SyncManager::<T>::new(
+        BlockSyncManager::<T>::new(
             Arc::clone(&config),
             sync,
             handle,

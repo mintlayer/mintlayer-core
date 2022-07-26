@@ -38,7 +38,7 @@ pub struct RequestState<T: NetworkingService> {
     pub(super) retry_count: usize,
 }
 
-impl<T> SyncManager<T>
+impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingCodecHandle: SyncingCodecService<T>,

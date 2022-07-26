@@ -71,7 +71,7 @@ pub enum SyncState {
 ///
 /// Currently its only mode of operation is greedy so it will download all changes from every
 /// peer it's connected to and actively keep track of the peer's state.
-pub struct SyncManager<T: NetworkingService> {
+pub struct BlockSyncManager<T: NetworkingService> {
     /// Chain config
     config: Arc<ChainConfig>,
 
@@ -101,7 +101,7 @@ pub struct SyncManager<T: NetworkingService> {
 }
 
 /// Syncing manager
-impl<T> SyncManager<T>
+impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
     T::SyncingCodecHandle: SyncingCodecService<T>,
