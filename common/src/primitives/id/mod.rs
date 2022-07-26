@@ -15,6 +15,9 @@
 //
 // Author(s): S. Afach
 
+mod with_id;
+pub use with_id::WithId;
+
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
@@ -137,55 +140,6 @@ impl<T: Idable> Idable for &T {
     type Tag = T::Tag;
     fn get_id(&self) -> Id<Self::Tag> {
         (*self).get_id()
-    }
-}
-
-/// An object together with its pre-calculated ID.
-///
-/// This only allows immutable access to the underlying object to prevent it from going out of sync
-/// with the ID, which is calculated for its contents. Getting an ID just returns the stored one.
-#[derive(Clone, Debug)]
-pub struct WithId<T: Idable> {
-    id: Id<T::Tag>,
-    object: T,
-}
-
-impl<T: Idable> WithId<T> {
-    /// Get a reference to the underlying object
-    pub fn get(this: &Self) -> &T {
-        &this.object
-    }
-
-    /// Get the pre-calucated object ID
-    pub fn id(this: &Self) -> Id<T::Tag> {
-        this.id
-    }
-
-    /// Take ownership of the underlying object
-    pub fn take(this: Self) -> T {
-        this.object
-    }
-}
-
-impl<T: Idable> WithId<T> {
-    pub fn new(object: T) -> Self {
-        let id = object.get_id();
-        Self { id, object }
-    }
-}
-
-impl<T: Idable> Idable for WithId<T> {
-    type Tag = T::Tag;
-    fn get_id(&self) -> Id<Self::Tag> {
-        Self::id(self)
-    }
-}
-
-// Implement Deref to the wrapped type but not DerefMut to prevent it from being modified.
-impl<T: Idable> std::ops::Deref for WithId<T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        Self::get(self)
     }
 }
 
