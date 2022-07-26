@@ -78,7 +78,7 @@ pub struct SyncManager<T: NetworkingService> {
     /// Syncing state of the local node
     state: SyncState,
 
-    /// Handle for sending/receiving connectivity events
+    /// Handle for sending/receiving syncing events
     handle: T::SyncingCodecHandle,
 
     /// RX channel for receiving control events
