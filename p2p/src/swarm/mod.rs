@@ -96,6 +96,7 @@ where
     /// Get mutable reference to the `ConnectivityHandle`
     #[allow(dead_code)]
     fn handle_mut(&mut self) -> &mut T::ConnectivityHandle {
+        // TODO: get rid of mutable handles that expose internal stuff
         &mut self.peer_connectivity_handle
     }
 
@@ -165,6 +166,7 @@ where
     ///
     /// Make sure that local and remote peer have the same software version
     fn validate_version(&self, version: &semver::SemVer) -> bool {
+        // TODO: handle upgrades of versions
         version == self.chain_config.version()
     }
 
