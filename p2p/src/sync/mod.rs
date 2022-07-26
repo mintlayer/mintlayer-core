@@ -322,6 +322,7 @@ where
         peer_id: T::PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
+        // TODO: remove the limitation of sending only one block, and allow sending multiple blocks (up to a cap)
         ensure!(
             blocks.len() == 1,
             P2pError::ProtocolError(ProtocolError::InvalidMessage),
