@@ -105,7 +105,7 @@ where
         request_type: RequestType,
         retry_count: usize,
     ) -> crate::Result<()> {
-        let request_id = self.handle.send_request(peer_id, request).await?;
+        let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
         self.requests.insert(
             request_id,
             RequestState {
@@ -194,7 +194,7 @@ where
     ) -> crate::Result<()> {
         // TODO: save sent header IDs somewhere and validate future requests against those?
         let message = self.make_header_response(headers);
-        self.handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message).await
     }
 
     /// Send header response to remote peer
@@ -212,6 +212,6 @@ where
     ) -> crate::Result<()> {
         // TODO: save sent block IDs somewhere and validate future requests against those?
         let message = self.make_block_response(blocks);
-        self.handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message).await
     }
 }

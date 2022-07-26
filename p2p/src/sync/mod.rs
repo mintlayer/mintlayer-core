@@ -79,7 +79,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     state: SyncState,
 
     /// Handle for sending/receiving syncing events
-    handle: T::SyncingCodecHandle,
+    peer_sync_handle: T::SyncingCodecHandle,
 
     /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -116,7 +116,7 @@ where
     ) -> Self {
         Self {
             config,
-            handle,
+            peer_sync_handle: handle,
             rx_sync,
             tx_swarm,
             tx_pubsub,
@@ -134,7 +134,7 @@ where
 
     /// Get mutable reference to the handle
     pub fn handle_mut(&mut self) -> &mut T::SyncingCodecHandle {
-        &mut self.handle
+        &mut self.peer_sync_handle
     }
 
     /// Register peer to the `SyncManager`
@@ -504,7 +504,7 @@ where
 
         loop {
             tokio::select! {
-                event = self.handle.poll_next() => match event? {
+                event = self.peer_sync_handle.poll_next() => match event? {
                     SyncingEvent::Request {
                         peer_id,
                         request_id,
