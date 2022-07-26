@@ -183,15 +183,16 @@ where
             headers.len() == 1,
             P2pError::ProtocolError(ProtocolError::InvalidMessage),
         );
+        // TODO: handle processing requests for multiple blocks
+        let block_id =
+            *headers.get(0).ok_or(P2pError::ProtocolError(ProtocolError::InvalidMessage))?;
         ensure!(
             self.peers.contains_key(&peer_id),
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        let block_result = self
-            .chainstate_handle
-            .call(move |this| this.get_block(headers.into_iter().next().expect("header to exist")))
-            .await?;
+        let block_result =
+            self.chainstate_handle.call(move |this| this.get_block(block_id)).await?;
 
         match block_result {
             Ok(Some(block)) => self.send_block_response(request_id, vec![block]).await,
