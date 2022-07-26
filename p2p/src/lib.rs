@@ -23,7 +23,7 @@ use crate::{
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 pub mod config;
@@ -152,7 +152,7 @@ where
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
         chain_config: Arc<ChainConfig>,
-        p2p_config: P2pConfig,
+        p2p_config: Arc<P2pConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> crate::Result<Self>
     where
@@ -166,9 +166,8 @@ where
                     p2p_config.bind_address.clone(),
                 ))
             })?,
-            &[],
             Arc::clone(&chain_config),
-            Duration::from_secs(p2p_config.outbound_connection_timeout),
+            Arc::clone(&p2p_config),
         )
         .await?;
 
@@ -180,10 +179,15 @@ where
 
         let swarm_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
-            if let Err(e) =
-                swarm::PeerManager::<T>::new(swarm_config, p2p_config, conn, rx_swarm, tx_p2p_sync)
-                    .run()
-                    .await
+            if let Err(e) = swarm::PeerManager::<T>::new(
+                swarm_config,
+                Arc::clone(&p2p_config),
+                conn,
+                rx_swarm,
+                tx_p2p_sync,
+            )
+            .run()
+            .await
             {
                 log::error!("PeerManager failed: {:?}", e);
             }
@@ -235,7 +239,7 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
-    p2p_config: P2pConfig,
+    p2p_config: Arc<P2pConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 ) -> crate::Result<P2pInterface<T>>
 where
