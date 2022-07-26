@@ -35,19 +35,21 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) = tokio::join!(
+        swarm1.peer_connectivity_handle.connect(addr),
+        swarm2.peer_connectivity_handle.poll_next(),
+    );
 
     if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
         swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
-    let peer_id = *swarm1.handle_mut().peer_id();
+    let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     assert!(!swarm2.validate_peer_id(&peer_id));
     assert!(std::matches!(
-        swarm2.handle_mut().poll_next().await,
+        swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 }
@@ -74,28 +76,30 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) = tokio::join!(
+        swarm1.peer_connectivity_handle.connect(addr),
+        swarm2.peer_connectivity_handle.poll_next(),
+    );
 
     if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
         swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
-    let peer_id = *swarm1.handle_mut().peer_id();
+    let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     assert!(!swarm2.validate_peer_id(&peer_id));
     assert!(std::matches!(
-        swarm2.handle_mut().poll_next().await,
+        swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
     // try to restablish connection, it timeouts because it's rejected in the backend
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    tokio::spawn(async move { swarm1.handle.connect(addr).await });
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    tokio::spawn(async move { swarm1.peer_connectivity_handle.connect(addr).await });
 
     tokio::select! {
-        _event = swarm2.handle.poll_next() => {
+        _event = swarm2.peer_connectivity_handle.poll_next() => {
             panic!("did not expect event, received {:?}", _event)
         },
         _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {}
@@ -125,34 +129,36 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) = tokio::join!(
+        swarm1.peer_connectivity_handle.connect(addr),
+        swarm2.peer_connectivity_handle.poll_next(),
+    );
 
     if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
         swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
-    let peer_id = *swarm1.handle_mut().peer_id();
+    let peer_id = *swarm1.peer_connectivity_handle.peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
     assert!(!swarm2.validate_peer_id(&peer_id));
     assert!(std::matches!(
-        swarm2.handle_mut().poll_next().await,
+        swarm2.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 
-    let remote_addr = swarm1.handle.local_addr().await.unwrap().unwrap();
-    let remote_id = *swarm1.handle.peer_id();
+    let remote_addr = swarm1.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let remote_id = *swarm1.peer_connectivity_handle.peer_id();
 
     tokio::spawn(async move {
         loop {
-            let _ = swarm1.handle.poll_next().await.unwrap();
+            let _ = swarm1.peer_connectivity_handle.poll_next().await.unwrap();
         }
     });
 
-    swarm2.handle.connect(remote_addr.clone()).await.unwrap();
+    swarm2.peer_connectivity_handle.connect(remote_addr.clone()).await.unwrap();
     if let Ok(net::types::ConnectivityEvent::ConnectionError { address, error }) =
-        swarm2.handle.poll_next().await
+        swarm2.peer_connectivity_handle.poll_next().await
     {
         assert_eq!(remote_addr, address);
         assert_eq!(
@@ -391,18 +397,20 @@ where
     )
     .await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) = tokio::join!(
+        swarm1.peer_connectivity_handle.connect(addr),
+        swarm2.peer_connectivity_handle.poll_next()
+    );
     let _conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
-    let swarm1_id = *swarm1.handle.peer_id();
+    let swarm1_id = *swarm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
     tokio::spawn(async move { swarm1.run().await });
 
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
-        swarm2.handle.poll_next().await
+        swarm2.peer_connectivity_handle.poll_next().await
     {
         assert_eq!(peer_id, swarm1_id);
     } else {

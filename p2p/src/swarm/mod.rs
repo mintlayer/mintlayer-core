@@ -53,7 +53,7 @@ where
     _p2p_config: Arc<P2pConfig>,
 
     /// Handle for sending/receiving connectivity events
-    handle: T::ConnectivityHandle,
+    peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
     rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
@@ -83,7 +83,7 @@ where
         tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
-            handle,
+            peer_connectivity_handle: handle,
             rx_swarm,
             tx_sync,
             peerdb: peerdb::PeerDb::new(Arc::clone(&p2p_config)),
@@ -96,7 +96,7 @@ where
     /// Get mutable reference to the `ConnectivityHandle`
     #[allow(dead_code)]
     fn handle_mut(&mut self) -> &mut T::ConnectivityHandle {
-        &mut self.handle
+        &mut self.peer_connectivity_handle
     }
 
     /// Update the list of known peers or known peer's list of addresses
@@ -274,7 +274,7 @@ where
         log::debug!("adjusting score for peer {peer_id}, adjustment {score}");
 
         if self.peerdb.adjust_peer_score(&peer_id, score) {
-            return self.handle.ban_peer(peer_id).await;
+            return self.peer_connectivity_handle.ban_peer(peer_id).await;
         }
 
         Ok(())
@@ -313,7 +313,7 @@ where
             P2pError::PeerError(PeerError::BannedAddress(address.to_string())),
         );
 
-        self.handle.connect(address).await
+        self.peer_connectivity_handle.connect(address).await
     }
 
     /// Maintain the swarm state
@@ -420,6 +420,9 @@ where
         loop {
             tokio::select! {
                 event = self.rx_swarm.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
+                    //
+                    // Handle events from an outside controller (rpc, for example) that sets/gets values for PeerManager
+                    //
                     event::SwarmEvent::Connect(addr, response) => {
                         log::debug!("try to establish outbound connection to peer at address {addr}");
 
@@ -432,7 +435,7 @@ where
                         log::debug!("disconnect peer {peer_id} from the swarm");
 
                         response
-                            .send(self.handle.disconnect(peer_id).await)
+                            .send(self.peer_connectivity_handle.disconnect(peer_id).await)
                             .map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::AdjustPeerScore(peer_id, score, response) => {
@@ -446,12 +449,13 @@ where
                         response.send(self.peerdb.active_peer_count()).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::GetBindAddress(response) => {
-                        let addr = self.handle.local_addr();
+                        let addr = self.peer_connectivity_handle.local_addr();
+                        // TODO: change the return to Option<String> and avoid using special values for None
                         let addr = addr.await?.map_or("<unavailable>".to_string(), |addr| addr.to_string());
                         response.send(addr).map_err(|_| P2pError::ChannelClosed)?;
                     }
                     event::SwarmEvent::GetPeerId(response) => response
-                        .send(self.handle.peer_id().to_string())
+                        .send(self.peer_connectivity_handle.peer_id().to_string())
                         .map_err(|_| P2pError::ChannelClosed)?,
                     event::SwarmEvent::GetConnectedPeers(response) => {
                         let peers = self.peerdb
@@ -462,7 +466,7 @@ where
                         response.send(peers).map_err(|_| P2pError::ChannelClosed)?
                     }
                 },
-                event = self.handle.poll_next() => match event {
+                event = self.peer_connectivity_handle.poll_next() => match event {
                     Ok(event) => match event {
                         net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
@@ -472,7 +476,7 @@ where
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
                                     log::warn!("peer error for peer {peer_id}: {err}");
-                                    self.handle.disconnect(peer_id).await?;
+                                    self.peer_connectivity_handle.disconnect(peer_id).await?;
                                 }
                                 Err(P2pError::ProtocolError(err)) => {
                                     log::warn!("peer error for peer {peer_id}: {err}");

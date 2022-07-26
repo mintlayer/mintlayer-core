@@ -114,13 +114,13 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// One or more peers discovered
+    /// One or more peers discovered (libp2p defines discovering as finding new addresses through mDNS or otherwise)
     Discovered {
         /// Address information
         peers: Vec<AddrInfo<T>>,
     },
 
-    /// One one more peers have expired
+    /// One one more peers have expired (libp2p defines expired addresses as addresses that haven't appeared in later refreshes of available addresses)
     Expired {
         /// Address information
         peers: Vec<AddrInfo<T>>,
