@@ -15,7 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
-    error::{DialError, P2pError},
+    error::{DialError, P2pError, PeerError},
     net::mock::{peer, socket, types},
 };
 use common::chain::ChainConfig;
@@ -32,16 +32,10 @@ use tokio::{
 struct PeerContext {
     peer_id: types::MockPeerId,
     tx: mpsc::Sender<types::MockEvent>,
-    state: ConnectionState,
 }
 
 #[derive(Debug)]
 enum ConnectionState {
-    /// Outbound connection has been dialed, wait for `ConnectionEstablished` event
-    Dialed {
-        tx: oneshot::Sender<crate::Result<types::MockPeerInfo>>,
-    },
-
     /// Connection established for outbound connection
     OutboundAccepted { address: SocketAddr },
 
@@ -64,6 +58,9 @@ pub struct Backend {
 
     /// Active peers
     peers: HashMap<types::MockPeerId, PeerContext>,
+
+    /// Pending connections
+    pending: HashMap<types::MockPeerId, (PeerContext, ConnectionState)>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -103,6 +100,7 @@ impl Backend {
             _pubsub_tx,
             timeout,
             peers: HashMap::new(),
+            pending: HashMap::new(),
             peer_chan: mpsc::channel(64),
         }
     }
@@ -117,7 +115,7 @@ impl Backend {
         let (tx, rx) = mpsc::channel(16);
         let socket = socket::MockSocket::new(socket);
 
-        self.peers.insert(peer_id, PeerContext { peer_id, tx, state });
+        self.pending.insert(peer_id, (PeerContext { peer_id, tx }, state));
 
         let tx = self.peer_chan.0.clone();
         let config = Arc::clone(&self.config);
@@ -184,6 +182,7 @@ impl Backend {
             tokio::select! {
                 event = self.socket.accept() => match event {
                     Ok(info) => {
+                        let peer_id = types::MockPeerId::from_socket_address(&info.1);
                         self.create_peer(
                             info.0,
                             types::MockPeerId::from_socket_address(&info.1),
@@ -201,8 +200,9 @@ impl Backend {
 
                     match event {
                         types::PeerEvent::PeerInfoReceived { network, version, protocols } => {
-                            match self.peers.remove(&peer_id).expect("peer to exist").state {
-                                ConnectionState::Dialed { .. } => panic!("peer has an invalid state"),
+                            let (ctx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+
+                            match state {
                                 ConnectionState::OutboundAccepted { address } => {
                                     self.conn_tx.send(types::ConnectivityEvent::OutboundAccepted {
                                         address,
@@ -232,12 +232,25 @@ impl Backend {
                                     .map_err(P2pError::from)?;
                                 }
                             }
+
+                            self.peers.insert(peer_id, ctx);
                         }
                     }
                 },
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { address, response } => {
                         self.connect(address, response).await?;
+                    }
+                    types::Command::Disconnect { peer_id, response } => {
+                        match self.peers.remove(&peer_id) {
+                            Some(peer) => {
+                                let res = peer.tx.send(types::MockEvent::Disconnect).await;
+                                response.send(res.map_err(P2pError::from)).map_err(|_| P2pError::ChannelClosed)?;
+                            }
+                            None => response
+                                .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
+                                .map_err(|_| P2pError::ChannelClosed)?,
+                        }
                     }
                 }
             }

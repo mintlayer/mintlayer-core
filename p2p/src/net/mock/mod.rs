@@ -190,8 +190,18 @@ where
         rx.await?
     }
 
-    async fn disconnect(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
-        todo!();
+    async fn disconnect(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        log::debug!("close connection with remote, {peer_id}");
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::Disconnect {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+
+        rx.await?
     }
 
     async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
@@ -221,10 +231,10 @@ where
                 })
             }
             types::ConnectivityEvent::ConnectionError { address, error } => {
-                Ok(ConnectivityEvent::ConnectionError {
-                    address,
-                    error,
-                })
+                Ok(ConnectivityEvent::ConnectionError { address, error })
+            }
+            types::ConnectivityEvent::ConnectionClosed { peer_id } => {
+                Ok(ConnectivityEvent::ConnectionClosed { peer_id })
             }
         }
     }
@@ -290,10 +300,12 @@ mod tests {
     #[tokio::test]
     async fn connect_to_remote() {
         let config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+
         let (mut conn1, _, _) = MockService::start(
             p2p_test_utils::make_mock_addr(),
             Arc::clone(&config),
-            Arc::new(Default::default()),
+            Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
@@ -301,7 +313,7 @@ mod tests {
         let (conn2, _, _) = MockService::start(
             p2p_test_utils::make_mock_addr(),
             Arc::clone(&config),
-            Arc::new(Default::default()),
+            Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
@@ -331,10 +343,12 @@ mod tests {
     #[tokio::test]
     async fn accept_incoming() {
         let config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+
         let (mut conn1, _, _) = MockService::start(
             p2p_test_utils::make_mock_addr(),
             Arc::clone(&config),
-            Arc::new(Default::default()),
+            Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
@@ -342,7 +356,7 @@ mod tests {
         let (mut conn2, _, _) = MockService::start(
             p2p_test_utils::make_mock_addr(),
             Arc::clone(&config),
-            Arc::new(Default::default()),
+            Arc::clone(&p2p_config),
         )
         .await
         .unwrap();
@@ -362,6 +376,39 @@ mod tests {
                     peer_info.protocols,
                     vec!["floodsub".to_string(), "ping".to_string()],
                 );
+            }
+            _ => panic!("invalid event received, expected incoming connection"),
+        }
+    }
+
+    #[tokio::test]
+    async fn disconnect() {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let p2p_config: Arc<config::P2pConfig> = Arc::new(Default::default());
+
+        let (mut conn1, _, _) = MockService::start(
+            p2p_test_utils::make_mock_addr(),
+            Arc::clone(&config),
+            Arc::clone(&p2p_config),
+        )
+        .await
+        .unwrap();
+        let (mut conn2, _, _) =
+            MockService::start(p2p_test_utils::make_mock_addr(), config, p2p_config)
+                .await
+                .unwrap();
+
+        let (_res1, res2) = tokio::join!(
+            conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
+            conn2.poll_next()
+        );
+
+        match res2.unwrap() {
+            ConnectivityEvent::InboundAccepted {
+                address: _,
+                peer_info,
+            } => {
+                assert_eq!(conn2.disconnect(peer_info.peer_id).await, Ok(()));
             }
             _ => panic!("invalid event received, expected incoming connection"),
         }

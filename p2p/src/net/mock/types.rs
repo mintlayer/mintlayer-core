@@ -30,6 +30,10 @@ pub enum Command {
         address: SocketAddr,
         response: oneshot::Sender<crate::Result<()>>,
     },
+    Disconnect {
+        peer_id: MockPeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -45,6 +49,9 @@ pub enum ConnectivityEvent {
     ConnectionError {
         address: SocketAddr,
         error: error::P2pError,
+    },
+    ConnectionClosed {
+        peer_id: MockPeerId,
     },
 }
 
@@ -103,7 +110,7 @@ pub enum PeerEvent {
 /// Events sent by the mock backend to peers
 #[derive(Debug)]
 pub enum MockEvent {
-    Dummy,
+    Disconnect,
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

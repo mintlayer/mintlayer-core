@@ -162,12 +162,14 @@ impl Peer {
         loop {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Dummy => {
-                        todo!();
+                    MockEvent::Disconnect => {
+                        break;
                     }
                 }
             }
         }
+
+        Ok(())
     }
 }
 
