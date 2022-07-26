@@ -35,7 +35,7 @@ pub enum Command {
 #[derive(Debug, PartialEq, Eq)]
 pub enum ConnectivityEvent {
     InboundAccepted {
-        peer_id: SocketAddr,
+        address: SocketAddr,
         peer_info: MockPeerInfo,
     },
     OutboundAccepted {

@@ -65,6 +65,7 @@ pub struct Backend {
     peers: HashMap<types::MockPeerId, PeerContext>,
 
     /// RX channel for receiving events from peers
+    #[allow(clippy::type_complexity)]
     peer_chan: (
         mpsc::Sender<(types::MockPeerId, types::PeerEvent)>,
         mpsc::Receiver<(types::MockPeerId, types::PeerEvent)>,
@@ -81,6 +82,7 @@ pub struct Backend {
 }
 
 impl Backend {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         address: SocketAddr,
         socket: TcpListener,
@@ -166,7 +168,19 @@ impl Backend {
                                     .await
                                     .map_err(P2pError::from)?;
                                 }
-                                ConnectionState::InboundAccepted { address: _ } => {
+                                ConnectionState::InboundAccepted { address } => {
+                                    self.conn_tx.send(types::ConnectivityEvent::InboundAccepted {
+                                        address,
+                                        peer_info: types::MockPeerInfo {
+                                            peer_id,
+                                            network,
+                                            version,
+                                            agent: None,
+                                            protocols,
+                                        }
+                                    })
+                                    .await
+                                    .map_err(P2pError::from)?;
                                 }
                             }
                         }
@@ -175,7 +189,9 @@ impl Backend {
                 event = self.cmd_rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
                     types::Command::Connect { address, response } => {
                         if self.address == address {
-                            let _ = response.send(Err(P2pError::DialError(DialError::IoError(ErrorKind::AddrNotAvailable))));
+                            let _ = response.send(Err(
+                                P2pError::DialError(DialError::IoError(ErrorKind::AddrNotAvailable))
+                            ));
                             continue;
                         }
 
@@ -193,7 +209,7 @@ impl Backend {
                                         peer::Role::Outbound,
                                         ConnectionState::OutboundAccepted { address }
                                     ).await?;
-                                    let _ = response.send(Ok(()));
+                                    response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?;
                                 },
                                 Err(e) => { let _ = response.send(Err(e.into())); },
                             }

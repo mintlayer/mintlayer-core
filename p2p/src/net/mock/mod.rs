@@ -214,11 +214,11 @@ where
                     peer_info: peer_info.try_into()?,
                 })
             }
-            types::ConnectivityEvent::InboundAccepted {
-                peer_id: _,
-                peer_info: _,
-            } => {
-                todo!();
+            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::InboundAccepted {
+                    address,
+                    peer_info: peer_info.try_into()?,
+                })
             }
         }
     }
@@ -319,6 +319,45 @@ mod tests {
             );
         } else {
             panic!("invalid event received");
+        }
+    }
+
+    #[tokio::test]
+    async fn accept_incoming() {
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (mut conn1, _, _) = MockService::start(
+            p2p_test_utils::make_mock_addr(),
+            Arc::clone(&config),
+            Arc::new(Default::default()),
+        )
+        .await
+        .unwrap();
+
+        let (mut conn2, _, _) = MockService::start(
+            p2p_test_utils::make_mock_addr(),
+            Arc::clone(&config),
+            Arc::new(Default::default()),
+        )
+        .await
+        .unwrap();
+
+        let bind_address = conn2.local_addr().await.unwrap().unwrap();
+        let (_res1, res2) = tokio::join!(conn1.connect(bind_address), conn2.poll_next());
+        match res2.unwrap() {
+            ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                assert_eq!(address, bind_address);
+                assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
+                assert_eq!(
+                    peer_info.version,
+                    common::primitives::semver::SemVer::new(0, 1, 0),
+                );
+                assert_eq!(peer_info.agent, None);
+                assert_eq!(
+                    peer_info.protocols,
+                    vec!["floodsub".to_string(), "ping".to_string()],
+                );
+            }
+            _ => panic!("invalid event received, expected incoming connection"),
         }
     }
 }
