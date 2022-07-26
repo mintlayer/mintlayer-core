@@ -35,9 +35,12 @@ fn process_a_trivial_block() {
 }
 
 // Generate some blocks and check that a locator is of expected length.
-#[test]
-fn get_locator() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_locator(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut btf = BlockTestFramework::new();
 
         let locator = btf.chainstate().get_locator().unwrap();
@@ -45,7 +48,6 @@ fn get_locator() {
         assert_eq!(&locator[0], &btf.genesis().get_id());
 
         // Expand the chain several times.
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let mut blocks = 1;
         let mut last_block_id: Id<GenBlock> = btf.genesis().get_id().into();
         for _ in 0..8 {
@@ -75,10 +77,12 @@ fn get_locator() {
 }
 
 // Check that new blocks (produced after a locator is created) are returned.
-#[test]
-fn get_headers() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let header_limit = i64::from(HEADER_LIMIT).try_into().unwrap();
         let headers_count = rng.gen_range(1000..header_limit);
         let blocks_count = rng.gen_range(1000..2000);
@@ -124,10 +128,12 @@ fn get_headers() {
 
 // Create two chains that only share the genesis block and verify that the header is attached to
 // the genesis.
-#[test]
-fn get_headers_genesis() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_genesis(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
 
         let mut btf = BlockTestFramework::new();
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
@@ -149,10 +155,12 @@ fn get_headers_genesis() {
 
 // Create two chains that branch at some point, both with some unique blocks. Verify that the first
 // returned header is attached to a block that is known to both chains.
-#[test]
-fn get_headers_branching_chains() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_branching_chains(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let common_height = rng.gen_range(100..10_000);
 
         let mut btf = BlockTestFramework::new();
@@ -172,10 +180,12 @@ fn get_headers_branching_chains() {
 
 // Create two separate chains that share some blocks. Verify that the first returned header is
 // attached to some block known for both chains.
-#[test]
-fn get_headers_different_chains() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_headers_different_chains(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
@@ -208,10 +218,12 @@ fn get_headers_different_chains() {
     });
 }
 
-#[test]
-fn filter_already_existing_blocks() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn filter_already_existing_blocks(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();
@@ -264,10 +276,12 @@ fn filter_already_existing_blocks() {
 }
 
 // Try to use headers that aren't attached to the chain.
-#[test]
-fn filter_already_existing_blocks_detached_headers() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
 
         let mut btf1 = BlockTestFramework::new();
         let mut btf2 = BlockTestFramework::new();

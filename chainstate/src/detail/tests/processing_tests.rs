@@ -65,9 +65,12 @@ fn process_genesis_block() {
     });
 }
 
-#[test]
-fn orphans_chains() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn orphans_chains(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut chainstate = setup_chainstate();
         assert_eq!(
             chainstate.get_best_block_id().unwrap(),
@@ -75,7 +78,6 @@ fn orphans_chains() {
         );
 
         // Process the orphan block
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let genesis_block = chainstate.chain_config.genesis_block().clone();
         let missing_block =
             produce_test_block(TestBlockInfo::from_genesis(&genesis_block), &mut rng);
@@ -140,13 +142,15 @@ fn empty_chainstate_no_genesis() {
     })
 }
 
-#[test]
-fn spend_inputs_simple() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_inputs_simple(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut chainstate = setup_chainstate();
 
         // Create a new block
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let block = produce_test_block(
             TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
             &mut rng,
@@ -192,9 +196,12 @@ fn spend_inputs_simple() {
 }
 
 // Produce and process some blocks.
-#[test]
-fn straight_chain() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn straight_chain(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -207,7 +214,6 @@ fn straight_chain() {
         )
         .unwrap();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let genesis_index = chainstate
             .make_db_tx_ro()
             .get_gen_block_index(&chainstate.chain_config.genesis_block_id())
@@ -261,11 +267,13 @@ fn straight_chain() {
     });
 }
 
-#[test]
-fn get_ancestor_invalid_height() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_ancestor_invalid_height(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut btf = BlockTestFramework::new();
     let height = 1;
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
     btf.create_chain(&btf.genesis().get_id().into(), height, &mut rng).unwrap();
     let last_block_index = btf.block_indexes.last().expect("last block in first chain").clone();
 
@@ -285,8 +293,11 @@ fn get_ancestor_invalid_height() {
     );
 }
 
-#[test]
-fn get_ancestor() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn get_ancestor(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut btf = BlockTestFramework::new();
 
     // We will create two chains that split at height 100
@@ -294,7 +305,6 @@ fn get_ancestor() {
     const ANCESTOR_HEIGHT: usize = 50;
     const FIRST_CHAIN_HEIGHT: usize = 500;
     const SECOND_CHAIN_LENGTH: usize = 300;
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
     btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
 
@@ -396,15 +406,17 @@ fn get_ancestor() {
 }
 
 // Create two chains that split at height 100.
-#[test]
-fn last_common_ancestor() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn last_common_ancestor(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut btf = BlockTestFramework::new();
 
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;
     const SECOND_CHAIN_LENGTH: usize = 300;
 
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
     btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
     let config_clone = btf.chainstate.chain_config.clone();
@@ -468,8 +480,11 @@ fn last_common_ancestor() {
     );
 }
 
-#[test]
-fn consensus_type() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn consensus_type(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let ignore_consensus = BlockHeight::new(0);
     let pow = BlockHeight::new(5);
     let ignore_again = BlockHeight::new(10);
@@ -506,13 +521,12 @@ fn consensus_type() {
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
-    // ConsenssuData::None, which agreess with the net_upgrades we defined above.
+    // ConsenssuData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
 
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
@@ -627,8 +641,11 @@ fn consensus_type() {
     }
 }
 
-#[test]
-fn pow() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn pow(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let ignore_consensus = BlockHeight::new(0);
     let pow_consensus = BlockHeight::new(1);
     let difficulty =
@@ -657,7 +674,6 @@ fn pow() {
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
     let mut btf = BlockTestFramework::with_chainstate(chainstate);
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus

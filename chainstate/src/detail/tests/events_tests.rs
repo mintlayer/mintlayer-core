@@ -23,13 +23,15 @@ use chainstate_storage::Store;
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
 // Subscribe to events, process a block and check that the `NewTip` event is triggered.
-#[test]
-fn simple_subscribe() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn simple_subscribe(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut chainstate = setup_chainstate();
         let events = subscribe(&mut chainstate, 1);
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         // Produce and process a block.
         let first_block = produce_test_block(
             TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
@@ -65,12 +67,14 @@ fn simple_subscribe() {
 }
 
 // Subscribe to events several times, then process a block.
-#[test]
-fn several_subscribers() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn several_subscribers(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let subscribers = rng.gen_range(8..256);
         let events = subscribe(&mut chainstate, subscribers);
 
@@ -92,12 +96,14 @@ fn several_subscribers() {
     });
 }
 
-#[test]
-fn several_subscribers_several_events() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn several_subscribers_several_events(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
 
@@ -125,9 +131,12 @@ fn several_subscribers_several_events() {
 }
 
 // An orphan block is rejected during processing, so it shouldn't trigger the new tip event.
-#[test]
-fn orphan_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn orphan_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -143,8 +152,6 @@ fn orphan_block() {
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
-
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let block = produce_test_block(
             TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()).orphan(),
@@ -160,9 +167,12 @@ fn orphan_block() {
     });
 }
 
-#[test]
-fn custom_orphan_error_hook() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn custom_orphan_error_hook(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -178,8 +188,6 @@ fn custom_orphan_error_hook() {
 
         let events = subscribe(&mut chainstate, 1);
         assert!(!chainstate.events_controller.subscribers().is_empty());
-
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
 
         let first_block = produce_test_block(
             TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),

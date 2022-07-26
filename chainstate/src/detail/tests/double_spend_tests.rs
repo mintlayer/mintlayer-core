@@ -37,12 +37,14 @@ use common::{
 // | |input = tx1        | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn spend_output_in_the_same_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_output_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -64,6 +66,7 @@ fn spend_output_in_the_same_block() {
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
             Some(<Id<GenBlock>>::from(block_id))
         );
+        panic!();
     });
 }
 
@@ -80,12 +83,14 @@ fn spend_output_in_the_same_block() {
 // | |input = prev_block | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn spend_output_in_the_same_block_invalid_order() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -128,12 +133,14 @@ fn spend_output_in_the_same_block_invalid_order() {
 // | |input = tx1        | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn double_spend_tx_in_the_same_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
@@ -181,12 +188,14 @@ fn double_spend_tx_in_the_same_block() {
 // | |input = genesis    | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn double_spend_tx_in_another_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn double_spend_tx_in_another_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let first_block = Block::new(
@@ -244,12 +253,14 @@ fn double_spend_tx_in_another_block() {
 // | |input = tx1        | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn spend_bigger_output_in_the_same_block() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let tx1_output_value = rng.gen_range(1000..2000);
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);

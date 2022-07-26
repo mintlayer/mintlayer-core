@@ -164,7 +164,8 @@ mod tests {
     use checkers::*;
     use common::{chain::block::Block, primitives::Id};
     use helpers::*;
-    use test_utils::{make_seedable_rng, random::*};
+    use rstest::*;
+    use test_utils::random::*;
 
     const MAX_ORPHAN_BLOCKS: usize = 512;
 
@@ -282,12 +283,14 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_one_block_and_clear() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_one_block_and_clear(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let block = gen_random_block(&mut rng);
         assert!(orphans_pool.add_block(block.clone()).is_ok());
 
@@ -300,12 +303,14 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_blocks_and_clear() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_blocks_and_clear(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
 
         // add a random block
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let block = gen_random_block(&mut rng);
         assert!(orphans_pool.add_block(block.clone()).is_ok());
         assert_eq!(orphans_pool.len(), 1);
@@ -345,11 +350,13 @@ mod tests {
         check_empty_pool(&orphans_pool);
     }
 
-    #[test]
-    fn test_add_block_exceeds_max() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_block_exceeds_max(#[case] seed: Seed) {
         let max_orphans = 3;
         let mut orphans_pool = OrphanBlocksPool::new(max_orphans);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let blocks = gen_random_blocks(&mut rng, max_orphans as u32 + 2);
 
         blocks.into_iter().for_each(|block| {
@@ -359,10 +366,12 @@ mod tests {
         check_pool_length(&orphans_pool, max_orphans);
     }
 
-    #[test]
-    fn test_add_block_repeated() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_add_block_repeated(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let blocks = gen_random_blocks(&mut rng, 50);
 
         blocks.iter().for_each(|block| {
@@ -377,10 +386,12 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_pool_drop_block() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_pool_drop_block(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         let blocks = gen_random_blocks(&mut rng, 5);
 
         blocks.iter().for_each(|block| {
@@ -398,11 +409,12 @@ mod tests {
         assert!(!orphans_pool.orphan_by_prev_id.contains_key(&rand_block.prev_block_id()));
     }
 
-    #[test]
-    fn test_deepest_child_in_chain() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_deepest_child_in_chain(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
 
         // In `orphans_by_prev_id`:
         // [
@@ -450,10 +462,12 @@ mod tests {
         check_block_existence(&orphans_pool, first_block);
     }
 
-    #[test]
-    fn test_deepest_child_common_parent() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_deepest_child_common_parent(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(MAX_ORPHAN_BLOCKS);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         // In `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e,f) ),
@@ -498,10 +512,12 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_prune() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_prune(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(12);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
         // in `orphans_by_prev_id`:
         // [
         //  ( a, (b,c,d,e) )
@@ -572,10 +588,12 @@ mod tests {
         check_pool_length(&orphans_pool, orphans_pool.max_orphans - 1);
     }
 
-    #[test]
-    fn test_simple_take_all_children_of() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_simple_take_all_children_of(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(20);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
 
         let count = 9;
         // in `orphans_by_prev_id`:
@@ -614,10 +632,12 @@ mod tests {
         check_pool_length(&orphans_pool, conn_blocks_len);
     }
 
-    #[test]
-    fn test_mix_chain_take_all_children_of() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_mix_chain_take_all_children_of(#[case] seed: Seed) {
         let mut orphans_pool = OrphanBlocksPool::new(20);
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+        let mut rng = make_seedable_rng(seed);
 
         let count = 9;
         // in `orphans_by_prev_id`:

@@ -28,10 +28,12 @@ use chainstate_storage::{BlockchainStorageRead, Store};
 use common::chain::config::create_unit_test_config;
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
-#[test]
-fn reorg_simple() {
-    common::concurrency::model(|| {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn reorg_simple(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let chain_config = Arc::new(create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let storage = Store::new_empty().unwrap();
@@ -100,14 +102,16 @@ fn reorg_simple() {
     });
 }
 
-#[test]
-fn test_very_long_reorgs() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_very_long_reorgs(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut rng = make_seedable_rng(seed);
         let mut btf = BlockTestFramework::new();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut btf, &events);
 
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
         check_simple_fork(&mut btf, &events, &mut rng);
         check_make_alternative_chain_longer(&mut btf, &events, &mut rng);
         check_reorg_to_first_chain(&mut btf, &events, &mut rng);

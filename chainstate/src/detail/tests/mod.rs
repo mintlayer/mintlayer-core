@@ -31,9 +31,9 @@ use common::{
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
+use rstest::*;
 use serialization::Encode;
-
-use test_utils::{make_seedable_rng, random::*};
+use test_utils::random::*;
 
 mod double_spend_tests;
 mod events_tests;
@@ -178,8 +178,11 @@ fn create_new_outputs(
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready
 #[ignore]
-#[test]
-fn generate_blocks_for_functional_tests() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let chain_config = create_regtest();
     let mut prev_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
     let chainstate_config = ChainstateConfig::new();
@@ -188,7 +191,6 @@ fn generate_blocks_for_functional_tests() {
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
-    let mut rng = make_seedable_rng!(Seed::from_entropy());
     for _ in 1..6 {
         let mut mined_block = btf.random_block(prev_block, None, &mut rng);
         let bits = difficulty.into();

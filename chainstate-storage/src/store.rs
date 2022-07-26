@@ -413,7 +413,8 @@ pub(crate) mod test {
     use common::primitives::{Amount, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;
-    use test_utils::{make_seedable_rng, random::*};
+    use rstest::*;
+    use test_utils::random::*;
     use utxo::{BlockUndo, TxUndo};
 
     #[test]
@@ -691,9 +692,11 @@ pub(crate) mod test {
     }
 
     #[cfg(not(loom))]
-    #[test]
-    fn undo_test() {
-        let mut rng = make_seedable_rng!(Seed::from_entropy());
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn undo_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let block_undo0 = create_rand_block_undo(&mut rng, 10, 5, BlockHeight::new(1));
         // create id:
         let id0: Id<Block> = Id::new(H256::random());
