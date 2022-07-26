@@ -13,13 +13,13 @@ pub(crate) struct FeeRate {
 impl FeeRate {
     pub(crate) fn new(tokens_per_kb: Amount) -> Self {
         Self {
-            atoms_per_kb: tokens_per_kb.into(),
+            atoms_per_kb: tokens_per_kb.into_atoms(),
         }
     }
 
     pub(crate) fn of_tx(fee: Amount, tx_size: usize) -> Self {
         Self {
-            atoms_per_kb: Self::div_up(1000 * u128::try_from(fee).expect("of_tx"), tx_size),
+            atoms_per_kb: Self::div_up(1000 * fee.into_atoms(), tx_size),
         }
     }
 
