@@ -7,30 +7,30 @@ lazy_static::lazy_static! {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FeeRate {
-    tokens_per_kb: u128,
+    atoms_per_kb: u128,
 }
 
 impl FeeRate {
     pub(crate) fn new(tokens_per_kb: Amount) -> Self {
         Self {
-            tokens_per_kb: tokens_per_kb.into(),
+            atoms_per_kb: tokens_per_kb.into(),
         }
     }
 
     pub(crate) fn of_tx(fee: Amount, tx_size: usize) -> Self {
         Self {
-            tokens_per_kb: Self::div_up(1000 * u128::try_from(fee).expect("of_tx"), tx_size),
+            atoms_per_kb: Self::div_up(1000 * u128::try_from(fee).expect("of_tx"), tx_size),
         }
     }
 
     pub(crate) fn compute_fee(&self, size: usize) -> Amount {
         Amount::from_atoms(
-            self.tokens_per_kb * u128::try_from(size).expect("compute_fee conversion") / 1000,
+            self.atoms_per_kb * u128::try_from(size).expect("compute_fee conversion") / 1000,
         )
     }
 
     pub(crate) fn tokens_per_kb(&self) -> u128 {
-        self.tokens_per_kb
+        self.atoms_per_kb
     }
 
     fn div_up(fee: u128, tx_size: usize) -> u128 {
@@ -42,8 +42,10 @@ impl FeeRate {
 impl std::ops::Add for FeeRate {
     type Output = FeeRate;
     fn add(self, other: Self) -> Self::Output {
-        let tokens_per_kb = self.tokens_per_kb + other.tokens_per_kb;
-        FeeRate { tokens_per_kb }
+        let tokens_per_kb = self.atoms_per_kb + other.atoms_per_kb;
+        FeeRate {
+            atoms_per_kb: tokens_per_kb,
+        }
     }
 }
 
@@ -51,7 +53,7 @@ impl std::ops::Div<u128> for FeeRate {
     type Output = FeeRate;
     fn div(self, rhs: u128) -> Self::Output {
         FeeRate {
-            tokens_per_kb: self.tokens_per_kb / rhs,
+            atoms_per_kb: self.atoms_per_kb / rhs,
         }
     }
 }
