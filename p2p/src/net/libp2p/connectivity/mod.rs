@@ -145,7 +145,7 @@ impl ConnectionManager {
             if connection.is_outbound_pending() {
                 self.add_event(ConnectionManagerEvent::Behaviour(
                     BehaviourEvent::ConnectionError {
-                        addr: connection.addr().clone(),
+                        address: connection.addr().clone(),
                         error: P2pError::DialError(DialError::IoError(
                             std::io::ErrorKind::ConnectionRefused,
                         )),
@@ -185,7 +185,7 @@ impl ConnectionManager {
         if let Some(connection) = self.connections.remove(&peer_id) {
             self.add_event(ConnectionManagerEvent::Behaviour(
                 BehaviourEvent::ConnectionError {
-                    addr: connection.addr().clone(),
+                    address: connection.addr().clone(),
                     error: P2pError::PeerError(PeerError::BannedPeer(peer_id.to_string())),
                 },
             ));
@@ -225,7 +225,7 @@ impl ConnectionManager {
 
                 Some(ConnectionManagerEvent::Behaviour(
                     BehaviourEvent::InboundAccepted {
-                        addr: connection.addr().clone(),
+                        address: connection.addr().clone(),
                         peer_info: IdentifyInfoWrapper::new(received_info),
                     },
                 ))
@@ -236,7 +236,7 @@ impl ConnectionManager {
 
                 Some(ConnectionManagerEvent::Behaviour(
                     BehaviourEvent::OutboundAccepted {
-                        addr: connection.addr().clone(),
+                        address: connection.addr().clone(),
                         peer_info: IdentifyInfoWrapper::new(received_info),
                     },
                 ))

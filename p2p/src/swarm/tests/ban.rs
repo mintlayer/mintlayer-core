@@ -37,8 +37,8 @@ async fn ban_connected_peer() {
     let (_conn1_res, conn2_res) =
         tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
 
-    if let Ok(net::types::ConnectivityEvent::IncomingConnection { peer_info, addr }) = conn2_res {
-        swarm2.accept_inbound_connection(addr, peer_info).await.unwrap();
+    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
+        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
     let peer_id = *swarm1.handle_mut().peer_id();
@@ -61,8 +61,8 @@ async fn banned_peer_attempts_to_connect() {
     let (_conn1_res, conn2_res) =
         tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
 
-    if let Ok(net::types::ConnectivityEvent::IncomingConnection { peer_info, addr }) = conn2_res {
-        swarm2.accept_inbound_connection(addr, peer_info).await.unwrap();
+    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
+        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
     let peer_id = *swarm1.handle_mut().peer_id();
@@ -97,8 +97,8 @@ async fn connect_to_banned_peer() {
     let (_conn1_res, conn2_res) =
         tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
 
-    if let Ok(net::types::ConnectivityEvent::IncomingConnection { peer_info, addr }) = conn2_res {
-        swarm2.accept_inbound_connection(addr, peer_info).await.unwrap();
+    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
+        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
     }
 
     let peer_id = *swarm1.handle_mut().peer_id();
@@ -119,10 +119,10 @@ async fn connect_to_banned_peer() {
     });
 
     swarm2.handle.connect(remote_addr.clone()).await.unwrap();
-    if let Ok(net::types::ConnectivityEvent::ConnectionError { addr, error }) =
+    if let Ok(net::types::ConnectivityEvent::ConnectionError { address, error }) =
         swarm2.handle.poll_next().await
     {
-        assert_eq!(remote_addr, addr);
+        assert_eq!(remote_addr, address);
         assert_eq!(
             error,
             P2pError::PeerError(PeerError::BannedPeer(remote_id.to_string()))
