@@ -1,3 +1,4 @@
+use chainstate_types::stake_modifer::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
@@ -7,10 +8,7 @@ use common::{
     primitives::{Compact, Id, Idable, H256},
     Uint256,
 };
-use crypto::vrf::{
-    transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
-    VRFError, VRFPublicKey, VRFReturn,
-};
+
 use thiserror::Error;
 use utils::ensure;
 
@@ -67,65 +65,11 @@ pub enum ConsensusPoSError {
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(VRFError),
+    VRFDataVerificationFailed(ProofOfStakeVRFError),
     #[error("Error while attempting to retrieve epoch data of index {0} with error: {1}")]
     EpochDataRetrievalQueryError(u64, PropertyQueryError),
     #[error("Epoch data not found for index: {0}")]
     EpochDataNotFound(u64),
-}
-
-fn construct_transcript(
-    epoch_index: u64,
-    random_seed: &H256,
-    spender_block_header: &BlockHeader,
-) -> WrappedTranscript {
-    TranscriptAssembler::new(b"MintlayerStakeVRF")
-        .attach(
-            b"Randomness",
-            TranscriptComponent::RawData(random_seed.as_bytes().to_vec()),
-        )
-        .attach(
-            b"Slot",
-            TranscriptComponent::U64(spender_block_header.timestamp().as_int_seconds() as u64),
-        )
-        .attach(b"EpochIndex", TranscriptComponent::U64(epoch_index))
-        .finalize()
-}
-
-fn extract_vrf_output(
-    vrf_data: &VRFReturn,
-    vrf_public_key: VRFPublicKey,
-    transcript: WrappedTranscript,
-) -> [u8; 32] {
-    match &vrf_data {
-        VRFReturn::Schnorrkel(d) => d
-            .calculate_vrf_output_with_generic_key::<generic_array::typenum::U32>(
-                vrf_public_key,
-                transcript.into(),
-            )
-            .unwrap()
-            .into(),
-    }
-}
-
-fn verify_vrf_and_get_vrf_output(
-    epoch_index: u64,
-    random_seed: &H256,
-    pos_data: &PoSData,
-    vrf_public_key: &VRFPublicKey,
-    spender_block_header: &BlockHeader,
-) -> Result<H256, ConsensusPoSError> {
-    let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
-
-    let vrf_data = pos_data.vrf_data();
-
-    vrf_public_key
-        .verify_vrf_data(transcript.clone().into(), vrf_data)
-        .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
-
-    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript);
-
-    Ok(vrf_raw_output.into())
 }
 
 fn check_stake_kernel_hash(
@@ -157,7 +101,9 @@ fn check_stake_kernel_hash(
         pos_data,
         pool_data.vrf_public_key(),
         spender_block_header,
-    )?;
+    )
+    .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
+
     let hash_pos_arith: Uint256 = hash_pos.into();
 
     // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes

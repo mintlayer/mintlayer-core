@@ -562,8 +562,10 @@ version = "0.1.0"
 dependencies = [
  "common",
  "crypto",
+ "generic-array",
  "parity-scale-codec",
  "serialization",
+ "thiserror",
 ]
 
 [[package]]

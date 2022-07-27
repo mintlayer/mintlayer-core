@@ -12,3 +12,5 @@ common = { path = "../common/" }
 crypto = { path = "../crypto" }
 
 parity-scale-codec = "3.1"
+thiserror = "1.0"
+generic-array = "0.14"
