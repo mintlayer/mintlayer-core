@@ -59,12 +59,12 @@ pub enum ConsensusPoSError {
     KernelHeaderOutputIndexOutOfRange(Id<GenBlock>, u32),
     #[error("Bits to target conversion failed {0:?}")]
     BitsToTargetConversionFailed(Compact),
-    #[error("Could not find previous block's stake modifer")]
-    PrevStakeModiferNotFound,
+    #[error("Could not find previous block's stake modifier")]
+    PrevStakeModifierNotFound,
     #[error("Could not find the previous block index of block: {0}")]
     PrevBlockIndexNotFound(Id<Block>),
     #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]
-    KernelAncesteryCheckFailed(Id<Block>),
+    KernelAncestryCheckFailed(Id<Block>),
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
@@ -188,11 +188,11 @@ fn ensure_correct_ancestry(
     };
     let kernel_block_header_as_ancestor = block_index_handle
         .get_ancestor(prev_block_index, kernel_block_index.block_height())
-        .map_err(|_| ConsensusPoSError::KernelAncesteryCheckFailed(header.get_id()))?;
+        .map_err(|_| ConsensusPoSError::KernelAncestryCheckFailed(header.get_id()))?;
 
     ensure!(
         kernel_block_header_as_ancestor.block_id() == kernel_block_index.block_id(),
-        ConsensusPoSError::KernelAncesteryCheckFailed(header.block_id()),
+        ConsensusPoSError::KernelAncestryCheckFailed(header.block_id()),
     );
     Ok(())
 }
