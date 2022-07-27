@@ -50,12 +50,12 @@ pub struct BlockTestFramework {
 
 impl BlockTestFramework {
     /// Creates a new `BlockTestFramework` instance using a builder api.
-    pub fn new() -> BlockTestFrameworkBuilder {
+    pub fn builder() -> BlockTestFrameworkBuilder {
         BlockTestFrameworkBuilder::new()
     }
 
     /// Processes a new block with the parameters specified using `ProcessBlockBuilder`.
-    pub fn process_block(&mut self) -> ProcessBlockBuilder {
+    pub fn block_builder(&mut self) -> ProcessBlockBuilder {
         ProcessBlockBuilder::new(self)
     }
 
@@ -127,7 +127,7 @@ impl BlockTestFramework {
 
 impl Default for BlockTestFramework {
     fn default() -> Self {
-        Self::new().build()
+        Self::builder().build()
     }
 }
 
@@ -136,7 +136,7 @@ fn build_test_framework() {
     let chain_type = ChainType::Mainnet;
     let max_db_commit_attempts = 10;
 
-    let tf = BlockTestFramework::new()
+    let tf = BlockTestFramework::builder()
         .with_chain_config(
             ChainConfigBuilder::new(chain_type)
                 .net_upgrades(NetUpgrades::unit_tests())
@@ -160,7 +160,7 @@ fn build_test_framework() {
 #[test]
 fn process_block() {
     let mut tf = BlockTestFramework::default();
-    tf.process_block().process().unwrap();
+    tf.block_builder().process().unwrap();
 }
 
 // TODO: FIXME ///////////////////////////////////////////////////////
