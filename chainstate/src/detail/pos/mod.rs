@@ -2,7 +2,6 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
         signature::Transactable,
-        stakelock::StakePoolData,
         ChainConfig, GenBlock, OutputSpentState, TxOutput,
     },
     primitives::{Compact, Id, Idable, H256},
@@ -113,20 +112,18 @@ fn verify_vrf_and_get_output(
     epoch_index: u64,
     random_seed: &H256,
     pos_data: &PoSData,
-    pool_data: &StakePoolData,
+    vrf_public_key: &VRFPublicKey,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
     let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
 
     let vrf_data = pos_data.vrf_data();
 
-    pool_data
-        .vrf_public_key()
+    vrf_public_key
         .verify_vrf_data(transcript.clone().into(), vrf_data)
         .map_err(ConsensusPoSError::VRFDataVerificationFailed)?;
 
-    let vrf_raw_output =
-        extract_vrf_output(vrf_data, pool_data.vrf_public_key().clone(), transcript);
+    let vrf_raw_output = extract_vrf_output(vrf_data, vrf_public_key.clone(), transcript);
 
     Ok(vrf_raw_output.into())
 }
@@ -158,7 +155,7 @@ fn check_stake_kernel_hash(
         epoch_index,
         random_seed,
         pos_data,
-        pool_data,
+        pool_data.vrf_public_key(),
         spender_block_header,
     )?;
     let hash_pos_arith: Uint256 = hash_pos.into();
