@@ -108,7 +108,7 @@ fn extract_vrf_output(
     }
 }
 
-fn verify_vrf_and_get_output(
+fn verify_vrf_and_get_vrf_output(
     epoch_index: u64,
     random_seed: &H256,
     pos_data: &PoSData,
@@ -151,7 +151,7 @@ fn check_stake_kernel_hash(
         common::chain::OutputPurpose::StakePool(d) => &**d,
     };
 
-    let hash_pos: H256 = verify_vrf_and_get_output(
+    let hash_pos: H256 = verify_vrf_and_get_vrf_output(
         epoch_index,
         random_seed,
         pos_data,
