@@ -98,7 +98,7 @@ fn check_stake_kernel_hash(
     let hash_pos: H256 = verify_vrf_and_get_vrf_output(
         epoch_index,
         random_seed,
-        pos_data,
+        pos_data.vrf_data(),
         pool_data.vrf_public_key(),
         spender_block_header,
     )

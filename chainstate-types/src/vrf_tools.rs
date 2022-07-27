@@ -1,7 +1,4 @@
-use common::{
-    chain::block::{consensus_data::PoSData, BlockHeader},
-    primitives::H256,
-};
+use common::{chain::block::BlockHeader, primitives::H256};
 use crypto::vrf::{
     transcript::{TranscriptAssembler, TranscriptComponent, WrappedTranscript},
     VRFError, VRFPublicKey, VRFReturn,
@@ -51,13 +48,11 @@ fn extract_vrf_output(
 pub fn verify_vrf_and_get_vrf_output(
     epoch_index: u64,
     random_seed: &H256,
-    pos_data: &PoSData,
+    vrf_data: &VRFReturn,
     vrf_public_key: &VRFPublicKey,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ProofOfStakeVRFError> {
     let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
-
-    let vrf_data = pos_data.vrf_data();
 
     vrf_public_key
         .verify_vrf_data(transcript.clone().into(), vrf_data)
