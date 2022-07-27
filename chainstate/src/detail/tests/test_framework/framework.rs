@@ -31,7 +31,7 @@ use crypto::random::Rng;
 use crate::{
     detail::{
         tests::{
-            create_new_outputs, produce_test_block,
+            create_new_outputs,
             test_framework::{BlockBuilder, TestFrameworkBuilder},
             TestBlockInfo, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL,
         },
@@ -80,11 +80,14 @@ impl TestFramework {
     /// block outputs.
     pub fn create_chain(
         &mut self,
-        parent_block_id: &Id<GenBlock>,
+        parent_block: &Id<GenBlock>,
         blocks: usize,
         rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, BlockError> {
-        let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
+        // TODO: Instead of creating TestBlockInfo on every iteration, a proper UTXO set
+        // abstraction should be used. See https://github.com/mintlayer/mintlayer-core/issues/312
+        // for the details.
+        let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block);
 
         for _ in 0..blocks {
             // The value of each output is decreased by a random amount to produce a new input and output.

@@ -94,6 +94,8 @@ fn chainstate_with_config(
     .unwrap()
 }
 
+// TODO: Replace by a proper UTXO set abstraction
+// (https://github.com/mintlayer/mintlayer-core/issues/312).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestBlockInfo {
     pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
@@ -140,6 +142,7 @@ impl TestBlockInfo {
     }
 }
 
+// TODO: FIXME: Remove?..
 fn produce_test_block(prev_block: TestBlockInfo, rng: &mut impl Rng) -> Block {
     produce_test_block_with_consensus_data(prev_block, ConsensusData::None, rng)
 }
