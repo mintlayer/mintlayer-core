@@ -1,4 +1,4 @@
-use chainstate_types::stake_modifer::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
+use chainstate_types::vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
 use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
