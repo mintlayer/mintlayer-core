@@ -56,3 +56,16 @@ impl std::ops::Div<u128> for FeeRate {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_div_up() {
+        let fee = 7;
+        let tx_size = usize::MAX;
+        let rate = FeeRate::div_up(fee, tx_size);
+        assert_eq!(rate, 1);
+    }
+}
