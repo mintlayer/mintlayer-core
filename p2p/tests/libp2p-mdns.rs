@@ -16,13 +16,14 @@
 // Author(s): A. Altonen
 
 use libp2p::multiaddr::Protocol;
-use p2p::net::{
-    libp2p::{Libp2pDiscoveryStrategy, Libp2pService},
-    types::ConnectivityEvent,
-    ConnectivityService, NetworkingService,
+use p2p::{
+    config,
+    net::{
+        libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService, NetworkingService,
+    },
 };
+use p2p_test_utils::make_libp2p_addr;
 use std::sync::Arc;
-use test_utils::make_libp2p_addr;
 
 // verify that libp2p mdns peer discovery works
 #[tokio::test]
@@ -30,18 +31,22 @@ async fn test_libp2p_peer_discovery() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut serv, _, _) = Libp2pService::start(
         make_libp2p_addr(),
-        &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Arc::new(config::P2pConfig {
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            ..Default::default()
+        }),
     )
     .await
     .unwrap();
 
     let (mut serv2, _, _) = Libp2pService::start(
         make_libp2p_addr(),
-        &[Libp2pDiscoveryStrategy::MulticastDns],
         Arc::clone(&config),
-        std::time::Duration::from_secs(10),
+        Arc::new(config::P2pConfig {
+            mdns_config: config::MdnsConfig::from_options(true, Some(200), None),
+            ..Default::default()
+        }),
     )
     .await
     .unwrap();

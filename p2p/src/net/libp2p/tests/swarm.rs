@@ -24,7 +24,7 @@ use libp2p::{
     tcp::TcpConfig,
     PeerId, Swarm, Transport,
 };
-use test_utils::make_libp2p_addr;
+use p2p_test_utils::make_libp2p_addr;
 
 // TODO: add more tests at some point
 

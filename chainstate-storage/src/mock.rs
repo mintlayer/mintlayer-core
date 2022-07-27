@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A mock version of the blockchian storage.
+//! A mock version of the blockchain storage.
 
 use chainstate_types::block_index::BlockIndex;
 use chainstate_types::epoch_data::EpochData;
@@ -91,7 +91,7 @@ mockall::mock! {
 }
 
 mockall::mock! {
-    /// A mock object for blockcain storage transaction
+    /// A mock object for blockchain storage transaction
     pub StoreTxRo {}
 
     impl crate::BlockchainStorageRead for StoreTxRo {
@@ -125,7 +125,7 @@ mockall::mock! {
 }
 
 mockall::mock! {
-    /// A mock object for blockcain storage transaction
+    /// A mock object for blockchain storage transaction
     pub StoreTxRw {}
 
     impl crate::BlockchainStorageRead for StoreTxRw {

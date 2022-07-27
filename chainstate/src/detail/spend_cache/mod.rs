@@ -116,7 +116,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex<'a>>, StateUpdateError> {
         match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(self.chain_config))),
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(
+                self.chain_config.genesis_block(),
+            ))),
             GenBlockId::Block(id) => self
                 .db_tx
                 .get_block_index(&id)

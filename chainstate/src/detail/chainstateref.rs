@@ -164,7 +164,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex<'a>>, PropertyQueryError> {
         match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(self.chain_config))),
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(
+                self.chain_config.genesis_block(),
+            ))),
             GenBlockId::Block(id) => self.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block)),
         }
     }

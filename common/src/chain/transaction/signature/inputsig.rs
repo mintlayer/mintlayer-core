@@ -20,7 +20,7 @@ mod authorize_pubkeyhash_spend;
 
 use std::io::BufWriter;
 
-use parity_scale_codec::{Decode, DecodeAll, Encode};
+use serialization::{Decode, DecodeAll, Encode};
 
 use crate::{
     chain::{Destination, Transaction},
@@ -134,13 +134,11 @@ impl StandardInputSignature {
 }
 
 impl Decode for StandardInputSignature {
-    fn decode<I: parity_scale_codec::Input>(
-        input: &mut I,
-    ) -> Result<Self, parity_scale_codec::Error> {
+    fn decode<I: serialization::Input>(input: &mut I) -> Result<Self, serialization::Error> {
         let sighash_byte = input.read_byte()?;
         let sighash: sighashtype::SigHashType = sighash_byte
             .try_into()
-            .map_err(|_| parity_scale_codec::Error::from("Invalid sighash byte"))?;
+            .map_err(|_| serialization::Error::from("Invalid sighash byte"))?;
         let raw_sig = Vec::decode(input)?;
 
         Ok(Self {
@@ -161,7 +159,7 @@ impl Encode for StandardInputSignature {
         self.raw_signature.size_hint() + 1
     }
 
-    fn encode_to<T: parity_scale_codec::Output + ?Sized>(&self, dest: &mut T) {
+    fn encode_to<T: serialization::Output + ?Sized>(&self, dest: &mut T) {
         dest.write(&[self.sighash_type.get()]);
         self.raw_signature.encode_to(dest);
     }

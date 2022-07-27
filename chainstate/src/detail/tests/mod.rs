@@ -31,7 +31,9 @@ use common::{
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
+use rstest::rstest;
 use serialization::Encode;
+use test_utils::random::{make_seedable_rng, Seed};
 
 mod double_spend_tests;
 mod events_tests;
@@ -49,10 +51,9 @@ const ERR_STORAGE_FAIL: &str = "Storage failure";
 const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
 const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
-fn empty_witness() -> InputWitness {
-    let mut rng = crypto::random::make_pseudo_rng();
+fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     let mut msg: Vec<u8> = (1..100).collect();
-    msg.shuffle(&mut rng);
+    msg.shuffle(rng);
     InputWitness::NoSignature(Some(msg))
 }
 
@@ -64,13 +65,13 @@ fn create_utxo_data(
     outsrc: OutPointSourceId,
     index: usize,
     output: &TxOutput,
+    rng: &mut impl Rng,
 ) -> Option<(TxInput, TxOutput)> {
-    let mut rng = crypto::random::make_pseudo_rng();
     let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
     let new_value = (output.value() - spent_value).unwrap();
     utils::ensure!(new_value >= Amount::from_atoms(1));
     Some((
-        TxInput::new(outsrc, index as u32, empty_witness()),
+        TxInput::new(outsrc, index as u32, empty_witness(rng)),
         TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
     ))
 }
@@ -139,17 +140,21 @@ impl TestBlockInfo {
     }
 }
 
-fn produce_test_block(prev_block: TestBlockInfo) -> Block {
-    produce_test_block_with_consensus_data(prev_block, ConsensusData::None)
+fn produce_test_block(prev_block: TestBlockInfo, rng: &mut impl Rng) -> Block {
+    produce_test_block_with_consensus_data(prev_block, ConsensusData::None, rng)
 }
 
 fn produce_test_block_with_consensus_data(
     prev_block: TestBlockInfo,
     consensus_data: ConsensusData,
+    rng: &mut impl Rng,
 ) -> Block {
     // The value of each output is decreased by a random amount to produce a new input and output.
-    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) =
-        prev_block.txns.into_iter().flat_map(|(s, o)| create_new_outputs(s, &o)).unzip();
+    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
+        .txns
+        .into_iter()
+        .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+        .unzip();
 
     Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
@@ -160,18 +165,25 @@ fn produce_test_block_with_consensus_data(
     .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
-fn create_new_outputs(srcid: OutPointSourceId, outs: &[TxOutput]) -> Vec<(TxInput, TxOutput)> {
+fn create_new_outputs(
+    srcid: OutPointSourceId,
+    outs: &[TxOutput],
+    rng: &mut impl Rng,
+) -> Vec<(TxInput, TxOutput)> {
     outs.iter()
         .enumerate()
-        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output))
+        .filter_map(move |(index, output)| create_utxo_data(srcid.clone(), index, output, rng))
         .collect()
 }
 
 // Generate 5 regtest blocks and print their hex encoding, which is useful for functional tests.
 // TODO: remove when block production is ready
 #[ignore]
-#[test]
-fn generate_blocks_for_functional_tests() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let chain_config = create_regtest();
     let mut prev_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
     let chainstate_config = ChainstateConfig::new();
@@ -181,7 +193,7 @@ fn generate_blocks_for_functional_tests() {
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
     for _ in 1..6 {
-        let mut mined_block = btf.random_block(prev_block, None);
+        let mut mined_block = btf.random_block(prev_block, None, &mut rng);
         let bits = difficulty.into();
         assert!(
             crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])

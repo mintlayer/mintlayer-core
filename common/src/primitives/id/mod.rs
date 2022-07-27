@@ -15,6 +15,9 @@
 //
 // Author(s): S. Afach
 
+mod with_id;
+pub use with_id::WithId;
+
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
@@ -131,6 +134,13 @@ impl<T: ?Sized> AsRef<[u8]> for Id<T> {
 pub trait Idable {
     type Tag: ?Sized;
     fn get_id(&self) -> Id<Self::Tag>;
+}
+
+impl<T: Idable> Idable for &T {
+    type Tag = T::Tag;
+    fn get_id(&self) -> Id<Self::Tag> {
+        (*self).get_id()
+    }
 }
 
 // we use a cropping stream (64 => 32) because

@@ -19,8 +19,7 @@ use super::{create_mainnet_genesis, create_unit_test_genesis, ChainConfig, Chain
 use crate::chain::{
     ConsensusUpgrade, Destination, Genesis, NetUpgrades, PoWChainConfig, UpgradeVersion,
 };
-use crate::primitives::H256;
-use crate::primitives::{semver::SemVer, BlockDistance, BlockHeight, Idable};
+use crate::primitives::{id::WithId, semver::SemVer, BlockDistance, BlockHeight, H256};
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -171,6 +170,7 @@ impl Builder {
                 premine_destination,
             } => create_unit_test_genesis(premine_destination),
         };
+        let genesis_block = WithId::new(genesis_block);
 
         ChainConfig {
             chain_type,
@@ -184,7 +184,6 @@ impl Builder {
             max_block_size_with_smart_contracts,
             max_future_block_time_offset,
             target_block_spacing,
-            genesis_block_id: genesis_block.get_id().into(),
             genesis_block,
             height_checkpoint_data: BTreeMap::new(),
             emission_schedule,

@@ -214,7 +214,7 @@ mod tests {
 
     fn check_block_tag(block: &Block) {
         let encoded_block = block.encode();
-        let first_byte = *encoded_block.get(0).unwrap();
+        let first_byte = *encoded_block.first().unwrap();
         assert_eq!(1, first_byte);
 
         let Block::V1(blockv1) = block;

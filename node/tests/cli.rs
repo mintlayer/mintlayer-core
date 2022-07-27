@@ -19,7 +19,6 @@ use assert_cmd::Command;
 use directories::UserDirs;
 use tempdir::TempDir;
 
-use common::chain::config::ChainType;
 use node::{NodeConfig, RunOptions};
 
 const BIN_NAME: &str = env!("CARGO_BIN_EXE_node");
@@ -88,14 +87,17 @@ fn read_config_override_values() {
     let p2p_ban_threshold = 3;
     let p2p_timeout = 10000;
     let rpc_addr = SocketAddr::from_str("127.0.0.1:5432").unwrap();
+    let enable_mdns = false;
 
     let options = RunOptions {
-        net: ChainType::Mainnet,
         max_db_commit_attempts: Some(max_db_commit_attempts),
         max_orphan_blocks: Some(max_orphan_blocks),
         p2p_addr: Some(p2p_addr.into()),
         p2p_ban_threshold: Some(p2p_ban_threshold),
         p2p_outbound_connection_timeout: Some(p2p_timeout),
+        p2p_enable_mdns: Some(enable_mdns),
+        p2p_mdns_query_interval: None,
+        p2p_enable_ipv6_mdns_discovery: None,
         rpc_addr: Some(rpc_addr),
     };
     let config = NodeConfig::read(&config_path, &options).unwrap();
@@ -162,12 +164,14 @@ fn custom_config_path_and_data_dir() {
 
 fn default_run_options() -> RunOptions {
     RunOptions {
-        net: ChainType::Mainnet,
         max_db_commit_attempts: None,
         max_orphan_blocks: None,
         p2p_addr: None,
         p2p_ban_threshold: None,
         p2p_outbound_connection_timeout: None,
+        p2p_enable_mdns: None,
+        p2p_mdns_query_interval: None,
+        p2p_enable_ipv6_mdns_discovery: None,
         rpc_addr: None,
     }
 }

@@ -20,9 +20,8 @@ use std::{ffi::OsString, fs, net::SocketAddr, path::PathBuf};
 use anyhow::{Context, Result};
 use clap::{Args, Parser, Subcommand};
 use directories::UserDirs;
-use strum::VariantNames;
 
-use common::chain::config::ChainType;
+use crate::regtest_options::RegtestOptions;
 
 const DATA_DIR_NAME: &str = ".mintlayer";
 const CONFIG_NAME: &str = "config.toml";
@@ -51,16 +50,16 @@ pub struct Options {
 pub enum Command {
     /// Create a configuration file.
     CreateConfig,
-    Run(RunOptions),
+    /// Run the mainnet node.
+    Mainnet(RunOptions),
+    /// Run the testnet node.
+    Testnet(RunOptions),
+    /// Run the regtest node.
+    Regtest(RegtestOptions),
 }
 
-/// Run the node.
 #[derive(Args, Debug)]
 pub struct RunOptions {
-    /// Blockchain type.
-    #[clap(long, possible_values = ChainType::VARIANTS, default_value = "mainnet")]
-    pub net: ChainType,
-
     /// The number of maximum attempts to process a block.
     #[clap(long)]
     pub max_db_commit_attempts: Option<usize>,
@@ -76,6 +75,18 @@ pub struct RunOptions {
     /// The p2p score threshold after which a peer is baned.
     #[clap(long)]
     pub p2p_ban_threshold: Option<u32>,
+
+    /// Use IPv6 instead of IPv4 for mDNS.
+    #[clap(long)]
+    pub p2p_enable_ipv6_mdns_discovery: Option<bool>,
+
+    /// Enable multicast DNS peer discovery
+    #[clap(long)]
+    pub p2p_enable_mdns: Option<bool>,
+
+    /// Interval (in milliseconds) at which to poll the network for new peers.
+    #[clap(long)]
+    pub p2p_mdns_query_interval: Option<u64>,
 
     /// The p2p timeout value in seconds.
     #[clap(long)]

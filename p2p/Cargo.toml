@@ -42,6 +42,6 @@ portpicker = "0.1"
 chainstate-storage = { path = "../chainstate-storage" }
 crypto = { path = "../crypto/" }
 
-[dev-dependencies.test-utils]
+[dev-dependencies.p2p-test-utils]
 version = "0.1"
-path = "test-utils"
+path = "p2p-test-utils"

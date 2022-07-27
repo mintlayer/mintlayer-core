@@ -27,7 +27,7 @@ use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
 use crate::chain::{Block, GenBlock, Genesis};
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::id::Id;
+use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use std::collections::BTreeMap;
@@ -39,19 +39,7 @@ const DEFAULT_EPOCH_LENGTH: BlockDistance =
     BlockDistance::from_int((5 * 24 * 60 * 60) / (DEFAULT_TARGET_BLOCK_SPACING.as_secs() as i64));
 const DEFAULT_EPOCH_SEED_STRIDE: u64 = 2;
 
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    strum::Display,
-    strum::EnumVariantNames,
-    strum::EnumString,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -86,8 +74,7 @@ pub struct ChainConfig {
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
-    genesis_block: Genesis,
-    genesis_block_id: Id<GenBlock>,
+    genesis_block: WithId<Genesis>,
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -108,10 +95,10 @@ impl ChainConfig {
     }
 
     pub fn genesis_block_id(&self) -> Id<GenBlock> {
-        self.genesis_block_id
+        self.genesis_block.get_id().into()
     }
 
-    pub fn genesis_block(&self) -> &Genesis {
+    pub fn genesis_block(&self) -> &WithId<Genesis> {
         &self.genesis_block
     }
 
@@ -219,7 +206,7 @@ fn create_mainnet_genesis() -> Genesis {
     let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
+    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
         &mut genesis_mint_pubkeyhash_encoded.as_slice(),
     )
     .expect("Decoding genesis mint destination shouldn't fail");
@@ -282,19 +269,6 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
-    }
-
-    #[test]
-    fn chain_type_names() {
-        use strum::VariantNames;
-
-        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
-        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
-
-        for chain_type_str in ChainType::VARIANTS {
-            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
-            assert_eq!(&chain_type.to_string(), chain_type_str);
-        }
     }
 
     #[test]

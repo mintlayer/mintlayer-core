@@ -526,11 +526,13 @@ dependencies = [
  "num",
  "replace_with",
  "rpc",
+ "rstest",
  "serde",
  "serde_json",
  "serialization",
  "static_assertions",
  "subsystem",
+ "test-utils",
  "thiserror",
  "tokio",
  "utils",
@@ -546,8 +548,10 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
+ "rstest",
  "serialization",
  "storage",
+ "test-utils",
  "thiserror",
  "utxo",
 ]
@@ -687,7 +691,6 @@ dependencies = [
  "serialization",
  "sscanf",
  "static_assertions",
- "strum",
  "thiserror",
 ]
 
@@ -2441,9 +2444,9 @@ dependencies = [
  "jsonrpsee",
  "logging",
  "p2p",
+ "paste",
  "rpc",
  "serde",
- "strum",
  "subsystem",
  "tempdir",
  "thiserror",
@@ -2607,6 +2610,7 @@ dependencies = [
  "jsonrpsee",
  "libp2p",
  "logging",
+ "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
  "rpc",
@@ -2614,11 +2618,25 @@ dependencies = [
  "serialization",
  "sscanf",
  "subsystem",
- "test-utils",
  "thiserror",
  "tokio",
  "utils",
  "void",
+]
+
+[[package]]
+name = "p2p-test-utils"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "crypto",
+ "libp2p",
+ "p2p",
+ "portpicker",
+ "subsystem",
+ "tokio",
 ]
 
 [[package]]
@@ -3300,6 +3318,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "rstest"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9c9dc66cc29792b663ffb5269be669f1613664e69ad56441fdb895c2347b930"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "rstest_macros",
+ "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5015e68a0685a95ade3eee617ff7101ab6a3fc689203101ca16ebc16f2b89c66"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.4.0",
+ "syn",
+]
+
+[[package]]
 name = "rtnetlink"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3849,8 +3892,24 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "storage-core",
+ "storage-inmemory",
+]
+
+[[package]]
+name = "storage-core"
+version = "0.1.0"
+dependencies = [
  "logging",
  "thiserror",
+]
+
+[[package]]
+name = "storage-inmemory"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "storage-core",
 ]
 
 [[package]]
@@ -3864,28 +3923,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strum"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
-dependencies = [
- "strum_macros",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
-dependencies = [
- "heck 0.4.0",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn",
-]
 
 [[package]]
 name = "subsystem"
@@ -4069,15 +4106,8 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "chainstate",
- "chainstate-storage",
- "common",
  "crypto",
- "libp2p",
- "p2p",
- "portpicker",
- "subsystem",
- "tokio",
+ "rand_chacha 0.3.1",
 ]
 
 [[package]]

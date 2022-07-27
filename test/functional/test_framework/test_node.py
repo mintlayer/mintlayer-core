@@ -107,8 +107,7 @@ class TestNode():
         self.args = [
             self.binary,
             "--datadir={}".format(datadir_path),
-            "run",
-            "--net=regtest",
+            "regtest",
             "--rpc-addr={}".format(rpc_addr),
             "--p2p-addr={}".format(p2p_addr),
             #"-X",

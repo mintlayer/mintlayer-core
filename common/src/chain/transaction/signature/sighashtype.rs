@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach & L. Kuklinek
 
-use parity_scale_codec::Encode;
+use serialization::Encode;
 
 use super::TransactionSigError;
 

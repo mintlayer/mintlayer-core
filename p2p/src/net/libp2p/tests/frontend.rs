@@ -15,6 +15,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
+    config,
     error::{ConversionError, DialError, P2pError},
     net::{
         self,
@@ -25,7 +26,7 @@ use crate::{
 };
 use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
 use serialization::{Decode, Encode};
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Encode, Decode, PartialEq, Eq, Copy, Clone)]
@@ -38,10 +39,9 @@ struct Transaction {
 async fn test_connect_new() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let service = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         config,
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await;
     assert!(service.is_ok());
@@ -53,19 +53,17 @@ async fn test_connect_new() {
 async fn test_connect_new_addrinuse() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let service = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         Arc::clone(&config),
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await;
     assert!(service.is_ok());
 
     let service = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         config,
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await;
 
@@ -86,17 +84,15 @@ async fn test_connect_new_addrinuse() {
 async fn test_connect_accept() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let service1 = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         Arc::clone(&config),
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await;
     let service2 = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         Arc::clone(&config),
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await;
     assert!(service1.is_ok());
@@ -120,10 +116,9 @@ async fn test_connect_peer_id_missing() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let addr: Multiaddr = "/ip6/::1/tcp/8904".parse().unwrap();
     let (mut service, _, _) = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         config,
-        Duration::from_secs(10),
+        Default::default(),
     )
     .await
     .unwrap();
@@ -306,10 +301,12 @@ fn test_parse_peers_valid_3_peers_1_valid() {
 async fn test_connect_with_timeout() {
     let config = Arc::new(common::chain::config::create_mainnet());
     let (mut service, _, _) = Libp2pService::start(
-        test_utils::make_libp2p_addr(),
-        &[],
+        p2p_test_utils::make_libp2p_addr(),
         config,
-        Duration::from_secs(2),
+        Arc::new(config::P2pConfig {
+            outbound_connection_timeout: 2,
+            ..Default::default()
+        }),
     )
     .await
     .unwrap();

@@ -17,6 +17,7 @@
 
 //! Discovery behaviour for libp2p
 
+use crate::config;
 use libp2p::{
     core::{
         connection::{ConnectedPoint, ConnectionId},
@@ -29,7 +30,10 @@ use libp2p::{
     },
     Multiaddr,
 };
-use std::task::{Context, Poll};
+use std::{
+    sync::Arc,
+    task::{Context, Poll},
+};
 
 mod mdns;
 
@@ -47,9 +51,9 @@ pub struct DiscoveryManager {
 }
 
 impl DiscoveryManager {
-    pub async fn new(mdns_enabled: bool) -> Self {
+    pub async fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
         Self {
-            mdns: mdns::Mdns::new(mdns_enabled).await,
+            mdns: mdns::Mdns::new(&p2p_config.mdns_config).await,
         }
     }
 }
