@@ -64,6 +64,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
+    /// Builds a block without processing it.
     pub fn build(self) -> Block {
         Block::new(
             self.transactions,
@@ -74,6 +75,7 @@ impl<'f> BlockBuilder<'f> {
         .unwrap()
     }
 
+    /// Constructs a block and processes it by the chainstate.
     pub fn process(self) -> Result<Option<BlockIndex>, BlockError> {
         let block = Block::new(
             self.transactions,
@@ -82,6 +84,6 @@ impl<'f> BlockBuilder<'f> {
             self.consensus_data,
         )
         .unwrap();
-        self.framework.chainstate.process_block(block, self.block_source)
+        self.framework.process_block(block, self.block_source)
     }
 }

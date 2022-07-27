@@ -54,66 +54,54 @@ impl TestFramework {
         TestFrameworkBuilder::new()
     }
 
-    /// Processes a new block with the parameters specified using `ProcessBlockBuilder`.
+    /// Returns a block builder instance that can be used for a block construction and processing.
     pub fn block_builder(&mut self) -> BlockBuilder {
         BlockBuilder::new(self)
     }
 
-    /// Creates and processes a given amount of blocks. Returns the if of the last produced block.
+    /// Processes the given block.
+    pub fn process_block(
+        &mut self,
+        block: Block,
+        source: BlockSource,
+    ) -> Result<Option<BlockIndex>, BlockError> {
+        // TODO: FIXME: Remove block_indexes?
+        let id = block.get_id();
+        let index = self.chainstate.process_block(block, source)?;
+        self.block_indexes.push(index.clone().unwrap_or_else(|| {
+            self.chainstate.chainstate_storage.get_block_index(&id).unwrap().unwrap()
+        }));
+        Ok(index)
+    }
+
+    /// Creates and processes a given amount of blocks. Returns the id of the last produced block.
+    ///
+    /// Each block contains a single transaction that spends a random amount from the previous
+    /// block outputs.
     pub fn create_chain(
         &mut self,
         parent_block_id: &Id<GenBlock>,
-        count_blocks: usize,
+        blocks: usize,
         rng: &mut impl Rng,
     ) -> Result<Id<GenBlock>, BlockError> {
         let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block_id);
 
-        for _ in 0..count_blocks {
-            // TODO: FIXME:
-            let block = produce_test_block(prev_block, rng);
+        for _ in 0..blocks {
+            // The value of each output is decreased by a random amount to produce a new input and output.
+            let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
+                .txns
+                .into_iter()
+                .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+                .unzip();
+            let transaction = Transaction::new(0, inputs, outputs, 0).unwrap();
+
+            let block = self
+                .block_builder()
+                .with_transactions(vec![transaction])
+                .with_prev_block_hash(prev_block.id)
+                .build();
             prev_block = TestBlockInfo::from_block(&block);
-            self.add_special_block(block.clone())?;
-
-            // // The value of each output is decreased by a random amount to produce a new input and output.
-            // let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-            //     .txns
-            //     .into_iter()
-            //     .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-            //     .unzip();
-            // let transaction = Transaction::new(0, inputs, outputs, 0).unwrap();
-            //
-            // self.process_block()
-            //     .with_transactions(vec![transaction])
-            //     .with_prev_block_hash(prev_block.id)
-            //     .process()
-            //     .unwrap();
-
-            // let block = produce_test_block(test_block_info, rng);
-            // test_block_info = TestBlockInfo::from_block(&block);
-            // self.add_special_block(block.clone())?;
-
-            /*
-                        fn produce_test_block_with_consensus_data(
-                prev_block: TestBlockInfo,
-                consensus_data: ConsensusData,
-                rng: &mut impl Rng,
-            ) -> Block {
-                // The value of each output is decreased by a random amount to produce a new input and output.
-                let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-                    .txns
-                    .into_iter()
-                    .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-                    .unzip();
-
-                Block::new(
-                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block.id,
-                    BlockTimestamp::from_duration_since_epoch(time::get()),
-                    consensus_data,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL)
-            }
-                         */
+            self.process_block(block, BlockSource::Local)?;
         }
 
         Ok(prev_block.id)
@@ -159,6 +147,7 @@ fn build_test_framework() {
 
 #[test]
 fn process_block() {
+    // TODO: FIXME: Expand the test.
     let mut tf = TestFramework::default();
     tf.block_builder().process().unwrap();
 }
