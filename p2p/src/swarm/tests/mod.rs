@@ -15,8 +15,8 @@
 //
 // Author(s): A. Altonen
 mod ban;
-mod peerdb;
 mod connections;
+mod peerdb;
 
 use crate::{
     net::{ConnectivityService, NetworkingService},

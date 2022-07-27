@@ -14,6 +14,15 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
+//! Mock networking backend
+//!
+//! The backend is modeled after libp2p.
+//!
+//! The peers are required to have unique IDs which they self-assign to themselves
+//! and advertise via the `Hello` message. Until the peer ID has been received, the
+//! peers are distinguished by their socket addresses.
+
 use crate::{
     error::{DialError, P2pError, PeerError},
     net::mock::{peer, socket, types},
@@ -30,7 +39,7 @@ use tokio::{
 };
 
 struct PeerContext {
-    peer_id: types::MockPeerId,
+    _peer_id: types::MockPeerId,
     tx: mpsc::Sender<types::MockEvent>,
 }
 
@@ -60,7 +69,7 @@ pub struct Backend {
     peers: HashMap<types::MockPeerId, PeerContext>,
 
     /// Pending connections
-    pending: HashMap<types::MockPeerId, (PeerContext, ConnectionState)>,
+    pending: HashMap<types::MockPeerId, (mpsc::Sender<types::MockEvent>, ConnectionState)>,
 
     /// RX channel for receiving events from peers
     #[allow(clippy::type_complexity)]
@@ -105,30 +114,41 @@ impl Backend {
         }
     }
 
+    /// Create new peer
+    ///
+    /// Move the connection to `pending` where it stays until either the connection is closed
+    /// or the handshake message is received at which point the peer information is moved from
+    /// `pending` to `peers` and the front-end is notified about the peer.
     async fn create_peer(
         &mut self,
         socket: TcpStream,
-        peer_id: types::MockPeerId,
+        local_peer_id: types::MockPeerId,
+        remote_peer_id: types::MockPeerId,
         role: peer::Role,
         state: ConnectionState,
     ) -> crate::Result<()> {
         let (tx, rx) = mpsc::channel(16);
         let socket = socket::MockSocket::new(socket);
 
-        self.pending.insert(peer_id, (PeerContext { peer_id, tx }, state));
+        self.pending.insert(remote_peer_id, (tx, state));
 
         let tx = self.peer_chan.0.clone();
         let config = Arc::clone(&self.config);
 
         tokio::spawn(async move {
-            if let Err(e) = peer::Peer::new(peer_id, role, config, socket, tx, rx).start().await {
-                log::error!("peer failed: {:?}", e);
+            if let Err(err) =
+                peer::Peer::new(local_peer_id, remote_peer_id, role, config, socket, tx, rx)
+                    .start()
+                    .await
+            {
+                log::error!("peer {remote_peer_id} failed: {err}");
             }
         });
 
         Ok(())
     }
 
+    /// Try to establish connection with a remote peer
     async fn connect(
         &mut self,
         address: SocketAddr,
@@ -149,6 +169,7 @@ impl Backend {
                 Ok(socket) => {
                     self.create_peer(
                         socket,
+                        types::MockPeerId::from_socket_address(&self.address),
                         types::MockPeerId::from_socket_address(&address),
                         peer::Role::Outbound,
                         ConnectionState::OutboundAccepted { address },
@@ -182,32 +203,29 @@ impl Backend {
             tokio::select! {
                 event = self.socket.accept() => match event {
                     Ok(info) => {
-                        let peer_id = types::MockPeerId::from_socket_address(&info.1);
                         self.create_peer(
                             info.0,
+                            types::MockPeerId::from_socket_address(&self.address),
                             types::MockPeerId::from_socket_address(&info.1),
                             peer::Role::Inbound,
                             ConnectionState::InboundAccepted { address: info.1 }
                         ).await?;
                     }
-                    Err(e) => {
-                        log::error!("accept() failed: {:?}", e);
-                        return Err(P2pError::Other("accept() failed"));
-                    }
+                    Err(_err) => return Err(P2pError::Other("accept() failed")),
                 },
                 event = self.peer_chan.1.recv().fuse() => {
                     let (peer_id, event) = event.ok_or(P2pError::ChannelClosed)?;
 
                     match event {
-                        types::PeerEvent::PeerInfoReceived { network, version, protocols } => {
-                            let (ctx, state) = self.pending.remove(&peer_id).expect("peer to exist");
+                        types::PeerEvent::PeerInfoReceived { peer_id: received_id, network, version, protocols } => {
+                            let (tx, state) = self.pending.remove(&peer_id).expect("peer to exist");
 
                             match state {
                                 ConnectionState::OutboundAccepted { address } => {
                                     self.conn_tx.send(types::ConnectivityEvent::OutboundAccepted {
                                         address,
                                         peer_info: types::MockPeerInfo {
-                                            peer_id,
+                                            peer_id: received_id,
                                             network,
                                             version,
                                             agent: None,
@@ -221,7 +239,7 @@ impl Backend {
                                     self.conn_tx.send(types::ConnectivityEvent::InboundAccepted {
                                         address,
                                         peer_info: types::MockPeerInfo {
-                                            peer_id,
+                                            peer_id: received_id,
                                             network,
                                             version,
                                             agent: None,
@@ -233,7 +251,17 @@ impl Backend {
                                 }
                             }
 
-                            self.peers.insert(peer_id, ctx);
+                            self.peers.insert(received_id, PeerContext {
+                                _peer_id: received_id,
+                                tx,
+                            });
+                        }
+                        types::PeerEvent::ConnectionClosed => {
+                            self.conn_tx.send(types::ConnectivityEvent::ConnectionClosed {
+                                peer_id,
+                            })
+                            .await
+                            .map_err(P2pError::from)?;
                         }
                     }
                 },
@@ -241,7 +269,9 @@ impl Backend {
                     types::Command::Connect { address, response } => {
                         self.connect(address, response).await?;
                     }
-                    types::Command::Disconnect { peer_id, response } => {
+                    types::Command::Disconnect { peer_id, response } |
+                    // TODO: implement proper banning mechanism
+                    types::Command::BanPeer { peer_id, response } => {
                         match self.peers.remove(&peer_id) {
                             Some(peer) => {
                                 let res = peer.tx.send(types::MockEvent::Disconnect).await;

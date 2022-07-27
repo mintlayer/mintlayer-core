@@ -46,14 +46,11 @@ pub struct MockMessageId(u64);
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct MockRequestId(u64);
 
-pub struct MockConnectivityHandle<T>
-where
-    T: NetworkingService,
-{
+pub struct MockConnectivityHandle<T: NetworkingService> {
     /// Socket address of the network service provider
     local_addr: SocketAddr,
 
-    /// Peer ID of remote
+    /// Peer ID of local node
     peer_id: types::MockPeerId,
 
     /// TX channel for sending commands to mock backend
@@ -132,7 +129,7 @@ impl NetworkingService for MockService {
         let local_addr = socket.local_addr().expect("to have bind address available");
 
         tokio::spawn(async move {
-            let mut mock = backend::Backend::new(
+            let mut backend = backend::Backend::new(
                 local_addr,
                 socket,
                 Arc::clone(&_config),
@@ -142,7 +139,10 @@ impl NetworkingService for MockService {
                 sync_tx,
                 std::time::Duration::from_secs(p2p_config.outbound_connection_timeout),
             );
-            let _ = mock.run().await;
+
+            if let Err(err) = backend.run().await {
+                log::error!("failed to run backend: {err}");
+            }
         });
 
         Ok((
@@ -212,8 +212,18 @@ where
         &self.peer_id
     }
 
-    async fn ban_peer(&mut self, _peer_id: T::PeerId) -> crate::Result<()> {
-        todo!();
+    async fn ban_peer(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
+        log::debug!("ban remote peer, peer id {peer_id}");
+
+        let (tx, rx) = oneshot::channel();
+        self.cmd_tx
+            .send(types::Command::BanPeer {
+                peer_id,
+                response: tx,
+            })
+            .await?;
+
+        rx.await?
     }
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
@@ -364,8 +374,10 @@ mod tests {
         let bind_address = conn2.local_addr().await.unwrap().unwrap();
         let (_res1, res2) = tokio::join!(conn1.connect(bind_address), conn2.poll_next());
         match res2.unwrap() {
-            ConnectivityEvent::InboundAccepted { address, peer_info } => {
-                assert_eq!(address, bind_address);
+            ConnectivityEvent::InboundAccepted {
+                address: _,
+                peer_info,
+            } => {
                 assert_eq!(peer_info.magic_bytes, *config.magic_bytes());
                 assert_eq!(
                     peer_info.version,

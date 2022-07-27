@@ -34,6 +34,10 @@ pub enum Command {
         peer_id: MockPeerId,
         response: oneshot::Sender<crate::Result<()>>,
     },
+    BanPeer {
+        peer_id: MockPeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -67,7 +71,7 @@ pub enum PubSubEvent {
 
 pub enum SyncingEvent {}
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
 pub struct MockPeerId(u64);
 
 impl MockPeerId {
@@ -85,7 +89,7 @@ impl MockPeerId {
 
 impl std::fmt::Display for MockPeerId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{}", self.0)
     }
 }
 
@@ -101,10 +105,12 @@ pub struct MockPeerInfo {
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
     PeerInfoReceived {
+        peer_id: MockPeerId,
         network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
     },
+    ConnectionClosed,
 }
 
 /// Events sent by the mock backend to peers
@@ -135,11 +141,13 @@ impl Protocol {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum HandshakeMessage {
     Hello {
+        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,
     },
     HelloAck {
+        peer_id: MockPeerId,
         version: common::primitives::semver::SemVer,
         network: [u8; 4],
         protocols: Vec<Protocol>,

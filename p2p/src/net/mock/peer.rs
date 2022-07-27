@@ -23,6 +23,7 @@ use crate::{
 };
 use common::chain::ChainConfig;
 use futures::FutureExt;
+use logging::log;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -32,17 +33,32 @@ pub enum Role {
 }
 
 pub struct Peer {
-    peer_id: MockPeerId,
+    /// Peer ID of the local node
+    local_peer_id: MockPeerId,
+
+    /// Peer ID of the remote node
+    remote_peer_id: MockPeerId,
+
+    /// Chain config
     config: Arc<ChainConfig>,
+
+    /// Is the connection inbound or outbound
     role: Role,
+
+    /// Peer socket
     socket: socket::MockSocket,
+
+    /// TX channel for communicating with backend
     tx: mpsc::Sender<(MockPeerId, PeerEvent)>,
+
+    /// RX channel for receiving commands from backend
     rx: mpsc::Receiver<MockEvent>,
 }
 
 impl Peer {
     pub fn new(
-        peer_id: MockPeerId,
+        local_peer_id: MockPeerId,
+        remote_peer_id: MockPeerId,
         role: Role,
         config: Arc<ChainConfig>,
         socket: socket::MockSocket,
@@ -50,7 +66,8 @@ impl Peer {
         rx: mpsc::Receiver<MockEvent>,
     ) -> Self {
         Self {
-            peer_id,
+            local_peer_id,
+            remote_peer_id,
             role,
             config,
             socket,
@@ -62,21 +79,15 @@ impl Peer {
     async fn handshake(&mut self) -> crate::Result<()> {
         match self.role {
             Role::Inbound => {
-                let (network, version, protocols) =
+                let (peer_id, network, version, protocols) =
                     if let Ok(Some(types::Message::Handshake(types::HandshakeMessage::Hello {
+                        peer_id,
                         version,
                         network,
                         protocols,
                     }))) = self.socket.recv().await
                     {
-                        if &network != self.config.magic_bytes() {
-                            return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                                network,
-                                *self.config.magic_bytes(),
-                            )));
-                        }
-
-                        (network, version, protocols)
+                        (peer_id, network, version, protocols)
                     } else {
                         return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                     };
@@ -84,6 +95,7 @@ impl Peer {
                 self.socket
                     .send(types::Message::Handshake(
                         types::HandshakeMessage::HelloAck {
+                            peer_id: self.local_peer_id,
                             version: *self.config.version(),
                             network: *self.config.magic_bytes(),
                             protocols: vec![
@@ -96,19 +108,24 @@ impl Peer {
 
                 self.tx
                     .send((
-                        self.peer_id,
+                        self.remote_peer_id,
                         types::PeerEvent::PeerInfoReceived {
+                            peer_id,
                             network,
                             version,
                             protocols,
                         },
                     ))
                     .await
-                    .map_err(P2pError::from)
+                    .map_err(P2pError::from)?;
+
+                self.remote_peer_id = peer_id;
+                Ok(())
             }
             Role::Outbound => {
                 self.socket
                     .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                        peer_id: self.local_peer_id,
                         version: *self.config.version(),
                         network: *self.config.magic_bytes(),
                         protocols: vec![
@@ -118,66 +135,78 @@ impl Peer {
                     }))
                     .await?;
 
-                let (network, version, protocols) = if let Ok(Some(types::Message::Handshake(
-                    types::HandshakeMessage::HelloAck {
+                let (peer_id, network, version, protocols) = if let Ok(Some(
+                    types::Message::Handshake(types::HandshakeMessage::HelloAck {
+                        peer_id,
                         version,
                         network,
                         protocols,
-                    },
-                ))) = self.socket.recv().await
+                    }),
+                )) = self.socket.recv().await
                 {
-                    if &network != self.config.magic_bytes() {
-                        return Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                            network,
-                            *self.config.magic_bytes(),
-                        )));
-                    }
-
-                    (network, version, protocols)
+                    (peer_id, network, version, protocols)
                 } else {
                     return Err(P2pError::ProtocolError(ProtocolError::InvalidMessage));
                 };
 
                 self.tx
                     .send((
-                        self.peer_id,
+                        self.remote_peer_id,
                         types::PeerEvent::PeerInfoReceived {
+                            peer_id,
                             network,
                             version,
                             protocols,
                         },
                     ))
                     .await
-                    .map_err(P2pError::from)
+                    .map_err(P2pError::from)?;
+
+                self.remote_peer_id = peer_id;
+                Ok(())
             }
         }
     }
 
+    async fn destroy_peer(&mut self) -> crate::Result<()> {
+        self.tx
+            .send((self.remote_peer_id, types::PeerEvent::ConnectionClosed))
+            .await
+            .map_err(P2pError::from)
+    }
+
     pub async fn start(&mut self) -> crate::Result<()> {
         // handshake with remote peer and send peer's info to backend
-        if let Err(_err) = self.handshake().await {
-            // TODO: inform backend
+        if let Err(err) = self.handshake().await {
+            log::debug!("handshake failed for peer {}: {err}", self.remote_peer_id);
+            return self.destroy_peer().await;
         }
 
         loop {
             tokio::select! {
                 event = self.rx.recv().fuse() => match event.ok_or(P2pError::ChannelClosed)? {
-                    MockEvent::Disconnect => {
-                        break;
+                    MockEvent::Disconnect => return self.destroy_peer().await,
+                },
+                event = self.socket.recv() => match event {
+                    Err(err) => {
+                        log::info!("peer connection closed, reason {err}");
+                        self.destroy_peer().await?;
+                    }
+                    Ok(None) => self.destroy_peer().await?,
+                    Ok(Some(_event)) => {
+                        // TODO: handle message
                     }
                 }
             }
         }
-
-        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use crate::net::mock::socket;
+    use crate::{message, net::mock::socket};
+    use chainstate::Locator;
     use futures::FutureExt;
 
     #[tokio::test]
@@ -188,10 +217,13 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id = MockPeerId::random();
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::new(
-            peer_id,
+            peer_id1,
+            peer_id3,
             Role::Inbound,
             Arc::clone(&config),
             socket1,
@@ -207,6 +239,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                peer_id: peer_id2,
                 version: *config.version(),
                 network: *config.magic_bytes(),
                 protocols: vec![
@@ -221,8 +254,9 @@ mod tests {
         assert_eq!(
             rx1.try_recv(),
             Ok((
-                peer_id,
+                peer_id3,
                 types::PeerEvent::PeerInfoReceived {
+                    peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
@@ -242,10 +276,13 @@ mod tests {
         let config = Arc::new(common::chain::config::create_mainnet());
         let (tx1, mut rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id = MockPeerId::random();
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::new(
-            peer_id,
+            peer_id1,
+            peer_id3,
             Role::Outbound,
             Arc::clone(&config),
             socket1,
@@ -262,6 +299,7 @@ mod tests {
             assert!(socket2
                 .send(types::Message::Handshake(
                     types::HandshakeMessage::HelloAck {
+                        peer_id: peer_id2,
                         version: *config.version(),
                         network: *config.magic_bytes(),
                         protocols: vec![
@@ -278,8 +316,9 @@ mod tests {
         assert_eq!(
             rx1.try_recv(),
             Ok((
-                peer_id,
+                peer_id3,
                 types::PeerEvent::PeerInfoReceived {
+                    peer_id: peer_id2,
                     network: *config.magic_bytes(),
                     version: *config.version(),
                     protocols: vec![
@@ -297,12 +336,15 @@ mod tests {
         let socket1 = socket::MockSocket::new(socket1);
         let mut socket2 = socket::MockSocket::new(socket2);
         let config = Arc::new(common::chain::config::create_mainnet());
-        let (tx1, mut rx1) = mpsc::channel(16);
+        let (tx1, _rx1) = mpsc::channel(16);
         let (_tx2, rx2) = mpsc::channel(16);
-        let peer_id = MockPeerId::random();
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+        let peer_id3 = MockPeerId::random();
 
         let mut peer = Peer::new(
-            peer_id,
+            peer_id1,
+            peer_id3,
             Role::Inbound,
             Arc::clone(&config),
             socket1,
@@ -315,6 +357,7 @@ mod tests {
         assert!(socket2.recv().now_or_never().is_none());
         assert!(socket2
             .send(types::Message::Handshake(types::HandshakeMessage::Hello {
+                peer_id: peer_id2,
                 version: *config.version(),
                 network: [1, 2, 3, 4],
                 protocols: vec![
@@ -325,16 +368,43 @@ mod tests {
             .await
             .is_ok());
 
+        assert_eq!(handle.await.unwrap(), Ok(()));
+    }
+
+    #[tokio::test]
+    async fn invalid_handshake_message() {
+        let (socket1, socket2) = p2p_test_utils::get_two_connected_sockets().await;
+        let socket1 = socket::MockSocket::new(socket1);
+        let mut socket2 = socket::MockSocket::new(socket2);
+        let config = Arc::new(common::chain::config::create_mainnet());
+        let (tx1, _rx1) = mpsc::channel(16);
+        let (_tx2, rx2) = mpsc::channel(16);
+        let peer_id1 = MockPeerId::random();
+        let peer_id2 = MockPeerId::random();
+
+        let mut peer = Peer::new(
+            peer_id1,
+            peer_id2,
+            Role::Inbound,
+            Arc::clone(&config),
+            socket1,
+            tx1,
+            rx2,
+        );
+
+        let handle = tokio::spawn(async move { peer.handshake().await });
+
+        assert!(socket2.recv().now_or_never().is_none());
+        socket2
+            .send(types::Message::Request(message::Request::HeaderRequest(
+                message::HeaderRequest::new(Locator::new(vec![])),
+            )))
+            .await
+            .unwrap();
+
         assert_eq!(
             handle.await.unwrap(),
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                [1, 2, 3, 4],
-                *config.magic_bytes()
-            )))
-        );
-        assert_eq!(
-            rx1.try_recv(),
-            Err(tokio::sync::mpsc::error::TryRecvError::Disconnected)
+            Err(P2pError::ProtocolError(ProtocolError::InvalidMessage)),
         );
     }
 }

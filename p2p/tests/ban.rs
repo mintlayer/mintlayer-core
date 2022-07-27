@@ -14,8 +14,6 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
-use libp2p::Multiaddr;
 use p2p::{
     error::{P2pError, PublishError},
     event::{PubSubControlEvent, SwarmEvent},
@@ -118,13 +116,13 @@ async fn invalid_pubsub_block() {
 // start two libp2p services and give an invalid block, verify that `PeerManager` is informed
 #[tokio::test]
 async fn invalid_sync_block() {
-    let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
-    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
+    let (_tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
+    let (tx_pubsub, _rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, _, sync1) =
+    let (_conn1, _, sync1) =
         Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
             .await
             .unwrap();
@@ -149,7 +147,7 @@ async fn invalid_sync_block() {
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();
         let res = sync1.process_block_response(remote_id, vec![blocks[2].clone()]).await;
-        let res = sync1.handle_error(remote_id, res).await;
+        sync1.handle_error(remote_id, res).await.unwrap();
     });
 
     if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = rx_swarm.recv().await {
