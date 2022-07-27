@@ -2,6 +2,7 @@ use common::{
     chain::{
         block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
         signature::Transactable,
+        stakelock::StakePoolData,
         ChainConfig, GenBlock, OutputSpentState, TxOutput,
     },
     primitives::{Compact, Id, Idable, H256},
@@ -112,21 +113,9 @@ fn verify_vrf_and_get_output(
     epoch_index: u64,
     random_seed: &H256,
     pos_data: &PoSData,
-    kernel_output: &TxOutput,
+    pool_data: &StakePoolData,
     spender_block_header: &BlockHeader,
 ) -> Result<H256, ConsensusPoSError> {
-    let pool_data = match kernel_output.purpose() {
-        common::chain::OutputPurpose::Transfer(_)
-        | common::chain::OutputPurpose::LockThenTransfer(_, _) => {
-            // only pool outputs can be staked
-            return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
-                spender_block_header.get_id(),
-            ));
-        }
-
-        common::chain::OutputPurpose::StakePool(d) => &**d,
-    };
-
     let transcript = construct_transcript(epoch_index, random_seed, spender_block_header);
 
     let vrf_data = pos_data.vrf_data();
@@ -153,11 +142,23 @@ fn check_stake_kernel_hash(
         .try_into()
         .map_err(|_| ConsensusPoSError::BitsToTargetConversionFailed(*pos_data.bits()))?;
 
+    let pool_data = match kernel_output.purpose() {
+        common::chain::OutputPurpose::Transfer(_)
+        | common::chain::OutputPurpose::LockThenTransfer(_, _) => {
+            // only pool outputs can be staked
+            return Err(ConsensusPoSError::InvalidOutputPurposeInStakeKernel(
+                spender_block_header.get_id(),
+            ));
+        }
+
+        common::chain::OutputPurpose::StakePool(d) => &**d,
+    };
+
     let hash_pos: H256 = verify_vrf_and_get_output(
         epoch_index,
         random_seed,
         pos_data,
-        kernel_output,
+        pool_data,
         spender_block_header,
     )?;
     let hash_pos_arith: Uint256 = hash_pos.into();
