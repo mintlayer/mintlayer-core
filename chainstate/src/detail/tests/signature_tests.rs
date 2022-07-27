@@ -15,7 +15,6 @@
 //
 // Author(s): S. Tkach
 
-use crate::detail::tests::*;
 use common::{
     chain::{
         signature::{
@@ -28,40 +27,42 @@ use common::{
 };
 use crypto::key::{KeyKind, PrivateKey};
 
+use crate::detail::tests::{test_framework::TransactionBuilder, *};
+
 #[test]
 fn signed_tx() {
     common::concurrency::model(|| {
-        let mut chainstate = setup_chainstate();
+        let mut tf = TestFramework::default();
 
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
         // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
         // genesis block.
-        let tx_1 = {
-            let input = TxInput::new(
-                OutPointSourceId::BlockReward(chainstate.chain_config.genesis_block_id()),
+        let tx_1 = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::BlockReward(tf.chainstate.chain_config.genesis_block_id()),
                 0,
                 InputWitness::NoSignature(None),
-            );
-            let output = TxOutput::new(
+            ))
+            .add_output(TxOutput::new(
                 Amount::from_atoms(100),
                 OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
-            );
-            Transaction::new(0, vec![input], vec![output], 0).unwrap()
-        };
+            ))
+            .build();
 
         // The second transaction has the signed input.
         let tx_2 = {
-            let input = TxInput::new(
-                OutPointSourceId::Transaction(tx_1.get_id()),
-                0,
-                InputWitness::NoSignature(None),
-            );
-            let output = TxOutput::new(
-                Amount::from_atoms(100),
-                OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
-            );
-            let mut tx = Transaction::new(0, vec![input], vec![output], 0).unwrap();
+            let mut tx = TransactionBuilder::new()
+                .add_input(TxInput::new(
+                    OutPointSourceId::Transaction(tx_1.get_id()),
+                    0,
+                    InputWitness::NoSignature(None),
+                ))
+                .add_output(TxOutput::new(
+                    Amount::from_atoms(100),
+                    OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
+                ))
+                .build();
             let input_sign = StandardInputSignature::produce_signature_for_input(
                 &private_key,
                 SigHashType::try_from(SigHashType::ALL).unwrap(),
@@ -74,13 +75,6 @@ fn signed_tx() {
             tx
         };
 
-        let block = Block::new(
-            vec![tx_1, tx_2],
-            chainstate.chain_config.genesis_block().get_id().into(),
-            BlockTimestamp::from_duration_since_epoch(time::get()),
-            ConsensusData::None,
-        )
-        .unwrap();
-        chainstate.process_block(block, BlockSource::Local).unwrap();
+        tf.block_builder().with_transactions(vec![tx_1, tx_2]).process().unwrap();
     });
 }

@@ -16,9 +16,11 @@
 mod block_builder;
 mod framework;
 mod framework_builder;
+mod transaction_builder;
 
 pub use self::{
     block_builder::BlockBuilder,
     framework::{TestBlockParams, TestFramework, TestSpentStatus},
     framework_builder::TestFrameworkBuilder,
+    transaction_builder::TransactionBuilder,
 };
