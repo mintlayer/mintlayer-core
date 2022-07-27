@@ -1,3 +1,5 @@
+NOTE: This file was written before we had any implementation of timelocks. We should handle timelocks in the mempool, and then also remove this file.
+
 TIMELOCK NOTES
 
 1. There are two kinds of timelocks, absolute and relative. Absolute timelocks prevent transmitting a tx over the network or spending a utxo before a specific point in time (measured either in Unix Epoch Time or block height). Relative timelocks prevent spending an outputs before it has aged by a certain amount of time.
