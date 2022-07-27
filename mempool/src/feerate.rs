@@ -1,3 +1,5 @@
+use std::num::NonZeroU128;
+
 use common::primitives::amount::Amount;
 
 lazy_static::lazy_static! {
@@ -48,9 +50,9 @@ impl std::ops::Add for FeeRate {
     }
 }
 
-impl std::ops::Div<u128> for FeeRate {
+impl std::ops::Div<NonZeroU128> for FeeRate {
     type Output = FeeRate;
-    fn div(self, rhs: u128) -> Self::Output {
+    fn div(self, rhs: NonZeroU128) -> Self::Output {
         FeeRate {
             atoms_per_kb: self.atoms_per_kb / rhs,
         }
