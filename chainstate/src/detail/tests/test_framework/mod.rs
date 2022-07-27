@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod block_builder;
 mod framework;
 mod framework_builder;
-mod process_block_builder;
 
 pub use self::{
-    framework::{BlockTestFramework, TestBlockParams, TestSpentStatus},
-    framework_builder::BlockTestFrameworkBuilder,
-    process_block_builder::ProcessBlockBuilder,
+    block_builder::BlockBuilder,
+    framework::{TestBlockParams, TestFramework, TestSpentStatus},
+    framework_builder::TestFrameworkBuilder,
 };

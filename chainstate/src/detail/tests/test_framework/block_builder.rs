@@ -22,12 +22,13 @@ use common::{
 };
 
 use crate::{
-    detail::{tests::test_framework::BlockTestFramework, BlockIndex},
+    detail::{tests::test_framework::TestFramework, BlockIndex},
     Block, BlockError, BlockSource, GenBlock,
 };
 
-pub struct ProcessBlockBuilder<'f> {
-    framework: &'f mut BlockTestFramework,
+/// The block builder that allows construction and processing of a block.
+pub struct BlockBuilder<'f> {
+    framework: &'f mut TestFramework,
     transactions: Vec<Transaction>,
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
@@ -35,8 +36,8 @@ pub struct ProcessBlockBuilder<'f> {
     block_source: BlockSource,
 }
 
-impl<'f> ProcessBlockBuilder<'f> {
-    pub fn new(framework: &'f mut BlockTestFramework) -> Self {
+impl<'f> BlockBuilder<'f> {
+    pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
@@ -61,6 +62,16 @@ impl<'f> ProcessBlockBuilder<'f> {
     pub fn with_prev_block_hash(mut self, prev_block_hash: Id<GenBlock>) -> Self {
         self.prev_block_hash = prev_block_hash;
         self
+    }
+
+    pub fn build(self) -> Block {
+        Block::new(
+            self.transactions,
+            self.prev_block_hash,
+            self.timestamp,
+            self.consensus_data,
+        )
+        .unwrap()
     }
 
     pub fn process(self) -> Result<Option<BlockIndex>, BlockError> {

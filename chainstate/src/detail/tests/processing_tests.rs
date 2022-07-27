@@ -21,7 +21,7 @@ use crate::{
     detail::{
         median_time::calculate_median_time_past,
         pow::error::ConsensusPoWError,
-        tests::{test_framework::BlockTestFramework, *},
+        tests::{test_framework::TestFramework, *},
     },
     make_chainstate, ChainstateConfig,
 };
@@ -272,7 +272,7 @@ fn straight_chain(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor_invalid_height(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::default();
+    let mut btf = TestFramework::default();
     let height = 1;
     btf.create_chain(&btf.genesis().get_id().into(), height, &mut rng).unwrap();
     let last_block_index = btf.block_indexes.last().expect("last block in first chain").clone();
@@ -298,7 +298,7 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn get_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::default();
+    let mut btf = TestFramework::default();
 
     // We will create two chains that split at height 100
     const SPLIT_HEIGHT: usize = 100;
@@ -411,7 +411,7 @@ fn get_ancestor(#[case] seed: Seed) {
 #[case(Seed::from_entropy())]
 fn last_common_ancestor(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let mut btf = BlockTestFramework::default();
+    let mut btf = TestFramework::default();
 
     const SPLIT_HEIGHT: usize = 100;
     const FIRST_CHAIN_HEIGHT: usize = 500;
@@ -526,7 +526,7 @@ fn consensus_type(#[case] seed: Seed) {
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
-    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let mut btf = TestFramework::with_chainstate(chainstate);
 
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
@@ -672,7 +672,7 @@ fn pow(#[case] seed: Seed) {
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
 
-    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let mut btf = TestFramework::with_chainstate(chainstate);
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks

@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use crate::{
     detail::tests::{
-        test_framework::{BlockTestFramework, TestBlockParams, TestSpentStatus},
+        test_framework::{TestBlockParams, TestFramework, TestSpentStatus},
         *,
     },
     ChainstateConfig,
@@ -108,7 +108,7 @@ fn reorg_simple(#[case] seed: Seed) {
 fn test_very_long_reorgs(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut btf = BlockTestFramework::default();
+        let mut btf = TestFramework::default();
         let events: EventList = Arc::new(Mutex::new(Vec::new()));
         subscribe_to_events(&mut btf, &events);
 
@@ -136,11 +136,7 @@ fn test_very_long_reorgs(#[case] seed: Seed) {
     });
 }
 
-fn check_spend_tx_in_failed_block(
-    btf: &mut BlockTestFramework,
-    events: &EventList,
-    rng: &mut impl Rng,
-) {
+fn check_spend_tx_in_failed_block(btf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
     // Check spending of a transaction in a block which failed to connect
     //
     //+-- 0x07e3…6fe4 (H:8,M,B:10)
@@ -176,7 +172,7 @@ fn check_spend_tx_in_failed_block(
     assert!(btf.create_chain(&(*btf.index_at(12).block_id()).into(), 1, rng).is_err());
 }
 
-fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework, rng: &mut impl Rng) {
+fn check_spend_tx_in_other_fork(btf: &mut TestFramework, rng: &mut impl Rng) {
     // # Attempt to spend a transaction created on a different fork
     //
     // +-- 0x4273…c93c (H:7,M,B:10)
@@ -213,7 +209,7 @@ fn check_spend_tx_in_other_fork(btf: &mut BlockTestFramework, rng: &mut impl Rng
     assert!(btf.create_chain(&block_id.into(), 10, rng).is_err());
 }
 
-fn check_fork_that_double_spends(btf: &mut BlockTestFramework, rng: &mut impl Rng) {
+fn check_fork_that_double_spends(btf: &mut TestFramework, rng: &mut impl Rng) {
     // # Try to create a fork that double-spends
     // +-- 0x6e45…e8e8 (H:0,P:0)
     //         +-- 0xe090…995e (H:1,M,P:1)
@@ -240,11 +236,7 @@ fn check_fork_that_double_spends(btf: &mut BlockTestFramework, rng: &mut impl Rn
     assert!(btf.add_special_block(double_spend_block).is_err());
 }
 
-fn check_reorg_to_first_chain(
-    btf: &mut BlockTestFramework,
-    events: &EventList,
-    rng: &mut impl Rng,
-) {
+fn check_reorg_to_first_chain(btf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
     //  ... and back to the first chain.
     //
     // +-- 0x6e45…e8e8 (H:0,B:0)
@@ -299,7 +291,7 @@ fn check_reorg_to_first_chain(
 }
 
 fn check_make_alternative_chain_longer(
-    btf: &mut BlockTestFramework,
+    btf: &mut TestFramework,
     events: &EventList,
     rng: &mut impl Rng,
 ) {
@@ -343,7 +335,7 @@ fn check_make_alternative_chain_longer(
     assert!(btf.is_block_in_main_chain(btf.index_at(4).block_id()));
 }
 
-fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList, rng: &mut impl Rng) {
+fn check_simple_fork(btf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
     //  Fork like this:
     //
     //  +-- 0x6e45…e8e8 (H:0,B:0) = genesis
@@ -387,7 +379,7 @@ fn check_simple_fork(btf: &mut BlockTestFramework, events: &EventList, rng: &mut
     assert!(!btf.is_block_in_main_chain(btf.index_at(3).block_id()));
 }
 
-fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
+fn check_last_event(btf: &mut TestFramework, events: &EventList) {
     // We don't send any events for blocks in the middle of the chain during reorgs.
     btf.chainstate.wait_for_all_events();
     let events = events.lock().unwrap();
@@ -407,7 +399,7 @@ fn check_last_event(btf: &mut BlockTestFramework, events: &EventList) {
     }
 }
 
-fn subscribe_to_events(btf: &mut BlockTestFramework, events: &EventList) {
+fn subscribe_to_events(btf: &mut TestFramework, events: &EventList) {
     let events = Arc::clone(events);
     // Event handler
     let subscribe_func = Arc::new(

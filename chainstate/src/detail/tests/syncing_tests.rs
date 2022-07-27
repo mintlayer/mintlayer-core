@@ -17,7 +17,7 @@
 
 use std::iter;
 
-use crate::detail::tests::{test_framework::BlockTestFramework, *};
+use crate::detail::tests::{test_framework::TestFramework, *};
 
 #[test]
 fn locator_distances() {
@@ -27,7 +27,7 @@ fn locator_distances() {
 
 #[test]
 fn process_a_trivial_block() {
-    let mut btf = BlockTestFramework::default();
+    let mut btf = TestFramework::default();
     btf.block_builder().process().unwrap();
 }
 
@@ -38,7 +38,7 @@ fn process_a_trivial_block() {
 fn get_locator(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut btf = BlockTestFramework::default();
+        let mut btf = TestFramework::default();
 
         let locator = btf.chainstate().get_locator().unwrap();
         assert_eq!(locator.len(), 1);
@@ -84,7 +84,7 @@ fn get_headers(#[case] seed: Seed) {
         let headers_count = rng.gen_range(1000..header_limit);
         let blocks_count = rng.gen_range(1000..2000);
 
-        let mut btf = BlockTestFramework::default();
+        let mut btf = TestFramework::default();
         let mut last_block_id = btf.genesis().get_id().into();
         last_block_id = btf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 
@@ -132,7 +132,7 @@ fn get_headers_genesis(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let mut btf = BlockTestFramework::default();
+        let mut btf = TestFramework::default();
         let genesis_id: Id<GenBlock> = btf.genesis().get_id().into();
 
         btf.create_chain(&genesis_id, rng.gen_range(64..128), &mut rng).unwrap();
@@ -160,7 +160,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let common_height = rng.gen_range(100..10_000);
 
-        let mut btf = BlockTestFramework::default();
+        let mut btf = TestFramework::default();
         let common_block_id = btf
             .create_chain(&btf.genesis().get_id().into(), common_height, &mut rng)
             .unwrap();
@@ -184,8 +184,8 @@ fn get_headers_different_chains(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let mut btf1 = BlockTestFramework::default();
-        let mut btf2 = BlockTestFramework::default();
+        let mut btf1 = TestFramework::default();
+        let mut btf2 = TestFramework::default();
 
         let mut prev = TestBlockInfo::from_genesis(btf1.genesis());
         assert_eq!(&prev, &TestBlockInfo::from_genesis(btf2.genesis()));
@@ -222,8 +222,8 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let mut btf1 = BlockTestFramework::default();
-        let mut btf2 = BlockTestFramework::default();
+        let mut btf1 = TestFramework::default();
+        let mut btf2 = TestFramework::default();
 
         let mut prev1 = TestBlockInfo::from_genesis(btf1.genesis());
         for _ in 0..rng.gen_range(8..16) {
@@ -280,8 +280,8 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
 
-        let mut btf1 = BlockTestFramework::default();
-        let mut btf2 = BlockTestFramework::default();
+        let mut btf1 = TestFramework::default();
+        let mut btf2 = TestFramework::default();
 
         let mut prev = TestBlockInfo::from_genesis(btf1.genesis());
         for _ in 0..rng.gen_range(8..16) {

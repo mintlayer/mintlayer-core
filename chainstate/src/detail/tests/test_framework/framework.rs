@@ -32,7 +32,7 @@ use crate::{
     detail::{
         tests::{
             create_new_outputs, produce_test_block,
-            test_framework::{BlockTestFrameworkBuilder, ProcessBlockBuilder},
+            test_framework::{BlockBuilder, TestFrameworkBuilder},
             TestBlockInfo, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL,
         },
         BlockIndex, GenBlockIndex, TimeGetter,
@@ -41,22 +41,22 @@ use crate::{
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
-pub struct BlockTestFramework {
+pub struct TestFramework {
     // TODO: FIXME: Private fields?
     pub chainstate: Chainstate,
     // TODO: FIXME: Remove?..
     pub block_indexes: Vec<BlockIndex>,
 }
 
-impl BlockTestFramework {
-    /// Creates a new `BlockTestFramework` instance using a builder api.
-    pub fn builder() -> BlockTestFrameworkBuilder {
-        BlockTestFrameworkBuilder::new()
+impl TestFramework {
+    /// Creates a new test framework instance using a builder api.
+    pub fn builder() -> TestFrameworkBuilder {
+        TestFrameworkBuilder::new()
     }
 
     /// Processes a new block with the parameters specified using `ProcessBlockBuilder`.
-    pub fn block_builder(&mut self) -> ProcessBlockBuilder {
-        ProcessBlockBuilder::new(self)
+    pub fn block_builder(&mut self) -> BlockBuilder {
+        BlockBuilder::new(self)
     }
 
     /// Creates and processes a given amount of blocks. Returns the if of the last produced block.
@@ -125,7 +125,7 @@ impl BlockTestFramework {
     }
 }
 
-impl Default for BlockTestFramework {
+impl Default for TestFramework {
     fn default() -> Self {
         Self::builder().build()
     }
@@ -136,7 +136,7 @@ fn build_test_framework() {
     let chain_type = ChainType::Mainnet;
     let max_db_commit_attempts = 10;
 
-    let tf = BlockTestFramework::builder()
+    let tf = TestFramework::builder()
         .with_chain_config(
             ChainConfigBuilder::new(chain_type)
                 .net_upgrades(NetUpgrades::unit_tests())
@@ -159,7 +159,7 @@ fn build_test_framework() {
 
 #[test]
 fn process_block() {
-    let mut tf = BlockTestFramework::default();
+    let mut tf = TestFramework::default();
     tf.block_builder().process().unwrap();
 }
 
@@ -183,7 +183,7 @@ pub enum TestBlockParams {
     SpendFrom(Id<Block>),
 }
 
-impl BlockTestFramework {
+impl TestFramework {
     // TODO: FIXME: Remove unused?..
     pub fn with_chainstate(chainstate: Chainstate) -> Self {
         Self {

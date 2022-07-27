@@ -17,7 +17,7 @@
 
 use std::sync::Mutex;
 
-use crate::detail::{tests::test_framework::BlockTestFramework, *};
+use crate::detail::{tests::test_framework::TestFramework, *};
 use chainstate_storage::Store;
 use common::{
     chain::{
@@ -188,7 +188,7 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     let mut prev_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
     let chainstate_config = ChainstateConfig::new();
     let chainstate = chainstate_with_config(chain_config, chainstate_config);
-    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let mut btf = TestFramework::with_chainstate(chainstate);
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 

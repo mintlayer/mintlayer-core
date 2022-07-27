@@ -23,11 +23,11 @@ use common::chain::{
 
 use crate::detail::{
     OrphanErrorHandler,
-    {tests::test_framework::BlockTestFramework, Chainstate, ChainstateConfig, TimeGetter},
+    {tests::test_framework::TestFramework, Chainstate, ChainstateConfig, TimeGetter},
 };
 
-/// BlockTestFramework builder.
-pub struct BlockTestFrameworkBuilder {
+/// The TestFramework builder.
+pub struct TestFrameworkBuilder {
     chain_config: ChainConfig,
     chainstate_config: ChainstateConfig,
     chainstate_storage: Store,
@@ -35,7 +35,8 @@ pub struct BlockTestFrameworkBuilder {
     time_getter: TimeGetter,
 }
 
-impl BlockTestFrameworkBuilder {
+impl TestFrameworkBuilder {
+    /// Constructs a builder instance with values appropriate for most of the tests.
     pub fn new() -> Self {
         let chain_config = ChainConfigBuilder::new(ChainType::Mainnet)
             .net_upgrades(NetUpgrades::unit_tests())
@@ -45,7 +46,7 @@ impl BlockTestFrameworkBuilder {
         let chainstate_storage = Store::new_empty().unwrap();
         let time_getter = TimeGetter::default();
 
-        BlockTestFrameworkBuilder {
+        TestFrameworkBuilder {
             chain_config,
             chainstate_config,
             chainstate_storage,
@@ -74,7 +75,7 @@ impl BlockTestFrameworkBuilder {
         self
     }
 
-    pub fn build(self) -> BlockTestFramework {
+    pub fn build(self) -> TestFramework {
         let chainstate = Chainstate::new(
             Arc::new(self.chain_config),
             self.chainstate_config,
@@ -84,7 +85,7 @@ impl BlockTestFrameworkBuilder {
         )
         .unwrap();
 
-        BlockTestFramework {
+        TestFramework {
             chainstate,
             block_indexes: Vec::new(),
         }
