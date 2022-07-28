@@ -16,61 +16,57 @@ pub enum Error {
 
 #[derive(Debug, Error)]
 pub enum TxValidationError {
-    #[error("No Inputs")]
+    #[error("Transaction has no inputs.")]
     NoInputs,
-    #[error("No Ouputs")]
+    #[error("Transaction has no outputs.")]
     NoOutputs,
-    #[error("DuplicateInputs")]
+    #[error("Transaction has duplicate inputs.")]
     DuplicateInputs,
-    #[error("LooseCoinbase")]
-    LooseCoinbase,
-    #[error("OutPointNotFound {outpoint:?}")]
+    #[error("Outpoint not found: {outpoint:?}")]
     OutPointNotFound {
         outpoint: OutPoint,
         tx_id: Id<Transaction>,
     },
-    #[error("ExceedsMaxBlockSize")]
+    #[error("Transaction exceeds the maximum block size.")]
     ExceedsMaxBlockSize,
-    #[error("TransactionAlreadyInMempool")]
+    #[error("Transaction already exists in the mempool.")]
     TransactionAlreadyInMempool,
-    #[error("ConflictWithIrreplaceableTransaction")]
+    #[error("Transaction conflicts with another, irreplaceable transaction.")]
     ConflictWithIrreplaceableTransaction,
-    #[error("InputValuesOverflow")]
+    #[error("The sum of the transaction's inputs' values overflows.")]
     InputValuesOverflow,
-    #[error("OutputValuesOverflow")]
+    #[error("The sum of the transaction's outputs' values overflows.")]
     OutputValuesOverflow,
-    #[error("InputsBelowOutputs")]
+    #[error("The sum of the transaction's inputs is smaller than the sum of its outputs.")]
     InputsBelowOutputs,
-    #[error("ReplacementFeeLowerThanOriginal: The replacement transaction has fee {replacement_fee:?}, the original transaction has fee {original_fee:?}")]
+    #[error("Replacement transaction has fee lower than the original. Replacement fee is {replacement_fee:?}, original fee {original_fee:?}")]
     ReplacementFeeLowerThanOriginal {
         replacement_tx: H256,
         replacement_fee: Amount,
         original_tx: H256,
         original_fee: Amount,
     },
-    #[error("TooManyPotentialReplacements")]
+    #[error("Transaction would require too many replacements.")]
     TooManyPotentialReplacements,
-    #[error("SpendsNewUnconfirmedInput")]
+    #[error("Replacement transaction spends an unconfirmed input which was not spent by any of the original transactions.")]
     SpendsNewUnconfirmedOutput,
-    #[error("ConflictsFeeOverflow")]
+    #[error("The sum of the fees of this transaction's conflicts overflows.")]
     ConflictsFeeOverflow,
-    #[error("TransactionFeeLowerThanConflictsWithDescendants")]
+    #[error("Transaction pays a fee that is lower than the fee of its conflicts with their descendants.")]
     TransactionFeeLowerThanConflictsWithDescendants,
-    #[error("AdditionalFeesUnderflow")]
+    #[error("Underflow in computing transaction's additional fees.")]
     AdditionalFeesUnderflow,
-    #[error("InsufficientFeesToRelay")]
+    #[error("Transaction does not pay sufficient fees to be relayed.")]
     InsufficientFeesToRelay { tx_fee: Amount, relay_fee: Amount },
-    #[error("InsufficientFeesToRelayRBF")]
+    #[error("Replacement transaction does not pay enough for its bandwidth.")]
     InsufficientFeesToRelayRBF,
-    #[error("RollingFeeThresholdNotMet")]
+    #[error("Rolling fee threshold not met.")]
     RollingFeeThresholdNotMet { minimum_fee: Amount, tx_fee: Amount },
-    #[error("FeeRate error")]
-    FeeRateError,
-    #[error("AncestorFeeUpdateOverflow")]
+    #[error("Overflow encountered while updating ancestor fee.")]
     AncestorFeeUpdateOverflow,
-    #[error("Descendant of expired transaction")]
+    #[error("Transaction is a descendant of expired transaction.")]
     DescendantOfExpiredTransaction,
-    #[error("Internal Error")]
+    #[error("Internal Error.")]
     InternalError,
 }
 
