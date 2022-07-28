@@ -229,6 +229,7 @@ impl NetworkingService for Libp2pService {
         Self::PubSubHandle,
         Self::MessageSendReceiveHandle,
     )> {
+        // TODO: Check the data directory first, and use keys from there if available
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
         let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
