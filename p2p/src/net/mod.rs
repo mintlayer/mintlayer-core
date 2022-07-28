@@ -55,8 +55,8 @@ pub trait NetworkingService {
     /// Handle for sending/receiving pubsub-related events
     type PubSubHandle: Send;
 
-    /// Handle for sending/receiving request-response events
-    type SyncingCodecHandle: Send;
+    /// Handle for sending/receiving request-response messages
+    type MessageSendReceiveHandle: Send;
 
     /// Unique ID assigned to each pubsub message
     type MessageId: Clone + Debug + Send;
@@ -78,7 +78,7 @@ pub trait NetworkingService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingCodecHandle,
+        Self::MessageSendReceiveHandle,
     )>;
 }
 

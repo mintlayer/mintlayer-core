@@ -49,7 +49,7 @@ async fn make_sync_manager<T>(
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
@@ -164,7 +164,7 @@ async fn process_header_request<T>(
 ) -> Result<(), P2pError>
 where
     T: NetworkingService,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         net::types::SyncingEvent::Request {
@@ -191,7 +191,7 @@ where
 async fn advance_mgr_state<T>(mgr: &mut BlockSyncManager<T>) -> Result<(), P2pError>
 where
     T: NetworkingService,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
 {
     match mgr.handle_mut().poll_next().await.unwrap() {
         net::types::SyncingEvent::Request {

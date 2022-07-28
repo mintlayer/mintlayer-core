@@ -218,7 +218,7 @@ impl NetworkingService for Libp2pService {
     type MessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
-    type SyncingCodecHandle = Libp2pSyncHandle<Self>;
+    type MessageSendReceiveHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
@@ -227,7 +227,7 @@ impl NetworkingService for Libp2pService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingCodecHandle,
+        Self::MessageSendReceiveHandle,
     )> {
         let id_keys = identity::Keypair::generate_ed25519();
         let peer_id = id_keys.public().to_peer_id();
@@ -294,7 +294,7 @@ impl NetworkingService for Libp2pService {
                 gossip_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingCodecHandle {
+            Self::MessageSendReceiveHandle {
                 cmd_tx,
                 sync_rx,
                 _marker: Default::default(),

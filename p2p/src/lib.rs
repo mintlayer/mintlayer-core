@@ -143,7 +143,7 @@ impl<T> P2P<T>
 where
     T: 'static + NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
     T::PubSubHandle: PubSubService<T>,
 {
     /// Start the P2P subsystem
@@ -253,7 +253,7 @@ pub async fn make_p2p<T>(
 where
     T: NetworkingService + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
     T::PubSubHandle: PubSubService<T>,
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,

@@ -41,7 +41,7 @@ pub struct RequestState<T: NetworkingService> {
 impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::MessageSendReceiveHandle: SyncingCodecService<T>,
 {
     /// Make a block request message
     ///

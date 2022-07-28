@@ -109,7 +109,7 @@ impl NetworkingService for MockService {
     type MessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingCodecHandle = MockSyncingCodecHandle<Self>;
+    type MessageSendReceiveHandle = MockSyncingCodecHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -118,7 +118,7 @@ impl NetworkingService for MockService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingCodecHandle,
+        Self::MessageSendReceiveHandle,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
@@ -157,7 +157,7 @@ impl NetworkingService for MockService {
                 _pubsub_rx,
                 _marker: Default::default(),
             },
-            Self::SyncingCodecHandle {
+            Self::MessageSendReceiveHandle {
                 _cmd_tx: cmd_tx,
                 _sync_rx,
                 _marker: Default::default(),
