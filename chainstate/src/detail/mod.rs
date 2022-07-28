@@ -323,7 +323,7 @@ impl Chainstate {
         self.make_db_tx_ro().get_block_index(id)
     }
 
-    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex<'_>>, PropertyQueryError> {
+    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_index()
     }
 
