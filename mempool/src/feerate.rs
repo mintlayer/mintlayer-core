@@ -13,9 +13,9 @@ pub(crate) struct FeeRate {
 }
 
 impl FeeRate {
-    pub(crate) fn new(tokens_per_kb: Amount) -> Self {
+    pub(crate) fn new(atoms_per_kb: Amount) -> Self {
         Self {
-            atoms_per_kb: tokens_per_kb.into_atoms(),
+            atoms_per_kb: atoms_per_kb.into_atoms(),
         }
     }
 
@@ -30,7 +30,7 @@ impl FeeRate {
         Amount::from_atoms(self.atoms_per_kb * size / 1000)
     }
 
-    pub(crate) fn tokens_per_kb(&self) -> u128 {
+    pub(crate) fn atoms_per_kb(&self) -> u128 {
         self.atoms_per_kb
     }
 
@@ -43,10 +43,8 @@ impl FeeRate {
 impl std::ops::Add for FeeRate {
     type Output = FeeRate;
     fn add(self, other: Self) -> Self::Output {
-        let tokens_per_kb = self.atoms_per_kb + other.atoms_per_kb;
-        FeeRate {
-            atoms_per_kb: tokens_per_kb,
-        }
+        let atoms_per_kb = self.atoms_per_kb + other.atoms_per_kb;
+        FeeRate { atoms_per_kb }
     }
 }
 

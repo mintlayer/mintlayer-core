@@ -260,7 +260,7 @@ impl RollingFeeRate {
             / (halflife.as_secs() as f64))
             .exp2();
         self.rolling_minimum_fee_rate = FeeRate::new(Amount::from_atoms(
-            (self.rolling_minimum_fee_rate.tokens_per_kb() as f64 / divisor) as u128,
+            (self.rolling_minimum_fee_rate.atoms_per_kb() as f64 / divisor) as u128,
         ));
 
         log::trace!(
