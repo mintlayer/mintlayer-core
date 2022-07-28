@@ -671,9 +671,10 @@ fn tx_too_big() -> anyhow::Result<()> {
 }
 
 fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), Error> {
-    eprintln!(
+    log::debug!(
         "tx_replace_tx: original_fee: {:?}, replacement_fee {:?}",
-        original_fee, replacement_fee
+        original_fee,
+        replacement_fee
     );
     let mut mempool = setup();
     let outpoint = mempool
@@ -697,13 +698,13 @@ fn test_replace_tx(original_fee: Amount, replacement_fee: Amount) -> Result<(), 
     let original = tx_spend_input(&mempool, input.clone(), original_fee, flags, locktime)
         .expect("should be able to spend here");
     let original_id = original.get_id();
-    eprintln!("created a tx with fee {:?}", mempool.try_get_fee(&original));
+    log::debug!("created a tx with fee {:?}", mempool.try_get_fee(&original));
     mempool.add_transaction(original)?;
 
     let flags = 0;
     let replacement = tx_spend_input(&mempool, input, replacement_fee, flags, locktime)
         .expect("should be able to spend here");
-    eprintln!(
+    log::debug!(
         "created a replacement with fee {:?}",
         mempool.try_get_fee(&replacement)
     );

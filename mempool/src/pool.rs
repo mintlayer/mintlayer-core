@@ -88,7 +88,6 @@ where
 
 fn get_relay_fee(tx: &Transaction) -> Amount {
     // TODO we should never reach the expect, but should this be an error anyway?
-    eprintln!("get_relay_fee - encoded_size {:?}", tx.encoded_size());
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
@@ -747,14 +746,13 @@ where
     fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx)?;
         let relay_fee = get_relay_fee(tx);
-        eprintln!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
+        log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
         (tx_fee >= relay_fee)
             .then(|| ())
             .ok_or(TxValidationError::InsufficientFeesToRelay { tx_fee, relay_fee })
     }
 
     fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
-        eprintln!("rbf_checks");
         let conflicts = tx
             .inputs()
             .iter()
@@ -805,13 +803,15 @@ where
         tx: &Transaction,
         total_conflict_fees: Amount,
     ) -> Result<(), TxValidationError> {
-        eprintln!("tx fee is {:?}", self.try_get_fee(tx)?);
+        log::debug!("pays_for_bandwidth: tx fee is {:?}", self.try_get_fee(tx)?);
         let additional_fees = (self.try_get_fee(tx)? - total_conflict_fees)
             .ok_or(TxValidationError::AdditionalFeesUnderflow)?;
         let relay_fee = get_relay_fee(tx);
-        eprintln!(
+        log::debug!(
             "conflict fees: {:?}, additional fee: {:?}, relay_fee {:?}",
-            total_conflict_fees, additional_fees, relay_fee
+            total_conflict_fees,
+            additional_fees,
+            relay_fee
         );
         (additional_fees >= relay_fee)
             .then(|| ())
