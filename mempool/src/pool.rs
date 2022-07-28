@@ -45,12 +45,12 @@ const ROLLING_FEE_DECAY_INTERVAL: Time = Duration::new(10, 0);
 pub(crate) type MemoryUsage = usize;
 
 #[automock]
-pub trait GetMemoryUsage: 'static {
+pub trait GetMemoryUsage {
     fn get_memory_usage(&self) -> MemoryUsage;
 }
 
 pub(crate) type Time = Duration;
-pub trait GetTime: Clone + 'static {
+pub trait GetTime {
     fn get_time(&self) -> Time;
 }
 
@@ -101,7 +101,7 @@ pub trait Mempool<C, T, M> {
     fn new_tip_set(&mut self, chain_state: C);
 }
 
-pub trait ChainState: Debug + 'static {
+pub trait ChainState: Debug {
     fn contains_outpoint(&self, outpoint: &OutPoint) -> bool;
     fn get_outpoint_value(&self, outpoint: &OutPoint) -> Result<Amount, anyhow::Error>;
 }
