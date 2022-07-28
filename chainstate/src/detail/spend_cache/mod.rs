@@ -18,6 +18,7 @@
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::amount_sum;
 use common::chain::signature::{verify_signature, Transactable};
+use common::chain::tokens::{token_id, AssetData, TokenId};
 use common::chain::{tokens::OutputValue, Transaction};
 use common::{
     chain::{
@@ -183,6 +184,96 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(output.value())
     }
 
+    // Get TokenId and Amount in input
+    fn filter_assets_amount(
+        &self,
+        prev_tx: &Transaction,
+        output: &common::chain::TxOutput,
+    ) -> Option<(TokenId, Amount)> {
+        match output.value() {
+            OutputValue::Coin(_) => None,
+            OutputValue::Asset(asset) => Some(match asset {
+                AssetData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
+                AssetData::TokenIssuanceV1 {
+                    token_ticker: _,
+                    amount_to_issue,
+                    number_of_decimals: _,
+                    metadata_uri: _,
+                } => {
+                    let token_id = token_id(prev_tx)?;
+                    (token_id, *amount_to_issue)
+                }
+                AssetData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => {
+                    /* Token have burned and can't be transfered */
+                    return None;
+                }
+            }),
+        }
+    }
+
+    pub fn calculate_assets_total_inputs(
+        &self,
+        inputs: &[TxInput],
+    ) -> Result<BTreeMap<TokenId, Amount>, StateUpdateError> {
+        let mut total_assets: BTreeMap<TokenId, Amount> = BTreeMap::new();
+        for (_input_idx, input) in inputs.iter().enumerate() {
+            let outpoint = input.outpoint();
+            let tx_index = match self.inputs.get(&outpoint.tx_id()) {
+                Some(tx_index_op) => match tx_index_op {
+                    CachedInputsOperation::Write(tx_index) => tx_index,
+                    CachedInputsOperation::Read(tx_index) => tx_index,
+                    CachedInputsOperation::Erase => {
+                        return Err(StateUpdateError::PreviouslyCachedInputWasErased)
+                    }
+                },
+                None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
+            };
+            let output_index = outpoint.output_index() as usize;
+            match tx_index.position() {
+                common::chain::SpendablePosition::Transaction(tx_pos) => {
+                    let tx = self
+                        .db_tx
+                        .get_mainchain_tx_by_position(tx_pos)
+                        .map_err(StateUpdateError::from)?
+                        .ok_or_else(|| {
+                            StateUpdateError::InvariantErrorTransactionCouldNotBeLoaded(
+                                tx_pos.clone(),
+                            )
+                        })?;
+
+                    let output = tx.outputs().get(output_index).ok_or(
+                        StateUpdateError::OutputIndexOutOfRange {
+                            tx_id: Some(tx.get_id().into()),
+                            source_output_index: output_index,
+                        },
+                    )?;
+
+                    match self.filter_assets_amount(&tx, output) {
+                        Some((token_id, amount)) => {
+                            total_assets.insert(
+                                token_id,
+                                (total_assets
+                                    .get(&token_id)
+                                    .cloned()
+                                    .unwrap_or(Amount::from_atoms(0))
+                                    + amount)
+                                    .ok_or(StateUpdateError::InputAdditionError)?,
+                            );
+                        }
+                        None => continue,
+                    }
+                }
+                common::chain::SpendablePosition::BlockReward(_block_id) => {
+                    continue;
+                }
+            }
+        }
+        Ok(total_assets)
+    }
+
     fn calculate_coins_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
@@ -235,13 +326,14 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 OutputValue::Coin(output_amount) => {
                     total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?
                 }
-                OutputValue::Asset(_) => { /*For now we don't calculate here tokens*/ }
+                OutputValue::Asset(_) => { /*For now we don't calculate here tokens, use calculate_assets_total_inputs */
+                }
             }
         }
         Ok(total)
     }
 
-    fn check_transferred_amounts_and_get_fee(
+    pub fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
     ) -> Result<Amount, StateUpdateError> {

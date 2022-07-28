@@ -43,6 +43,7 @@ pub const TOKEN_MIN_ISSUANCE_FEE: Amount = Amount::from_atoms(10_000_000_000_000
 pub const TOKEN_MAX_URI_LEN: usize = 1024;
 pub const TOKEN_MAX_DEC_COUNT: u8 = 18;
 pub const TOKEN_MAX_TICKER_LEN: usize = 5;
+pub const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
 #[derive(
     Debug,

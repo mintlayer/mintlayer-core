@@ -116,6 +116,8 @@ pub enum TokensError {
     InsuffienceTokenValueInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't burn zero value in transaction {0} in block {1}")]
     BurnZeroTokens(Id<Transaction>, Id<Block>),
+    #[error("Can't transfer zero tokens in transaction {0} in block {1}")]
+    TransferZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Some of the tokens are lost in transaction {0} in block {1}")]
     SomeTokensLost(Id<Transaction>, Id<Block>),
     #[error("Can't find token in inputs in transaction {0} in block {1}")]

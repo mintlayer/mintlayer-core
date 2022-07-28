@@ -265,9 +265,10 @@ fn token_transfer_test() {
             process_token(&mut chainstate, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::InsuffienceTokenValueInInputs(_, _)
-                    )
+                    CheckBlockTransactionsError::CheckTokensError(TokensError::TransferZeroTokens(
+                        _,
+                        _
+                    ))
                 )
             ))
         ));
