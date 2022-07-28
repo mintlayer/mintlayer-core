@@ -232,6 +232,12 @@ where
             tokio::select! {
                 event = self.pubsub_handle.poll_next() => match event? {
                     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+                        // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
+                        //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
+                        //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
+                        //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
+                        //       blocks to a subset of the peers. We will have a discussion on whether we should continue
+                        //       announcing blocks
                         message::Announcement::Block(block) => {
                             self.process_block_announcement(peer_id, message_id, block).await?;
                         },
