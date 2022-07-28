@@ -69,7 +69,7 @@ macro_rules! decl_schema {
         }
     ) => {
         $(
-            #[doc = "Database index: "] #[doc = stringify!($name)]
+            #[doc = concat!("Database index: ", stringify!($name))]
             $vis struct $name;
             impl $crate::schema::DBIndex for $name {
                 const NAME: &'static str = stringify!($name);
