@@ -94,7 +94,7 @@ impl TestFramework {
                 .block_builder()
                 // .with_transactions(vec![transaction])
                 .add_test_transaction_with_parent(prev_block.id, rng)
-                .with_prev_block_hash(prev_block.id)
+                .with_parent(prev_block.id)
                 .build();
             prev_block = TestBlockInfo::from_block(&block);
             self.process_block(block, BlockSource::Local)?;

@@ -95,7 +95,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Overrides the previous block hash that is deduced by default as the best block.
-    pub fn with_prev_block_hash(mut self, prev_block_hash: Id<GenBlock>) -> Self {
+    pub fn with_parent(mut self, prev_block_hash: Id<GenBlock>) -> Self {
         self.prev_block_hash = prev_block_hash;
         self
     }

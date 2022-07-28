@@ -156,7 +156,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
             + tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
         let second_block = tf
             .block_builder()
-            .with_prev_block_hash(first_block.get_id().into())
+            .with_parent(first_block.get_id().into())
             .with_timestamp(BlockTimestamp::from_int_seconds(timestamp))
             .build();
 
