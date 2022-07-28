@@ -92,7 +92,7 @@ where
     }
 
     /// Subscribe to events
-    async fn subscribe_to_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
+    async fn subscribe_to_chainstate_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
         let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
 
         let subscribe_func =
@@ -113,7 +113,6 @@ where
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
 
-        self.pubsub_handle.subscribe(&self.topics).await?;
         Ok(rx)
     }
 
@@ -224,7 +223,10 @@ where
         }
 
         // subscribe to chainstate events and pubsub topics
-        let mut block_rx = self.subscribe_to_events().await?;
+        let mut block_rx = self.subscribe_to_chainstate_events().await?;
+
+        // tell peers what topics we're interested in
+        self.pubsub_handle.subscribe(&self.topics).await?;
 
         loop {
             tokio::select! {
