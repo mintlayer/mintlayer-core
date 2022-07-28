@@ -20,6 +20,7 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError,
     OrphanCheckError,
 };
+use chainstate_types::stake_modifer::StakeModifierError;
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file
@@ -43,7 +44,8 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
-            BlockError::PoSKernelInputNotFound(_) => 100,
+            BlockError::PoSKernelOutputRetrievalFailed(_) => 100,
+            BlockError::PoSRandomnessCalculationFailed(err) => err.ban_score(),
         }
     }
 }
@@ -195,6 +197,15 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
             ConsensusPoSError::EpochDataRetrievalQueryError(_, _) => 0,
             ConsensusPoSError::EpochDataNotFound(_) => 0,
+        }
+    }
+}
+
+impl BanScore for StakeModifierError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            StakeModifierError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            StakeModifierError::VRFDataVerificationFailed(_) => 100,
         }
     }
 }

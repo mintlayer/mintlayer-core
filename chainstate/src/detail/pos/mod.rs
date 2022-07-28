@@ -140,13 +140,11 @@ fn ensure_correct_ancestry(
     Ok(())
 }
 
-pub fn check_proof_of_stake(
-    chain_config: &ChainConfig,
-    header: &BlockHeader,
+pub fn get_kernel_block_index<'a>(
     pos_data: &PoSData,
     block_index_handle: &dyn BlockIndexHandle,
     tx_index_retriever: &dyn TransactionIndexHandle,
-) -> Result<(), ConsensusPoSError> {
+) -> Result<GenBlockIndex, ConsensusPoSError> {
     ensure!(
         !pos_data.kernel_inputs().is_empty(),
         ConsensusPoSError::NoKernel,
@@ -156,6 +154,7 @@ pub fn check_proof_of_stake(
         pos_data.kernel_inputs().len() == 1,
         ConsensusPoSError::MultipleKernels,
     );
+
     let kernel_outpoint =
         pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
     let kernel_tx_index = tx_index_retriever
@@ -170,31 +169,37 @@ pub fn check_proof_of_stake(
         .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
         .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
 
-    let prev_block_index = block_index_handle
-        .get_gen_block_index(header.prev_block_id())
-        .expect("Database error while retrieving prev block index")
-        .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+    Ok(kernel_block_index)
+}
 
-    let epoch_index =
-        chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
+pub fn get_kernel_output(
+    pos_data: &PoSData,
+    block_index_handle: &dyn BlockIndexHandle,
+    tx_index_retriever: &dyn TransactionIndexHandle,
+) -> Result<TxOutput, ConsensusPoSError> {
+    ensure!(
+        !pos_data.kernel_inputs().is_empty(),
+        ConsensusPoSError::NoKernel,
+    );
+    // in general this should not be an issue, but we have to first study this security model with one kernel
+    ensure!(
+        pos_data.kernel_inputs().len() == 1,
+        ConsensusPoSError::MultipleKernels,
+    );
 
-    let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
-        let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
-        *block_index_handle
-            .get_epoch_data(index_to_retrieve)
-            .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
-            .ok_or(ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
-            .randomness()
-    } else {
-        *chain_config.initial_randomness()
-    };
+    let kernel_outpoint =
+        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
+    let kernel_tx_index = tx_index_retriever
+        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
+        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
+        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
 
-    ensure_correct_ancestry(
-        header,
-        &prev_block_index,
-        &kernel_block_index,
-        block_index_handle,
-    )?;
+    let kernel_block_id = kernel_tx_index.position().block_id_anyway();
+
+    let kernel_block_index = block_index_handle
+        .get_gen_block_index(&kernel_block_id)
+        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
+        .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
 
     let kernel_output = match kernel_tx_index.position() {
         common::chain::SpendablePosition::Transaction(tx_pos) => tx_index_retriever
@@ -221,6 +226,53 @@ pub fn check_proof_of_stake(
             .clone(),
     };
 
+    Ok(kernel_output)
+}
+
+pub fn check_proof_of_stake(
+    chain_config: &ChainConfig,
+    header: &BlockHeader,
+    pos_data: &PoSData,
+    block_index_handle: &dyn BlockIndexHandle,
+    tx_index_retriever: &dyn TransactionIndexHandle,
+) -> Result<(), ConsensusPoSError> {
+    let kernel_block_index =
+        get_kernel_block_index(pos_data, block_index_handle, tx_index_retriever)?;
+
+    let prev_block_index = block_index_handle
+        .get_gen_block_index(header.prev_block_id())
+        .expect("Database error while retrieving prev block index")
+        .ok_or_else(|| ConsensusPoSError::PrevBlockIndexNotFound(header.get_id()))?;
+
+    let epoch_index =
+        chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
+
+    let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
+        let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
+        *block_index_handle
+            .get_epoch_data(index_to_retrieve)
+            .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
+            .ok_or(ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
+            .randomness()
+    } else {
+        *chain_config.initial_randomness()
+    };
+
+    let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)?;
+
+    ensure_correct_ancestry(
+        header,
+        &prev_block_index,
+        &kernel_block_index,
+        block_index_handle,
+    )?;
+
+    let kernel_outpoint =
+        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
+    let kernel_tx_index = tx_index_retriever
+        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
+        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
+        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
     let is_input_already_spent = kernel_tx_index
         .get_spent_state(kernel_outpoint.output_index())
         .map_err(|_| ConsensusPoSError::InIndexOutpointAccessError)?;

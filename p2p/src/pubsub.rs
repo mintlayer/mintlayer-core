@@ -171,7 +171,8 @@ where
                 err @ BlockError::BlockProofCalculationError(_) => {
                     (ValidationResult::Reject, err.ban_score())
                 }
-                BlockError::PoSKernelInputNotFound(_) => todo!(),
+                BlockError::PoSKernelOutputRetrievalFailed(_) => todo!(),
+                BlockError::PoSRandomnessCalculationFailed(_) => todo!(),
             },
             Err(FailedToInitializeChainstate(_)) => (ValidationResult::Ignore, 0),
             Err(FailedToReadProperty(_)) => (ValidationResult::Ignore, 0),

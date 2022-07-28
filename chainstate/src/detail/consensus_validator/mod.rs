@@ -30,6 +30,7 @@ pub use self::block_index_handle::BlockIndexHandle;
 pub use self::transaction_index_handle::TransactionIndexHandle;
 
 use super::pos::check_proof_of_stake;
+use super::pos::get_kernel_output;
 use super::ConsensusVerificationError;
 
 mod block_index_handle;
@@ -65,22 +66,30 @@ pub(crate) fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>
     )
 }
 
-pub fn compute_extra_consensus_data(
+pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHandle>(
+    chain_config: &ChainConfig,
     prev_block_index: &BlockIndex,
     header: &BlockHeader,
+    block_index_handle: &H,
+    tx_index_retriever: &T,
 ) -> Result<ConsensusExtraData, BlockError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
         ConsensusData::PoS(pos_data) => {
-            let kernel_output = pos_data
-                .kernel_inputs()
-                .get(0)
-                .ok_or_else(|| BlockError::PoSKernelInputNotFound(header.get_id()))?;
             let prev_stake_modifier = prev_block_index.preconnect_data().stake_modifier();
-            let stake_modifer =
-                PoSStakeModifier::from_new_block(prev_stake_modifier, kernel_output.outpoint());
-            let data = ConsensusExtraData::PoS(stake_modifer);
+            let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
+                .map_err(|_| BlockError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
+            let stake_modifier = PoSStakeModifier::from_new_block(
+                chain_config,
+                prev_stake_modifier,
+                prev_block_index,
+                header,
+                &kernel_output,
+                pos_data,
+            )
+            .map_err(BlockError::PoSRandomnessCalculationFailed)?;
+            let data = ConsensusExtraData::PoS(stake_modifier);
             Ok(data)
         }
     }

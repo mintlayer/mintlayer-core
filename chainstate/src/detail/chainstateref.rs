@@ -762,7 +762,13 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         // Set Chain Trust
         let consensus_extra = match &prev_block_index {
-            GenBlockIndex::Block(prev_bi) => compute_extra_consensus_data(prev_bi, block.header())?,
+            GenBlockIndex::Block(prev_bi) => compute_extra_consensus_data(
+                self.chain_config,
+                prev_bi,
+                block.header(),
+                self,
+                self,
+            )?,
             GenBlockIndex::Genesis(_) => ConsensusExtraData::None,
         };
 
