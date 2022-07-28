@@ -16,8 +16,8 @@
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::signature::inputsig::InputWitness;
 use common::chain::{
-    tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
-    TxOutput,
+    tokens::OutputValue, Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose,
+    Transaction, TxInput, TxOutput,
 };
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};

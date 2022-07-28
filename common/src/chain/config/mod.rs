@@ -21,11 +21,11 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
 use crate::chain::{Block, GenBlock, Genesis};
-use crate::chain::tokens::OutputValue;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
 use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
