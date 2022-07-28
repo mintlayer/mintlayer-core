@@ -154,7 +154,7 @@ pub enum PubSubEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the message
-        message_id: T::MessageId,
+        message_id: T::PubSubMessageId,
 
         /// Received data, block/transaction
         announcement: message::Announcement,
@@ -184,7 +184,7 @@ where
         peer_id: T::PeerId,
 
         /// Unique ID of the request
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
 
         /// Received request
         request: message::Request,
@@ -196,7 +196,7 @@ where
         peer_id: T::PeerId,
 
         /// Unique ID of the request this message is a response to
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
 
         /// Received response
         response: message::Response,
@@ -205,7 +205,7 @@ where
     /// Error occurred with syncing codec
     Error {
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         error: RequestResponseError,
     },
 }

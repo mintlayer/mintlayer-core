@@ -120,7 +120,7 @@ where
     async fn process_block_announcement(
         &mut self,
         peer_id: T::PeerId,
-        message_id: T::MessageId,
+        message_id: T::PubSubMessageId,
         block: Block,
     ) -> crate::Result<()> {
         let result = match self

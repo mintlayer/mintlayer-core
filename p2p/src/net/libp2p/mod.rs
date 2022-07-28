@@ -214,8 +214,8 @@ impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
     type PeerId = PeerId;
     type ProtocolId = String;
-    type RequestId = RequestId;
-    type MessageId = MessageId;
+    type SyncingPeerRequestId = RequestId;
+    type PubSubMessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
     type MessageSendReceiveHandle = Libp2pSyncHandle<Self>;
@@ -411,7 +411,7 @@ where
 #[async_trait]
 impl<T> PubSubService<T> for Libp2pPubSubHandle<T>
 where
-    T: NetworkingService<PeerId = PeerId, MessageId = MessageId> + Send,
+    T: NetworkingService<PeerId = PeerId, PubSubMessageId = MessageId> + Send,
 {
     async fn publish(&mut self, announcement: message::Announcement) -> crate::Result<()> {
         let encoded = announcement.encode();
@@ -444,7 +444,7 @@ where
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,
-        message_id: T::MessageId,
+        message_id: T::PubSubMessageId,
         result: net::types::ValidationResult,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
@@ -492,13 +492,17 @@ where
 #[async_trait]
 impl<T> SyncingCodecService<T> for Libp2pSyncHandle<T>
 where
-    T: NetworkingService<PeerId = PeerId, MessageId = MessageId, RequestId = RequestId> + Send,
+    T: NetworkingService<
+            PeerId = PeerId,
+            PubSubMessageId = MessageId,
+            SyncingPeerRequestId = RequestId,
+        > + Send,
 {
     async fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,
-    ) -> crate::Result<T::RequestId> {
+    ) -> crate::Result<T::SyncingPeerRequestId> {
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
             .send(types::Command::SendRequest {
@@ -514,7 +518,7 @@ where
 
     async fn send_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();

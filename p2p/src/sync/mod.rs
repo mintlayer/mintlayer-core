@@ -97,7 +97,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// Pending requests
-    requests: HashMap<T::RequestId, request::RequestState<T>>,
+    requests: HashMap<T::SyncingPeerRequestId, request::RequestState<T>>,
 }
 
 /// Syncing manager
@@ -164,7 +164,7 @@ where
     pub async fn process_header_request(
         &mut self,
         _peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
         // TODO: check if remote has already asked for these headers?
@@ -176,7 +176,7 @@ where
     pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
         ensure!(
@@ -379,7 +379,7 @@ where
     pub async fn process_error(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         error: net::types::RequestResponseError,
     ) -> crate::Result<()> {
         match error {

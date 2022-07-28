@@ -43,8 +43,8 @@ pub trait NetworkingService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
-    /// Unique ID assigned to each received request
-    type RequestId: Debug + Eq + Hash + Send + Sync;
+    /// Unique ID assigned to each received request from a peer
+    type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
 
     /// Id that identifies a protocol
     type ProtocolId: Clone + Debug + Display + Eq + PartialEq + Send;
@@ -59,7 +59,7 @@ pub trait NetworkingService {
     type MessageSendReceiveHandle: Send;
 
     /// Unique ID assigned to each pubsub message
-    type MessageId: Clone + Debug + Send;
+    type PubSubMessageId: Clone + Debug + Send;
 
     /// Initialize the network service provider
     ///
@@ -147,7 +147,7 @@ where
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,
-        msg_id: T::MessageId,
+        msg_id: T::PubSubMessageId,
         result: types::ValidationResult,
     ) -> crate::Result<()>;
 
@@ -182,7 +182,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,
-    ) -> crate::Result<T::RequestId>;
+    ) -> crate::Result<T::SyncingPeerRequestId>;
 
     /// Send block/header response to remote
     ///
@@ -191,7 +191,7 @@ where
     /// * `message` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()>;
 

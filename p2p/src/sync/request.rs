@@ -189,7 +189,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_header_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         // TODO: save sent header IDs somewhere and validate future requests against those?
@@ -207,7 +207,7 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_block_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
         // TODO: save sent block IDs somewhere and validate future requests against those?

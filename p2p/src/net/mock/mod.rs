@@ -105,8 +105,8 @@ impl NetworkingService for MockService {
     type Address = SocketAddr;
     type PeerId = types::MockPeerId;
     type ProtocolId = String;
-    type RequestId = MockRequestId;
-    type MessageId = MockMessageId;
+    type SyncingPeerRequestId = MockRequestId;
+    type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
     type MessageSendReceiveHandle = MockSyncingCodecHandle<Self>;
@@ -261,7 +261,7 @@ where
     async fn report_validation_result(
         &mut self,
         _source: T::PeerId,
-        _msg_id: T::MessageId,
+        _msg_id: T::PubSubMessageId,
         _result: ValidationResult,
     ) -> crate::Result<()> {
         todo!();
@@ -279,19 +279,19 @@ where
 #[async_trait]
 impl<T> SyncingCodecService<T> for MockSyncingCodecHandle<T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId, RequestId = MockRequestId> + Send,
+    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
 {
     async fn send_request(
         &mut self,
         _peer_id: T::PeerId,
         _request: message::Request,
-    ) -> crate::Result<T::RequestId> {
+    ) -> crate::Result<T::SyncingPeerRequestId> {
         todo!();
     }
 
     async fn send_response(
         &mut self,
-        _request_id: T::RequestId,
+        _request_id: T::SyncingPeerRequestId,
         _response: message::Response,
     ) -> crate::Result<()> {
         todo!();
