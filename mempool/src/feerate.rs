@@ -19,9 +19,9 @@ impl FeeRate {
         }
     }
 
-    pub(crate) fn of_tx(fee: Amount, tx_size: usize) -> Self {
+    pub(crate) fn from_total_tx_fee(total_tx_fee: Amount, tx_size: usize) -> Self {
         Self {
-            atoms_per_kb: Self::div_up(1000 * fee.into_atoms(), tx_size),
+            atoms_per_kb: Self::div_up(1000 * total_tx_fee.into_atoms(), tx_size),
         }
     }
 

@@ -1409,7 +1409,8 @@ fn rolling_fee() -> anyhow::Result<()> {
     log::debug!("FeeRate of child_0 {:?}", child_0_fee);
     assert_eq!(
         rolling_fee,
-        *INCREMENTAL_RELAY_FEE_RATE + FeeRate::of_tx(child_0_fee, child_0.encoded_size())
+        *INCREMENTAL_RELAY_FEE_RATE
+            + FeeRate::from_total_tx_fee(child_0_fee, child_0.encoded_size())
     );
     assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3582)));
     log::debug!(
@@ -1418,7 +1419,7 @@ fn rolling_fee() -> anyhow::Result<()> {
     );
     assert_eq!(
         rolling_fee,
-        FeeRate::of_tx(mempool.try_get_fee(&child_0)?, child_0.encoded_size())
+        FeeRate::from_total_tx_fee(mempool.try_get_fee(&child_0)?, child_0.encoded_size())
             + *INCREMENTAL_RELAY_FEE_RATE
     );
 

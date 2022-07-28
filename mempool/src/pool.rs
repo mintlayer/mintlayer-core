@@ -980,7 +980,10 @@ where
                 removed.fees_with_descendants,
                 removed.tx.encoded_size()
             );
-            removed_fees.push(FeeRate::of_tx(removed.fee, removed.tx.encoded_size()));
+            removed_fees.push(FeeRate::from_total_tx_fee(
+                removed.fee,
+                removed.tx.encoded_size(),
+            ));
             self.store.drop_tx_and_descendants(removed.tx.get_id());
         }
         removed_fees
