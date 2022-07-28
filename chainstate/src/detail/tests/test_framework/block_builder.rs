@@ -84,7 +84,7 @@ impl<'f> BlockBuilder<'f> {
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let parent = TestBlockInfo::from_id(&self.framework.chainstate(), parent);
+        let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
         let (inputs, outputs): (Vec<_>, Vec<_>) = parent
             .txns
             .into_iter()

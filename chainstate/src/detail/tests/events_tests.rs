@@ -29,7 +29,7 @@ fn simple_subscribe(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
         let mut tf = TestFramework::default();
-        let events = subscribe(tf.chainstate(), 1);
+        let events = subscribe(&mut tf.chainstate, 1);
 
         // Produce and process a block.
         let first_block = tf.block_builder().add_test_transaction(&mut rng).build();
@@ -72,13 +72,13 @@ fn several_subscribers(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
 
         let subscribers = rng.gen_range(8..256);
-        let events = subscribe(tf.chainstate(), subscribers);
+        let events = subscribe(&mut tf.chainstate, subscribers);
 
         let block = tf.block_builder().add_test_transaction(&mut rng).build();
 
-        assert!(!tf.chainstate().events_controller.subscribers().is_empty());
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
-        tf.chainstate().wait_for_all_events();
+        tf.chainstate.wait_for_all_events();
 
         let guard = events.lock().unwrap();
         assert_eq!(guard.len(), subscribers);
@@ -100,13 +100,13 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
 
-        let events = subscribe(tf.chainstate(), subscribers);
-        assert!(!tf.chainstate().events_controller.subscribers().is_empty());
+        let events = subscribe(&mut tf.chainstate, subscribers);
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
         for _ in 0..blocks {
             let block = tf.block_builder().add_test_transaction(&mut rng).build();
             let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
-            tf.chainstate().wait_for_all_events();
+            tf.chainstate.wait_for_all_events();
 
             let guard = events.lock().unwrap();
             let (id, height) = guard.last().unwrap();
@@ -124,7 +124,7 @@ fn orphan_block() {
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
-        let events = subscribe(tf.chainstate(), 1);
+        let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
         let block = tf.block_builder().make_orphan().build();
@@ -147,7 +147,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
         let (orphan_error_hook, errors) = orphan_error_hook();
         let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
-        let events = subscribe(tf.chainstate(), 1);
+        let events = subscribe(&mut tf.chainstate, 1);
         assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
         let first_block = tf.block_builder().add_test_transaction(&mut rng).build();

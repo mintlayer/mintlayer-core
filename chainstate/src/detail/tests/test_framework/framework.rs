@@ -42,7 +42,6 @@ use crate::{
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
-    // TODO: FIXME: Private fields?
     pub chainstate: Chainstate,
     // TODO: FIXME: Remove?..
     pub block_indexes: Vec<BlockIndex>,
@@ -363,10 +362,6 @@ impl TestFramework {
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
         self.chainstate.get_block(block_id)
-    }
-
-    pub fn chainstate(&mut self) -> &mut Chainstate {
-        &mut self.chainstate
     }
 
     pub fn index_at(&self, at: usize) -> &BlockIndex {

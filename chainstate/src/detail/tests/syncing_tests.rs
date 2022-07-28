@@ -40,7 +40,7 @@ fn get_locator(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut btf = TestFramework::default();
 
-        let locator = btf.chainstate().get_locator().unwrap();
+        let locator = btf.chainstate.get_locator().unwrap();
         assert_eq!(locator.len(), 1);
         assert_eq!(&locator[0], &btf.genesis().get_id());
 
@@ -53,20 +53,17 @@ fn get_locator(#[case] seed: Seed) {
             blocks += new_blocks;
 
             // Check the locator length.
-            let locator = btf.chainstate().get_locator().unwrap();
+            let locator = btf.chainstate.get_locator().unwrap();
             assert_eq!(locator.len(), (blocks as f64).log2().ceil() as usize + 1);
 
             // Check the locator headers.
-            let height = btf
-                .chainstate()
-                .get_block_height_in_main_chain(&last_block_id)
-                .unwrap()
-                .unwrap();
+            let height =
+                btf.chainstate.get_block_height_in_main_chain(&last_block_id).unwrap().unwrap();
             assert_eq!(&locator[0], &last_block_id);
             for (i, header) in locator.iter().skip(1).enumerate() {
                 let idx = height - BlockDistance::new(2i64.pow(i as u32));
                 let expected =
-                    btf.chainstate().get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
+                    btf.chainstate.get_block_id_from_height(&idx.unwrap()).unwrap().unwrap();
                 assert_eq!(&expected, header);
             }
         }
@@ -89,27 +86,24 @@ fn get_headers(#[case] seed: Seed) {
         last_block_id = btf.create_chain(&last_block_id, blocks_count, &mut rng).unwrap();
 
         // The locator is from this exact chain, so `get_headers` should return an empty sequence.
-        let locator = btf.chainstate().get_locator().unwrap();
-        assert_eq!(
-            btf.chainstate().get_headers(locator.clone()).unwrap(),
-            vec![]
-        );
+        let locator = btf.chainstate.get_locator().unwrap();
+        assert_eq!(btf.chainstate.get_headers(locator.clone()).unwrap(), vec![]);
 
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
             let block = produce_test_block(
-                TestBlockInfo::from_id(btf.chainstate(), last_block_id),
+                TestBlockInfo::from_id(&btf.chainstate, last_block_id),
                 &mut rng,
             );
             last_block_id = block.get_id().into();
             let header = block.header().clone();
-            btf.chainstate().process_block(block, BlockSource::Peer).unwrap().unwrap();
+            btf.chainstate.process_block(block, BlockSource::Peer).unwrap().unwrap();
             Some(header)
         })
         .take(headers_count)
         .collect();
 
-        let headers = btf.chainstate().get_headers(locator.clone()).unwrap();
+        let headers = btf.chainstate.get_headers(locator.clone()).unwrap();
         assert_eq!(headers, expected);
         // Because both the locator and chainstate are tracking the same chain, the first header of
         // the locator is always the parent of the first new block.
@@ -118,7 +112,7 @@ fn get_headers(#[case] seed: Seed) {
         // Produce more blocks than `HEADER_LIMIT`, so get_headers is truncated.
         btf.create_chain(&last_block_id, header_limit - expected.len(), &mut rng)
             .unwrap();
-        let headers = btf.chainstate().get_headers(locator).unwrap();
+        let headers = btf.chainstate.get_headers(locator).unwrap();
         assert_eq!(headers.len(), header_limit);
     });
 }
