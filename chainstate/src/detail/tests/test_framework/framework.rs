@@ -90,17 +90,10 @@ impl TestFramework {
         let mut prev_block = TestBlockInfo::from_id(&self.chainstate, *parent_block);
 
         for _ in 0..blocks {
-            // The value of each output is decreased by a random amount to produce a new input and output.
-            let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-                .txns
-                .into_iter()
-                .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-                .unzip();
-            let transaction = Transaction::new(0, inputs, outputs, 0).unwrap();
-
             let block = self
                 .block_builder()
-                .with_transactions(vec![transaction])
+                // .with_transactions(vec![transaction])
+                .add_test_transaction_with_parent(prev_block.id, rng)
                 .with_prev_block_hash(prev_block.id)
                 .build();
             prev_block = TestBlockInfo::from_block(&block);

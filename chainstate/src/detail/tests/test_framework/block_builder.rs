@@ -18,11 +18,15 @@ use common::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         Transaction,
     },
-    primitives::{time, Id},
+    primitives::{time, Id, H256},
 };
+use crypto::random::Rng;
 
 use crate::{
-    detail::{tests::test_framework::TestFramework, BlockIndex},
+    detail::{
+        tests::{create_new_outputs, test_framework::TestFramework, TestBlockInfo},
+        BlockIndex,
+    },
     Block, BlockError, BlockSource, GenBlock,
 };
 
@@ -37,6 +41,7 @@ pub struct BlockBuilder<'f> {
 }
 
 impl<'f> BlockBuilder<'f> {
+    /// Creates a new builder instance.
     pub fn new(framework: &'f mut TestFramework) -> Self {
         let transactions = Vec::new();
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
@@ -54,22 +59,55 @@ impl<'f> BlockBuilder<'f> {
         }
     }
 
+    /// Replaces the transactions.
     pub fn with_transactions(mut self, transactions: Vec<Transaction>) -> Self {
         self.transactions = transactions;
         self
     }
 
+    /// Appends the given transaction to the transactions list.
     pub fn add_transaction(mut self, transaction: Transaction) -> Self {
         self.transactions.push(transaction);
         self
     }
 
+    /// Adds a transaction that uses the transactions from the previous block as inputs and
+    /// produces new outputs.
+    pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
+        let parent = self.framework.best_block_index().block_id();
+        self.add_test_transaction_with_parent(parent, rng)
+    }
+
+    /// Same as `add_test_transaction`, but with a custom parent.
+    pub fn add_test_transaction_with_parent(
+        mut self,
+        parent: Id<GenBlock>,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let parent = TestBlockInfo::from_id(&self.framework.chainstate(), parent);
+        let (inputs, outputs): (Vec<_>, Vec<_>) = parent
+            .txns
+            .into_iter()
+            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+            .unzip();
+        self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
+        self
+    }
+
+    /// Overrides the previous block hash that is deduced by default as the best block.
     pub fn with_prev_block_hash(mut self, prev_block_hash: Id<GenBlock>) -> Self {
         self.prev_block_hash = prev_block_hash;
         self
     }
 
-    pub fn with_timestapm(mut self, timestamp: BlockTimestamp) -> Self {
+    /// Overrides the previous block hash by a random value making the resulting block an orphan.
+    pub fn make_orphan(mut self) -> Self {
+        self.prev_block_hash = Id::new(H256::random());
+        self
+    }
+
+    /// Overrides the timestamp that is equal to the current time by default.
+    pub fn with_timestamp(mut self, timestamp: BlockTimestamp) -> Self {
         self.timestamp = timestamp;
         self
     }

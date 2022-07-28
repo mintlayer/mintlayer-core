@@ -27,7 +27,7 @@ use common::{
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount, BlockHeight, Id, H256},
+    primitives::{time, Amount, BlockHeight, Id},
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
@@ -134,11 +134,6 @@ impl TestBlockInfo {
                 Self::from_block(&block)
             }
         }
-    }
-
-    fn orphan(mut self) -> Self {
-        self.id = Id::new(H256::random());
-        self
     }
 }
 

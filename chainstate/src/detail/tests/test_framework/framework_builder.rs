@@ -65,7 +65,7 @@ impl TestFrameworkBuilder {
         self
     }
 
-    pub fn with_custom_orphan_error_hook(mut self, hook: Arc<OrphanErrorHandler>) -> Self {
+    pub fn with_orphan_error_hook(mut self, hook: Arc<OrphanErrorHandler>) -> Self {
         self.custom_orphan_error_hook = Some(hook);
         self
     }

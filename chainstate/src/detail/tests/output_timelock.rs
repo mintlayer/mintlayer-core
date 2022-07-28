@@ -437,7 +437,7 @@ fn output_lock_until_time() {
                             ))
                             .build()
                     )
-                    .with_timestapm(BlockTimestamp::from_int_seconds(*block_time))
+                    .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
@@ -448,7 +448,7 @@ fn output_lock_until_time() {
             );
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.block_builder()
-                .with_timestapm(BlockTimestamp::from_int_seconds(*block_time))
+                .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .process()
                 .unwrap();
             assert_eq!(
@@ -470,7 +470,7 @@ fn output_lock_until_time() {
             )
             // The block that is being validated isn't taken into account when calculating the
             // median time, so any time can be used here.
-            .with_timestapm(BlockTimestamp::from_int_seconds(
+            .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
             .process()
@@ -590,7 +590,7 @@ fn output_lock_for_seconds() {
                             ))
                             .build()
                     )
-                    .with_timestapm(BlockTimestamp::from_int_seconds(*block_time))
+                    .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
@@ -602,7 +602,7 @@ fn output_lock_for_seconds() {
 
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.block_builder()
-                .with_timestapm(BlockTimestamp::from_int_seconds(*block_time))
+                .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .process()
                 .unwrap();
             assert_eq!(
@@ -624,7 +624,7 @@ fn output_lock_for_seconds() {
             )
             // The block that is being validated isn't taken into account when calculating the
             // median time, so any time can be used here.
-            .with_timestapm(BlockTimestamp::from_int_seconds(
+            .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
             .process()
@@ -741,7 +741,7 @@ fn add_block_with_locked_output(
                 ))
                 .build(),
         )
-        .with_timestapm(timestamp)
+        .with_timestamp(timestamp)
         .process()
         .unwrap();
 
