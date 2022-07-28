@@ -59,8 +59,18 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
+    pub fn add_transaction(mut self, transaction: Transaction) -> Self {
+        self.transactions.push(transaction);
+        self
+    }
+
     pub fn with_prev_block_hash(mut self, prev_block_hash: Id<GenBlock>) -> Self {
         self.prev_block_hash = prev_block_hash;
+        self
+    }
+
+    pub fn with_timestapm(mut self, timestamp: BlockTimestamp) -> Self {
+        self.timestamp = timestamp;
         self
     }
 
@@ -84,6 +94,6 @@ impl<'f> BlockBuilder<'f> {
             self.consensus_data,
         )
         .unwrap();
-        self.framework.process_block(block, self.block_source)
+        self.framework.process_block(block.clone(), self.block_source)
     }
 }

@@ -21,8 +21,8 @@ use common::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::{Builder as ChainConfigBuilder, ChainType},
         signature::inputsig::InputWitness,
-        Block, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, OutputSpentState,
-        Transaction, TxInput, TxOutput,
+        Block, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, OutputPurpose,
+        OutputSpentState, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable, H256},
 };
@@ -32,7 +32,7 @@ use crate::{
     detail::{
         tests::{
             create_new_outputs,
-            test_framework::{BlockBuilder, TestFrameworkBuilder},
+            test_framework::{BlockBuilder, TestFrameworkBuilder, TransactionBuilder},
             TestBlockInfo, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL,
         },
         BlockIndex, GenBlockIndex, TimeGetter,
@@ -114,6 +114,30 @@ impl TestFramework {
     pub fn genesis(&self) -> &Genesis {
         self.chainstate.chain_config.genesis_block()
     }
+
+    /// Returns the best block index.
+    #[track_caller]
+    pub fn best_block_index(&self) -> GenBlockIndex {
+        self.chainstate.get_best_block_index().unwrap().unwrap()
+    }
+
+    /// Returns a test block information for the best block.
+    #[track_caller]
+    pub fn best_block_info(&self) -> TestBlockInfo {
+        let id = self.best_block_index().block_id();
+        TestBlockInfo::from_id(&self.chainstate, id)
+    }
+
+    /// Returns a test block information for the specified height.
+    #[track_caller]
+    pub fn block_info_from_height(&self, height: u64) -> TestBlockInfo {
+        let id = self
+            .chainstate
+            .get_block_id_from_height(&BlockHeight::from(height))
+            .unwrap()
+            .unwrap();
+        TestBlockInfo::from_id(&self.chainstate, id)
+    }
 }
 
 impl Default for TestFramework {
@@ -150,9 +174,18 @@ fn build_test_framework() {
 
 #[test]
 fn process_block() {
-    // TODO: FIXME: Expand the test.
     let mut tf = TestFramework::default();
-    tf.block_builder().process().unwrap();
+    tf.block_builder()
+        .add_transaction(
+            TransactionBuilder::new()
+                .add_output(TxOutput::new(
+                    Amount::from_atoms(0),
+                    OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+                ))
+                .build(),
+        )
+        .process()
+        .unwrap();
 }
 
 // TODO: FIXME ///////////////////////////////////////////////////////

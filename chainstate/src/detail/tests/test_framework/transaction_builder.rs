@@ -69,7 +69,6 @@ impl TransactionBuilder {
         self
     }
 
-    /// Creates an unsigned transaction.
     pub fn build(self) -> Transaction {
         Transaction::new(self.flags, self.inputs, self.outputs, self.lock_time).unwrap()
     }
