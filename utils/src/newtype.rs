@@ -66,8 +66,8 @@ mod tests {
     }
 
     newtype! {
-    #[derive(Clone, Debug)]
-    struct NewInt(OldInt);
+        #[derive(Clone, Debug)]
+        struct NewInt(OldInt);
     }
 
     #[test]
