@@ -18,7 +18,7 @@
 use super::{Block, Genesis};
 use crate::primitives::Id;
 
-/// Generalized block that's either [genesis::Genesis] or [block::Block].
+/// Generalized block that's either [Genesis] or [Block].
 ///
 /// Does not contain any data, only used as `Id<GenBlock>` to signify given Id can refer to either
 /// genesis or proper block.

@@ -56,7 +56,7 @@ pub struct PubSubMessageHandler<T: NetworkingService> {
     /// TX channel for sending control events to `PeerManager`
     tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
 
-    /// RX channel for receiving control events from RPC/[`swarm::PeerManager`]
+    /// RX channel for receiving control events from RPC/[`crate::swarm::PeerManager`]
     rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
 
     /// Topics that the `PubSubMessageHandler` listens to

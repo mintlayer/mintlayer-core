@@ -31,6 +31,7 @@ use crate::primitives::id::{Id, Idable, WithId};
 use crate::primitives::semver::SemVer;
 use crate::primitives::{Amount, BlockDistance, BlockHeight, H256};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 const DEFAULT_MAX_FUTURE_BLOCK_TIME_OFFSET: Duration = Duration::from_secs(60 * 60);
@@ -74,7 +75,7 @@ pub struct ChainConfig {
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
-    genesis_block: WithId<Genesis>,
+    genesis_block: Arc<WithId<Genesis>>,
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -98,7 +99,7 @@ impl ChainConfig {
         self.genesis_block.get_id().into()
     }
 
-    pub fn genesis_block(&self) -> &WithId<Genesis> {
+    pub fn genesis_block(&self) -> &Arc<WithId<Genesis>> {
         &self.genesis_block
     }
 

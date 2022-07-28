@@ -35,7 +35,7 @@ impl<'a, H: BlockIndexHandle> BlockIndexHistoryIterator<'a, H> {
 }
 
 impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
-    type Item = GenBlockIndex<'a>;
+    type Item = GenBlockIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
         let next_id = self.next_id.as_ref()?;

@@ -340,7 +340,7 @@ where
     /// The node is considered fully synced, i.e., that its initial block download is done, if:
     /// - all of its peers are in `Idle` state
     ///
-    /// When the node is synced, [`crate::PubSubMessageHandler`] is notified so it knows to
+    /// When the node is synced, [`crate::pubsub::PubSubMessageHandler`] is notified so it knows to
     /// subscribe to the needed publish-subscribe topics.
     pub async fn check_state(&mut self) -> crate::Result<()> {
         // TODO: improve "initial block download done" check
