@@ -132,6 +132,6 @@ impl<'f> BlockBuilder<'f> {
             self.consensus_data,
         )
         .unwrap();
-        self.framework.process_block(block.clone(), self.block_source)
+        self.framework.process_block(block, self.block_source)
     }
 }
