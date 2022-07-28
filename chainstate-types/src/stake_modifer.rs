@@ -44,7 +44,7 @@ impl PoSStakeModifier {
     ) -> Result<Self, StakeModifierError> {
         use crypto::hash::StreamHasher;
 
-        let prev_stake_modifer = previous_randomness.cloned().unwrap_or(Self::at_genesis());
+        let prev_stake_modifer = previous_randomness.cloned().unwrap_or_else(Self::at_genesis);
         let prev_stake_modifer_val = prev_stake_modifer.value();
 
         let epoch_index =

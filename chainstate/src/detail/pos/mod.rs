@@ -140,7 +140,7 @@ fn ensure_correct_ancestry(
     Ok(())
 }
 
-pub fn get_kernel_block_index<'a>(
+pub fn get_kernel_block_index(
     pos_data: &PoSData,
     block_index_handle: &dyn BlockIndexHandle,
     tx_index_retriever: &dyn TransactionIndexHandle,
