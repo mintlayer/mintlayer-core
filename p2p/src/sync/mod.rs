@@ -16,7 +16,7 @@
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event, message,
-    net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
+    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
@@ -79,7 +79,7 @@ pub struct BlockSyncManager<T: NetworkingService> {
     state: SyncState,
 
     /// Handle for sending/receiving syncing events
-    peer_sync_handle: T::MessageSendReceiveHandle,
+    peer_sync_handle: T::SyncingMessagingHandle,
 
     /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -104,11 +104,11 @@ pub struct BlockSyncManager<T: NetworkingService> {
 impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
-    T::MessageSendReceiveHandle: SyncingCodecService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
-        handle: T::MessageSendReceiveHandle,
+        handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
@@ -133,7 +133,7 @@ where
     }
 
     /// Get mutable reference to the handle
-    pub fn handle_mut(&mut self) -> &mut T::MessageSendReceiveHandle {
+    pub fn handle_mut(&mut self) -> &mut T::SyncingMessagingHandle {
         // TODO: get rid of this function as it's used only in tests; perhaps a better way to do this is by
         // creating p2p objects and make them communicate together instead of having access to internal
         // private parts of the sync manager

@@ -27,7 +27,7 @@ use crate::{
             types::IdentifyInfoWrapper,
         },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
-        ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
+        ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 use async_trait::async_trait;
@@ -219,7 +219,7 @@ impl NetworkingService for Libp2pService {
     type PubSubMessageId = MessageId;
     type ConnectivityHandle = Libp2pConnectivityHandle<Self>;
     type PubSubHandle = Libp2pPubSubHandle<Self>;
-    type MessageSendReceiveHandle = Libp2pSyncHandle<Self>;
+    type SyncingMessagingHandle = Libp2pSyncHandle<Self>;
 
     async fn start(
         bind_addr: Self::Address,
@@ -228,7 +228,7 @@ impl NetworkingService for Libp2pService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::MessageSendReceiveHandle,
+        Self::SyncingMessagingHandle,
     )> {
         // TODO: Check the data directory first, and use keys from there if available
         let id_keys = identity::Keypair::generate_ed25519();
@@ -296,7 +296,7 @@ impl NetworkingService for Libp2pService {
                 gossip_rx,
                 _marker: Default::default(),
             },
-            Self::MessageSendReceiveHandle {
+            Self::SyncingMessagingHandle {
                 cmd_tx,
                 sync_rx,
                 _marker: Default::default(),
@@ -492,7 +492,7 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingCodecService<T> for Libp2pSyncHandle<T>
+impl<T> SyncingMessagingService<T> for Libp2pSyncHandle<T>
 where
     T: NetworkingService<
             PeerId = PeerId,

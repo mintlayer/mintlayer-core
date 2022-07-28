@@ -42,7 +42,7 @@ async fn make_sync_manager<T>(
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::MessageSendReceiveHandle: SyncingCodecService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);

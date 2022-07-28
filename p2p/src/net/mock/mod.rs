@@ -20,7 +20,7 @@ use crate::{
     net::{
         self,
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent, ValidationResult},
-        ConnectivityService, NetworkingService, PubSubService, SyncingCodecService,
+        ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 use async_trait::async_trait;
@@ -109,7 +109,7 @@ impl NetworkingService for MockService {
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type MessageSendReceiveHandle = MockSyncingCodecHandle<Self>;
+    type SyncingMessagingHandle = MockSyncingCodecHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -118,7 +118,7 @@ impl NetworkingService for MockService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::MessageSendReceiveHandle,
+        Self::SyncingMessagingHandle,
     )> {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
@@ -157,7 +157,7 @@ impl NetworkingService for MockService {
                 _pubsub_rx,
                 _marker: Default::default(),
             },
-            Self::MessageSendReceiveHandle {
+            Self::SyncingMessagingHandle {
                 _cmd_tx: cmd_tx,
                 _sync_rx,
                 _marker: Default::default(),
@@ -277,7 +277,7 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingCodecService<T> for MockSyncingCodecHandle<T>
+impl<T> SyncingMessagingService<T> for MockSyncingCodecHandle<T>
 where
     T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
 {

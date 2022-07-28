@@ -56,7 +56,7 @@ pub trait NetworkingService {
     type PubSubHandle: Send;
 
     /// Handle for sending/receiving request-response messages
-    type MessageSendReceiveHandle: Send;
+    type SyncingMessagingHandle: Send;
 
     /// Unique ID assigned to each pubsub message
     type PubSubMessageId: Clone + Debug + Send;
@@ -78,7 +78,7 @@ pub trait NetworkingService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::MessageSendReceiveHandle,
+        Self::SyncingMessagingHandle,
     )>;
 }
 
@@ -169,7 +169,7 @@ where
 /// [SyncingCodecService] provides an interface for sending and receiving block
 /// and header requests with a remote peer.
 #[async_trait]
-pub trait SyncingCodecService<T>
+pub trait SyncingMessagingService<T>
 where
     T: NetworkingService,
 {
