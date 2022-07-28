@@ -886,7 +886,7 @@ fn tx_spend_several_inputs<T: GetTime, M: GetMemoryUsage>(
 }
 
 #[test]
-fn one_ancestor_signal_is_enough() -> anyhow::Result<()> {
+fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
     let mut mempool = setup();
     let tx = TxGenerator::new()
         .with_num_outputs(2)
