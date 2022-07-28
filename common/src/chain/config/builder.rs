@@ -185,9 +185,7 @@ impl Builder {
 
 macro_rules! builder_method {
     ($name:ident: $type:ty) => {
-        #[doc = "Set the `"]
-        #[doc = stringify!($name)]
-        #[doc = "` field."]
+        #[doc = concat!("Set the `", stringify!($name), "` field.")]
         #[must_use = "chain::config::Builder dropped prematurely"]
         pub fn $name(mut self, $name: $type) -> Self {
             self.$name = $name;
