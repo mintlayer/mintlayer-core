@@ -112,25 +112,25 @@ trait TryGetFee {
 
 newtype! {
     #[derive(Debug)]
-    struct Ancestors(BTreeSet<H256>);
+    struct Ancestors(BTreeSet<Id<Transaction>>);
 }
 
 newtype! {
     #[derive(Debug)]
-    struct Descendants(BTreeSet<H256>);
+    struct Descendants(BTreeSet<Id<Transaction>>);
 }
 
 newtype! {
     #[derive(Debug)]
-    struct Conflicts(BTreeSet<H256>);
+    struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct TxMempoolEntry {
     tx: Transaction,
     fee: Amount,
-    parents: BTreeSet<H256>,
-    children: BTreeSet<H256>,
+    parents: BTreeSet<Id<Transaction>>,
+    children: BTreeSet<Id<Transaction>>,
     count_with_descendants: usize,
     fees_with_descendants: Amount,
     creation_time: Time,
@@ -140,7 +140,7 @@ impl TxMempoolEntry {
     fn new(
         tx: Transaction,
         fee: Amount,
-        parents: BTreeSet<H256>,
+        parents: BTreeSet<Id<Transaction>>,
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
@@ -158,23 +158,23 @@ impl TxMempoolEntry {
         self.count_with_descendants
     }
 
-    fn tx_id(&self) -> H256 {
-        self.tx.get_id().get()
+    fn tx_id(&self) -> Id<Transaction> {
+        self.tx.get_id()
     }
 
-    fn unconfirmed_parents(&self) -> impl Iterator<Item = &H256> {
+    fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.parents.iter()
     }
 
-    fn unconfirmed_children(&self) -> impl Iterator<Item = &H256> {
+    fn unconfirmed_children(&self) -> impl Iterator<Item = &Id<Transaction>> {
         self.children.iter()
     }
 
-    fn get_children_mut(&mut self) -> &mut BTreeSet<H256> {
+    fn get_children_mut(&mut self) -> &mut BTreeSet<Id<Transaction>> {
         &mut self.children
     }
 
-    fn get_parents_mut(&mut self) -> &mut BTreeSet<H256> {
+    fn get_parents_mut(&mut self) -> &mut BTreeSet<Id<Transaction>> {
         &mut self.parents
     }
 
@@ -312,19 +312,19 @@ struct MempoolStore {
     // Where feerate is computed as fee(tx)/size(tx)
     // Note that if we wish to follow Bitcoin Bore, "size" is not simply the encoded size, but
     // rather a value that takes into account witdess and sigop data (see CTxMemPoolEntry::GetTxSize).
-    txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<H256>>,
+    txs_by_descendant_score: BTreeMap<DescendantScore, BTreeSet<Id<Transaction>>>,
 
     // Entries that have remained in the mempool for a long time (see DEFAULT_MEMPOOL_EXPIRY) are
     // evicted. To efficiently know which entries to evict, we store the mempool entries sorted by
     // their creation time, from earliest to latest.
-    txs_by_creation_time: BTreeMap<Time, BTreeSet<H256>>,
+    txs_by_creation_time: BTreeMap<Time, BTreeSet<Id<Transaction>>>,
 
     // TODO add txs_by_ancestor_score index, which will be used by the block production subsystem
     // to select the best transactions for the next block
     //
     // We keep the information of which outpoints are spent by entries currently in the mempool.
     // This allows us to recognize conflicts (double-spends) and handle them
-    spender_txs: BTreeMap<OutPoint, H256>,
+    spender_txs: BTreeMap<OutPoint, Id<Transaction>>,
 }
 
 impl MempoolStore {
@@ -366,14 +366,14 @@ impl MempoolStore {
             .map(|output| output.value())
     }
 
-    fn get_entry(&self, id: &H256) -> Option<&TxMempoolEntry> {
-        self.txs_by_id.get(id)
+    fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {
+        self.txs_by_id.get(&id.get())
     }
 
     fn append_to_parents(&mut self, entry: &TxMempoolEntry) {
         for parent in entry.unconfirmed_parents() {
             self.txs_by_id
-                .get_mut(parent)
+                .get_mut(&parent.get())
                 .expect("append_to_parents")
                 .get_children_mut()
                 .insert(entry.tx_id());
@@ -383,7 +383,7 @@ impl MempoolStore {
     fn remove_from_parents(&mut self, entry: &TxMempoolEntry) {
         for parent in entry.unconfirmed_parents() {
             self.txs_by_id
-                .get_mut(parent)
+                .get_mut(&parent.get())
                 .expect("remove_from_parents")
                 .get_children_mut()
                 .remove(&entry.tx_id());
@@ -393,7 +393,7 @@ impl MempoolStore {
     fn remove_from_children(&mut self, entry: &TxMempoolEntry) {
         for child in entry.unconfirmed_children() {
             self.txs_by_id
-                .get_mut(child)
+                .get_mut(&child.get())
                 .expect("remove_from_children")
                 .get_parents_mut()
                 .remove(&entry.tx_id());
@@ -402,7 +402,7 @@ impl MempoolStore {
 
     fn update_ancestor_state_for_add(&mut self, entry: &TxMempoolEntry) -> Result<(), Error> {
         for ancestor in entry.unconfirmed_ancestors(self).0 {
-            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
+            let ancestor = self.txs_by_id.get_mut(&ancestor.get()).expect("ancestor");
             ancestor.fees_with_descendants = (ancestor.fees_with_descendants + entry.fee)
                 .ok_or(TxValidationError::AncestorFeeUpdateOverflow)?;
             ancestor.count_with_descendants += 1;
@@ -412,7 +412,7 @@ impl MempoolStore {
 
     fn update_ancestor_state_for_drop(&mut self, entry: &TxMempoolEntry) {
         for ancestor in entry.unconfirmed_ancestors(self).0 {
-            let ancestor = self.txs_by_id.get_mut(&ancestor).expect("ancestor");
+            let ancestor = self.txs_by_id.get_mut(&ancestor.get()).expect("ancestor");
             ancestor.fees_with_descendants =
                 (ancestor.fees_with_descendants - entry.fee).expect("fee with descendants");
             ancestor.count_with_descendants -= 1;
@@ -438,11 +438,11 @@ impl MempoolStore {
         let creation_time = entry.creation_time;
         let tx_id = entry.tx_id();
 
-        self.txs_by_id.insert(tx_id, entry.clone());
+        self.txs_by_id.insert(tx_id.get(), entry.clone());
 
         self.add_to_descendant_score_index(&entry);
         self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
-        assert!(self.txs_by_id.get(&tx_id).is_some());
+        assert!(self.txs_by_id.get(&tx_id.get()).is_some());
         Ok(())
     }
 
@@ -463,7 +463,8 @@ impl MempoolStore {
             entries.retain(|id| !ancestors.contains(id))
         }
         for ancestor_id in ancestors.0 {
-            let ancestor = self.txs_by_id.get(&ancestor_id).expect("Inconsistent mempool state");
+            let ancestor =
+                self.txs_by_id.get(&ancestor_id.get()).expect("Inconsistent mempool state");
             self.txs_by_descendant_score
                 .entry(ancestor.fees_with_descendants.into())
                 .or_default()
@@ -480,8 +481,8 @@ impl MempoolStore {
             self.update_ancestor_state_for_drop(&entry);
             self.drop_tx(&entry);
         } else {
-            assert!(!self.txs_by_descendant_score.values().flatten().any(|id| *id == tx_id.get()));
-            assert!(!self.spender_txs.iter().any(|(_, id)| *id == tx_id.get()));
+            assert!(!self.txs_by_descendant_score.values().flatten().any(|id| *id == *tx_id));
+            assert!(!self.spender_txs.iter().any(|(_, id)| *id == *tx_id));
         }
     }
 
@@ -516,7 +517,7 @@ impl MempoolStore {
 
     fn drop_conflicts(&mut self, conflicts: Conflicts) {
         for conflict in conflicts.0 {
-            self.remove_tx(&Id::new(conflict))
+            self.remove_tx(&conflict)
         }
     }
 
@@ -531,14 +532,14 @@ impl MempoolStore {
             self.remove_tx(&entry.tx.get_id());
             for descendant_id in descendants.0 {
                 // It may be that this descendant has several ancestors and has already been removed
-                if let Some(descendant) = self.txs_by_id.get(&descendant_id).cloned() {
+                if let Some(descendant) = self.txs_by_id.get(&descendant_id.get()).cloned() {
                     self.remove_tx(&descendant.tx.get_id())
                 }
             }
         }
     }
 
-    fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<H256> {
+    fn find_conflicting_tx(&self, outpoint: &OutPoint) -> Option<Id<Transaction>> {
         self.spender_txs.get(outpoint).cloned()
     }
 }
@@ -636,8 +637,8 @@ where
         let parents = tx
             .inputs()
             .iter()
-            .map(|input| input.outpoint().tx_id().get_tx_id().expect("Not coinbase").get())
-            .filter_map(|id| self.store.txs_by_id.contains_key(&id).then(|| id))
+            .map(|input| *input.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
+            .filter_map(|id| self.store.txs_by_id.contains_key(&id.get()).then(|| id))
             .collect::<BTreeSet<_>>();
 
         let fee = self.try_get_fee(&tx)?;
@@ -823,10 +824,13 @@ where
     fn pays_more_than_conflicts_with_descendants(
         &self,
         tx: &Transaction,
-        conflicts_with_descendants: &BTreeSet<H256>,
+        conflicts_with_descendants: &BTreeSet<Id<Transaction>>,
     ) -> Result<Amount, TxValidationError> {
         let conflicts_with_descendants = conflicts_with_descendants.iter().map(|conflict_id| {
-            self.store.txs_by_id.get(conflict_id).expect("tx should exist in mempool")
+            self.store
+                .txs_by_id
+                .get(&conflict_id.get())
+                .expect("tx should exist in mempool")
         });
 
         let total_conflict_fees = conflicts_with_descendants
@@ -877,7 +881,7 @@ where
                     replacement_tx: tx.get_id().get(),
                     replacement_fee,
                     original_fee: conflict.fee,
-                    original_tx: conflict.tx_id(),
+                    original_tx: conflict.tx_id().get(),
                 })
             },
         )
@@ -886,7 +890,7 @@ where
     fn potential_replacements_within_limit(
         &self,
         conflicts: &[&TxMempoolEntry],
-    ) -> Result<BTreeSet<H256>, TxValidationError> {
+    ) -> Result<BTreeSet<Id<Transaction>>, TxValidationError> {
         let mut num_potential_replacements = 0;
         for conflict in conflicts {
             num_potential_replacements += conflict.count_with_descendants();
@@ -938,7 +942,7 @@ where
             .txs_by_creation_time
             .values()
             .flatten()
-            .map(|entry_id| self.store.txs_by_id.get(entry_id).expect("entry should exist"))
+            .map(|entry_id| self.store.txs_by_id.get(&entry_id.get()).expect("entry should exist"))
             .filter(|entry| {
                 let now = self.clock.get_time();
                 let expired = now.saturating_sub(entry.creation_time) > self.max_tx_age;
@@ -973,8 +977,12 @@ where
                 .flatten()
                 .next()
                 .expect("pool not empty");
-            let removed =
-                self.store.txs_by_id.get(removed_id).expect("tx with id should exist").clone();
+            let removed = self
+                .store
+                .txs_by_id
+                .get(&removed_id.get())
+                .expect("tx with id should exist")
+                .clone();
 
             log::debug!(
                 "Mempool trim: Evicting tx {} which has a descendant score of {:?} and has size {}",
