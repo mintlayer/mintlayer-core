@@ -22,6 +22,7 @@ use crate::{
     net::{
         self,
         libp2p::{
+            backend::Libp2pBackend,
             sync::{SyncRequest, SyncResponse},
             types::IdentifyInfoWrapper,
         },
@@ -267,7 +268,7 @@ impl NetworkingService for Libp2pService {
         log::debug!("spawning libp2p backend to background");
 
         tokio::spawn(async move {
-            let mut backend = backend::Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+            let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
             backend.run().await
         });
 

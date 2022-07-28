@@ -31,7 +31,7 @@ use libp2p::{
 use logging::log;
 use tokio::sync::mpsc;
 
-pub struct Backend {
+pub struct Libp2pBackend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
 
@@ -51,7 +51,7 @@ pub struct Backend {
     listen_addr: Option<Multiaddr>,
 }
 
-impl Backend {
+impl Libp2pBackend {
     pub fn new(
         swarm: Swarm<behaviour::Libp2pBehaviour>,
         cmd_rx: mpsc::Receiver<types::Command>,
@@ -327,7 +327,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -354,7 +354,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -395,7 +395,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

@@ -16,7 +16,7 @@
 use crate::net::{
     self, config,
     libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
+    libp2p::{backend::Libp2pBackend, behaviour, connectivity, discovery, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -60,7 +60,7 @@ pub async fn make_libp2p(
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -143,7 +143,7 @@ pub async fn make_libp2p(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
@@ -159,7 +159,7 @@ pub async fn make_libp2p_with_ping(
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -237,7 +237,7 @@ pub async fn make_libp2p_with_ping(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
