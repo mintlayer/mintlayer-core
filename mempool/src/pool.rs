@@ -19,6 +19,7 @@ use common::primitives::H256;
 
 use logging::log;
 
+use utils::ensure;
 use utils::newtype;
 
 use crate::error::Error;
@@ -774,10 +775,11 @@ where
     ) -> Result<Conflicts, TxValidationError> {
         for entry in conflicts {
             // Enforce BIP125 Rule #1.
-            entry
-                .is_replaceable(&self.store)
-                .then(|| ())
-                .ok_or(TxValidationError::ConflictWithIrreplaceableTransaction)?;
+
+            ensure!(
+                entry.is_replaceable(&self.store),
+                TxValidationError::ConflictWithIrreplaceableTransaction
+            );
         }
         // It's possible that the replacement pays more fees than its direct conflicts but not more
         // than all conflicts (i.e. the direct conflicts have high-fee descendants). However, if the
