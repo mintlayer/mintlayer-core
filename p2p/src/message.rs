@@ -14,6 +14,7 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+use chainstate::Locator;
 use common::{
     chain::block::{Block, BlockHeader},
     primitives::Id,
@@ -22,19 +23,19 @@ use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub struct HeaderRequest {
-    locator: Vec<BlockHeader>,
+    locator: Locator,
 }
 
 impl HeaderRequest {
-    pub fn new(locator: Vec<BlockHeader>) -> Self {
+    pub fn new(locator: Locator) -> Self {
         HeaderRequest { locator }
     }
 
-    pub fn locator(&self) -> &Vec<BlockHeader> {
+    pub fn locator(&self) -> &Locator {
         &self.locator
     }
 
-    pub fn into_locator(self) -> Vec<BlockHeader> {
+    pub fn into_locator(self) -> Locator {
         self.locator
     }
 }

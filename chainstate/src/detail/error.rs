@@ -16,7 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use common::{
-    chain::{block::Block, Transaction},
+    chain::{Block, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
@@ -39,15 +39,11 @@ pub enum BlockError {
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
-    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<Block>, PropertyQueryError),
+    InvariantErrorFailedToFindNewChainPath(Id<Block>, Id<GenBlock>, PropertyQueryError),
     #[error("Invariant error: Attempted to connected block that isn't on the tip")]
     InvariantErrorInvalidTip,
-    #[error("Failed to find previous block in non-genesis setting")]
-    InvariantErrorPrevBlockNotFound,
     #[error("The previous block not found")]
     PrevBlockNotFound,
-    #[error("Invalid block source")]
-    InvalidBlockSource,
     #[error("Block {0} already exists")]
     BlockAlreadyExists(Id<Block>),
     #[error("Failed to commit block state update to database for block: {0} after {1} attempts with error {2}")]
@@ -61,9 +57,9 @@ pub enum ConsensusVerificationError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
     #[error("Error while loading previous block {0} of block {1} with error {2}")]
-    PrevBlockLoadError(Id<Block>, Id<Block>, PropertyQueryError),
+    PrevBlockLoadError(Id<GenBlock>, Id<Block>, PropertyQueryError),
     #[error("Previous block {0} of block {1} not found in database")]
-    PrevBlockNotFound(Id<Block>, Id<Block>),
+    PrevBlockNotFound(Id<GenBlock>, Id<Block>),
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
@@ -80,8 +76,6 @@ pub enum CheckBlockError {
     MerkleRootMismatch,
     #[error("Block has an invalid witness merkle root")]
     WitnessMerkleRootMismatch,
-    #[error("Only genesis can have no previous block")]
-    InvalidBlockNoPrevBlock,
     #[error("Previous block {0} of block {1} not found in database")]
     PrevBlockNotFound(Id<Block>, Id<Block>),
     #[error("Block time must be equal or higher than the median of its ancestors")]
@@ -153,13 +147,9 @@ pub enum PropertyQueryError {
     #[error("Block not found {0}")]
     BlockNotFound(Id<Block>),
     #[error("Previous block index not found {0}")]
-    PrevBlockIndexNotFound(Id<Block>),
-    #[error("Block index {0} has no previous block entry in it")]
-    BlockIndexHasNoPrevBlock(Id<Block>),
+    PrevBlockIndexNotFound(Id<GenBlock>),
     #[error("Block for height {0} not found")]
     BlockForHeightNotFound(BlockHeight),
-    #[error("Invalid previous block value")]
-    InvalidInputForPrevBlock,
     #[error("Provided an empty list")]
     InvalidInputEmpty,
     #[error("Invalid ancestor height: sought ancestor with height {ancestor_height} for block with height {block_height}")]
@@ -167,14 +157,14 @@ pub enum PropertyQueryError {
         block_height: BlockHeight,
         ancestor_height: BlockHeight,
     },
+    #[error("Genesis block has no header")]
+    GenesisHeaderRequested,
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum OrphanCheckError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),
-    #[error("Previous block not found")]
-    PrevBlockIdNotFound,
     #[error("Block index not found")]
     PrevBlockIndexNotFound(PropertyQueryError),
     #[error("Orphan that was submitted legitimately through a local source")]

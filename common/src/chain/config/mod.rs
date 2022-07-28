@@ -21,19 +21,15 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::block::Block;
-use crate::chain::block::ConsensusData;
-use crate::chain::signature::inputsig::InputWitness;
-use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
-use crate::chain::transaction::Transaction;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
+use crate::chain::{Block, GenBlock, Genesis};
+use crate::chain::tokens::OutputValue;
 use crate::chain::{PoWChainConfig, UpgradeVersion};
-use crate::primitives::id::{Id, H256};
-use crate::primitives::Amount;
-use crate::primitives::BlockDistance;
-use crate::primitives::{semver::SemVer, BlockHeight};
+use crate::primitives::id::{Id, Idable, WithId};
+use crate::primitives::semver::SemVer;
+use crate::primitives::{Amount, BlockDistance, BlockHeight};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -45,19 +41,7 @@ pub const TOKEN_MAX_DEC_COUNT: u8 = 18;
 pub const TOKEN_MAX_TICKER_LEN: usize = 5;
 pub const TOKEN_MAX_ISSUANCE_ALLOWED: usize = 1;
 
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    strum::Display,
-    strum::EnumVariantNames,
-    strum::EnumString,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ChainType {
     Mainnet,
     Testnet,
@@ -89,13 +73,10 @@ impl ChainType {
 pub struct ChainConfig {
     chain_type: ChainType,
     address_prefix: String,
-    rpc_port: u16,
-    p2p_port: u16,
     height_checkpoint_data: BTreeMap<BlockHeight, Id<Block>>,
     net_upgrades: NetUpgrades<UpgradeVersion>,
     magic_bytes: [u8; 4],
-    genesis_block: Block,
-    genesis_block_id: Id<Block>,
+    genesis_block: WithId<Genesis>,
     blockreward_maturity: BlockDistance,
     max_future_block_time_offset: Duration,
     version: SemVer,
@@ -112,11 +93,11 @@ impl ChainConfig {
         &self.address_prefix
     }
 
-    pub fn genesis_block_id(&self) -> Id<Block> {
-        self.genesis_block_id.clone()
+    pub fn genesis_block_id(&self) -> Id<GenBlock> {
+        self.genesis_block.get_id().into()
     }
 
-    pub fn genesis_block(&self) -> &Block {
+    pub fn genesis_block(&self) -> &WithId<Genesis> {
         &self.genesis_block
     }
 
@@ -138,14 +119,6 @@ impl ChainConfig {
 
     pub fn net_upgrade(&self) -> &NetUpgrades<UpgradeVersion> {
         &self.net_upgrades
-    }
-
-    pub fn p2p_port(&self) -> u16 {
-        self.p2p_port
-    }
-
-    pub fn rpc_port(&self) -> u16 {
-        self.rpc_port
     }
 
     pub fn height_checkpoints(&self) -> &BTreeMap<BlockHeight, Id<Block>> {
@@ -201,8 +174,8 @@ const MAX_BLOCK_HEADER_SIZE: usize = 1024;
 const MAX_BLOCK_TXS_SIZE: usize = 524_288;
 const MAX_BLOCK_CONTRACTS_SIZE: usize = 524_288;
 
-fn create_mainnet_genesis() -> Block {
-    use crate::chain::transaction::{TxInput, TxOutput};
+fn create_mainnet_genesis() -> Genesis {
+    use crate::chain::transaction::TxOutput;
 
     // TODO: replace this with our mint key
     // Private key: "0080732e24bb0b704cb455e233b539f2c63ab411989a54984f84a6a2eb2e933e160f"
@@ -212,58 +185,41 @@ fn create_mainnet_genesis() -> Block {
     let genesis_mint_pubkeyhash_hex_encoded = "008640e6a3d3d53c7dffe2790b0e147c9a77197033";
     let genesis_mint_pubkeyhash_encoded = Vec::from_hex(genesis_mint_pubkeyhash_hex_encoded)
         .expect("Hex decoding of pubkeyhash shouldn't fail");
-    let genesis_mint_destination = <Destination as parity_scale_codec::DecodeAll>::decode_all(
+    let genesis_mint_destination = <Destination as serialization::DecodeAll>::decode_all(
         &mut genesis_mint_pubkeyhash_encoded.as_slice(),
     )
     .expect("Decoding genesis mint destination shouldn't fail");
 
-    let genesis_message = b"".to_vec();
-    let input = TxInput::new(
-        Id::<Transaction>::new(H256::zero()).into(),
-        0,
-        InputWitness::NoSignature(Some(genesis_message)),
-    );
+    let genesis_message = String::new();
+
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(genesis_mint_destination),
     );
-    let tx = Transaction::new(0, vec![input], vec![output], 0)
-        .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(
-        vec![tx],
-        None,
+    Genesis::new(
+        genesis_message,
         BlockTimestamp::from_int_seconds(1639975460),
-        ConsensusData::None,
+        vec![output],
     )
-    .expect("Error creating genesis block")
 }
 
-fn create_unit_test_genesis(premine_destination: Destination) -> Block {
-    use crate::chain::transaction::{TxInput, TxOutput};
+fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
+    use crate::chain::transaction::TxOutput;
 
-    let genesis_message = b"".to_vec();
-    let input = TxInput::new(
-        Id::<Transaction>::new(H256::zero()).into(),
-        0,
-        InputWitness::NoSignature(Some(genesis_message)),
-    );
+    let genesis_message = String::new();
 
     let output = TxOutput::new(
         OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(premine_destination),
     );
-    let tx = Transaction::new(0, vec![input], vec![output], 0)
-        .expect("Failed to create genesis coinbase transaction");
 
-    Block::new(
-        vec![tx],
-        None,
+    Genesis::new(
+        genesis_message,
         BlockTimestamp::from_int_seconds(1639975460),
-        ConsensusData::None,
+        vec![output],
     )
-    .expect("Error creating genesis block")
 }
 
 pub fn create_mainnet() -> ChainConfig {
@@ -292,19 +248,6 @@ mod tests {
         assert!(!config.net_upgrades.is_empty());
         assert_eq!(2, config.net_upgrades.len());
         assert_eq!(config.chain_type(), &ChainType::Mainnet);
-    }
-
-    #[test]
-    fn chain_type_names() {
-        use strum::VariantNames;
-
-        assert_eq!(&ChainType::Mainnet.to_string(), "mainnet");
-        assert_eq!(&ChainType::Testnet.to_string(), "testnet");
-
-        for chain_type_str in ChainType::VARIANTS {
-            let chain_type: ChainType = chain_type_str.parse().expect("cannot parse chain type");
-            assert_eq!(&chain_type.to_string(), chain_type_str);
-        }
     }
 
     #[test]

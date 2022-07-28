@@ -109,6 +109,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e22d1f4b888c298a027c99dc9048015fac177587de20fc30232a057dfbe24a21"
 
 [[package]]
+name = "assert_cmd"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93ae1ddd39efd67689deb1979d80bad3bf7f2b09c6e6117c8d1f2443b5e2f83e"
+dependencies = [
+ "bstr",
+ "doc-comment",
+ "predicates",
+ "predicates-core",
+ "predicates-tree",
+ "wait-timeout",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -397,7 +411,9 @@ version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
+ "lazy_static",
  "memchr",
+ "regex-automata",
 ]
 
 [[package]]
@@ -509,10 +525,13 @@ dependencies = [
  "num",
  "replace_with",
  "rpc",
+ "rstest",
+ "serde",
  "serde_json",
  "serialization",
  "static_assertions",
  "subsystem",
+ "test-utils",
  "thiserror",
  "tokio",
  "utils",
@@ -528,8 +547,10 @@ dependencies = [
  "itertools",
  "mockall",
  "num-traits",
+ "rstest",
  "serialization",
  "storage",
+ "test-utils",
  "thiserror",
  "utxo",
 ]
@@ -664,10 +685,10 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_test",
+ "serial_test",
  "serialization",
  "sscanf",
  "static_assertions",
- "strum",
  "thiserror",
 ]
 
@@ -915,6 +936,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "directories"
+version = "4.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b1d1d91c932ef41c0f2663aa8b0ca0342d444d842c06914aa0a7e352d0bada6"
+dependencies = [
+ "libc",
+ "redox_users",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "dissimilar"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -929,6 +970,12 @@ dependencies = [
  "byteorder 1.4.3",
  "quick-error 1.2.3",
 ]
+
+[[package]]
+name = "doc-comment"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
 name = "downcast"
@@ -2186,6 +2233,7 @@ dependencies = [
 name = "mintlayer-test"
 version = "0.1.0"
 dependencies = [
+ "common",
  "libtest-mimic",
  "node",
  "thiserror",
@@ -2385,18 +2433,23 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "assert_cmd",
  "chainstate",
  "chainstate-storage",
  "clap 3.2.5",
  "common",
+ "directories",
  "jsonrpsee",
  "logging",
  "p2p",
+ "paste",
  "rpc",
- "strum",
+ "serde",
  "subsystem",
+ "tempdir",
  "thiserror",
  "tokio",
+ "toml",
 ]
 
 [[package]]
@@ -2555,17 +2608,33 @@ dependencies = [
  "jsonrpsee",
  "libp2p",
  "logging",
+ "p2p-test-utils",
  "parity-scale-codec",
  "portpicker",
  "rpc",
+ "serde",
  "serialization",
  "sscanf",
  "subsystem",
- "test-utils",
  "thiserror",
  "tokio",
  "utils",
  "void",
+]
+
+[[package]]
+name = "p2p-test-utils"
+version = "0.1.0"
+dependencies = [
+ "chainstate",
+ "chainstate-storage",
+ "common",
+ "crypto",
+ "libp2p",
+ "p2p",
+ "portpicker",
+ "subsystem",
+ "tokio",
 ]
 
 [[package]]
@@ -3136,6 +3205,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_users"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
+dependencies = [
+ "getrandom 0.2.7",
+ "redox_syscall",
+ "thiserror",
+]
+
+[[package]]
 name = "regex"
 version = "1.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3230,8 +3310,34 @@ dependencies = [
  "async-trait",
  "jsonrpsee",
  "logging",
+ "serde",
  "subsystem",
  "tokio",
+]
+
+[[package]]
+name = "rstest"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9c9dc66cc29792b663ffb5269be669f1613664e69ad56441fdb895c2347b930"
+dependencies = [
+ "futures",
+ "futures-timer",
+ "rstest_macros",
+ "rustc_version 0.4.0",
+]
+
+[[package]]
+name = "rstest_macros"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5015e68a0685a95ade3eee617ff7101ab6a3fc689203101ca16ebc16f2b89c66"
+dependencies = [
+ "cfg-if",
+ "proc-macro2",
+ "quote",
+ "rustc_version 0.4.0",
+ "syn",
 ]
 
 [[package]]
@@ -3515,6 +3621,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "serial_test"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7eec42e7232e5ca56aa59d63af3c7f991fe71ee6a3ddd2d3480834cf3902b007"
+dependencies = [
+ "futures",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1b95bb2f4f624565e8fe8140c789af7e2082c0e0561b5a82a1b678baa9703dc"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn",
+]
+
+[[package]]
 name = "serialization"
 version = "0.1.0"
 dependencies = [
@@ -3758,8 +3890,24 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "common",
+ "storage-core",
+ "storage-inmemory",
+]
+
+[[package]]
+name = "storage-core"
+version = "0.1.0"
+dependencies = [
  "logging",
  "thiserror",
+]
+
+[[package]]
+name = "storage-inmemory"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "storage-core",
 ]
 
 [[package]]
@@ -3773,28 +3921,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "strum"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
-dependencies = [
- "strum_macros",
-]
-
-[[package]]
-name = "strum_macros"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6878079b17446e4d3eba6192bb0a2950d5b14f0ed8424b852310e5a94345d0ef"
-dependencies = [
- "heck 0.4.0",
- "proc-macro2",
- "quote",
- "rustversion",
- "syn",
-]
 
 [[package]]
 name = "subsystem"
@@ -3978,15 +4104,8 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 name = "test-utils"
 version = "0.1.0"
 dependencies = [
- "chainstate",
- "chainstate-storage",
- "common",
  "crypto",
- "libp2p",
- "p2p",
- "portpicker",
- "subsystem",
- "tokio",
+ "rand_chacha 0.3.1",
 ]
 
 [[package]]

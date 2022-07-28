@@ -18,6 +18,7 @@
 //! Network behaviour configuration for libp2p
 
 use crate::{
+    config,
     error::{P2pError, ProtocolError},
     message,
     net::{
@@ -86,8 +87,8 @@ pub type Libp2pNetworkBehaviourAction = NetworkBehaviourAction<
 impl Libp2pBehaviour {
     pub async fn new(
         config: Arc<ChainConfig>,
+        p2p_config: Arc<config::P2pConfig>,
         id_keys: identity::Keypair,
-        enable_mdns: bool,
     ) -> Self {
         let gossipsub_config = GossipsubConfigBuilder::default()
             .heartbeat_interval(GOSSIPSUB_HEARTBEAT)
@@ -132,7 +133,7 @@ impl Libp2pBehaviour {
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
+            discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,

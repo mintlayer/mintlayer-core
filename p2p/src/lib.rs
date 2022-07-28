@@ -14,16 +14,19 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use crate::{
+    config::P2pConfig,
     error::{ConversionError, P2pError},
     net::{ConnectivityService, NetworkingService, PubSubService, SyncingCodecService},
 };
 use chainstate::chainstate_interface;
 use common::chain::ChainConfig;
 use logging::log;
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+use std::{fmt::Debug, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
+pub mod config;
 pub mod error;
 pub mod event;
 pub mod message;
@@ -38,9 +41,6 @@ pub type Result<T> = core::result::Result<T, P2pError>;
 
 // TODO: figure out proper channel sizes
 const CHANNEL_SIZE: usize = 64;
-
-// TODO: this should come from a config
-const TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct P2pInterface<T: NetworkingService> {
     p2p: P2P<T>,
@@ -151,21 +151,23 @@ where
     ///
     /// This function starts the networking backend and individual manager objects.
     pub async fn new(
-        bind_addr: String,
-        config: Arc<ChainConfig>,
+        chain_config: Arc<ChainConfig>,
+        p2p_config: Arc<P2pConfig>,
         consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
     ) -> crate::Result<Self>
     where
         <T as NetworkingService>::Address: FromStr,
         <<T as NetworkingService>::Address as FromStr>::Err: Debug,
     {
+        let p2p_config = Arc::new(p2p_config);
         let (conn, pubsub, sync) = T::start(
-            bind_addr.parse::<T::Address>().map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(bind_addr))
+            p2p_config.bind_address.parse::<T::Address>().map_err(|_| {
+                P2pError::ConversionError(ConversionError::InvalidAddress(
+                    p2p_config.bind_address.clone(),
+                ))
             })?,
-            &[],
-            Arc::clone(&config),
-            TIMEOUT,
+            Arc::clone(&chain_config),
+            Arc::clone(&p2p_config),
         )
         .await?;
 
@@ -175,11 +177,17 @@ where
         let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
         let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
 
-        let swarm_config = Arc::clone(&config);
+        let swarm_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
-            if let Err(e) = swarm::PeerManager::<T>::new(swarm_config, conn, rx_swarm, tx_p2p_sync)
-                .run()
-                .await
+            if let Err(e) = swarm::PeerManager::<T>::new(
+                swarm_config,
+                Arc::clone(&p2p_config),
+                conn,
+                rx_swarm,
+                tx_p2p_sync,
+            )
+            .run()
+            .await
             {
                 log::error!("PeerManager failed: {:?}", e);
             }
@@ -187,7 +195,7 @@ where
 
         let sync_handle = consensus_handle.clone();
         let tx_swarm_sync = tx_swarm.clone();
-        let sync_config = Arc::clone(&config);
+        let sync_config = Arc::clone(&chain_config);
         tokio::spawn(async move {
             if let Err(e) = sync::SyncManager::<T>::new(
                 sync_config,
@@ -207,7 +215,7 @@ where
         let tx_swarm_pubsub = tx_swarm.clone();
         tokio::spawn(async move {
             if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
-                config,
+                chain_config,
                 pubsub,
                 consensus_handle,
                 tx_swarm_pubsub,
@@ -231,8 +239,8 @@ pub type P2pHandle<T> = subsystem::Handle<P2pInterface<T>>;
 
 pub async fn make_p2p<T>(
     chain_config: Arc<ChainConfig>,
+    p2p_config: Arc<P2pConfig>,
     consensus_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-    bind_addr: String,
 ) -> crate::Result<P2pInterface<T>>
 where
     T: NetworkingService + 'static,
@@ -245,6 +253,6 @@ where
     <<T as NetworkingService>::PeerId as FromStr>::Err: Debug,
 {
     Ok(P2pInterface {
-        p2p: P2P::new(bind_addr, chain_config, consensus_handle).await?,
+        p2p: P2P::new(chain_config, p2p_config, consensus_handle).await?,
     })
 }

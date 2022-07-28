@@ -30,6 +30,8 @@ macro_rules! construct_uint {
         impl_array_newtype!($name, u64, $n_words);
 
         impl $name {
+            pub const ZERO: Self = Self::from_u64(0u64);
+
             /// Conversion to u32
             #[inline]
             pub fn low_u32(&self) -> u32 {
@@ -80,7 +82,7 @@ macro_rules! construct_uint {
 
             /// Create an object from a given unsigned 64-bit integer
             #[inline]
-            pub fn from_u64(init: u64) -> $name {
+            pub const fn from_u64(init: u64) -> $name {
                 let mut ret = [0; $n_words];
                 ret[0] = init;
                 $name(ret)

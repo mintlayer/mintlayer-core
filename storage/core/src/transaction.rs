@@ -28,8 +28,8 @@ pub trait TransactionRo: Sized {
     /// High-level convenience method. Prefer this over using a transaction directly.
     ///
     /// ```
-    /// # use storage::traits::*;
-    /// # fn foo<'a, S: storage::schema::Schema, T: Transactional<'a, S>>(foo: &'a T) {
+    /// # use storage_core::traits::*;
+    /// # fn foo<'a, S: storage_core::schema::Schema, T: Transactional<'a, S>>(foo: &'a T) {
     /// let result = foo.transaction_ro().run(|tx| {
     ///     // Your transaction operations go here
     ///     Ok(42) // this will be the result
@@ -64,8 +64,9 @@ pub trait TransactionRw: Sized {
     /// High-level convenience method. Prefer this over using the transaction directly.
     ///
     /// ```
-    /// # use storage::traits::*;
-    /// # fn foo<'a, S: storage::schema::Schema, T: Transactional<'a, S>>(foo: &'a mut T) {
+    /// # use storage_core::traits::*;
+    /// # use storage_core as storage;
+    /// # fn foo<'a, S: storage_core::schema::Schema, T: Transactional<'a, S>>(foo: &'a mut T) {
     /// let result = foo.transaction_rw().run(|tx| {
     ///     // Your transaction operations go here
     ///     storage::commit(42) // this will be the result

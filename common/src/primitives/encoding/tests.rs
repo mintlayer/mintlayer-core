@@ -230,7 +230,7 @@ fn check_valid_strings() {
             "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
             "?1v759aa",
         ).iter().for_each(|s| {
-            match super::bech32m::bech32m_to_base32(*s) {
+            match super::bech32m::bech32m_to_base32(s) {
                Ok(decoded) => {
                    match super::bech32m::base32_to_bech32m(decoded.hrp(), <&[bech32::u5]>::clone(&decoded.data())) {
                        Ok(encoded) => { assert_eq!(s.to_lowercase(), encoded.to_lowercase()) }

@@ -15,12 +15,15 @@
 
 //! Top-level node runner as a library
 
+mod config;
 mod options;
+mod regtest_options;
 mod runner;
 
 pub type Error = anyhow::Error;
 
-pub use options::Options;
+pub use config::NodeConfig;
+pub use options::{Command, Options, RunOptions};
 pub use runner::{initialize, run};
 
 pub fn init_logging(opts: &Options) {

@@ -114,13 +114,13 @@ fn basic_spending() {
     );
 
     // spend one output
-    let spend_0_res = tx_index.spend(0, tx_spending_output_0.clone().into());
+    let spend_0_res = tx_index.spend(0, tx_spending_output_0.into());
     assert!(spend_0_res.is_ok());
 
     // check state
     assert_eq!(
         tx_index.get_spent_state(0).unwrap(),
-        OutputSpentState::SpentBy(tx_spending_output_0.clone().into())
+        OutputSpentState::SpentBy(tx_spending_output_0.into())
     );
     assert_eq!(
         tx_index.get_spent_state(1).unwrap(),
@@ -135,13 +135,13 @@ fn basic_spending() {
 
     // attempt double-spend
     assert_eq!(
-        tx_index.spend(0, tx_spending_output_1.clone().into()).unwrap_err(),
-        SpendError::AlreadySpent(tx_spending_output_0.clone().into())
+        tx_index.spend(0, tx_spending_output_1.into()).unwrap_err(),
+        SpendError::AlreadySpent(tx_spending_output_0.into())
     );
 
     // spend all other outputs
-    assert!(tx_index.spend(1, tx_spending_output_1.clone().into()).is_ok());
-    assert!(tx_index.spend(2, tx_spending_output_2.clone().into()).is_ok());
+    assert!(tx_index.spend(1, tx_spending_output_1.into()).is_ok());
+    assert!(tx_index.spend(2, tx_spending_output_2.into()).is_ok());
 
     // check that all are spent
     assert!(tx_index.all_outputs_spent());
@@ -152,11 +152,11 @@ fn basic_spending() {
     );
     assert_eq!(
         tx_index.get_spent_state(1).unwrap(),
-        OutputSpentState::SpentBy(tx_spending_output_1.clone().into())
+        OutputSpentState::SpentBy(tx_spending_output_1.into())
     );
     assert_eq!(
         tx_index.get_spent_state(2).unwrap(),
-        OutputSpentState::SpentBy(tx_spending_output_2.clone().into())
+        OutputSpentState::SpentBy(tx_spending_output_2.into())
     );
 
     // unspend output 1
@@ -273,8 +273,8 @@ fn generate_random_invalid_block() -> Block {
             .map(|_| generate_random_invalid_transaction(&mut rng))
             .collect::<Vec<_>>()
     };
-    let time = rng.next_u32();
-    let prev_id = Some(Id::new(generate_random_h256(&mut rng)));
+    let time = rng.next_u64();
+    let prev_id = Id::new(generate_random_h256(&mut rng));
 
     Block::new(
         transactions,

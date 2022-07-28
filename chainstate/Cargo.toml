@@ -7,7 +7,6 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-async-trait = "0.1"
 chainstate-storage = {path = '../chainstate-storage'}
 chainstate-types = {path = '../chainstate-types'}
 common = {path = '../common'}
@@ -18,15 +17,19 @@ serialization = {path = "../serialization"}
 subsystem = {path = '../subsystem'}
 utils = {path = '../utils'}
 
+async-trait = "0.1"
 hex = "0.4"
 itertools = "0.10"
 jsonrpsee = {version = "0.14", features = ["macros"]}
 num = "0.4.0"
 replace_with = "0.1"
 thiserror = "1.0"
+serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 mockall = "0.11"
+rstest = "0.15"
 serde_json = "1.0"
 static_assertions = "1.1"
 tokio = "1.19"
+test-utils = {path = "../test-utils"}

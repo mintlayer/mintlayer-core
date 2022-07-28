@@ -20,6 +20,7 @@ mod tmp;
 use crate::{
     net::{ConnectivityService, NetworkingService},
     swarm::PeerManager,
+    P2pConfig,
 };
 use std::{fmt::Debug, str::FromStr, sync::Arc};
 
@@ -33,14 +34,7 @@ where
     <T as NetworkingService>::Address: FromStr,
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
-    let (conn, _, _) = T::start(
-        addr,
-        &[],
-        Arc::clone(&config),
-        std::time::Duration::from_secs(10),
-    )
-    .await
-    .unwrap();
+    let (conn, _, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
     let (_, rx) = tokio::sync::mpsc::channel(16);
     let (tx_sync, mut rx_sync) = tokio::sync::mpsc::channel(16);
 
@@ -50,5 +44,6 @@ where
         }
     });
 
-    PeerManager::<T>::new(Arc::clone(&config), conn, rx, tx_sync)
+    let p2p_config = Arc::new(P2pConfig::new());
+    PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
 }

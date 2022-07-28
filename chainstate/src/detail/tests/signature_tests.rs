@@ -33,14 +33,13 @@ fn signed_tx() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
 
-        let genesis_tx = chainstate.chain_config.genesis_block().transactions().get(0).unwrap();
         let (private_key, public_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
 
         // The first transaction uses the `AnyoneCanSpend` output of the transaction from the
         // genesis block.
         let tx_1 = {
             let input = TxInput::new(
-                OutPointSourceId::Transaction(genesis_tx.get_id()),
+                OutPointSourceId::BlockReward(chainstate.chain_config.genesis_block_id()),
                 0,
                 InputWitness::NoSignature(None),
             );
@@ -77,8 +76,8 @@ fn signed_tx() {
 
         let block = Block::new(
             vec![tx_1, tx_2],
-            Some(chainstate.chain_config.genesis_block().get_id()),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            chainstate.chain_config.genesis_block().get_id().into(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .unwrap();

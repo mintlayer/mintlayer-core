@@ -13,14 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 use std::time::Duration;
-use thiserror::Error;
+
+pub type BlockTimestampInternalType = u64;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Encode, Decode, PartialOrd, Ord)]
 pub struct BlockTimestamp {
     #[codec(compact)]
-    timestamp: u32,
+    timestamp: BlockTimestampInternalType,
 }
 
 impl std::fmt::Display for BlockTimestamp {
@@ -29,32 +30,38 @@ impl std::fmt::Display for BlockTimestamp {
     }
 }
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum TimestampError {
-    #[error("Duration cannot fit in a u32: {0:?}")]
-    DurationTooLargeForU32(Duration),
-}
-
 impl BlockTimestamp {
-    pub fn from_int_seconds(timestamp: u32) -> Self {
+    pub fn from_int_seconds(timestamp: BlockTimestampInternalType) -> Self {
         Self { timestamp }
     }
 
-    pub fn from_duration_since_epoch(duration: Duration) -> Result<Self, TimestampError> {
-        let result = Self {
-            timestamp: duration
-                .as_secs()
-                .try_into()
-                .map_err(|_| TimestampError::DurationTooLargeForU32(duration))?,
-        };
-        Ok(result)
+    pub fn from_duration_since_epoch(duration: Duration) -> Self {
+        Self {
+            timestamp: duration.as_secs(),
+        }
     }
 
     pub fn as_duration_since_epoch(&self) -> Duration {
         Duration::from_secs(self.timestamp as u64)
     }
 
-    pub fn as_int_seconds(&self) -> u32 {
+    pub fn as_int_seconds(&self) -> BlockTimestampInternalType {
         self.timestamp
+    }
+
+    pub fn add_int_seconds(&self, seconds: BlockTimestampInternalType) -> Option<BlockTimestamp> {
+        self.timestamp.checked_add(seconds).map(|ts| Self { timestamp: ts })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn history_iteration() {
+        let timestamp = BlockTimestamp::from_int_seconds(u64::MAX);
+        let timestamp_next = timestamp.add_int_seconds(1);
+        assert!(timestamp_next.is_none());
     }
 }

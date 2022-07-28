@@ -15,6 +15,9 @@
 //
 // Author(s): S. Afach
 
+mod with_id;
+pub use with_id::WithId;
+
 use crate::{construct_fixed_hash, Uint256};
 use generic_array::{typenum, GenericArray};
 use serialization::{Decode, Encode};
@@ -65,7 +68,7 @@ impl<'de> serde::Deserialize<'de> for H256 {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, Encode, Decode, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
 pub struct Id<T: ?Sized> {
     id: H256,
@@ -73,7 +76,16 @@ pub struct Id<T: ?Sized> {
     _shadow: std::marker::PhantomData<fn() -> T>,
 }
 
-impl<T> Display for Id<T> {
+// Implementing Clone manually to avoid the Clone constraint on T
+impl<T: ?Sized> Clone for Id<T> {
+    fn clone(&self) -> Self {
+        Self::new(self.id)
+    }
+}
+
+impl<T: ?Sized> Copy for Id<T> {}
+
+impl<T: ?Sized> Display for Id<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.id.fmt(f)
     }
@@ -99,7 +111,7 @@ impl<T: Eq> From<H256> for Id<T> {
     }
 }
 
-impl<T> Id<T> {
+impl<T: ?Sized> Id<T> {
     pub fn get(&self) -> H256 {
         self.id
     }
@@ -112,7 +124,7 @@ impl<T> Id<T> {
     }
 }
 
-impl<T> AsRef<[u8]> for Id<T> {
+impl<T: ?Sized> AsRef<[u8]> for Id<T> {
     fn as_ref(&self) -> &[u8] {
         &self.id[..]
     }
@@ -122,6 +134,13 @@ impl<T> AsRef<[u8]> for Id<T> {
 pub trait Idable {
     type Tag: ?Sized;
     fn get_id(&self) -> Id<Self::Tag>;
+}
+
+impl<T: Idable> Idable for &T {
+    type Tag = T::Tag;
+    fn get_id(&self) -> Id<Self::Tag> {
+        (*self).get_id()
+    }
 }
 
 // we use a cropping stream (64 => 32) because

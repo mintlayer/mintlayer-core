@@ -15,24 +15,20 @@
 
 //! Chainstate subsystem RPC handler
 
-use crate::ChainstateError;
-
-use crate::{Block, BlockSource};
-use common::primitives::BlockHeight;
+use crate::{Block, BlockSource, ChainstateError, GenBlock};
+use common::primitives::{BlockHeight, Id};
 use serialization::Decode;
 use subsystem::subsystem::CallError;
-
-type BlockId = common::primitives::Id<common::chain::block::Block>;
 
 #[rpc::rpc(server, namespace = "chainstate")]
 trait ChainstateRpc {
     /// Get the best block ID
     #[method(name = "best_block_id")]
-    async fn best_block_id(&self) -> rpc::Result<BlockId>;
+    async fn best_block_id(&self) -> rpc::Result<Id<GenBlock>>;
 
     /// Get block ID at given height in the mainchain
     #[method(name = "block_id_at_height")]
-    async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<BlockId>>;
+    async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>>;
 
     /// Submit a block to be included in the chain
     #[method(name = "submit_block")]
@@ -42,7 +38,7 @@ trait ChainstateRpc {
     #[method(name = "block_height_in_main_chain")]
     async fn block_height_in_main_chain(
         &self,
-        block_id: BlockId,
+        block_id: Id<GenBlock>,
     ) -> rpc::Result<Option<BlockHeight>>;
 
     /// Get best block height in main chain
@@ -52,11 +48,11 @@ trait ChainstateRpc {
 
 #[async_trait::async_trait]
 impl ChainstateRpcServer for super::ChainstateHandle {
-    async fn best_block_id(&self) -> rpc::Result<BlockId> {
+    async fn best_block_id(&self) -> rpc::Result<Id<GenBlock>> {
         handle_error(self.call(|this| this.get_best_block_id()).await)
     }
 
-    async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<BlockId>> {
+    async fn block_id_at_height(&self, height: BlockHeight) -> rpc::Result<Option<Id<GenBlock>>> {
         handle_error(self.call(move |this| this.get_block_id_from_height(&height)).await)
     }
 
@@ -70,7 +66,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
 
     async fn block_height_in_main_chain(
         &self,
-        block_id: BlockId,
+        block_id: Id<GenBlock>,
     ) -> rpc::Result<Option<BlockHeight>> {
         handle_error(self.call(move |this| this.get_block_height_in_main_chain(&block_id)).await)
     }
@@ -87,6 +83,7 @@ fn handle_error<T>(e: Result<Result<T, ChainstateError>, CallError>) -> rpc::Res
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::ChainstateConfig;
     use serde_json::Value;
     use std::{future::Future, sync::Arc};
 
@@ -94,11 +91,19 @@ mod test {
         proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
         let storage = chainstate_storage::Store::new_empty().unwrap();
-        let cfg = Arc::new(common::chain::config::create_unit_test_config());
+        let chain_config = Arc::new(common::chain::config::create_unit_test_config());
+        let chainstate_config = ChainstateConfig::new();
         let mut man = subsystem::Manager::new("rpctest");
         let handle = man.add_subsystem(
             "chainstate",
-            crate::make_chainstate(cfg, storage, None, Default::default()).unwrap(),
+            crate::make_chainstate(
+                chain_config,
+                chainstate_config,
+                storage,
+                None,
+                Default::default(),
+            )
+            .unwrap(),
         );
         let _ = man.add_raw_subsystem(
             "test",

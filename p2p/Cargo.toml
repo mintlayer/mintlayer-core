@@ -12,6 +12,7 @@ parity-scale-codec = "3.1"
 sscanf = "0.2"
 thiserror = "1.0"
 void = "1.0"
+serde = { version = "1", features = ["derive"] }
 
 # local dependencies
 common = { path = "../common/" }
@@ -41,6 +42,6 @@ portpicker = "0.1"
 chainstate-storage = { path = "../chainstate-storage" }
 crypto = { path = "../crypto/" }
 
-[dev-dependencies.test-utils]
+[dev-dependencies.p2p-test-utils]
 version = "0.1"
-path = "test-utils"
+path = "p2p-test-utils"

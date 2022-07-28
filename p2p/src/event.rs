@@ -60,7 +60,7 @@ where
     Disconnected(T::PeerId),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PubSubControlEvent {
     InitialBlockDownloadDone,
 }

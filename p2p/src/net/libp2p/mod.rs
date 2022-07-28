@@ -17,6 +17,7 @@
 //
 // Author(s): A. Altonen
 use crate::{
+    config,
     error::{ConversionError, DialError, P2pError, ProtocolError, PublishError},
     message,
     net::{
@@ -57,13 +58,6 @@ mod tests;
 mod types;
 
 pub mod behaviour;
-
-/// libp2p-specifc peer discovery strategies
-#[derive(Debug, PartialEq, Eq)]
-pub enum Libp2pDiscoveryStrategy {
-    /// Use mDNS to find peers in the local network
-    MulticastDns,
-}
 
 #[derive(Debug)]
 pub struct Libp2pService;
@@ -219,7 +213,6 @@ where
 #[async_trait]
 impl NetworkingService for Libp2pService {
     type Address = Multiaddr;
-    type DiscoveryStrategy = Libp2pDiscoveryStrategy;
     type PeerId = PeerId;
     type ProtocolId = String;
     type RequestId = RequestId;
@@ -230,9 +223,8 @@ impl NetworkingService for Libp2pService {
 
     async fn start(
         bind_addr: Self::Address,
-        strategies: &[Self::DiscoveryStrategy],
         chain_config: Arc<common::chain::ChainConfig>,
-        timeout: std::time::Duration,
+        p2p_config: Arc<config::P2pConfig>,
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
@@ -249,15 +241,17 @@ impl NetworkingService for Libp2pService {
             .upgrade(upgrade::Version::V1)
             .authenticate(noise::NoiseConfig::xx(noise_keys).into_authenticated())
             .multiplex(mplex::MplexConfig::new())
-            .outbound_timeout(timeout)
+            .outbound_timeout(std::time::Duration::from_secs(
+                p2p_config.outbound_connection_timeout,
+            ))
             .boxed();
 
         let swarm = SwarmBuilder::new(
             transport,
             behaviour::Libp2pBehaviour::new(
                 Arc::clone(&chain_config),
+                Arc::clone(&p2p_config),
                 id_keys,
-                strategies.iter().any(|s| s == &Libp2pDiscoveryStrategy::MulticastDns),
             )
             .await,
             peer_id,

@@ -15,20 +15,29 @@
 
 use chainstate_types::block_index::BlockIndex;
 use common::{
-    chain::block::Block,
+    chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
-use crate::detail::PropertyQueryError;
+use crate::detail::{gen_block_index::GenBlockIndex, PropertyQueryError};
 
 pub trait BlockIndexHandle {
+    /// Get block index for given block ID
     fn get_block_index(
         &self,
-        block_index: &Id<Block>,
+        block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError>;
+
+    /// Get generalized block index for given ID (block ID or genesis ID)
+    fn get_gen_block_index(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError>;
+
+    /// Get a block ancestor
     fn get_ancestor(
         &self,
         block_index: &BlockIndex,
         ancestor_height: BlockHeight,
-    ) -> Result<BlockIndex, PropertyQueryError>;
+    ) -> Result<GenBlockIndex, PropertyQueryError>;
 }

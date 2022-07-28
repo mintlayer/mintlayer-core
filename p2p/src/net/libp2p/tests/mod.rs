@@ -14,8 +14,9 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
+
 use crate::net::{
-    self,
+    self, config,
     libp2p::sync::*,
     libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
 };
@@ -36,6 +37,7 @@ use std::{
     collections::{HashMap, VecDeque},
     iter,
     num::NonZeroU32,
+    sync::Arc,
 };
 use tokio::sync::mpsc;
 
@@ -55,9 +57,9 @@ mod swarm;
 #[allow(dead_code)]
 pub async fn make_libp2p(
     config: common::chain::ChainConfig,
+    p2p_config: Arc<config::P2pConfig>,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
-    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -120,7 +122,7 @@ pub async fn make_libp2p(
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
+            discovery: discovery::DiscoveryManager::new(p2p_config).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,
@@ -153,10 +155,10 @@ pub async fn make_libp2p(
 #[allow(dead_code)]
 pub async fn make_libp2p_with_ping(
     config: common::chain::ChainConfig,
+    p2p_config: Arc<config::P2pConfig>,
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
-    enable_mdns: bool,
 ) -> (
     Backend,
     mpsc::Sender<types::Command>,
@@ -214,7 +216,7 @@ pub async fn make_libp2p_with_ping(
             )
             .expect("configuration to be valid"),
             connmgr: connectivity::ConnectionManager::new(),
-            discovery: discovery::DiscoveryManager::new(enable_mdns).await,
+            discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
             waker: None,

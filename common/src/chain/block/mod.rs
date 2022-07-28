@@ -16,6 +16,7 @@
 // Author(s): S. Afach
 
 use crate::chain::transaction::Transaction;
+pub use crate::chain::GenBlock;
 
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
@@ -36,8 +37,6 @@ use serialization::{DirectDecode, DirectEncode};
 
 use self::block_size::BlockSize;
 use self::timestamp::BlockTimestamp;
-
-use super::ChainConfig;
 
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
@@ -83,6 +82,7 @@ impl From<MerkleTreeFormError> for BlockCreationError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DirectEncode, DirectDecode)]
+#[must_use]
 pub enum Block {
     V1(BlockV1),
 }
@@ -90,7 +90,7 @@ pub enum Block {
 impl Block {
     pub fn new(
         transactions: Vec<Transaction>,
-        prev_block_hash: Option<Id<Block>>,
+        prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
         consensus_data: ConsensusData,
     ) -> Result<Self, BlockCreationError> {
@@ -117,7 +117,7 @@ impl Block {
     // this function is needed to avoid a circular dependency with storage
     pub fn new_with_no_consensus(
         transactions: Vec<Transaction>,
-        prev_block_hash: Option<Id<Block>>,
+        prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
@@ -182,14 +182,10 @@ impl Block {
         }
     }
 
-    pub fn prev_block_id(&self) -> Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> Id<GenBlock> {
         match &self {
-            Block::V1(blk) => blk.prev_block_id().clone(),
+            Block::V1(blk) => *blk.prev_block_id(),
         }
-    }
-
-    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.header().is_genesis(chain_config)
     }
 
     pub fn block_size(&self) -> BlockSize {
@@ -218,7 +214,7 @@ mod tests {
 
     fn check_block_tag(block: &Block) {
         let encoded_block = block.encode();
-        let first_byte = *encoded_block.get(0).unwrap();
+        let first_byte = *encoded_block.first().unwrap();
         assert_eq!(1, first_byte);
 
         let Block::V1(blockv1) = block;
@@ -237,7 +233,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_id: None,
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
@@ -260,7 +256,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_id: None,
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
@@ -302,7 +298,7 @@ mod tests {
             consensus_data: ConsensusData::None,
             tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
             witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            prev_block_id: None,
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 

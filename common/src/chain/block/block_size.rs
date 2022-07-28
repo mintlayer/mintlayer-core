@@ -15,7 +15,7 @@
 
 use super::Block;
 use crate::chain::TransactionSize;
-use parity_scale_codec::Encode;
+use serialization::Encode;
 
 pub struct BlockSize {
     header: usize,

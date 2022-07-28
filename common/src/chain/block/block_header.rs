@@ -13,19 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use parity_scale_codec::{Decode, Encode};
+use serialization::{Decode, Encode};
 
 use super::consensus_data::BlockRewardTransactable;
 use super::timestamp::BlockTimestamp;
-use super::{Block, ConsensusData};
-use crate::chain::ChainConfig;
+use crate::chain::{block::ConsensusData, Block, GenBlock};
 use crate::primitives::id::{Id, Idable, H256};
 use crate::primitives::{id, VersionTag};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Encode, Decode, serialization::Tagged)]
 pub struct BlockHeader {
     pub(super) version: VersionTag<1>,
-    pub(super) prev_block_id: Option<Id<Block>>,
+    pub(super) prev_block_id: Id<GenBlock>,
     pub(super) tx_merkle_root: Option<H256>,
     pub(super) witness_merkle_root: Option<H256>,
     pub(super) timestamp: BlockTimestamp,
@@ -41,11 +40,7 @@ impl BlockHeader {
         Id::new(id::hash_encoded(self))
     }
 
-    pub fn is_genesis(&self, chain_config: &ChainConfig) -> bool {
-        self.prev_block_id == None && chain_config.genesis_block_id() == self.block_id()
-    }
-
-    pub fn prev_block_id(&self) -> &Option<Id<Block>> {
+    pub fn prev_block_id(&self) -> &Id<GenBlock> {
         &self.prev_block_id
     }
 

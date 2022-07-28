@@ -24,7 +24,6 @@ use common::{
     },
     primitives::{time, Amount, Id},
 };
-use crypto::random::{self, Rng};
 
 // Process a block where the second transaction uses the first one as input.
 //
@@ -38,18 +37,22 @@ use crypto::random::{self, Rng};
 // | |input = tx1        | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn spend_output_in_the_same_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_output_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![first_tx, second_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            Id::new(chainstate.chain_config.genesis_block_id().get()),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -61,7 +64,7 @@ fn spend_output_in_the_same_block() {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(block_id)
+            Some(<Id<GenBlock>>::from(block_id))
         );
     });
 }
@@ -79,18 +82,22 @@ fn spend_output_in_the_same_block() {
 // | |input = prev_block | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn spend_output_in_the_same_block_invalid_order() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![second_tx, first_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            chainstate.chain_config.genesis_block_id(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -125,19 +132,23 @@ fn spend_output_in_the_same_block_invalid_order() {
 // | |input = tx1        | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn double_spend_tx_in_the_same_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
-        let second_tx = tx_from_tx(&first_tx);
-        let third_tx = tx_from_tx(&first_tx);
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
+        let second_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
+        let third_tx = tx_from_tx(&first_tx, rng.gen_range(1000..2000));
 
         let block = Block::new(
             vec![first_tx, second_tx, third_tx],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            chainstate.chain_config.genesis_block_id(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -176,16 +187,20 @@ fn double_spend_tx_in_the_same_block() {
 // | |input = genesis    | |
 // | +-------------------+ |
 // +-----------------------+
-#[test]
-fn double_spend_tx_in_another_block() {
-    common::concurrency::model(|| {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn double_spend_tx_in_another_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
         let mut chainstate = setup_chainstate();
 
-        let first_tx = tx_from_genesis(&chainstate);
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
         let first_block = Block::new(
             vec![first_tx.clone()],
-            Some(Id::new(chainstate.chain_config.genesis_block_id().get())),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            chainstate.chain_config.genesis_block_id(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -196,14 +211,15 @@ fn double_spend_tx_in_another_block() {
                 .chainstate_storage
                 .get_best_block_id()
                 .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(first_block_id.clone())
+            Some(first_block_id.into())
         );
 
-        let second_tx = tx_from_genesis(&chainstate);
+        let tx2_output_value = rng.gen_range(100_000..200_000);
+        let second_tx = tx_from_genesis(&chainstate, &mut rng, tx2_output_value);
         let second_block = Block::new(
             vec![second_tx],
-            Some(first_block_id.clone()),
-            BlockTimestamp::from_duration_since_epoch(time::get()).unwrap(),
+            first_block_id.into(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .expect(ERR_CREATE_BLOCK_FAIL);
@@ -224,31 +240,77 @@ fn double_spend_tx_in_another_block() {
     });
 }
 
+// Try to process a block where the second transaction's input is more then first output.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut chainstate = setup_chainstate();
+
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(1000..2000);
+        let tx2_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(&chainstate, &mut rng, tx1_output_value);
+        let second_tx = tx_from_tx(&first_tx, tx2_output_value);
+
+        let block = Block::new(
+            vec![first_tx, second_tx],
+            chainstate.chain_config.genesis_block_id(),
+            BlockTimestamp::from_duration_since_epoch(time::get()),
+            ConsensusData::None,
+        )
+        .expect(ERR_CREATE_BLOCK_FAIL);
+
+        assert_eq!(
+            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
+                Amount::from_atoms(tx1_output_value),
+                Amount::from_atoms(tx2_output_value)
+            ))
+        );
+        assert_eq!(
+            chainstate
+                .chainstate_storage
+                .get_best_block_id()
+                .expect(ERR_BEST_BLOCK_NOT_FOUND)
+                .expect(ERR_STORAGE_FAIL),
+            chainstate.chain_config.genesis_block_id()
+        );
+    });
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
-fn tx_from_genesis(chainstate: &Chainstate) -> Transaction {
-    let genesis_block_tx_id =
-        chainstate.chain_config.genesis_block().transactions().get(0).unwrap().get_id();
+fn tx_from_genesis(chainstate: &Chainstate, rng: &mut impl Rng, output_value: u128) -> Transaction {
+    let genesis_block_id = chainstate.chain_config.genesis_block_id();
     let input = TxInput::new(
-        OutPointSourceId::Transaction(genesis_block_tx_id),
+        OutPointSourceId::BlockReward(genesis_block_id),
         0,
-        empty_witness(),
+        empty_witness(rng),
     );
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(
-            random::make_pseudo_rng().gen_range(100_000..200_000),
-        )),
+        OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
 }
 
 // Creates a transaction with an input based on the specified transaction id.
-fn tx_from_tx(tx: &Transaction) -> Transaction {
+fn tx_from_tx(tx: &Transaction, output_value: u128) -> Transaction {
     let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(
-            random::make_pseudo_rng().gen_range(1000..2000),
-        )),
+        OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)

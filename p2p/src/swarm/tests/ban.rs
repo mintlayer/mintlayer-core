@@ -18,12 +18,12 @@
 use crate::{
     error::{P2pError, PeerError},
     net::{self, libp2p::Libp2pService, ConnectivityService},
-    swarm::tests::make_peer_manager,
+    swarm::{self, tests::make_peer_manager},
 };
 use common::chain::config;
-use libp2p::Multiaddr;
+use libp2p::{Multiaddr, PeerId};
+use p2p_test_utils::make_libp2p_addr;
 use std::sync::Arc;
-use test_utils::make_libp2p_addr;
 
 // ban peer whose connected to us
 #[tokio::test]
@@ -320,4 +320,35 @@ async fn validate_invalid_inbound_connection() {
         .await;
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
+}
+
+#[tokio::test]
+async fn inbound_connection_invalid_magic() {
+    let mut swarm1 =
+        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::new(config::create_mainnet()))
+            .await;
+
+    let mut swarm2 = make_peer_manager::<Libp2pService>(
+        make_libp2p_addr(),
+        Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
+    )
+    .await;
+
+    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
+    let (_conn1_res, conn2_res) =
+        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
+    let _conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+    let swarm1_id = *swarm1.handle.peer_id();
+
+    // run the first peer manager in the background and poll events from the peer manager
+    // that tries to connect to the first manager
+    tokio::spawn(async move { swarm1.run().await });
+
+    if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
+        swarm2.handle.poll_next().await
+    {
+        assert_eq!(peer_id, swarm1_id);
+    } else {
+        panic!("invalid event received");
+    }
 }
