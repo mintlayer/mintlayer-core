@@ -15,7 +15,10 @@
 //
 // Author(s): S. Afach
 
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    sync::Arc,
+};
 
 use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
@@ -114,11 +117,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex<'a>>, StateUpdateError> {
+    ) -> Result<Option<GenBlockIndex>, StateUpdateError> {
         match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
                 self.chain_config.genesis_block(),
-            ))),
+            )))),
             GenBlockId::Block(id) => self
                 .db_tx
                 .get_block_index(&id)

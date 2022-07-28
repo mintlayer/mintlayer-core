@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     consensus_validator::TransactionIndexHandle, gen_block_index::GenBlockIndex,
@@ -60,7 +60,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex<'a>>, PropertyQueryError> {
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(block_id)
     }
     fn get_ancestor(
@@ -151,11 +151,11 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex<'a>>, PropertyQueryError> {
+    ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         match block_id.classify(self.chain_config) {
-            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(
+            GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
                 self.chain_config.genesis_block(),
-            ))),
+            )))),
             GenBlockId::Block(id) => self.get_block_index(&id).map(|b| b.map(GenBlockIndex::Block)),
         }
     }
@@ -205,7 +205,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn get_previous_block_index(
         &self,
         block_index: &BlockIndex,
-    ) -> Result<GenBlockIndex<'a>, PropertyQueryError> {
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
         let prev_block_id = block_index.prev_block_id();
         self.get_gen_block_index(prev_block_id)?
             .ok_or(PropertyQueryError::PrevBlockIndexNotFound(*prev_block_id))
@@ -213,9 +213,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn get_ancestor(
         &self,
-        block_index: &GenBlockIndex<'a>,
+        block_index: &GenBlockIndex,
         target_height: BlockHeight,
-    ) -> Result<GenBlockIndex<'a>, PropertyQueryError> {
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
         if target_height > block_index.block_height() {
             return Err(PropertyQueryError::InvalidAncestorHeight {
                 block_height: block_index.block_height(),
@@ -263,9 +263,9 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     #[allow(unused)]
     pub fn last_common_ancestor(
         &self,
-        first_block_index: &GenBlockIndex<'a>,
-        second_block_index: &GenBlockIndex<'a>,
-    ) -> Result<GenBlockIndex<'a>, PropertyQueryError> {
+        first_block_index: &GenBlockIndex,
+        second_block_index: &GenBlockIndex,
+    ) -> Result<GenBlockIndex, PropertyQueryError> {
         let mut first_block_index = first_block_index.clone();
         let mut second_block_index = second_block_index.clone();
         match first_block_index.block_height().cmp(&second_block_index.block_height()) {
@@ -294,7 +294,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
     }
 
-    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex<'a>>, PropertyQueryError> {
+    pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id()?)
     }
 
@@ -670,7 +670,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
     fn disconnect_tip(
         &mut self,
         expected_tip_block_id: Option<&Id<Block>>,
-    ) -> Result<GenBlockIndex<'a>, BlockError> {
+    ) -> Result<GenBlockIndex, BlockError> {
         let best_block_id = self
             .get_best_block_id()
             .expect("Best block not initialized")
