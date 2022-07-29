@@ -90,7 +90,7 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
-    /// Adds a transaction that tries to spend already spend output from the specified block.
+    /// Adds a transaction that tries to spend the already spent output from the specified block.
     pub fn add_double_spend_transaction(
         mut self,
         parent: Id<GenBlock>,

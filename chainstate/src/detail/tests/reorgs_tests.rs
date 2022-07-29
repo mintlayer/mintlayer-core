@@ -211,44 +211,44 @@ fn check_reorg_to_first_chain(tf: &mut TestFramework, events: &EventList, rng: &
 
     // b3
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(&tf, tf.index_at(3).block_id()));
+    assert!(!is_block_in_main_chain(tf, tf.index_at(3).block_id()));
     // b4
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(4).block_id(),
         &(*tf.index_at(3).block_id()).into(),
         None,
         3,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(&tf, tf.index_at(4).block_id()));
+    assert!(!is_block_in_main_chain(tf, tf.index_at(4).block_id()));
     // b5
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(5).block_id(),
         &(*tf.index_at(2).block_id()).into(),
         Some(tf.index_at(6).block_id()),
         3,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(5).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(5).block_id()));
     // b6
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(6).block_id(),
         &(*tf.index_at(5).block_id()).into(),
         None,
         4,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(6).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(6).block_id()));
 }
 
 fn check_make_alternative_chain_longer(
@@ -273,24 +273,24 @@ fn check_make_alternative_chain_longer(
     check_last_event(tf, events);
     // b3
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
         Some(tf.index_at(4).block_id()),
         2,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(3).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(3).block_id()));
     // b4
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(4).block_id(),
         &(*tf.index_at(3).block_id()).into(),
         None,
         3,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(4).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(4).block_id()));
 }
 
 fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl Rng) {
@@ -310,34 +310,34 @@ fn check_simple_fork(tf: &mut TestFramework, events: &EventList, rng: &mut impl 
     check_last_event(tf, events);
 
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(1).block_id(),
         &tf.genesis().get_id().into(),
         Some(tf.index_at(2).block_id()),
         1,
         TestSpentStatus::Spent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(1).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(1).block_id()));
     // b2
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(2).block_id(),
         &(*tf.index_at(1).block_id()).into(),
         None,
         2,
         TestSpentStatus::Unspent,
     );
-    assert!(is_block_in_main_chain(&tf, tf.index_at(2).block_id()));
+    assert!(is_block_in_main_chain(tf, tf.index_at(2).block_id()));
     // b3
     check_block_status(
-        &tf,
+        tf,
         tf.index_at(3).block_id(),
         &(*tf.index_at(1).block_id()).into(),
         None,
         2,
         TestSpentStatus::NotInMainchain,
     );
-    assert!(!is_block_in_main_chain(&tf, tf.index_at(3).block_id()));
+    assert!(!is_block_in_main_chain(tf, tf.index_at(3).block_id()));
 }
 
 fn check_last_event(tf: &mut TestFramework, events: &EventList) {
@@ -427,8 +427,7 @@ fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
         .chainstate_storage
         .get_block_id_by_height(&height)
         .unwrap()
-        .map(|id| &id == block_index.block_id())
-        .unwrap_or(false)
+        .map_or(false, |id| &id == block_index.block_id())
 }
 
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {

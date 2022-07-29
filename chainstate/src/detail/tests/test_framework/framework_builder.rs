@@ -90,4 +90,19 @@ impl TestFrameworkBuilder {
             block_indexes: Vec::new(),
         }
     }
+
+    pub fn build_no_genesis(self) -> TestFramework {
+        let chainstate = Chainstate::new_no_genesis(
+            Arc::new(self.chain_config),
+            self.chainstate_config,
+            self.chainstate_storage,
+            self.custom_orphan_error_hook,
+            self.time_getter,
+        );
+
+        TestFramework {
+            chainstate,
+            block_indexes: Vec::new(),
+        }
+    }
 }
