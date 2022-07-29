@@ -102,7 +102,7 @@ fn orphans_chains(#[case] seed: Seed) {
             .chain_block_id()
             .unwrap();
         assert_eq!(
-            tf.block_index(&current_best).block_height(),
+            tf.block_index(&current_best.into()).block_height(),
             (MAX_ORPHANS_COUNT_IN_TEST as u64).into()
         );
         // There should be no more orphan blocks left.
@@ -203,7 +203,11 @@ fn straight_chain(#[case] seed: Seed) {
             let prev_block_id = block_index.block_id();
             let best_block_id = tf.best_block_id();
             assert_eq!(best_block_id, block_index.block_id());
-            let new_block = produce_test_block(prev_block, &mut rng);
+            let new_block = tf
+                .block_builder()
+                .with_parent(prev_block.id)
+                .add_test_transaction_with_parent(prev_block.id, &mut rng)
+                .build();
             let new_block_index =
                 tf.process_block(new_block.clone(), BlockSource::Peer).unwrap().unwrap();
 
@@ -505,7 +509,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
-        let prev_block = tf.get_block(*tf.index_at(i - 1).block_id()).unwrap().unwrap();
+        let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .block_builder()
             .with_parent(prev_block.get_id().into())
@@ -528,7 +532,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Block 10 should ignore consensus according to net upgrades. The following Pow block should
     // fail.
-    let prev_block = tf.get_block(*tf.index_at(9).block_id()).unwrap().unwrap();
+    let prev_block = tf.block(*tf.index_at(9).block_id());
     let mut mined_block = tf
         .block_builder()
         .with_parent(prev_block.get_id().into())
@@ -552,7 +556,7 @@ fn consensus_type(#[case] seed: Seed) {
         .expect("chain creation");
 
     // At height 15 we are again proof of work, ignoring consensus should fail
-    let prev_block = tf.get_block(*tf.index_at(14).block_id()).unwrap().unwrap();
+    let prev_block = tf.block(*tf.index_at(14).block_id());
     assert!(matches!(
         tf.block_builder()
             .with_parent(prev_block.get_id().into())
@@ -566,7 +570,7 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mining should work
     for i in 15..20 {
-        let prev_block = tf.get_block(*tf.index_at(i - 1).block_id()).unwrap().unwrap();
+        let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .block_builder()
             .with_parent(prev_block.get_id().into())

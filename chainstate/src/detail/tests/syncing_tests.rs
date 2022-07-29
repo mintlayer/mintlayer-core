@@ -165,7 +165,7 @@ fn get_headers_branching_chains(#[case] seed: Seed) {
 
         let headers = tf.chainstate.get_headers(locator).unwrap();
         let id = headers[0].prev_block_id();
-        assert!(tf.get_block_index(id).block_height() <= BlockHeight::new(common_height as u64));
+        assert!(tf.block_index(id).block_height() <= BlockHeight::new(common_height as u64));
     });
 }
 
@@ -201,12 +201,12 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let locator = tf1.chainstate.get_locator().unwrap();
         let headers = tf2.chainstate.get_headers(locator).unwrap();
         let id = *headers[0].prev_block_id();
-        tf1.get_block_index(&id); // This panics if the ID is not found
+        tf1.block_index(&id); // This panics if the ID is not found
 
         let locator = tf2.chainstate.get_locator().unwrap();
         let headers = tf1.chainstate.get_headers(locator).unwrap();
         let id = *headers[0].prev_block_id();
-        tf2.get_block_index(&id); // This panics if the ID is not found
+        tf2.block_index(&id); // This panics if the ID is not found
     });
 }
 
@@ -241,13 +241,21 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
         // Add random blocks to both chains.
         for i in 0..(limit * 2) {
             if i <= limit {
-                let block = tf1.random_block(prev1, None, &mut rng);
+                let block = tf1
+                    .block_builder()
+                    .with_parent(prev1.id)
+                    .add_test_transaction_with_parent(prev1.id, &mut rng)
+                    .build();
                 prev1 = TestBlockInfo::from_block(&block);
                 headers1.push(block.header().clone());
                 tf1.process_block(block, BlockSource::Local).unwrap();
             }
 
-            let block = tf1.random_block(prev2, None, &mut rng);
+            let block = tf2
+                .block_builder()
+                .with_parent(prev2.id)
+                .add_test_transaction_with_parent(prev2.id, &mut rng)
+                .build();
             prev2 = TestBlockInfo::from_block(&block);
             headers2.push(block.header().clone());
             tf2.process_block(block, BlockSource::Local).unwrap();
@@ -294,7 +302,11 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
 
         let mut headers = Vec::new();
         for _ in 0..rng.gen_range(3..10) {
-            let block = tf2.random_block(prev, None, &mut rng);
+            let block = tf2
+                .block_builder()
+                .with_parent(prev.id)
+                .add_test_transaction_with_parent(prev.id, &mut rng)
+                .build();
             prev = TestBlockInfo::from_block(&block);
             headers.push(block.header().clone());
             tf2.process_block(block, BlockSource::Local).unwrap();

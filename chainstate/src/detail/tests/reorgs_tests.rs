@@ -22,10 +22,7 @@ use common::chain::OutputSpentState;
 
 use crate::detail::{
     spend_cache::error::StateUpdateError,
-    tests::{
-        test_framework::{TestFramework, TestSpentStatus},
-        *,
-    },
+    tests::{test_framework::TestFramework, *},
 };
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.
@@ -266,8 +263,11 @@ fn check_make_alternative_chain_longer(
     // Reorg to a longer chain
     //
     let block = tf.block(*tf.block_indexes.last().unwrap().block_id());
-    let block = tf.random_block(TestBlockInfo::from_block(&block), None, rng);
-    assert!(tf.add_special_block(block).is_ok());
+    tf.block_builder()
+        .with_parent(block.get_id().into())
+        .add_test_transaction_from_block(&block, rng)
+        .process()
+        .unwrap();
     check_last_event(tf, events);
     // b3
     check_block_status(
@@ -419,18 +419,38 @@ fn check_block_at_height(
 }
 
 fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
-    let block_index = tf.block_index(block_id);
+    let block_index = tf.block_index(&block_id.to_owned().into());
     let height = block_index.block_height();
     tf.chainstate
         .chainstate_storage
         .get_block_id_by_height(&height)
         .unwrap()
-        .map_or(false, |id| &id == block_index.block_id())
+        .map_or(false, |id| id == block_index.block_id())
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum TestSpentStatus {
+    Spent,
+    Unspent,
+    NotInMainchain,
+}
+
+fn spent_status(
+    tf: &TestFramework,
+    tx_id: &Id<Transaction>,
+    output_index: u32,
+) -> Option<OutputSpentState> {
+    let tx_index = tf
+        .chainstate
+        .chainstate_storage
+        .get_mainchain_tx_index(&OutPointSourceId::from(*tx_id))
+        .unwrap()?;
+    tx_index.get_spent_state(output_index).ok()
 }
 
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {
     for (output_index, _) in tx.outputs().iter().enumerate() {
-        let status = tf.get_spent_status(&tx.get_id(), output_index as u32);
+        let status = spent_status(&tf, &tx.get_id(), output_index as u32);
         if spend_status == &TestSpentStatus::Spent {
             assert_ne!(status, Some(OutputSpentState::Unspent));
         } else {

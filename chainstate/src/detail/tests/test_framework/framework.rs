@@ -18,26 +18,22 @@
 use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, ConsensusData},
         config::{Builder as ChainConfigBuilder, ChainType},
-        signature::inputsig::InputWitness,
-        Block, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, OutputPurpose,
-        OutputSpentState, Transaction, TxInput, TxOutput,
+        Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput,
     },
-    primitives::{id::WithId, time, Amount, Id, Idable, H256},
+    primitives::{id::WithId, Amount, Id, Idable},
 };
 use crypto::random::Rng;
 
 use crate::{
     detail::{
         tests::{
-            create_new_outputs,
             test_framework::{BlockBuilder, TestFrameworkBuilder, TransactionBuilder},
-            TestBlockInfo, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL,
+            TestBlockInfo,
         },
         BlockIndex, GenBlockIndex, TimeGetter,
     },
-    BlockError, BlockHeight, BlockSource, Chainstate, ChainstateConfig, PropertyQueryError,
+    BlockError, BlockHeight, BlockSource, Chainstate, ChainstateConfig,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
@@ -142,8 +138,13 @@ impl TestFramework {
     }
 
     /// Returns a block index corresponding to the specified id.
-    pub fn block_index(&self, id: &Id<Block>) -> BlockIndex {
-        self.chainstate.get_block_index(id).unwrap().unwrap()
+    pub fn block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
+        self.chainstate.make_db_tx_ro().get_gen_block_index(id).unwrap().unwrap()
+    }
+
+    pub fn index_at(&self, at: usize) -> &BlockIndex {
+        assert!(at > 0, "No block index for genesis");
+        &self.block_indexes[at - 1]
     }
 }
 
@@ -193,116 +194,4 @@ fn process_block() {
         )
         .process()
         .unwrap();
-}
-
-// TODO: FIXME ///////////////////////////////////////////////////////
-// TODO: FIXME: Check everything below.
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum TestSpentStatus {
-    Spent,
-    Unspent,
-    NotInMainchain,
-}
-
-// TODO: See https://github.com/mintlayer/mintlayer-core/issues/274 for details.
-#[allow(dead_code)]
-pub enum TestBlockParams {
-    NoErrors,
-    TxCount(usize),
-    Fee(Amount),
-    Orphan,
-    SpendFrom(Id<Block>),
-}
-
-impl TestFramework {
-    // TODO: FIXME: Remove unused?..
-    pub fn with_chainstate(chainstate: Chainstate) -> Self {
-        Self {
-            chainstate,
-            block_indexes: Vec::new(),
-        }
-    }
-
-    pub fn random_block(
-        &self,
-        parent_info: TestBlockInfo,
-        params: Option<&[TestBlockParams]>,
-        rng: &mut impl Rng,
-    ) -> Block {
-        let (mut inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = parent_info
-            .txns
-            .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-            .unzip();
-
-        let mut prev_block_hash = parent_info.id;
-        if let Some(params) = params {
-            for param in params {
-                match param {
-                    TestBlockParams::SpendFrom(block_id) => {
-                        let block = self
-                            .chainstate
-                            .chainstate_storage
-                            .get_block(*block_id)
-                            .unwrap()
-                            .unwrap();
-
-                        let double_spend_input = TxInput::new(
-                            OutPointSourceId::Transaction(block.transactions()[0].get_id()),
-                            0,
-                            InputWitness::NoSignature(None),
-                        );
-                        inputs.push(double_spend_input)
-                    }
-                    TestBlockParams::Orphan => prev_block_hash = Id::new(H256::random()),
-                    // TODO: FIXME.
-                    _ => unimplemented!(),
-                }
-            }
-        }
-
-        Block::new(
-            vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-            prev_block_hash,
-            BlockTimestamp::from_duration_since_epoch(time::get()),
-            ConsensusData::None,
-        )
-        .expect(ERR_CREATE_BLOCK_FAIL)
-    }
-
-    pub fn get_block_index(&self, id: &Id<GenBlock>) -> GenBlockIndex {
-        self.chainstate.make_db_tx_ro().get_gen_block_index(id).unwrap().unwrap()
-    }
-
-    pub fn add_special_block(&mut self, block: Block) -> Result<Option<BlockIndex>, BlockError> {
-        let id = block.get_id();
-        let block_index = self.chainstate.process_block(block, BlockSource::Local)?;
-        self.block_indexes.push(block_index.clone().unwrap_or_else(|| {
-            self.chainstate.chainstate_storage.get_block_index(&id).unwrap().unwrap()
-        }));
-        Ok(block_index)
-    }
-
-    pub fn get_spent_status(
-        &self,
-        tx_id: &Id<Transaction>,
-        output_index: u32,
-    ) -> Option<OutputSpentState> {
-        let tx_index = self
-            .chainstate
-            .chainstate_storage
-            .get_mainchain_tx_index(&OutPointSourceId::from(*tx_id))
-            .unwrap()?;
-        tx_index.get_spent_state(output_index).ok()
-    }
-
-    pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
-        self.chainstate.get_block(block_id)
-    }
-
-    pub fn index_at(&self, at: usize) -> &BlockIndex {
-        assert!(at > 0, "No block index for genesis");
-        &self.block_indexes[at - 1]
-    }
 }
