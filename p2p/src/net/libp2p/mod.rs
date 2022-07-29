@@ -51,7 +51,6 @@ use utils::ensure;
 
 mod backend;
 mod constants;
-mod discovery;
 mod sync_codec;
 mod tests;
 mod types;

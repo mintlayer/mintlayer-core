@@ -16,6 +16,7 @@
 //! Network behaviour configuration for libp2p
 
 pub mod connection_manager;
+pub mod discovery;
 
 use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
 
@@ -27,7 +28,6 @@ use crate::{
         self,
         libp2p::{
             constants::*,
-            discovery,
             sync_codec::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },

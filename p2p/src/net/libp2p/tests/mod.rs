@@ -16,7 +16,7 @@
 use crate::net::{
     self, config,
     libp2p::sync_codec::*,
-    libp2p::{backend::Libp2pBackend, behaviour, discovery, types},
+    libp2p::{backend::Libp2pBackend, behaviour, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -40,7 +40,7 @@ use std::{
 };
 use tokio::sync::mpsc;
 
-use super::behaviour::connection_manager;
+use super::behaviour::{connection_manager, discovery};
 
 #[cfg(test)]
 mod frontend;
