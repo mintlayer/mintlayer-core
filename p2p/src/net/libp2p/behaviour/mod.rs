@@ -15,6 +15,10 @@
 
 //! Network behaviour configuration for libp2p
 
+pub mod connection_manager;
+
+use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
+
 use crate::{
     config,
     error::{P2pError, ProtocolError},
@@ -22,10 +26,6 @@ use crate::{
     net::{
         self,
         libp2p::{
-            connection_manager::{
-                self,
-                types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
-            },
             constants::*,
             discovery,
             sync_codec::*,

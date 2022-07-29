@@ -34,12 +34,7 @@
 
 use crate::{
     error::{DialError, P2pError, PeerError},
-    net::libp2p::{
-        connection_manager::types::{
-            BehaviourEvent, Connection, ConnectionManagerEvent, ConnectionState, ControlEvent,
-        },
-        types::IdentifyInfoWrapper,
-    },
+    net::libp2p::types::IdentifyInfoWrapper,
 };
 use libp2p::{
     core::{
@@ -57,6 +52,10 @@ use logging::log;
 use std::{
     collections::{HashMap, VecDeque},
     task::{Context, Poll, Waker},
+};
+
+use self::types::{
+    BehaviourEvent, Connection, ConnectionManagerEvent, ConnectionState, ControlEvent,
 };
 
 pub mod types;

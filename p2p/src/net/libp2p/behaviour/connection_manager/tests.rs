@@ -18,11 +18,11 @@ use super::*;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::libp2p::{
-        connection_manager::*,
         types::{ConnectivityEvent, IdentifyInfoWrapper},
         DialError,
     },
 };
+
 use libp2p::{
     core::connection::{ConnectedPoint, Endpoint},
     identify, identity,
