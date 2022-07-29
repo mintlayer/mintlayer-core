@@ -29,22 +29,40 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         signature::inputsig::InputWitness,
         tokens::{token_id, AssetData, OutputValue, TokenId},
-        OutputPurpose, Transaction, TxInput, TxOutput,
+        GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount},
+    primitives::{time, Amount, Id, Idable},
 };
 use std::vec;
 
+enum ParentBlock {
+    BestBlock,
+    BlockId(Id<GenBlock>),
+}
+
 fn process_token(
     chainstate: &mut Chainstate,
+    parent_block: ParentBlock,
     values: Vec<OutputValue>,
 ) -> Result<Option<BlockIndex>, BlockError> {
+    process_token_ex(chainstate, vec![], parent_block, values).map(|(_block_id, result)| result)
+}
+
+fn process_token_ex(
+    chainstate: &mut Chainstate,
+    additional_inputs: Vec<TxInput>,
+    parent_block: ParentBlock,
+    values: Vec<OutputValue>,
+) -> Result<(Block, Option<BlockIndex>), BlockError> {
     let receiver = anyonecanspend_address();
-    let parent_block_id = chainstate.get_best_block_id().unwrap();
+    let parent_block_id = match parent_block {
+        ParentBlock::BestBlock => chainstate.get_best_block_id().unwrap(),
+        ParentBlock::BlockId(block_id) => block_id,
+    };
     let test_block_info = TestBlockInfo::from_id(chainstate, parent_block_id);
 
     // Create a token issue transaction and block
-    let inputs = test_block_info
+    let mut inputs: Vec<TxInput> = test_block_info
         .txns
         .iter()
         .flat_map(|(outpoint_source_id, outputs)| {
@@ -62,6 +80,8 @@ fn process_token(
         })
         .collect();
 
+    inputs.extend(additional_inputs);
+
     let outputs: Vec<TxOutput> = values
         .into_iter()
         .map(|value| TxOutput::new(value, OutputPurpose::Transfer(receiver.clone())))
@@ -76,7 +96,9 @@ fn process_token(
     .unwrap();
 
     // Process it
-    chainstate.process_block(block, BlockSource::Local)
+    chainstate
+        .process_block(block.clone(), BlockSource::Local)
+        .map(|result| (block, result))
 }
 
 #[test]
@@ -90,7 +112,9 @@ fn token_issue_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
+        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
         let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
@@ -102,7 +126,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -120,7 +144,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -138,7 +162,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -156,7 +180,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -174,7 +198,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -192,7 +216,7 @@ fn token_issue_test() {
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -215,7 +239,9 @@ fn token_transfer_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
+        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
         let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
@@ -225,7 +251,7 @@ fn token_transfer_test() {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to transfer exceed amount
         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
@@ -233,7 +259,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(987654321),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
@@ -245,7 +271,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
@@ -257,7 +283,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(0),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(TokensError::TransferZeroTokens(
@@ -380,7 +406,9 @@ fn transfer_tokens() {
             number_of_decimals: 1,
             metadata_uri: b"https://52292852472.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
+        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
         let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
         let token_id = token_id(&block.transactions()[0]).unwrap();
@@ -396,14 +424,14 @@ fn transfer_tokens() {
                 amount: Amount::from_atoms(123456),
             }),
         ];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Collect these in one output
         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
             token_id,
             amount: TOTAL_TOKEN_VALUE,
         })];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
     })
 }
 
@@ -421,7 +449,9 @@ fn test_burn_tokens() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
+        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
+            .unwrap()
+            .unwrap();
         let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
@@ -431,7 +461,7 @@ fn test_burn_tokens() {
             token_id,
             amount: ISSUED_FUNDS,
         })];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try burn more than we have in input
         let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
@@ -439,7 +469,7 @@ fn test_burn_tokens() {
             amount_to_burn: (ISSUED_FUNDS * 2).unwrap(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
@@ -451,7 +481,7 @@ fn test_burn_tokens() {
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::SomeTokensLost(_, _))
             ))
@@ -468,14 +498,14 @@ fn test_burn_tokens() {
                 amount: HALF_ISSUED_FUNDS,
             }),
         ];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to burn it all
         let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
-        let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to transfer burned tokens
         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
@@ -483,7 +513,7 @@ fn test_burn_tokens() {
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            dbg!(process_token(&mut chainstate, values)),
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
@@ -491,54 +521,146 @@ fn test_burn_tokens() {
     })
 }
 
-//     B1 - C1 - D1
-//   /
-// A
-//   \
-//     B2 - C2
-//
-// Where in A, we issue a token, and it becomes part of the utxo-set.
-// Now assuming chain-trust per block is 1, it's obvious that D1 represents the tip.
-// Consider a case where B1 spends the issued token output. If a Block D2 was added
-// to this chain (whose previous block is C2), and D2 contains an input that also spends
-// B1, your check for whether that output is spent will simply yield a wrong result,
-// because it was spent in B1 but isn't spent in your chain. As you see, knowing whether
-// that output is spent depends on the current tip, and that's why check_block doesn't
-// look into the history, because the database state is not compatible with every block
-// we check.
-// #[test]
-// fn test_reorg_and_try_to_double_spend_tokens() {
-//     common::concurrency::model(|| {
-//         const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
+#[test]
+fn test_reorg_and_try_to_double_spend_tokens() {
+    //     B1 - C1 - D1
+    //   /
+    // A
+    //   \
+    //     B2 - C2
+    //
+    // Where in A, we issue a token, and it becomes part of the utxo-set.
+    // Now assuming chain-trust per block is 1, it's obvious that D1 represents the tip.
+    // Consider a case where B1 spends the issued token output. If a Block D2 was added
+    // to this chain (whose previous block is C2), and D2 contains an input that also spends
+    // B1, check that output is spent.
 
-//         // Issue a new token
-//         let mut chainstate = setup_chainstate();
-//         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
-//             token_ticker: b"USDC".to_vec(),
-//             amount_to_issue: ISSUED_FUNDS,
-//             number_of_decimals: 1,
-//             metadata_uri: b"https://some_site.meta".to_vec(),
-//         })];
-//         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
-//         let block_a = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
-//         assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
-//         let token_id = token_id(&block_a.transactions()[0]).unwrap();
+    common::concurrency::model(|| {
+        const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
 
-//         // B1 - burn all tokens in mainchain
-//         let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
-//             token_id,
-//             amount_to_burn: ISSUED_FUNDS,
-//         })];
-//         let block_index = process_token(&mut chainstate, values).unwrap().unwrap();
-//         let block_b1 = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        // Issue a new token
+        let mut chainstate = setup_chainstate();
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenIssuanceV1 {
+                token_ticker: b"USDC".to_vec(),
+                amount_to_issue: ISSUED_FUNDS,
+                number_of_decimals: 1,
+                metadata_uri: b"https://some_site.meta".to_vec(),
+            }),
+            OutputValue::Coin(Amount::from_atoms(123456)),
+        ];
+        let (block_a, _) = process_token_ex(
+            &mut chainstate,
+            vec![],
+            ParentBlock::BestBlock,
+            values.clone(),
+        )
+        .unwrap();
+        assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
+        let token_id = token_id(&block_a.transactions()[0]).unwrap();
 
-//         // Try to transfer spent tokens
-//         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
-//             token_id,
-//             amount: ISSUED_FUNDS,
-//         })];
-//         let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+        // B1 - burn all tokens in mainchain
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenBurnV1 {
+                token_id,
+                amount_to_burn: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123455)),
+        ];
+        let (block_b1, _) =
+            process_token_ex(&mut chainstate, vec![], ParentBlock::BestBlock, values).unwrap();
+        let _block_b1 = chainstate.get_block(block_b1.get_id()).unwrap().unwrap();
 
-//         // Second chain - B2
-//     })
-// }
+        let spent_input = TxInput::new(
+            OutPointSourceId::from(block_b1.transactions()[0].get_id()),
+            0,
+            InputWitness::NoSignature(None),
+        );
+
+        // Try to transfer spent tokens
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123454)),
+        ];
+        assert!(matches!(
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
+            ))
+        ));
+
+        // Let's add C1 and D1
+        let values = vec![OutputValue::Coin(Amount::from_atoms(123453))];
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let values = vec![OutputValue::Coin(Amount::from_atoms(123452))];
+        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+
+        // Second chain - B2
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123454)),
+        ];
+        let (block_b2, block_index) = process_token_ex(
+            &mut chainstate,
+            vec![],
+            ParentBlock::BlockId(Id::<GenBlock>::from(block_a.get_id())),
+            values,
+        )
+        .unwrap();
+        assert!(block_index.is_none(), "Reog is not allowed at this height");
+
+        // C2 - burn all tokens in second chain
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenBurnV1 {
+                token_id,
+                amount_to_burn: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123453)),
+        ];
+        let (block_c2, block_index) = process_token_ex(
+            &mut chainstate,
+            vec![],
+            ParentBlock::BlockId(Id::<GenBlock>::from(block_b2.get_id())),
+            values,
+        )
+        .unwrap();
+        assert!(block_index.is_none(), "Reog is not allowed at this height");
+
+        // Now D2 trying to spend tokens from mainchain
+        let values = vec![
+            OutputValue::Asset(AssetData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123454)),
+        ];
+        let (block_d2, block_index) = process_token_ex(
+            &mut chainstate,
+            vec![spent_input],
+            ParentBlock::BlockId(Id::<GenBlock>::from(block_c2.get_id())),
+            values,
+        )
+        .unwrap();
+        assert!(block_index.is_none(), "Reog is not allowed at this height");
+
+        // Block E2 will cause reorganization
+        let values = vec![OutputValue::Coin(Amount::from_atoms(123453))];
+        assert!(matches!(
+            process_token_ex(
+                &mut chainstate,
+                vec![],
+                ParentBlock::BlockId(Id::<GenBlock>::from(block_d2.get_id())),
+                values
+            ),
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::MissingOutputOrSpent
+            ))
+        ));
+    })
+}
