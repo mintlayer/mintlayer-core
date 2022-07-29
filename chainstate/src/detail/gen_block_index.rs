@@ -18,16 +18,17 @@ use common::chain::block::{consensus_data::BlockRewardTransactable, timestamp::B
 use common::chain::{GenBlock, Genesis};
 use common::primitives::{id::WithId, BlockHeight, Id, Idable};
 use common::Uint256;
+use std::sync::Arc;
 
 /// Generalized block index
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
-pub enum GenBlockIndex<'a> {
+pub enum GenBlockIndex {
     Block(BlockIndex),
-    Genesis(&'a WithId<Genesis>),
+    Genesis(Arc<WithId<Genesis>>),
 }
 
-impl<'a> GenBlockIndex<'a> {
+impl GenBlockIndex {
     pub fn block_id(&self) -> Id<GenBlock> {
         match self {
             GenBlockIndex::Block(b) => (*b.block_id()).into(),

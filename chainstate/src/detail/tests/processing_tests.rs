@@ -231,7 +231,8 @@ fn straight_chain(#[case] seed: Seed) {
         assert_eq!(genesis_index.block_height(), BlockHeight::new(0));
 
         let chain_config_clone = chainstate.chain_config.clone();
-        let mut block_index = GenBlockIndex::Genesis(chain_config_clone.genesis_block());
+        let mut block_index =
+            GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
         let mut prev_block = TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block());
 
         for _ in 0..rng.gen_range(100..200) {
@@ -420,7 +421,7 @@ fn last_common_ancestor(#[case] seed: Seed) {
     btf.create_chain(&btf.genesis().get_id().into(), SPLIT_HEIGHT, &mut rng)
         .expect("Chain creation to succeed");
     let config_clone = btf.chainstate.chain_config.clone();
-    let genesis = GenBlockIndex::Genesis(config_clone.genesis_block());
+    let genesis = GenBlockIndex::Genesis(Arc::clone(config_clone.genesis_block()));
     let split = GenBlockIndex::Block(btf.index_at(SPLIT_HEIGHT).clone());
 
     // First branch of fork
