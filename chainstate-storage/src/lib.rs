@@ -26,8 +26,8 @@ use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 mod internal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
-mod utxo_db;
 
+pub use internal::utxo_db;
 pub use storage::transaction::{TransactionRo, TransactionRw};
 
 // Alias the in-memory store as the store used by other crates for now

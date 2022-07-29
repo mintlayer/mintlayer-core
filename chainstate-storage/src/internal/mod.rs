@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod utxo_db;
+
 use chainstate_types::block_index::BlockIndex;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
@@ -390,4 +392,4 @@ impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for
 }
 
 #[cfg(test)]
-pub(crate) mod test;
+mod test;
