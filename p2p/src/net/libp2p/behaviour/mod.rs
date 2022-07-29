@@ -17,6 +17,7 @@
 
 pub mod connection_manager;
 pub mod discovery;
+pub mod sync_codec;
 
 use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
 
@@ -28,7 +29,6 @@ use crate::{
         self,
         libp2p::{
             constants::*,
-            sync_codec::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
     },
@@ -53,7 +53,9 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use super::sync_codec::message_types::{SyncRequest, SyncResponse};
+use sync_codec::message_types::{SyncRequest, SyncResponse};
+
+use self::sync_codec::{SyncMessagingCodec, SyncingProtocol};
 
 /// Libp2pBehaviour defines the protocols that communicate with peers, which include message exchange protocol and message processing
 /// For example, how a HELLO message is exchanged, and what kind of messages to send after a connection is established

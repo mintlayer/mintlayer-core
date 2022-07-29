@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use behaviour::sync_codec::*;
+
 use crate::net::{
     self, config,
-    libp2p::sync_codec::*,
     libp2p::{backend::Libp2pBackend, behaviour, types},
 };
 use futures::prelude::*;

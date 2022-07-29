@@ -246,8 +246,8 @@ impl Libp2pBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{
-        behaviour::{self, connection_manager, discovery},
+    use crate::net::libp2p::behaviour::{
+        self, connection_manager, discovery,
         sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
     use libp2p::{

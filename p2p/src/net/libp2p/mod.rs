@@ -21,16 +21,13 @@ use crate::{
     message,
     net::{
         self,
-        libp2p::{
-            backend::Libp2pBackend,
-            sync_codec::message_types::{SyncRequest, SyncResponse},
-            types::IdentifyInfoWrapper,
-        },
+        libp2p::{backend::Libp2pBackend, types::IdentifyInfoWrapper},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
         ConnectivityService, NetworkingService, PubSubService, SyncingMessagingService,
     },
 };
 use async_trait::async_trait;
+use behaviour::sync_codec::message_types::{SyncRequest, SyncResponse};
 use itertools::*;
 use libp2p::{
     core::{upgrade, PeerId},
@@ -51,7 +48,6 @@ use utils::ensure;
 
 mod backend;
 mod constants;
-mod sync_codec;
 mod tests;
 mod types;
 
