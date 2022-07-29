@@ -193,6 +193,7 @@ fn straight_chain(#[case] seed: Seed) {
 
         let chain_config_clone = tf.chainstate.chain_config.clone();
         let mut block_index =
+            GenBlockIndex::Genesis(Arc::clone(chain_config_clone.genesis_block()));
         let mut prev_block = TestBlockInfo::from_genesis(tf.genesis());
 
         for _ in 0..rng.gen_range(100..200) {
