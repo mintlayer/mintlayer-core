@@ -111,7 +111,7 @@ pub async fn make_libp2p(
             ),
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncingMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
@@ -205,7 +205,7 @@ pub async fn make_libp2p_with_ping(
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncingMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),

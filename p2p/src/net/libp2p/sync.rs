@@ -31,9 +31,12 @@ const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct SyncingProtocol();
 
+/// The SyncingMessageCodec defines the types of request/response messages and how they are serialized and deserialized,
+/// which is done by implementating the RequestResponseCodec for it and defining the request response types
 #[derive(Clone)]
-pub struct SyncingCodec();
+pub struct SyncingMessagingCodec();
 
+/// Generic type of Request messages
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncRequest(Vec<u8>);
 
@@ -51,6 +54,7 @@ impl Deref for SyncRequest {
     }
 }
 
+/// Generic type of Response messages
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyncResponse(Vec<u8>);
 
@@ -75,7 +79,7 @@ impl ProtocolName for SyncingProtocol {
 }
 
 #[async_trait]
-impl RequestResponseCodec for SyncingCodec {
+impl RequestResponseCodec for SyncingMessagingCodec {
     type Protocol = SyncingProtocol;
     type Request = SyncRequest;
     type Response = SyncResponse;
@@ -173,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_request() {
-        let mut codec = SyncingCodec();
+        let mut codec = SyncingMessagingCodec();
         let protocol = SyncingProtocol();
 
         // empty stream
@@ -219,7 +223,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_read_response() {
-        let mut codec = SyncingCodec();
+        let mut codec = SyncingMessagingCodec();
         let protocol = SyncingProtocol();
 
         // empty stream
@@ -265,7 +269,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_write_request() {
-        let mut codec = SyncingCodec();
+        let mut codec = SyncingMessagingCodec();
         let protocol = SyncingProtocol();
 
         // empty response
@@ -300,7 +304,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_write_response() {
-        let mut codec = SyncingCodec();
+        let mut codec = SyncingMessagingCodec();
         let protocol = SyncingProtocol();
 
         // empty response
