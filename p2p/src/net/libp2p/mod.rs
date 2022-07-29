@@ -50,7 +50,7 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
-mod connectivity;
+mod connection_manager;
 mod constants;
 mod discovery;
 mod sync_codec;

@@ -247,7 +247,7 @@ impl Libp2pBackend {
 mod tests {
     use super::*;
     use crate::net::libp2p::{
-        behaviour, connectivity, discovery,
+        behaviour, connection_manager, discovery,
         sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
     use libp2p::{
@@ -309,7 +309,7 @@ mod tests {
             gossipsub,
             identify,
             sync,
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Default::default()).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),

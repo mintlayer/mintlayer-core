@@ -16,7 +16,7 @@
 use crate::net::{
     self, config,
     libp2p::sync_codec::*,
-    libp2p::{backend::Libp2pBackend, behaviour, connectivity, discovery, types},
+    libp2p::{backend::Libp2pBackend, behaviour, connection_manager, discovery, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -120,7 +120,7 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(p2p_config).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -214,7 +214,7 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),

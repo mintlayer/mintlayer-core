@@ -18,7 +18,7 @@ use super::*;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::libp2p::{
-        connectivity::*,
+        connection_manager::*,
         types::{ConnectivityEvent, IdentifyInfoWrapper},
         DialError,
     },

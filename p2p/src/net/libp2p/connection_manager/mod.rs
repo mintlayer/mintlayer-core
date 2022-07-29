@@ -35,7 +35,7 @@
 use crate::{
     error::{DialError, P2pError, PeerError},
     net::libp2p::{
-        connectivity::types::{
+        connection_manager::types::{
             BehaviourEvent, Connection, ConnectionManagerEvent, ConnectionState, ControlEvent,
         },
         types::IdentifyInfoWrapper,

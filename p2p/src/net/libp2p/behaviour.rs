@@ -22,7 +22,7 @@ use crate::{
     net::{
         self,
         libp2p::{
-            connectivity::{
+            connection_manager::{
                 self,
                 types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent},
             },
@@ -68,7 +68,7 @@ pub struct Libp2pBehaviour {
     pub ping: ping::Behaviour,
     pub identify: identify::Identify,
     pub sync: RequestResponse<SyncMessagingCodec>,
-    pub connmgr: connectivity::ConnectionManager,
+    pub connmgr: connection_manager::ConnectionManager,
     pub discovery: discovery::DiscoveryManager,
 
     #[behaviour(ignore)]
@@ -133,7 +133,7 @@ impl Libp2pBehaviour {
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
