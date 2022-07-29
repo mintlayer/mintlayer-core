@@ -37,7 +37,6 @@ use crate::{
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
     pub chainstate: Chainstate,
-    // TODO: FIXME: Remove?..
     pub block_indexes: Vec<BlockIndex>,
 }
 
