@@ -419,7 +419,7 @@ fn check_block_at_height(
 }
 
 fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
-    let block_index = tf.block_index(&block_id.to_owned().into());
+    let block_index = tf.block_index(&block_id.clone().into());
     let height = block_index.block_height();
     tf.chainstate
         .chainstate_storage
@@ -450,7 +450,7 @@ fn spent_status(
 
 fn check_spend_status(tf: &TestFramework, tx: &Transaction, spend_status: &TestSpentStatus) {
     for (output_index, _) in tx.outputs().iter().enumerate() {
-        let status = spent_status(&tf, &tx.get_id(), output_index as u32);
+        let status = spent_status(tf, &tx.get_id(), output_index as u32);
         if spend_status == &TestSpentStatus::Spent {
             assert_ne!(status, Some(OutputSpentState::Unspent));
         } else {
