@@ -17,7 +17,10 @@
 
 use super::{anyonecanspend_address, setup_chainstate};
 use crate::{
-    detail::{CheckBlockError, CheckBlockTransactionsError, TokensError},
+    detail::{
+        spend_cache::error::StateUpdateError, tests::TestBlockInfo, CheckBlockError,
+        CheckBlockTransactionsError, TokensError,
+    },
     BlockError, BlockSource, Chainstate,
 };
 use chainstate_types::block_index::BlockIndex;
@@ -28,7 +31,7 @@ use common::{
         tokens::{token_id, AssetData, OutputValue, TokenId},
         OutputPurpose, Transaction, TxInput, TxOutput,
     },
-    primitives::{Amount, Idable},
+    primitives::{time, Amount},
 };
 use std::vec;
 
@@ -36,20 +39,21 @@ fn process_token(
     chainstate: &mut Chainstate,
     values: Vec<OutputValue>,
 ) -> Result<Option<BlockIndex>, BlockError> {
-    let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
     let receiver = anyonecanspend_address();
-    let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
+    let parent_block_id = chainstate.get_best_block_id().unwrap();
+    let test_block_info = TestBlockInfo::from_id(chainstate, parent_block_id);
+
     // Create a token issue transaction and block
-    let inputs = prev_block
-        .transactions()
+    let inputs = test_block_info
+        .txns
         .iter()
-        .flat_map(|tx| {
-            tx.outputs()
+        .flat_map(|(outpoint_source_id, outputs)| {
+            outputs
                 .iter()
                 .enumerate()
                 .map(|(output_index, _output)| {
                     TxInput::new(
-                        tx.get_id().into(),
+                        outpoint_source_id.clone(),
                         output_index.try_into().unwrap(),
                         InputWitness::NoSignature(None),
                     )
@@ -65,8 +69,8 @@ fn process_token(
 
     let block = Block::new(
         vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
-        Some(prev_block_id),
-        BlockTimestamp::from_int_seconds(prev_block.timestamp().as_int_seconds() + 1),
+        parent_block_id,
+        BlockTimestamp::from_duration_since_epoch(time::get()),
         ConsensusData::None,
     )
     .unwrap();
@@ -87,7 +91,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
-        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Ticker is too long
@@ -212,7 +216,7 @@ fn token_transfer_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
-        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
@@ -230,12 +234,8 @@ fn token_transfer_test() {
         })];
         assert!(matches!(
             process_token(&mut chainstate, values),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::InsuffienceTokenValueInInputs(_, _)
-                    )
-                )
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
         ));
 
@@ -246,13 +246,8 @@ fn token_transfer_test() {
         })];
         assert!(matches!(
             process_token(&mut chainstate, values),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(TokensError::NoTokenInInputs(
-                        _,
-                        _
-                    ))
-                )
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
         ));
 
@@ -279,7 +274,8 @@ fn token_transfer_test() {
 fn couple_of_token_issuance_in_one_tx() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
-        let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
+        let parent_block_id = chainstate.get_best_block_id().unwrap();
+        let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
         let receiver = anyonecanspend_address();
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -287,10 +283,9 @@ fn couple_of_token_issuance_in_one_tx() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
         // Create a token issue transaction and block
         let inputs = vec![TxInput::new(
-            prev_block.transactions()[0].get_id().into(),
+            test_block_info.txns[0].0.clone(),
             0,
             InputWitness::NoSignature(None),
         )];
@@ -300,8 +295,8 @@ fn couple_of_token_issuance_in_one_tx() {
         ];
         let block = Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
-            Some(prev_block_id),
-            BlockTimestamp::from_int_seconds(prev_block.timestamp().as_int_seconds() + 1),
+            parent_block_id,
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .unwrap();
@@ -324,7 +319,10 @@ fn couple_of_token_issuance_in_one_tx() {
 fn token_issuance_with_insufficient_fee() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
-        let prev_block_id = chainstate.get_best_block_id().unwrap().unwrap();
+
+        let parent_block_id = chainstate.get_best_block_id().unwrap();
+        let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
+
         let receiver = anyonecanspend_address();
         let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -332,22 +330,14 @@ fn token_issuance_with_insufficient_fee() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         });
-        let prev_block = chainstate.get_block(prev_block_id.clone()).unwrap().unwrap();
         // Create a token issue transaction and block
         let inputs = vec![TxInput::new(
-            prev_block.transactions()[0].get_id().into(),
+            test_block_info.txns[0].0.clone(),
             0,
             InputWitness::NoSignature(None),
         )];
 
-        let input_coins = match chainstate
-            .get_block(chainstate.get_best_block_id().unwrap().unwrap())
-            .unwrap()
-            .unwrap()
-            .transactions()[0]
-            .outputs()[0]
-            .value()
-        {
+        let input_coins = match test_block_info.txns[0].1[0].value() {
             OutputValue::Coin(coin) => *coin,
             OutputValue::Asset(_) => unreachable!(),
         };
@@ -361,8 +351,8 @@ fn token_issuance_with_insufficient_fee() {
         ];
         let block = Block::new(
             vec![Transaction::new(0, inputs, outputs, 0).unwrap()],
-            Some(prev_block_id),
-            BlockTimestamp::from_int_seconds(prev_block.timestamp().as_int_seconds() + 1),
+            parent_block_id,
+            BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
         )
         .unwrap();
@@ -370,12 +360,8 @@ fn token_issuance_with_insufficient_fee() {
         // Process it
         assert!(matches!(
             chainstate.process_block(block, BlockSource::Local),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::InsuffienceTokenFees(_, _)
-                    )
-                )
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::InsuffienceTokenFees(_, _))
             ))
         ));
     })
@@ -395,7 +381,7 @@ fn transfer_tokens() {
             metadata_uri: b"https://52292852472.meta".to_vec(),
         })];
         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
-        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
         let token_id = token_id(&block.transactions()[0]).unwrap();
 
@@ -436,7 +422,7 @@ fn test_burn_tokens() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
-        let block = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
@@ -454,12 +440,8 @@ fn test_burn_tokens() {
         })];
         assert!(matches!(
             process_token(&mut chainstate, values),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::InsuffienceTokenValueInInputs(_, _)
-                    )
-                )
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
         ));
 
@@ -470,13 +452,8 @@ fn test_burn_tokens() {
         })];
         assert!(matches!(
             process_token(&mut chainstate, values),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(TokensError::SomeTokensLost(
-                        _,
-                        _
-                    ))
-                )
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::SomeTokensLost(_, _))
             ))
         ));
 
@@ -506,15 +483,62 @@ fn test_burn_tokens() {
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, values),
-            Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(TokensError::NoTokenInInputs(
-                        _,
-                        _
-                    ))
-                )
+            dbg!(process_token(&mut chainstate, values)),
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
         ));
     })
 }
+
+//     B1 - C1 - D1
+//   /
+// A
+//   \
+//     B2 - C2
+//
+// Where in A, we issue a token, and it becomes part of the utxo-set.
+// Now assuming chain-trust per block is 1, it's obvious that D1 represents the tip.
+// Consider a case where B1 spends the issued token output. If a Block D2 was added
+// to this chain (whose previous block is C2), and D2 contains an input that also spends
+// B1, your check for whether that output is spent will simply yield a wrong result,
+// because it was spent in B1 but isn't spent in your chain. As you see, knowing whether
+// that output is spent depends on the current tip, and that's why check_block doesn't
+// look into the history, because the database state is not compatible with every block
+// we check.
+// #[test]
+// fn test_reorg_and_try_to_double_spend_tokens() {
+//     common::concurrency::model(|| {
+//         const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
+
+//         // Issue a new token
+//         let mut chainstate = setup_chainstate();
+//         let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+//             token_ticker: b"USDC".to_vec(),
+//             amount_to_issue: ISSUED_FUNDS,
+//             number_of_decimals: 1,
+//             metadata_uri: b"https://some_site.meta".to_vec(),
+//         })];
+//         let block_index = process_token(&mut chainstate, values.clone()).unwrap().unwrap();
+//         let block_a = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+//         assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
+//         let token_id = token_id(&block_a.transactions()[0]).unwrap();
+
+//         // B1 - burn all tokens in mainchain
+//         let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+//             token_id,
+//             amount_to_burn: ISSUED_FUNDS,
+//         })];
+//         let block_index = process_token(&mut chainstate, values).unwrap().unwrap();
+//         let block_b1 = chainstate.get_block(block_index.block_id().clone()).unwrap().unwrap();
+
+//         // Try to transfer spent tokens
+//         let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+//             token_id,
+//             amount: ISSUED_FUNDS,
+//         })];
+//         let _ = process_token(&mut chainstate, values).unwrap().unwrap();
+
+//         // Second chain - B2
+//     })
+// }
