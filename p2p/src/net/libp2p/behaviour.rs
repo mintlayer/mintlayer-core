@@ -174,6 +174,8 @@ impl Libp2pBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
+    /// Libp2p handles retrieving identifying information from a new peer
+    /// This function implements what to do with information received from a peer
     fn inject_event(&mut self, event: identify::IdentifyEvent) {
         match event {
             identify::IdentifyEvent::Error { peer_id, error } => {
@@ -199,6 +201,7 @@ impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
+    /// Libp2p handles sending low-level tcp pings to peers (with results that can be success/failure); we handle what to do with that here
     fn inject_event(&mut self, event: ping::PingEvent) {
         match event {
             ping::Event {
@@ -239,6 +242,7 @@ impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
 }
 
 impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour {
+    /// Messages from Gossipsub (PubSub for us) are processed here, and then create an event to the PubSub module
     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
         match event {
             gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
@@ -298,6 +302,7 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
 impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>>
     for Libp2pBehaviour
 {
+    /// handle all request/response messages that have to do with syncing blocks
     fn inject_event(&mut self, event: RequestResponseEvent<SyncRequest, SyncResponse>) {
         match event {
             RequestResponseEvent::Message { peer, message } => match message {

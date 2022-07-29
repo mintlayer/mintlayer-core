@@ -36,8 +36,10 @@ const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 pub struct SyncingProtocol();
 
 impl ProtocolName for SyncingProtocol {
+    /// When using the RequestResponse<> behavior with Libp2p, this is going to be the string that is used to demultiplex the stream
+    /// we get for a specific use-case. For example, for syncing, we use this prefix. If we add our custom PubSub implementation,
+    /// we have to use another string, or the demultiplexer will fail at distinguishing streams
     fn protocol_name(&self) -> &[u8] {
-        // TODO: See how we're gonna deal with version numbers here
         "/mintlayer/sync/0.1.0".as_bytes()
     }
 }
