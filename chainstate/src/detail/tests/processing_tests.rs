@@ -17,14 +17,6 @@
 
 use std::{sync::atomic::Ordering, time::Duration};
 
-use crate::{
-    detail::{
-        median_time::calculate_median_time_past,
-        pow::error::ConsensusPoWError,
-        tests::{test_framework::TestFramework, *},
-    },
-    make_chainstate, ChainstateConfig,
-};
 use chainstate_storage::{BlockchainStorageRead, Store};
 use common::{
     chain::{
@@ -36,6 +28,15 @@ use common::{
     Uint256,
 };
 use crypto::key::{KeyKind, PrivateKey};
+
+use crate::{
+    detail::{
+        median_time::calculate_median_time_past,
+        pow::error::ConsensusPoWError,
+        tests::{test_framework::TestFramework, *},
+    },
+    make_chainstate, ChainstateConfig,
+};
 
 #[test]
 fn process_genesis_block() {

@@ -48,10 +48,7 @@ fn output_lock_until_height() {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output.clone())
-                        .add_output(TxOutput::new(
-                            Amount::from_atoms(5000),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ))
+                        .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .process()
@@ -61,7 +58,7 @@ fn output_lock_until_height() {
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
-        let prev_block_info = tf.block_info_from_height(1);
+        let prev_block_info = tf.block_info(1);
         tf.block_builder()
             .add_transaction(
                 TransactionBuilder::new()
@@ -70,10 +67,7 @@ fn output_lock_until_height() {
                         0,
                         InputWitness::NoSignature(None),
                     ))
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(10000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(10000)
                     .build(),
             )
             .process()
@@ -94,10 +88,7 @@ fn output_lock_until_height() {
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
-                            .add_output(TxOutput::new(
-                                Amount::from_atoms(5000),
-                                OutputPurpose::Transfer(anyonecanspend_address()),
-                            ))
+                            .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .process()
@@ -119,17 +110,14 @@ fn output_lock_until_height() {
 
         // now we should be able to spend it at block_height_that_unlocks
         assert_eq!(
-            tf.best_block_index().block_id(),
-            tf.block_info_from_height(block_height_that_unlocks - 1).id
+            tf.best_block_id(),
+            tf.block_info(block_height_that_unlocks - 1).id
         );
         tf.block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(5000)
                     .build(),
             )
             .process()
@@ -157,10 +145,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
                 0,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 Amount::from_atoms(100000),
                 OutputPurpose::LockThenTransfer(
@@ -175,10 +160,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
                 1,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(5000)
             .build();
 
         assert_eq!(
@@ -210,10 +192,7 @@ fn output_lock_for_block_count() {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output.clone())
-                        .add_output(TxOutput::new(
-                            Amount::from_atoms(5000),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ))
+                        .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .process()
@@ -232,10 +211,7 @@ fn output_lock_for_block_count() {
                         0,
                         InputWitness::NoSignature(None),
                     ))
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(10000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(10000)
                     .build(),
             )
             .process()
@@ -256,10 +232,7 @@ fn output_lock_for_block_count() {
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
-                            .add_output(TxOutput::new(
-                                Amount::from_atoms(5000),
-                                OutputPurpose::Transfer(anyonecanspend_address()),
-                            ))
+                            .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .process()
@@ -284,10 +257,7 @@ fn output_lock_for_block_count() {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(5000)
                     .build(),
             )
             .process()
@@ -313,10 +283,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
                 0,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 Amount::from_atoms(100000),
                 OutputPurpose::LockThenTransfer(
@@ -331,10 +298,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
                 1,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(50000)
             .build();
         assert_eq!(
             tf.block_builder().with_transactions(vec![tx1, tx2]).process().unwrap_err(),
@@ -364,10 +328,7 @@ fn output_lock_for_block_count_attempted_overflow() {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output)
-                        .add_output(TxOutput::new(
-                            Amount::from_atoms(5000),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ))
+                        .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .process()
@@ -417,11 +378,8 @@ fn output_lock_until_time() {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             assert_eq!(
-                calculate_median_time_past(
-                    &tf.chainstate.make_db_tx_ro(),
-                    &tf.best_block_index().block_id()
-                )
-                .as_int_seconds(),
+                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
+                    .as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
@@ -431,10 +389,7 @@ fn output_lock_until_time() {
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
-                            .add_output(TxOutput::new(
-                                Amount::from_atoms(5000),
-                                OutputPurpose::Transfer(anyonecanspend_address()),
-                            ))
+                            .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
@@ -462,10 +417,7 @@ fn output_lock_until_time() {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(5000)
                     .build(),
             )
             // The block that is being validated isn't taken into account when calculating the
@@ -497,10 +449,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
                 0,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 Amount::from_atoms(100000),
                 OutputPurpose::LockThenTransfer(
@@ -516,10 +465,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
                 1,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(50000)
             .build();
 
         assert_eq!(
@@ -570,11 +516,8 @@ fn output_lock_for_seconds() {
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
             assert_eq!(
-                calculate_median_time_past(
-                    &tf.chainstate.make_db_tx_ro(),
-                    &tf.best_block_index().block_id()
-                )
-                .as_int_seconds(),
+                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
+                    .as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
@@ -584,10 +527,7 @@ fn output_lock_for_seconds() {
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
-                            .add_output(TxOutput::new(
-                                Amount::from_atoms(5000),
-                                OutputPurpose::Transfer(anyonecanspend_address()),
-                            ))
+                            .add_anyone_can_spend_output(5000)
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
@@ -616,10 +556,7 @@ fn output_lock_for_seconds() {
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
-                    .add_output(TxOutput::new(
-                        Amount::from_atoms(5000),
-                        OutputPurpose::Transfer(anyonecanspend_address()),
-                    ))
+                    .add_anyone_can_spend_output(5000)
                     .build(),
             )
             // The block that is being validated isn't taken into account when calculating the
@@ -648,10 +585,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
                 0,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
                 Amount::from_atoms(100000),
                 OutputPurpose::LockThenTransfer(
@@ -667,10 +601,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
                 1,
                 InputWitness::NoSignature(None),
             ))
-            .add_output(TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            ))
+            .add_anyone_can_spend_output(50000)
             .build();
 
         assert_eq!(
@@ -699,10 +630,7 @@ fn output_lock_for_seconds_attempted_overflow() {
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output)
-                        .add_output(TxOutput::new(
-                            Amount::from_atoms(5000),
-                            OutputPurpose::Transfer(anyonecanspend_address()),
-                        ))
+                        .add_anyone_can_spend_output(5000)
                         .build()
                 )
                 .process()
@@ -721,7 +649,7 @@ fn add_block_with_locked_output(
 ) -> TxInput {
     // Find the last block.
     let current_height = tf.best_block_index().block_height();
-    let prev_block_info = tf.block_info_from_height(current_height.into());
+    let prev_block_info = tf.block_info(current_height.into());
 
     tf.block_builder()
         .add_transaction(
@@ -731,10 +659,7 @@ fn add_block_with_locked_output(
                     0,
                     InputWitness::NoSignature(None),
                 ))
-                .add_output(TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ))
+                .add_anyone_can_spend_output(10000)
                 .add_output(TxOutput::new(
                     Amount::from_atoms(100000),
                     OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
@@ -748,7 +673,7 @@ fn add_block_with_locked_output(
     let new_height = (current_height + BlockDistance::new(1)).unwrap();
     assert_eq!(tf.best_block_index().block_height(), new_height);
 
-    let block_info = tf.block_info_from_height(new_height.into());
+    let block_info = tf.block_info(new_height.into());
     TxInput::new(
         block_info.txns[0].0.clone(),
         1,

@@ -64,6 +64,14 @@ impl TransactionBuilder {
         self
     }
 
+    /// Adds an output with the "anyone can spend" destination.
+    pub fn add_anyone_can_spend_output(self, amount: u128) -> Self {
+        self.add_output(TxOutput::new(
+            Amount::from_atoms(amount),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        ))
+    }
+
     pub fn with_lock_time(mut self, lock_time: u32) -> Self {
         self.lock_time = lock_time;
         self

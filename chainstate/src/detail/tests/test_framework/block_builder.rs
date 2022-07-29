@@ -16,7 +16,8 @@
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
-        Transaction,
+        signature::inputsig::InputWitness,
+        Transaction, TxInput, TxOutput,
     },
     primitives::{time, Id, H256},
 };
@@ -74,7 +75,7 @@ impl<'f> BlockBuilder<'f> {
     /// Adds a transaction that uses the transactions from the previous block as inputs and
     /// produces new outputs.
     pub fn add_test_transaction(self, rng: &mut impl Rng) -> Self {
-        let parent = self.framework.best_block_index().block_id();
+        let parent = self.framework.best_block_id();
         self.add_test_transaction_with_parent(parent, rng)
     }
 
@@ -84,12 +85,25 @@ impl<'f> BlockBuilder<'f> {
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
-        let (inputs, outputs): (Vec<_>, Vec<_>) = parent
-            .txns
-            .into_iter()
-            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-            .unzip();
+        let (inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
+        self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
+        self
+    }
+
+    /// Adds a transaction that tries to spend already spend output from the specified block.
+    pub fn add_double_spend_transaction(
+        mut self,
+        parent: Id<GenBlock>,
+        spend_from: Id<Block>,
+        rng: &mut impl Rng,
+    ) -> Self {
+        let (mut inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
+        let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
+        inputs.push(TxInput::new(
+            spend_from.txns[0].0.clone(),
+            0,
+            InputWitness::NoSignature(None),
+        ));
         self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
         self
     }
@@ -133,5 +147,18 @@ impl<'f> BlockBuilder<'f> {
         )
         .unwrap();
         self.framework.process_block(block, self.block_source)
+    }
+
+    /// Produces a new set of inputs and outputs from the transactions of the specified block.
+    fn make_test_inputs_outputs(
+        &self,
+        parent: Id<GenBlock>,
+        rng: &mut impl Rng,
+    ) -> (Vec<TxInput>, Vec<TxOutput>) {
+        TestBlockInfo::from_id(&self.framework.chainstate, parent)
+            .txns
+            .into_iter()
+            .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
+            .unzip()
     }
 }

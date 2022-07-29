@@ -52,10 +52,7 @@ fn spend_output_in_the_same_block(#[case] seed: Seed) {
         let block_id = block.get_id();
 
         tf.process_block(block, BlockSource::Local).unwrap();
-        assert_eq!(
-            tf.best_block_index().block_id(),
-            <Id<GenBlock>>::from(block_id)
-        );
+        assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block_id));
     });
 }
 
@@ -91,7 +88,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
         );
-        assert_eq!(tf.best_block_index().block_id(), tf.genesis().get_id());
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
     });
 }
 
@@ -135,7 +132,7 @@ fn double_spend_tx_in_the_same_block(#[case] seed: Seed) {
                 CheckBlockTransactionsError::DuplicateInputInBlock(block_id)
             ))
         );
-        assert_eq!(tf.best_block_index().block_id(), tf.genesis().get_id());
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
     });
 }
 
@@ -169,7 +166,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let first_block = tf.block_builder().add_transaction(first_tx.clone()).build();
         let first_block_id = first_block.get_id();
         tf.process_block(first_block, BlockSource::Local).unwrap();
-        assert_eq!(tf.best_block_index().block_id(), first_block_id);
+        assert_eq!(tf.best_block_id(), first_block_id);
 
         let tx2_output_value = rng.gen_range(100_000..200_000);
         let second_tx = tx_from_genesis(tf.genesis(), &mut rng, tx2_output_value);
@@ -180,7 +177,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
                 Spender::RegularInput(first_tx.get_id())
             ))
         );
-        assert_eq!(tf.best_block_index().block_id(), first_block_id);
+        assert_eq!(tf.best_block_id(), first_block_id);
     });
 }
 
@@ -219,7 +216,7 @@ fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
                 Amount::from_atoms(tx2_output_value)
             ))
         );
-        assert_eq!(tf.best_block_index().block_id(), tf.genesis().get_id());
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
     });
 }
 

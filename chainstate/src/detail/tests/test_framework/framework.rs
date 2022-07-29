@@ -64,7 +64,6 @@ impl TestFramework {
         block: Block,
         source: BlockSource,
     ) -> Result<Option<BlockIndex>, BlockError> {
-        // TODO: FIXME: Remove block_indexes?
         let id = block.get_id();
         let index = self.chainstate.process_block(block, source)?;
         self.block_indexes.push(index.clone().unwrap_or_else(|| {
@@ -113,22 +112,38 @@ impl TestFramework {
         self.chainstate.get_best_block_index().unwrap().unwrap()
     }
 
+    /// Return the best block identifier.
+    #[track_caller]
+    pub fn best_block_id(&self) -> Id<GenBlock> {
+        self.best_block_index().block_id()
+    }
+
     /// Returns a test block information for the best block.
     #[track_caller]
     pub fn best_block_info(&self) -> TestBlockInfo {
-        let id = self.best_block_index().block_id();
-        TestBlockInfo::from_id(&self.chainstate, id)
+        TestBlockInfo::from_id(&self.chainstate, self.best_block_id())
     }
 
     /// Returns a test block information for the specified height.
     #[track_caller]
-    pub fn block_info_from_height(&self, height: u64) -> TestBlockInfo {
+    pub fn block_info(&self, height: u64) -> TestBlockInfo {
         let id = self
             .chainstate
             .get_block_id_from_height(&BlockHeight::from(height))
             .unwrap()
             .unwrap();
         TestBlockInfo::from_id(&self.chainstate, id)
+    }
+
+    /// Returns a block corresponding to the specified identifier.
+    #[track_caller]
+    pub fn block(&self, id: Id<Block>) -> Block {
+        self.chainstate.get_block(id).unwrap().unwrap()
+    }
+
+    /// Returns a block index corresponding to the specified id.
+    pub fn block_index(&self, id: &Id<Block>) -> BlockIndex {
+        self.chainstate.get_block_index(id).unwrap().unwrap()
     }
 }
 
@@ -280,84 +295,6 @@ impl TestFramework {
             .get_mainchain_tx_index(&OutPointSourceId::from(*tx_id))
             .unwrap()?;
         tx_index.get_spent_state(output_index).ok()
-    }
-
-    fn check_spend_status(&self, tx: &Transaction, spend_status: &TestSpentStatus) {
-        for (output_index, _) in tx.outputs().iter().enumerate() {
-            let status = self.get_spent_status(&tx.get_id(), output_index as u32);
-            if spend_status == &TestSpentStatus::Spent {
-                assert_ne!(status, Some(OutputSpentState::Unspent));
-            } else {
-                assert_eq!(status, Some(OutputSpentState::Unspent));
-            }
-        }
-    }
-
-    fn check_block_at_height(
-        &self,
-        block_height: BlockHeight,
-        expected_block_id: Option<&Id<Block>>,
-    ) {
-        if expected_block_id.is_some() {
-            let real_next_block_id = self
-                .chainstate
-                .chainstate_storage
-                .get_block_id_by_height(&block_height)
-                .unwrap();
-            let expected_block_id: Option<Id<GenBlock>> = expected_block_id.map(|id| (*id).into());
-            assert_eq!(real_next_block_id, expected_block_id);
-        }
-    }
-
-    pub fn test_block(
-        &self,
-        block_id: &Id<Block>,
-        prev_block_id: &Id<GenBlock>,
-        next_block_id: Option<&Id<Block>>,
-        height: u64,
-        spend_status: TestSpentStatus,
-    ) {
-        if spend_status != TestSpentStatus::NotInMainchain {
-            match self.block_indexes.iter().find(|x| x.block_id() == block_id) {
-                Some(block_index) => {
-                    let block = self
-                        .chainstate
-                        .chainstate_storage
-                        .get_block(*block_index.block_id())
-                        .unwrap()
-                        .unwrap();
-                    for tx in block.transactions() {
-                        self.check_spend_status(tx, &spend_status);
-                    }
-                }
-                None => {
-                    panic!("block not found")
-                }
-            }
-        }
-
-        let block_index =
-            self.chainstate.chainstate_storage.get_block_index(block_id).unwrap().unwrap();
-        assert_eq!(block_index.prev_block_id(), prev_block_id);
-        assert_eq!(block_index.block_height(), BlockHeight::new(height));
-        self.check_block_at_height(block_index.block_height().next_height(), next_block_id);
-    }
-
-    pub fn is_block_in_main_chain(&self, block_id: &Id<Block>) -> bool {
-        let block_index = self
-            .chainstate
-            .chainstate_storage
-            .get_block_index(block_id)
-            .ok()
-            .flatten()
-            .unwrap();
-        let height = block_index.block_height();
-        let id_at_height =
-            self.chainstate.chainstate_storage.get_block_id_by_height(&height).unwrap();
-        match id_at_height {
-            Some(id) => id == *block_index.block_id(),
-            None => false,
-        }
     }
 
     pub fn get_block(&self, block_id: Id<Block>) -> Result<Option<Block>, PropertyQueryError> {
