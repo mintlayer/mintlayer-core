@@ -419,7 +419,7 @@ fn check_block_at_height(
 }
 
 fn is_block_in_main_chain(tf: &TestFramework, block_id: &Id<Block>) -> bool {
-    let block_index = tf.block_index(&block_id.clone().into());
+    let block_index = tf.block_index(&(*block_id).into());
     let height = block_index.block_height();
     tf.chainstate
         .chainstate_storage
