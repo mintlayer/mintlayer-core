@@ -90,6 +90,24 @@ fn ensure_correct_ancestry(
     Ok(())
 }
 
+pub fn randomness_of_epoch(
+    chain_config: &ChainConfig,
+    epoch_index: u64,
+    block_index_handle: &dyn BlockIndexHandle,
+) -> Result<H256, ConsensusPoSError> {
+    let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
+        let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
+        *block_index_handle
+            .get_epoch_data(index_to_retrieve)
+            .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
+            .ok_or(ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
+            .randomness()
+    } else {
+        *chain_config.initial_randomness()
+    };
+    Ok(random_seed)
+}
+
 pub fn check_proof_of_stake(
     chain_config: &ChainConfig,
     header: &BlockHeader,
@@ -108,16 +126,7 @@ pub fn check_proof_of_stake(
     let epoch_index =
         chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
 
-    let random_seed = if epoch_index >= chain_config.epoch_index_seed_stride() {
-        let index_to_retrieve = epoch_index - chain_config.epoch_index_seed_stride();
-        *block_index_handle
-            .get_epoch_data(index_to_retrieve)
-            .map_err(|e| ConsensusPoSError::EpochDataRetrievalQueryError(index_to_retrieve, e))?
-            .ok_or(ConsensusPoSError::EpochDataNotFound(index_to_retrieve))?
-            .randomness()
-    } else {
-        *chain_config.initial_randomness()
-    };
+    let random_seed = randomness_of_epoch(chain_config, epoch_index, block_index_handle)?;
 
     let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)?;
 
