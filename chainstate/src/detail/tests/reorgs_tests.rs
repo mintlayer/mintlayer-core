@@ -119,12 +119,11 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
 
     let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON - 1).block_id());
     let spend_from = *tf.index_at(NEW_CHAIN_END_ON).block_id();
-    let double_spend_block = tf
-        .block_builder()
+    tf.block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-        .build();
-    tf.process_block(double_spend_block, BlockSource::Local).unwrap();
+        .process()
+        .unwrap();
     // Cause reorg on a failed block
     assert_eq!(
         tf.create_chain(&(*tf.index_at(12).block_id()).into(), 1, rng).unwrap_err(),
@@ -182,13 +181,12 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
     //
     let block = tf.block(*tf.block_indexes.last().unwrap().block_id());
     let spend_from = *tf.index_at(6).block_id();
-    let double_spend_block = tf
-        .block_builder()
-        .with_parent(block.get_id().into())
-        .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-        .build();
     assert_eq!(
-        tf.process_block(double_spend_block, BlockSource::Local).unwrap_err(),
+        tf.block_builder()
+            .with_parent(block.get_id().into())
+            .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
+            .process()
+            .unwrap_err(),
         BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
     );
 }

@@ -24,7 +24,7 @@ use common::{
         Block, Destination, GenBlock, Genesis, NetUpgrades, OutPointSourceId, OutputPurpose,
         OutputSpentState, Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount, Id, Idable, H256},
+    primitives::{id::WithId, time, Amount, Id, Idable, H256},
 };
 use crypto::random::Rng;
 
@@ -102,7 +102,7 @@ impl TestFramework {
     }
 
     /// Returns the genesis block of the chain.
-    pub fn genesis(&self) -> &Genesis {
+    pub fn genesis(&self) -> &WithId<Genesis> {
         self.chainstate.chain_config.genesis_block()
     }
 

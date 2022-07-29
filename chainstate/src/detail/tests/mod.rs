@@ -22,7 +22,7 @@ use chainstate_storage::Store;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
-        config::{create_regtest, create_unit_test_config},
+        config::create_regtest,
         signature::inputsig::InputWitness,
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
@@ -74,10 +74,6 @@ fn create_utxo_data(
         TxInput::new(outsrc, index as u32, empty_witness(rng)),
         TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
     ))
-}
-
-fn setup_chainstate() -> Chainstate {
-    chainstate_with_config(create_unit_test_config(), ChainstateConfig::new())
 }
 
 fn chainstate_with_config(

@@ -81,13 +81,22 @@ impl<'f> BlockBuilder<'f> {
 
     /// Same as `add_test_transaction`, but with a custom parent.
     pub fn add_test_transaction_with_parent(
-        mut self,
+        self,
         parent: Id<GenBlock>,
         rng: &mut impl Rng,
     ) -> Self {
-        let (inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
-        self.transactions.push(Transaction::new(0, inputs, outputs, 0).unwrap());
-        self
+        let (inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(
+            TestBlockInfo::from_id(&self.framework.chainstate, parent),
+            rng,
+        );
+        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
+    }
+
+    /// Same as `add_test_transaction_with_parent`, but uses reference to a block.
+    pub fn add_test_transaction_from_block(self, parent: &Block, rng: &mut impl Rng) -> Self {
+        let (inputs, outputs): (Vec<_>, Vec<_>) =
+            self.make_test_inputs_outputs(TestBlockInfo::from_block(parent), rng);
+        self.add_transaction(Transaction::new(0, inputs, outputs, 0).unwrap())
     }
 
     /// Adds a transaction that tries to spend the already spent output from the specified block.
@@ -97,6 +106,7 @@ impl<'f> BlockBuilder<'f> {
         spend_from: Id<Block>,
         rng: &mut impl Rng,
     ) -> Self {
+        let parent = TestBlockInfo::from_id(&self.framework.chainstate, parent);
         let (mut inputs, outputs): (Vec<_>, Vec<_>) = self.make_test_inputs_outputs(parent, rng);
         let spend_from = TestBlockInfo::from_id(&self.framework.chainstate, spend_from.into());
         inputs.push(TxInput::new(
@@ -126,6 +136,12 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
+    /// Overrides the consensus data that is `ConsensusData::None` by default.
+    pub fn with_consensus_data(mut self, data: ConsensusData) -> Self {
+        self.consensus_data = data;
+        self
+    }
+
     /// Builds a block without processing it.
     pub fn build(self) -> Block {
         Block::new(
@@ -152,10 +168,10 @@ impl<'f> BlockBuilder<'f> {
     /// Produces a new set of inputs and outputs from the transactions of the specified block.
     fn make_test_inputs_outputs(
         &self,
-        parent: Id<GenBlock>,
+        parent: TestBlockInfo,
         rng: &mut impl Rng,
     ) -> (Vec<TxInput>, Vec<TxOutput>) {
-        TestBlockInfo::from_id(&self.framework.chainstate, parent)
+        parent
             .txns
             .into_iter()
             .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
