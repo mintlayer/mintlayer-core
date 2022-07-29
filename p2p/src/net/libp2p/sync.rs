@@ -74,6 +74,7 @@ impl Deref for SyncResponse {
 
 impl ProtocolName for SyncingProtocol {
     fn protocol_name(&self) -> &[u8] {
+        // TODO: See how we're gonna deal with version numbers here
         "/mintlayer/sync/0.1.0".as_bytes()
     }
 }
