@@ -31,6 +31,13 @@ const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct SyncingProtocol();
 
+impl ProtocolName for SyncingProtocol {
+    fn protocol_name(&self) -> &[u8] {
+        // TODO: See how we're gonna deal with version numbers here
+        "/mintlayer/sync/0.1.0".as_bytes()
+    }
+}
+
 /// The SyncingMessageCodec defines the types of request/response messages and how they are serialized and deserialized,
 /// which is done by implementating the RequestResponseCodec for it and defining the request response types
 #[derive(Clone)]
@@ -69,13 +76,6 @@ impl Deref for SyncResponse {
 
     fn deref(&self) -> &Self::Target {
         &self.0
-    }
-}
-
-impl ProtocolName for SyncingProtocol {
-    fn protocol_name(&self) -> &[u8] {
-        // TODO: See how we're gonna deal with version numbers here
-        "/mintlayer/sync/0.1.0".as_bytes()
     }
 }
 
