@@ -42,7 +42,6 @@ use libp2p::{
         ConnectionHandler, IntoConnectionHandler, NetworkBehaviour as Libp2pNetworkBehaviour,
         NetworkBehaviourAction, NetworkBehaviourEventProcess, PollParameters,
     },
-    NetworkBehaviour,
 };
 use logging::log;
 use serialization::Decode;
@@ -54,9 +53,11 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+use super::sync::message_types::{SyncRequest, SyncResponse};
+
 /// Libp2pBehaviour defines the protocols that communicate with peers, which include message exchange protocol and message processing
 /// For example, how a HELLO message is exchanged, and what kind of messages to send after a connection is established
-#[derive(NetworkBehaviour)]
+#[derive(libp2p::NetworkBehaviour)]
 #[behaviour(
     out_event = "Libp2pBehaviourEvent",
     event_process = true,

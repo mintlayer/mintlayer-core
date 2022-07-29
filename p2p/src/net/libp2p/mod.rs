@@ -23,7 +23,7 @@ use crate::{
         self,
         libp2p::{
             backend::Libp2pBackend,
-            sync::{SyncRequest, SyncResponse},
+            sync::message_types::{SyncRequest, SyncResponse},
             types::IdentifyInfoWrapper,
         },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},

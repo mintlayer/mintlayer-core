@@ -26,7 +26,7 @@ async fn test_read_request() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         let res = codec.read_request(&protocol, &mut socket).await.unwrap();
-        assert_eq!(res, SyncRequest(data));
+        assert_eq!(res, SyncRequest::new(data));
     }
 
     // 10 MB + 1 byte
@@ -72,7 +72,7 @@ async fn test_read_response() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         let res = codec.read_response(&protocol, &mut socket).await.unwrap();
-        assert_eq!(res, SyncResponse(data));
+        assert_eq!(res, SyncResponse::new(data));
     }
 
     // 10 MB + 1 byte
@@ -103,7 +103,10 @@ async fn test_write_request() {
         let data = vec![];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        codec.write_request(&protocol, &mut socket, SyncRequest(data)).await.unwrap();
+        codec
+            .write_request(&protocol, &mut socket, SyncRequest::new(data))
+            .await
+            .unwrap();
     }
 
     // 10 MB
@@ -112,7 +115,10 @@ async fn test_write_request() {
         let data = vec![1u8; 10 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        codec.write_request(&protocol, &mut socket, SyncRequest(data)).await.unwrap();
+        codec
+            .write_request(&protocol, &mut socket, SyncRequest::new(data))
+            .await
+            .unwrap();
     }
 
     // 12 MB
@@ -121,7 +127,7 @@ async fn test_write_request() {
         let data = vec![1u8; 12 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        if let Err(e) = codec.write_request(&protocol, &mut socket, SyncRequest(data)).await {
+        if let Err(e) = codec.write_request(&protocol, &mut socket, SyncRequest::new(data)).await {
             assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
         }
     }
@@ -138,7 +144,10 @@ async fn test_write_response() {
         let data = vec![];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        codec.write_response(&protocol, &mut socket, SyncResponse(data)).await.unwrap();
+        codec
+            .write_response(&protocol, &mut socket, SyncResponse::new(data))
+            .await
+            .unwrap();
     }
 
     // 10 MB
@@ -147,7 +156,10 @@ async fn test_write_response() {
         let data = vec![1u8; 10 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        codec.write_response(&protocol, &mut socket, SyncResponse(data)).await.unwrap();
+        codec
+            .write_response(&protocol, &mut socket, SyncResponse::new(data))
+            .await
+            .unwrap();
     }
 
     // 12 MB
@@ -156,7 +168,8 @@ async fn test_write_response() {
         let data = vec![1u8; 12 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        if let Err(e) = codec.write_response(&protocol, &mut socket, SyncResponse(data)).await {
+        if let Err(e) = codec.write_response(&protocol, &mut socket, SyncResponse::new(data)).await
+        {
             assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
         }
     }

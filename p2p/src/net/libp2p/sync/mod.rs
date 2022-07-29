@@ -24,7 +24,11 @@ use libp2p::{
     core::upgrade::{read_length_prefixed, write_length_prefixed},
     request_response::*,
 };
-use std::{io, ops::Deref};
+use std::io;
+
+use self::message_types::{SyncRequest, SyncResponse};
+
+pub mod message_types;
 
 const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 
@@ -42,42 +46,6 @@ impl ProtocolName for SyncingProtocol {
 /// which is done by implementating the RequestResponseCodec for it and defining the request response types
 #[derive(Clone)]
 pub struct SyncingMessagingCodec();
-
-/// Generic type of Request messages
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncRequest(Vec<u8>);
-
-impl SyncRequest {
-    pub fn new(data: Vec<u8>) -> Self {
-        Self(data)
-    }
-}
-
-impl Deref for SyncRequest {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-/// Generic type of Response messages
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SyncResponse(Vec<u8>);
-
-impl SyncResponse {
-    pub fn new(data: Vec<u8>) -> Self {
-        Self(data)
-    }
-}
-
-impl Deref for SyncResponse {
-    type Target = Vec<u8>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 #[async_trait]
 impl RequestResponseCodec for SyncingMessagingCodec {
@@ -99,7 +67,7 @@ impl RequestResponseCodec for SyncingMessagingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(SyncRequest(vec))
+        Ok(SyncRequest::new(vec))
     }
 
     async fn read_response<T>(
@@ -116,14 +84,14 @@ impl RequestResponseCodec for SyncingMessagingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(SyncResponse(vec))
+        Ok(SyncResponse::new(vec))
     }
 
     async fn write_request<T>(
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        SyncRequest(data): SyncRequest,
+        data: SyncRequest,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
@@ -139,7 +107,7 @@ impl RequestResponseCodec for SyncingMessagingCodec {
             ));
         }
 
-        write_length_prefixed(io, data).await?;
+        write_length_prefixed(io, data.take()).await?;
         io.close().await?;
 
         Ok(())
@@ -149,7 +117,7 @@ impl RequestResponseCodec for SyncingMessagingCodec {
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        SyncResponse(data): SyncResponse,
+        data: SyncResponse,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
@@ -165,7 +133,7 @@ impl RequestResponseCodec for SyncingMessagingCodec {
             ));
         }
 
-        write_length_prefixed(io, data).await?;
+        write_length_prefixed(io, data.take()).await?;
         io.close().await?;
 
         Ok(())

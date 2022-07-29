@@ -18,7 +18,7 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse},
+        libp2p::sync::message_types::{SyncRequest, SyncResponse},
     },
 };
 use libp2p::{
