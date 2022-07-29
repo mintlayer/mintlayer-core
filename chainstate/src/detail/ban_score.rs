@@ -16,9 +16,9 @@
 use crate::BlockError;
 
 use super::{
-    pos::ConsensusPoSError, pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError,
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError,
-    OrphanCheckError,
+    pos::error::ConsensusPoSError, pow::error::ConsensusPoWError,
+    spend_cache::error::StateUpdateError, BlockSizeError, CheckBlockError,
+    CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 use chainstate_types::pos_randomness::PoSRandomnessError;
 

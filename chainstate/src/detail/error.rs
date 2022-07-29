@@ -23,7 +23,7 @@ use common::{
 use thiserror::Error;
 
 use super::{
-    orphan_blocks::OrphanAddError, pos::ConsensusPoSError, pow::error::ConsensusPoWError,
+    orphan_blocks::OrphanAddError, pos::error::ConsensusPoSError, pow::error::ConsensusPoWError,
     spend_cache::error::StateUpdateError,
 };
 

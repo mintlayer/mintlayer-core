@@ -30,7 +30,7 @@ pub use self::block_index_handle::BlockIndexHandle;
 pub use self::transaction_index_handle::TransactionIndexHandle;
 
 use super::pos::check_proof_of_stake;
-use super::pos::get_kernel_output;
+use super::pos::kernel::get_kernel_output;
 use super::ConsensusVerificationError;
 
 mod block_index_handle;

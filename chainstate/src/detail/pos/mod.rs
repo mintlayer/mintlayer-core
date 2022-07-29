@@ -1,74 +1,26 @@
-use chainstate_types::vrf_tools::{verify_vrf_and_get_vrf_output, ProofOfStakeVRFError};
+use chainstate_types::vrf_tools::verify_vrf_and_get_vrf_output;
 use common::{
     chain::{
-        block::{consensus_data::PoSData, timestamp::BlockTimestamp, Block, BlockHeader},
-        signature::Transactable,
-        ChainConfig, GenBlock, OutputSpentState, TxOutput,
+        block::{consensus_data::PoSData, BlockHeader},
+        ChainConfig, OutputSpentState, TxOutput,
     },
-    primitives::{Compact, Id, Idable, H256},
+    primitives::{Idable, H256},
     Uint256,
 };
 
-use thiserror::Error;
 use utils::ensure;
+
+use crate::detail::pos::kernel::{get_kernel_block_index, get_kernel_output};
+
+use self::error::ConsensusPoSError;
 
 use super::{
     consensus_validator::{BlockIndexHandle, TransactionIndexHandle},
     gen_block_index::GenBlockIndex,
-    PropertyQueryError,
 };
 
-#[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum ConsensusPoSError {
-    #[error("Block storage error: `{0}`")]
-    StorageError(#[from] chainstate_storage::Error),
-    #[error("Stake kernel hash failed to meet the target requirement")]
-    StakeKernelHashTooHigh,
-    #[error(
-        "Stake block timestamp cannot be smaller than the kernel's (kernel: {0} < stake: {1})"
-    )]
-    TimestampViolation(BlockTimestamp, BlockTimestamp),
-    #[error("Kernel inputs are empty")]
-    NoKernel,
-    #[error("Only one kernel allowed")]
-    MultipleKernels,
-    #[error("Could not load the transaction pointed to by an outpoint")]
-    OutpointTransactionRetrievalError,
-    #[error("Could not find the transaction pointed to by an outpoint")]
-    OutpointTransactionNotFound,
-    #[error("Outpoint access error. Possibly invalid")]
-    InIndexOutpointAccessError,
-    #[error("Output already spent")]
-    KernelOutputAlreadySpent,
-    #[error("Kernel block index load error with block id: {0}")]
-    KernelBlockIndexLoadError(Id<GenBlock>),
-    #[error("Kernel block index not found with block id: {0}")]
-    KernelBlockIndexNotFound(Id<GenBlock>),
-    #[error("Kernel input transaction retrieval error: {0}")]
-    KernelTransactionRetrievalFailed(PropertyQueryError),
-    #[error("Kernel output index out of range: {0}")]
-    KernelOutputIndexOutOfRange(u32),
-    #[error("Kernel input transaction not found")]
-    KernelTransactionNotFound,
-    #[error("Kernel header output load error")]
-    KernelHeaderOutputDoesNotExist(Id<GenBlock>),
-    #[error("Kernel header index out of range. Block id: {0} and index {1}")]
-    KernelHeaderOutputIndexOutOfRange(Id<GenBlock>, u32),
-    #[error("Bits to target conversion failed {0:?}")]
-    BitsToTargetConversionFailed(Compact),
-    #[error("Could not find the previous block index of block: {0}")]
-    PrevBlockIndexNotFound(Id<Block>),
-    #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]
-    KernelAncestryCheckFailed(Id<Block>),
-    #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
-    InvalidOutputPurposeInStakeKernel(Id<Block>),
-    #[error("Failed to verify VRF data with error: {0}")]
-    VRFDataVerificationFailed(ProofOfStakeVRFError),
-    #[error("Error while attempting to retrieve epoch data of index {0} with error: {1}")]
-    EpochDataRetrievalQueryError(u64, PropertyQueryError),
-    #[error("Epoch data not found for index: {0}")]
-    EpochDataNotFound(u64),
-}
+pub mod error;
+pub mod kernel;
 
 fn check_stake_kernel_hash(
     epoch_index: u64,
@@ -136,95 +88,6 @@ fn ensure_correct_ancestry(
         ConsensusPoSError::KernelAncestryCheckFailed(header.block_id()),
     );
     Ok(())
-}
-
-pub fn get_kernel_block_index(
-    pos_data: &PoSData,
-    block_index_handle: &dyn BlockIndexHandle,
-    tx_index_retriever: &dyn TransactionIndexHandle,
-) -> Result<GenBlockIndex, ConsensusPoSError> {
-    ensure!(
-        !pos_data.kernel_inputs().is_empty(),
-        ConsensusPoSError::NoKernel,
-    );
-    // in general this should not be an issue, but we have to first study this security model with one kernel
-    ensure!(
-        pos_data.kernel_inputs().len() == 1,
-        ConsensusPoSError::MultipleKernels,
-    );
-
-    let kernel_outpoint =
-        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
-    let kernel_tx_index = tx_index_retriever
-        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
-        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
-        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
-
-    let kernel_block_id = kernel_tx_index.position().block_id_anyway();
-
-    let kernel_block_index = block_index_handle
-        .get_gen_block_index(&kernel_block_id)
-        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
-        .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
-
-    Ok(kernel_block_index)
-}
-
-pub fn get_kernel_output(
-    pos_data: &PoSData,
-    block_index_handle: &dyn BlockIndexHandle,
-    tx_index_retriever: &dyn TransactionIndexHandle,
-) -> Result<TxOutput, ConsensusPoSError> {
-    ensure!(
-        !pos_data.kernel_inputs().is_empty(),
-        ConsensusPoSError::NoKernel,
-    );
-    // in general this should not be an issue, but we have to first study this security model with one kernel
-    ensure!(
-        pos_data.kernel_inputs().len() == 1,
-        ConsensusPoSError::MultipleKernels,
-    );
-
-    let kernel_outpoint =
-        pos_data.kernel_inputs().get(0).ok_or(ConsensusPoSError::NoKernel)?.outpoint();
-    let kernel_tx_index = tx_index_retriever
-        .get_mainchain_tx_index(&kernel_outpoint.tx_id())
-        .map_err(|_| ConsensusPoSError::OutpointTransactionRetrievalError)?
-        .ok_or(ConsensusPoSError::OutpointTransactionNotFound)?;
-
-    let kernel_block_id = kernel_tx_index.position().block_id_anyway();
-
-    let kernel_block_index = block_index_handle
-        .get_gen_block_index(&kernel_block_id)
-        .map_err(|_| ConsensusPoSError::KernelBlockIndexLoadError(kernel_block_id))?
-        .ok_or(ConsensusPoSError::KernelBlockIndexNotFound(kernel_block_id))?;
-
-    let kernel_output = match kernel_tx_index.position() {
-        common::chain::SpendablePosition::Transaction(tx_pos) => tx_index_retriever
-            .get_mainchain_tx_by_position(tx_pos)
-            .map_err(ConsensusPoSError::KernelTransactionRetrievalFailed)?
-            .ok_or(ConsensusPoSError::KernelTransactionNotFound)?
-            .outputs()
-            .get(kernel_outpoint.output_index() as usize)
-            .ok_or_else(|| {
-                ConsensusPoSError::KernelOutputIndexOutOfRange(kernel_outpoint.output_index())
-            })?
-            .clone(),
-        common::chain::SpendablePosition::BlockReward(block_id) => kernel_block_index
-            .block_reward_transactable()
-            .outputs()
-            .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
-            .get(kernel_outpoint.output_index() as usize)
-            .ok_or_else(|| {
-                ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
-                    *block_id,
-                    kernel_outpoint.output_index(),
-                )
-            })?
-            .clone(),
-    };
-
-    Ok(kernel_output)
 }
 
 pub fn check_proof_of_stake(
