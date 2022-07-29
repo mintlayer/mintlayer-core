@@ -292,6 +292,7 @@ impl ConnectionManager {
 }
 
 impl NetworkBehaviour for ConnectionManager {
+    // TODO: write documentation that defines what a "ConnectionHandler" is and then what a DummyConnectionHandler does
     type ConnectionHandler = DummyConnectionHandler;
     type OutEvent = ConnectionManagerEvent;
 
