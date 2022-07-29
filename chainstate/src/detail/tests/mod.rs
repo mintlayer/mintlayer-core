@@ -45,10 +45,6 @@ mod test_framework;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
 
-const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
-const ERR_STORAGE_FAIL: &str = "Storage failure";
-const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
-
 fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     let mut msg: Vec<u8> = (1..100).collect();
     msg.shuffle(rng);

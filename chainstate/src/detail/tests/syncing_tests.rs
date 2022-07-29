@@ -189,10 +189,7 @@ fn get_headers_different_chains(#[case] seed: Seed) {
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            assert_eq!(
-                tf1.block_indexes.last().unwrap().block_id(),
-                tf2.block_indexes.last().unwrap().block_id()
-            );
+            assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
         tf1.create_chain(&prev.id, rng.gen_range(32..256), &mut rng).unwrap();
@@ -227,10 +224,7 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
             prev1 = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            assert_eq!(
-                tf1.block_indexes.last().unwrap().block_id(),
-                tf2.block_indexes.last().unwrap().block_id(),
-            );
+            assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
         let limit = rng.gen_range(32..256);
@@ -294,10 +288,7 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
-            assert_eq!(
-                tf1.block_indexes.last().unwrap().block_id(),
-                tf2.block_indexes.last().unwrap().block_id(),
-            );
+            assert_eq!(tf1.best_block_id(), tf2.best_block_id());
         }
 
         let mut headers = Vec::new();

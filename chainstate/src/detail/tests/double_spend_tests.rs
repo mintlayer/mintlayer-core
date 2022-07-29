@@ -242,5 +242,5 @@ fn tx_from_tx(tx: &Transaction, output_value: u128) -> Transaction {
         Amount::from_atoms(output_value),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
-    Transaction::new(0, vec![input], vec![output], 0).expect(ERR_CREATE_TX_FAIL)
+    Transaction::new(0, vec![input], vec![output], 0).unwrap()
 }

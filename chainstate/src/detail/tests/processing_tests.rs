@@ -137,20 +137,14 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                 tf.chainstate
                     .chainstate_storage
                     .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
-                    .expect(ERR_STORAGE_FAIL),
+                    .unwrap(),
                 None
             );
         }
 
         // Process the second block
         tf.process_block(block.clone(), BlockSource::Local).unwrap();
-        assert_eq!(
-            tf.chainstate
-                .chainstate_storage
-                .get_best_block_id()
-                .expect(ERR_BEST_BLOCK_NOT_FOUND),
-            Some(<Id<GenBlock>>::from(block.get_id()))
-        );
+        assert_eq!(tf.best_block_id(), <Id<GenBlock>>::from(block.get_id()));
 
         // Check that the transactions are in the main-chain and their inputs are not spent.
         for tx in block.transactions() {
@@ -159,7 +153,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
                 .chainstate_storage
                 .get_mainchain_tx_index(&OutPointSourceId::from(tx.get_id()))
                 .unwrap()
-                .expect(ERR_STORAGE_FAIL);
+                .unwrap();
 
             for input in tx.inputs() {
                 assert_eq!(
@@ -233,7 +227,6 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
     let mut tf = TestFramework::default();
     let height = 1;
     tf.create_chain(&tf.genesis().get_id().into(), height, &mut rng).unwrap();
-    let last_block_index = tf.block_indexes.last().expect("last block in first chain").clone();
 
     let invalid_height = height + 1;
     assert_eq!(
@@ -242,9 +235,9 @@ fn get_ancestor_invalid_height(#[case] seed: Seed) {
             block_height: u64::try_from(height).unwrap().into(),
         },
         tf.chainstate
-            .make_db_tx()
+            .make_db_tx_ro()
             .get_ancestor(
-                &GenBlockIndex::Block(last_block_index),
+                &tf.best_block_index(),
                 u64::try_from(invalid_height).unwrap().into()
             )
             .unwrap_err()
@@ -294,8 +287,7 @@ fn get_ancestor(#[case] seed: Seed) {
         &mut rng,
     )
     .expect("second chain");
-    let last_block_in_first_chain =
-        GenBlockIndex::Block(tf.block_indexes.last().expect("last block in first chain").clone());
+    let last_block_in_first_chain = tf.best_block_index();
 
     const ANCESTOR_IN_FIRST_CHAIN_HEIGHT: usize = 400;
     let ancestor_in_first_chain =
@@ -342,20 +334,19 @@ fn get_ancestor(#[case] seed: Seed) {
     );
 
     // Create a second chain and test get_ancestor for this chain's last block
-    tf.create_chain(
-        &split.block_id(),
-        SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
-        &mut rng,
-    )
-    .expect("second chain");
-    let last_block_in_second_chain =
-        GenBlockIndex::Block(tf.block_indexes.last().expect("last block in first chain").clone());
+    let last_block_in_second_chain = tf
+        .create_chain(
+            &split.block_id(),
+            SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
+            &mut rng,
+        )
+        .expect("second chain");
     assert_eq!(
         ancestor.block_id(),
         tf.chainstate
-            .make_db_tx()
+            .make_db_tx_ro()
             .get_ancestor(
-                &last_block_in_second_chain,
+                &tf.block_index(&last_block_in_second_chain),
                 u64::try_from(ANCESTOR_HEIGHT).unwrap().into()
             )
             .expect("ancestor")
@@ -388,18 +379,17 @@ fn last_common_ancestor(#[case] seed: Seed) {
         &mut rng,
     )
     .expect("Chain creation to succeed");
-    let last_block_in_first_chain =
-        GenBlockIndex::Block(tf.block_indexes.last().expect("last block in first chain").clone());
+    let last_block_in_first_chain = tf.best_block_index();
 
     // Second branch of fork
-    tf.create_chain(
-        &split.block_id(),
-        SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
-        &mut rng,
-    )
-    .expect("second chain");
-    let last_block_in_second_chain =
-        GenBlockIndex::Block(tf.block_indexes.last().expect("last block in first chain").clone());
+    let last_block_in_second_chain = tf
+        .create_chain(
+            &split.block_id(),
+            SECOND_CHAIN_LENGTH - SPLIT_HEIGHT,
+            &mut rng,
+        )
+        .unwrap();
+    let last_block_in_second_chain = tf.block_index(&last_block_in_second_chain);
 
     assert_eq!(
         tf.chainstate
