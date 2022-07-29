@@ -248,7 +248,7 @@ mod tests {
     use super::*;
     use crate::net::libp2p::{
         behaviour, connectivity, discovery,
-        sync_codec::{SyncingMessagingCodec, SyncingProtocol},
+        sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
     use libp2p::{
         core::upgrade,
@@ -302,7 +302,7 @@ mod tests {
 
         let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
         let cfg = RequestResponseConfig::default();
-        let sync = RequestResponse::new(SyncingMessagingCodec(), protocols, cfg);
+        let sync = RequestResponse::new(SyncMessagingCodec(), protocols, cfg);
 
         let behaviour = behaviour::Libp2pBehaviour {
             ping: ping::Behaviour::new(ping::Config::new()),

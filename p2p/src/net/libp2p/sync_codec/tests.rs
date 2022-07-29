@@ -2,7 +2,7 @@ use super::*;
 
 #[tokio::test]
 async fn test_read_request() {
-    let mut codec = SyncingMessagingCodec();
+    let mut codec = SyncMessagingCodec();
     let protocol = SyncingProtocol();
 
     // empty stream
@@ -48,7 +48,7 @@ async fn test_read_request() {
 
 #[tokio::test]
 async fn test_read_response() {
-    let mut codec = SyncingMessagingCodec();
+    let mut codec = SyncMessagingCodec();
     let protocol = SyncingProtocol();
 
     // empty stream
@@ -94,7 +94,7 @@ async fn test_read_response() {
 
 #[tokio::test]
 async fn test_write_request() {
-    let mut codec = SyncingMessagingCodec();
+    let mut codec = SyncMessagingCodec();
     let protocol = SyncingProtocol();
 
     // empty response
@@ -135,7 +135,7 @@ async fn test_write_request() {
 
 #[tokio::test]
 async fn test_write_response() {
-    let mut codec = SyncingMessagingCodec();
+    let mut codec = SyncMessagingCodec();
     let protocol = SyncingProtocol();
 
     // empty response

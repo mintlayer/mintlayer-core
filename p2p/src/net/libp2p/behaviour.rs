@@ -67,7 +67,7 @@ pub struct Libp2pBehaviour {
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
     pub identify: identify::Identify,
-    pub sync: RequestResponse<SyncingMessagingCodec>,
+    pub sync: RequestResponse<SyncMessagingCodec>,
     pub connmgr: connectivity::ConnectionManager,
     pub discovery: discovery::DiscoveryManager,
 
@@ -124,7 +124,7 @@ impl Libp2pBehaviour {
                 id_keys.public(),
             )),
             sync: RequestResponse::new(
-                SyncingMessagingCodec(),
+                SyncMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 req_cfg,
             ),

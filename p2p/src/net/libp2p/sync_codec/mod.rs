@@ -45,10 +45,10 @@ impl ProtocolName for SyncingProtocol {
 /// The SyncingMessageCodec defines the types of request/response messages and how they are serialized and deserialized,
 /// which is done by implementating the RequestResponseCodec for it and defining the request response types
 #[derive(Clone)]
-pub struct SyncingMessagingCodec();
+pub struct SyncMessagingCodec();
 
 #[async_trait]
-impl RequestResponseCodec for SyncingMessagingCodec {
+impl RequestResponseCodec for SyncMessagingCodec {
     type Protocol = SyncingProtocol;
     type Request = SyncRequest;
     type Response = SyncResponse;
