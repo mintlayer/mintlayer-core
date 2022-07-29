@@ -22,6 +22,7 @@ use crate::chain::{
 use crate::primitives::{id::WithId, semver::SemVer, BlockDistance, BlockHeight};
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 impl ChainType {
@@ -161,7 +162,7 @@ impl Builder {
                 premine_destination,
             } => create_unit_test_genesis(premine_destination),
         };
-        let genesis_block = WithId::new(genesis_block);
+        let genesis_block = Arc::new(WithId::new(genesis_block));
 
         ChainConfig {
             chain_type,
@@ -185,9 +186,7 @@ impl Builder {
 
 macro_rules! builder_method {
     ($name:ident: $type:ty) => {
-        #[doc = "Set the `"]
-        #[doc = stringify!($name)]
-        #[doc = "` field."]
+        #[doc = concat!("Set the `", stringify!($name), "` field.")]
         #[must_use = "chain::config::Builder dropped prematurely"]
         pub fn $name(mut self, $name: $type) -> Self {
             self.$name = $name;

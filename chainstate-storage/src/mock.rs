@@ -255,7 +255,7 @@ mod tests {
     #[test]
     fn use_generic_test() {
         common::concurrency::model(|| {
-            let store: crate::Store = crate::Store::new_empty().unwrap();
+            let store = crate::Store::new_empty().unwrap();
             generic_test(&store);
         });
     }
