@@ -57,8 +57,16 @@ use sync_codec::message_types::{SyncRequest, SyncResponse};
 
 use self::sync_codec::{SyncMessagingCodec, SyncingProtocol};
 
-/// Libp2pBehaviour defines the protocols that communicate with peers, which include message exchange protocol and message processing
-/// For example, how a HELLO message is exchanged, and what kind of messages to send after a connection is established
+/// Libp2pBehaviour defines the protocols that communicate with peers, such as different streams
+/// (sync, for example, is a separate stream that's prefixed, at the stream-level, with SyncingProtocol::protocol_name(), which is done through the demultiplexer of streams)
+/// (identify, as another example, is a stream that's created by libp2p, and handles getting identifying information of peers, like their peer public keys, addresses, supported protocols, etc)
+///
+/// every "behavior" below (besides those with #[behaviour(ignore)] on top), implement the NetworkBehaviour trait,
+/// where this trait has methods that handle connections, streams, and other events.
+///
+/// As another example with explanation, the Request/Response protocol is used for syncing. The implementation for that is done in:
+///     impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>> ...
+/// where we handle the request/response messages that libp2p demultiplexes for us
 #[derive(libp2p::NetworkBehaviour)]
 #[behaviour(
     out_event = "Libp2pBehaviourEvent",
