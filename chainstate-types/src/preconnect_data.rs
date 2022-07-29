@@ -1,11 +1,11 @@
 use serialization::{Decode, Encode};
 
-use crate::stake_modifer::PoSStakeModifier;
+use crate::pos_randomness::PoSRandomness;
 
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum ConsensusExtraData {
     None,
-    PoS(PoSStakeModifier),
+    PoS(PoSRandomness),
 }
 
 #[derive(Debug, Encode, Decode, Clone)]
@@ -22,10 +22,10 @@ impl BlockPreconnectData {
         &self.consensus_extra
     }
 
-    pub fn stake_modifier(&self) -> Option<&PoSStakeModifier> {
+    pub fn pos_randomness(&self) -> Option<&PoSRandomness> {
         match &self.consensus_extra {
             ConsensusExtraData::None => None,
-            ConsensusExtraData::PoS(stake_modifer) => Some(stake_modifer),
+            ConsensusExtraData::PoS(randomness) => Some(randomness),
         }
     }
 }

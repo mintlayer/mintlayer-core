@@ -56,8 +56,6 @@ pub enum ConsensusPoSError {
     KernelHeaderOutputIndexOutOfRange(Id<GenBlock>, u32),
     #[error("Bits to target conversion failed {0:?}")]
     BitsToTargetConversionFailed(Compact),
-    #[error("Could not find previous block's stake modifier")]
-    PrevStakeModifierNotFound,
     #[error("Could not find the previous block index of block: {0}")]
     PrevBlockIndexNotFound(Id<Block>),
     #[error("The kernel is not an ancestor of the current header of id {0}. This is a double-spend attempt at best")]

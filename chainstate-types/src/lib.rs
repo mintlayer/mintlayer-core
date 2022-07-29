@@ -18,5 +18,5 @@ pub mod epoch_data;
 pub mod height_skip;
 pub mod locator;
 pub mod preconnect_data;
-pub mod stake_modifer;
+pub mod pos_randomness;
 pub mod vrf_tools;

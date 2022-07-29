@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach, A. Sinitsyn
 
-use chainstate_types::stake_modifer::StakeModifierError;
+use chainstate_types::pos_randomness::PoSRandomnessError;
 use common::{
     chain::{Block, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
@@ -54,7 +54,7 @@ pub enum BlockError {
     #[error("Kernel output was not found in block: {0}")]
     PoSKernelOutputRetrievalFailed(Id<Block>),
     #[error("Randomness calculation failed for block: {0}")]
-    PoSRandomnessCalculationFailed(#[from] StakeModifierError),
+    PoSRandomnessCalculationFailed(#[from] PoSRandomnessError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -14,8 +14,8 @@
 // limitations under the License.
 
 use chainstate_types::block_index::BlockIndex;
+use chainstate_types::pos_randomness::PoSRandomness;
 use chainstate_types::preconnect_data::ConsensusExtraData;
-use chainstate_types::stake_modifer::PoSStakeModifier;
 
 use common::chain::block::BlockHeader;
 use common::chain::block::ConsensusData;
@@ -77,19 +77,19 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
         ConsensusData::PoS(pos_data) => {
-            let prev_stake_modifier = prev_block_index.preconnect_data().stake_modifier();
+            let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
             let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
                 .map_err(|_| BlockError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
-            let stake_modifier = PoSStakeModifier::from_new_block(
+            let current_randomness = PoSRandomness::from_new_block(
                 chain_config,
-                prev_stake_modifier,
+                prev_randomness,
                 prev_block_index,
                 header,
                 &kernel_output,
                 pos_data,
             )
             .map_err(BlockError::PoSRandomnessCalculationFailed)?;
-            let data = ConsensusExtraData::PoS(stake_modifier);
+            let data = ConsensusExtraData::PoS(current_randomness);
             Ok(data)
         }
     }

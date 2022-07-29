@@ -20,7 +20,7 @@ use super::{
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError,
     OrphanCheckError,
 };
-use chainstate_types::stake_modifer::StakeModifierError;
+use chainstate_types::pos_randomness::PoSRandomnessError;
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file
@@ -190,7 +190,6 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::KernelHeaderOutputDoesNotExist(_) => 100,
             ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(_, _) => 100,
             ConsensusPoSError::BitsToTargetConversionFailed(_) => 100,
-            ConsensusPoSError::PrevStakeModifierNotFound => 100,
             ConsensusPoSError::PrevBlockIndexNotFound(_) => 100,
             ConsensusPoSError::KernelAncestryCheckFailed(_) => 100,
             ConsensusPoSError::InvalidOutputPurposeInStakeKernel(_) => 100,
@@ -201,11 +200,11 @@ impl BanScore for ConsensusPoSError {
     }
 }
 
-impl BanScore for StakeModifierError {
+impl BanScore for PoSRandomnessError {
     fn ban_score(&self) -> u32 {
         match self {
-            StakeModifierError::InvalidOutputPurposeInStakeKernel(_) => 100,
-            StakeModifierError::VRFDataVerificationFailed(_) => 100,
+            PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_) => 100,
+            PoSRandomnessError::VRFDataVerificationFailed(_) => 100,
         }
     }
 }

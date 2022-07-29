@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum StakeModifierError {
+pub enum PoSRandomnessError {
     #[error("Attempted to use a non-locked stake as stake kernel in block {0}")]
     InvalidOutputPurposeInStakeKernel(Id<Block>),
     #[error("Failed to verify VRF data with error: {0}")]
@@ -25,27 +25,28 @@ pub enum StakeModifierError {
 }
 
 #[derive(Debug, Encode, Decode, Clone)]
-pub struct PoSStakeModifier {
+pub struct PoSRandomness {
     value: H256,
 }
 
-impl PoSStakeModifier {
+impl PoSRandomness {
     pub fn new(value: H256) -> Self {
         Self { value }
     }
 
     pub fn from_new_block(
         chain_config: &ChainConfig,
-        previous_randomness: Option<&PoSStakeModifier>,
+        previous_randomness: Option<&PoSRandomness>,
         prev_block_index: &BlockIndex,
         header: &BlockHeader,
         kernel_output: &TxOutput,
         pos_data: &PoSData,
-    ) -> Result<Self, StakeModifierError> {
+    ) -> Result<Self, PoSRandomnessError> {
         use crypto::hash::StreamHasher;
 
-        let prev_stake_modifer = previous_randomness.cloned().unwrap_or_else(Self::at_genesis);
-        let prev_stake_modifer_val = prev_stake_modifer.value();
+        let prev_randomness =
+            previous_randomness.cloned().unwrap_or_else(|| Self::at_genesis(chain_config));
+        let prev_randomness_val = prev_randomness.value();
 
         let epoch_index =
             chain_config.epoch_index_from_height(&prev_block_index.block_height().next_height());
@@ -54,7 +55,7 @@ impl PoSStakeModifier {
             common::chain::OutputPurpose::Transfer(_)
             | common::chain::OutputPurpose::LockThenTransfer(_, _) => {
                 // only pool outputs can be staked
-                return Err(StakeModifierError::InvalidOutputPurposeInStakeKernel(
+                return Err(PoSRandomnessError::InvalidOutputPurposeInStakeKernel(
                     header.get_id(),
                 ));
             }
@@ -64,25 +65,25 @@ impl PoSStakeModifier {
 
         let hash_pos: H256 = verify_vrf_and_get_vrf_output(
             epoch_index,
-            &prev_stake_modifer_val,
+            &prev_randomness_val,
             pos_data.vrf_data(),
             pool_data.vrf_public_key(),
             header,
         )
-        .map_err(StakeModifierError::VRFDataVerificationFailed)?;
+        .map_err(PoSRandomnessError::VRFDataVerificationFailed)?;
 
         let mut hasher = DefaultHashAlgoStream::new();
-        hash_encoded_to(&prev_stake_modifer_val, &mut hasher);
+        hash_encoded_to(&prev_randomness_val, &mut hasher);
         hash_encoded_to(&hash_pos, &mut hasher);
         let hash: H256 = hasher.finalize().into();
 
         Ok(Self::new(hash))
     }
 
-    /// stake modifier at genesis
-    fn at_genesis() -> Self {
+    /// randomness at genesis
+    fn at_genesis(chain_config: &ChainConfig) -> Self {
         Self {
-            value: H256::zero(),
+            value: *chain_config.initial_randomness(),
         }
     }
 
