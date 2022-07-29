@@ -61,7 +61,7 @@ use std::{
 
 pub mod types;
 
-/// Connection manager
+/// Connection manager is responsible for handling low-level connection stuff, like connect/disconnect and handshakes
 pub struct ConnectionManager {
     /// Handler for waking when a new event is produced
     waker: Option<Waker>,
