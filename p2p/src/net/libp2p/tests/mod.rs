@@ -15,7 +15,7 @@
 
 use crate::net::{
     self, config,
-    libp2p::sync::*,
+    libp2p::sync_codec::*,
     libp2p::{backend::Libp2pBackend, behaviour, connectivity, discovery, types},
 };
 use futures::prelude::*;

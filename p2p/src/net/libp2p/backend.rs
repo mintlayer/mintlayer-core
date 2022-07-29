@@ -248,7 +248,7 @@ mod tests {
     use super::*;
     use crate::net::libp2p::{
         behaviour, connectivity, discovery,
-        sync::{SyncingMessagingCodec, SyncingProtocol},
+        sync_codec::{SyncingMessagingCodec, SyncingProtocol},
     };
     use libp2p::{
         core::upgrade,

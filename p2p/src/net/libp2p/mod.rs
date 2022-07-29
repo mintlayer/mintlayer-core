@@ -23,7 +23,7 @@ use crate::{
         self,
         libp2p::{
             backend::Libp2pBackend,
-            sync::message_types::{SyncRequest, SyncResponse},
+            sync_codec::message_types::{SyncRequest, SyncResponse},
             types::IdentifyInfoWrapper,
         },
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic, SyncingEvent},
@@ -53,7 +53,7 @@ mod backend;
 mod connectivity;
 mod constants;
 mod discovery;
-mod sync;
+mod sync_codec;
 mod tests;
 mod types;
 

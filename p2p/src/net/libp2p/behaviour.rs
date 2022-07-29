@@ -28,7 +28,7 @@ use crate::{
             },
             constants::*,
             discovery,
-            sync::*,
+            sync_codec::*,
             types::{self, ConnectivityEvent, Libp2pBehaviourEvent, PubSubEvent},
         },
     },
@@ -53,7 +53,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-use super::sync::message_types::{SyncRequest, SyncResponse};
+use super::sync_codec::message_types::{SyncRequest, SyncResponse};
 
 /// Libp2pBehaviour defines the protocols that communicate with peers, which include message exchange protocol and message processing
 /// For example, how a HELLO message is exchanged, and what kind of messages to send after a connection is established
