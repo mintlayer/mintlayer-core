@@ -4,7 +4,7 @@ use common::{
         block::{consensus_data::PoSData, BlockHeader},
         ChainConfig, OutputSpentState, TxOutput,
     },
-    primitives::{Idable, H256},
+    primitives::{BlockHeight, Idable, H256},
     Uint256,
 };
 
@@ -88,6 +88,14 @@ fn ensure_correct_ancestry(
         ConsensusPoSError::KernelAncestryCheckFailed(header.block_id()),
     );
     Ok(())
+}
+
+pub fn is_due_for_epoch_data_calculation(chain_config: &ChainConfig, height: BlockHeight) -> bool {
+    let height: u64 = height.into();
+    let epoch_length: i64 = chain_config.epoch_length().into();
+    let epoch_length: u64 =
+        epoch_length.try_into().expect("Epoch length negative. Invariant broken.");
+    height % epoch_length == 0
 }
 
 pub fn randomness_of_epoch(

@@ -19,6 +19,7 @@ use super::{
     consensus_validator::{compute_extra_consensus_data, TransactionIndexHandle},
     gen_block_index::GenBlockIndex,
     median_time::calculate_median_time_past,
+    pos::is_due_for_epoch_data_calculation,
     time_getter::TimeGetterFn,
 };
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
@@ -717,6 +718,13 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         Ok(prev_block_index)
     }
 
+    fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
+        if is_due_for_epoch_data_calculation(self.chain_config, height) {
+            // calculate the data that has to go to the EpochData type and store it to database
+        }
+        todo!()
+    }
+
     pub fn activate_best_chain(
         &mut self,
         new_block_index: BlockIndex,
@@ -730,6 +738,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         if new_block_index.chain_trust() > current_best_block_index.chain_trust() {
             self.reorganize(&best_block_id, &new_block_index)?;
+            self.prepare_epoch_data(new_block_index.block_height())?;
             return Ok(Some(new_block_index));
         }
 
