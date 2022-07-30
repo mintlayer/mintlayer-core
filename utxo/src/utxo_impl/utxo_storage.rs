@@ -23,39 +23,88 @@ use crate::{BlockUndo, Error};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{Id, H256};
 
-pub trait UtxosPersistentStorage {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
+pub trait UtxosPersistentStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error>;
     fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error>;
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error>;
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error>;
 }
 
-pub struct UtxoDB<'a, S: UtxosPersistentStorage>(&'a mut S);
+pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
 
-impl<'a, S: UtxosPersistentStorage> UtxoDB<'a, S> {
-    pub fn new(store: &'a mut S) -> Self {
-        Self(store)
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error>;
+
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error>;
+}
+
+pub struct UtxoDB<'a, S>(&'a S);
+
+pub struct UtxoDBMut<'a, S>(&'a mut S);
+
+impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
+        self.0.get_utxo(outpoint)
     }
 
-    pub fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error> {
-        self.0.set_undo_data(id, undo)
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error> {
+        self.0.get_best_block_id()
     }
 
-    pub fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error> {
-        self.0.del_undo_data(id)
-    }
-
-    pub fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
         self.0.get_undo_data(id)
     }
 }
 
-impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
+impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageWrite for UtxoDBMut<'a, S> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error> {
+        self.0.set_utxo(outpoint, entry)
+    }
+
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error> {
+        self.0.del_utxo(outpoint)
+    }
+
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error> {
+        self.0.set_best_block_id(block_id)
+    }
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error> {
+        self.0.set_undo_data(id, undo)
+    }
+
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error> {
+        self.0.del_undo_data(id)
+    }
+}
+
+impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a, S> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
+        self.0.get_utxo(outpoint)
+    }
+
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error> {
+        self.0.get_best_block_id()
+    }
+
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
+        self.0.get_undo_data(id)
+    }
+}
+
+impl<'a, S> UtxoDB<'a, S> {
+    pub fn new(store: &'a S) -> Self {
+        Self(store)
+    }
+}
+
+impl<'a, S> UtxoDBMut<'a, S> {
+    pub fn new(store: &'a mut S) -> Self {
+        Self(store)
+    }
+}
+
+impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         match self.0.get_utxo(outpoint) {
             Ok(res) => res,
@@ -97,7 +146,49 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorage> FlushableUtxoView for UtxoDB<'a, S> {
+impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDBMut<'a, S> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        match self.0.get_utxo(outpoint) {
+            Ok(res) => res,
+            Err(e) => {
+                panic!(
+                    "Database error while attempting to retrieve utxo from the database: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        self.utxo(outpoint).is_some()
+    }
+
+    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
+        match self.0.get_best_block_id() {
+            Ok(opt_id) => opt_id,
+            Err(e) => {
+                panic!(
+                    "Database error while attempting to retrieve utxo set best block hash from the database: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        None
+    }
+
+    fn derive_cache(&self) -> UtxosCache {
+        let mut cache = UtxosCache::new(self);
+        if let Some(hash) = self.best_block_hash() {
+            cache.set_best_block(hash);
+        }
+        cache
+    }
+}
+
+impl<'a, S: UtxosPersistentStorageWrite> FlushableUtxoView for UtxoDBMut<'a, S> {
     fn batch_write(
         &mut self,
         utxos: crate::utxo_impl::ConsumedUtxoCache,
@@ -136,7 +227,24 @@ impl UtxoInMemoryDBImpl {
     }
 }
 
-impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
+impl UtxosPersistentStorageRead for UtxoInMemoryDBImpl {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::utxo_impl::Error> {
+        let res = self.store.get(outpoint);
+        Ok(res.cloned())
+    }
+
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
+        let res = self.undo_store.get(&id.get());
+        Ok(res.cloned())
+    }
+
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::utxo_impl::Error> {
+        // TODO: fix; don't get general block id
+        Ok(self.best_block_id)
+    }
+}
+
+impl UtxosPersistentStorageWrite for UtxoInMemoryDBImpl {
     fn set_utxo(
         &mut self,
         outpoint: &OutPoint,
@@ -149,10 +257,6 @@ impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
         self.store.remove(outpoint);
         Ok(())
     }
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::utxo_impl::Error> {
-        let res = self.store.get(outpoint);
-        Ok(res.cloned())
-    }
     fn set_best_block_id(
         &mut self,
         block_id: &Id<GenBlock>,
@@ -160,10 +264,6 @@ impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
         // TODO: fix; don't store in general block id
         self.best_block_id = Some(*block_id);
         Ok(())
-    }
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::utxo_impl::Error> {
-        // TODO: fix; don't get general block id
-        Ok(self.best_block_id)
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
@@ -174,11 +274,6 @@ impl UtxosPersistentStorage for UtxoInMemoryDBImpl {
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
         self.undo_store.remove(&id.get());
         Ok(())
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
-        let res = self.undo_store.get(&id.get());
-        Ok(res.cloned())
     }
 }
 
@@ -292,7 +387,7 @@ mod test {
 
         // create the UtxoDB.
         let mut db_interface_clone = db_interface.clone();
-        let mut db = UtxoDB::new(&mut db_interface_clone);
+        let mut db = UtxoDBMut::new(&mut db_interface_clone);
 
         // let's check that each tx_input exists in the db. Secure the spent utxos.
         let spent_utxos = expected_tx_inputs
@@ -474,7 +569,7 @@ mod test {
             };
 
             let mut db_interface = UtxoInMemoryDBImpl::new();
-            let mut utxo_db = UtxoDB::new(&mut db_interface);
+            let mut utxo_db = UtxoDBMut::new(&mut db_interface);
 
             // test batch_write
             let res = utxo_db.batch_write(utxos.clone());

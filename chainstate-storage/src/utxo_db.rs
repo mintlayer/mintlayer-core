@@ -18,7 +18,10 @@
 use crate::{internal::Store, Error, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
-use utxo::{utxo_storage::UtxosPersistentStorage, BlockUndo, Utxo};
+use utxo::{
+    utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite},
+    BlockUndo, Utxo,
+};
 
 #[derive(Clone)]
 pub struct UtxoDBImpl<B> {
@@ -31,7 +34,23 @@ impl<B> UtxoDBImpl<B> {
     }
 }
 
-impl<B> UtxosPersistentStorage for UtxoDBImpl<B>
+impl<B> UtxosPersistentStorageRead for UtxoDBImpl<B>
+where
+    B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
+{
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error> {
+        self.store.get_utxo(outpoint).map_err(|e| e.into())
+    }
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, utxo::Error> {
+        self.store.get_best_block_for_utxos().map_err(|e| e.into())
+    }
+
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, utxo::Error> {
+        self.store.get_undo_data(id).map_err(|e| e.into())
+    }
+}
+
+impl<B> UtxosPersistentStorageWrite for UtxoDBImpl<B>
 where
     B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
 {
@@ -41,14 +60,8 @@ where
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), utxo::Error> {
         self.store.del_utxo(outpoint).map_err(|e| e.into())
     }
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error> {
-        self.store.get_utxo(outpoint).map_err(|e| e.into())
-    }
     fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), utxo::Error> {
         self.store.set_best_block_for_utxos(block_id).map_err(|e| e.into())
-    }
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, utxo::Error> {
-        self.store.get_best_block_for_utxos().map_err(|e| e.into())
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), utxo::Error> {
@@ -57,10 +70,6 @@ where
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), utxo::Error> {
         self.store.del_undo_data(id).map_err(|e| e.into())
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, utxo::Error> {
-        self.store.get_undo_data(id).map_err(|e| e.into())
     }
 }
 
