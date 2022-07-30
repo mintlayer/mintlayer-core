@@ -43,7 +43,7 @@ pub struct UtxoDB<'a, S>(&'a S);
 
 pub struct UtxoDBMut<'a, S>(&'a mut S);
 
-impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
         self.0.get_utxo(outpoint)
     }
@@ -104,9 +104,10 @@ impl<'a, S> UtxoDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        match self.0.get_utxo(outpoint) {
+mod utxodb_utxoview_impls {
+    use super::*;
+    pub fn utxo<S: UtxosPersistentStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
+        match db.get_utxo(outpoint) {
             Ok(res) => res,
             Err(e) => {
                 panic!(
@@ -117,12 +118,17 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
         }
     }
 
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.utxo(outpoint).is_some()
+    pub fn has_utxo<S: UtxosPersistentStorageRead + UtxosView>(
+        db: &S,
+        outpoint: &OutPoint,
+    ) -> bool {
+        utxo(db, outpoint).is_some()
     }
 
-    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        match self.0.get_best_block_id() {
+    pub fn best_block_hash<S: UtxosPersistentStorageRead + UtxosView>(
+        db: &S,
+    ) -> Option<Id<GenBlock>> {
+        match db.get_best_block_id() {
             Ok(opt_id) => opt_id,
             Err(e) => {
                 panic!(
@@ -133,58 +139,60 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
         }
     }
 
-    fn estimated_size(&self) -> Option<usize> {
+    pub fn estimated_size<S: UtxosPersistentStorageRead + UtxosView>(db: &S) -> Option<usize> {
         None
     }
 
-    fn derive_cache(&self) -> UtxosCache {
-        let mut cache = UtxosCache::new(self);
-        if let Some(hash) = self.best_block_hash() {
+    pub fn derive_cache<S: UtxosPersistentStorageRead + UtxosView>(db: &S) -> UtxosCache {
+        let mut cache = UtxosCache::new(db);
+        if let Some(hash) = db.best_block_hash() {
             cache.set_best_block(hash);
         }
         cache
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        match self.0.get_utxo(outpoint) {
-            Ok(res) => res,
-            Err(e) => {
-                panic!(
-                    "Database error while attempting to retrieve utxo from the database: {}",
-                    e
-                );
-            }
-        }
+        utxodb_utxoview_impls::utxo(self, outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.utxo(outpoint).is_some()
+        utxodb_utxoview_impls::has_utxo(self, outpoint)
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        match self.0.get_best_block_id() {
-            Ok(opt_id) => opt_id,
-            Err(e) => {
-                panic!(
-                    "Database error while attempting to retrieve utxo set best block hash from the database: {}",
-                    e
-                );
-            }
-        }
+        utxodb_utxoview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        None
+        utxodb_utxoview_impls::estimated_size(self)
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        let mut cache = UtxosCache::new(self);
-        if let Some(hash) = self.best_block_hash() {
-            cache.set_best_block(hash);
-        }
-        cache
+        utxodb_utxoview_impls::derive_cache(self)
+    }
+}
+
+impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDBMut<'a, S> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        utxodb_utxoview_impls::utxo(self, outpoint)
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        utxodb_utxoview_impls::has_utxo(self, outpoint)
+    }
+
+    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
+        utxodb_utxoview_impls::best_block_hash(self)
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        utxodb_utxoview_impls::estimated_size(self)
+    }
+
+    fn derive_cache(&self) -> UtxosCache {
+        utxodb_utxoview_impls::derive_cache(self)
     }
 }
 
