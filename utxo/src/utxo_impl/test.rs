@@ -447,7 +447,7 @@ fn blockchain_or_mempool_utxo_test() {
     let (utxo, outpoint_2) = create_utxo_for_mempool();
     assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
 
-    let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
+    let res = cache.utxo(&outpoint_2).expect("should countain utxo");
     assert!(res.source_height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
 }
@@ -467,7 +467,7 @@ fn multiple_update_utxos_test() {
         let id = OutPointSourceId::from(tx.get_id());
         let outpoint = OutPoint::new(id, i as u32);
 
-        let utxo = cache.get_utxo(&outpoint).expect("utxo should exist");
+        let utxo = cache.utxo(&outpoint).expect("utxo should exist");
         assert_eq!(utxo.output(), x);
     });
 
@@ -496,6 +496,6 @@ fn multiple_update_utxos_test() {
 
     // check that the spent utxos should not exist in the cache anymore.
     to_spend.iter().for_each(|input| {
-        assert!(cache.get_utxo(input.outpoint()).is_none());
+        assert!(cache.utxo(input.outpoint()).is_none());
     });
 }

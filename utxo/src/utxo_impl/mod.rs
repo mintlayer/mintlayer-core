@@ -98,7 +98,7 @@ impl Utxo {
 
 pub trait UtxosView {
     /// Retrieves utxo.
-    fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
 
     /// Checks whether outpoint is unspent.
     fn has_utxo(&self, outpoint: &OutPoint) -> bool;
@@ -220,7 +220,7 @@ impl<'a> UtxosCache<'a> {
 
         // since the utxo does not exist in this view, try to check from parent.
         self.parent.and_then(|parent| {
-            parent.get_utxo(outpoint).map(|utxo| UtxoEntry {
+            parent.utxo(outpoint).map(|utxo| UtxoEntry {
                 // if the utxo exists in parent:
                 // dirty is FALSE because this view does not have the utxo, therefore is different from parent
                 // fresh is FALSE because this view does not have the utxo but the parent has.
@@ -408,18 +408,18 @@ impl<'a> Debug for UtxosCache<'a> {
 }
 
 impl<'a> UtxosView for UtxosCache<'a> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         let key = outpoint;
         if let Some(res) = self.utxos.get(key) {
             return res.utxo();
         }
 
         // if utxo is not found in this view, use parent's `get_utxo`.
-        self.parent.and_then(|parent| parent.get_utxo(outpoint))
+        self.parent.and_then(|parent| parent.utxo(outpoint))
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.get_utxo(outpoint).is_some()
+        self.utxo(outpoint).is_some()
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {

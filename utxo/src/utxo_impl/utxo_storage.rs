@@ -56,7 +56,7 @@ impl<'a, S: UtxosPersistentStorage> UtxoDB<'a, S> {
 }
 
 impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         match self.0.get_utxo(outpoint) {
             Ok(res) => res,
             Err(e) => {
@@ -69,7 +69,7 @@ impl<'a, S: UtxosPersistentStorage> UtxosView for UtxoDB<'a, S> {
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        self.get_utxo(outpoint).is_some()
+        self.utxo(outpoint).is_some()
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
@@ -301,7 +301,7 @@ mod test {
                 let outpoint = input.outpoint();
                 assert!(db.has_utxo(outpoint));
 
-                db.get_utxo(outpoint).expect("utxo should exist.")
+                db.utxo(outpoint).expect("utxo should exist.")
             })
             .collect_vec();
 
@@ -350,7 +350,7 @@ mod test {
 
         // check that all in tx_inputs do NOT exist
         expected_tx_inputs.iter().for_each(|input| {
-            assert_eq!(db.get_utxo(input.outpoint()), None);
+            assert_eq!(db.utxo(input.outpoint()), None);
         });
 
         // save the undo data to the db.
@@ -369,7 +369,7 @@ mod test {
         {
             block.transactions().iter().for_each(|tx| {
                 tx.inputs().iter().for_each(|input| {
-                    assert_eq!(db.get_utxo(input.outpoint()), None);
+                    assert_eq!(db.utxo(input.outpoint()), None);
                 });
             });
         }
@@ -426,7 +426,7 @@ mod test {
 
         // check that all the expected_tx_inputs exists, and the same utxo is saved.
         expected_tx_inputs.iter().enumerate().for_each(|(idx, input)| {
-            let res = db.get_utxo(input.outpoint());
+            let res = db.utxo(input.outpoint());
 
             let expected_utxo = spent_utxos.get(idx);
             assert_eq!(res.as_ref(), expected_utxo);
@@ -486,7 +486,7 @@ mod test {
             let outpoint = keys[rng].clone();
 
             // test the get_utxo
-            let utxo_opt = utxo_db.get_utxo(&outpoint);
+            let utxo_opt = utxo_db.utxo(&outpoint);
 
             let outpoint_key = &outpoint;
             let utxo_entry = utxos.container.get(outpoint_key).expect("an entry should be found");
