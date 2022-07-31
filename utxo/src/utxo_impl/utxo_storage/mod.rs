@@ -16,30 +16,31 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 // todo: remove ^ when all untested codes are tested
 
+pub mod in_memory;
 mod rw_impls;
 mod view_impls;
 
 use crate::{BlockUndo, Utxo};
-use chainstate_types::storage_result::Error as StorageError;
+use chainstate_types::storage_result::Error;
 use common::{
     chain::{Block, GenBlock, OutPoint},
     primitives::Id,
 };
 
 pub trait UtxosStorageRead {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError>;
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError>;
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError>;
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error>;
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Error>;
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error>;
 }
 
 pub trait UtxosStorageWrite: UtxosStorageRead {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError>;
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Error>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), Error>;
 
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Error>;
 
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError>;
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error>;
 }
 
 #[must_use]

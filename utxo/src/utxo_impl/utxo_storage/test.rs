@@ -1,3 +1,4 @@
+use super::in_memory::UtxoInMemoryDBImpl;
 use super::*;
 use crate::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo};
 use crate::utxo_impl::{
@@ -13,64 +14,6 @@ use common::primitives::{Id, H256};
 use crypto::random::{make_pseudo_rng, seq, Rng};
 use itertools::Itertools;
 use std::collections::{BTreeMap, HashMap};
-
-#[derive(Clone)]
-struct UtxoInMemoryDBImpl {
-    store: BTreeMap<OutPoint, Utxo>,
-    undo_store: HashMap<H256, BlockUndo>,
-    best_block_id: Option<Id<GenBlock>>,
-}
-
-impl UtxoInMemoryDBImpl {
-    fn new() -> Self {
-        Self {
-            store: BTreeMap::new(),
-            undo_store: HashMap::new(),
-            best_block_id: None,
-        }
-    }
-}
-
-impl UtxosStorageRead for UtxoInMemoryDBImpl {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
-        let res = self.store.get(outpoint);
-        Ok(res.cloned())
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
-        let res = self.undo_store.get(&id.get());
-        Ok(res.cloned())
-    }
-
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        Ok(self.best_block_id)
-    }
-}
-
-impl UtxosStorageWrite for UtxoInMemoryDBImpl {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
-        self.store.insert(outpoint.clone(), entry);
-        Ok(())
-    }
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
-        self.store.remove(outpoint);
-        Ok(())
-    }
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
-        self.best_block_id = Some(*block_id);
-        Ok(())
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
-        self.undo_store.insert(id.get(), undo.clone());
-        Ok(())
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
-        self.undo_store.remove(&id.get());
-        Ok(())
-    }
-}
 
 fn create_transactions(
     inputs: Vec<TxInput>,
@@ -181,7 +124,7 @@ fn utxo_and_undo_test() {
         // create a view based on the db.
 
         let mut parent_view = UtxosCache::default();
-        db.0.store.iter().for_each(|(outpoint, utxo)| {
+        db.0.internal_store().iter().for_each(|(outpoint, utxo)| {
             assert!(parent_view.add_utxo(utxo.clone(), outpoint, false).is_ok());
         });
         parent_view.set_best_block(db.best_block_hash().expect("there should be best block hash"));
