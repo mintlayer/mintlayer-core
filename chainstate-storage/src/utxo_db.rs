@@ -42,14 +42,14 @@ where
     B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
 {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
-        self.store.get_utxo(outpoint).map_err(|e| e.into())
+        self.store.get_utxo(outpoint)
     }
     fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        self.store.get_best_block_for_utxos().map_err(|e| e.into())
+        self.store.get_best_block_for_utxos()
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
-        self.store.get_undo_data(id).map_err(|e| e.into())
+        self.store.get_undo_data(id)
     }
 }
 
@@ -58,21 +58,21 @@ where
     B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
 {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
-        self.store.set_utxo(outpoint, entry).map_err(|e| e.into())
+        self.store.set_utxo(outpoint, entry)
     }
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
-        self.store.del_utxo(outpoint).map_err(|e| e.into())
+        self.store.del_utxo(outpoint)
     }
     fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
-        self.store.set_best_block_for_utxos(block_id).map_err(|e| e.into())
+        self.store.set_best_block_for_utxos(block_id)
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
-        self.store.set_undo_data(id, undo).map_err(|e| e.into())
+        self.store.set_undo_data(id, undo)
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
-        self.store.del_undo_data(id).map_err(|e| e.into())
+        self.store.del_undo_data(id)
     }
 }
 
