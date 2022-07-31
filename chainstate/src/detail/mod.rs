@@ -297,7 +297,7 @@ impl Chainstate {
                         &OutPoint::new(genesis_id.into(), index as u32),
                         false,
                     )
-                    .unwrap();
+                    .expect("Adding genesis utxo failed");
             }
 
             let consumed_utxos_cache = utxos_cache.consume().expect("Consuming should never fail");
