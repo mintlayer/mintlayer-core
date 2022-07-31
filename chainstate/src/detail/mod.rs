@@ -16,7 +16,7 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use chainstate_storage::{Transactional, UtxoWrite};
+use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
 use common::chain::OutPoint;

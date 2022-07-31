@@ -77,6 +77,10 @@ pub trait BlockchainStorageRead {
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
+
+    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
+    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -115,28 +119,14 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-}
 
-/// Queries to get the Utxo
-// this is not exposed outside the crate, because we only want this to be accessible
-// using the UtxoDB.
-// TODO: restore the pub(crate) visibility after we implement UtxosPersistentStorageRead/UtxosPersistentStorageWrite for persistent db
-pub trait UtxoRead {
-    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
-}
-
-/// Queries to update the Utxo
-// this is not exposed outside the crate, because we only want this to be accessible
-// using the UtxoDB.
-// TODO: restore the pub(crate) visibility after we implement UtxosPersistentStorageRead/UtxosPersistentStorageWrite for persistent db
-pub trait UtxoWrite: UtxoRead {
+    // TODO: rename to set_utxo
     fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 
+    // TODO: rename to set_undo_data
     fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }

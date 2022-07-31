@@ -15,7 +15,8 @@
 
 #![allow(dead_code)]
 
-use crate::{internal::Store, Error, UtxoRead, UtxoWrite};
+use crate::{internal::Store, Error};
+use crate::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
 use utxo::{
