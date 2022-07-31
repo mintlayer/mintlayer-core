@@ -1,4 +1,4 @@
-use super::in_memory::UtxoInMemoryDBImpl;
+use super::in_memory::UtxosDBInMemoryImpl;
 use super::*;
 use crate::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo};
 use crate::utxo_impl::{
@@ -55,7 +55,7 @@ fn create_block(
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
 fn initialize_db(
-    db_interface: &mut UtxoInMemoryDBImpl,
+    db_interface: &mut UtxosDBInMemoryImpl,
     tx_outputs_size: u32,
 ) -> (Id<GenBlock>, Vec<OutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random());
@@ -97,7 +97,7 @@ fn utxo_and_undo_test() {
     let tx_outputs_size = 3;
     let num_of_txs = 1;
 
-    let mut db_interface = UtxoInMemoryDBImpl::new();
+    let mut db_interface = UtxosDBInMemoryImpl::new();
 
     // initializing the db with existing utxos.
     let (best_block_id, outpoints) = initialize_db(&mut db_interface, tx_outputs_size);
@@ -285,7 +285,7 @@ fn test_utxo() {
             best_block: new_best_block_hash,
         };
 
-        let mut db_interface = UtxoInMemoryDBImpl::new();
+        let mut db_interface = UtxosDBInMemoryImpl::new();
         let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
         // test batch_write

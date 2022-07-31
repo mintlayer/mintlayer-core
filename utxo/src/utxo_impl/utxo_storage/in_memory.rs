@@ -9,13 +9,13 @@ use common::{
 };
 
 #[derive(Clone)]
-pub struct UtxoInMemoryDBImpl {
+pub struct UtxosDBInMemoryImpl {
     store: BTreeMap<OutPoint, Utxo>,
     undo_store: HashMap<H256, BlockUndo>,
     best_block_id: Option<Id<GenBlock>>,
 }
 
-impl UtxoInMemoryDBImpl {
+impl UtxosDBInMemoryImpl {
     pub fn new() -> Self {
         Self {
             store: BTreeMap::new(),
@@ -29,7 +29,7 @@ impl UtxoInMemoryDBImpl {
     }
 }
 
-impl UtxosStorageRead for UtxoInMemoryDBImpl {
+impl UtxosStorageRead for UtxosDBInMemoryImpl {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, Error> {
         let res = self.store.get(outpoint);
         Ok(res.cloned())
@@ -45,7 +45,7 @@ impl UtxosStorageRead for UtxoInMemoryDBImpl {
     }
 }
 
-impl UtxosStorageWrite for UtxoInMemoryDBImpl {
+impl UtxosStorageWrite for UtxosDBInMemoryImpl {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), Error> {
         self.store.insert(outpoint.clone(), entry);
         Ok(())
