@@ -301,7 +301,7 @@ impl Chainstate {
 
             let consumed_utxos = utxos_cache.consume().expect("Consuming should never fail");
 
-            utxos_db.batch_write(consumed_utxos).expect("Writing genesis outputs failed");
+            utxos_db.batch_write(consumed_utxos).expect("Writing genesis utxos failed");
         }
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
