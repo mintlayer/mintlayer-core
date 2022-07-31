@@ -19,12 +19,15 @@ use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, Chainstat
 use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
+use common::chain::OutPoint;
 use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
+use utxo::utxo_storage::UtxoDBMut;
+use utxo::{FlushableUtxoView, Utxo, UtxosView};
 mod consensus_validator;
 mod orphan_blocks;
 
@@ -282,18 +285,24 @@ impl Chainstate {
             .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
             .map_err(BlockError::StorageError)?;
 
-        // TODO: this should be done through the UtxoDB abstraction, not directly through db_tx
-        // let mut utxo_db = UtxoDBMut::new(&mut db_tx);
+        {
+            let mut utxos_db = UtxoDBMut::new(&mut db_tx);
+            let mut utxos_cache = utxos_db.derive_cache();
+            utxos_cache.set_best_block(genesis_id);
+            for (index, output) in genesis.utxos().iter().enumerate() {
+                utxos_cache
+                    .add_utxo(
+                        Utxo::new(output.clone(), false, BlockHeight::new(0)),
+                        &OutPoint::new(genesis_id.into(), index as u32),
+                        false,
+                    )
+                    .unwrap();
+            }
 
-        // for (index, output) in genesis.utxos().iter().enumerate() {
-        //     db_tx
-        //         .set_utxo(
-        //             &OutPoint::new(genesis_id.into(), index as u32),
-        //             Utxo::new(output.clone(), false, BlockHeight::new(0)),
-        //         )
-        //         .unwrap();
-        // }
-
+            utxos_db
+                .batch_write(utxos_cache.consume().expect("Consuming should never fail"))
+                .expect("Writing genesis outputs failed");
+        }
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
     }

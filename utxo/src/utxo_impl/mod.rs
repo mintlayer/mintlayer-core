@@ -388,7 +388,7 @@ impl<'a> UtxosCache<'a> {
         None
     }
 
-    fn consume(self) -> Result<ConsumedUtxoCache, Error> {
+    pub fn consume(self) -> Result<ConsumedUtxoCache, Error> {
         Ok(ConsumedUtxoCache {
             container: self.utxos,
             best_block: self.current_block_hash.ok_or(Error::CacheWithoutBestBlock)?,
