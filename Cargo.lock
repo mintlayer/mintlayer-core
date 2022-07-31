@@ -552,7 +552,6 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
- "thiserror",
  "utxo",
 ]
 
