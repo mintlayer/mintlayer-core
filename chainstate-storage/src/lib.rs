@@ -64,15 +64,6 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
-
-    // // Get a utxo given its outpoint
-    // fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
-
-    // // Get the best block id that associates with the current utxo set state
-    // fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
-
-    // // Get the undo data of a block given its id
-    // fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
