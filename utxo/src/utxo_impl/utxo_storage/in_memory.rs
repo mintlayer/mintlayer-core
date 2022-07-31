@@ -5,13 +5,13 @@ use crate::{BlockUndo, Utxo};
 use chainstate_types::storage_result::Error;
 use common::{
     chain::{Block, GenBlock, OutPoint},
-    primitives::{Id, H256},
+    primitives::Id,
 };
 
 #[derive(Clone)]
 pub struct UtxosDBInMemoryImpl {
     store: BTreeMap<OutPoint, Utxo>,
-    undo_store: HashMap<H256, BlockUndo>,
+    undo_store: BTreeMap<Id<Block>, BlockUndo>,
     best_block_id: Option<Id<GenBlock>>,
 }
 
@@ -19,7 +19,7 @@ impl UtxosDBInMemoryImpl {
     pub fn new() -> Self {
         Self {
             store: BTreeMap::new(),
-            undo_store: HashMap::new(),
+            undo_store: BTreeMap::new(),
             best_block_id: None,
         }
     }
@@ -36,7 +36,7 @@ impl UtxosStorageRead for UtxosDBInMemoryImpl {
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
-        let res = self.undo_store.get(&id.get());
+        let res = self.undo_store.get(&id);
         Ok(res.cloned())
     }
 
@@ -60,12 +60,12 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
-        self.undo_store.insert(id.get(), undo.clone());
+        self.undo_store.insert(id, undo.clone());
         Ok(())
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
-        self.undo_store.remove(&id.get());
+        self.undo_store.remove(&id);
         Ok(())
     }
 }
