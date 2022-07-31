@@ -23,7 +23,7 @@ mod test {
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
     use utxo::utxo_storage::UtxoDBMut;
-    use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
+    use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
     use utxo::Utxo;
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {

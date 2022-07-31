@@ -19,7 +19,7 @@ use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
 use common::primitives::{BlockHeight, Id, Idable};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
+use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 use utxo::{BlockUndo, Utxo};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
@@ -151,7 +151,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for S
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosPersistentStorageRead for Store<B> {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -186,7 +186,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosPersistentStorageWrite for Store<B> {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
@@ -249,7 +249,7 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     }
 }
 
-impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxosPersistentStorageRead for StoreTx<Tx> {
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxosStorageRead for StoreTx<Tx> {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
         self.read::<DBUtxo, _, _>(&outpoint.encode())
     }
@@ -309,7 +309,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 }
 
-impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxosPersistentStorageWrite for StoreTx<Tx> {
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxosStorageWrite for StoreTx<Tx> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
         let key = outpoint.encode();
         self.write::<DBUtxo, _, _>(key, &entry)

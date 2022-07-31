@@ -21,7 +21,7 @@ use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
 use storage::{inmemory, traits};
-use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
+use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 
 mod internal;
 #[cfg(any(test, feature = "mock"))]
@@ -38,7 +38,7 @@ pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
 
 /// Queries on persistent blockchain data
-pub trait BlockchainStorageRead: UtxosPersistentStorageRead {
+pub trait BlockchainStorageRead: UtxosStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
@@ -76,7 +76,7 @@ pub trait BlockchainStorageRead: UtxosPersistentStorageRead {
 }
 
 /// Modifying operations on persistent blockchain data
-pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosPersistentStorageWrite {
+pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 

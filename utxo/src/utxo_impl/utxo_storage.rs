@@ -24,13 +24,13 @@ use chainstate_types::storage_result::Error as StorageError;
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{Id, H256};
 
-pub trait UtxosPersistentStorageRead {
+pub trait UtxosStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError>;
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError>;
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError>;
 }
 
-pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
+pub trait UtxosStorageWrite: UtxosStorageRead {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError>;
 
@@ -58,7 +58,7 @@ impl<'a, S> UtxoDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDBMut<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
@@ -72,7 +72,7 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut
     }
 }
 
-impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageWrite for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxoDBMut<'a, S> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
     }
@@ -93,7 +93,7 @@ impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageWrite for UtxoDBM
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDB<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
@@ -109,7 +109,7 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a
 
 mod utxodb_utxoview_impls {
     use super::*;
-    pub fn utxo<S: UtxosPersistentStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
+    pub fn utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
         match db.get_utxo(outpoint) {
             Ok(res) => res,
             Err(e) => {
@@ -121,16 +121,11 @@ mod utxodb_utxoview_impls {
         }
     }
 
-    pub fn has_utxo<S: UtxosPersistentStorageRead + UtxosView>(
-        db: &S,
-        outpoint: &OutPoint,
-    ) -> bool {
+    pub fn has_utxo<S: UtxosStorageRead + UtxosView>(db: &S, outpoint: &OutPoint) -> bool {
         utxo(db, outpoint).is_some()
     }
 
-    pub fn best_block_hash<S: UtxosPersistentStorageRead + UtxosView>(
-        db: &S,
-    ) -> Option<Id<GenBlock>> {
+    pub fn best_block_hash<S: UtxosStorageRead + UtxosView>(db: &S) -> Option<Id<GenBlock>> {
         match db.get_best_block_for_utxos() {
             Ok(opt_id) => opt_id,
             Err(e) => {
@@ -142,11 +137,11 @@ mod utxodb_utxoview_impls {
         }
     }
 
-    pub fn estimated_size<S: UtxosPersistentStorageRead + UtxosView>(db: &S) -> Option<usize> {
+    pub fn estimated_size<S: UtxosStorageRead + UtxosView>(db: &S) -> Option<usize> {
         None
     }
 
-    pub fn derive_cache<S: UtxosPersistentStorageRead + UtxosView>(db: &S) -> UtxosCache {
+    pub fn derive_cache<S: UtxosStorageRead + UtxosView>(db: &S) -> UtxosCache {
         let mut cache = UtxosCache::new(db);
         if let Some(hash) = db.best_block_hash() {
             cache.set_best_block(hash);
@@ -155,7 +150,7 @@ mod utxodb_utxoview_impls {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosView for UtxoDB<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxodb_utxoview_impls::utxo(self, outpoint)
     }
@@ -177,7 +172,7 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageWrite> UtxosView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> UtxosView for UtxoDBMut<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxodb_utxoview_impls::utxo(self, outpoint)
     }
@@ -199,7 +194,7 @@ impl<'a, S: UtxosPersistentStorageWrite> UtxosView for UtxoDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageWrite> FlushableUtxoView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxoDBMut<'a, S> {
     fn batch_write(
         &mut self,
         utxos: crate::utxo_impl::ConsumedUtxoCache,
@@ -238,7 +233,7 @@ impl UtxoInMemoryDBImpl {
     }
 }
 
-impl UtxosPersistentStorageRead for UtxoInMemoryDBImpl {
+impl UtxosStorageRead for UtxoInMemoryDBImpl {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         let res = self.store.get(outpoint);
         Ok(res.cloned())
@@ -255,7 +250,7 @@ impl UtxosPersistentStorageRead for UtxoInMemoryDBImpl {
     }
 }
 
-impl UtxosPersistentStorageWrite for UtxoInMemoryDBImpl {
+impl UtxosStorageWrite for UtxoInMemoryDBImpl {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.store.insert(outpoint.clone(), entry);
         Ok(())

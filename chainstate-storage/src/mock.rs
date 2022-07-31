@@ -21,7 +21,7 @@ use common::chain::transaction::{
 };
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{BlockHeight, Id};
-use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
+use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 use utxo::{BlockUndo, Utxo};
 
 mockall::mock! {
@@ -51,7 +51,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
     }
 
-    impl UtxosPersistentStorageRead for Store {
+    impl UtxosStorageRead for Store {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
@@ -79,7 +79,7 @@ mockall::mock! {
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
     }
 
-    impl UtxosPersistentStorageWrite for Store {
+    impl UtxosStorageWrite for Store {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
@@ -126,7 +126,7 @@ mockall::mock! {
         ) -> crate::Result<Option<Id<GenBlock>>>;
     }
 
-    impl crate::UtxosPersistentStorageRead for StoreTxRo {
+    impl crate::UtxosStorageRead for StoreTxRo {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
@@ -165,7 +165,7 @@ mockall::mock! {
 
     }
 
-    impl UtxosPersistentStorageRead for StoreTxRw {
+    impl UtxosStorageRead for StoreTxRw {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
@@ -194,7 +194,7 @@ mockall::mock! {
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
     }
 
-    impl UtxosPersistentStorageWrite for StoreTxRw {
+    impl UtxosStorageWrite for StoreTxRw {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
