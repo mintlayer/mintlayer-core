@@ -183,7 +183,6 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
         fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
-
     }
 }
 
