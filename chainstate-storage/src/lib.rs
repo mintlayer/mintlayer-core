@@ -78,8 +78,13 @@ pub trait BlockchainStorageRead {
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
+    // Get a utxo given its outpoint
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+
+    // Get the best block id that associates with the current utxo set state
     fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
+
+    // Get the undo data of a block given its id
     fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
 
@@ -120,12 +125,19 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
+    // Set a utxo element by its outpoint
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+
+    // Delete a utxo given its outpoint
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
+    // The best block for the current utxo state
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 
+    // Set the utxo undo data of a block given by an id
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+
+    // Delete the utxo data of a block recognized by its id
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
