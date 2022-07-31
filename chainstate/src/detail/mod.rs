@@ -285,6 +285,7 @@ impl Chainstate {
             .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
             .map_err(BlockError::StorageError)?;
 
+        // initialize the utxo-set by adding genesis outputs to it
         {
             let mut utxos_db = UtxosDBMut::new(&mut db_tx);
             let mut utxos_cache = utxos_db.derive_cache();
