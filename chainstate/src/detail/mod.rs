@@ -287,7 +287,7 @@ impl Chainstate {
         // TODO: this should be done through the UtxoDB abstraction, not directly through db_tx
         for (index, output) in genesis.utxos().iter().enumerate() {
             db_tx
-                .add_utxo(
+                .set_utxo(
                     &OutPoint::new(genesis_id.into(), index as u32),
                     Utxo::new(output.clone(), false, BlockHeight::new(0)),
                 )

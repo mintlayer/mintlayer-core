@@ -56,7 +56,7 @@ where
     B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
 {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), utxo::Error> {
-        self.store.add_utxo(outpoint, entry).map_err(|e| e.into())
+        self.store.set_utxo(outpoint, entry).map_err(|e| e.into())
     }
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), utxo::Error> {
         self.store.del_utxo(outpoint).map_err(|e| e.into())
@@ -66,7 +66,7 @@ where
     }
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), utxo::Error> {
-        self.store.add_undo_data(id, undo).map_err(|e| e.into())
+        self.store.set_undo_data(id, undo).map_err(|e| e.into())
     }
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), utxo::Error> {

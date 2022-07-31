@@ -178,10 +178,10 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-        fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+        fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-        fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+        fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
     }
 }
@@ -296,7 +296,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
         self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
     }
 
-    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
         let key = outpoint.encode();
         self.write::<DBUtxo, _, _>(key, &entry)
     }
@@ -310,7 +310,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
         self.write_value::<well_known::UtxosBestBlockId>(block_id)
     }
 
-    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()> {
         self.write::<DBBlockUndo, _, _>(id.encode(), undo)
     }
 
@@ -679,7 +679,7 @@ pub(crate) mod test {
         assert_eq!(store.get_undo_data(id0), Ok(None));
 
         // add undo data and check if it is there
-        assert_eq!(store.add_undo_data(id0, &block_undo0), Ok(()));
+        assert_eq!(store.set_undo_data(id0, &block_undo0), Ok(()));
         assert_eq!(
             store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
@@ -692,7 +692,7 @@ pub(crate) mod test {
         let id1: Id<Block> = Id::new(H256::random());
 
         assert_eq!(store.get_undo_data(id1), Ok(None));
-        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
+        assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(
             store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
@@ -703,7 +703,7 @@ pub(crate) mod test {
             store.get_undo_data(id0).unwrap().unwrap(),
             block_undo0.clone()
         );
-        assert_eq!(store.add_undo_data(id1, &block_undo1), Ok(()));
+        assert_eq!(store.set_undo_data(id1, &block_undo1), Ok(()));
         assert_eq!(store.get_undo_data(id1).unwrap().unwrap(), block_undo1);
     }
 }

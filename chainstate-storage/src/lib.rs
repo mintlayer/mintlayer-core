@@ -120,14 +120,12 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
-    // TODO: rename to set_utxo
-    fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
 
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
 
-    // TODO: rename to set_undo_data
-    fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
     fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
