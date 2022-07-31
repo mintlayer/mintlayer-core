@@ -535,6 +535,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utxo",
 ]
 
 [[package]]

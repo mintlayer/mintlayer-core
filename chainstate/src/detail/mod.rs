@@ -16,15 +16,17 @@
 // Author(s): S. Afach, A. Sinitsyn
 
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use chainstate_storage::Transactional;
+use chainstate_storage::{Transactional, UtxoWrite};
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
+use common::chain::OutPoint;
 use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
+use utxo::Utxo;
 mod consensus_validator;
 mod orphan_blocks;
 
@@ -281,6 +283,17 @@ impl Chainstate {
         db_tx
             .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
             .map_err(BlockError::StorageError)?;
+
+        // TODO: this should be done through the UtxoDB abstraction, not directly through db_tx
+        for (index, output) in genesis.utxos().iter().enumerate() {
+            db_tx
+                .add_utxo(
+                    &OutPoint::new(genesis_id.into(), index as u32),
+                    Utxo::new(output.clone(), false, BlockHeight::new(0)),
+                )
+                .unwrap();
+        }
+
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
     }

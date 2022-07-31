@@ -174,7 +174,7 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDB<'a, S> {
     }
 }
 
-impl<'a, S: UtxosPersistentStorageRead> UtxosView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosPersistentStorageWrite> UtxosView for UtxoDBMut<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         utxodb_utxoview_impls::utxo(self, outpoint)
     }
