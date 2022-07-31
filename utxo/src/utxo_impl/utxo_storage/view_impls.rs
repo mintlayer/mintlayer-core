@@ -7,7 +7,7 @@ use crate::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 
 use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
-mod utxosdb_utxoview_impls {
+mod utxosdb_utxosview_impls {
     use common::{
         chain::{GenBlock, OutPoint},
         primitives::Id,
@@ -59,45 +59,45 @@ mod utxosdb_utxoview_impls {
 
 impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxosdb_utxoview_impls::utxo(self, outpoint)
+        utxosdb_utxosview_impls::utxo(self, outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxosdb_utxoview_impls::has_utxo(self, outpoint)
+        utxosdb_utxosview_impls::has_utxo(self, outpoint)
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        utxosdb_utxoview_impls::best_block_hash(self)
+        utxosdb_utxosview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        utxosdb_utxoview_impls::estimated_size(self)
+        utxosdb_utxosview_impls::estimated_size(self)
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        utxosdb_utxoview_impls::derive_cache(self)
+        utxosdb_utxosview_impls::derive_cache(self)
     }
 }
 
 impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxosdb_utxoview_impls::utxo(self, outpoint)
+        utxosdb_utxosview_impls::utxo(self, outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxosdb_utxoview_impls::has_utxo(self, outpoint)
+        utxosdb_utxosview_impls::has_utxo(self, outpoint)
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        utxosdb_utxoview_impls::best_block_hash(self)
+        utxosdb_utxosview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        utxosdb_utxoview_impls::estimated_size(self)
+        utxosdb_utxosview_impls::estimated_size(self)
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        utxosdb_utxoview_impls::derive_cache(self)
+        utxosdb_utxosview_impls::derive_cache(self)
     }
 }
 
