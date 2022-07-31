@@ -16,7 +16,7 @@
 #![allow(dead_code, unused_variables, unused_imports)]
 // todo: remove ^ when all untested codes are tested
 
-mod view_impl;
+mod view_impls;
 
 use std::collections::{BTreeMap, HashMap};
 
