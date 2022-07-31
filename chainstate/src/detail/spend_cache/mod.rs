@@ -198,7 +198,6 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 entry.insert(CachedInputsOperation::Read(tx_index))
             }
         };
-
         Ok(())
     }
 
