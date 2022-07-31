@@ -43,7 +43,6 @@ impl UtxosStorageRead for UtxoInMemoryDBImpl {
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        // TODO: fix; don't get general block id
         Ok(self.best_block_id)
     }
 }
@@ -58,7 +57,6 @@ impl UtxosStorageWrite for UtxoInMemoryDBImpl {
         Ok(())
     }
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
-        // TODO: fix; don't store in general block id
         self.best_block_id = Some(*block_id);
         Ok(())
     }
