@@ -19,13 +19,12 @@
 mod rw_impls;
 mod view_impls;
 
-use std::collections::{BTreeMap, HashMap};
-
-use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
-use crate::{BlockUndo, Error};
+use crate::{BlockUndo, Utxo};
 use chainstate_types::storage_result::Error as StorageError;
-use common::chain::{Block, GenBlock, OutPoint};
-use common::primitives::{Id, H256};
+use common::{
+    chain::{Block, GenBlock, OutPoint},
+    primitives::Id,
+};
 
 pub trait UtxosStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError>;

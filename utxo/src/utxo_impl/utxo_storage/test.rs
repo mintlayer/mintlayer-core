@@ -12,7 +12,7 @@ use common::primitives::{Amount, BlockHeight, Idable};
 use common::primitives::{Id, H256};
 use crypto::random::{make_pseudo_rng, seq, Rng};
 use itertools::Itertools;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Clone)]
 struct UtxoInMemoryDBImpl {
