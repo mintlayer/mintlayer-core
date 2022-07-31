@@ -41,7 +41,19 @@ pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
 
 pub struct UtxoDB<'a, S>(&'a S);
 
+impl<'a, S> UtxoDB<'a, S> {
+    pub fn new(store: &'a S) -> Self {
+        Self(store)
+    }
+}
+
 pub struct UtxoDBMut<'a, S>(&'a mut S);
+
+impl<'a, S> UtxoDBMut<'a, S> {
+    pub fn new(store: &'a mut S) -> Self {
+        Self(store)
+    }
+}
 
 impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
@@ -89,18 +101,6 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
         self.0.get_undo_data(id)
-    }
-}
-
-impl<'a, S> UtxoDB<'a, S> {
-    pub fn new(store: &'a S) -> Self {
-        Self(store)
-    }
-}
-
-impl<'a, S> UtxoDBMut<'a, S> {
-    pub fn new(store: &'a mut S) -> Self {
-        Self(store)
     }
 }
 
