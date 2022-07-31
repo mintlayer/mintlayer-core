@@ -34,21 +34,9 @@ pub use storage::transaction::{TransactionRo, TransactionRw};
 // Alias the in-memory store as the store used by other crates for now
 pub type Store = internal::Store<inmemory::Store<internal::Schema>>;
 
-/// Blockchain storage error
-#[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
-pub enum Error {
-    #[error("Storage error: {0}")]
-    Storage(storage::error::Recoverable),
-}
-
-impl From<storage::Error> for Error {
-    fn from(e: storage::Error) -> Self {
-        Error::Storage(e.recoverable())
-    }
-}
-
 /// Possibly failing result of blockchain storage query
-pub type Result<T> = core::result::Result<T, Error>;
+pub type Result<T> = chainstate_types::storage_result::Result<T>;
+pub type Error = chainstate_types::storage_result::Error;
 
 /// Queries on persistent blockchain data
 pub trait BlockchainStorageRead {

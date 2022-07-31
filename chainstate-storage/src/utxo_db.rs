@@ -15,7 +15,7 @@
 
 #![allow(dead_code)]
 
-use crate::{internal::Store, Error};
+use crate::internal::Store;
 use crate::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
@@ -71,12 +71,6 @@ where
 
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), utxo::Error> {
         self.store.del_undo_data(id).map_err(|e| e.into())
-    }
-}
-
-impl From<Error> for utxo::Error {
-    fn from(e: Error) -> Self {
-        utxo::Error::DBError(format!("{:?}", e))
     }
 }
 

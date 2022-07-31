@@ -43,3 +43,9 @@ pub enum Error {
     #[error("Database error: `{0}`")]
     DBError(String),
 }
+
+impl From<chainstate_types::storage_result::Error> for Error {
+    fn from(e: chainstate_types::storage_result::Error) -> Self {
+        Error::DBError(format!("{:?}", e))
+    }
+}

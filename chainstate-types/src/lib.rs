@@ -16,3 +16,4 @@
 pub mod block_index;
 pub mod height_skip;
 pub mod locator;
+pub mod storage_result;

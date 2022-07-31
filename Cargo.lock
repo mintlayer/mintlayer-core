@@ -563,6 +563,8 @@ dependencies = [
  "common",
  "parity-scale-codec",
  "serialization",
+ "storage",
+ "thiserror",
 ]
 
 [[package]]
@@ -4452,6 +4454,7 @@ dependencies = [
 name = "utxo"
 version = "0.1.0"
 dependencies = [
+ "chainstate-types",
  "common",
  "crypto",
  "itertools",
