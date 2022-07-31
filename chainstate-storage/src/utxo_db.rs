@@ -22,7 +22,7 @@ mod test {
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::utxo_storage::UtxoDBMut;
+    use utxo::utxo_storage::UtxosDBMut;
     use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
     use utxo::Utxo;
 
@@ -50,7 +50,7 @@ mod test {
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut store = crate::Store::new_empty().expect("should create a store");
-        let mut db_interface = UtxoDBMut::new(&mut store);
+        let mut db_interface = UtxosDBMut::new(&mut store);
 
         // utxo checking
         let (utxo, outpoint) = create_utxo(1, rng.gen_range(0..u128::MAX));

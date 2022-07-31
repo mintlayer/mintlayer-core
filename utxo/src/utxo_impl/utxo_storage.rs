@@ -41,24 +41,24 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
 }
 
 #[must_use]
-pub struct UtxoDB<'a, S>(&'a S);
+pub struct UtxosDB<'a, S>(&'a S);
 
-impl<'a, S> UtxoDB<'a, S> {
+impl<'a, S> UtxosDB<'a, S> {
     pub fn new(store: &'a S) -> Self {
         Self(store)
     }
 }
 
 #[must_use]
-pub struct UtxoDBMut<'a, S>(&'a mut S);
+pub struct UtxosDBMut<'a, S>(&'a mut S);
 
-impl<'a, S> UtxoDBMut<'a, S> {
+impl<'a, S> UtxosDBMut<'a, S> {
     pub fn new(store: &'a mut S) -> Self {
         Self(store)
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
@@ -72,7 +72,7 @@ impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxosDBMut<'a, S> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
     }
@@ -93,7 +93,7 @@ impl<'a, S: UtxosStorageWrite> UtxosStorageWrite for UtxoDBMut<'a, S> {
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDB<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDB<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
@@ -107,7 +107,7 @@ impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxoDB<'a, S> {
     }
 }
 
-mod utxodb_utxoview_impls {
+mod utxosdb_utxoview_impls {
     use super::*;
     pub fn utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
         match db.get_utxo(outpoint) {
@@ -150,51 +150,51 @@ mod utxodb_utxoview_impls {
     }
 }
 
-impl<'a, S: UtxosStorageRead> UtxosView for UtxoDB<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosView for UtxosDB<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxodb_utxoview_impls::utxo(self, outpoint)
+        utxosdb_utxoview_impls::utxo(self, outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxodb_utxoview_impls::has_utxo(self, outpoint)
+        utxosdb_utxoview_impls::has_utxo(self, outpoint)
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        utxodb_utxoview_impls::best_block_hash(self)
+        utxosdb_utxoview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        utxodb_utxoview_impls::estimated_size(self)
+        utxosdb_utxoview_impls::estimated_size(self)
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        utxodb_utxoview_impls::derive_cache(self)
+        utxosdb_utxoview_impls::derive_cache(self)
     }
 }
 
-impl<'a, S: UtxosStorageWrite> UtxosView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
-        utxodb_utxoview_impls::utxo(self, outpoint)
+        utxosdb_utxoview_impls::utxo(self, outpoint)
     }
 
     fn has_utxo(&self, outpoint: &OutPoint) -> bool {
-        utxodb_utxoview_impls::has_utxo(self, outpoint)
+        utxosdb_utxoview_impls::has_utxo(self, outpoint)
     }
 
     fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        utxodb_utxoview_impls::best_block_hash(self)
+        utxosdb_utxoview_impls::best_block_hash(self)
     }
 
     fn estimated_size(&self) -> Option<usize> {
-        utxodb_utxoview_impls::estimated_size(self)
+        utxosdb_utxoview_impls::estimated_size(self)
     }
 
     fn derive_cache(&self) -> UtxosCache {
-        utxodb_utxoview_impls::derive_cache(self)
+        utxosdb_utxoview_impls::derive_cache(self)
     }
 }
 
-impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxoDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<'a, S> {
     fn batch_write(
         &mut self,
         utxos: crate::utxo_impl::ConsumedUtxoCache,
@@ -281,7 +281,7 @@ mod test {
     use super::*;
     use crate::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo};
     use crate::utxo_impl::{
-        flush_to_base, utxo_storage::UtxoDB, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache,
+        flush_to_base, utxo_storage::UtxosDB, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache,
         UtxosView,
     };
     use crate::ConsumedUtxoCache;
@@ -384,9 +384,9 @@ mod test {
         // create the TxInputs for spending.
         let expected_tx_inputs = create_tx_inputs(&outpoints);
 
-        // create the UtxoDB.
+        // create the UtxosDB.
         let mut db_interface_clone = db_interface.clone();
-        let mut db = UtxoDBMut::new(&mut db_interface_clone);
+        let mut db = UtxosDBMut::new(&mut db_interface_clone);
 
         // let's check that each tx_input exists in the db. Secure the spent utxos.
         let spent_utxos = expected_tx_inputs
@@ -568,7 +568,7 @@ mod test {
             };
 
             let mut db_interface = UtxoInMemoryDBImpl::new();
-            let mut utxo_db = UtxoDBMut::new(&mut db_interface);
+            let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
             // test batch_write
             let res = utxo_db.batch_write(utxos.clone());

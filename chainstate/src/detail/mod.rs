@@ -26,7 +26,7 @@ use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
-use utxo::utxo_storage::UtxoDBMut;
+use utxo::utxo_storage::UtxosDBMut;
 use utxo::{FlushableUtxoView, Utxo, UtxosView};
 mod consensus_validator;
 mod orphan_blocks;
@@ -286,7 +286,7 @@ impl Chainstate {
             .map_err(BlockError::StorageError)?;
 
         {
-            let mut utxos_db = UtxoDBMut::new(&mut db_tx);
+            let mut utxos_db = UtxosDBMut::new(&mut db_tx);
             let mut utxos_cache = utxos_db.derive_cache();
             utxos_cache.set_best_block(genesis_id);
             for (index, output) in genesis.utxos().iter().enumerate() {
