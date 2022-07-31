@@ -125,7 +125,7 @@ fn utxo_and_undo_test() {
 
         let mut parent_view = UtxosCache::default();
         db.0.internal_store().iter().for_each(|(outpoint, utxo)| {
-            assert!(parent_view.add_utxo(utxo.clone(), outpoint, false).is_ok());
+            parent_view.add_utxo(utxo.clone(), outpoint, false).unwrap();
         });
         parent_view.set_best_block(db.best_block_hash().expect("there should be best block hash"));
 
@@ -156,7 +156,7 @@ fn utxo_and_undo_test() {
 
         // flush to db
         view.set_best_block(block.get_id().into());
-        assert!(flush_to_base(view, &mut db).is_ok());
+        flush_to_base(view, &mut db).unwrap();
 
         (block, block_undo)
     };
@@ -168,7 +168,7 @@ fn utxo_and_undo_test() {
 
     // save the undo data to the db.
     {
-        assert!(db.set_undo_data(block.get_id(), &block_undo).is_ok());
+        db.set_undo_data(block.get_id(), &block_undo).unwrap();
 
         // check that the block_undo retrieved from db is the same as the one being stored.
         let block_undo_from_db = db
@@ -224,15 +224,15 @@ fn utxo_and_undo_test() {
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).expect("it should have utxo");
-                assert!(view.add_utxo(utxo.clone(), input.outpoint(), true).is_ok());
+                view.add_utxo(utxo.clone(), input.outpoint(), true).unwrap();
             });
         });
 
         // flush the view to the db.
-        assert!(flush_to_base(view, &mut db).is_ok());
+        flush_to_base(view, &mut db).unwrap();
 
         // remove the block undo file
-        assert!(db.del_undo_data(block.get_id()).is_ok());
+        db.del_undo_data(block.get_id()).unwrap();
         assert_eq!(db.get_undo_data(block.get_id()), Ok(None));
     }
 
@@ -290,7 +290,7 @@ fn test_utxo() {
 
         // test batch_write
         let res = utxo_db.batch_write(utxos.clone());
-        assert!(res.is_ok());
+        res.unwrap();
 
         // randomly get a key for checking
         let keys = utxos.container.keys().collect_vec();
@@ -341,14 +341,14 @@ fn test_utxo() {
                 .expect("utxo should exist");
 
             let mut parent = UtxosCache::default();
-            assert!(parent.add_utxo(utxo, outpoint, false).is_ok());
+            parent.add_utxo(utxo, outpoint, false).unwrap();
             parent.set_best_block(utxo_db.best_block_hash().expect("best block should be there"));
 
             let mut child = UtxosCache::new(&parent);
-            assert!(child.spend_utxo(outpoint).is_ok());
+            child.spend_utxo(outpoint).unwrap();
 
             let res = flush_to_base(child, &mut utxo_db);
-            assert!(res.is_ok());
+            res.unwrap();
 
             assert!(!utxo_db.has_utxo(outpoint));
         }
