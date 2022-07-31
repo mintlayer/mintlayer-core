@@ -13,78 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
-
-use crate::internal::Store;
-use common::chain::{Block, GenBlock, OutPoint};
-use common::primitives::Id;
-use utxo::{
-    utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite},
-    BlockUndo, Utxo,
-};
-
-use chainstate_types::storage_result::Error as StorageError;
-
-#[derive(Clone)]
-pub struct UtxoDBImpl<B> {
-    store: Store<B>,
-}
-
-impl<B> UtxoDBImpl<B> {
-    pub fn new(store: Store<B>) -> Self {
-        Self { store }
-    }
-}
-
-impl<B> UtxosPersistentStorageRead for UtxoDBImpl<B>
-where
-    B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
-{
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
-        self.store.get_utxo(outpoint)
-    }
-    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        self.store.get_best_block_for_utxos()
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
-        self.store.get_undo_data(id)
-    }
-}
-
-impl<B> UtxosPersistentStorageWrite for UtxoDBImpl<B>
-where
-    B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
-{
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
-        self.store.set_utxo(outpoint, entry)
-    }
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
-        self.store.del_utxo(outpoint)
-    }
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
-        self.store.set_best_block_for_utxos(block_id)
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
-        self.store.set_undo_data(id, undo)
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
-        self.store.del_undo_data(id)
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::internal::test::create_rand_block_undo;
-    use common::chain::{Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
-    use common::primitives::{Amount, BlockHeight, H256};
+    use common::chain::{Block, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
+    use common::primitives::{Amount, BlockHeight, Id, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
+    use utxo::utxo_storage::UtxoDBMut;
+    use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
+    use utxo::Utxo;
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
@@ -109,8 +49,8 @@ mod test {
     #[case(Seed::from_entropy())]
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let store = crate::Store::new_empty().expect("should create a store");
-        let mut db_interface = UtxoDBImpl::new(store);
+        let mut store = crate::Store::new_empty().expect("should create a store");
+        let mut db_interface = UtxoDBMut::new(&mut store);
 
         // utxo checking
         let (utxo, outpoint) = create_utxo(1, rng.gen_range(0..u128::MAX));
