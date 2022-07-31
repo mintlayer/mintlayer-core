@@ -19,6 +19,7 @@ use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
 use common::primitives::{BlockHeight, Id, Idable};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
+use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
 use utxo::{BlockUndo, Utxo};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
@@ -147,7 +148,11 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for S
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
+    }
+}
 
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosPersistentStorageRead for Store<B> {
+    delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
@@ -178,6 +183,11 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
+    }
+}
+
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosPersistentStorageWrite for Store<B> {
+    delegate_to_transaction! {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
         fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
@@ -237,7 +247,9 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
         self.read::<DBBlockByHeight, _, _>(&height.encode())
     }
+}
 
+impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxosPersistentStorageRead for StoreTx<Tx> {
     fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
         self.read::<DBUtxo, _, _>(&outpoint.encode())
     }
@@ -295,7 +307,9 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()> {
         self.0.get_mut::<DBBlockByHeight, _>().del(&height.encode()).map_err(Into::into)
     }
+}
 
+impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxosPersistentStorageWrite for StoreTx<Tx> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
         let key = outpoint.encode();
         self.write::<DBUtxo, _, _>(key, &entry)

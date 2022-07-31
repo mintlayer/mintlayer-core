@@ -26,7 +26,7 @@ use common::primitives::{Id, H256};
 
 pub trait UtxosPersistentStorageRead {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError>;
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError>;
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError>;
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError>;
 }
 
@@ -34,7 +34,7 @@ pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError>;
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError>;
 
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError>;
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError>;
 
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError>;
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError>;
@@ -63,8 +63,8 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        self.0.get_best_block_id()
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
+        self.0.get_best_block_for_utxos()
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
@@ -81,8 +81,8 @@ impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageWrite for UtxoDBM
         self.0.del_utxo(outpoint)
     }
 
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
-        self.0.set_best_block_id(block_id)
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
+        self.0.set_best_block_for_utxos(block_id)
     }
     fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
         self.0.set_undo_data(id, undo)
@@ -98,8 +98,8 @@ impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
-        self.0.get_best_block_id()
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
+        self.0.get_best_block_for_utxos()
     }
 
     fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
@@ -131,7 +131,7 @@ mod utxodb_utxoview_impls {
     pub fn best_block_hash<S: UtxosPersistentStorageRead + UtxosView>(
         db: &S,
     ) -> Option<Id<GenBlock>> {
-        match db.get_best_block_id() {
+        match db.get_best_block_for_utxos() {
             Ok(opt_id) => opt_id,
             Err(e) => {
                 panic!(
@@ -216,7 +216,7 @@ impl<'a, S: UtxosPersistentStorageWrite> FlushableUtxoView for UtxoDBMut<'a, S> 
                 };
             }
         }
-        self.0.set_best_block_id(&utxos.best_block)?;
+        self.0.set_best_block_for_utxos(&utxos.best_block)?;
         Ok(())
     }
 }
@@ -249,7 +249,7 @@ impl UtxosPersistentStorageRead for UtxoInMemoryDBImpl {
         Ok(res.cloned())
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
         // TODO: fix; don't get general block id
         Ok(self.best_block_id)
     }
@@ -264,7 +264,7 @@ impl UtxosPersistentStorageWrite for UtxoInMemoryDBImpl {
         self.store.remove(outpoint);
         Ok(())
     }
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         // TODO: fix; don't store in general block id
         self.best_block_id = Some(*block_id);
         Ok(())
@@ -344,7 +344,7 @@ mod test {
         tx_outputs_size: u32,
     ) -> (Id<GenBlock>, Vec<OutPoint>) {
         let best_block_id: Id<GenBlock> = Id::new(H256::random());
-        assert!(db_interface.set_best_block_id(&best_block_id).is_ok());
+        assert!(db_interface.set_best_block_for_utxos(&best_block_id).is_ok());
 
         // let's populate the db with outputs.
         let tx_outputs = create_tx_outputs(tx_outputs_size);

@@ -17,12 +17,11 @@
 
 use chainstate_types::block_index::BlockIndex;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
 use storage::{inmemory, traits};
-use utxo::{BlockUndo, Utxo};
+use utxo::utxo_storage::{UtxosPersistentStorageRead, UtxosPersistentStorageWrite};
 
 mod internal;
 #[cfg(any(test, feature = "mock"))]
@@ -39,7 +38,7 @@ pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
 
 /// Queries on persistent blockchain data
-pub trait BlockchainStorageRead {
+pub trait BlockchainStorageRead: UtxosPersistentStorageRead {
     /// Get storage version
     fn get_storage_version(&self) -> crate::Result<u32>;
 
@@ -66,18 +65,18 @@ pub trait BlockchainStorageRead {
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
 
-    // Get a utxo given its outpoint
-    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
+    // // Get a utxo given its outpoint
+    // fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
 
-    // Get the best block id that associates with the current utxo set state
-    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
+    // // Get the best block id that associates with the current utxo set state
+    // fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
-    // Get the undo data of a block given its id
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
+    // // Get the undo data of a block given its id
+    // fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
 }
 
 /// Modifying operations on persistent blockchain data
-pub trait BlockchainStorageWrite: BlockchainStorageRead {
+pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosPersistentStorageWrite {
     /// Set storage version
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
 
@@ -112,21 +111,6 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
-
-    // Set a utxo element by its outpoint
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
-
-    // Delete a utxo given its outpoint
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
-
-    // The best block for the current utxo state
-    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> crate::Result<()>;
-
-    // Set the utxo undo data of a block given by an id
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
-
-    // Delete the utxo data of a block recognized by its id
-    fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage

@@ -16,7 +16,6 @@
 #![allow(dead_code)]
 
 use crate::internal::Store;
-use crate::{BlockchainStorageRead, BlockchainStorageWrite};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
 use utxo::{
@@ -44,7 +43,7 @@ where
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.store.get_utxo(outpoint)
     }
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
+    fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
         self.store.get_best_block_for_utxos()
     }
 
@@ -63,7 +62,7 @@ where
     fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
         self.store.del_utxo(outpoint)
     }
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
+    fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         self.store.set_best_block_for_utxos(block_id)
     }
 
@@ -122,11 +121,11 @@ mod test {
 
         // test block id
         let block_id: Id<Block> = Id::new(H256::random());
-        assert!(db_interface.set_best_block_id(&block_id.into()).is_ok());
+        assert!(db_interface.set_best_block_for_utxos(&block_id.into()).is_ok());
 
         let block_id = Id::new(
             db_interface
-                .get_best_block_id()
+                .get_best_block_for_utxos()
                 .expect("query should not fail")
                 .expect("should return the block id")
                 .get(),
