@@ -39,6 +39,7 @@ pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error>;
 }
 
+#[must_use]
 pub struct UtxoDB<'a, S>(&'a S);
 
 impl<'a, S> UtxoDB<'a, S> {
@@ -47,6 +48,7 @@ impl<'a, S> UtxoDB<'a, S> {
     }
 }
 
+#[must_use]
 pub struct UtxoDBMut<'a, S>(&'a mut S);
 
 impl<'a, S> UtxoDBMut<'a, S> {
