@@ -20,23 +20,24 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::utxo_impl::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use crate::{BlockUndo, Error};
+use chainstate_types::storage_result::Error as StorageError;
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{Id, H256};
 
 pub trait UtxosPersistentStorageRead {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error>;
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error>;
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error>;
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError>;
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError>;
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError>;
 }
 
 pub trait UtxosPersistentStorageWrite: UtxosPersistentStorageRead {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error>;
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error>;
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError>;
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError>;
 
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error>;
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError>;
 
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error>;
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error>;
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError>;
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError>;
 }
 
 #[must_use]
@@ -58,50 +59,50 @@ impl<'a, S> UtxoDBMut<'a, S> {
 }
 
 impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDBMut<'a, S> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error> {
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
         self.0.get_best_block_id()
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
         self.0.get_undo_data(id)
     }
 }
 
 impl<'a, S: UtxosPersistentStorageWrite> UtxosPersistentStorageWrite for UtxoDBMut<'a, S> {
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), crate::Error> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.0.set_utxo(outpoint, entry)
     }
 
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::Error> {
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
         self.0.del_utxo(outpoint)
     }
 
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), crate::Error> {
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         self.0.set_best_block_id(block_id)
     }
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), crate::Error> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
         self.0.set_undo_data(id, undo)
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), crate::Error> {
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
         self.0.del_undo_data(id)
     }
 }
 
 impl<'a, S: UtxosPersistentStorageRead> UtxosPersistentStorageRead for UtxoDB<'a, S> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::Error> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         self.0.get_utxo(outpoint)
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::Error> {
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
         self.0.get_best_block_id()
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, crate::Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
         self.0.get_undo_data(id)
     }
 }
@@ -238,50 +239,43 @@ impl UtxoInMemoryDBImpl {
 }
 
 impl UtxosPersistentStorageRead for UtxoInMemoryDBImpl {
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, crate::utxo_impl::Error> {
+    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {
         let res = self.store.get(outpoint);
         Ok(res.cloned())
     }
 
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, Error> {
+    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, StorageError> {
         let res = self.undo_store.get(&id.get());
         Ok(res.cloned())
     }
 
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, crate::utxo_impl::Error> {
+    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, StorageError> {
         // TODO: fix; don't get general block id
         Ok(self.best_block_id)
     }
 }
 
 impl UtxosPersistentStorageWrite for UtxoInMemoryDBImpl {
-    fn set_utxo(
-        &mut self,
-        outpoint: &OutPoint,
-        entry: Utxo,
-    ) -> Result<(), crate::utxo_impl::Error> {
+    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), StorageError> {
         self.store.insert(outpoint.clone(), entry);
         Ok(())
     }
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), crate::utxo_impl::Error> {
+    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), StorageError> {
         self.store.remove(outpoint);
         Ok(())
     }
-    fn set_best_block_id(
-        &mut self,
-        block_id: &Id<GenBlock>,
-    ) -> Result<(), crate::utxo_impl::Error> {
+    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), StorageError> {
         // TODO: fix; don't store in general block id
         self.best_block_id = Some(*block_id);
         Ok(())
     }
 
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), Error> {
+    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), StorageError> {
         self.undo_store.insert(id.get(), undo.clone());
         Ok(())
     }
 
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
+    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), StorageError> {
         self.undo_store.remove(&id.get());
         Ok(())
     }
