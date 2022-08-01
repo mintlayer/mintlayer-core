@@ -17,7 +17,7 @@ use super::*;
 use crate::{
     config,
     net::{libp2p::Libp2pService, types},
-    swarm::peerdb::{Peer, PeerDb},
+    peer_manager::peerdb::{Peer, PeerDb},
 };
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use std::collections::HashMap;

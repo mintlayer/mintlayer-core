@@ -16,7 +16,7 @@
 use crate::{
     error::{P2pError, PeerError},
     net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService},
-    swarm::tests::make_peer_manager,
+    peer_manager::tests::make_peer_manager,
 };
 use common::chain::config;
 use libp2p::Multiaddr;

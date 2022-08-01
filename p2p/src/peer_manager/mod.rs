@@ -93,13 +93,6 @@ where
         }
     }
 
-    /// Get mutable reference to the `ConnectivityHandle`
-    #[allow(dead_code)]
-    fn handle_mut(&mut self) -> &mut T::ConnectivityHandle {
-        // TODO: get rid of mutable handles that expose internal stuff
-        &mut self.peer_connectivity_handle
-    }
-
     /// Update the list of known peers or known peer's list of addresses
     fn peer_discovered(&mut self, peers: &[net::types::AddrInfo<T>]) {
         peers.iter().for_each(|peer| {

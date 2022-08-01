@@ -183,6 +183,7 @@ where
             headers.len() == 1,
             P2pError::ProtocolError(ProtocolError::InvalidMessage),
         );
+
         // TODO: handle processing requests for multiple blocks
         let block_id =
             *headers.get(0).ok_or(P2pError::ProtocolError(ProtocolError::InvalidMessage))?;
@@ -383,10 +384,6 @@ where
         error: net::types::RequestResponseError,
     ) -> crate::Result<()> {
         match error {
-            // TODO: through peermanager!
-            net::types::RequestResponseError::ConnectionClosed => {
-                self.unregister_peer(peer_id);
-            }
             net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
                     log::warn!(
@@ -430,6 +427,7 @@ where
                 }
             }
         }
+
         Ok(())
     }
 

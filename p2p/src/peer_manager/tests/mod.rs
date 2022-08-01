@@ -19,7 +19,7 @@ mod peerdb;
 
 use crate::{
     net::{ConnectivityService, NetworkingService},
-    swarm::PeerManager,
+    peer_manager::PeerManager,
     P2pConfig,
 };
 use std::{fmt::Debug, str::FromStr, sync::Arc};

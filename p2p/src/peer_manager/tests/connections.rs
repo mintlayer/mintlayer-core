@@ -21,7 +21,7 @@ use crate::{
         mock::{types::MockPeerId, MockService},
         ConnectivityService, NetworkingService,
     },
-    swarm::{self, tests::make_peer_manager},
+    peer_manager::{self, tests::make_peer_manager},
 };
 use common::chain::config;
 use libp2p::{Multiaddr, PeerId};
@@ -391,7 +391,7 @@ async fn inbound_connection_too_many_peers<T>(
     });
     assert_eq!(
         swarm1.peerdb.active_peer_count(),
-        swarm::MAX_ACTIVE_CONNECTIONS
+        peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
     let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
@@ -418,7 +418,7 @@ async fn inbound_connection_too_many_peers<T>(
 #[tokio::test]
 async fn inbound_connection_too_many_peers_libp2p() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..swarm::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(|_| net::types::PeerInfo {
             peer_id: PeerId::random(),
             magic_bytes: *config.magic_bytes(),
@@ -447,7 +447,7 @@ async fn inbound_connection_too_many_peers_libp2p() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_mock() {
     let config = Arc::new(config::create_mainnet());
-    let _peers = (0..swarm::MAX_ACTIVE_CONNECTIONS)
+    let _peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(|_| net::types::PeerInfo::<MockService> {
             peer_id: MockPeerId::random(),
             magic_bytes: *config.magic_bytes(),

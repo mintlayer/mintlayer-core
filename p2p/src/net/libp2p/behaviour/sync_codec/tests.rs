@@ -1,3 +1,20 @@
+// Copyright (c) 2022 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://spdx.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// Author(s): A. Altonen
+
 use super::*;
 
 #[tokio::test]
@@ -26,7 +43,7 @@ async fn test_read_request() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         let res = codec.read_request(&protocol, &mut socket).await.unwrap();
-        assert_eq!(res, SyncRequest::new(data));
+        assert_eq!(res, message_types::SyncRequest::new(data));
     }
 
     // 10 MB + 1 byte
@@ -72,7 +89,7 @@ async fn test_read_response() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         let res = codec.read_response(&protocol, &mut socket).await.unwrap();
-        assert_eq!(res, SyncResponse::new(data));
+        assert_eq!(res, message_types::SyncResponse::new(data));
     }
 
     // 10 MB + 1 byte
@@ -104,7 +121,11 @@ async fn test_write_request() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         codec
-            .write_request(&protocol, &mut socket, SyncRequest::new(data))
+            .write_request(
+                &protocol,
+                &mut socket,
+                message_types::SyncRequest::new(data),
+            )
             .await
             .unwrap();
     }
@@ -116,7 +137,11 @@ async fn test_write_request() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         codec
-            .write_request(&protocol, &mut socket, SyncRequest::new(data))
+            .write_request(
+                &protocol,
+                &mut socket,
+                message_types::SyncRequest::new(data),
+            )
             .await
             .unwrap();
     }
@@ -127,7 +152,14 @@ async fn test_write_request() {
         let data = vec![1u8; 12 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        if let Err(e) = codec.write_request(&protocol, &mut socket, SyncRequest::new(data)).await {
+        if let Err(e) = codec
+            .write_request(
+                &protocol,
+                &mut socket,
+                message_types::SyncRequest::new(data),
+            )
+            .await
+        {
             assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
         }
     }
@@ -145,7 +177,11 @@ async fn test_write_response() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         codec
-            .write_response(&protocol, &mut socket, SyncResponse::new(data))
+            .write_response(
+                &protocol,
+                &mut socket,
+                message_types::SyncResponse::new(data),
+            )
             .await
             .unwrap();
     }
@@ -157,7 +193,11 @@ async fn test_write_response() {
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
         codec
-            .write_response(&protocol, &mut socket, SyncResponse::new(data))
+            .write_response(
+                &protocol,
+                &mut socket,
+                message_types::SyncResponse::new(data),
+            )
             .await
             .unwrap();
     }
@@ -168,7 +208,13 @@ async fn test_write_response() {
         let data = vec![1u8; 12 * 1024 * 1024];
 
         let mut socket = futures::io::Cursor::new(&mut out[..]);
-        if let Err(e) = codec.write_response(&protocol, &mut socket, SyncResponse::new(data)).await
+        if let Err(e) = codec
+            .write_response(
+                &protocol,
+                &mut socket,
+                message_types::SyncResponse::new(data),
+            )
+            .await
         {
             assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
         }

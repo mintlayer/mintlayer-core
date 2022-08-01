@@ -30,9 +30,9 @@ pub mod error;
 pub mod event;
 pub mod message;
 pub mod net;
+pub mod peer_manager;
 pub mod pubsub;
 pub mod rpc;
-pub mod swarm;
 pub mod sync;
 
 /// Result type with P2P errors
@@ -45,7 +45,6 @@ pub struct P2pInterface<T: NetworkingService> {
     p2p: P2P<T>,
 }
 
-// TODO: reduce code duplication?
 impl<T> P2pInterface<T>
 where
     T: NetworkingService,
@@ -170,12 +169,14 @@ where
         )
         .await?;
 
-        // p2p creates its components (such as PeerManager/swarm, sync, pubsub, etc) and makes communications with them in two possible ways:
+        // P2P creates its components (such as PeerManager, sync, pubsub, etc) and makes
+        // communications with them in two possible ways:
+        //
         // 1. Fire-and-forget
         // 2. Request and wait for response
-        // The difference between these types is that enums that contain the events *can* have a oneshot::channel object that should be used to send the response.
-
-        // TODO: think about these channel sizes
+        //
+        // The difference between these types is that enums that contain the events *can* have
+        // a `oneshot::channel` object that must be used to send the response.
         let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
         let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
         let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
@@ -184,7 +185,7 @@ where
         {
             let chain_config = Arc::clone(&chain_config);
             tokio::spawn(async move {
-                if let Err(e) = swarm::PeerManager::<T>::new(
+                if let Err(err) = peer_manager::PeerManager::<T>::new(
                     chain_config,
                     Arc::clone(&p2p_config),
                     conn,
@@ -194,7 +195,7 @@ where
                 .run()
                 .await
                 {
-                    log::error!("PeerManager failed: {:?}", e);
+                    log::error!("PeerManager failed: {err}");
                 }
             });
         }
@@ -202,8 +203,9 @@ where
             let consensus_handle = consensus_handle.clone();
             let tx_swarm = tx_swarm.clone();
             let chain_config = Arc::clone(&chain_config);
+
             tokio::spawn(async move {
-                if let Err(e) = sync::BlockSyncManager::<T>::new(
+                if let Err(err) = sync::BlockSyncManager::<T>::new(
                     chain_config,
                     sync,
                     consensus_handle,
@@ -214,15 +216,16 @@ where
                 .run()
                 .await
                 {
-                    log::error!("SyncManager failed: {:?}", e);
+                    log::error!("SyncManager failed: {err}");
                 }
             });
         }
 
         {
             let tx_swarm = tx_swarm.clone();
+
             tokio::spawn(async move {
-                if let Err(e) = pubsub::PubSubMessageHandler::<T>::new(
+                if let Err(err) = pubsub::PubSubMessageHandler::<T>::new(
                     chain_config,
                     pubsub,
                     consensus_handle,
@@ -233,10 +236,11 @@ where
                 .run()
                 .await
                 {
-                    log::error!("PubSubMessageHandler failed: {:?}", e);
+                    log::error!("PubSubMessageHandler failed: {err}");
                 }
             });
         }
+
         Ok(Self { tx_swarm, _tx_sync })
     }
 }

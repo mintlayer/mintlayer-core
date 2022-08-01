@@ -18,7 +18,7 @@
 use crate::{
     error::{DialError, P2pError, ProtocolError},
     net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService},
-    swarm::{self, tests::make_peer_manager},
+    peer_manager::{self, tests::make_peer_manager},
 };
 use common::chain::config;
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
@@ -288,7 +288,7 @@ async fn inbound_connection_too_many_peers() {
         make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
 
     // add `MAX_ACTIVE_CONNECTIONS` peers so the next peer that joins is rejected
-    for _ in 0..swarm::MAX_ACTIVE_CONNECTIONS {
+    for _ in 0..peer_manager::MAX_ACTIVE_CONNECTIONS {
         let peer_id = PeerId::random();
 
         swarm1.peerdb.peer_connected(
@@ -311,7 +311,7 @@ async fn inbound_connection_too_many_peers() {
     }
     assert_eq!(
         swarm1.peerdb.active_peer_count(),
-        swarm::MAX_ACTIVE_CONNECTIONS
+        peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
     let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();

@@ -93,12 +93,6 @@ async fn connection_established_dialer() {
             types::ControlEvent::CloseConnection { peer_id },
         )),
     );
-    // assert_eq!(
-    //     connmgr.events.front(),
-    //     Some(&types::ConnectionManagerEvent::Behaviour(
-    //         types::BehaviourEvent::ConnectionClosed { peer_id },
-    //     ))
-    // );
     connmgr.events.clear();
 
     // known peer in `Active` state

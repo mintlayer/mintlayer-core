@@ -36,10 +36,7 @@ pub struct AddrInfo<T: NetworkingService> {
 /// the information is passed on to [crate::swarm::PeerManager] which decides whether it wants to keep
 /// the connection open or close it and possibly ban the peer from.
 #[derive(Debug)]
-pub struct PeerInfo<T>
-where
-    T: NetworkingService,
-{
+pub struct PeerInfo<T: NetworkingService> {
     /// Unique ID of the peer
     pub peer_id: T::PeerId,
 
@@ -166,18 +163,11 @@ pub enum PubSubEvent<T: NetworkingService> {
 pub enum RequestResponseError {
     /// Request timed out
     Timeout,
-
-    /// Connection was closed by remote
-    // TODO: peer manager
-    ConnectionClosed,
 }
 
 /// Syncing-related events
 #[derive(Debug)]
-pub enum SyncingEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum SyncingEvent<T: NetworkingService> {
     /// Incoming request
     Request {
         /// Unique ID of the sender

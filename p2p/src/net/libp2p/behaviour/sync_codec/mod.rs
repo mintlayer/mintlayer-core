@@ -18,6 +18,7 @@
 //!
 //! Used to exchange SCALE-encoded header/block request/response pairs
 
+use crate::net::libp2p::constants::MESSAGE_MAX_SIZE;
 use async_trait::async_trait;
 use futures::prelude::*;
 use libp2p::{
@@ -26,34 +27,32 @@ use libp2p::{
 };
 use std::io;
 
-use self::message_types::{SyncRequest, SyncResponse};
-
 pub mod message_types;
-
-const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
 pub struct SyncingProtocol();
 
 impl ProtocolName for SyncingProtocol {
-    /// When using the RequestResponse<> behavior with Libp2p, this is going to be the string that is used to demultiplex the stream
-    /// we get for a specific use-case. For example, for syncing, we use this prefix. If we add our custom PubSub implementation,
-    /// we have to use another string, or the demultiplexer will fail at distinguishing streams
+    /// When using the RequestResponse<> behavior with Libp2p, this is going to be the string that
+    /// is used to demultiplex the stream we get for a specific use-case. For example, for syncing,
+    /// we use this prefix. If we add our custom PubSub implementation, we have to use another string,
+    /// or the demultiplexer will fail at distinguishing streams
     fn protocol_name(&self) -> &[u8] {
         "/mintlayer/sync/0.1.0".as_bytes()
     }
 }
 
-/// The SyncingMessageCodec defines the types of request/response messages and how they are serialized and deserialized,
-/// which is done by implementating the RequestResponseCodec for it and defining the request response types
+/// The SyncingMessageCodec defines the types of request/response messages and how they are serialized
+/// and deserialized, which is done by implementating the RequestResponseCodec for it and defining
+/// the request response types
 #[derive(Clone)]
 pub struct SyncMessagingCodec();
 
 #[async_trait]
 impl RequestResponseCodec for SyncMessagingCodec {
     type Protocol = SyncingProtocol;
-    type Request = SyncRequest;
-    type Response = SyncResponse;
+    type Request = message_types::SyncRequest;
+    type Response = message_types::SyncResponse;
 
     async fn read_request<T>(
         &mut self,
@@ -69,7 +68,7 @@ impl RequestResponseCodec for SyncMessagingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(SyncRequest::new(vec))
+        Ok(message_types::SyncRequest::new(vec))
     }
 
     async fn read_response<T>(
@@ -86,14 +85,14 @@ impl RequestResponseCodec for SyncMessagingCodec {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
-        Ok(SyncResponse::new(vec))
+        Ok(message_types::SyncResponse::new(vec))
     }
 
     async fn write_request<T>(
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        data: SyncRequest,
+        data: message_types::SyncRequest,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,
@@ -119,7 +118,7 @@ impl RequestResponseCodec for SyncMessagingCodec {
         &mut self,
         _: &SyncingProtocol,
         io: &mut T,
-        data: SyncResponse,
+        data: message_types::SyncResponse,
     ) -> io::Result<()>
     where
         T: AsyncWrite + Unpin + Send,

@@ -19,8 +19,6 @@ pub mod connection_manager;
 pub mod discovery;
 pub mod sync_codec;
 
-use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
-
 use crate::{
     config,
     error::{P2pError, ProtocolError},
@@ -34,6 +32,7 @@ use crate::{
     },
 };
 use common::chain::config::ChainConfig;
+use connection_manager::types::{BehaviourEvent, ConnectionManagerEvent, ControlEvent};
 use libp2p::{
     gossipsub::{self, Gossipsub, GossipsubConfigBuilder, MessageAuthenticity, ValidationMode},
     identify, identity, ping,
@@ -52,20 +51,23 @@ use std::{
     sync::Arc,
     task::{Context, Poll, Waker},
 };
+use sync_codec::{
+    message_types::{SyncRequest, SyncResponse},
+    SyncMessagingCodec, SyncingProtocol,
+};
 
-use sync_codec::message_types::{SyncRequest, SyncResponse};
-
-use self::sync_codec::{SyncMessagingCodec, SyncingProtocol};
-
-/// Libp2pBehaviour defines the protocols that communicate with peers, such as different streams
-/// (sync, for example, is a separate stream that's prefixed, at the stream-level, with SyncingProtocol::protocol_name(), which is done through the demultiplexer of streams)
-/// (identify, as another example, is a stream that's created by libp2p, and handles getting identifying information of peers, like their peer public keys, addresses, supported protocols, etc)
+/// `Libp2pBehaviour` defines the protocols that communicate with peers, such as different streams
+/// (sync, e.g., is a separate stream that's prefixed, at the stream-level, with `SyncingProtocol::protocol_name()`,
+/// which is done through the demultiplexer of streams)
+/// (identify, as another example, is a stream that's created by libp2p, and handles getting identifying information
+/// of peers, like their peer public keys, addresses, supported protocols, etc)
 ///
-/// every "behavior" below (besides those with #[behaviour(ignore)] on top), implement the NetworkBehaviour trait,
+/// Every "behaviour" below (besides those with `#[behaviour(ignore)]` on top), implement the `NetworkBehaviour` trait,
 /// where this trait has methods that handle connections, streams, and other events.
 ///
-/// As another example with explanation, the Request/Response protocol is used for syncing. The implementation for that is done in:
-///     impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>> ...
+/// As another example with explanation, the Request/Response protocol is used for syncing.
+/// The implementation for that is done in:
+///     `impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse>> ...`
 /// where we handle the request/response messages that libp2p demultiplexes for us
 #[derive(libp2p::NetworkBehaviour)]
 #[behaviour(
@@ -189,63 +191,47 @@ impl NetworkBehaviourEventProcess<identify::IdentifyEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: identify::IdentifyEvent) {
         match event {
             identify::IdentifyEvent::Error { peer_id, error } => {
-                log::error!("libp2p-identify error for peer {}: {}", peer_id, error);
+                log::error!("libp2p-identify error for peer {peer_id}: {error}");
             }
             identify::IdentifyEvent::Received { peer_id, info } => {
                 if let Err(err) = self.connmgr.register_identify_info(&peer_id, info) {
-                    log::error!(
-                        "Failed to register `IdentifyInfo` for peer {}: {}",
-                        peer_id,
-                        err
-                    );
+                    log::error!("Failed to register `IdentifyInfo` for peer {peer_id}: {err}",);
                 }
             }
             identify::IdentifyEvent::Sent { peer_id } => {
-                log::trace!("identify info sent to peer {:?}", peer_id)
+                log::trace!("identify info sent to peer {peer_id}")
             }
             identify::IdentifyEvent::Pushed { peer_id } => {
-                log::trace!("identify info pushed to peer {:?}", peer_id)
+                log::trace!("identify info pushed to peer {peer_id}")
             }
         }
     }
 }
 
 impl NetworkBehaviourEventProcess<ping::PingEvent> for Libp2pBehaviour {
-    /// Libp2p handles sending low-level tcp pings to peers (with results that can be success/failure); we handle what to do with that here
+    /// Libp2p handles sending low-level tcp pings to peers (with results that can be success/failure);
+    /// we handle what to do with that here
     fn inject_event(&mut self, event: ping::PingEvent) {
-        match event {
-            ping::Event {
-                peer,
-                result: Result::Ok(ping::Success::Ping { rtt }),
-            } => {
+        let ping::PingEvent { peer, result } = event;
+
+        match result {
+            Result::Ok(ping::Success::Ping { rtt }) => {
                 // TODO: report rtt to swarm manager?
-                log::debug!("peer {} responded to ping, rtt {:?}", peer, rtt);
+                log::debug!("peer {peer} responded to ping, rtt {rtt:?}");
             }
-            ping::Event {
-                peer,
-                result: Result::Ok(ping::Success::Pong),
-            } => {
-                log::debug!("peer {} responded to pong", peer);
+            Result::Ok(ping::Success::Pong) => {
+                log::trace!("peer {peer} responded to pong");
             }
-            ping::Event {
-                peer,
-                result: Result::Err(ping::Failure::Timeout),
-            } => {
-                log::warn!("ping timeout for peer {}", peer);
+            Result::Err(ping::Failure::Timeout) => {
+                log::warn!("ping timeout for peer {peer}");
                 // TODO: add test for this
             }
-            ping::Event {
-                peer,
-                result: Result::Err(ping::Failure::Unsupported),
-            } => {
-                log::error!("peer {} doesn't support libp2p::ping", peer);
+            Result::Err(ping::Failure::Unsupported) => {
+                log::error!("peer {peer} doesn't support libp2p::ping");
                 // TODO: add test for this
             }
-            ping::Event {
-                peer: _,
-                result: Result::Err(ping::Failure::Other { error }),
-            } => {
-                log::error!("unknown ping failure: {:?}", error);
+            Result::Err(ping::Failure::Other { error }) => {
+                log::error!("unknown ping failure {error} from peer {peer}");
             }
         }
     }
@@ -256,13 +242,13 @@ impl NetworkBehaviourEventProcess<gossipsub::GossipsubEvent> for Libp2pBehaviour
     fn inject_event(&mut self, event: gossipsub::GossipsubEvent) {
         match event {
             gossipsub::GossipsubEvent::Unsubscribed { peer_id, topic } => {
-                log::trace!("peer {} unsubscribed from topic {:?}", peer_id, topic);
+                log::trace!("peer {peer_id} unsubscribed from topic {topic:?}");
             }
             gossipsub::GossipsubEvent::Subscribed { peer_id, topic } => {
-                log::trace!("peer {} subscribed to topic {:?}", peer_id, topic);
+                log::trace!("peer {peer_id} subscribed to topic {topic:?}");
             }
             gossipsub::GossipsubEvent::GossipsubNotSupported { peer_id } => {
-                log::info!("peer {} does not support gossipsub", peer_id);
+                log::info!("peer {peer_id} does not support gossipsub");
 
                 self.add_event(Libp2pBehaviourEvent::Connectivity(
                     ConnectivityEvent::Misbehaved {
@@ -347,7 +333,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                 peer: _,
                 request_id,
             } => {
-                log::debug!("response sent, request id {:?}", request_id);
+                log::debug!("response sent, request id {request_id:?}");
             }
             RequestResponseEvent::OutboundFailure {
                 peer,
@@ -365,9 +351,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                     OutboundFailure::ConnectionClosed => {
                         if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
                             log::error!(
-                                "Failed to handle `ConnectionClosed` event for peer {}: {}",
-                                peer,
-                                err
+                                "Failed to handle `ConnectionClosed` event for peer {peer}: {err}"
                             );
                         }
                     }
@@ -395,9 +379,7 @@ impl NetworkBehaviourEventProcess<RequestResponseEvent<SyncRequest, SyncResponse
                     InboundFailure::ConnectionClosed => {
                         if let Err(err) = self.connmgr.handle_connection_closed(&peer) {
                             log::error!(
-                                "Failed to handle `ConnectionClosed` event for peer {}: {}",
-                                peer,
-                                err
+                                "Failed to handle `ConnectionClosed` event for peer {peer}: {err}",
                             );
                         }
                     }

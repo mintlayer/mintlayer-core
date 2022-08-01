@@ -291,7 +291,11 @@ impl ConnectionManager {
 }
 
 impl NetworkBehaviour for ConnectionManager {
-    // TODO: write documentation that defines what a "ConnectionHandler" is and then what a DummyConnectionHandler does
+    // `ConnectionHandler` is used to negotiate the protocols that are used for communication with the
+    // remote peer. It's the job of the `ConnectionHandler` to select the protocols and open substreams
+    // for each selected protocol.
+    //
+    // `DummyConnectionHandler` is an implementation of a connection handler that doesn't handle anything
     type ConnectionHandler = DummyConnectionHandler;
     type OutEvent = ConnectionManagerEvent;
 

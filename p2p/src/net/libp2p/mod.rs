@@ -34,7 +34,7 @@ use libp2p::{
     gossipsub::MessageId,
     identity, mplex,
     multiaddr::Protocol,
-    noise,
+    noise::{self, AuthenticKeypair},
     request_response::*,
     swarm::SwarmBuilder,
     tcp::TcpConfig,
@@ -47,19 +47,15 @@ use tokio::sync::{mpsc, oneshot};
 use utils::ensure;
 
 mod backend;
+pub mod behaviour;
 mod constants;
 mod tests;
 mod types;
 
-pub mod behaviour;
-
 #[derive(Debug)]
 pub struct Libp2pService;
 
-pub struct Libp2pConnectivityHandle<T>
-where
-    T: NetworkingService,
-{
+pub struct Libp2pConnectivityHandle<T: NetworkingService> {
     /// Peer Id of the local node
     peer_id: PeerId,
 
@@ -71,10 +67,22 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct Libp2pPubSubHandle<T>
-where
-    T: NetworkingService,
-{
+impl<T: NetworkingService> Libp2pConnectivityHandle<T> {
+    pub fn new(
+        peer_id: PeerId,
+        cmd_tx: mpsc::Sender<types::Command>,
+        conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+    ) -> Self {
+        Self {
+            peer_id,
+            cmd_tx,
+            conn_rx,
+            _marker: Default::default(),
+        }
+    }
+}
+
+pub struct Libp2pPubSubHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
 
@@ -83,16 +91,54 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct Libp2pSyncHandle<T>
-where
-    T: NetworkingService,
-{
+impl<T: NetworkingService> Libp2pPubSubHandle<T> {
+    pub fn new(
+        cmd_tx: mpsc::Sender<types::Command>,
+        gossip_rx: mpsc::Receiver<types::PubSubEvent>,
+    ) -> Self {
+        Self {
+            cmd_tx,
+            gossip_rx,
+            _marker: Default::default(),
+        }
+    }
+}
+
+pub struct Libp2pSyncHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
     cmd_tx: mpsc::Sender<types::Command>,
 
     /// Channel for receiving pubsub events from libp2p backend
     sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
+}
+
+impl<T: NetworkingService> Libp2pSyncHandle<T> {
+    pub fn new(
+        cmd_tx: mpsc::Sender<types::Command>,
+        sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    ) -> Self {
+        Self {
+            cmd_tx,
+            sync_rx,
+            _marker: Default::default(),
+        }
+    }
+}
+
+// TODO: Check the data directory first, and use keys from there if available
+fn make_libp2p_keys() -> (
+    PeerId,
+    identity::Keypair,
+    AuthenticKeypair<noise::X25519Spec>,
+) {
+    let id_keys = identity::Keypair::generate_ed25519();
+    let peer_id = id_keys.public().to_peer_id();
+    let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
+        .into_authentic(&id_keys)
+        .expect("Noise key creation to succeed");
+
+    (peer_id, id_keys, noise_keys)
 }
 
 /// Verify that the discovered multiaddress is in a format that Mintlayer supports:
@@ -224,13 +270,7 @@ impl NetworkingService for Libp2pService {
         Self::PubSubHandle,
         Self::SyncingMessagingHandle,
     )> {
-        // TODO: Check the data directory first, and use keys from there if available
-        let id_keys = identity::Keypair::generate_ed25519();
-        let peer_id = id_keys.public().to_peer_id();
-        let noise_keys = noise::Keypair::<noise::X25519Spec>::new()
-            .into_authentic(&id_keys)
-            .map_err(|_| P2pError::Other("Failed to create Noise keys"))?;
-
+        let (peer_id, id_keys, noise_keys) = make_libp2p_keys();
         let transport = TcpConfig::new()
             .nodelay(true)
             .upgrade(upgrade::Version::V1)
@@ -253,17 +293,17 @@ impl NetworkingService for Libp2pService {
         )
         .build();
 
+        // TODO: unbounded
         let (cmd_tx, cmd_rx) = mpsc::channel(constants::CHANNEL_SIZE);
         let (gossip_tx, gossip_rx) = mpsc::channel(constants::CHANNEL_SIZE);
         let (conn_tx, conn_rx) = mpsc::channel(constants::CHANNEL_SIZE);
         let (sync_tx, sync_rx) = mpsc::channel(constants::CHANNEL_SIZE);
 
         // run the libp2p backend in a background task
-        log::debug!("spawning libp2p backend to background");
-
         tokio::spawn(async move {
-            let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
-            backend.run().await
+            log::debug!("spawning libp2p backend to background");
+
+            Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx).run().await
         });
 
         // send listen command to the libp2p backend and if it succeeds,
@@ -279,22 +319,9 @@ impl NetworkingService for Libp2pService {
             .map_err(|_| P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse)))?;
 
         Ok((
-            Self::ConnectivityHandle {
-                peer_id,
-                cmd_tx: cmd_tx.clone(),
-                conn_rx,
-                _marker: Default::default(),
-            },
-            Self::PubSubHandle {
-                cmd_tx: cmd_tx.clone(),
-                gossip_rx,
-                _marker: Default::default(),
-            },
-            Self::SyncingMessagingHandle {
-                cmd_tx,
-                sync_rx,
-                _marker: Default::default(),
-            },
+            Self::ConnectivityHandle::new(peer_id, cmd_tx.clone(), conn_rx),
+            Self::PubSubHandle::new(cmd_tx.clone(), gossip_rx),
+            Self::SyncingMessagingHandle::new(cmd_tx, sync_rx),
         ))
     }
 }
@@ -306,18 +333,11 @@ where
     IdentifyInfoWrapper: TryInto<net::types::PeerInfo<T>, Error = P2pError>,
 {
     async fn connect(&mut self, addr: T::Address) -> crate::Result<()> {
-        log::debug!("try to establish outbound connection, address {:?}", addr);
+        log::debug!("try to establish an outbound connection, address {addr}");
 
-        let peer_id = match addr.iter().last() {
-            Some(Protocol::P2p(hash)) => PeerId::from_multihash(hash).map_err(|_| {
-                P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
-            })?,
-            _ => {
-                return Err(P2pError::ConversionError(ConversionError::InvalidAddress(
-                    addr.to_string(),
-                )))
-            }
-        };
+        let peer_id = PeerId::try_from_multiaddr(&addr).ok_or_else(|| {
+            P2pError::ConversionError(ConversionError::InvalidAddress(addr.to_string()))
+        })?;
 
         // try to connect to remote peer
         let (tx, rx) = oneshot::channel();
@@ -426,7 +446,7 @@ where
 
         let (tx, rx) = oneshot::channel();
         self.cmd_tx
-            .send(types::Command::SendMessage {
+            .send(types::Command::AnnounceData {
                 topic,
                 message: encoded,
                 response: tx,
