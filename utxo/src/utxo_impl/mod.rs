@@ -265,7 +265,7 @@ impl<'a> UtxosCache<'a> {
                 source: source.clone(),
             };
 
-            self.add_utxo(utxo, &outpoint, overwrite)?;
+            self.add_utxo(&outpoint, utxo, overwrite)?;
         }
         Ok(())
     }
@@ -285,8 +285,8 @@ impl<'a> UtxosCache<'a> {
     /// Adds a utxo entry in the cache.
     pub fn add_utxo(
         &mut self,
-        utxo: Utxo,
         outpoint: &OutPoint,
+        utxo: Utxo,
         possible_overwrite: bool,
     ) -> Result<(), Error> {
         let is_fresh = match self.utxos.get(outpoint) {

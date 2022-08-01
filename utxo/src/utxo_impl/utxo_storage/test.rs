@@ -125,7 +125,7 @@ fn utxo_and_undo_test() {
 
         let mut parent_view = UtxosCache::default();
         db.0.internal_store().iter().for_each(|(outpoint, utxo)| {
-            parent_view.add_utxo(utxo.clone(), outpoint, false).unwrap();
+            parent_view.add_utxo(outpoint, utxo.clone(), false).unwrap();
         });
         parent_view.set_best_block(db.best_block_hash().expect("there should be best block hash"));
 
@@ -224,7 +224,7 @@ fn utxo_and_undo_test() {
             // add the undo utxos back to the view.
             tx.inputs().iter().enumerate().for_each(|(in_idx, input)| {
                 let utxo = undos.get(in_idx).expect("it should have utxo");
-                view.add_utxo(utxo.clone(), input.outpoint(), true).unwrap();
+                view.add_utxo(input.outpoint(), utxo.clone(), true).unwrap();
             });
         });
 
@@ -341,7 +341,7 @@ fn test_utxo() {
                 .expect("utxo should exist");
 
             let mut parent = UtxosCache::default();
-            parent.add_utxo(utxo, outpoint, false).unwrap();
+            parent.add_utxo(outpoint, utxo, false).unwrap();
             parent.set_best_block(utxo_db.best_block_hash().expect("best block should be there"));
 
             let mut child = UtxosCache::new(&parent);

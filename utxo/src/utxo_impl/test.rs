@@ -48,7 +48,7 @@ fn check_add_utxo(
 
     // perform the add_utxo.
     let (utxo, _) = create_utxo(0);
-    let add_result = cache.add_utxo(utxo, &outpoint, possible_overwrite);
+    let add_result = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
     assert_eq!(add_result, op_result);
 
@@ -420,10 +420,10 @@ fn derive_cache_test() {
     let mut cache = UtxosCache::default();
 
     let (utxo, outpoint_1) = create_utxo(10);
-    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
     let (utxo, outpoint_2) = create_utxo(20);
-    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let mut extra_cache = cache.derive_cache();
     assert!(extra_cache.utxos.is_empty());
@@ -432,7 +432,7 @@ fn derive_cache_test() {
     assert!(extra_cache.has_utxo(&outpoint_2));
 
     let (utxo, outpoint) = create_utxo(30);
-    assert!(extra_cache.add_utxo(utxo, &outpoint, true).is_ok());
+    assert!(extra_cache.add_utxo(&outpoint, utxo, true).is_ok());
 
     assert!(!cache.has_utxo(&outpoint));
 }
@@ -442,10 +442,10 @@ fn blockchain_or_mempool_utxo_test() {
     let mut cache = UtxosCache::default();
 
     let (utxo, outpoint_1) = create_utxo(10);
-    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
     let (utxo, outpoint_2) = create_utxo_for_mempool();
-    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let res = cache.utxo(&outpoint_2).expect("should countain utxo");
     assert!(res.source_height().is_mempool());

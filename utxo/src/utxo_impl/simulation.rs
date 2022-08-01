@@ -65,7 +65,7 @@ fn populate_cache<'a>(
 
         // randomly set the `possible_overwrite`
         let possible_overwrite = random_bool();
-        let _ = cache.add_utxo(utxo, &outpoint, possible_overwrite);
+        let _ = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
         // println!("child, insert: {:?}, overwrite: {}", outpoint,possible_overwrite );
     }

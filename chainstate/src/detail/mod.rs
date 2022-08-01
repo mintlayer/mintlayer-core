@@ -293,8 +293,8 @@ impl Chainstate {
             for (index, output) in genesis.utxos().iter().enumerate() {
                 utxos_cache
                     .add_utxo(
-                        Utxo::new(output.clone(), false, BlockHeight::new(0)),
                         &OutPoint::new(genesis_id.into(), index as u32),
+                        Utxo::new(output.clone(), false, BlockHeight::new(0)),
                         false,
                     )
                     .expect("Adding genesis utxo failed");
