@@ -468,7 +468,7 @@ fn consensus_type(#[case] seed: Seed) {
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because config::Builder by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
-    // ConsenssuData::None, which agrees with the net_upgrades we defined above.
+    // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 
@@ -613,7 +613,7 @@ fn pow(#[case] seed: Seed) {
     // Internally this calls Consensus::new, which processes the genesis block
     // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
     // create the genesis_block, and this function creates a genesis block with
-    // ConsenssuData::None, which agreess with the net_upgrades we defined above.
+    // ConsensusData::None, which agrees with the net_upgrades we defined above.
     let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
     let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
 

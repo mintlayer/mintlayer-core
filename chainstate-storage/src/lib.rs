@@ -58,7 +58,7 @@ pub trait BlockchainStorageRead {
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
-    fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+    fn get_block_index(&self, block_id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
