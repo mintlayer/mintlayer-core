@@ -247,7 +247,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         }
     }
 
-    pub fn calculate_assets_total_inputs(
+    pub fn calculate_tokens_total_inputs(
         &self,
         inputs: &[TxInput],
     ) -> Result<BTreeMap<TokenId, Amount>, StateUpdateError> {
@@ -355,7 +355,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 OutputValue::Coin(output_amount) => {
                     total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?
                 }
-                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_assets_total_inputs */
+                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_tokens_total_inputs */
                 }
             }
         }
@@ -611,7 +611,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     ) -> Result<(), TokensError> {
         // Collect token inputs
         let total_value_tokens = self
-            .calculate_assets_total_inputs(tx.inputs())
+            .calculate_tokens_total_inputs(tx.inputs())
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
         // Is token exist in inputs?
@@ -687,7 +687,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     ) -> Result<(), TokensError> {
         // Collect token inputs
         let total_value_tokens = self
-            .calculate_assets_total_inputs(tx.inputs())
+            .calculate_tokens_total_inputs(tx.inputs())
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
 
         // Is token exist in inputs?
@@ -714,7 +714,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn check_connected_assets(
+    fn check_connected_tokens(
         &self,
         asset: &TokenData,
         tx: &Transaction,
@@ -751,14 +751,14 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_tokens_values(&self, block: &Block) -> Result<(), StateUpdateError> {
         for tx in block.transactions() {
-            // Check assets before connect tx
+            // Check tokens before connect tx
             tx.outputs()
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
                     OutputValue::Token(asset) => Some(asset),
                 })
-                .try_for_each(|asset| self.check_connected_assets(asset, tx, block))
+                .try_for_each(|asset| self.check_connected_tokens(asset, tx, block))
                 .map_err(StateUpdateError::TokensError)?;
 
             // If it is not a genesis and in tx issuance
