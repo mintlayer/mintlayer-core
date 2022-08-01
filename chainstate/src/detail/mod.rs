@@ -43,6 +43,7 @@ pub use chainstate_types::locator::Locator;
 
 mod chainstateref;
 mod gen_block_index;
+mod tokens;
 
 use gen_block_index::GenBlockIndex;
 

@@ -24,14 +24,11 @@ use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
-        config::{
-            TOKEN_MAX_DEC_COUNT, TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MAX_TICKER_LEN,
-            TOKEN_MAX_URI_LEN,
-        },
-        tokens::{get_tokens_issuance_count, OutputValue, TokenData, TokenId},
-        ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
+        config::TOKEN_MAX_ISSUANCE_ALLOWED,
+        tokens::{get_tokens_issuance_count, OutputValue},
+        ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
-    primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
 use logging::log;
@@ -43,7 +40,7 @@ use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     spend_cache::{BlockTransactableRef, CachedInputs},
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
+    tokens, BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
 };
 
@@ -484,60 +481,6 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_token_issuance_data(
-        &self,
-        token_ticker: &Vec<u8>,
-        amount_to_issue: &Amount,
-        number_of_decimals: &u8,
-        metadata_uri: &Vec<u8>,
-        tx_id: Id<Transaction>,
-        block_id: Id<Block>,
-    ) -> Result<(), TokensError> {
-        //TODO: Shall we have check for unique token name?
-
-        // Check token name
-        if token_ticker.len() > TOKEN_MAX_TICKER_LEN
-            || token_ticker.is_empty()
-            || !String::from_utf8_lossy(token_ticker).is_ascii()
-        {
-            return Err(TokensError::IssueErrorIncorrectTicker(tx_id, block_id));
-        }
-
-        // Check amount
-        if amount_to_issue == &Amount::from_atoms(0) {
-            return Err(TokensError::IssueErrorIncorrectAmount(tx_id, block_id));
-        }
-
-        // Check decimals
-        if number_of_decimals > &TOKEN_MAX_DEC_COUNT {
-            return Err(TokensError::IssueErrorTooManyDecimals(tx_id, block_id));
-        }
-
-        // Check URI
-        if metadata_uri.len() > TOKEN_MAX_URI_LEN
-            || !String::from_utf8_lossy(metadata_uri).is_ascii()
-        {
-            return Err(TokensError::IssueErrorIncorrectMetadataURI(tx_id, block_id));
-        }
-        Ok(())
-    }
-
-    fn check_token_transfer_data(
-        &self,
-        block_id: Id<Block>,
-        tx: &Transaction,
-        _token_id: &TokenId,
-        amount: &Amount,
-    ) -> Result<(), TokensError> {
-        // Check amount
-        ensure!(
-            amount > &Amount::from_atoms(0),
-            TokensError::TransferZeroTokens(tx.get_id(), block_id)
-        );
-
-        Ok(())
-    }
-
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue any count of token types in one tx
@@ -556,58 +499,8 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Coin(_) => None,
                     OutputValue::Token(token) => Some(token),
                 })
-                .try_for_each(|token| self.check_tokens_data(token, tx, block))
+                .try_for_each(|token| tokens::check_tokens_data(token, tx, block))
                 .map_err(CheckBlockTransactionsError::CheckTokensError)?;
-        }
-        Ok(())
-    }
-
-    fn check_burn_data(
-        &self,
-        tx: &Transaction,
-        block_id: &Id<Block>,
-        _burn_token_id: &TokenId,
-        amount_to_burn: &Amount,
-    ) -> Result<(), TokensError> {
-        // Check amount
-        ensure!(
-            amount_to_burn != &Amount::from_atoms(0),
-            TokensError::BurnZeroTokens(tx.get_id(), *block_id)
-        );
-        Ok(())
-    }
-
-    fn check_tokens_data(
-        &self,
-        token: &TokenData,
-        tx: &Transaction,
-        block: &Block,
-    ) -> Result<(), TokensError> {
-        match token {
-            TokenData::TokenTransferV1 { token_id, amount } => {
-                self.check_token_transfer_data(block.get_id(), tx, token_id, amount)?;
-            }
-            TokenData::TokenIssuanceV1 {
-                token_ticker,
-                amount_to_issue,
-                number_of_decimals,
-                metadata_uri,
-            } => {
-                self.check_token_issuance_data(
-                    token_ticker,
-                    amount_to_issue,
-                    number_of_decimals,
-                    metadata_uri,
-                    tx.get_id(),
-                    block.get_id(),
-                )?;
-            }
-            TokenData::TokenBurnV1 {
-                token_id,
-                amount_to_burn,
-            } => {
-                self.check_burn_data(tx, &block.get_id(), token_id, amount_to_burn)?;
-            }
         }
         Ok(())
     }
