@@ -488,7 +488,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn apply_spend(
+    fn spend(
         &mut self,
         inputs: &[TxInput],
         spend_height: &BlockHeight,
@@ -539,7 +539,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
-                self.apply_spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
+                self.spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.header().block_reward_transactable();
@@ -558,7 +558,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         )?;
 
                         let spender = block.get_id().into();
-                        self.apply_spend(ins, spend_height, blockreward_maturity, spender)?;
+                        self.spend(ins, spend_height, blockreward_maturity, spender)?;
                     }
                     None => (),
                 }
