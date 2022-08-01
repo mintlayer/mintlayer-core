@@ -478,7 +478,7 @@ fn consensus_type(#[case] seed: Seed) {
         tf.block_builder()
             .add_test_transaction(&mut rng)
             .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])))
-            .process()
+            .build_and_process()
             .unwrap_err(),
         BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
             ConsensusVerificationError::ConsensusTypeMismatch(..)
@@ -492,7 +492,10 @@ fn consensus_type(#[case] seed: Seed) {
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
     assert!(matches!(
-        tf.block_builder().add_test_transaction(&mut rng).process().unwrap_err(),
+        tf.block_builder()
+            .add_test_transaction(&mut rng)
+            .build_and_process()
+            .unwrap_err(),
         BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
             ConsensusVerificationError::ConsensusTypeMismatch(..)
         ))
@@ -552,7 +555,7 @@ fn consensus_type(#[case] seed: Seed) {
         tf.block_builder()
             .with_parent(prev_block.get_id().into())
             .add_test_transaction_from_block(&prev_block, &mut rng)
-            .process()
+            .build_and_process()
             .unwrap_err(),
         BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
             ConsensusVerificationError::ConsensusTypeMismatch(..)
@@ -689,7 +692,7 @@ fn blocks_from_the_future() {
                 .with_timestamp(BlockTimestamp::from_int_seconds(
                     current_time.load(Ordering::SeqCst) + max_future_offset,
                 ))
-                .process()
+                .build_and_process()
                 .unwrap()
                 .unwrap();
         }
@@ -704,7 +707,7 @@ fn blocks_from_the_future() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load(Ordering::SeqCst) + max_future_offset + 1,
                     ))
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::CheckBlockFailed(CheckBlockError::BlockFromTheFuture)
             );
@@ -717,7 +720,7 @@ fn blocks_from_the_future() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load(Ordering::SeqCst) - 1
                     ))
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::CheckBlockFailed(CheckBlockError::BlockTimeOrderInvalid)
             );

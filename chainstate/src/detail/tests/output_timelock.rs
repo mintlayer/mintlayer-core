@@ -51,7 +51,7 @@ fn output_lock_until_height() {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
@@ -70,7 +70,7 @@ fn output_lock_until_height() {
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
@@ -91,7 +91,7 @@ fn output_lock_until_height() {
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
@@ -101,7 +101,7 @@ fn output_lock_until_height() {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.block_builder().process().unwrap();
+            tf.block_builder().build_and_process().unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -120,7 +120,7 @@ fn output_lock_until_height() {
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -164,7 +164,10 @@ fn output_lock_until_height_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder().with_transactions(vec![tx1, tx2]).process().unwrap_err(),
+            tf.block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -195,7 +198,7 @@ fn output_lock_for_block_count() {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
@@ -214,7 +217,7 @@ fn output_lock_for_block_count() {
                     .add_anyone_can_spend_output(10000)
                     .build(),
             )
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
@@ -235,7 +238,7 @@ fn output_lock_for_block_count() {
                             .add_anyone_can_spend_output(5000)
                             .build()
                     )
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
@@ -245,7 +248,7 @@ fn output_lock_for_block_count() {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.block_builder().process().unwrap();
+            tf.block_builder().build_and_process().unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -260,7 +263,7 @@ fn output_lock_for_block_count() {
                     .add_anyone_can_spend_output(5000)
                     .build(),
             )
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -301,7 +304,10 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             .add_anyone_can_spend_output(50000)
             .build();
         assert_eq!(
-            tf.block_builder().with_transactions(vec![tx1, tx2]).process().unwrap_err(),
+            tf.block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -331,7 +337,7 @@ fn output_lock_for_block_count_attempted_overflow() {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::BlockHeightArithmeticError)
         );
@@ -393,7 +399,7 @@ fn output_lock_until_time() {
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
@@ -404,7 +410,7 @@ fn output_lock_until_time() {
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                .process()
+                .build_and_process()
                 .unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -425,7 +431,7 @@ fn output_lock_until_time() {
             .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -469,7 +475,10 @@ fn output_lock_until_time_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder().with_transactions(vec![tx1, tx2]).process().unwrap_err(),
+            tf.block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -531,7 +540,7 @@ fn output_lock_for_seconds() {
                             .build()
                     )
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                    .process()
+                    .build_and_process()
                     .unwrap_err(),
                 BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
             );
@@ -543,7 +552,7 @@ fn output_lock_for_seconds() {
             // Create another block, with no transactions, and get the blockchain to progress.
             tf.block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
-                .process()
+                .build_and_process()
                 .unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -564,7 +573,7 @@ fn output_lock_for_seconds() {
             .with_timestamp(BlockTimestamp::from_int_seconds(
                 *block_times.last().unwrap(),
             ))
-            .process()
+            .build_and_process()
             .unwrap();
         assert_eq!(
             tf.best_block_index().block_height(),
@@ -605,7 +614,10 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder().with_transactions(vec![tx1, tx2]).process().unwrap_err(),
+            tf.block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
@@ -633,7 +645,7 @@ fn output_lock_for_seconds_attempted_overflow() {
                         .add_anyone_can_spend_output(5000)
                         .build()
                 )
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::BlockTimestampArithmeticError)
         );
@@ -667,7 +679,7 @@ fn add_block_with_locked_output(
                 .build(),
         )
         .with_timestamp(timestamp)
-        .process()
+        .build_and_process()
         .unwrap();
 
     let new_height = (current_height + BlockDistance::new(1)).unwrap();

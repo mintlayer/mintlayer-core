@@ -189,6 +189,6 @@ fn process_block() {
                 ))
                 .build(),
         )
-        .process()
+        .build_and_process()
         .unwrap();
 }

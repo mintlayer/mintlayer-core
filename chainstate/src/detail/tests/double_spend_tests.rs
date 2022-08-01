@@ -84,7 +84,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
         assert_eq!(
             tf.block_builder()
                 .with_transactions(vec![second_tx, first_tx])
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
         );
@@ -209,7 +209,7 @@ fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
         assert_eq!(
             tf.block_builder()
                 .with_transactions(vec![first_tx, second_tx])
-                .process()
+                .build_and_process()
                 .unwrap_err(),
             BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
                 Amount::from_atoms(tx1_output_value),

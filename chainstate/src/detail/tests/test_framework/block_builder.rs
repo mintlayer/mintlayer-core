@@ -154,7 +154,7 @@ impl<'f> BlockBuilder<'f> {
     }
 
     /// Constructs a block and processes it by the chainstate.
-    pub fn process(self) -> Result<Option<BlockIndex>, BlockError> {
+    pub fn build_and_process(self) -> Result<Option<BlockIndex>, BlockError> {
         let block = Block::new(
             self.transactions,
             self.prev_block_hash,

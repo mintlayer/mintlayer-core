@@ -119,7 +119,7 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
     tf.block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-        .process()
+        .build_and_process()
         .unwrap();
     // Cause reorg on a failed block
     assert_eq!(
@@ -182,7 +182,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
         tf.block_builder()
             .with_parent(block.get_id().into())
             .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
-            .process()
+            .build_and_process()
             .unwrap_err(),
         BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
     );
@@ -266,7 +266,7 @@ fn check_make_alternative_chain_longer(
     tf.block_builder()
         .with_parent(block.get_id().into())
         .add_test_transaction_from_block(&block, rng)
-        .process()
+        .build_and_process()
         .unwrap();
     check_last_event(tf, events);
     // b3

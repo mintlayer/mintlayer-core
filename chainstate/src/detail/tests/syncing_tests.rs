@@ -28,7 +28,7 @@ fn locator_distances() {
 #[test]
 fn process_a_trivial_block() {
     let mut btf = TestFramework::default();
-    btf.block_builder().process().unwrap();
+    btf.block_builder().build_and_process().unwrap();
 }
 
 // Generate some blocks and check that a locator is of expected length.
