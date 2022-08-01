@@ -125,7 +125,7 @@ newtype! {
     struct Conflicts(BTreeSet<Id<Transaction>>);
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, Eq, Clone)]
 struct TxMempoolEntry {
     tx: Transaction,
     fee: Amount,
@@ -225,6 +225,12 @@ impl TxMempoolEntry {
 impl PartialOrd for TxMempoolEntry {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(other.tx_id().cmp(&self.tx_id()))
+    }
+}
+
+impl PartialEq for TxMempoolEntry {
+    fn eq(&self, other: &Self) -> bool {
+        self.tx_id() == other.tx_id()
     }
 }
 
