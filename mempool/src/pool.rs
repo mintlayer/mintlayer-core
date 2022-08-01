@@ -247,6 +247,7 @@ struct RollingFeeRate {
 }
 
 impl RollingFeeRate {
+    #[allow(clippy::float_arithmetic)]
     fn decay_fee(mut self, halflife: Time, current_time: Time) -> Self {
         log::trace!(
             "decay_fee: old fee rate:  {:?}\nCurrent time: {:?}\nLast Rolling Fee Update: {:?}\nHalflife: {:?}",
