@@ -11,7 +11,7 @@ pub enum Error {
     #[error("Mempool is full")]
     MempoolFull,
     #[error(transparent)]
-    TxValidationError(TxValidationError),
+    TxValidationError(#[from] TxValidationError),
 }
 
 #[derive(Debug, Error)]
@@ -68,10 +68,4 @@ pub enum TxValidationError {
     DescendantOfExpiredTransaction,
     #[error("Internal Error.")]
     InternalError,
-}
-
-impl From<TxValidationError> for Error {
-    fn from(e: TxValidationError) -> Self {
-        Error::TxValidationError(e)
-    }
 }
