@@ -96,8 +96,17 @@ pub trait Mempool<C, T, M> {
     fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self;
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
+
+    // Returns `true` if the mempool contains a transaction with the given id, `false` otherwise.
     fn contains_transaction(&self, tx: &Id<Transaction>) -> bool;
+
+    // Drops a transaction from the mempool, updating its in-mempool parents and children. This
+    // operation removes the transaction from all indices, as well as updating the state (fee,
+    // count with descendants) of the transaction's ancestors. In addition, outpoints spent by this
+    // transaction are no longer marked as spent
     fn drop_transaction(&mut self, tx: &Id<Transaction>);
+
+    // Add/remove transactions to/from the mempool according to a new tip
     fn new_tip_set(&mut self, chain_state: C);
 }
 
