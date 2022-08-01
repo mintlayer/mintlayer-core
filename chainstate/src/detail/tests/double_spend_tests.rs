@@ -15,10 +15,8 @@
 //
 // Author(s): A. Sinitsyn
 
-use crate::detail::{
-    spend_cache::error::StateUpdateError,
-    tests::{test_framework::TransactionBuilder, TestFramework, *},
-};
+use crate::detail::tests::{test_framework::TransactionBuilder, TestFramework, *};
+use crate::detail::transaction_verifier::error::StateUpdateError;
 use common::{
     chain::{OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},

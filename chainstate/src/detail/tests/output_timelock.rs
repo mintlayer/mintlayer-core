@@ -19,11 +19,11 @@ use common::{
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
-        spend_cache::error::StateUpdateError,
         tests::{
             anyonecanspend_address,
             test_framework::{TestFramework, TransactionBuilder},
         },
+        transaction_verifier::error::StateUpdateError,
     },
     BlockError, TimeGetter,
 };

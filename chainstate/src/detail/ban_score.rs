@@ -16,7 +16,7 @@
 use crate::BlockError;
 
 use super::{
-    pow::error::ConsensusPoWError, spend_cache::error::StateUpdateError, BlockSizeError,
+    pow::error::ConsensusPoWError, transaction_verifier::error::StateUpdateError, BlockSizeError,
     CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
 };
 

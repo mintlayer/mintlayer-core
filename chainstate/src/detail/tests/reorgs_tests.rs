@@ -21,8 +21,8 @@ use chainstate_storage::BlockchainStorageRead;
 use common::chain::OutputSpentState;
 
 use crate::detail::{
-    spend_cache::error::StateUpdateError,
     tests::{test_framework::TestFramework, *},
+    transaction_verifier::error::StateUpdateError,
 };
 
 // Produce `genesis -> a` chain, then a parallel `genesis -> b -> c` that should trigger a reorg.

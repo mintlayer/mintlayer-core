@@ -23,7 +23,7 @@ use thiserror::Error;
 
 use super::{
     orphan_blocks::OrphanAddError, pow::error::ConsensusPoWError,
-    spend_cache::error::StateUpdateError,
+    transaction_verifier::error::StateUpdateError,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

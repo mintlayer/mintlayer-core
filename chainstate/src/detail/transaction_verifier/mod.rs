@@ -49,27 +49,29 @@ pub enum BlockTransactableRef<'a> {
     BlockReward(&'a Block),
 }
 
-pub struct ConsumedCachedInputs {
+/// The change that a block has caused to the blockchain state
+pub struct TransactionVerifierDelta {
     data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
-pub struct CachedInputs<'a, S> {
+/// The tool used to verify transaction and cache their updated states in memory
+pub struct TransactionVerifier<'a, S> {
     db_tx: &'a S,
-    inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     chain_config: &'a ChainConfig,
 }
 
-impl<'a, S> CachedInputs<'a, S> {
+impl<'a, S> TransactionVerifier<'a, S> {
     pub fn new(db_tx: &'a S, chain_config: &'a ChainConfig) -> Self {
         Self {
             db_tx,
             chain_config,
-            inputs: BTreeMap::new(),
+            tx_index_cache: BTreeMap::new(),
         }
     }
 }
 
-impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
+impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     fn outpoint_source_id_from_spend_ref(
         spend_ref: BlockTransactableRef,
     ) -> Result<OutPointSourceId, StateUpdateError> {
@@ -107,7 +109,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
-        match self.inputs.entry(outpoint_source_id) {
+        match self.tx_index_cache.entry(outpoint_source_id) {
             Entry::Occupied(_) => return Err(StateUpdateError::OutputAlreadyPresentInInputsCache),
             Entry::Vacant(entry) => entry.insert(tx_index),
         };
@@ -134,7 +136,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let tx_index = CachedInputsOperation::Erase;
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
-        self.inputs.insert(outpoint_source_id, tx_index);
+        self.tx_index_cache.insert(outpoint_source_id, tx_index);
         Ok(())
     }
 
@@ -165,7 +167,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &mut self,
         outpoint: &OutPoint,
     ) -> Result<&mut CachedInputsOperation, StateUpdateError> {
-        let result = match self.inputs.get_mut(&outpoint.tx_id()) {
+        let result = match self.tx_index_cache.get_mut(&outpoint.tx_id()) {
             Some(tx_index) => tx_index,
             None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
         };
@@ -176,7 +178,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &self,
         outpoint: &OutPoint,
     ) -> Result<&CachedInputsOperation, StateUpdateError> {
-        let result = match self.inputs.get(&outpoint.tx_id()) {
+        let result = match self.tx_index_cache.get(&outpoint.tx_id()) {
             Some(tx_index) => tx_index,
             None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
         };
@@ -184,7 +186,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     }
 
     fn fetch_and_cache(&mut self, outpoint: &OutPoint) -> Result<(), StateUpdateError> {
-        let _tx_index_op = match self.inputs.entry(outpoint.tx_id()) {
+        let _tx_index_op = match self.tx_index_cache.entry(outpoint.tx_id()) {
             Entry::Occupied(entry) => {
                 // If tx index was loaded
                 entry.into_mut()
@@ -217,7 +219,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
-            let tx_index = match self.inputs.get(&outpoint.tx_id()) {
+            let tx_index = match self.tx_index_cache.get(&outpoint.tx_id()) {
                 Some(tx_index_op) => match tx_index_op {
                     CachedInputsOperation::Write(tx_index) => tx_index,
                     CachedInputsOperation::Read(tx_index) => tx_index,
@@ -498,7 +500,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    pub fn spend(
+    pub fn connect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
@@ -553,7 +555,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    pub fn unspend(&mut self, spend_ref: BlockTransactableRef) -> Result<(), StateUpdateError> {
+    pub fn disconnect_transaction(
+        &mut self,
+        spend_ref: BlockTransactableRef,
+    ) -> Result<(), StateUpdateError> {
         // Delete TxMainChainIndex for the current tx
         self.remove_outputs(spend_ref)?;
 
@@ -609,15 +614,17 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         inputs.iter().try_for_each(|input| self.fetch_and_cache(input.outpoint()))
     }
 
-    pub fn consume(self) -> Result<ConsumedCachedInputs, StateUpdateError> {
-        Ok(ConsumedCachedInputs { data: self.inputs })
+    pub fn consume(self) -> Result<TransactionVerifierDelta, StateUpdateError> {
+        Ok(TransactionVerifierDelta {
+            data: self.tx_index_cache,
+        })
     }
 }
 
-impl<'a, S: BlockchainStorageWrite> CachedInputs<'a, S> {
+impl<'a, S: BlockchainStorageWrite> TransactionVerifier<'a, S> {
     pub fn flush_to_storage(
         db_tx: &mut S,
-        input_data: ConsumedCachedInputs,
+        input_data: TransactionVerifierDelta,
     ) -> Result<(), StateUpdateError> {
         for (tx_id, tx_index_op) in input_data.data {
             match tx_index_op {
