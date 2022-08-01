@@ -484,7 +484,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_issue_data(
+    fn check_token_issuance_data(
         &self,
         token_ticker: &Vec<u8>,
         amount_to_issue: &Amount,
@@ -522,7 +522,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_transfer_data(
+    fn check_token_transfer_data(
         &self,
         block_id: Id<Block>,
         tx: &Transaction,
@@ -532,7 +532,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         // Check amount
         ensure!(
             amount > &Amount::from_atoms(0),
-            TokensError::TransferZeroTokens(tx.get_id(), block_id,)
+            TokensError::TransferZeroTokens(tx.get_id(), block_id)
         );
 
         Ok(())
@@ -585,7 +585,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     ) -> Result<(), TokensError> {
         match asset {
             AssetData::TokenTransferV1 { token_id, amount } => {
-                self.check_transfer_data(block.get_id(), tx, token_id, amount)?;
+                self.check_token_transfer_data(block.get_id(), tx, token_id, amount)?;
             }
             AssetData::TokenIssuanceV1 {
                 token_ticker,
@@ -593,7 +593,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 number_of_decimals,
                 metadata_uri,
             } => {
-                self.check_issue_data(
+                self.check_token_issuance_data(
                     token_ticker,
                     amount_to_issue,
                     number_of_decimals,
