@@ -31,7 +31,7 @@ use common::{
         calculate_tx_index_from_block,
         config::{TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MIN_ISSUANCE_FEE},
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, token_id, AssetData, OutputValue, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -218,16 +218,16 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     }
 
     // Get TokenId and Amount in input
-    fn filter_assets_amount(
+    fn filter_tokens_amount(
         &self,
         prev_tx: &Transaction,
         output: &common::chain::TxOutput,
     ) -> Option<(TokenId, Amount)> {
         match output.value() {
             OutputValue::Coin(_) => None,
-            OutputValue::Asset(asset) => Some(match asset {
-                AssetData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
-                AssetData::TokenIssuanceV1 {
+            OutputValue::Token(token) => Some(match token {
+                TokenData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
+                TokenData::TokenIssuanceV1 {
                     token_ticker: _,
                     amount_to_issue,
                     number_of_decimals: _,
@@ -236,7 +236,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let token_id = token_id(prev_tx)?;
                     (token_id, *amount_to_issue)
                 }
-                AssetData::TokenBurnV1 {
+                TokenData::TokenBurnV1 {
                     token_id: _,
                     amount_to_burn: _,
                 } => {
@@ -251,7 +251,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &self,
         inputs: &[TxInput],
     ) -> Result<BTreeMap<TokenId, Amount>, StateUpdateError> {
-        let mut total_assets: BTreeMap<TokenId, Amount> = BTreeMap::new();
+        let mut total_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
             let tx_index = match self.inputs.get(&outpoint.tx_id()) {
@@ -284,11 +284,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         },
                     )?;
 
-                    match self.filter_assets_amount(&tx, output) {
+                    match self.filter_tokens_amount(&tx, output) {
                         Some((token_id, amount)) => {
-                            total_assets.insert(
+                            total_tokens.insert(
                                 token_id,
-                                (total_assets
+                                (total_tokens
                                     .get(&token_id)
                                     .cloned()
                                     .unwrap_or(Amount::from_atoms(0))
@@ -304,7 +304,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 }
             }
         }
-        Ok(total_assets)
+        Ok(total_tokens)
     }
 
     fn calculate_coins_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
@@ -355,7 +355,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 OutputValue::Coin(output_amount) => {
                     total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?
                 }
-                OutputValue::Asset(_) => { /*For now we don't calculate here tokens, use calculate_assets_total_inputs */
+                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_assets_total_inputs */
                 }
             }
         }
@@ -391,7 +391,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             .iter()
             .try_fold(Amount::from_atoms(0), |accum, out| match out.value() {
                 OutputValue::Coin(value) => accum + *value,
-                OutputValue::Asset(_) => Some(accum),
+                OutputValue::Token(_) => Some(accum),
             })
             .ok_or(StateUpdateError::OutputAdditionError)
     }
@@ -653,28 +653,28 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             .iter()
             .filter_map(|x| match x.value() {
                 OutputValue::Coin(_) => None,
-                OutputValue::Asset(asset) => match asset {
-                    AssetData::TokenTransferV1 { token_id, amount } => {
+                OutputValue::Token(asset) => match asset {
+                    TokenData::TokenTransferV1 { token_id, amount } => {
                         if token_id == burn_token_id {
                             Some(amount)
                         } else {
                             None
                         }
                     }
-                    AssetData::TokenIssuanceV1 {
+                    TokenData::TokenIssuanceV1 {
                         token_ticker: _,
                         amount_to_issue: _,
                         number_of_decimals: _,
                         metadata_uri: _,
                     }
-                    | AssetData::TokenBurnV1 {
+                    | TokenData::TokenBurnV1 {
                         token_id: _,
                         amount_to_burn: _,
                     } => None,
                 },
             })
             .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
-            .ok_or_else(|| TokensError::CoinOrAssetOverflow(tx.get_id(), *block_id))?;
+            .ok_or_else(|| TokensError::CoinOrTokenOverflow(tx.get_id(), *block_id))?;
         Ok(change_amount)
     }
 
@@ -716,15 +716,15 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_connected_assets(
         &self,
-        asset: &AssetData,
+        asset: &TokenData,
         tx: &Transaction,
         block: &Block,
     ) -> Result<(), TokensError> {
         match asset {
-            AssetData::TokenTransferV1 { token_id, amount } => {
+            TokenData::TokenTransferV1 { token_id, amount } => {
                 self.check_connected_transfer_data(block.get_id(), tx, token_id, amount)?;
             }
-            AssetData::TokenIssuanceV1 {
+            TokenData::TokenIssuanceV1 {
                 token_ticker,
                 amount_to_issue,
                 number_of_decimals,
@@ -739,7 +739,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     block.get_id(),
                 )?;
             }
-            AssetData::TokenBurnV1 {
+            TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn,
             } => {
@@ -756,7 +756,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
-                    OutputValue::Asset(asset) => Some(asset),
+                    OutputValue::Token(asset) => Some(asset),
                 })
                 .try_for_each(|asset| self.check_connected_assets(asset, tx, block))
                 .map_err(StateUpdateError::TokensError)?;

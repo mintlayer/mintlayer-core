@@ -28,7 +28,7 @@ use common::{
             TOKEN_MAX_DEC_COUNT, TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MAX_TICKER_LEN,
             TOKEN_MAX_URI_LEN,
         },
-        tokens::{get_tokens_issuance_count, AssetData, OutputValue, TokenId},
+        tokens::{get_tokens_issuance_count, OutputValue, TokenData, TokenId},
         ChainConfig, GenBlock, GenBlockId, OutPointSourceId, Transaction,
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
@@ -538,7 +538,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_tokens(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
+    fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
             // We can't issue any count of token types in one tx
             let issuance_count = get_tokens_issuance_count(tx);
@@ -549,14 +549,14 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                 )
             );
 
-            // Check assets
+            // Check tokens
             tx.outputs()
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
-                    OutputValue::Asset(asset) => Some(asset),
+                    OutputValue::Token(token) => Some(token),
                 })
-                .try_for_each(|asset| self.check_asset(asset, tx, block))
+                .try_for_each(|token| self.check_tokens_data(token, tx, block))
                 .map_err(CheckBlockTransactionsError::CheckTokensError)?;
         }
         Ok(())
@@ -577,17 +577,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         Ok(())
     }
 
-    fn check_asset(
+    fn check_tokens_data(
         &self,
-        asset: &AssetData,
+        token: &TokenData,
         tx: &Transaction,
         block: &Block,
     ) -> Result<(), TokensError> {
-        match asset {
-            AssetData::TokenTransferV1 { token_id, amount } => {
+        match token {
+            TokenData::TokenTransferV1 { token_id, amount } => {
                 self.check_token_transfer_data(block.get_id(), tx, token_id, amount)?;
             }
-            AssetData::TokenIssuanceV1 {
+            TokenData::TokenIssuanceV1 {
                 token_ticker,
                 amount_to_issue,
                 number_of_decimals,
@@ -602,7 +602,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     block.get_id(),
                 )?;
             }
-            AssetData::TokenBurnV1 {
+            TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn,
             } => {
@@ -615,7 +615,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_transactions(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         self.check_duplicate_inputs(block)?;
         self.check_duplicate_txs(block)?;
-        self.check_tokens(block)?;
+        self.check_tokens_txs(block)?;
         Ok(())
     }
 

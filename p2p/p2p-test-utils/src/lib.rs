@@ -115,7 +115,7 @@ fn create_utxo_data(
 ) -> Option<(TxInput, TxOutput)> {
     let output_value = match output.value() {
         OutputValue::Coin(coin) => *coin,
-        OutputValue::Asset(_) => return None,
+        OutputValue::Token(_) => return None,
     };
     let new_value = (output_value - Amount::from_atoms(1)).unwrap();
     if new_value == Amount::from_atoms(0) {

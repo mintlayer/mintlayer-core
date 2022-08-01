@@ -27,11 +27,11 @@ use super::Transaction;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
-    Asset(AssetData),
+    Token(TokenData),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
-pub enum AssetData {
+pub enum TokenData {
     // TokenTransfer data to another user. If it is a token, then the token data must also be transferred to the recipient.
     #[codec(index = 1)]
     TokenTransferV1 { token_id: TokenId, amount: Amount },
@@ -73,20 +73,20 @@ pub fn get_tokens_issuance_count(tx: &Transaction) -> usize {
         .iter()
         .filter_map(|output| match output.value() {
             OutputValue::Coin(_) => None,
-            OutputValue::Asset(asset) => Some(asset),
+            OutputValue::Token(asset) => Some(asset),
         })
         .fold(0, |accum, asset| match asset {
-            AssetData::TokenTransferV1 {
+            TokenData::TokenTransferV1 {
                 token_id: _,
                 amount: _,
             } => accum,
-            AssetData::TokenIssuanceV1 {
+            TokenData::TokenIssuanceV1 {
                 token_ticker: _,
                 amount_to_issue: _,
                 number_of_decimals: _,
                 metadata_uri: _,
             } => accum + 1,
-            AssetData::TokenBurnV1 {
+            TokenData::TokenBurnV1 {
                 token_id: _,
                 amount_to_burn: _,
             } => accum,

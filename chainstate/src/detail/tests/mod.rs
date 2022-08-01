@@ -25,7 +25,7 @@ use common::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::{create_regtest, create_unit_test_config},
         signature::inputsig::InputWitness,
-        tokens::{AssetData, OutputValue},
+        tokens::{OutputValue, TokenData},
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
     },
@@ -82,15 +82,15 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 )
             }
-            OutputValue::Asset(asset) => match asset {
-                AssetData::TokenTransferV1 {
+            OutputValue::Token(asset) => match asset {
+                TokenData::TokenTransferV1 {
                     token_id: _,
                     amount: _,
                 } => TxOutput::new(
-                    OutputValue::Asset(asset.clone()),
+                    OutputValue::Token(asset.clone()),
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 ),
-                AssetData::TokenIssuanceV1 {
+                TokenData::TokenIssuanceV1 {
                     token_ticker: _,
                     amount_to_issue: _,
                     number_of_decimals: _,
@@ -106,7 +106,7 @@ fn create_utxo_data(
                 //     }),
                 //     OutputPurpose::Transfer(anyonecanspend_address()),
                 // )
-                AssetData::TokenBurnV1 {
+                TokenData::TokenBurnV1 {
                     token_id: _,
                     amount_to_burn: _,
                 } => return None,

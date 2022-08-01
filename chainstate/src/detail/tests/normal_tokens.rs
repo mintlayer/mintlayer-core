@@ -28,7 +28,7 @@ use common::{
     chain::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         signature::inputsig::InputWitness,
-        tokens::{token_id, AssetData, OutputValue, TokenId},
+        tokens::{token_id, OutputValue, TokenData, TokenId},
         GenBlock, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{time, Amount, Id, Idable},
@@ -106,7 +106,7 @@ fn token_issue_test() {
     common::concurrency::model(|| {
         // Process token without errors
         let mut chainstate = setup_chainstate();
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -119,7 +119,7 @@ fn token_issue_test() {
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Ticker is too long
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"TRY TO USE THE LONG NAME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -137,7 +137,7 @@ fn token_issue_test() {
         ));
 
         // Doesn't exist ticker
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -155,7 +155,7 @@ fn token_issue_test() {
         ));
 
         // Ticker contain not alpha-numeric byte
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: "💖".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -173,7 +173,7 @@ fn token_issue_test() {
         ));
 
         // Issue amount is too low
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: "USDT".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(0),
             number_of_decimals: 1,
@@ -191,7 +191,7 @@ fn token_issue_test() {
         ));
 
         // Too many decimals
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: "USDT".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(123456789),
             number_of_decimals: 123,
@@ -209,7 +209,7 @@ fn token_issue_test() {
         ));
 
         // URI is too long
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -233,7 +233,7 @@ fn token_transfer_test() {
     common::concurrency::model(|| {
         let mut chainstate = setup_chainstate();
         // Issue a new token
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -247,14 +247,14 @@ fn token_transfer_test() {
 
         // Transfer it
         let token_id = token_id(&block.transactions()[0]).unwrap();
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
         let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to transfer exceed amount
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(987654321),
         })];
@@ -266,7 +266,7 @@ fn token_transfer_test() {
         ));
 
         // Try to transfer token with wrong id
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id: TokenId::random(),
             amount: Amount::from_atoms(123456789),
         })];
@@ -278,7 +278,7 @@ fn token_transfer_test() {
         ));
 
         // Try to transfer zero amount
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(0),
         })];
@@ -303,7 +303,7 @@ fn couple_of_token_issuance_in_one_tx() {
         let parent_block_id = chainstate.get_best_block_id().unwrap();
         let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
         let receiver = anyonecanspend_address();
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -350,7 +350,7 @@ fn token_issuance_with_insufficient_fee() {
         let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
 
         let receiver = anyonecanspend_address();
-        let value = OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
@@ -365,7 +365,7 @@ fn token_issuance_with_insufficient_fee() {
 
         let input_coins = match test_block_info.txns[0].1[0].value() {
             OutputValue::Coin(coin) => *coin,
-            OutputValue::Asset(_) => unreachable!(),
+            OutputValue::Token(_) => unreachable!(),
         };
 
         let outputs = vec![
@@ -400,7 +400,7 @@ fn transfer_tokens() {
 
         // Process token without errors
         let mut chainstate = setup_chainstate();
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: TOTAL_TOKEN_VALUE,
             number_of_decimals: 1,
@@ -415,11 +415,11 @@ fn transfer_tokens() {
 
         // Split token in outputs
         let values = vec![
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: (TOTAL_TOKEN_VALUE - Amount::from_atoms(123456)).unwrap(),
             }),
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: Amount::from_atoms(123456),
             }),
@@ -427,7 +427,7 @@ fn transfer_tokens() {
         let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Collect these in one output
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: TOTAL_TOKEN_VALUE,
         })];
@@ -443,7 +443,7 @@ fn test_burn_tokens() {
 
         let mut chainstate = setup_chainstate();
         // Issue a new token
-        let values = vec![OutputValue::Asset(AssetData::TokenIssuanceV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
@@ -457,14 +457,14 @@ fn test_burn_tokens() {
 
         // Transfer it
         let token_id = token_id(&block.transactions()[0]).unwrap();
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: ISSUED_FUNDS,
         })];
         let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try burn more than we have in input
-        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: (ISSUED_FUNDS * 2).unwrap(),
         })];
@@ -476,7 +476,7 @@ fn test_burn_tokens() {
         ));
 
         // Burn 50% and don't add utxo for the rest
-        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
@@ -489,11 +489,11 @@ fn test_burn_tokens() {
 
         // Burn 50% and 50% transfer
         let values = vec![
-            OutputValue::Asset(AssetData::TokenBurnV1 {
+            OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn: HALF_ISSUED_FUNDS,
             }),
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: HALF_ISSUED_FUNDS,
             }),
@@ -501,14 +501,14 @@ fn test_burn_tokens() {
         let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to burn it all
-        let values = vec![OutputValue::Asset(AssetData::TokenBurnV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
         let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
 
         // Try to transfer burned tokens
-        let values = vec![OutputValue::Asset(AssetData::TokenTransferV1 {
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
@@ -541,7 +541,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         // Issue a new token
         let mut chainstate = setup_chainstate();
         let values = vec![
-            OutputValue::Asset(AssetData::TokenIssuanceV1 {
+            OutputValue::Token(TokenData::TokenIssuanceV1 {
                 token_ticker: b"USDC".to_vec(),
                 amount_to_issue: ISSUED_FUNDS,
                 number_of_decimals: 1,
@@ -561,7 +561,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // B1 - burn all tokens in mainchain
         let values = vec![
-            OutputValue::Asset(AssetData::TokenBurnV1 {
+            OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn: ISSUED_FUNDS,
             }),
@@ -579,7 +579,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // Try to transfer spent tokens
         let values = vec![
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: ISSUED_FUNDS,
             }),
@@ -600,7 +600,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // Second chain - B2
         let values = vec![
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: ISSUED_FUNDS,
             }),
@@ -617,7 +617,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // C2 - burn all tokens in second chain
         let values = vec![
-            OutputValue::Asset(AssetData::TokenBurnV1 {
+            OutputValue::Token(TokenData::TokenBurnV1 {
                 token_id,
                 amount_to_burn: ISSUED_FUNDS,
             }),
@@ -634,7 +634,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // Now D2 trying to spend tokens from mainchain
         let values = vec![
-            OutputValue::Asset(AssetData::TokenTransferV1 {
+            OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
                 amount: ISSUED_FUNDS,
             }),
