@@ -27,7 +27,7 @@ impl FeeRate {
 
     pub(crate) fn compute_fee(&self, size: usize) -> Amount {
         let size = u128::try_from(size).expect("compute_fee conversion");
-        Amount::from_atoms(self.atoms_per_kb * size / 1000)
+        Amount::from_atoms((self.atoms_per_kb * size) / 1000)
     }
 
     pub(crate) fn atoms_per_kb(&self) -> u128 {
