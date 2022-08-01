@@ -15,8 +15,10 @@
 //
 // Author(s): A. Sinitsyn
 
-use crate::detail::tests::{test_framework::TransactionBuilder, TestFramework, *};
-use crate::detail::transaction_verifier::error::StateUpdateError;
+use crate::detail::{
+    tests::{test_framework::TransactionBuilder, TestFramework, *},
+    transaction_verifier::error::ConnectTransactionError,
+};
 use common::{
     chain::{OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
@@ -84,7 +86,7 @@ fn spend_output_in_the_same_block_invalid_order(#[case] seed: Seed) {
                 .with_transactions(vec![second_tx, first_tx])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::MissingOutputOrSpent)
+            BlockError::StateUpdateFailed(ConnectTransactionError::MissingOutputOrSpent)
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
     });
@@ -171,7 +173,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
         let second_block = tf.make_block_builder().add_transaction(second_tx).build();
         assert_eq!(
             tf.process_block(second_block, BlockSource::Local).unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::DoubleSpendAttempt(
+            BlockError::StateUpdateFailed(ConnectTransactionError::DoubleSpendAttempt(
                 Spender::RegularInput(first_tx.get_id())
             ))
         );
@@ -209,7 +211,7 @@ fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
                 .with_transactions(vec![first_tx, second_tx])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
+            BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(
                 Amount::from_atoms(tx1_output_value),
                 Amount::from_atoms(tx2_output_value)
             ))

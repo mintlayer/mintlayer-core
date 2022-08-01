@@ -15,7 +15,7 @@
 //
 // Author(s): S. Afach
 
-use super::error::StateUpdateError;
+use super::error::ConnectTransactionError;
 use common::chain::{Spender, TxMainChainIndex};
 
 pub enum CachedInputsOperation {
@@ -25,14 +25,18 @@ pub enum CachedInputsOperation {
 }
 
 impl CachedInputsOperation {
-    pub fn spend(&mut self, output_index: u32, spender: Spender) -> Result<(), StateUpdateError> {
+    pub fn spend(
+        &mut self,
+        output_index: u32,
+        spender: Spender,
+    ) -> Result<(), ConnectTransactionError> {
         // spend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.spend(output_index, spender).map_err(StateUpdateError::from)?
+                tx_index.spend(output_index, spender).map_err(ConnectTransactionError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(StateUpdateError::MissingOutputOrSpentOutputErasedOnConnect)
+                return Err(ConnectTransactionError::MissingOutputOrSpentOutputErasedOnConnect)
             }
         }
 
@@ -41,14 +45,14 @@ impl CachedInputsOperation {
         Ok(())
     }
 
-    pub fn unspend(&mut self, output_index: u32) -> Result<(), StateUpdateError> {
+    pub fn unspend(&mut self, output_index: u32) -> Result<(), ConnectTransactionError> {
         // unspend the output
         match self {
             CachedInputsOperation::Write(tx_index) | CachedInputsOperation::Read(tx_index) => {
-                tx_index.unspend(output_index).map_err(StateUpdateError::from)?
+                tx_index.unspend(output_index).map_err(ConnectTransactionError::from)?
             }
             CachedInputsOperation::Erase => {
-                return Err(StateUpdateError::MissingOutputOrSpentOutputErasedOnDisconnect)
+                return Err(ConnectTransactionError::MissingOutputOrSpentOutputErasedOnDisconnect)
             }
         }
 
