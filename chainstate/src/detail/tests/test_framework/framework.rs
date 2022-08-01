@@ -47,7 +47,7 @@ impl TestFramework {
     }
 
     /// Returns a block builder instance that can be used for a block construction and processing.
-    pub fn block_builder(&mut self) -> BlockBuilder {
+    pub fn make_block_builder(&mut self) -> BlockBuilder {
         BlockBuilder::new(self)
     }
 
@@ -82,7 +82,7 @@ impl TestFramework {
 
         for _ in 0..blocks {
             let block = self
-                .block_builder()
+                .make_block_builder()
                 // .with_transactions(vec![transaction])
                 .add_test_transaction_with_parent(prev_block.id, rng)
                 .with_parent(prev_block.id)
@@ -180,7 +180,7 @@ fn build_test_framework() {
 #[test]
 fn process_block() {
     let mut tf = TestFramework::default();
-    tf.block_builder()
+    tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
                 .add_output(TxOutput::new(

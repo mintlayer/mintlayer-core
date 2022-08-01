@@ -36,13 +36,13 @@ fn reorg_simple(#[case] seed: Seed) {
         let genesis_id = tf.genesis().get_id();
         assert_eq!(tf.best_block_id(), genesis_id);
 
-        let block_a = tf.block_builder().add_test_transaction(&mut rng).build();
+        let block_a = tf.make_block_builder().add_test_transaction(&mut rng).build();
         tf.process_block(block_a.clone(), BlockSource::Local).unwrap();
         assert_eq!(tf.best_block_id(), block_a.get_id());
 
         // Produce the parallel chain.
         let block_b = tf
-            .block_builder()
+            .make_block_builder()
             .add_test_transaction_with_parent(genesis_id.into(), &mut rng)
             .with_parent(genesis_id.into())
             .build();
@@ -53,7 +53,7 @@ fn reorg_simple(#[case] seed: Seed) {
 
         // Produce one more block that causes a reorg.
         let block_c = tf
-            .block_builder()
+            .make_block_builder()
             .add_test_transaction_with_parent(block_b.get_id().into(), &mut rng)
             .with_parent(block_b.get_id().into())
             .build();
@@ -116,7 +116,7 @@ fn check_spend_tx_in_failed_block(tf: &mut TestFramework, events: &EventList, rn
 
     let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON - 1).block_id());
     let spend_from = *tf.index_at(NEW_CHAIN_END_ON).block_id();
-    tf.block_builder()
+    tf.make_block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
         .build_and_process()
@@ -150,7 +150,7 @@ fn check_spend_tx_in_other_fork(tf: &mut TestFramework, rng: &mut impl Rng) {
     let block = tf.block(*tf.index_at(NEW_CHAIN_END_ON).block_id());
     let spend_from = *tf.index_at(3).block_id();
     let double_spend_block = tf
-        .block_builder()
+        .make_block_builder()
         .with_parent(block.get_id().into())
         .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
         .build();
@@ -179,7 +179,7 @@ fn check_fork_that_double_spends(tf: &mut TestFramework, rng: &mut impl Rng) {
     let block = tf.block(*tf.block_indexes.last().unwrap().block_id());
     let spend_from = *tf.index_at(6).block_id();
     assert_eq!(
-        tf.block_builder()
+        tf.make_block_builder()
             .with_parent(block.get_id().into())
             .add_double_spend_transaction(block.get_id().into(), spend_from, rng)
             .build_and_process()
@@ -263,7 +263,7 @@ fn check_make_alternative_chain_longer(
     // Reorg to a longer chain
     //
     let block = tf.block(*tf.block_indexes.last().unwrap().block_id());
-    tf.block_builder()
+    tf.make_block_builder()
         .with_parent(block.get_id().into())
         .add_test_transaction_from_block(&block, rng)
         .build_and_process()

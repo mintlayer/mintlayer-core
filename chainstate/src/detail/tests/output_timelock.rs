@@ -44,7 +44,7 @@ fn output_lock_until_height() {
 
         // attempt to create the next block, and attempt to spend the locked output
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output.clone())
@@ -59,7 +59,7 @@ fn output_lock_until_height() {
 
         // create another block, and spend the first input from the previous block
         let prev_block_info = tf.block_info(1);
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
@@ -84,7 +84,7 @@ fn output_lock_until_height() {
 
             // Create another block, and spend the first input from the previous block.
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
@@ -101,7 +101,7 @@ fn output_lock_until_height() {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.block_builder().build_and_process().unwrap();
+            tf.make_block_builder().build_and_process().unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -113,7 +113,7 @@ fn output_lock_until_height() {
             tf.best_block_id(),
             tf.block_info(block_height_that_unlocks - 1).id
         );
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
@@ -164,7 +164,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
@@ -191,7 +191,7 @@ fn output_lock_for_block_count() {
 
         // attempt to create the next block, and attempt to spend the locked output
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output.clone())
@@ -206,7 +206,7 @@ fn output_lock_for_block_count() {
 
         // create another block, and spend the first input from the previous block
         let prev_block_info = tf.best_block_info();
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(TxInput::new(
@@ -231,7 +231,7 @@ fn output_lock_for_block_count() {
 
             // create another block, and spend the first input from the previous block
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
@@ -248,7 +248,7 @@ fn output_lock_for_block_count() {
             );
 
             // create another block, with no transactions, and get the blockchain to progress
-            tf.block_builder().build_and_process().unwrap();
+            tf.make_block_builder().build_and_process().unwrap();
             assert_eq!(
                 tf.best_block_index().block_height(),
                 BlockHeight::new(height)
@@ -256,7 +256,7 @@ fn output_lock_for_block_count() {
         }
 
         // now we should be able to spend it at block_count_that_unlocks
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
@@ -304,7 +304,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             .add_anyone_can_spend_output(50000)
             .build();
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
@@ -330,7 +330,7 @@ fn output_lock_for_block_count_attempted_overflow() {
 
         // attempt to create the next block, and attempt to spend the locked output
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output)
@@ -391,7 +391,7 @@ fn output_lock_until_time() {
 
             // Check that the output still cannot be spent.
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
@@ -408,7 +408,7 @@ fn output_lock_until_time() {
                 BlockHeight::new(height as u64),
             );
             // Create another block, with no transactions, and get the blockchain to progress.
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
@@ -419,7 +419,7 @@ fn output_lock_until_time() {
         }
 
         // Check that the output can now be spent.
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
@@ -475,7 +475,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
@@ -532,7 +532,7 @@ fn output_lock_for_seconds() {
 
             // Check that the output still cannot be spent.
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .add_transaction(
                         TransactionBuilder::new()
                             .add_input(locked_output.clone())
@@ -550,7 +550,7 @@ fn output_lock_for_seconds() {
             );
 
             // Create another block, with no transactions, and get the blockchain to progress.
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                 .build_and_process()
                 .unwrap();
@@ -561,7 +561,7 @@ fn output_lock_for_seconds() {
         }
 
         // Check that the output can now be spent.
-        tf.block_builder()
+        tf.make_block_builder()
             .add_transaction(
                 TransactionBuilder::new()
                     .add_input(locked_output)
@@ -614,7 +614,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             .build();
 
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
@@ -638,7 +638,7 @@ fn output_lock_for_seconds_attempted_overflow() {
 
         // attempt to create the next block, and attempt to spend the locked output
         assert_eq!(
-            tf.block_builder()
+            tf.make_block_builder()
                 .add_transaction(
                     TransactionBuilder::new()
                         .add_input(locked_output)
@@ -663,7 +663,7 @@ fn add_block_with_locked_output(
     let current_height = tf.best_block_index().block_height();
     let prev_block_info = tf.block_info(current_height.into());
 
-    tf.block_builder()
+    tf.make_block_builder()
         .add_transaction(
             TransactionBuilder::new()
                 .add_input(TxInput::new(

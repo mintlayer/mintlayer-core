@@ -75,7 +75,7 @@ fn signed_tx() {
             tx
         };
 
-        tf.block_builder()
+        tf.make_block_builder()
             .with_transactions(vec![tx_1, tx_2])
             .build_and_process()
             .unwrap();

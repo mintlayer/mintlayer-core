@@ -28,7 +28,7 @@ fn locator_distances() {
 #[test]
 fn process_a_trivial_block() {
     let mut btf = TestFramework::default();
-    btf.block_builder().build_and_process().unwrap();
+    btf.make_block_builder().build_and_process().unwrap();
 }
 
 // Generate some blocks and check that a locator is of expected length.
@@ -92,7 +92,7 @@ fn get_headers(#[case] seed: Seed) {
         // Produce more blocks. Now `get_headers` should return these blocks.
         let expected: Vec<_> = iter::from_fn(|| {
             let block = tf
-                .block_builder()
+                .make_block_builder()
                 .with_parent(last_block_id)
                 .add_test_transaction(&mut rng)
                 .build();
@@ -184,8 +184,11 @@ fn get_headers_different_chains(#[case] seed: Seed) {
         let mut prev = TestBlockInfo::from_genesis(tf1.genesis());
         assert_eq!(&prev, &TestBlockInfo::from_genesis(tf2.genesis()));
         for _ in 0..rng.gen_range(100..250) {
-            let block =
-                tf1.block_builder().with_parent(prev.id).add_test_transaction(&mut rng).build();
+            let block = tf1
+                .make_block_builder()
+                .with_parent(prev.id)
+                .add_test_transaction(&mut rng)
+                .build();
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -219,8 +222,11 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
 
         let mut prev1 = TestBlockInfo::from_genesis(tf1.genesis());
         for _ in 0..rng.gen_range(8..16) {
-            let block =
-                tf1.block_builder().with_parent(prev1.id).add_test_transaction(&mut rng).build();
+            let block = tf1
+                .make_block_builder()
+                .with_parent(prev1.id)
+                .add_test_transaction(&mut rng)
+                .build();
             prev1 = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -236,7 +242,7 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
         for i in 0..(limit * 2) {
             if i <= limit {
                 let block = tf1
-                    .block_builder()
+                    .make_block_builder()
                     .with_parent(prev1.id)
                     .add_test_transaction_with_parent(prev1.id, &mut rng)
                     .build();
@@ -246,7 +252,7 @@ fn filter_already_existing_blocks(#[case] seed: Seed) {
             }
 
             let block = tf2
-                .block_builder()
+                .make_block_builder()
                 .with_parent(prev2.id)
                 .add_test_transaction_with_parent(prev2.id, &mut rng)
                 .build();
@@ -283,8 +289,11 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
 
         let mut prev = TestBlockInfo::from_genesis(tf1.genesis());
         for _ in 0..rng.gen_range(8..16) {
-            let block =
-                tf1.block_builder().with_parent(prev.id).add_test_transaction(&mut rng).build();
+            let block = tf1
+                .make_block_builder()
+                .with_parent(prev.id)
+                .add_test_transaction(&mut rng)
+                .build();
             prev = TestBlockInfo::from_block(&block);
             tf1.process_block(block.clone(), BlockSource::Local).unwrap();
             tf2.process_block(block.clone(), BlockSource::Local).unwrap();
@@ -294,7 +303,7 @@ fn filter_already_existing_blocks_detached_headers(#[case] seed: Seed) {
         let mut headers = Vec::new();
         for _ in 0..rng.gen_range(3..10) {
             let block = tf2
-                .block_builder()
+                .make_block_builder()
                 .with_parent(prev.id)
                 .add_test_transaction_with_parent(prev.id, &mut rng)
                 .build();

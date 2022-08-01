@@ -68,14 +68,14 @@ fn orphans_chains(#[case] seed: Seed) {
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
 
         // Prepare, but not process the block.
-        let missing_block = tf.block_builder().add_test_transaction(&mut rng).build();
+        let missing_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
 
         // Create and process orphan blocks.
         const MAX_ORPHANS_COUNT_IN_TEST: usize = 100;
         let mut current_block = missing_block.clone();
         for orphan_count in 1..MAX_ORPHANS_COUNT_IN_TEST {
             current_block = tf
-                .block_builder()
+                .make_block_builder()
                 .with_parent(current_block.get_id().into())
                 .add_test_transaction_from_block(&current_block, &mut rng)
                 .build();
@@ -129,7 +129,7 @@ fn spend_inputs_simple(#[case] seed: Seed) {
         let mut tf = TestFramework::default();
 
         // Create a new block
-        let block = tf.block_builder().add_test_transaction(&mut rng).build();
+        let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
 
         // Check that all tx not in the main chain
         for tx in block.transactions() {
@@ -199,7 +199,7 @@ fn straight_chain(#[case] seed: Seed) {
             let best_block_id = tf.best_block_id();
             assert_eq!(best_block_id, block_index.block_id());
             let new_block = tf
-                .block_builder()
+                .make_block_builder()
                 .with_parent(prev_block.id)
                 .add_test_transaction_with_parent(prev_block.id, &mut rng)
                 .build();
@@ -475,7 +475,7 @@ fn consensus_type(#[case] seed: Seed) {
     // The next block will have height 1. At this height, we are still under IgnoreConsensus, so
     // processing a block with PoWData will fail
     assert!(matches!(
-        tf.block_builder()
+        tf.make_block_builder()
             .add_test_transaction(&mut rng)
             .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])))
             .build_and_process()
@@ -492,7 +492,7 @@ fn consensus_type(#[case] seed: Seed) {
     // The next block will be at height 5, so it is expected to be a PoW block. Let's crate a block
     // with ConsensusData::None and see that adding it fails
     assert!(matches!(
-        tf.block_builder()
+        tf.make_block_builder()
             .add_test_transaction(&mut rng)
             .build_and_process()
             .unwrap_err(),
@@ -505,7 +505,7 @@ fn consensus_type(#[case] seed: Seed) {
     for i in 5..10 {
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
-            .block_builder()
+            .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -528,7 +528,7 @@ fn consensus_type(#[case] seed: Seed) {
     // fail.
     let prev_block = tf.block(*tf.index_at(9).block_id());
     let mut mined_block = tf
-        .block_builder()
+        .make_block_builder()
         .with_parent(prev_block.get_id().into())
         .add_test_transaction_from_block(&prev_block, &mut rng)
         .build();
@@ -552,7 +552,7 @@ fn consensus_type(#[case] seed: Seed) {
     // At height 15 we are again proof of work, ignoring consensus should fail
     let prev_block = tf.block(*tf.index_at(14).block_id());
     assert!(matches!(
-        tf.block_builder()
+        tf.make_block_builder()
             .with_parent(prev_block.get_id().into())
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build_and_process()
@@ -566,7 +566,7 @@ fn consensus_type(#[case] seed: Seed) {
     for i in 15..20 {
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
-            .block_builder()
+            .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
@@ -619,7 +619,7 @@ fn pow(#[case] seed: Seed) {
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
-    let mut random_invalid_block = tf.block_builder().add_test_transaction(&mut rng).build();
+    let mut random_invalid_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
     assert!(matches!(
@@ -688,7 +688,7 @@ fn blocks_from_the_future() {
             let max_future_offset =
                 tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
 
-            tf.block_builder()
+            tf.make_block_builder()
                 .with_timestamp(BlockTimestamp::from_int_seconds(
                     current_time.load(Ordering::SeqCst) + max_future_offset,
                 ))
@@ -703,7 +703,7 @@ fn blocks_from_the_future() {
                 tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
 
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load(Ordering::SeqCst) + max_future_offset + 1,
                     ))
@@ -716,7 +716,7 @@ fn blocks_from_the_future() {
         {
             // submit a block one second before genesis in time
             assert_eq!(
-                tf.block_builder()
+                tf.make_block_builder()
                     .with_timestamp(BlockTimestamp::from_int_seconds(
                         current_time.load(Ordering::SeqCst) - 1
                     ))
