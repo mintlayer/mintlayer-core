@@ -657,8 +657,14 @@ fn outpoint_not_found() -> anyhow::Result<()> {
 #[test]
 fn tx_too_big() -> anyhow::Result<()> {
     let mut mempool = setup();
+    let single_output_size = TxOutput::new(
+        Amount::from_atoms(100),
+        OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+    )
+    .encoded_size();
+    let too_many_outputs = MAX_BLOCK_SIZE_BYTES / single_output_size;
     let tx = TxGenerator::new()
-        .with_num_outputs(400_000)
+        .with_num_outputs(too_many_outputs)
         .generate_tx(&mempool)
         .expect("generate_tx failed");
     assert!(matches!(
