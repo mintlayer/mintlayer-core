@@ -737,21 +737,25 @@ where
     fn pays_minimum_mempool_fee(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx)?;
         let minimum_fee = self.get_update_minimum_mempool_fee(tx);
-        (tx_fee >= minimum_fee)
-            .then(|| ())
-            .ok_or(TxValidationError::RollingFeeThresholdNotMet {
+        ensure!(
+            tx_fee >= minimum_fee,
+            TxValidationError::RollingFeeThresholdNotMet {
                 minimum_fee,
                 tx_fee,
-            })
+            }
+        );
+        Ok(())
     }
 
     fn pays_minimum_relay_fees(&self, tx: &Transaction) -> Result<(), TxValidationError> {
         let tx_fee = self.try_get_fee(tx)?;
         let relay_fee = get_relay_fee(tx);
         log::debug!("tx_fee: {:?}, relay_fee: {:?}", tx_fee, relay_fee);
-        (tx_fee >= relay_fee)
-            .then(|| ())
-            .ok_or(TxValidationError::InsufficientFeesToRelay { tx_fee, relay_fee })
+        ensure!(
+            tx_fee >= relay_fee,
+            TxValidationError::InsufficientFeesToRelay { tx_fee, relay_fee }
+        );
+        Ok(())
     }
 
     fn rbf_checks(&self, tx: &Transaction) -> Result<Conflicts, TxValidationError> {
@@ -816,9 +820,11 @@ where
             additional_fees,
             relay_fee
         );
-        (additional_fees >= relay_fee)
-            .then(|| ())
-            .ok_or(TxValidationError::InsufficientFeesToRelayRBF)
+        ensure!(
+            additional_fees >= relay_fee,
+            TxValidationError::InsufficientFeesToRelayRBF
+        );
+        Ok(())
     }
 
     fn pays_more_than_conflicts_with_descendants(
@@ -839,9 +845,10 @@ where
             .ok_or(TxValidationError::ConflictsFeeOverflow)?;
 
         let replacement_fee = self.try_get_fee(tx)?;
-        (replacement_fee > total_conflict_fees)
-            .then(|| ())
-            .ok_or(TxValidationError::TransactionFeeLowerThanConflictsWithDescendants)?;
+        ensure!(
+            replacement_fee > total_conflict_fees,
+            TxValidationError::TransactionFeeLowerThanConflictsWithDescendants
+        );
         Ok(total_conflict_fees)
     }
 
@@ -912,14 +919,14 @@ where
         let id = entry.tx.get_id().get();
         self.store.add_tx(entry)?;
         self.remove_expired_transactions();
-        self.store
-            .txs_by_id
-            .contains_key(&id)
-            .then(|| ())
-            .ok_or(TxValidationError::DescendantOfExpiredTransaction)?;
+        ensure!(
+            self.store.txs_by_id.contains_key(&id),
+            TxValidationError::DescendantOfExpiredTransaction
+        );
 
         self.limit_mempool_size()?;
-        self.store.txs_by_id.contains_key(&id).then(|| ()).ok_or(Error::MempoolFull)
+        ensure!(self.store.txs_by_id.contains_key(&id), Error::MempoolFull);
+        Ok(())
     }
 
     fn limit_mempool_size(&mut self) -> Result<(), Error> {
