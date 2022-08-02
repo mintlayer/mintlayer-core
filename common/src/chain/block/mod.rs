@@ -15,28 +15,30 @@
 //
 // Author(s): S. Afach
 
-use crate::chain::transaction::Transaction;
-pub use crate::chain::GenBlock;
+pub use crate::chain::{
+    block::block_reward::{BlockReward, BlockRewardTransactable},
+    GenBlock,
+};
+pub use block_header::BlockHeader;
+pub use consensus_data::ConsensusData;
 
+use crate::chain::transaction::Transaction;
 use crate::primitives::merkle;
 use crate::primitives::merkle::MerkleTreeFormError;
 use crate::primitives::{Id, Idable, VersionTag, H256};
+
+mod block_reward;
 mod block_v1;
-pub mod consensus_data;
-
-pub mod block_size;
-
-pub mod timestamp;
 
 pub mod block_header;
+pub mod block_size;
+pub mod consensus_data;
+pub mod timestamp;
 
-pub use block_header::BlockHeader;
 use block_v1::BlockV1;
-pub use consensus_data::ConsensusData;
 use serialization::{DirectDecode, DirectEncode};
 
-use self::block_size::BlockSize;
-use self::timestamp::BlockTimestamp;
+use self::{block_size::BlockSize, timestamp::BlockTimestamp};
 
 pub fn calculate_tx_merkle_root(
     transactions: &[Transaction],
@@ -93,6 +95,7 @@ impl Block {
         prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
         consensus_data: ConsensusData,
+        reward: BlockReward,
     ) -> Result<Self, BlockCreationError> {
         let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
         let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
@@ -108,6 +111,7 @@ impl Block {
 
         let block = Block::V1(BlockV1 {
             header,
+            reward,
             transactions,
         });
 
@@ -132,8 +136,11 @@ impl Block {
             witness_merkle_root,
         };
 
+        let reward = BlockReward::new(Vec::new());
+
         let block = Block::V1(BlockV1 {
             header,
+            reward,
             transactions,
         });
 
@@ -191,6 +198,12 @@ impl Block {
     pub fn block_size(&self) -> BlockSize {
         BlockSize::new_from_block(self)
     }
+
+    pub fn block_reward_transactable(&self) -> () {
+        match &self {
+            Block::V1(b) => b.block_reward_transactable(),
+        }
+    }
 }
 
 impl Idable for Block {
@@ -237,8 +250,11 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
+        let reward = BlockReward::new(Vec::new());
+
         let block = Block::V1(BlockV1 {
             header,
+            reward,
             transactions: Vec::new(),
         });
         let _res = calculate_tx_merkle_root(block.transactions());
@@ -260,10 +276,13 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
+        let reward = BlockReward::new(Vec::new());
+
         let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
 
         let block = Block::V1(BlockV1 {
             header,
+            reward,
             transactions: vec![one_transaction.clone()],
         });
         let res = calculate_tx_merkle_root(block.transactions()).unwrap();
@@ -302,8 +321,11 @@ mod tests {
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
+        let reward = BlockReward::new(Vec::new());
+
         let block = Block::V1(BlockV1 {
             header,
+            reward,
             transactions: Vec::new(),
         });
 

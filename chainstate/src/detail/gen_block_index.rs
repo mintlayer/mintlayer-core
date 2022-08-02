@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::block_index::BlockIndex;
-use common::chain::block::{consensus_data::BlockRewardTransactable, timestamp::BlockTimestamp};
+use common::chain::block::{timestamp::BlockTimestamp, BlockRewardTransactable};
 use common::chain::{GenBlock, Genesis};
 use common::primitives::{id::WithId, BlockHeight, Id, Idable};
 use common::Uint256;

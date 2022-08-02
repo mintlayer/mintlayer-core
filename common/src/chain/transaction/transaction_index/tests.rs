@@ -21,7 +21,7 @@ use crate::chain::block::timestamp::BlockTimestamp;
 use crate::chain::OutputPurpose;
 use crate::{
     chain::{
-        block::ConsensusData,
+        block::{BlockReward, ConsensusData},
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype::SigHashType,
@@ -275,12 +275,14 @@ fn generate_random_invalid_block() -> Block {
     };
     let time = rng.next_u64();
     let prev_id = Id::new(generate_random_h256(&mut rng));
+    let reward = BlockReward::new(Vec::new());
 
     Block::new(
         transactions,
         prev_id,
         BlockTimestamp::from_int_seconds(time),
         ConsensusData::None,
+        reward,
     )
     .expect("Creating block caused fail")
 }

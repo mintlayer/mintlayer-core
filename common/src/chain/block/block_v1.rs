@@ -13,21 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::block::Block;
-use crate::chain::block::ConsensusData;
-use crate::chain::transaction::Transaction;
-use crate::primitives::id;
-use crate::primitives::id::Idable;
-use crate::primitives::{Id, H256};
-
 use serialization::{Decode, Encode};
 
-use super::block_header::BlockHeader;
-use super::timestamp::BlockTimestamp;
+use crate::{
+    chain::{
+        block::{Block, BlockReward, ConsensusData},
+        transaction::Transaction,
+    },
+    primitives::{
+        id::{self, Idable},
+        Id, H256,
+    },
+};
+
+use super::{block_header::BlockHeader, timestamp::BlockTimestamp};
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
+    pub(super) reward: BlockReward,
     pub(super) transactions: Vec<Transaction>,
 }
 
@@ -69,5 +73,10 @@ impl BlockV1 {
 
     pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
         &self.header.prev_block_id
+    }
+
+    pub fn block_reward_transactable(&self) -> () {
+        // TODO: FIXME:
+        todo!()
     }
 }

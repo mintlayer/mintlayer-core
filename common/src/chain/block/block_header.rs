@@ -15,7 +15,6 @@
 
 use serialization::{Decode, Encode};
 
-use super::consensus_data::BlockRewardTransactable;
 use super::timestamp::BlockTimestamp;
 use crate::chain::{block::ConsensusData, Block, GenBlock};
 use crate::primitives::id::{Id, Idable, H256};
@@ -46,10 +45,6 @@ impl BlockHeader {
 
     pub fn timestamp(&self) -> BlockTimestamp {
         self.timestamp
-    }
-
-    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        self.consensus_data.derive_transactable()
     }
 }
 

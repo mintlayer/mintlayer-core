@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::block::{consensus_data::BlockRewardTransactable, timestamp::BlockTimestamp};
+use super::block::{timestamp::BlockTimestamp, BlockRewardTransactable};
 use super::TxOutput;
 use crate::primitives::{id, Id, Idable};
 
