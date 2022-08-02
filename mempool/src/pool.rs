@@ -493,7 +493,6 @@ impl MempoolStore {
     fn remove_tx(&mut self, tx_id: &Id<Transaction>) {
         log::info!("remove_tx: {}", tx_id.get());
         if let Some(entry) = self.txs_by_id.remove(&tx_id.get()) {
-            self.update_for_drop(&entry);
             self.update_ancestor_state_for_drop(&entry);
             self.drop_tx(&entry);
         } else {
@@ -508,6 +507,7 @@ impl MempoolStore {
     }
 
     fn drop_tx(&mut self, entry: &TxMempoolEntry) {
+        self.update_for_drop(entry);
         self.remove_from_descendant_score_index(entry);
         self.txs_by_creation_time.entry(entry.creation_time).and_modify(|entries| {
             entries.remove(&entry.tx_id()).then(|| ()).expect("Inconsistent mempool store")
