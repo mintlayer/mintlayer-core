@@ -196,7 +196,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
+fn overspend(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
@@ -214,6 +214,47 @@ fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
             BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
                 Amount::from_atoms(tx1_output_value),
                 Amount::from_atoms(tx2_output_value)
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+// Check that it is impossible to overspend the input using several outputs, even if each of the
+// individual outputs spent less than input.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn overspend_multiple_outputs(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+        let mut rng = make_seedable_rng(seed);
+
+        let tx1_output_value = rng.gen_range(1000..2000);
+        let tx1 = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+
+        let tx2_output_value = tx1_output_value - 1;
+        let tx2_output = TxOutput::new(
+            Amount::from_atoms(tx2_output_value),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        );
+        let tx2 = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                tx1.get_id().into(),
+                0,
+                InputWitness::NoSignature(None),
+            ))
+            .with_outputs(vec![tx2_output.clone(), tx2_output])
+            .build();
+
+        assert_eq!(
+            tf.make_block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
+                Amount::from_atoms(tx1_output_value),
+                Amount::from_atoms(tx2_output_value * 2)
             ))
         );
         assert_eq!(tf.best_block_id(), tf.genesis().get_id());
