@@ -53,7 +53,7 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
-mod spend_cache;
+mod transaction_verifier;
 
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
