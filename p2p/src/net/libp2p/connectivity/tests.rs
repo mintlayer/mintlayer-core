@@ -227,7 +227,7 @@ async fn register_identify_info() {
         connmgr.events.front(),
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::InboundAccepted {
-                addr: Multiaddr::empty(),
+                address: Multiaddr::empty(),
                 peer_info: IdentifyInfoWrapper::new(info),
             },
         )),
@@ -254,7 +254,7 @@ async fn register_identify_info() {
         connmgr.events.front(),
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::OutboundAccepted {
-                addr: Multiaddr::empty(),
+                address: Multiaddr::empty(),
                 peer_info: IdentifyInfoWrapper::new(info),
             },
         )),
@@ -360,7 +360,7 @@ async fn handle_connection_refused() {
         connmgr.events.front(),
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::ConnectionError {
-                addr: Multiaddr::empty(),
+                address: Multiaddr::empty(),
                 error: P2pError::DialError(DialError::IoError(
                     std::io::ErrorKind::ConnectionRefused,
                 )),
@@ -447,7 +447,7 @@ async fn banned_peer() {
         connmgr.events.front(),
         Some(&types::ConnectionManagerEvent::Behaviour(
             types::BehaviourEvent::ConnectionError {
-                addr: Multiaddr::empty(),
+                address: Multiaddr::empty(),
                 error: P2pError::PeerError(PeerError::BannedPeer(peer_id.to_string())),
             },
         )),

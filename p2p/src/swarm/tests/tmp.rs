@@ -52,7 +52,7 @@ async fn test_swarm_connect_libp2p() {
     assert!(std::matches!(
         swarm.handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
-            addr: _,
+            address: _,
             error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
         })
     ));
@@ -90,7 +90,7 @@ async fn test_auto_connect_libp2p() {
     assert_eq!(swarm.pending.len(), 1);
     assert!(std::matches!(
         swarm.handle.poll_next().await,
-        Ok(net::types::ConnectivityEvent::ConnectionAccepted { .. })
+        Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
     ));
 }
 
@@ -107,7 +107,7 @@ async fn connect_outbound_same_network() {
 
     assert!(std::matches!(
         swarm1.handle.poll_next().await,
-        Ok(net::types::ConnectivityEvent::ConnectionAccepted { .. })
+        Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
     ));
 }
 
@@ -173,8 +173,10 @@ async fn connect_outbound_different_network() {
     tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
     swarm1.handle.connect(addr).await.unwrap();
 
-    if let Ok(net::types::ConnectivityEvent::ConnectionAccepted { peer_info, addr: _ }) =
-        swarm1.handle.poll_next().await
+    if let Ok(net::types::ConnectivityEvent::OutboundAccepted {
+        peer_info,
+        address: _,
+    }) = swarm1.handle.poll_next().await
     {
         assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
     }
@@ -191,9 +193,9 @@ async fn connect_inbound_same_network() {
         swarm2.handle.poll_next()
     );
     let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-    if let net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } = conn2_res {
+    if let net::types::ConnectivityEvent::InboundAccepted { peer_info, address } = conn2_res {
         assert_eq!(
-            swarm2.accept_inbound_connection(addr, peer_info).await,
+            swarm2.accept_inbound_connection(address, peer_info).await,
             Ok(())
         );
     } else {
@@ -218,9 +220,9 @@ async fn connect_inbound_different_network() {
     );
     let conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
 
-    if let net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } = conn2_res {
+    if let net::types::ConnectivityEvent::InboundAccepted { peer_info, address } = conn2_res {
         assert_eq!(
-            swarm2.accept_inbound_connection(addr, peer_info).await,
+            swarm2.accept_inbound_connection(address, peer_info).await,
             Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
                 [1, 2, 3, 4],
                 *config::create_mainnet().magic_bytes(),
@@ -248,11 +250,11 @@ async fn remote_closes_connection() {
 
     assert!(std::matches!(
         conn2_res,
-        net::types::ConnectivityEvent::IncomingConnection { .. }
+        net::types::ConnectivityEvent::InboundAccepted { .. }
     ));
     assert!(std::matches!(
         swarm1.handle.poll_next().await,
-        Ok(net::types::ConnectivityEvent::ConnectionAccepted { .. })
+        Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
     ));
 
     assert_eq!(
