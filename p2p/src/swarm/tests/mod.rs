@@ -15,6 +15,7 @@
 //
 // Author(s): A. Altonen
 mod ban;
+mod peerdb;
 mod tmp;
 
 use crate::{

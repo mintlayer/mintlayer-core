@@ -211,18 +211,18 @@ impl<T: NetworkingService> PartialEq for net::types::PeerInfo<T> {
 // verify that vector of address (that all belong to one peer) parse into one `net::types::Peer` entry
 #[test]
 fn test_parse_peers_valid_1_peer() {
-    let id = PeerId::random();
+    let peer_id = PeerId::random();
     let ip4: Multiaddr = "/ip4/127.0.0.1/tcp/9090".parse().unwrap();
     let ip6: Multiaddr = "/ip6/::1/tcp/9091".parse().unwrap();
-    let addrs = vec![(id, ip4.clone()), (id, ip6.clone())];
+    let addrs = vec![(peer_id, ip4.clone()), (peer_id, ip6.clone())];
 
     let parsed: Vec<net::types::AddrInfo<Libp2pService>> = parse_peers(addrs);
     assert_eq!(
         parsed,
         vec![net::types::AddrInfo {
-            id,
-            ip4: vec![ip4.with(Protocol::P2p(id.into()))],
-            ip6: vec![ip6.with(Protocol::P2p(id.into()))],
+            peer_id,
+            ip4: vec![ip4.with(Protocol::P2p(peer_id.into()))],
+            ip6: vec![ip6.with(Protocol::P2p(peer_id.into()))],
         }]
     );
 }
@@ -251,18 +251,18 @@ fn test_parse_peers_valid_2_peers() {
     ];
 
     let mut parsed: Vec<net::types::AddrInfo<Libp2pService>> = parse_peers(addrs);
-    parsed.sort_by(|a, b| a.id.cmp(&b.id));
+    parsed.sort_by(|a, b| a.peer_id.cmp(&b.peer_id));
 
     assert_eq!(
         parsed,
         vec![
             net::types::AddrInfo {
-                id: id_2,
+                peer_id: id_2,
                 ip4: vec![ip4_2.with(Protocol::P2p(id_2.into()))],
                 ip6: vec![ip6_2.with(Protocol::P2p(id_2.into()))],
             },
             net::types::AddrInfo {
-                id: id_1,
+                peer_id: id_1,
                 ip4: vec![ip4_1.with(Protocol::P2p(id_1.into()))],
                 ip6: vec![ip6_1.with(Protocol::P2p(id_1.into()))],
             },
@@ -289,7 +289,7 @@ fn test_parse_peers_valid_3_peers_1_valid() {
     assert_eq!(
         parsed,
         vec![net::types::AddrInfo {
-            id: id_1,
+            peer_id: id_1,
             ip4: vec![ip4.with(Protocol::P2p(id_1.into()))],
             ip6: vec![],
         }]

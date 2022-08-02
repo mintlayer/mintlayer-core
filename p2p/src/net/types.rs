@@ -20,7 +20,7 @@ use super::*;
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddrInfo<T: NetworkingService> {
     /// Unique ID of the peer
-    pub id: T::PeerId,
+    pub peer_id: T::PeerId,
 
     /// List of discovered IPv4 addresses
     pub ip4: Vec<T::Address>,
