@@ -34,15 +34,12 @@ mod utxosdb_utxosview_impls {
 
     use super::*;
     pub fn utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
-        match db.get_utxo(outpoint) {
-            Ok(res) => res,
-            Err(e) => {
-                panic!(
-                    "Database error while attempting to retrieve utxo from the database: {}",
-                    e
-                );
-            }
-        }
+        db.get_utxo(outpoint).unwrap_or_else(|e| {
+            panic!(
+                "Database error while attempting to retrieve utxo from the database: {}",
+                e
+            )
+        })
     }
 
     pub fn has_utxo<S: UtxosStorageRead + UtxosView>(db: &S, outpoint: &OutPoint) -> bool {

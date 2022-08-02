@@ -41,6 +41,7 @@ fn create_transactions(
     let input_size = inputs.len() / num_of_txs;
 
     // create the multiple transactions based on the inputs.
+    // TODO: use proper test random number generation for tests here
     inputs
         .chunks(input_size)
         .into_iter()

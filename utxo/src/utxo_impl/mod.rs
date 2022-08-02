@@ -297,7 +297,7 @@ impl<'a> UtxosCache<'a> {
         &mut self,
         outpoint: &OutPoint,
         utxo: Utxo,
-        possible_overwrite: bool,
+        possible_overwrite: bool, // TODO: change this to an enum that explains what happens
     ) -> Result<(), Error> {
         let is_fresh = match self.utxos.get(outpoint) {
             None => {
