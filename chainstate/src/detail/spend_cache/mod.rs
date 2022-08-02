@@ -46,6 +46,8 @@ use self::error::StateUpdateError;
 
 pub mod error;
 
+type TokensMap = BTreeMap<TokenId, Amount>;
+
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BlockTransactableRef<'a> {
@@ -249,8 +251,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     pub fn calculate_transfered_and_burn_tokens(
         outputs: &[TxOutput],
-    ) -> Result<BTreeMap<TokenId, Amount>, TokensError> {
-        let mut total_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
+    ) -> Result<TokensMap, TokensError> {
+        let mut total_tokens: TokensMap = BTreeMap::new();
         let iter_res: Result<(), TokensError> = outputs
             .iter()
             .filter_map(|x| match x.value() {
@@ -286,8 +288,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     pub fn calculate_tokens_total_inputs(
         &self,
         inputs: &[TxInput],
-    ) -> Result<BTreeMap<TokenId, Amount>, StateUpdateError> {
-        let mut total_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
+    ) -> Result<TokensMap, StateUpdateError> {
+        let mut total_tokens: TokensMap = BTreeMap::new();
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
             let tx_index = self.get_tx_index_from_cache(outpoint)?;
@@ -639,6 +641,41 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
+    fn check_connected_burn_data(
+        &self,
+        tx: &Transaction,
+        block_id: &Id<Block>,
+        burn_token_id: &TokenId,
+        amount_to_burn: &Amount,
+    ) -> Result<(), TokensError> {
+        // Collect token inputs
+        let total_value_tokens = self
+            .calculate_tokens_total_inputs(tx.inputs())
+            .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
+
+        // Is token exist in inputs?
+        let origin_amount = total_value_tokens
+            .get(burn_token_id)
+            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
+
+        // Check amount
+        ensure!(
+            origin_amount >= amount_to_burn,
+            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), *block_id)
+        );
+
+        // If we burn a piece of the token, we have to check output with the rest tokens
+        if origin_amount > amount_to_burn {
+            // Check whether all tokens burn and transfer
+            ensure!(
+                (*amount_to_burn + Self::get_change_amount(tx, burn_token_id)?)
+                    == Some(*origin_amount),
+                TokensError::SomeTokensLost(tx.get_id(), *block_id)
+            );
+        }
+        Ok(())
+    }
+
     fn check_connected_transfer_data(
         &self,
         block_id: Id<Block>,
@@ -651,19 +688,15 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             .calculate_tokens_total_inputs(tx.inputs())
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
-        // Collect token outputs
-        let total_output_tokens = Self::calculate_transfered_and_burn_tokens(tx.outputs())?;
-
         // Is token exist in inputs?
-        let (_, input_amount) = total_input_tokens
-            .iter()
-            .find(|&(origin_token_id, _)| origin_token_id == token_id)
+        let input_amount = total_input_tokens
+            .get(token_id)
             .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
         // Is token exist in outputs?
-        let (_, output_amount) = total_output_tokens
-            .iter()
-            .find(|&(origin_token_id, _)| origin_token_id == token_id)
+        let total_output_tokens = Self::calculate_transfered_and_burn_tokens(tx.outputs())?;
+        let output_amount = total_output_tokens
+            .get(token_id)
             .ok_or_else(|| TokensError::SomeTokensLost(tx.get_id(), block_id))?;
 
         // Check amounts
@@ -723,42 +756,6 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
             .ok_or(TokensError::CoinOrTokenOverflow)?;
         Ok(change_amount)
-    }
-
-    fn check_connected_burn_data(
-        &self,
-        tx: &Transaction,
-        block_id: &Id<Block>,
-        burn_token_id: &TokenId,
-        amount_to_burn: &Amount,
-    ) -> Result<(), TokensError> {
-        // Collect token inputs
-        let total_value_tokens = self
-            .calculate_tokens_total_inputs(tx.inputs())
-            .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
-
-        // Is token exist in inputs?
-        let (_, origin_amount) = total_value_tokens
-            .iter()
-            .find(|&(origin_token_id, _)| origin_token_id == burn_token_id)
-            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
-
-        // Check amount
-        ensure!(
-            origin_amount >= amount_to_burn,
-            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), *block_id)
-        );
-
-        // If we burn a piece of the token, we have to check output with the rest tokens
-        if origin_amount > amount_to_burn {
-            // Check whether all tokens burn and transfer
-            ensure!(
-                (*amount_to_burn + Self::get_change_amount(tx, burn_token_id)?)
-                    == Some(*origin_amount),
-                TokensError::SomeTokensLost(tx.get_id(), *block_id)
-            );
-        }
-        Ok(())
     }
 
     fn check_connected_tokens(
