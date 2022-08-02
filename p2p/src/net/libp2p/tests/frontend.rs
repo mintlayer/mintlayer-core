@@ -322,7 +322,7 @@ async fn test_connect_with_timeout() {
     assert!(std::matches!(
         service.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
-            addr: _,
+            address: _,
             error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
         })
     ));
@@ -346,7 +346,7 @@ async fn test_connect_with_timeout() {
     assert!(std::matches!(
         service.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
-            addr: _,
+            address: _,
             error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
         })
     ));

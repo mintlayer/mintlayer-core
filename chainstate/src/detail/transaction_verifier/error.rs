@@ -20,7 +20,7 @@ use common::{
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-pub enum StateUpdateError {
+pub enum ConnectTransactionError {
     #[error("Blockchain storage error: {0}")]
     StorageError(chainstate_storage::Error),
     #[error("While connecting a block, transaction number `{0}` does not exist in block `{1}`")]
@@ -84,23 +84,25 @@ pub enum StateUpdateError {
     TimeLockViolation,
 }
 
-impl From<chainstate_storage::Error> for StateUpdateError {
+impl From<chainstate_storage::Error> for ConnectTransactionError {
     fn from(err: chainstate_storage::Error) -> Self {
         // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
         // We don't need to cause panic here
-        StateUpdateError::StorageError(err)
+        ConnectTransactionError::StorageError(err)
     }
 }
 
-impl From<SpendError> for StateUpdateError {
+impl From<SpendError> for ConnectTransactionError {
     fn from(err: SpendError) -> Self {
         match err {
-            SpendError::AlreadySpent(spender) => StateUpdateError::DoubleSpendAttempt(spender),
-            SpendError::AlreadyUnspent => StateUpdateError::InvariantBrokenAlreadyUnspent,
+            SpendError::AlreadySpent(spender) => {
+                ConnectTransactionError::DoubleSpendAttempt(spender)
+            }
+            SpendError::AlreadyUnspent => ConnectTransactionError::InvariantBrokenAlreadyUnspent,
             SpendError::OutOfRange {
                 tx_id,
                 source_output_index,
-            } => StateUpdateError::OutputIndexOutOfRange {
+            } => ConnectTransactionError::OutputIndexOutOfRange {
                 tx_id,
                 source_output_index,
             },
@@ -108,15 +110,17 @@ impl From<SpendError> for StateUpdateError {
     }
 }
 
-impl From<TxMainChainIndexError> for StateUpdateError {
+impl From<TxMainChainIndexError> for ConnectTransactionError {
     fn from(err: TxMainChainIndexError) -> Self {
         match err {
-            TxMainChainIndexError::InvalidOutputCount => StateUpdateError::InvalidOutputCount,
+            TxMainChainIndexError::InvalidOutputCount => {
+                ConnectTransactionError::InvalidOutputCount
+            }
             TxMainChainIndexError::SerializationInvariantError(block_id) => {
-                StateUpdateError::SerializationInvariantError(block_id)
+                ConnectTransactionError::SerializationInvariantError(block_id)
             }
             TxMainChainIndexError::InvalidTxNumberForBlock(tx_num, block_id) => {
-                StateUpdateError::InvariantErrorTxNumWrongInBlock(tx_num, block_id)
+                ConnectTransactionError::InvariantErrorTxNumWrongInBlock(tx_num, block_id)
             }
         }
     }

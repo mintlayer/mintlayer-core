@@ -466,10 +466,10 @@ where
                 },
                 event = self.handle.poll_next() => match event {
                     Ok(event) => match event {
-                        net::types::ConnectivityEvent::IncomingConnection { peer_info, addr } => {
+                        net::types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
 
-                            match self.accept_inbound_connection(addr, peer_info).await {
+                            match self.accept_inbound_connection(address, peer_info).await {
                                 Ok(_) => {},
                                 Err(P2pError::ChannelClosed) => return Err(P2pError::ChannelClosed),
                                 Err(P2pError::PeerError(err)) => {
@@ -485,12 +485,12 @@ where
                                 }
                             }
                         }
-                        net::types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
+                        net::types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
                             let peer_id = peer_info.peer_id;
-                            let res = self.accept_connection(addr.clone(), peer_info).await;
+                            let res = self.accept_connection(address.clone(), peer_info).await;
                             self.handle_result(Some(peer_id), res).await?;
 
-                            match self.pending.remove(&addr) {
+                            match self.pending.remove(&address) {
                                 Some(Some(channel)) => channel.send(Ok(())).map_err(|_| P2pError::ChannelClosed)?,
                                 Some(None) => {},
                                 None => log::error!("connection accepted but it's not pending?"),
@@ -500,8 +500,8 @@ where
                             let res = self.close_connection(peer_id).await;
                             self.handle_result(Some(peer_id), res).await?;
                         }
-                        net::types::ConnectivityEvent::ConnectionError { addr, error } => {
-                            let res = self.handle_outbound_error(addr, error);
+                        net::types::ConnectivityEvent::ConnectionError { address, error } => {
+                            let res = self.handle_outbound_error(address, error);
                             self.handle_result(None, res).await?;
                         }
                         net::types::ConnectivityEvent::Discovered { peers } => {
@@ -509,9 +509,6 @@ where
                         }
                         net::types::ConnectivityEvent::Expired { peers } => {
                             self.peer_expired(&peers);
-                        }
-                        net::types::ConnectivityEvent::Disconnected { .. } => {
-                            // TODO: add tests
                         }
                         net::types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
