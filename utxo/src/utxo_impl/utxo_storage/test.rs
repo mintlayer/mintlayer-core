@@ -71,12 +71,9 @@ fn create_block(
 
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
-fn initialize_db(
-    db_interface: &mut UtxosDBInMemoryImpl,
-    tx_outputs_size: u32,
-) -> (Id<GenBlock>, Vec<OutPoint>) {
+fn initialize_db(tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random());
-    assert!(db_interface.set_best_block_for_utxos(&best_block_id).is_ok());
+    let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id.into(), Default::default());
 
     // let's populate the db with outputs.
     let tx_outputs = create_tx_outputs(tx_outputs_size);
@@ -94,7 +91,7 @@ fn initialize_db(
         })
         .collect_vec();
 
-    (best_block_id, outpoints)
+    (db_interface, outpoints)
 }
 
 fn create_utxo_entries(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
@@ -114,10 +111,8 @@ fn utxo_and_undo_test() {
     let tx_outputs_size = 3;
     let num_of_txs = 1;
 
-    let mut db_interface = UtxosDBInMemoryImpl::new();
-
     // initializing the db with existing utxos.
-    let (best_block_id, outpoints) = initialize_db(&mut db_interface, tx_outputs_size);
+    let (db_interface, outpoints) = initialize_db(tx_outputs_size);
     // create the TxInputs for spending.
     let expected_tx_inputs = create_tx_inputs(&outpoints);
 
@@ -149,7 +144,12 @@ fn utxo_and_undo_test() {
         let mut view = parent_view.derive_cache();
 
         // create a new block to spend.
-        let block = create_block(best_block_id, expected_tx_inputs.clone(), 0, num_of_txs);
+        let block = create_block(
+            db_interface.best_block_hash().unwrap(),
+            expected_tx_inputs.clone(),
+            0,
+            num_of_txs,
+        );
         let block_height = BlockHeight::new(1);
         // spend the block
         let block_undo = {
@@ -302,7 +302,7 @@ fn test_utxo() {
             best_block: new_best_block_hash,
         };
 
-        let mut db_interface = UtxosDBInMemoryImpl::new();
+        let mut db_interface = UtxosDBInMemoryImpl::new(new_best_block_hash, Default::default());
         let mut utxo_db = UtxosDBMut::new(&mut db_interface);
 
         // test batch_write

@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use super::{UtxosStorageRead, UtxosStorageWrite};
-use crate::{BlockUndo, Utxo};
+use crate::{BlockUndo, Utxo, UtxosCache, UtxosView};
 use chainstate_types::storage_result::Error;
 use common::{
     chain::{Block, GenBlock, OutPoint},
@@ -28,15 +28,15 @@ use common::{
 pub struct UtxosDBInMemoryImpl {
     store: BTreeMap<OutPoint, Utxo>,
     undo_store: BTreeMap<Id<Block>, BlockUndo>,
-    best_block_id: Option<Id<GenBlock>>,
+    best_block_id: Id<GenBlock>,
 }
 
 impl UtxosDBInMemoryImpl {
-    pub fn new() -> Self {
+    pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
         Self {
             store: BTreeMap::new(),
             undo_store: BTreeMap::new(),
-            best_block_id: None,
+            best_block_id: best_block,
         }
     }
 
@@ -57,7 +57,7 @@ impl UtxosStorageRead for UtxosDBInMemoryImpl {
     }
 
     fn get_best_block_for_utxos(&self) -> Result<Option<Id<GenBlock>>, Error> {
-        Ok(self.best_block_id)
+        Ok(Some(self.best_block_id))
     }
 }
 
@@ -71,7 +71,7 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
         Ok(())
     }
     fn set_best_block_for_utxos(&mut self, block_id: &Id<GenBlock>) -> Result<(), Error> {
-        self.best_block_id = Some(*block_id);
+        self.best_block_id = *block_id;
         Ok(())
     }
 
@@ -83,5 +83,27 @@ impl UtxosStorageWrite for UtxosDBInMemoryImpl {
     fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), Error> {
         self.undo_store.remove(&id);
         Ok(())
+    }
+}
+
+impl UtxosView for UtxosDBInMemoryImpl {
+    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
+        self.store.get(outpoint).cloned()
+    }
+
+    fn has_utxo(&self, outpoint: &OutPoint) -> bool {
+        self.store.get(outpoint).is_some()
+    }
+
+    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
+        Some(self.best_block_id)
+    }
+
+    fn estimated_size(&self) -> Option<usize> {
+        None
+    }
+
+    fn derive_cache(&self) -> crate::UtxosCache {
+        UtxosCache::new(self)
     }
 }
