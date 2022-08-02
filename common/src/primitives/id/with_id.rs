@@ -35,7 +35,7 @@ impl<T: Idable> WithId<T> {
         &this.object
     }
 
-    /// Get the pre-calucated object ID
+    /// Get the pre-calculated object ID
     pub fn id(this: &Self) -> Id<T::Tag> {
         this.id
     }

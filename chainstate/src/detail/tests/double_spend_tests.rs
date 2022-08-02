@@ -220,6 +220,153 @@ fn spend_bigger_output_in_the_same_block(#[case] seed: Seed) {
     });
 }
 
+// Try to use the transaction input twice in one block.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+
+        let input = TxInput::new(first_tx.get_id().into(), 0, InputWitness::NoSignature(None));
+        let second_tx = TransactionBuilder::new()
+            .add_input(input.clone())
+            .add_input(input)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+        let second_tx_id = second_tx.get_id();
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::DuplicateInputInTransaction(second_tx_id, block_id)
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+// Try to use the transaction input twice with different signatures in one block.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |input = tx1        | |
+// | |input = tx1        | |
+// | +-------------------+ |
+// +-----------------------+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let mut rng = make_seedable_rng(seed);
+        let tx1_output_value = rng.gen_range(100_000..200_000);
+        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, tx1_output_value);
+
+        let input1 = TxInput::new(
+            first_tx.get_id().into(),
+            0,
+            InputWitness::NoSignature(Some(vec![0, 1, 2])),
+        );
+        let input2 = TxInput::new(
+            first_tx.get_id().into(),
+            0,
+            InputWitness::NoSignature(Some(vec![0, 1, 2, 3])),
+        );
+        let second_tx = TransactionBuilder::new()
+            .add_input(input1)
+            .add_input(input2)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                OutputPurpose::Transfer(anyonecanspend_address()),
+            ))
+            .build();
+        let second_tx_id = second_tx.get_id();
+
+        let block = tf.make_block_builder().with_transactions(vec![first_tx, second_tx]).build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::DuplicateInputInTransaction(second_tx_id, block_id)
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
+// Try to use the transaction twice in one block.
+//
+// +--Block----------------+
+// |                       |
+// | +-------tx-1--------+ |
+// | |input = prev_block | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |                   | |
+// | +-------------------+ |
+// |                       |
+// | +-------tx-2--------+ |
+// | |                   | |
+// | +-------------------+ |
+// +-----------------------+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn duplicate_tx_in_the_same_block(#[case] seed: Seed) {
+    common::concurrency::model(move || {
+        let mut tf = TestFramework::default();
+
+        let mut rng = make_seedable_rng(seed);
+        let first_tx = tx_from_genesis(tf.genesis(), &mut rng, 1);
+
+        let second_tx = TransactionBuilder::new().build();
+        let second_tx_id = second_tx.get_id();
+
+        let block = tf
+            .make_block_builder()
+            .with_transactions(vec![first_tx, second_tx.clone(), second_tx])
+            .build();
+        let block_id = block.get_id();
+        assert_eq!(
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
+            BlockError::CheckBlockFailed(CheckBlockError::CheckTransactionFailed(
+                CheckBlockTransactionsError::DuplicatedTransactionInBlock(second_tx_id, block_id)
+            ))
+        );
+        assert_eq!(tf.best_block_id(), tf.genesis().get_id());
+    });
+}
+
 // Creates a transaction with an input based on the first transaction from the genesis block.
 fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) -> Transaction {
     TransactionBuilder::new()
