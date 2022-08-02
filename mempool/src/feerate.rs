@@ -35,9 +35,11 @@ impl FeeRate {
         self.atoms_per_kb
     }
 
-    fn div_up(fee: u128, tx_size: usize) -> u128 {
-        let tx_size = u128::try_from(tx_size).expect("div_up conversion");
-        (fee + tx_size - 1) / tx_size
+    // TODO Use NonZeroUsize for divisor
+    fn div_up(dividend: u128, divisor: usize) -> u128 {
+        debug_assert!(divisor != 0);
+        let divisor = u128::try_from(divisor).expect("div_up conversion");
+        (dividend + divisor - 1) / divisor
     }
 }
 
