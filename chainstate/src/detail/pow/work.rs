@@ -76,7 +76,7 @@ fn calculate_work_required<H: BlockIndexHandle>(
                 .prev_block_id()
                 .classify(chain_config)
                 .chain_block_id()
-                .expect("If PoWStatus is `Onging` then we cannot be at genesis");
+                .expect("If PoWStatus is `Ongoing` then we cannot be at genesis");
 
             let prev_block_index = match block_index_handle.get_block_index(&prev_block_id) {
                 Ok(id) => id,
@@ -230,66 +230,50 @@ mod tests {
     use crate::detail::pow::work::check_proof_of_work;
     use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
+    use rstest::rstest;
     use std::str::FromStr;
 
     //TODO: add `CalculateNextWorkRequired` test cases from Bitcoin
 
-    #[test]
-    fn proof_of_work_ok_test() {
-        fn test(bits: u32, hash: &str) {
-            let hash = H256::from_str(hash).expect("should not fail");
-            let bits = Compact(bits);
-
-            let res = check_proof_of_work(hash, bits).expect("should not fail");
-            assert!(res);
-        }
-
-        // block 722731
-        test(
-            386_567_092,
-            "000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c",
-        );
-        // block 721311
-        test(
-            386_568_320,
-            "0000000000000000000838523baafc5f5904e472de7ffba2a431b53179a03eb3",
-        );
-        //block 2
-        test(
-            486_604_799,
-            "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
-        );
-
-        test(
-            0,
-            "0000000000000000000000000000000000000000000000000000000000000000",
-        );
+    #[rstest]
+    #[case(0, "0000000000000000000000000000000000000000000000000000000000000000")]
+    #[case(
+        386_567_092,
+        "000000000000000000059fa50103b9683e51e5aba83b8a34c9b98ce67d66136c"
+    )] // block 722731
+    #[case(
+        386_568_320,
+        "0000000000000000000838523baafc5f5904e472de7ffba2a431b53179a03eb3"
+    )] // block 721311
+    #[case(
+        486_604_799,
+        "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd"
+    )] // block 2
+    fn pow_ok(#[case] bits: u32, #[case] hash: H256) {
+        assert!(check_proof_of_work(hash, Compact(bits)).unwrap());
     }
 
     #[test]
-    fn proof_of_work_not_ok_test() {
+    fn hash_bigger_than_target() {
         let cfg = create_mainnet();
-        let pow_cfg = cfg.get_proof_of_work_config();
-        let pow_limit = pow_cfg.limit();
+        let pow_limit = cfg.get_proof_of_work_config().limit();
 
-        // bigger hash than target
-        {
-            let bits = Compact::from(pow_limit);
-            let hash = H256::from(pow_limit.mul_u32(2));
+        let bits = Compact::from(pow_limit);
+        let hash = H256::from(pow_limit.mul_u32(2));
 
-            let res = check_proof_of_work(hash, bits).expect("should not error out");
-            assert!(!res);
-        }
+        assert!(!check_proof_of_work(hash, bits).unwrap());
+    }
 
-        // too easy target
-        {
-            let bits = Compact::from(pow_limit.mul_u32(2));
-            let hash =
-                H256::from_str("1000000000000000000000000000000000000000000000000000000000000000")
-                    .expect("uh oh");
+    #[test]
+    fn too_easy_target() {
+        let cfg = create_mainnet();
+        let pow_limit = cfg.get_proof_of_work_config().limit();
 
-            let res = check_proof_of_work(hash, bits).expect("should not error out");
-            assert!(!res);
-        }
+        let bits = Compact::from(pow_limit.mul_u32(2));
+        let hash =
+            H256::from_str("1000000000000000000000000000000000000000000000000000000000000000")
+                .unwrap();
+
+        assert!(!check_proof_of_work(hash, bits).unwrap());
     }
 }

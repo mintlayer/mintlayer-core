@@ -21,7 +21,6 @@ anyhow = "1.0"
 clap = { version = "3.1", features = ["derive"] }
 jsonrpsee = { version = "0.14", features = ["macros"] }
 tokio = { version = "1.19", default-features = false }
-thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }
 toml = "0.5"
 directories = "4.0"

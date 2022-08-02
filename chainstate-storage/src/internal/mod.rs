@@ -54,7 +54,7 @@ mod well_known {
 
 storage::decl_schema! {
     // Database schema for blockchain storage
-    Schema {
+    pub(crate) Schema {
         // Storage for individual values.
         pub DBValue: Single,
         // Storage for blocks.
@@ -72,27 +72,26 @@ storage::decl_schema! {
     }
 }
 
-type StoreImpl = storage::Store<Schema>;
-type RoTxImpl<'tx> = <StoreImpl as traits::Transactional<'tx, Schema>>::TransactionRo;
-type RwTxImpl<'tx> = <StoreImpl as traits::Transactional<'tx, Schema>>::TransactionRw;
+type RoTxImpl<'tx, B> = <B as traits::Transactional<'tx, Schema>>::TransactionRo;
+type RwTxImpl<'tx, B> = <B as traits::Transactional<'tx, Schema>>::TransactionRw;
 
-/// Persistent store for blockchain data
+/// Store for blockchain data, parametrized over the backend B
 #[derive(Clone)]
-pub struct Store(StoreImpl);
+pub struct Store<B>(B);
 
 /// Store for blockchain data
-impl Store {
+impl<B: Default + for<'tx> traits::Transactional<'tx, Schema>> Store<B> {
     /// New empty storage
     pub fn new_empty() -> crate::Result<Self> {
-        let mut store = Self(storage::Store::default());
+        let mut store = Self(B::default());
         store.set_storage_version(1)?;
         Ok(store)
     }
 }
 
-impl<'tx> crate::Transactional<'tx> for Store {
-    type TransactionRo = StoreTx<RoTxImpl<'tx>>;
-    type TransactionRw = StoreTx<RwTxImpl<'tx>>;
+impl<'tx, B: traits::Transactional<'tx, Schema>> crate::Transactional<'tx> for Store<B> {
+    type TransactionRo = StoreTx<RoTxImpl<'tx, B>>;
+    type TransactionRw = StoreTx<RwTxImpl<'tx, B>>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> Self::TransactionRo {
         StoreTx(traits::Transactional::transaction_ro(&self.0))
@@ -103,7 +102,7 @@ impl<'tx> crate::Transactional<'tx> for Store {
     }
 }
 
-impl BlockchainStorage for Store {}
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorage for Store<B> {}
 
 macro_rules! delegate_to_transaction {
     ($(fn $f:ident $args:tt -> $ret:ty;)*) => {
@@ -130,7 +129,7 @@ macro_rules! delegate_to_transaction {
     };
 }
 
-impl BlockchainStorageRead for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -154,20 +153,20 @@ impl BlockchainStorageRead for Store {
     }
 }
 
-impl UtxoRead for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxoRead for Store<B> {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
     }
 }
 
-impl UndoRead for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UndoRead for Store<B> {
     delegate_to_transaction! {
         fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>>;
     }
 }
 
-impl BlockchainStorageWrite for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
@@ -193,7 +192,7 @@ impl BlockchainStorageWrite for Store {
     }
 }
 
-impl UtxoWrite for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxoWrite for Store<B> {
     delegate_to_transaction! {
         fn add_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
@@ -201,7 +200,7 @@ impl UtxoWrite for Store {
     }
 }
 
-impl UndoWrite for Store {
+impl<B: for<'tx> traits::Transactional<'tx, Schema>> UndoWrite for Store<B> {
     delegate_to_transaction! {
         fn add_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> crate::Result<()>;
         fn del_undo_data(&mut self, id: Id<Block>) -> crate::Result<()>;
@@ -417,10 +416,12 @@ pub(crate) mod test {
     use test_utils::random::{make_seedable_rng, Seed};
     use utxo::{BlockUndo, TxUndo};
 
+    type TestStore = Store<storage::inmemory::Store<Schema>>;
+
     #[test]
     fn test_storage_get_default_version_in_tx() {
         common::concurrency::model(|| {
-            let store = Store::new_empty().unwrap();
+            let store = TestStore::new_empty().unwrap();
             let vtx = store.transaction_ro().run(|tx| tx.get_storage_version()).unwrap();
             let vst = store.get_storage_version().unwrap();
             assert_eq!(vtx, 1, "Default storage version wrong");
@@ -458,7 +459,7 @@ pub(crate) mod test {
         .unwrap();
 
         // Set up the store
-        let mut store = Store::new_empty().unwrap();
+        let mut store = TestStore::new_empty().unwrap();
 
         // Storage version manipulation
         assert_eq!(store.get_storage_version(), Ok(1));
@@ -540,7 +541,7 @@ pub(crate) mod test {
     fn get_set_transactions() {
         common::concurrency::model(|| {
             // Set up the store and initialize the version to 2
-            let mut store = Store::new_empty().unwrap();
+            let mut store = TestStore::new_empty().unwrap();
             assert_eq!(store.set_storage_version(2), Ok(()));
 
             // Concurrently bump version and run a transactiomn that reads the version twice.
@@ -578,7 +579,7 @@ pub(crate) mod test {
     fn test_storage_transactions() {
         common::concurrency::model(|| {
             // Set up the store and initialize the version to 2
-            let mut store = Store::new_empty().unwrap();
+            let mut store = TestStore::new_empty().unwrap();
             assert_eq!(store.set_storage_version(2), Ok(()));
 
             // Concurrently bump version by 3 and 5 in two separate threads
@@ -615,7 +616,7 @@ pub(crate) mod test {
     fn test_storage_transactions_with_result_check() {
         common::concurrency::model(|| {
             // Set up the store and initialize the version to 2
-            let mut store = Store::new_empty().unwrap();
+            let mut store = TestStore::new_empty().unwrap();
             assert_eq!(store.set_storage_version(2), Ok(()));
 
             // Concurrently bump version by 3 and 5 in two separate threads
@@ -702,7 +703,7 @@ pub(crate) mod test {
         let id0: Id<Block> = Id::new(H256::random());
 
         // set up the store
-        let mut store = Store::new_empty().unwrap();
+        let mut store = TestStore::new_empty().unwrap();
 
         // store is empty, so no undo data should be found.
         assert_eq!(store.get_undo_data(id0), Ok(None));

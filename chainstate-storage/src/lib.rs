@@ -21,16 +21,18 @@ use common::chain::OutPoint;
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
-use storage::traits;
+use storage::{inmemory, traits};
 use utxo::{BlockUndo, Utxo};
 
+mod internal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
-mod store;
 mod utxo_db;
 
 pub use storage::transaction::{TransactionRo, TransactionRw};
-pub use store::Store;
+
+// Alias the in-memory store as the store used by other crates for now
+pub type Store = internal::Store<inmemory::Store<internal::Schema>>;
 
 /// Blockchain storage error
 #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Clone, Copy, thiserror::Error)]
@@ -56,7 +58,7 @@ pub trait BlockchainStorageRead {
     /// Get the hash of the best block
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
-    fn get_block_index(&self, block_index: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+    fn get_block_index(&self, block_id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;

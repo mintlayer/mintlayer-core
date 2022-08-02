@@ -67,7 +67,7 @@ async fn test_auto_connect_libp2p() {
     let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
+    let peer_id: PeerId = if let Some(Protocol::P2p(peer)) = addr.iter().last() {
         PeerId::from_multihash(peer).unwrap()
     } else {
         panic!("invalid multiaddr");
@@ -82,7 +82,7 @@ async fn test_auto_connect_libp2p() {
 
     // "discover" the other libp2p service
     swarm.peer_discovered(&[net::types::AddrInfo {
-        id,
+        peer_id,
         ip4: vec![],
         ip6: vec![addr],
     }]);
@@ -277,8 +277,10 @@ async fn inbound_connection_too_many_peers() {
     // add `MAX_ACTIVE_CONNECTIONS` peers so the next peer that joins is rejected
     for _ in 0..swarm::MAX_ACTIVE_CONNECTIONS {
         let peer_id = PeerId::random();
-        let info = swarm::peerdb::PeerContext {
-            _info: net::types::PeerInfo {
+
+        swarm1.peerdb.peer_connected(
+            Multiaddr::empty(),
+            net::types::PeerInfo {
                 peer_id,
                 magic_bytes: *config.magic_bytes(),
                 version: common::primitives::semver::SemVer::new(0, 1, 0),
@@ -292,12 +294,12 @@ async fn inbound_connection_too_many_peers() {
                     "/mintlayer/sync/0.1.0".to_string(),
                 ],
             },
-            score: 0,
-        };
-
-        swarm1.peers.insert(peer_id, info);
+        );
     }
-    assert_eq!(swarm1.peers.len(), swarm::MAX_ACTIVE_CONNECTIONS);
+    assert_eq!(
+        swarm1.peerdb.active_peer_count(),
+        swarm::MAX_ACTIVE_CONNECTIONS
+    );
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let (_conn1_res, conn2_res) =

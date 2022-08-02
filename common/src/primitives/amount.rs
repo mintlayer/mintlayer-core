@@ -115,7 +115,7 @@ impl Amount {
 
             amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
         } else {
-            // if there's 1 decomal point, split, join the numbers, then add zeros to the right
+            // if there's 1 decimal point, split, join the numbers, then add zeros to the right
             let amount_split = amount_str.split('.').collect::<Vec<&str>>();
             debug_assert!(amount_split.len() == 2); // we already checked we have 1 decimal exactly
             if amount_split[1].len() > decimals {

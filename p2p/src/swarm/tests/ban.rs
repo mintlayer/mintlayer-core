@@ -139,20 +139,23 @@ async fn validate_invalid_outbound_connection() {
     // valid connection
     let peer_id = libp2p::PeerId::random();
     let res = swarm
-        .accept_connection(net::types::PeerInfo::<Libp2pService> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: vec![
-                "/meshsub/1.1.0".to_string(),
-                "/meshsub/1.0.0".to_string(),
-                "/ipfs/ping/1.0.0".to_string(),
-                "/ipfs/id/1.0.0".to_string(),
-                "/ipfs/id/push/1.0.0".to_string(),
-                "/mintlayer/sync/0.1.0".to_string(),
-            ],
-        })
+        .accept_connection(
+            Multiaddr::empty(),
+            net::types::PeerInfo::<Libp2pService> {
+                peer_id,
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: vec![
+                    "/meshsub/1.1.0".to_string(),
+                    "/meshsub/1.0.0".to_string(),
+                    "/ipfs/ping/1.0.0".to_string(),
+                    "/ipfs/id/1.0.0".to_string(),
+                    "/ipfs/id/push/1.0.0".to_string(),
+                    "/mintlayer/sync/0.1.0".to_string(),
+                ],
+            },
+        )
         .await;
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(!swarm.peerdb.is_id_banned(&peer_id));
@@ -160,20 +163,23 @@ async fn validate_invalid_outbound_connection() {
     // invalid magic bytes
     let peer_id = libp2p::PeerId::random();
     let res = swarm
-        .accept_connection(net::types::PeerInfo::<Libp2pService> {
-            peer_id,
-            magic_bytes: [1, 2, 3, 4],
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: vec![
-                "/meshsub/1.1.0".to_string(),
-                "/meshsub/1.0.0".to_string(),
-                "/ipfs/ping/1.0.0".to_string(),
-                "/ipfs/id/1.0.0".to_string(),
-                "/ipfs/id/push/1.0.0".to_string(),
-                "/mintlayer/sync/0.1.0".to_string(),
-            ],
-        })
+        .accept_connection(
+            Multiaddr::empty(),
+            net::types::PeerInfo::<Libp2pService> {
+                peer_id,
+                magic_bytes: [1, 2, 3, 4],
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: vec![
+                    "/meshsub/1.1.0".to_string(),
+                    "/meshsub/1.0.0".to_string(),
+                    "/ipfs/ping/1.0.0".to_string(),
+                    "/ipfs/id/1.0.0".to_string(),
+                    "/ipfs/id/push/1.0.0".to_string(),
+                    "/mintlayer/sync/0.1.0".to_string(),
+                ],
+            },
+        )
         .await;
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
@@ -181,20 +187,23 @@ async fn validate_invalid_outbound_connection() {
     // invalid version
     let peer_id = libp2p::PeerId::random();
     let res = swarm
-        .accept_connection(net::types::PeerInfo::<Libp2pService> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(1, 1, 1),
-            agent: None,
-            protocols: vec![
-                "/meshsub/1.1.0".to_string(),
-                "/meshsub/1.0.0".to_string(),
-                "/ipfs/ping/1.0.0".to_string(),
-                "/ipfs/id/1.0.0".to_string(),
-                "/ipfs/id/push/1.0.0".to_string(),
-                "/mintlayer/sync/0.1.0".to_string(),
-            ],
-        })
+        .accept_connection(
+            Multiaddr::empty(),
+            net::types::PeerInfo::<Libp2pService> {
+                peer_id,
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(1, 1, 1),
+                agent: None,
+                protocols: vec![
+                    "/meshsub/1.1.0".to_string(),
+                    "/meshsub/1.0.0".to_string(),
+                    "/ipfs/ping/1.0.0".to_string(),
+                    "/ipfs/id/1.0.0".to_string(),
+                    "/ipfs/id/push/1.0.0".to_string(),
+                    "/mintlayer/sync/0.1.0".to_string(),
+                ],
+            },
+        )
         .await;
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));
@@ -202,19 +211,22 @@ async fn validate_invalid_outbound_connection() {
     // protocol missing
     let peer_id = libp2p::PeerId::random();
     let res = swarm
-        .accept_connection(net::types::PeerInfo::<Libp2pService> {
-            peer_id,
-            magic_bytes: *config.magic_bytes(),
-            version: common::primitives::semver::SemVer::new(0, 1, 0),
-            agent: None,
-            protocols: vec![
-                "/meshsub/1.1.0".to_string(),
-                "/meshsub/1.0.0".to_string(),
-                "/ipfs/ping/1.0.0".to_string(),
-                "/ipfs/id/push/1.0.0".to_string(),
-                "/mintlayer/sync/0.1.0".to_string(),
-            ],
-        })
+        .accept_connection(
+            Multiaddr::empty(),
+            net::types::PeerInfo::<Libp2pService> {
+                peer_id,
+                magic_bytes: *config.magic_bytes(),
+                version: common::primitives::semver::SemVer::new(0, 1, 0),
+                agent: None,
+                protocols: vec![
+                    "/meshsub/1.1.0".to_string(),
+                    "/meshsub/1.0.0".to_string(),
+                    "/ipfs/ping/1.0.0".to_string(),
+                    "/ipfs/id/push/1.0.0".to_string(),
+                    "/mintlayer/sync/0.1.0".to_string(),
+                ],
+            },
+        )
         .await;
     assert_eq!(swarm.handle_result(Some(peer_id), res).await, Ok(()));
     assert!(swarm.peerdb.is_id_banned(&peer_id));

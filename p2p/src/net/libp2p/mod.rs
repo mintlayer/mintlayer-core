@@ -136,13 +136,13 @@ where
 {
     fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
         let mut entry = net::types::AddrInfo {
-            id: PeerId::random(),
+            peer_id: PeerId::random(),
             ip4: Vec::new(),
             ip6: Vec::new(),
         };
 
         iter.into_iter().for_each(|(id, addr)| {
-            entry.id = id;
+            entry.peer_id = id;
             match get_addr_from_multiaddr(&addr) {
                 Some(Protocol::Ip4(_)) => entry.ip4.push(addr),
                 Some(Protocol::Ip6(_)) => entry.ip6.push(addr),
@@ -152,7 +152,7 @@ where
 
         log::trace!(
             "id {:?}, ipv4 {:#?}, ipv6 {:#?}",
-            entry.id,
+            entry.peer_id,
             entry.ip4,
             entry.ip6
         );

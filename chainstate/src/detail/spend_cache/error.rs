@@ -39,7 +39,7 @@ pub enum StateUpdateError {
     PreviouslyCachedInputNotFound,
     #[error("Input was cached, but it is erased")]
     PreviouslyCachedInputWasErased,
-    #[error("Block disconnect already-unspent (invaraint broken)")]
+    #[error("Block disconnect already-unspent (invariant broken)")]
     InvariantBrokenAlreadyUnspent,
     #[error("Source block index for block reward output not found")]
     InvariantBrokenSourceBlockIndexNotFound,

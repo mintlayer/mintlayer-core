@@ -15,13 +15,14 @@
 //
 // Author(s): A. Sinitsyn
 
-use super::{anyonecanspend_address, setup_chainstate};
+use super::anyonecanspend_address;
+use crate::detail::tests::test_framework::TestFramework;
 use crate::{
     detail::{
         spend_cache::error::StateUpdateError, tests::TestBlockInfo, CheckBlockError,
         CheckBlockTransactionsError, TokensError,
     },
-    BlockError, BlockSource, Chainstate,
+    BlockError, BlockSource,
 };
 use chainstate_types::block_index::BlockIndex;
 use common::{
@@ -41,25 +42,25 @@ enum ParentBlock {
 }
 
 fn process_token(
-    chainstate: &mut Chainstate,
+    test_framework: &mut TestFramework,
     parent_block: ParentBlock,
     values: Vec<OutputValue>,
 ) -> Result<Option<BlockIndex>, BlockError> {
-    process_token_ex(chainstate, vec![], parent_block, values).map(|(_block_id, result)| result)
+    process_token_ex(test_framework, vec![], parent_block, values).map(|(_block_id, result)| result)
 }
 
 fn process_token_ex(
-    chainstate: &mut Chainstate,
+    test_framework: &mut TestFramework,
     additional_inputs: Vec<TxInput>,
     parent_block: ParentBlock,
     values: Vec<OutputValue>,
 ) -> Result<(Block, Option<BlockIndex>), BlockError> {
     let receiver = anyonecanspend_address();
     let parent_block_id = match parent_block {
-        ParentBlock::BestBlock => chainstate.get_best_block_id().unwrap(),
+        ParentBlock::BestBlock => test_framework.best_block_id(),
         ParentBlock::BlockId(block_id) => block_id,
     };
-    let test_block_info = TestBlockInfo::from_id(chainstate, parent_block_id);
+    let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
 
     // Create a token issue transaction and block
     let mut inputs: Vec<TxInput> = test_block_info
@@ -96,7 +97,7 @@ fn process_token_ex(
     .unwrap();
 
     // Process it
-    chainstate
+    test_framework
         .process_block(block.clone(), BlockSource::Local)
         .map(|result| (block, result))
 }
@@ -105,17 +106,20 @@ fn process_token_ex(
 fn token_issue_test() {
     common::concurrency::model(|| {
         // Process token without errors
-        let mut chainstate = setup_chainstate();
+
+        let mut test_framework = TestFramework::default();
+        // let mut chainstate = setup_chainstate();
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
-            .unwrap()
-            .unwrap();
-        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
+        let block_index =
+            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+                .unwrap()
+                .unwrap();
+        let block = test_framework.block(*block_index.block_id());
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Ticker is too long
@@ -126,7 +130,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -144,7 +148,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -162,7 +166,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -180,7 +184,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -198,7 +202,7 @@ fn token_issue_test() {
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -216,7 +220,7 @@ fn token_issue_test() {
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -231,7 +235,7 @@ fn token_issue_test() {
 #[test]
 fn token_transfer_test() {
     common::concurrency::model(|| {
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
         // Issue a new token
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -239,10 +243,11 @@ fn token_transfer_test() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
-            .unwrap()
-            .unwrap();
-        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
+        let block_index =
+            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+                .unwrap()
+                .unwrap();
+        let block = test_framework.block(*block_index.block_id());
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
@@ -251,7 +256,9 @@ fn token_transfer_test() {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Try to transfer exceed amount
         let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
@@ -259,7 +266,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(987654321),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
@@ -271,7 +278,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
@@ -283,7 +290,7 @@ fn token_transfer_test() {
             amount: Amount::from_atoms(0),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(TokensError::TransferZeroTokens(
@@ -299,9 +306,9 @@ fn token_transfer_test() {
 #[test]
 fn couple_of_token_issuance_in_one_tx() {
     common::concurrency::model(|| {
-        let mut chainstate = setup_chainstate();
-        let parent_block_id = chainstate.get_best_block_id().unwrap();
-        let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
+        let mut test_framework = TestFramework::default();
+        let parent_block_id = test_framework.best_block_id();
+        let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
         let receiver = anyonecanspend_address();
         let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -329,7 +336,7 @@ fn couple_of_token_issuance_in_one_tx() {
 
         // Process it
         assert!(matches!(
-            chainstate.process_block(block, BlockSource::Local),
+            test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::CheckBlockFailed(
                 CheckBlockError::CheckTransactionFailed(
                     CheckBlockTransactionsError::CheckTokensError(
@@ -344,10 +351,10 @@ fn couple_of_token_issuance_in_one_tx() {
 #[test]
 fn token_issuance_with_insufficient_fee() {
     common::concurrency::model(|| {
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
 
-        let parent_block_id = chainstate.get_best_block_id().unwrap();
-        let test_block_info = TestBlockInfo::from_id(&chainstate, parent_block_id);
+        let parent_block_id = test_framework.best_block_id();
+        let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
 
         let receiver = anyonecanspend_address();
         let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
@@ -385,7 +392,7 @@ fn token_issuance_with_insufficient_fee() {
 
         // Process it
         assert!(matches!(
-            chainstate.process_block(block, BlockSource::Local),
+            test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenFees(_, _))
             ))
@@ -399,17 +406,18 @@ fn transfer_tokens() {
         const TOTAL_TOKEN_VALUE: Amount = Amount::from_atoms(52292852472);
 
         // Process token without errors
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
             amount_to_issue: TOTAL_TOKEN_VALUE,
             number_of_decimals: 1,
             metadata_uri: b"https://52292852472.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
-            .unwrap()
-            .unwrap();
-        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
+        let block_index =
+            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+                .unwrap()
+                .unwrap();
+        let block = test_framework.block(*block_index.block_id());
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
         let token_id = token_id(&block.transactions()[0]).unwrap();
 
@@ -424,14 +432,18 @@ fn transfer_tokens() {
                 amount: Amount::from_atoms(123456),
             }),
         ];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Collect these in one output
         let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: TOTAL_TOKEN_VALUE,
         })];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
     })
 }
 
@@ -441,7 +453,7 @@ fn test_burn_tokens() {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(123456788);
         const HALF_ISSUED_FUNDS: Amount = Amount::from_atoms(61728394);
 
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
         // Issue a new token
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"USDC".to_vec(),
@@ -449,10 +461,11 @@ fn test_burn_tokens() {
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
         })];
-        let block_index = process_token(&mut chainstate, ParentBlock::BestBlock, values.clone())
-            .unwrap()
-            .unwrap();
-        let block = chainstate.get_block(*block_index.block_id()).unwrap().unwrap();
+        let block_index =
+            process_token(&mut test_framework, ParentBlock::BestBlock, values.clone())
+                .unwrap()
+                .unwrap();
+        let block = test_framework.block(*block_index.block_id());
         assert_eq!(block.transactions()[0].outputs()[0].value(), &values[0]);
 
         // Transfer it
@@ -461,7 +474,9 @@ fn test_burn_tokens() {
             token_id,
             amount: ISSUED_FUNDS,
         })];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Try burn more than we have in input
         let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
@@ -469,7 +484,7 @@ fn test_burn_tokens() {
             amount_to_burn: (ISSUED_FUNDS * 2).unwrap(),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))
@@ -481,7 +496,7 @@ fn test_burn_tokens() {
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::SomeTokensLost(_, _))
             ))
@@ -498,14 +513,18 @@ fn test_burn_tokens() {
                 amount: HALF_ISSUED_FUNDS,
             }),
         ];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Try to burn it all
         let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Try to transfer burned tokens
         let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
@@ -513,7 +532,7 @@ fn test_burn_tokens() {
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
@@ -539,7 +558,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(1_000_000);
 
         // Issue a new token
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
         let values = vec![
             OutputValue::Token(TokenData::TokenIssuanceV1 {
                 token_ticker: b"USDC".to_vec(),
@@ -550,7 +569,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123456)),
         ];
         let (block_a, _) = process_token_ex(
-            &mut chainstate,
+            &mut test_framework,
             vec![],
             ParentBlock::BestBlock,
             values.clone(),
@@ -568,8 +587,8 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123455)),
         ];
         let (block_b1, _) =
-            process_token_ex(&mut chainstate, vec![], ParentBlock::BestBlock, values).unwrap();
-        let _block_b1 = chainstate.get_block(block_b1.get_id()).unwrap().unwrap();
+            process_token_ex(&mut test_framework, vec![], ParentBlock::BestBlock, values).unwrap();
+        let _block_b1 = test_framework.block(block_b1.get_id());
 
         let spent_input = TxInput::new(
             OutPointSourceId::from(block_b1.transactions()[0].get_id()),
@@ -586,7 +605,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123454)),
         ];
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
@@ -594,9 +613,13 @@ fn test_reorg_and_try_to_double_spend_tokens() {
 
         // Let's add C1 and D1
         let values = vec![OutputValue::Coin(Amount::from_atoms(123453))];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
         let values = vec![OutputValue::Coin(Amount::from_atoms(123452))];
-        let _ = process_token(&mut chainstate, ParentBlock::BestBlock, values).unwrap().unwrap();
+        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+            .unwrap()
+            .unwrap();
 
         // Second chain - B2
         let values = vec![
@@ -607,7 +630,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123454)),
         ];
         let (block_b2, block_index) = process_token_ex(
-            &mut chainstate,
+            &mut test_framework,
             vec![],
             ParentBlock::BlockId(Id::<GenBlock>::from(block_a.get_id())),
             values,
@@ -624,7 +647,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123453)),
         ];
         let (block_c2, block_index) = process_token_ex(
-            &mut chainstate,
+            &mut test_framework,
             vec![],
             ParentBlock::BlockId(Id::<GenBlock>::from(block_b2.get_id())),
             values,
@@ -641,7 +664,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
             OutputValue::Coin(Amount::from_atoms(123454)),
         ];
         let (block_d2, block_index) = process_token_ex(
-            &mut chainstate,
+            &mut test_framework,
             vec![spent_input],
             ParentBlock::BlockId(Id::<GenBlock>::from(block_c2.get_id())),
             values,
@@ -653,7 +676,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         let values = vec![OutputValue::Coin(Amount::from_atoms(123453))];
         assert!(matches!(
             process_token_ex(
-                &mut chainstate,
+                &mut test_framework,
                 vec![],
                 ParentBlock::BlockId(Id::<GenBlock>::from(block_d2.get_id())),
                 values
@@ -671,7 +694,7 @@ fn test_attempt_to_print_tokens() {
         const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
 
         // Issue a new token
-        let mut chainstate = setup_chainstate();
+        let mut test_framework = TestFramework::default();
         let values = vec![
             OutputValue::Token(TokenData::TokenIssuanceV1 {
                 token_ticker: b"USDC".to_vec(),
@@ -682,7 +705,7 @@ fn test_attempt_to_print_tokens() {
             OutputValue::Coin(Amount::from_atoms(123456)),
         ];
         let (block_a, _) = process_token_ex(
-            &mut chainstate,
+            &mut test_framework,
             vec![],
             ParentBlock::BestBlock,
             values.clone(),
@@ -705,7 +728,7 @@ fn test_attempt_to_print_tokens() {
         ];
 
         assert!(matches!(
-            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
             ))

@@ -15,23 +15,26 @@
 
 #![allow(dead_code)]
 
-use crate::{Error, Store, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
+use crate::{internal::Store, Error, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::Id;
 use utxo::{utxo_storage::UtxosPersistentStorage, BlockUndo, Utxo};
 
 #[derive(Clone)]
-pub struct UtxoDBImpl {
-    store: Store,
+pub struct UtxoDBImpl<B> {
+    store: Store<B>,
 }
 
-impl UtxoDBImpl {
-    pub fn new(store: Store) -> Self {
+impl<B> UtxoDBImpl<B> {
+    pub fn new(store: Store<B>) -> Self {
         Self { store }
     }
 }
 
-impl UtxosPersistentStorage for UtxoDBImpl {
+impl<B> UtxosPersistentStorage for UtxoDBImpl<B>
+where
+    B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
+{
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), utxo::Error> {
         self.store.add_utxo(outpoint, entry).map_err(|e| e.into())
     }
@@ -70,7 +73,7 @@ impl From<Error> for utxo::Error {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::store::test::create_rand_block_undo;
+    use crate::internal::test::create_rand_block_undo;
     use common::chain::{
         tokens::OutputValue, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput,
     };
@@ -103,7 +106,7 @@ mod test {
     #[case(Seed::from_entropy())]
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let store = Store::new_empty().expect("should create a store");
+        let store = crate::Store::new_empty().expect("should create a store");
         let mut db_interface = UtxoDBImpl::new(store);
 
         // utxo checking

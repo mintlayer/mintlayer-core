@@ -17,8 +17,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::detail::tests::*;
-use chainstate_storage::Store;
+use crate::detail::tests::{test_framework::TestFramework, *};
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -29,17 +28,14 @@ type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 fn simple_subscribe(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut chainstate = setup_chainstate();
-        let events = subscribe(&mut chainstate, 1);
+        let mut tf = TestFramework::default();
+        let events = subscribe(&mut tf.chainstate, 1);
 
         // Produce and process a block.
-        let first_block = produce_test_block(
-            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
-            &mut rng,
-        );
-        assert!(!chainstate.events_controller.subscribers().is_empty());
-        chainstate.process_block(first_block.clone(), BlockSource::Local).unwrap();
-        chainstate.wait_for_all_events();
+        let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        tf.process_block(first_block.clone(), BlockSource::Local).unwrap();
+        tf.chainstate.wait_for_all_events();
 
         // Check the event.
         {
@@ -51,9 +47,9 @@ fn simple_subscribe(#[case] seed: Seed) {
         }
 
         // Process one more block.
-        let second_block = produce_test_block(TestBlockInfo::from_block(&first_block), &mut rng);
-        chainstate.process_block(second_block.clone(), BlockSource::Local).unwrap();
-        chainstate.wait_for_all_events();
+        let second_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+        tf.process_block(second_block.clone(), BlockSource::Local).unwrap();
+        tf.chainstate.wait_for_all_events();
 
         let guard = events.lock().unwrap();
         assert_eq!(guard.len(), 2);
@@ -73,19 +69,16 @@ fn simple_subscribe(#[case] seed: Seed) {
 fn several_subscribers(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut chainstate = setup_chainstate();
+        let mut tf = TestFramework::default();
 
         let subscribers = rng.gen_range(8..256);
-        let events = subscribe(&mut chainstate, subscribers);
+        let events = subscribe(&mut tf.chainstate, subscribers);
 
-        let block = produce_test_block(
-            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
-            &mut rng,
-        );
+        let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
 
-        assert!(!chainstate.events_controller.subscribers().is_empty());
-        chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-        chainstate.wait_for_all_events();
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
+        tf.process_block(block.clone(), BlockSource::Local).unwrap();
+        tf.chainstate.wait_for_all_events();
 
         let guard = events.lock().unwrap();
         assert_eq!(guard.len(), subscribers);
@@ -102,24 +95,18 @@ fn several_subscribers(#[case] seed: Seed) {
 fn several_subscribers_several_events(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let mut chainstate = setup_chainstate();
+        let mut tf = TestFramework::default();
 
         let subscribers = rng.gen_range(4..16);
         let blocks = rng.gen_range(8..128);
 
-        let events = subscribe(&mut chainstate, subscribers);
-        assert!(!chainstate.events_controller.subscribers().is_empty());
+        let events = subscribe(&mut tf.chainstate, subscribers);
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
-        let mut block_info = TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block());
         for _ in 0..blocks {
-            let block = produce_test_block(block_info, &mut rng);
-            block_info = TestBlockInfo::from_block(&block);
-            let index = chainstate
-                .process_block(block.clone(), BlockSource::Local)
-                .ok()
-                .flatten()
-                .unwrap();
-            chainstate.wait_for_all_events();
+            let block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+            let index = tf.process_block(block.clone(), BlockSource::Local).ok().flatten().unwrap();
+            tf.chainstate.wait_for_all_events();
 
             let guard = events.lock().unwrap();
             let (id, height) = guard.last().unwrap();
@@ -131,37 +118,21 @@ fn several_subscribers_several_events(#[case] seed: Seed) {
 }
 
 // An orphan block is rejected during processing, so it shouldn't trigger the new tip event.
-#[rstest]
-#[trace]
-#[case(Seed::from_entropy())]
-fn orphan_block(#[case] seed: Seed) {
+#[test]
+fn orphan_block() {
     common::concurrency::model(move || {
-        let mut rng = make_seedable_rng(seed);
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            Some(orphan_error_hook),
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
-        let events = subscribe(&mut chainstate, 1);
-        assert!(!chainstate.events_controller.subscribers().is_empty());
+        let events = subscribe(&mut tf.chainstate, 1);
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
-        let block = produce_test_block(
-            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()).orphan(),
-            &mut rng,
-        );
+        let block = tf.make_block_builder().make_orphan().build();
         assert_eq!(
-            chainstate.process_block(block, BlockSource::Local).unwrap_err(),
+            tf.process_block(block, BlockSource::Local).unwrap_err(),
             BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
         );
-        chainstate.wait_for_all_events();
+        tf.chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
         assert!(errors.lock().unwrap().is_empty());
     });
@@ -173,49 +144,34 @@ fn orphan_block(#[case] seed: Seed) {
 fn custom_orphan_error_hook(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut rng = make_seedable_rng(seed);
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
         let (orphan_error_hook, errors) = orphan_error_hook();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            Some(orphan_error_hook),
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::builder().with_orphan_error_hook(orphan_error_hook).build();
 
-        let events = subscribe(&mut chainstate, 1);
-        assert!(!chainstate.events_controller.subscribers().is_empty());
+        let events = subscribe(&mut tf.chainstate, 1);
+        assert!(!tf.chainstate.events_controller.subscribers().is_empty());
 
-        let first_block = produce_test_block(
-            TestBlockInfo::from_genesis(chainstate.chain_config.genesis_block()),
-            &mut rng,
-        );
+        let first_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
         // Produce a block with a bad timestamp.
-        let timestamp = chainstate.chain_config.genesis_block().timestamp().as_int_seconds()
-            + chainstate.chain_config.max_future_block_time_offset().as_secs();
-        let second_block = Block::new(
-            vec![],
-            first_block.get_id().into(),
-            BlockTimestamp::from_int_seconds(timestamp),
-            ConsensusData::None,
-        )
-        .expect(ERR_CREATE_BLOCK_FAIL);
+        let timestamp = tf.genesis().timestamp().as_int_seconds()
+            + tf.chainstate.chain_config.max_future_block_time_offset().as_secs();
+        let second_block = tf
+            .make_block_builder()
+            .with_parent(first_block.get_id().into())
+            .with_timestamp(BlockTimestamp::from_int_seconds(timestamp))
+            .build();
 
         // The second block isn't processed because its parent isn't known.
         assert_eq!(
-            chainstate.process_block(second_block, BlockSource::Local).unwrap_err(),
+            tf.process_block(second_block, BlockSource::Local).unwrap_err(),
             BlockError::OrphanCheckFailed(OrphanCheckError::LocalOrphan)
         );
-        chainstate.wait_for_all_events();
+        tf.chainstate.wait_for_all_events();
         assert!(events.lock().unwrap().is_empty());
         assert!(errors.lock().unwrap().is_empty());
 
         // Processing the first block should trigger the custom orphan error hook.
-        chainstate.process_block(first_block, BlockSource::Local).unwrap();
-        chainstate.wait_for_all_events();
+        tf.process_block(first_block, BlockSource::Local).unwrap();
+        tf.chainstate.wait_for_all_events();
         assert_eq!(events.lock().unwrap().len(), 1);
         let guard = errors.lock().unwrap();
         assert_eq!(guard.len(), 1);

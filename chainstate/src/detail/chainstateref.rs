@@ -446,17 +446,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         for tx in block.transactions() {
             let mut tx_inputs = BTreeSet::new();
             for input in tx.inputs() {
-                if !block_inputs.insert(input.outpoint()) {
-                    return Err(CheckBlockTransactionsError::DuplicateInputInBlock(
-                        block.get_id(),
-                    ));
-                }
-                if !tx_inputs.insert(input.outpoint()) {
-                    return Err(CheckBlockTransactionsError::DuplicateInputInTransaction(
+                ensure!(
+                    tx_inputs.insert(input.outpoint()),
+                    CheckBlockTransactionsError::DuplicateInputInTransaction(
                         tx.get_id(),
-                        block.get_id(),
-                    ));
-                }
+                        block.get_id()
+                    )
+                );
+                ensure!(
+                    block_inputs.insert(input.outpoint()),
+                    CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
+                );
             }
         }
         Ok(())
@@ -709,7 +709,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .chain_block_id()
             .expect("Cannot disconnect genesis");
 
-        // Optionally, we can double-check that the tip is what we're discconnecting
+        // Optionally, we can double-check that the tip is what we're disconnecting
         if let Some(expected_tip_block_id) = expected_tip_block_id {
             debug_assert_eq!(expected_tip_block_id, &best_block_id);
         }

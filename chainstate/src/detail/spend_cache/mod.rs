@@ -220,7 +220,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     }
 
     // Get TokenId and Amount in input
-    fn filter_transfered_and_issued_amounts(
+    fn filter_transferred_and_issued_amounts(
         &self,
         prev_tx: &Transaction,
         output: &common::chain::TxOutput,
@@ -242,14 +242,14 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     token_id: _,
                     amount_to_burn: _,
                 } => {
-                    /* Token have burned and can't be transfered */
+                    /* Token have burned and can't be transferred */
                     return None;
                 }
             }),
         }
     }
 
-    pub fn calculate_transfered_and_burn_tokens(
+    pub fn calculate_transfered_and_burned_tokens(
         outputs: &[TxOutput],
     ) -> Result<TokensMap, TokensError> {
         let mut total_tokens: TokensMap = BTreeMap::new();
@@ -313,7 +313,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         },
                     )?;
 
-                    match self.filter_transfered_and_issued_amounts(&tx, output) {
+                    match self.filter_transferred_and_issued_amounts(&tx, output) {
                         Some((token_id, amount)) => {
                             total_tokens.insert(
                                 token_id,
@@ -694,7 +694,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
         // Is token exist in outputs?
-        let total_output_tokens = Self::calculate_transfered_and_burn_tokens(tx.outputs())?;
+        let total_output_tokens = Self::calculate_transfered_and_burned_tokens(tx.outputs())?;
         let output_amount = total_output_tokens
             .get(token_id)
             .ok_or_else(|| TokensError::SomeTokensLost(tx.get_id(), block_id))?;
@@ -735,11 +735,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 OutputValue::Coin(_) => None,
                 OutputValue::Token(asset) => match asset {
                     TokenData::TokenTransferV1 { token_id, amount } => {
-                        if token_id == burn_token_id {
-                            Some(amount)
-                        } else {
-                            None
-                        }
+                        (token_id == burn_token_id).then_some(amount)
                     }
                     TokenData::TokenIssuanceV1 {
                         token_ticker: _,

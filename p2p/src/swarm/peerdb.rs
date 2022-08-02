@@ -30,86 +30,126 @@
 //!
 //! TODO: reserved peers
 
-use crate::net::{types, NetworkingService};
+use crate::{
+    config,
+    error::P2pError,
+    net::{types, NetworkingService},
+};
 use logging::log;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{hash_map::Entry, HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
-// TODO: store active address
-// TODO: store other discovered addresses
 #[derive(Debug)]
 pub struct PeerContext<T: NetworkingService> {
     /// Peer information
-    pub _info: types::PeerInfo<T>,
+    pub info: types::PeerInfo<T>,
+
+    /// Peer's active address, if known
+    pub address: Option<T::Address>,
+
+    /// Set of available addresses
+    pub addresses: HashSet<T::Address>,
 
     /// Peer score
     pub score: u32,
 }
 
-/// Peer address information
-enum PeerAddrInfo<T: NetworkingService> {
-    Raw {
-        /// Hashset of IPv4 addresses
-        ip4: HashSet<T::Address>,
-
-        /// Hashset of IPv6 addresses
-        ip6: HashSet<T::Address>,
-    },
+#[derive(Debug)]
+pub enum BannedPeer<T: NetworkingService> {
+    Known(PeerContext<T>),
+    Discovered(VecDeque<T::Address>),
+    Unknown,
 }
 
-// TODO: improve how peers are stored, order by reputation?
-pub struct PeerDb<T: NetworkingService> {
-    /// Hashmap for peer information
-    peers: HashMap<T::PeerId, PeerContext<T>>,
+#[derive(Debug)]
+pub enum Peer<T: NetworkingService> {
+    /// Active peer
+    Active(PeerContext<T>),
 
-    /// Hashmap of discovered peers we don't have an active connection with
-    discovered: HashMap<T::PeerId, PeerAddrInfo<T>>,
+    /// Idle peer (`types::PeerInfo<t>` received)
+    Idle(PeerContext<T>),
+
+    /// Active/known peer that has been banned
+    Banned(BannedPeer<T>),
+
+    /// Discovered peer (addresses have been received)
+    Discovered(VecDeque<T::Address>),
+}
+
+// TODO: store available peers into a binary heap
+pub struct PeerDb<T: NetworkingService> {
+    /// P2P configuration
+    p2p_config: Arc<config::P2pConfig>,
+
+    /// Set of peers known to `PeerDb`
+    peers: HashMap<T::PeerId, Peer<T>>,
+
+    /// Set of available (idle) peers
+    available: HashSet<T::PeerId>,
 
     /// Pending connections
-    pending: HashMap<T::Address, PeerAddrInfo<T>>,
+    pending: HashMap<T::Address, T::PeerId>,
 
     /// Banned peers
     banned: HashSet<T::PeerId>,
 }
 
 impl<T: NetworkingService> PeerDb<T> {
-    pub fn new() -> Self {
+    pub fn new(p2p_config: Arc<config::P2pConfig>) -> Self {
         Self {
-            peers: HashMap::new(),
-            discovered: HashMap::new(),
-            pending: HashMap::new(),
-            banned: HashSet::new(),
+            peers: Default::default(),
+            available: Default::default(),
+            pending: Default::default(),
+            banned: Default::default(),
+            p2p_config,
         }
     }
 
     /// Get the number of idle (available) peers
     pub fn idle_peer_count(&self) -> usize {
-        self.discovered.len()
+        self.available.len()
     }
 
-    /// Get socket address of the next best peer (TODO: in terms of peer score)
-    pub fn best_peer_addr(&mut self) -> Option<T::Address> {
-        // TODO: improve peer selection
-        let key = match self.discovered.keys().next() {
-            Some(key) => *key,
-            None => return None,
-        };
+    /// Get the number of active peers
+    pub fn active_peer_count(&self) -> usize {
+        self.peers
+            .len()
+            .checked_sub(self.pending.len())
+            .and_then(|acc| acc.checked_sub(self.available.len()))
+            .and_then(|acc| acc.checked_sub(self.banned.len()))
+            .expect("`PeerDb` state to be consistent")
+    }
 
-        // TODO: find a better way to store the addresses
-        let peer_info = self.discovered.remove(&key).expect("peer to exist");
-        let addr = match peer_info {
-            PeerAddrInfo::Raw { ref ip4, ref ip6 } => {
-                assert!(!(ip4.is_empty() && ip6.is_empty()));
+    pub fn active_peers(&self) -> Vec<(&T::PeerId, &PeerContext<T>)> {
+        self.peers
+            .iter()
+            .filter_map(|(id, info)| match info {
+                Peer::Active(inner) => Some((id, inner)),
+                Peer::Idle(_) | Peer::Banned(_) | Peer::Discovered(_) => None,
+            })
+            .collect::<Vec<_>>()
+    }
 
-                if ip6.is_empty() {
-                    ip4.iter().next().expect("ip4 empty").clone()
-                } else {
-                    ip6.iter().next().expect("ip6 empty").clone()
-                }
-            }
-        };
+    /// Get reference to the peer store
+    pub fn peers(&mut self) -> &HashMap<T::PeerId, Peer<T>> {
+        &self.peers
+    }
 
-        self.pending.insert(addr.clone(), peer_info);
-        Some(addr)
+    /// Get reference to the available peer store
+    pub fn available(&mut self) -> &HashSet<T::PeerId> {
+        &self.available
+    }
+
+    /// Get reference to the pending peer store
+    pub fn pending(&mut self) -> &HashMap<T::Address, T::PeerId> {
+        &self.pending
+    }
+
+    /// Get reference to the banned peer store
+    pub fn banned(&mut self) -> &HashSet<T::PeerId> {
+        &self.banned
     }
 
     /// Check is the peer ID banned
@@ -122,26 +162,59 @@ impl<T: NetworkingService> PeerDb<T> {
         false // TODO: implement
     }
 
-    /// Discover new peer addresses
-    pub fn discover_peers(&mut self, peers: &[types::AddrInfo<T>]) {
-        log::info!("discovered {} new peers", peers.len());
+    /// Check if the peers is part of our active swarm
+    pub fn is_active_peer(&self, peer_id: &T::PeerId) -> bool {
+        std::matches!(self.peers.get(peer_id), Some(Peer::Active(_)))
+    }
 
-        for info in peers.iter() {
-            // TODO: update peer stats
-            if self.peers.contains_key(&info.id) {
-                continue;
+    /// Get socket address of the next best peer (TODO: in terms of peer score)
+    // TODO: rewrite all of this
+    pub fn take_best_peer_addr(&mut self) -> crate::Result<Option<T::Address>> {
+        // TODO: improve peer selection
+        let peer_id = match self.available.iter().next() {
+            Some(peer_id) => *peer_id,
+            None => return Ok(None),
+        };
+
+        match self.peers.get_mut(&peer_id) {
+            Some(Peer::Idle(_info) | Peer::Active(_info)) => {
+                // TODO: implement
+                Ok(None)
             }
+            Some(Peer::Banned(_info)) => {
+                // TODO: implement
+                Ok(None)
+            }
+            Some(Peer::Discovered(addr_info)) => addr_info.pop_front().map_or(Ok(None), |addr| {
+                self.available.remove(&peer_id);
+                self.pending.insert(addr.clone(), peer_id);
+                Ok(Some(addr))
+            }),
+            None => Err(P2pError::DatabaseFailure),
+        }
+    }
 
-            match self.discovered.entry(info.id).or_insert_with(|| PeerAddrInfo::Raw {
-                ip4: HashSet::new(),
-                ip6: HashSet::new(),
-            }) {
-                PeerAddrInfo::Raw { ip4, ip6 } => {
-                    log::trace!("discovered ipv4 {:#?}, ipv6 {:#?}", ip4, ip6);
-
-                    ip4.extend(info.ip4.clone());
-                    ip6.extend(info.ip6.clone());
+    /// Discover new peer addresses
+    pub fn peer_discovered(&mut self, info: &types::AddrInfo<T>) {
+        match self.peers.entry(info.peer_id) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                Peer::Discovered(addr_info) => {
+                    // TODO: duplicates
+                    addr_info.extend(info.ip6.clone());
+                    addr_info.extend(info.ip4.clone());
                 }
+                Peer::Idle(_info) | Peer::Active(_info) => {
+                    // TODO: update existing information of a known peer
+                }
+                Peer::Banned(_info) => {
+                    // TODO: update existing information of a known peer
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(Peer::Discovered(VecDeque::from_iter(
+                    info.ip6.iter().cloned().chain(info.ip4.iter().cloned()).collect::<Vec<_>>(),
+                )));
+                self.available.insert(info.peer_id);
             }
         }
     }
@@ -162,120 +235,176 @@ impl<T: NetworkingService> PeerDb<T> {
     }
 
     /// Register peer information to `PeerDb`
-    pub fn register_peer_info(&mut self, _info: types::PeerInfo<T>) {
-        // TODO: implement
+    ///
+    /// If the peer is known (either fully known or only discovered), its information
+    /// is updated with the new received information. If the peer is unknown to `PeerDb`
+    /// (new inbound connection from an unknown peer), a new entry is created for the peer.
+    ///
+    /// Finally the peer is marked as available so future connection attempts may try to
+    /// dial this peer from the last known address.
+    pub fn register_peer_info(&mut self, address: T::Address, info: types::PeerInfo<T>) {
+        let peer_id = info.peer_id;
+
+        let entry = match self.peers.remove(&peer_id) {
+            Some(Peer::Discovered(addr_info)) => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: 0,
+                    address: Some(address.clone()),
+                    addresses: HashSet::from_iter(addr_info),
+                })
+            }
+            Some(Peer::Idle(peer_info)) => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: peer_info.score,
+                    address: Some(address.clone()),
+                    addresses: peer_info.addresses,
+                })
+            }
+            None => {
+                self.available.insert(peer_id);
+                Peer::Idle(PeerContext {
+                    info,
+                    score: 0,
+                    address: Some(address.clone()),
+                    addresses: HashSet::new(),
+                })
+            }
+            Some(entry @ Peer::Active(_)) => entry,
+            Some(entry @ Peer::Banned(_)) => entry,
+        };
+
+        self.peers.insert(peer_id, entry);
+        self.pending.remove(&address);
     }
 
-    /// Ban peer
-    pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
-        // TODO: print more information about the peer
-        self.banned.insert(*peer_id);
+    /// Mark peer as connected
+    ///
+    /// After `PeerManager` has established either an inbound or an outbound connection,
+    /// it informs the `PeerDb` about it which updates the peer information it has and
+    /// marks the peer as unavailable for future dial attempts.
+    pub fn peer_connected(&mut self, address: T::Address, info: types::PeerInfo<T>) {
+        let peer_id = info.peer_id;
+
+        let entry = match self.peers.remove(&peer_id) {
+            Some(Peer::Discovered(addr_info)) => Peer::Active(PeerContext {
+                info,
+                score: 0,
+                address: Some(address.clone()),
+                addresses: HashSet::from_iter(addr_info),
+            }),
+            Some(Peer::Idle(peer_info)) => Peer::Active(PeerContext {
+                info,
+                score: peer_info.score,
+                address: Some(address.clone()),
+                addresses: peer_info.addresses,
+            }),
+            None => Peer::Active(PeerContext {
+                info,
+                score: 0,
+                address: Some(address.clone()),
+                addresses: HashSet::new(),
+            }),
+            Some(entry @ Peer::Active(_)) => entry,
+            Some(entry @ Peer::Banned(_)) => entry,
+        };
+
+        self.peers.insert(peer_id, entry);
+        self.available.remove(&peer_id);
+        self.pending.remove(&address);
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::net::{self, libp2p::Libp2pService};
-    use libp2p::PeerId;
-
-    #[test]
-    fn test_peer_discovered_libp2p() {
-        let mut peerdb = PeerDb::new();
-
-        let id_1: libp2p::PeerId = PeerId::random();
-        let id_2: libp2p::PeerId = PeerId::random();
-        let id_3: libp2p::PeerId = PeerId::random();
-
-        // check that peer with `id` has the correct ipv4 and ipv6 addresses
-        let check_peer =
-            |discovered: &HashMap<
-                <Libp2pService as NetworkingService>::PeerId,
-                PeerAddrInfo<Libp2pService>,
-            >,
-             id: libp2p::PeerId,
-             ip4: Vec<<Libp2pService as NetworkingService>::Address>,
-             ip6: Vec<<Libp2pService as NetworkingService>::Address>| {
-                let (p_ip4, p_ip6) = match discovered.get(&id).unwrap() {
-                    PeerAddrInfo::Raw { ip4, ip6 } => (ip4, ip6),
-                };
-
-                assert_eq!(ip4.len(), p_ip4.len());
-                assert_eq!(ip6.len(), p_ip6.len());
-
-                for ip in ip4.iter() {
-                    assert!(p_ip4.contains(ip));
+    /// Handle peer disconnection event
+    ///
+    /// Close the connection to an active peer and change the peer state
+    /// the `Peer::Idle` so it can be used again for connection later.
+    pub fn peer_disconnected(&mut self, peer_id: &T::PeerId) {
+        if let Some(entry) = self.peers.remove(peer_id) {
+            let entry = match entry {
+                Peer::Active(inner) => {
+                    self.available.insert(*peer_id);
+                    Peer::Idle(inner)
                 }
-
-                for ip in ip6.iter() {
-                    assert!(p_ip6.contains(ip));
-                }
+                Peer::Discovered(inner) => Peer::Discovered(inner),
+                Peer::Idle(inner) => Peer::Idle(inner),
+                Peer::Banned(inner) => Peer::Banned(inner),
             };
 
-        // first add two new peers, both with ipv4 and ipv6 address
-        peerdb.discover_peers(&[
-            net::types::AddrInfo {
-                id: id_1,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9091".parse().unwrap()],
+            self.peers.insert(*peer_id, entry);
+        }
+    }
+
+    /// Change peer state to `Peer::Banned` and and it to the list of banned peers
+    pub fn ban_peer(&mut self, peer_id: &T::PeerId) {
+        if let Some(entry) = self.peers.remove(peer_id) {
+            let entry = match entry {
+                Peer::Active(inner) | Peer::Idle(inner) => {
+                    log::info!(
+                        "ban known/idle peer {}, peer address {:?}",
+                        peer_id,
+                        inner.address
+                    );
+                    Peer::Banned(BannedPeer::Known(inner))
+                }
+                Peer::Discovered(inner) => {
+                    log::info!(
+                        "ban discovered peer {}, peer addresses {:?}",
+                        peer_id,
+                        inner
+                    );
+                    Peer::Banned(BannedPeer::Discovered(inner))
+                }
+                Peer::Banned(inner) => Peer::Banned(inner),
+            };
+
+            self.peers.insert(*peer_id, entry);
+        }
+
+        self.available.remove(peer_id);
+        self.banned.insert(*peer_id);
+    }
+
+    /// Adjust peer score
+    ///
+    /// If the peer is known, update its existing peer score and if it is not
+    /// known (either at all or fully), just use `score` to make the decision whether
+    /// to ban the peer or not.
+    ///
+    /// If peer is banned, it is still kept in the peer storage but it is removed
+    /// from the `available` storage so it won't be picked up again and its peer ID
+    /// is recorded into the `banned` storage which keeps track of all banned peers.
+    ///
+    /// TODO: implement unbanning
+    pub fn adjust_peer_score(&mut self, peer_id: &T::PeerId, score: u32) -> bool {
+        let final_score = match self.peers.entry(*peer_id) {
+            Entry::Vacant(entry) => {
+                entry.insert(Peer::Banned(BannedPeer::Unknown));
+                score
+            }
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                Peer::Discovered(_) => score,
+                Peer::Banned(inner) => match inner {
+                    BannedPeer::Known(info) => {
+                        info.score = info.score.saturating_add(score);
+                        info.score
+                    }
+                    BannedPeer::Discovered(_) | BannedPeer::Unknown => score,
+                },
+                Peer::Idle(info) | Peer::Active(info) => {
+                    info.score = info.score.saturating_add(score);
+                    info.score
+                }
             },
-            net::types::AddrInfo {
-                id: id_2,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-            },
-        ]);
+        };
 
-        assert_eq!(peerdb.peers.len(), 0);
-        assert_eq!(peerdb.discovered.len(), 2);
+        if final_score >= self.p2p_config.ban_threshold {
+            self.ban_peer(peer_id);
+            return true;
+        }
 
-        check_peer(
-            &peerdb.discovered,
-            id_1,
-            vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9091".parse().unwrap()],
-        );
-
-        check_peer(
-            &peerdb.discovered,
-            id_2,
-            vec!["/ip4/127.0.0.1/tcp/9092".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9093".parse().unwrap()],
-        );
-
-        // then discover one new peer and two additional ipv6 addresses for peer 1
-        peerdb.discover_peers(&[
-            net::types::AddrInfo {
-                id: id_1,
-                ip4: vec![],
-                ip6: vec![
-                    "/ip6/::1/tcp/9094".parse().unwrap(),
-                    "/ip6/::1/tcp/9095".parse().unwrap(),
-                ],
-            },
-            net::types::AddrInfo {
-                id: id_3,
-                ip4: vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-                ip6: vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-            },
-        ]);
-
-        check_peer(
-            &peerdb.discovered,
-            id_1,
-            vec!["/ip4/127.0.0.1/tcp/9090".parse().unwrap()],
-            vec![
-                "/ip6/::1/tcp/9091".parse().unwrap(),
-                "/ip6/::1/tcp/9094".parse().unwrap(),
-                "/ip6/::1/tcp/9095".parse().unwrap(),
-            ],
-        );
-
-        check_peer(
-            &peerdb.discovered,
-            id_3,
-            vec!["/ip4/127.0.0.1/tcp/9096".parse().unwrap()],
-            vec!["/ip6/::1/tcp/9097".parse().unwrap()],
-        );
+        false
     }
 }

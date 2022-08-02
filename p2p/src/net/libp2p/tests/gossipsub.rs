@@ -123,6 +123,9 @@ async fn test_gossipsub_not_supported() {
                 ) => {
                     break;
                 }
+                SwarmEvent::ConnectionClosed { .. } => {
+                    break;
+                }
                 _event => {},
             },
             _event = swarm.next() => {},
