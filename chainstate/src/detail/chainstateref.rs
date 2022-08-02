@@ -445,17 +445,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             for tx in block.transactions() {
                 let mut tx_inputs = BTreeSet::new();
                 for input in tx.inputs() {
-                    if !tx_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInTransaction(
+                    ensure!(
+                        tx_inputs.insert(input.outpoint()),
+                        CheckBlockTransactionsError::DuplicateInputInTransaction(
                             tx.get_id(),
-                            block.get_id(),
-                        ));
-                    }
-                    if !block_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInBlock(
-                            block.get_id(),
-                        ));
-                    }
+                            block.get_id()
+                        )
+                    );
+                    ensure!(
+                        block_inputs.insert(input.outpoint()),
+                        CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
+                    );
                 }
             }
         }
