@@ -95,8 +95,8 @@ impl UtxosView for UtxosDBInMemoryImpl {
         self.store.get(outpoint).is_some()
     }
 
-    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        Some(self.best_block_id)
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.best_block_id
     }
 
     fn estimated_size(&self) -> Option<usize> {

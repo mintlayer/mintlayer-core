@@ -134,7 +134,7 @@ fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 
     let block_hash = Id::new(H256::random());
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     parent.set_best_block(block_hash);
 
     let parent_clone = parent.clone();

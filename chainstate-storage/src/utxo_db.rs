@@ -50,6 +50,9 @@ mod test {
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut store = crate::Store::new_empty().expect("should create a store");
+        store
+            .set_best_block_for_utxos(&H256::random().into())
+            .expect("Setting best block cannot fail");
         let mut db_interface = UtxosDBMut::new(&mut store);
 
         // utxo checking

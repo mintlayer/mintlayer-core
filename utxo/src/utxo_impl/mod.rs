@@ -104,7 +104,7 @@ pub trait UtxosView {
     fn has_utxo(&self, outpoint: &OutPoint) -> bool;
 
     /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Option<Id<GenBlock>>;
+    fn best_block_hash(&self) -> Id<GenBlock>;
 
     /// Estimated size of the whole view (None if not implemented)
     fn estimated_size(&self) -> Option<usize>;
@@ -126,13 +126,13 @@ pub trait FlushableUtxoView {
 // flush the cache into the provided base. This will consume the cache and throw it away.
 // It uses the batch_write function since it's available in different kinds of views.
 pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> Result<(), Error> {
-    base.batch_write(cache.consume()?)
+    base.batch_write(cache.consume())
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
-    current_block_hash: Option<Id<GenBlock>>,
+    current_block_hash: Id<GenBlock>,
     utxos: BTreeMap<OutPoint, UtxoEntry>,
     //TODO: do we need this?
     memory_usage: usize,
@@ -210,6 +210,16 @@ impl UtxoEntry {
 }
 
 impl<'a> UtxosCache<'a> {
+    #[cfg(test)]
+    pub(crate) fn new_for_test(best_block: Id<GenBlock>) -> Self {
+        Self {
+            parent: None,
+            current_block_hash: best_block,
+            utxos: Default::default(),
+            memory_usage: 0,
+        }
+    }
+
     /// returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
@@ -241,7 +251,7 @@ impl<'a> UtxosCache<'a> {
     }
 
     pub fn set_best_block(&mut self, block_hash: Id<GenBlock>) {
-        self.current_block_hash = Some(block_hash);
+        self.current_block_hash = block_hash;
     }
 
     pub fn add_utxos(
@@ -388,11 +398,11 @@ impl<'a> UtxosCache<'a> {
         None
     }
 
-    pub fn consume(self) -> Result<ConsumedUtxoCache, Error> {
-        Ok(ConsumedUtxoCache {
+    pub fn consume(self) -> ConsumedUtxoCache {
+        ConsumedUtxoCache {
             container: self.utxos,
-            best_block: self.current_block_hash.ok_or(Error::CacheWithoutBestBlock)?,
-        })
+            best_block: self.current_block_hash,
+        }
     }
 }
 
@@ -422,10 +432,8 @@ impl<'a> UtxosView for UtxosCache<'a> {
         self.utxo(outpoint).is_some()
     }
 
-    fn best_block_hash(&self) -> Option<Id<GenBlock>> {
-        self.current_block_hash.or_else(||
-            // if the block_hash is empty in this view, use parent's `get_best_block_hash`.
-            self.parent.and_then(|parent| parent.best_block_hash()))
+    fn best_block_hash(&self) -> Id<GenBlock> {
+        self.current_block_hash
     }
 
     fn estimated_size(&self) -> Option<usize> {
@@ -491,7 +499,7 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
             }
         }
 
-        self.current_block_hash = Some(utxo_entries.best_block);
+        self.current_block_hash = utxo_entries.best_block;
         Ok(())
     }
 }
@@ -507,12 +515,14 @@ mod simulation;
 
 #[cfg(test)]
 mod unit_test {
+    use common::primitives::H256;
+
     use crate::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
     use crate::UtxosCache;
 
     #[test]
     fn test_uncache() {
-        let mut cache = UtxosCache::default();
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is not dirty and not fresh
         let (utxo, outp) = insert_single_entry(&mut cache, &Presence::Present, Some(0), None);

@@ -19,7 +19,6 @@ use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, Chainstat
 use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
-use common::chain::OutPoint;
 use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
@@ -27,7 +26,6 @@ use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
 use utxo::utxo_storage::UtxosDBMut;
-use utxo::{FlushableUtxoView, Utxo, UtxosView};
 mod consensus_validator;
 mod orphan_blocks;
 

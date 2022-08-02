@@ -43,7 +43,7 @@ fn check_add_utxo(
     result_flags: Option<u8>,
     op_result: Result<(), Error>,
 ) {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
     let (_, outpoint) = insert_single_entry(&mut cache, &cache_presence, cache_flags, None);
 
     // perform the add_utxo.
@@ -74,13 +74,13 @@ fn check_spend_utxo(
     result_flags: Option<u8>,
 ) {
     // initialize the parent cache.
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (_, parent_outpoint) =
         insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
 
     // initialize the child cache
     let mut child = match parent_presence {
-        Absent => UtxosCache::default(),
+        Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
 
@@ -119,7 +119,7 @@ fn check_write_utxo(
     result_flags: Option<u8>,
 ) {
     //initialize the parent cache
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (_, outpoint) = insert_single_entry(&mut parent, &parent_presence, parent_flags, None);
     let key = &outpoint;
 
@@ -183,12 +183,12 @@ fn check_get_mut_utxo(
     cache_flags: Option<u8>,
     result_flags: Option<u8>,
 ) {
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (parent_utxo, parent_outpoint) =
         insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
 
     let mut child = match parent_presence {
-        Absent => UtxosCache::default(),
+        Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
     let (child_utxo, child_outpoint) = insert_single_entry(
@@ -417,7 +417,7 @@ fn access_utxo_test() {
 
 #[test]
 fn derive_cache_test() {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     let (utxo, outpoint_1) = create_utxo(10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -439,7 +439,7 @@ fn derive_cache_test() {
 
 #[test]
 fn blockchain_or_mempool_utxo_test() {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     let (utxo, outpoint_1) = create_utxo(10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
@@ -456,7 +456,7 @@ fn blockchain_or_mempool_utxo_test() {
 fn multiple_update_utxos_test() {
     use common::chain::signature::inputsig::InputWitness;
 
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     // let's test `add_utxos`
     let tx = Transaction::new(0x00, vec![], create_tx_outputs(10), 0x01).unwrap();

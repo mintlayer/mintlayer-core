@@ -135,17 +135,17 @@ fn utxo_and_undo_test() {
     let (block, block_undo) = {
         // create a view based on the db.
 
-        let mut parent_view = UtxosCache::default();
+        let mut parent_view = UtxosCache::new_for_test(H256::random().into());
         db.0.internal_store().iter().for_each(|(outpoint, utxo)| {
             parent_view.add_utxo(outpoint, utxo.clone(), false).unwrap();
         });
-        parent_view.set_best_block(db.best_block_hash().expect("there should be best block hash"));
+        parent_view.set_best_block(db.best_block_hash());
 
         let mut view = parent_view.derive_cache();
 
         // create a new block to spend.
         let block = create_block(
-            db_interface.best_block_hash().unwrap(),
+            db_interface.best_block_hash(),
             expected_tx_inputs.clone(),
             0,
             num_of_txs,
@@ -207,7 +207,7 @@ fn utxo_and_undo_test() {
     // let's try to reverse the spending.
     {
         // get the best_block_id
-        let current_best_block_id = db.best_block_hash().expect("should return the best block id");
+        let current_best_block_id = db.best_block_hash();
 
         println!("the current block id: {:?}", current_best_block_id);
 
@@ -224,12 +224,12 @@ fn utxo_and_undo_test() {
         assert_eq!(block_undo.tx_undos().len(), expected_tx_inputs.len());
 
         // let's create a view.
-        let mut view = UtxosCache::default();
+        let mut view = UtxosCache::new_for_test(H256::random().into());
         // set the best block to the previous one
         {
             view.set_best_block(block.prev_block_id());
             // the best block id should be the same as the old one.
-            assert_eq!(view.best_block_hash().unwrap(), block.prev_block_id());
+            assert_eq!(view.best_block_hash(), block.prev_block_id());
         }
 
         // get the block txinputs, and add them to the view.
@@ -276,7 +276,7 @@ fn utxo_and_undo_test() {
             })
             .collect();
 
-        let id = db.best_block_hash().expect("it should return an id");
+        let id = db.best_block_hash();
 
         // Create a dummy block.
         let block = create_block(id, tx_inputs, 0, num_of_txs as usize);
@@ -325,7 +325,7 @@ fn test_utxo() {
         assert!(utxo_db.has_utxo(&outpoint));
 
         //check the best block hash
-        assert_eq!(utxo_db.best_block_hash(), Some(new_best_block_hash));
+        assert_eq!(utxo_db.best_block_hash(), new_best_block_hash);
 
         // try to write a non-dirty utxo
         {
@@ -357,9 +357,8 @@ fn test_utxo() {
                 .utxo()
                 .expect("utxo should exist");
 
-            let mut parent = UtxosCache::default();
+            let mut parent = UtxosCache::new_for_test(utxo_db.best_block_hash());
             parent.add_utxo(outpoint, utxo, false).unwrap();
-            parent.set_best_block(utxo_db.best_block_hash().expect("best block should be there"));
 
             let mut child = UtxosCache::new(&parent);
             child.spend_utxo(outpoint).unwrap();
