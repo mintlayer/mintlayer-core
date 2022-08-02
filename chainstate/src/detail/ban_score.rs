@@ -127,7 +127,7 @@ impl BanScore for TokensError {
             TokensError::IssueErrorTooManyDecimals(_, _) => 100,
             TokensError::IssueErrorIncorrectMetadataURI(_, _) => 100,
             TokensError::MultipleTokenIssuanceInTransaction(_, _) => 100,
-            TokensError::CoinOrTokenOverflow(_, _) => 100,
+            TokensError::CoinOrTokenOverflow => 100,
             TokensError::InsuffienceTokenFees(_, _) => 0,
             TokensError::InsuffienceTokenValueInInputs(_, _) => 100,
             TokensError::BurnZeroTokens(_, _) => 100,

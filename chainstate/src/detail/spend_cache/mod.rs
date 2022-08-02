@@ -205,7 +205,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn get_output_amount(
+    fn get_output_value(
         outputs: &[TxOutput],
         output_index: usize,
         spender_id: Spender,
@@ -218,7 +218,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     }
 
     // Get TokenId and Amount in input
-    fn filter_tokens_amount(
+    fn filter_transfered_and_issued_amounts(
         &self,
         prev_tx: &Transaction,
         output: &common::chain::TxOutput,
@@ -247,6 +247,42 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         }
     }
 
+    pub fn calculate_transfered_and_burn_tokens(
+        outputs: &[TxOutput],
+    ) -> Result<BTreeMap<TokenId, Amount>, TokensError> {
+        let mut total_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
+        let iter_res: Result<(), TokensError> = outputs
+            .iter()
+            .filter_map(|x| match x.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token) => match token {
+                    TokenData::TokenTransferV1 { token_id, amount } => Some((*token_id, *amount)),
+                    TokenData::TokenIssuanceV1 {
+                        token_ticker: _,
+                        amount_to_issue: _,
+                        number_of_decimals: _,
+                        metadata_uri: _,
+                    } => None,
+                    TokenData::TokenBurnV1 {
+                        token_id,
+                        amount_to_burn,
+                    } => Some((*token_id, *amount_to_burn)),
+                },
+            })
+            .try_for_each(|(token_id, amount)| {
+                total_tokens.insert(
+                    token_id,
+                    (total_tokens.get(&token_id).cloned().unwrap_or(Amount::from_atoms(0))
+                        + amount)
+                        .ok_or(TokensError::CoinOrTokenOverflow)?,
+                );
+                Ok(())
+            });
+        iter_res?;
+
+        Ok(total_tokens)
+    }
+
     pub fn calculate_tokens_total_inputs(
         &self,
         inputs: &[TxInput],
@@ -254,16 +290,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let mut total_tokens: BTreeMap<TokenId, Amount> = BTreeMap::new();
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
-            let tx_index = match self.inputs.get(&outpoint.tx_id()) {
-                Some(tx_index_op) => match tx_index_op {
-                    CachedInputsOperation::Write(tx_index) => tx_index,
-                    CachedInputsOperation::Read(tx_index) => tx_index,
-                    CachedInputsOperation::Erase => {
-                        return Err(StateUpdateError::PreviouslyCachedInputWasErased)
-                    }
-                },
-                None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
-            };
+            let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;
             match tx_index.position() {
                 common::chain::SpendablePosition::Transaction(tx_pos) => {
@@ -284,7 +311,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         },
                     )?;
 
-                    match self.filter_tokens_amount(&tx, output) {
+                    match self.filter_transfered_and_issued_amounts(&tx, output) {
                         Some((token_id, amount)) => {
                             total_tokens.insert(
                                 token_id,
@@ -307,20 +334,28 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(total_tokens)
     }
 
+    fn get_tx_index_from_cache(
+        &self,
+        outpoint: &OutPoint,
+    ) -> Result<&TxMainChainIndex, StateUpdateError> {
+        let tx_index = match self.inputs.get(&outpoint.tx_id()) {
+            Some(tx_index_op) => match tx_index_op {
+                CachedInputsOperation::Write(tx_index) => tx_index,
+                CachedInputsOperation::Read(tx_index) => tx_index,
+                CachedInputsOperation::Erase => {
+                    return Err(StateUpdateError::PreviouslyCachedInputWasErased)
+                }
+            },
+            None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
+        };
+        Ok(tx_index)
+    }
+
     fn calculate_coins_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
-            let tx_index = match self.inputs.get(&outpoint.tx_id()) {
-                Some(tx_index_op) => match tx_index_op {
-                    CachedInputsOperation::Write(tx_index) => tx_index,
-                    CachedInputsOperation::Read(tx_index) => tx_index,
-                    CachedInputsOperation::Erase => {
-                        return Err(StateUpdateError::PreviouslyCachedInputWasErased)
-                    }
-                },
-                None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
-            };
+            let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;
 
             let output_amount = match tx_index.position() {
@@ -335,7 +370,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             )
                         })?;
 
-                    Self::get_output_amount(tx.outputs(), output_index, tx.get_id().into())
+                    Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())
                         .cloned()?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
@@ -348,7 +383,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let rewards_tx = block_index.block_reward_transactable();
 
                     let outputs = rewards_tx.outputs().unwrap_or(&[]);
-                    Self::get_output_amount(outputs, output_index, (*block_id).into()).cloned()?
+                    Self::get_output_value(outputs, output_index, (*block_id).into()).cloned()?
                 }
             };
             match output_amount {
@@ -370,7 +405,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let outputs = tx.outputs();
 
         let inputs_total = self.calculate_coins_total_inputs(inputs)?;
-        let outputs_total = Self::calculate_total_outputs(outputs)?;
+        let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
             return Err(StateUpdateError::AttemptToPrintMoney(
@@ -386,7 +421,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         ))
     }
 
-    fn calculate_total_outputs(outputs: &[TxOutput]) -> Result<Amount, StateUpdateError> {
+    fn calculate_coins_total_outputs(outputs: &[TxOutput]) -> Result<Amount, StateUpdateError> {
         outputs
             .iter()
             .try_fold(Amount::from_atoms(0), |accum, out| match out.value() {
@@ -423,8 +458,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             || Ok(Amount::from_atoms(0)),
             |ins| self.calculate_coins_total_inputs(ins),
         )?;
-        let outputs_total =
-            outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
+        let outputs_total = outputs.map_or_else(
+            || Ok(Amount::from_atoms(0)),
+            Self::calculate_coins_total_outputs,
+        )?;
 
         let max_allowed_outputs_total =
             amount_sum!(inputs_total, block_subsidy_at_height, total_fees)
@@ -607,22 +644,36 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         block_id: Id<Block>,
         tx: &Transaction,
         token_id: &TokenId,
-        amount: &Amount,
+        token_amount: &Amount,
     ) -> Result<(), TokensError> {
         // Collect token inputs
-        let total_value_tokens = self
+        let total_input_tokens = self
             .calculate_tokens_total_inputs(tx.inputs())
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
+        // Collect token outputs
+        let total_output_tokens = Self::calculate_transfered_and_burn_tokens(tx.outputs())?;
+
         // Is token exist in inputs?
-        let (_, origin_amount) = total_value_tokens
+        let (_, input_amount) = total_input_tokens
             .iter()
             .find(|&(origin_token_id, _)| origin_token_id == token_id)
             .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
-        // Check amount
+        // Is token exist in outputs?
+        let (_, output_amount) = total_output_tokens
+            .iter()
+            .find(|&(origin_token_id, _)| origin_token_id == token_id)
+            .ok_or_else(|| TokensError::SomeTokensLost(tx.get_id(), block_id))?;
+
+        // Check amounts
         ensure!(
-            origin_amount >= amount,
+            dbg!(input_amount) >= dbg!(token_amount),
+            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
+        );
+
+        ensure!(
+            input_amount >= dbg!(output_amount),
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
         );
 
@@ -643,11 +694,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     }
 
     // Calc not burned tokens that were placed in OutputValue::TokenTransfer after partial burn
-    fn get_change_amount(
-        tx: &Transaction,
-        burn_token_id: &TokenId,
-        block_id: &Id<Block>,
-    ) -> Result<Amount, TokensError> {
+    fn get_change_amount(tx: &Transaction, burn_token_id: &TokenId) -> Result<Amount, TokensError> {
         let change_amount = tx
             .outputs()
             .iter()
@@ -674,7 +721,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 },
             })
             .try_fold(Amount::from_atoms(0), |accum, output| accum + *output)
-            .ok_or_else(|| TokensError::CoinOrTokenOverflow(tx.get_id(), *block_id))?;
+            .ok_or(TokensError::CoinOrTokenOverflow)?;
         Ok(change_amount)
     }
 
@@ -706,7 +753,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         if origin_amount > amount_to_burn {
             // Check whether all tokens burn and transfer
             ensure!(
-                (*amount_to_burn + Self::get_change_amount(tx, burn_token_id, block_id)?)
+                (*amount_to_burn + Self::get_change_amount(tx, burn_token_id)?)
                     == Some(*origin_amount),
                 TokensError::SomeTokensLost(tx.get_id(), *block_id)
             );
@@ -716,11 +763,11 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
     fn check_connected_tokens(
         &self,
-        asset: &TokenData,
+        token_data: &TokenData,
         tx: &Transaction,
         block: &Block,
     ) -> Result<(), TokensError> {
-        match asset {
+        match token_data {
             TokenData::TokenTransferV1 { token_id, amount } => {
                 self.check_connected_transfer_data(block.get_id(), tx, token_id, amount)?;
             }
@@ -756,9 +803,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 .iter()
                 .filter_map(|output| match output.value() {
                     OutputValue::Coin(_) => None,
-                    OutputValue::Token(asset) => Some(asset),
+                    OutputValue::Token(token_data) => Some(token_data),
                 })
-                .try_for_each(|asset| self.check_connected_tokens(asset, tx, block))
+                .try_for_each(|token_data| self.check_connected_tokens(token_data, tx, block))
                 .map_err(StateUpdateError::TokensError)?;
 
             // If it is not a genesis and in tx issuance

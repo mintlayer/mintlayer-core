@@ -102,8 +102,8 @@ pub enum TokensError {
     IssueErrorIncorrectMetadataURI(Id<Transaction>, Id<Block>),
     #[error("Too many tokens issued in transaction {0} in block {1}")]
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
-    #[error("Coin or token overflow in transaction {0} in block {1}")]
-    CoinOrTokenOverflow(Id<Transaction>, Id<Block>),
+    #[error("Coin or token overflow")]
+    CoinOrTokenOverflow,
     #[error("Token fees insuffience in transaction {0} in block {1}")]
     InsuffienceTokenFees(Id<Transaction>, Id<Block>),
     #[error("Token value in inputs insuffience in transaction {0} in block {1}")]

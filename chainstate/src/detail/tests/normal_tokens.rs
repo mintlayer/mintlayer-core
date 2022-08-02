@@ -664,3 +664,51 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         ));
     })
 }
+
+#[test]
+fn test_attempt_to_print_tokens() {
+    common::concurrency::model(|| {
+        const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
+
+        // Issue a new token
+        let mut chainstate = setup_chainstate();
+        let values = vec![
+            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                token_ticker: b"USDC".to_vec(),
+                amount_to_issue: ISSUED_FUNDS,
+                number_of_decimals: 1,
+                metadata_uri: b"https://some_site.meta".to_vec(),
+            }),
+            OutputValue::Coin(Amount::from_atoms(123456)),
+        ];
+        let (block_a, _) = process_token_ex(
+            &mut chainstate,
+            vec![],
+            ParentBlock::BestBlock,
+            values.clone(),
+        )
+        .unwrap();
+        assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
+        let token_id = token_id(&block_a.transactions()[0]).unwrap();
+
+        // Try to transfer spent tokens
+        let values = vec![
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Coin(Amount::from_atoms(123454)),
+        ];
+
+        assert!(matches!(
+            process_token(&mut chainstate, ParentBlock::BestBlock, values),
+            Err(BlockError::StateUpdateFailed(
+                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
+            ))
+        ));
+    });
+}
