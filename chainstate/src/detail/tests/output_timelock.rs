@@ -20,11 +20,11 @@ use common::{
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
-        spend_cache::error::StateUpdateError,
         tests::{
             anyonecanspend_address,
             test_framework::{TestFramework, TransactionBuilder},
         },
+        transaction_verifier::error::ConnectTransactionError,
     },
     BlockError, TimeGetter,
 };
@@ -54,7 +54,7 @@ fn output_lock_until_height() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
@@ -94,7 +94,7 @@ fn output_lock_until_height() {
                     )
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -169,7 +169,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -201,7 +201,7 @@ fn output_lock_for_block_count() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
@@ -241,7 +241,7 @@ fn output_lock_for_block_count() {
                     )
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -309,7 +309,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -340,7 +340,7 @@ fn output_lock_for_block_count_attempted_overflow() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::BlockHeightArithmeticError)
+            BlockError::StateUpdateFailed(ConnectTransactionError::BlockHeightArithmeticError)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
@@ -402,7 +402,7 @@ fn output_lock_until_time() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -480,7 +480,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -543,7 +543,7 @@ fn output_lock_for_seconds() {
                     .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
                     .build_and_process()
                     .unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
             );
             assert_eq!(
                 tf.best_block_index().block_height(),
@@ -619,7 +619,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
@@ -648,7 +648,7 @@ fn output_lock_for_seconds_attempted_overflow() {
                 )
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::BlockTimestampArithmeticError)
+            BlockError::StateUpdateFailed(ConnectTransactionError::BlockTimestampArithmeticError)
         );
         assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });

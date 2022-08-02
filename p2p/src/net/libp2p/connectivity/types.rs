@@ -32,13 +32,13 @@ pub enum ControlEvent {
 pub enum BehaviourEvent {
     /// Inbound connection accepted
     InboundAccepted {
-        addr: Multiaddr,
+        address: Multiaddr,
         peer_info: IdentifyInfoWrapper,
     },
 
     /// Outbound connection accepted
     OutboundAccepted {
-        addr: Multiaddr,
+        address: Multiaddr,
         peer_info: IdentifyInfoWrapper,
     },
 
@@ -46,7 +46,7 @@ pub enum BehaviourEvent {
     ConnectionClosed { peer_id: PeerId },
 
     /// Connection error
-    ConnectionError { addr: Multiaddr, error: P2pError },
+    ConnectionError { address: Multiaddr, error: P2pError },
 }
 
 #[derive(Debug, PartialEq, Eq)]

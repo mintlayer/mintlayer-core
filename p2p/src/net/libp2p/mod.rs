@@ -375,18 +375,18 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
-                Ok(ConnectivityEvent::ConnectionAccepted {
-                    addr,
+            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::OutboundAccepted {
+                    address,
                     peer_info: peer_info.try_into()?,
                 })
             }
-            types::ConnectivityEvent::ConnectionError { addr, error } => {
-                Ok(ConnectivityEvent::ConnectionError { addr, error })
+            types::ConnectivityEvent::ConnectionError { address, error } => {
+                Ok(ConnectivityEvent::ConnectionError { address, error })
             }
-            types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
-                Ok(ConnectivityEvent::IncomingConnection {
-                    addr,
+            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::InboundAccepted {
+                    address,
                     peer_info: peer_info.try_into()?,
                 })
             }
@@ -399,9 +399,6 @@ where
             types::ConnectivityEvent::Expired { peers } => Ok(ConnectivityEvent::Expired {
                 peers: parse_peers(peers),
             }),
-            types::ConnectivityEvent::Disconnected { peer_id } => {
-                Ok(ConnectivityEvent::Disconnected { peer_id })
-            }
             types::ConnectivityEvent::Error { peer_id, error } => {
                 Ok(ConnectivityEvent::Error { peer_id, error })
             }

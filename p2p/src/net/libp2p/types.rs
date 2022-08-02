@@ -133,20 +133,20 @@ pub enum Command {
 #[derive(Debug)]
 pub enum ConnectivityEvent {
     /// Outbound connection accepted by remote
-    ConnectionAccepted {
-        addr: Multiaddr,
+    OutboundAccepted {
+        address: Multiaddr,
         peer_info: IdentifyInfoWrapper,
     },
 
     /// Inbound connection incoming
-    IncomingConnection {
-        addr: Multiaddr,
+    InboundAccepted {
+        address: Multiaddr,
         peer_info: IdentifyInfoWrapper,
     },
 
     /// Outbound connection failed
     ConnectionError {
-        addr: Multiaddr,
+        address: Multiaddr,
         error: error::P2pError,
     },
 
@@ -158,9 +158,6 @@ pub enum ConnectivityEvent {
 
     /// One or more peers that were previously discovered have expired
     Expired { peers: Vec<(PeerId, Multiaddr)> },
-
-    /// Peer disconnected from the swarm
-    Disconnected { peer_id: PeerId },
 
     /// An error occurred with a connected peer
     Error {

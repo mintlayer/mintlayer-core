@@ -401,14 +401,14 @@ impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
     fn inject_event(&mut self, event: ConnectionManagerEvent) {
         match event {
             ConnectionManagerEvent::Behaviour(event) => match event {
-                BehaviourEvent::InboundAccepted { addr, peer_info } => {
+                BehaviourEvent::InboundAccepted { address, peer_info } => {
                     self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::IncomingConnection { addr, peer_info },
+                        ConnectivityEvent::InboundAccepted { address, peer_info },
                     ))
                 }
-                BehaviourEvent::OutboundAccepted { addr, peer_info } => {
+                BehaviourEvent::OutboundAccepted { address, peer_info } => {
                     self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::ConnectionAccepted { addr, peer_info },
+                        ConnectivityEvent::OutboundAccepted { address, peer_info },
                     ))
                 }
                 BehaviourEvent::ConnectionClosed { peer_id } => {
@@ -416,9 +416,9 @@ impl NetworkBehaviourEventProcess<ConnectionManagerEvent> for Libp2pBehaviour {
                         ConnectivityEvent::ConnectionClosed { peer_id },
                     ))
                 }
-                BehaviourEvent::ConnectionError { addr, error } => {
+                BehaviourEvent::ConnectionError { address, error } => {
                     self.add_event(Libp2pBehaviourEvent::Connectivity(
-                        ConnectivityEvent::ConnectionError { addr, error },
+                        ConnectivityEvent::ConnectionError { address, error },
                     ))
                 }
             },

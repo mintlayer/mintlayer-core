@@ -40,7 +40,7 @@ where
     let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
     let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
-        ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 }

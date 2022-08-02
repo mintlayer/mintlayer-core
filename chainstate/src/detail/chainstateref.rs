@@ -39,8 +39,9 @@ use crate::{BlockError, BlockSource, ChainstateConfig};
 use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
-    spend_cache::{BlockTransactableRef, CachedInputs},
-    tokens, BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
+    tokens,
+    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
 };
 
@@ -487,7 +488,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             let issuance_count = get_tokens_issuance_count(tx);
             ensure!(
                 issuance_count <= TOKEN_MAX_ISSUANCE_ALLOWED,
-                CheckBlockTransactionsError::CheckTokensError(
+                CheckBlockTransactionsError::TokensError(
                     TokensError::MultipleTokenIssuanceInTransaction(tx.get_id(), block.get_id()),
                 )
             );
@@ -500,7 +501,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Token(token) => Some(token),
                 })
                 .try_for_each(|token| tokens::check_tokens_data(token, tx, block))
-                .map_err(CheckBlockTransactionsError::CheckTokensError)?;
+                .map_err(CheckBlockTransactionsError::TokensError)?;
         }
         Ok(())
     }
@@ -536,12 +537,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block: &Block,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
-    ) -> Result<CachedInputs<S>, BlockError> {
+    ) -> Result<TransactionVerifier<S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
-        cached_inputs.spend(
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        tx_verifier.connect_transaction(
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
@@ -549,7 +550,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         )?;
 
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            cached_inputs.spend(
+            tx_verifier.connect_transaction(
                 BlockTransactableRef::Transaction(block, tx_num),
                 spend_height,
                 &median_time_past,
@@ -558,21 +559,21 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        cached_inputs.check_block_reward(block, block_subsidy)?;
+        tx_verifier.check_block_reward(block, block_subsidy)?;
 
-        Ok(cached_inputs)
+        Ok(tx_verifier)
     }
 
     fn make_cache_with_disconnected_transactions(
         &self,
         block: &Block,
-    ) -> Result<CachedInputs<S>, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
+    ) -> Result<TransactionVerifier<S>, BlockError> {
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
         block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
+            tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
         })?;
-        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
-        Ok(cached_inputs)
+        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;
+        Ok(tx_verifier)
     }
 }
 
@@ -656,11 +657,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        let cached_inputs =
+        let connected_txs =
             self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
-        let cached_inputs = cached_inputs.consume()?;
+        let consumed = connected_txs.consume()?;
 
-        CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
         Ok(())
     }
 
@@ -668,7 +669,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
-        CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
         Ok(())
     }
 

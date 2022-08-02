@@ -42,7 +42,7 @@ use utils::ensure;
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
 
-use self::error::StateUpdateError;
+use self::error::ConnectTransactionError;
 
 pub mod error;
 
@@ -55,34 +55,36 @@ pub enum BlockTransactableRef<'a> {
     BlockReward(&'a Block),
 }
 
-pub struct ConsumedCachedInputs {
+/// The change that a block has caused to the blockchain state
+pub struct TransactionVerifierDelta {
     data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
 }
 
-pub struct CachedInputs<'a, S> {
+/// The tool used to verify transaction and cache their updated states in memory
+pub struct TransactionVerifier<'a, S> {
     db_tx: &'a S,
-    inputs: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
     chain_config: &'a ChainConfig,
 }
 
-impl<'a, S> CachedInputs<'a, S> {
+impl<'a, S> TransactionVerifier<'a, S> {
     pub fn new(db_tx: &'a S, chain_config: &'a ChainConfig) -> Self {
         Self {
             db_tx,
             chain_config,
-            inputs: BTreeMap::new(),
+            tx_index_cache: BTreeMap::new(),
         }
     }
 }
 
-impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
+impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     fn outpoint_source_id_from_spend_ref(
         spend_ref: BlockTransactableRef,
-    ) -> Result<OutPointSourceId, StateUpdateError> {
+    ) -> Result<OutPointSourceId, ConnectTransactionError> {
         let outpoint_source_id = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    StateUpdateError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
+                    ConnectTransactionError::InvariantErrorTxNumWrongInBlock(tx_num, block.get_id())
                 })?;
                 let tx_id = tx.get_id();
                 OutPointSourceId::from(tx_id)
@@ -92,7 +94,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(outpoint_source_id)
     }
 
-    fn add_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), StateUpdateError> {
+    fn add_outputs(
+        &mut self,
+        spend_ref: BlockTransactableRef,
+    ) -> Result<(), ConnectTransactionError> {
         let tx_index = match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
@@ -104,7 +109,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         outputs
                             .len()
                             .try_into()
-                            .map_err(|_| StateUpdateError::InvalidOutputCount)?,
+                            .map_err(|_| ConnectTransactionError::InvalidOutputCount)?,
                     )?),
                     None => return Ok(()), // no outputs to add
                 }
@@ -113,8 +118,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
-        match self.inputs.entry(outpoint_source_id) {
-            Entry::Occupied(_) => return Err(StateUpdateError::OutputAlreadyPresentInInputsCache),
+        match self.tx_index_cache.entry(outpoint_source_id) {
+            Entry::Occupied(_) => {
+                return Err(ConnectTransactionError::OutputAlreadyPresentInInputsCache)
+            }
             Entry::Vacant(entry) => entry.insert(tx_index),
         };
         Ok(())
@@ -123,7 +130,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     pub fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
-    ) -> Result<Option<GenBlockIndex>, StateUpdateError> {
+    ) -> Result<Option<GenBlockIndex>, ConnectTransactionError> {
         match block_id.classify(self.chain_config) {
             GenBlockId::Genesis(_id) => Ok(Some(GenBlockIndex::Genesis(Arc::clone(
                 self.chain_config.genesis_block(),
@@ -132,15 +139,18 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 .db_tx
                 .get_block_index(&id)
                 .map(|b| b.map(GenBlockIndex::Block))
-                .map_err(StateUpdateError::from),
+                .map_err(ConnectTransactionError::from),
         }
     }
 
-    fn remove_outputs(&mut self, spend_ref: BlockTransactableRef) -> Result<(), StateUpdateError> {
+    fn remove_outputs(
+        &mut self,
+        spend_ref: BlockTransactableRef,
+    ) -> Result<(), ConnectTransactionError> {
         let tx_index = CachedInputsOperation::Erase;
         let outpoint_source_id = Self::outpoint_source_id_from_spend_ref(spend_ref)?;
 
-        self.inputs.insert(outpoint_source_id, tx_index);
+        self.tx_index_cache.insert(outpoint_source_id, tx_index);
         Ok(())
     }
 
@@ -149,20 +159,20 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         spending_block_id: &Id<GenBlock>,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
-    ) -> Result<(), StateUpdateError> {
+    ) -> Result<(), ConnectTransactionError> {
         let spending_block_id = match spending_block_id.classify(self.chain_config) {
             GenBlockId::Block(id) => id,
             // TODO Handle premine maturity here or using some other mechanism (output time lock)
             GenBlockId::Genesis(_) => return Ok(()),
         };
         let source_block_index = self.db_tx.get_block_index(&spending_block_id)?;
-        let source_block_index =
-            source_block_index.ok_or(StateUpdateError::InvariantBrokenSourceBlockIndexNotFound)?;
+        let source_block_index = source_block_index
+            .ok_or(ConnectTransactionError::InvariantBrokenSourceBlockIndexNotFound)?;
         let source_height = source_block_index.block_height();
-        let actual_distance =
-            (*spend_height - source_height).ok_or(StateUpdateError::BlockHeightArithmeticError)?;
+        let actual_distance = (*spend_height - source_height)
+            .ok_or(ConnectTransactionError::BlockHeightArithmeticError)?;
         if actual_distance < *blockreward_maturity {
-            return Err(StateUpdateError::ImmatureBlockRewardSpend);
+            return Err(ConnectTransactionError::ImmatureBlockRewardSpend);
         }
         Ok(())
     }
@@ -170,10 +180,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn get_from_cached_mut(
         &mut self,
         outpoint: &OutPoint,
-    ) -> Result<&mut CachedInputsOperation, StateUpdateError> {
-        let result = match self.inputs.get_mut(&outpoint.tx_id()) {
+    ) -> Result<&mut CachedInputsOperation, ConnectTransactionError> {
+        let result = match self.tx_index_cache.get_mut(&outpoint.tx_id()) {
             Some(tx_index) => tx_index,
-            None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
+            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
         };
         Ok(result)
     }
@@ -181,16 +191,16 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn get_from_cached(
         &self,
         outpoint: &OutPoint,
-    ) -> Result<&CachedInputsOperation, StateUpdateError> {
-        let result = match self.inputs.get(&outpoint.tx_id()) {
+    ) -> Result<&CachedInputsOperation, ConnectTransactionError> {
+        let result = match self.tx_index_cache.get(&outpoint.tx_id()) {
             Some(tx_index) => tx_index,
-            None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
+            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
         };
         Ok(result)
     }
 
-    fn fetch_and_cache(&mut self, outpoint: &OutPoint) -> Result<(), StateUpdateError> {
-        let _tx_index_op = match self.inputs.entry(outpoint.tx_id()) {
+    fn fetch_and_cache(&mut self, outpoint: &OutPoint) -> Result<(), ConnectTransactionError> {
+        let _tx_index_op = match self.tx_index_cache.entry(outpoint.tx_id()) {
             Entry::Occupied(entry) => {
                 // If tx index was loaded
                 entry.into_mut()
@@ -200,7 +210,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                 let tx_index = self
                     .db_tx
                     .get_mainchain_tx_index(&outpoint.tx_id())?
-                    .ok_or(StateUpdateError::MissingOutputOrSpent)?;
+                    .ok_or(ConnectTransactionError::MissingOutputOrSpent)?;
                 entry.insert(CachedInputsOperation::Read(tx_index))
             }
         };
@@ -211,11 +221,14 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         outputs: &[TxOutput],
         output_index: usize,
         spender_id: Spender,
-    ) -> Result<&OutputValue, StateUpdateError> {
-        let output = outputs.get(output_index).ok_or(StateUpdateError::OutputIndexOutOfRange {
-            tx_id: Some(spender_id),
-            source_output_index: output_index,
-        })?;
+    ) -> Result<&OutputValue, ConnectTransactionError> {
+        let output =
+            outputs
+                .get(output_index)
+                .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
+                    tx_id: Some(spender_id),
+                    source_output_index: output_index,
+                })?;
         Ok(output.value())
     }
 
@@ -288,7 +301,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     pub fn calculate_tokens_total_inputs(
         &self,
         inputs: &[TxInput],
-    ) -> Result<TokensMap, StateUpdateError> {
+    ) -> Result<TokensMap, ConnectTransactionError> {
         let mut total_tokens: TokensMap = BTreeMap::new();
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
@@ -299,15 +312,15 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let tx = self
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(StateUpdateError::from)?
+                        .map_err(ConnectTransactionError::from)?
                         .ok_or_else(|| {
-                            StateUpdateError::InvariantErrorTransactionCouldNotBeLoaded(
+                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
                                 tx_pos.clone(),
                             )
                         })?;
 
                     let output = tx.outputs().get(output_index).ok_or(
-                        StateUpdateError::OutputIndexOutOfRange {
+                        ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: Some(tx.get_id().into()),
                             source_output_index: output_index,
                         },
@@ -322,7 +335,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                                     .cloned()
                                     .unwrap_or(Amount::from_atoms(0))
                                     + amount)
-                                    .ok_or(StateUpdateError::InputAdditionError)?,
+                                    .ok_or(ConnectTransactionError::InputAdditionError)?,
                             );
                         }
                         None => continue,
@@ -339,21 +352,24 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn get_tx_index_from_cache(
         &self,
         outpoint: &OutPoint,
-    ) -> Result<&TxMainChainIndex, StateUpdateError> {
-        let tx_index = match self.inputs.get(&outpoint.tx_id()) {
+    ) -> Result<&TxMainChainIndex, ConnectTransactionError> {
+        let tx_index = match self.tx_index_cache.get(&outpoint.tx_id()) {
             Some(tx_index_op) => match tx_index_op {
                 CachedInputsOperation::Write(tx_index) => tx_index,
                 CachedInputsOperation::Read(tx_index) => tx_index,
                 CachedInputsOperation::Erase => {
-                    return Err(StateUpdateError::PreviouslyCachedInputWasErased)
+                    return Err(ConnectTransactionError::PreviouslyCachedInputWasErased)
                 }
             },
-            None => return Err(StateUpdateError::PreviouslyCachedInputNotFound),
+            None => return Err(ConnectTransactionError::PreviouslyCachedInputNotFound),
         };
         Ok(tx_index)
     }
 
-    fn calculate_coins_total_inputs(&self, inputs: &[TxInput]) -> Result<Amount, StateUpdateError> {
+    fn calculate_coins_total_inputs(
+        &self,
+        inputs: &[TxInput],
+    ) -> Result<Amount, ConnectTransactionError> {
         let mut total = Amount::from_atoms(0);
         for (_input_idx, input) in inputs.iter().enumerate() {
             let outpoint = input.outpoint();
@@ -365,9 +381,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let tx = self
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(StateUpdateError::from)?
+                        .map_err(ConnectTransactionError::from)?
                         .ok_or_else(|| {
-                            StateUpdateError::InvariantErrorTransactionCouldNotBeLoaded(
+                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
                                 tx_pos.clone(),
                             )
                         })?;
@@ -379,7 +395,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
                         // TODO get rid of this coercion
                         let block_id = Id::new(block_id.get());
-                        StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
+                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
                     })?;
 
                     let rewards_tx = block_index.block_reward_transactable();
@@ -390,7 +406,8 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             };
             match output_amount {
                 OutputValue::Coin(output_amount) => {
-                    total = (total + output_amount).ok_or(StateUpdateError::InputAdditionError)?
+                    total = (total + output_amount)
+                        .ok_or(ConnectTransactionError::InputAdditionError)?
                 }
                 OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_tokens_total_inputs */
                 }
@@ -402,7 +419,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
     fn check_transferred_amounts_and_get_fee(
         &self,
         tx: &Transaction,
-    ) -> Result<Amount, StateUpdateError> {
+    ) -> Result<Amount, ConnectTransactionError> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
@@ -410,37 +427,39 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
-            return Err(StateUpdateError::AttemptToPrintMoney(
+            return Err(ConnectTransactionError::AttemptToPrintMoney(
                 inputs_total,
                 outputs_total,
             ));
         }
 
         let paid_fee = inputs_total - outputs_total;
-        paid_fee.ok_or(StateUpdateError::TxFeeTotalCalcFailed(
+        paid_fee.ok_or(ConnectTransactionError::TxFeeTotalCalcFailed(
             inputs_total,
             outputs_total,
         ))
     }
 
-    fn calculate_coins_total_outputs(outputs: &[TxOutput]) -> Result<Amount, StateUpdateError> {
+    fn calculate_coins_total_outputs(
+        outputs: &[TxOutput],
+    ) -> Result<Amount, ConnectTransactionError> {
         outputs
             .iter()
             .try_fold(Amount::from_atoms(0), |accum, out| match out.value() {
                 OutputValue::Coin(value) => accum + *value,
                 OutputValue::Token(_) => Some(accum),
             })
-            .ok_or(StateUpdateError::OutputAdditionError)
+            .ok_or(ConnectTransactionError::OutputAdditionError)
     }
 
-    fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, StateUpdateError> {
+    fn calculate_block_total_fees(&self, block: &Block) -> Result<Amount, ConnectTransactionError> {
         let total_fees = block
             .transactions()
             .iter()
             .try_fold(Amount::from_atoms(0), |init, tx| {
                 init + self.check_transferred_amounts_and_get_fee(tx).ok()?
             })
-            .ok_or_else(|| StateUpdateError::FailedToAddAllFeesOfBlock(block.get_id()))?;
+            .ok_or_else(|| ConnectTransactionError::FailedToAddAllFeesOfBlock(block.get_id()))?;
         Ok(total_fees)
     }
 
@@ -448,7 +467,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         &self,
         block: &Block,
         block_subsidy_at_height: Amount,
-    ) -> Result<(), StateUpdateError> {
+    ) -> Result<(), ConnectTransactionError> {
         let total_fees = self.calculate_block_total_fees(block)?;
 
         let block_reward_transactable = block.header().block_reward_transactable();
@@ -467,10 +486,10 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
         let max_allowed_outputs_total =
             amount_sum!(inputs_total, block_subsidy_at_height, total_fees)
-                .ok_or_else(|| StateUpdateError::RewardAdditionError(block.get_id()))?;
+                .ok_or_else(|| ConnectTransactionError::RewardAdditionError(block.get_id()))?;
 
         if outputs_total > max_allowed_outputs_total {
-            return Err(StateUpdateError::AttemptToPrintMoney(
+            return Err(ConnectTransactionError::AttemptToPrintMoney(
                 inputs_total,
                 outputs_total,
             ));
@@ -484,7 +503,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         output: &TxOutput,
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
-    ) -> Result<(), StateUpdateError> {
+    ) -> Result<(), ConnectTransactionError> {
         use common::chain::timelock::OutputTimeLock;
         use common::chain::OutputPurpose;
 
@@ -501,22 +520,23 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
             OutputTimeLock::UntilHeight(h) => (spend_height >= h),
             OutputTimeLock::UntilTime(t) => (spending_time >= t),
             OutputTimeLock::ForBlockCount(d) => {
-                let d: i64 =
-                    (*d).try_into().map_err(|_| StateUpdateError::BlockHeightArithmeticError)?;
+                let d: i64 = (*d)
+                    .try_into()
+                    .map_err(|_| ConnectTransactionError::BlockHeightArithmeticError)?;
                 let d = BlockDistance::from(d);
                 *spend_height
                     >= (source_block_height + d)
-                        .ok_or(StateUpdateError::BlockHeightArithmeticError)?
+                        .ok_or(ConnectTransactionError::BlockHeightArithmeticError)?
             }
             OutputTimeLock::ForSeconds(dt) => {
                 *spending_time
                     >= source_block_time
                         .add_int_seconds(*dt)
-                        .ok_or(StateUpdateError::BlockTimestampArithmeticError)?
+                        .ok_or(ConnectTransactionError::BlockTimestampArithmeticError)?
             }
         };
 
-        ensure!(past_lock, StateUpdateError::TimeLockViolation);
+        ensure!(past_lock, ConnectTransactionError::TimeLockViolation);
 
         Ok(())
     }
@@ -526,7 +546,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         tx: &T,
         spend_height: &BlockHeight,
         spending_time: &BlockTimestamp,
-    ) -> Result<(), StateUpdateError> {
+    ) -> Result<(), ConnectTransactionError> {
         let inputs = match tx.inputs() {
             Some(ins) => ins,
             None => return Ok(()),
@@ -538,16 +558,16 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
             let tx_index = prev_tx_index_op
                 .get_tx_index()
-                .ok_or(StateUpdateError::PreviouslyCachedInputNotFound)?;
+                .ok_or(ConnectTransactionError::PreviouslyCachedInputNotFound)?;
 
             match tx_index.position() {
                 SpendablePosition::Transaction(tx_pos) => {
                     let prev_tx = self
                         .db_tx
                         .get_mainchain_tx_by_position(tx_pos)
-                        .map_err(StateUpdateError::from)?
+                        .map_err(ConnectTransactionError::from)?
                         .ok_or_else(|| {
-                            StateUpdateError::InvariantErrorTransactionCouldNotBeLoaded(
+                            ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
                                 tx_pos.clone(),
                             )
                         })?;
@@ -555,7 +575,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     let output = prev_tx
                         .outputs()
                         .get(input.outpoint().output_index() as usize)
-                        .ok_or(StateUpdateError::OutputIndexOutOfRange {
+                        .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: None,
                             source_output_index: outpoint.output_index() as usize,
                         })?;
@@ -566,9 +586,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         let block_index = self
                             .db_tx
                             .get_block_index(tx_pos.block_id())
-                            .map_err(StateUpdateError::from)?
+                            .map_err(ConnectTransactionError::from)?
                             .ok_or_else(|| {
-                                StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(
+                                ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(
                                     *tx_pos.block_id(),
                                 )
                             })?;
@@ -581,13 +601,13 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     }
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
-                        .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
+                        .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
                 }
                 SpendablePosition::BlockReward(block_id) => {
                     let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
                         // TODO get rid of the coercion
                         let block_id = Id::new(block_id.get());
-                        StateUpdateError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
+                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
                     })?;
 
                     let reward_tx = block_index.block_reward_transactable();
@@ -596,7 +616,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         .outputs()
                         .unwrap_or(&[])
                         .get(input.outpoint().output_index() as usize)
-                        .ok_or(StateUpdateError::OutputIndexOutOfRange {
+                        .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: None,
                             source_output_index: outpoint.output_index() as usize,
                         })?;
@@ -606,36 +626,9 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     self.check_timelock(&block_index, output, spend_height, spending_time)?;
 
                     verify_signature(output.purpose().destination(), tx, input_idx)
-                        .map_err(|_| StateUpdateError::SignatureVerificationFailed)?;
+                        .map_err(|_| ConnectTransactionError::SignatureVerificationFailed)?;
                 }
             };
-        }
-
-        Ok(())
-    }
-
-    fn apply_spend(
-        &mut self,
-        inputs: &[TxInput],
-        spend_height: &BlockHeight,
-        blockreward_maturity: &BlockDistance,
-        spender: Spender,
-    ) -> Result<(), StateUpdateError> {
-        for input in inputs {
-            let outpoint = input.outpoint();
-
-            match outpoint.tx_id() {
-                OutPointSourceId::Transaction(_) => {}
-                OutPointSourceId::BlockReward(block_id) => {
-                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
-                }
-            }
-
-            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
-
-            prev_tx_index_op
-                .spend(outpoint.output_index(), spender.clone())
-                .map_err(StateUpdateError::from)?;
         }
 
         Ok(())
@@ -789,7 +782,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn check_tokens_values(&self, block: &Block) -> Result<(), StateUpdateError> {
+    fn check_tokens_values(&self, block: &Block) -> Result<(), ConnectTransactionError> {
         for tx in block.transactions() {
             // Check tokens before connect tx
             tx.outputs()
@@ -799,25 +792,25 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     OutputValue::Token(token_data) => Some(token_data),
                 })
                 .try_for_each(|token_data| self.check_connected_tokens(token_data, tx, block))
-                .map_err(StateUpdateError::TokensError)?;
+                .map_err(ConnectTransactionError::TokensError)?;
 
             // If it is not a genesis and in tx issuance
             if self
                 .db_tx
                 .get_best_block_id()
-                .map_err(StateUpdateError::StorageError)?
+                .map_err(ConnectTransactionError::StorageError)?
                 .is_some()
                 && get_tokens_issuance_count(tx) == TOKEN_MAX_ISSUANCE_ALLOWED
             {
                 // check is fee enough for issuance
                 ensure!(
                     self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
-                        StateUpdateError::TokensError(TokensError::InsuffienceTokenFees(
+                        ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(
                             tx.get_id(),
                             block.get_id(),
                         ))
                     })? >= TOKEN_MIN_ISSUANCE_FEE,
-                    StateUpdateError::TokensError(TokensError::InsuffienceTokenFees(
+                    ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(
                         tx.get_id(),
                         block.get_id()
                     ),)
@@ -827,17 +820,44 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    pub fn spend(
+    fn spend(
+        &mut self,
+        inputs: &[TxInput],
+        spend_height: &BlockHeight,
+        blockreward_maturity: &BlockDistance,
+        spender: Spender,
+    ) -> Result<(), ConnectTransactionError> {
+        for input in inputs {
+            let outpoint = input.outpoint();
+
+            match outpoint.tx_id() {
+                OutPointSourceId::Transaction(_) => {}
+                OutPointSourceId::BlockReward(block_id) => {
+                    self.check_blockreward_maturity(&block_id, spend_height, blockreward_maturity)?;
+                }
+            }
+
+            let prev_tx_index_op = self.get_from_cached_mut(outpoint)?;
+
+            prev_tx_index_op
+                .spend(outpoint.output_index(), spender.clone())
+                .map_err(ConnectTransactionError::from)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn connect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
         spend_height: &BlockHeight,
         median_time_past: &BlockTimestamp,
         blockreward_maturity: &BlockDistance,
-    ) -> Result<(), StateUpdateError> {
+    ) -> Result<(), ConnectTransactionError> {
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    StateUpdateError::TxNumWrongInBlockOnConnect(tx_num, block.get_id())
+                    ConnectTransactionError::TxNumWrongInBlockOnConnect(tx_num, block.get_id())
                 })?;
 
                 // pre-cache all inputs
@@ -854,7 +874,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
 
                 // spend inputs of this transaction
                 let spender = tx.get_id().into();
-                self.apply_spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
+                self.spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.header().block_reward_transactable();
@@ -873,7 +893,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                         )?;
 
                         let spender = block.get_id().into();
-                        self.apply_spend(ins, spend_height, blockreward_maturity, spender)?;
+                        self.spend(ins, spend_height, blockreward_maturity, spender)?;
                     }
                     None => (),
                 }
@@ -885,14 +905,17 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    pub fn unspend(&mut self, spend_ref: BlockTransactableRef) -> Result<(), StateUpdateError> {
+    pub fn disconnect_transaction(
+        &mut self,
+        spend_ref: BlockTransactableRef,
+    ) -> Result<(), ConnectTransactionError> {
         // Delete TxMainChainIndex for the current tx
         self.remove_outputs(spend_ref)?;
 
         match spend_ref {
             BlockTransactableRef::Transaction(block, tx_num) => {
                 let tx = block.transactions().get(tx_num).ok_or_else(|| {
-                    StateUpdateError::TxNumWrongInBlockOnDisconnect(tx_num, block.get_id())
+                    ConnectTransactionError::TxNumWrongInBlockOnDisconnect(tx_num, block.get_id())
                 })?;
 
                 // pre-cache all inputs
@@ -907,7 +930,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                     // Mark input as unspend
                     input_tx_id_op
                         .unspend(outpoint.output_index())
-                        .map_err(StateUpdateError::from)?;
+                        .map_err(ConnectTransactionError::from)?;
                 }
             }
             BlockTransactableRef::BlockReward(block) => {
@@ -926,7 +949,7 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
                             // Mark input as unspend
                             input_tx_id_op
                                 .unspend(outpoint.output_index())
-                                .map_err(StateUpdateError::from)?;
+                                .map_err(ConnectTransactionError::from)?;
                         }
                     }
                     None => (),
@@ -937,20 +960,22 @@ impl<'a, S: BlockchainStorageRead> CachedInputs<'a, S> {
         Ok(())
     }
 
-    fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), StateUpdateError> {
+    fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
         inputs.iter().try_for_each(|input| self.fetch_and_cache(input.outpoint()))
     }
 
-    pub fn consume(self) -> Result<ConsumedCachedInputs, StateUpdateError> {
-        Ok(ConsumedCachedInputs { data: self.inputs })
+    pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
+        Ok(TransactionVerifierDelta {
+            data: self.tx_index_cache,
+        })
     }
 }
 
-impl<'a, S: BlockchainStorageWrite> CachedInputs<'a, S> {
+impl<'a, S: BlockchainStorageWrite> TransactionVerifier<'a, S> {
     pub fn flush_to_storage(
         db_tx: &mut S,
-        input_data: ConsumedCachedInputs,
-    ) -> Result<(), StateUpdateError> {
+        input_data: TransactionVerifierDelta,
+    ) -> Result<(), ConnectTransactionError> {
         for (tx_id, tx_index_op) in input_data.data {
             match tx_index_op {
                 CachedInputsOperation::Write(ref tx_index) => {

@@ -17,11 +17,10 @@
 
 use super::anyonecanspend_address;
 use crate::detail::tests::test_framework::TestFramework;
+use crate::detail::transaction_verifier::error::ConnectTransactionError;
+use crate::detail::CheckBlockTransactionsError;
 use crate::{
-    detail::{
-        spend_cache::error::StateUpdateError, tests::TestBlockInfo, CheckBlockError,
-        CheckBlockTransactionsError, TokensError,
-    },
+    detail::{tests::TestBlockInfo, CheckBlockError, TokensError},
     BlockError, BlockSource,
 };
 use chainstate_types::block_index::BlockIndex;
@@ -132,11 +131,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorIncorrectTicker(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectTicker(_, _)
+                ))
             ))
         ));
 
@@ -150,11 +147,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorIncorrectTicker(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectTicker(_, _)
+                ))
             ))
         ));
 
@@ -168,11 +163,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorIncorrectTicker(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectTicker(_, _)
+                ))
             ))
         ));
 
@@ -186,11 +179,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorIncorrectAmount(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectAmount(_, _)
+                ))
             ))
         ));
 
@@ -204,11 +195,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorTooManyDecimals(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorTooManyDecimals(_, _)
+                ))
             ))
         ));
 
@@ -222,11 +211,9 @@ fn token_issue_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::IssueErrorIncorrectMetadataURI(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::IssueErrorIncorrectMetadataURI(_, _)
+                ))
             ))
         ));
     });
@@ -268,7 +255,10 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
+                    _,
+                    _
+                ))
             ))
         ));
 
@@ -280,7 +270,7 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
         ));
 
@@ -292,12 +282,9 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(TokensError::TransferZeroTokens(
-                        _,
-                        _
-                    ))
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::TransferZeroTokens(_, _)
+                ))
             ))
         ));
     })
@@ -338,11 +325,9 @@ fn couple_of_token_issuance_in_one_tx() {
         assert!(matches!(
             test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::CheckBlockFailed(
-                CheckBlockError::CheckTransactionFailed(
-                    CheckBlockTransactionsError::CheckTokensError(
-                        TokensError::MultipleTokenIssuanceInTransaction(_, _)
-                    )
-                )
+                CheckBlockError::CheckTransactionFailed(CheckBlockTransactionsError::TokensError(
+                    TokensError::MultipleTokenIssuanceInTransaction(_, _)
+                ))
             ))
         ));
     })
@@ -394,7 +379,7 @@ fn token_issuance_with_insufficient_fee() {
         assert!(matches!(
             test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::InsuffienceTokenFees(_, _))
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(_, _))
             ))
         ));
     })
@@ -486,7 +471,10 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
+                    _,
+                    _
+                ))
             ))
         ));
 
@@ -498,7 +486,7 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::SomeTokensLost(_, _))
+                ConnectTransactionError::TokensError(TokensError::SomeTokensLost(_, _))
             ))
         ));
 
@@ -534,7 +522,7 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
         ));
     })
@@ -607,7 +595,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::NoTokenInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::NoTokenInInputs(_, _))
             ))
         ));
 
@@ -682,7 +670,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
                 values
             ),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::MissingOutputOrSpent
+                ConnectTransactionError::MissingOutputOrSpent
             ))
         ));
     })
@@ -730,7 +718,10 @@ fn test_attempt_to_print_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                StateUpdateError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
+                    _,
+                    _
+                ))
             ))
         ));
     });

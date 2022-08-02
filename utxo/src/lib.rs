@@ -34,12 +34,14 @@ pub enum Error {
     UtxoAlreadySpent,
     #[error("Attempted to spend a non-existing UTXO")]
     NoUtxoFound,
-    #[error(
-        "Attempted to consume a cache object that does not have any best block associated with it"
-    )]
-    CacheWithoutBestBlock,
     #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]
     NoBlockchainHeightFound,
     #[error("Database error: `{0}`")]
     DBError(String),
+}
+
+impl From<chainstate_types::storage_result::Error> for Error {
+    fn from(e: chainstate_types::storage_result::Error) -> Self {
+        Error::DBError(format!("{:?}", e))
+    }
 }

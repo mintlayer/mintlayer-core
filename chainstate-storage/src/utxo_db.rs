@@ -13,75 +13,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code)]
-
-use crate::{internal::Store, Error, UndoRead, UndoWrite, UtxoRead, UtxoWrite};
-use common::chain::{Block, GenBlock, OutPoint};
-use common::primitives::Id;
-use utxo::{utxo_storage::UtxosPersistentStorage, BlockUndo, Utxo};
-
-#[derive(Clone)]
-pub struct UtxoDBImpl<B> {
-    store: Store<B>,
-}
-
-impl<B> UtxoDBImpl<B> {
-    pub fn new(store: Store<B>) -> Self {
-        Self { store }
-    }
-}
-
-impl<B> UtxosPersistentStorage for UtxoDBImpl<B>
-where
-    B: for<'tx> storage::traits::Transactional<'tx, crate::internal::Schema>,
-{
-    fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> Result<(), utxo::Error> {
-        self.store.add_utxo(outpoint, entry).map_err(|e| e.into())
-    }
-    fn del_utxo(&mut self, outpoint: &OutPoint) -> Result<(), utxo::Error> {
-        self.store.del_utxo(outpoint).map_err(|e| e.into())
-    }
-    fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, utxo::Error> {
-        self.store.get_utxo(outpoint).map_err(|e| e.into())
-    }
-    fn set_best_block_id(&mut self, block_id: &Id<GenBlock>) -> Result<(), utxo::Error> {
-        self.store.set_best_block_for_utxos(block_id).map_err(|e| e.into())
-    }
-    fn get_best_block_id(&self) -> Result<Option<Id<GenBlock>>, utxo::Error> {
-        self.store.get_best_block_for_utxos().map_err(|e| e.into())
-    }
-
-    fn set_undo_data(&mut self, id: Id<Block>, undo: &BlockUndo) -> Result<(), utxo::Error> {
-        self.store.add_undo_data(id, undo).map_err(|e| e.into())
-    }
-
-    fn del_undo_data(&mut self, id: Id<Block>) -> Result<(), utxo::Error> {
-        self.store.del_undo_data(id).map_err(|e| e.into())
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> Result<Option<BlockUndo>, utxo::Error> {
-        self.store.get_undo_data(id).map_err(|e| e.into())
-    }
-}
-
-impl From<Error> for utxo::Error {
-    fn from(e: Error) -> Self {
-        utxo::Error::DBError(format!("{:?}", e))
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::*;
     use crate::internal::test::create_rand_block_undo;
     use common::chain::{
-        tokens::OutputValue, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput,
+        tokens::OutputValue, Block, Destination, OutPoint, OutPointSourceId, OutputPurpose,
+        TxOutput,
     };
-    use common::primitives::{Amount, BlockHeight, H256};
+    use common::primitives::{Amount, BlockHeight, Id, H256};
     use crypto::key::{KeyKind, PrivateKey};
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
+    use utxo::utxo_storage::UtxosDBMut;
+    use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
+    use utxo::Utxo;
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
@@ -106,8 +52,11 @@ mod test {
     #[case(Seed::from_entropy())]
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let store = crate::Store::new_empty().expect("should create a store");
-        let mut db_interface = UtxoDBImpl::new(store);
+        let mut store = crate::Store::new_empty().expect("should create a store");
+        store
+            .set_best_block_for_utxos(&H256::random().into())
+            .expect("Setting best block cannot fail");
+        let mut db_interface = UtxosDBMut::new(&mut store);
 
         // utxo checking
         let (utxo, outpoint) = create_utxo(1, rng.gen_range(0..u128::MAX));
@@ -118,11 +67,11 @@ mod test {
 
         // test block id
         let block_id: Id<Block> = Id::new(H256::random());
-        assert!(db_interface.set_best_block_id(&block_id.into()).is_ok());
+        assert!(db_interface.set_best_block_for_utxos(&block_id.into()).is_ok());
 
         let block_id = Id::new(
             db_interface
-                .get_best_block_id()
+                .get_best_block_for_utxos()
                 .expect("query should not fail")
                 .expect("should return the block id")
                 .get(),

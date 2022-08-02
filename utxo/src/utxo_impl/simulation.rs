@@ -65,7 +65,7 @@ fn populate_cache<'a>(
 
         // randomly set the `possible_overwrite`
         let possible_overwrite = random_bool();
-        let _ = cache.add_utxo(utxo, &outpoint, possible_overwrite);
+        let _ = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
         // println!("child, insert: {:?}, overwrite: {}", outpoint,possible_overwrite );
     }
@@ -134,7 +134,7 @@ fn stack_flush_test() {
     let mut outps: Vec<OutPoint> = vec![];
 
     let block_hash = Id::new(H256::random());
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     parent.set_best_block(block_hash);
 
     let parent_clone = parent.clone();
@@ -156,7 +156,7 @@ fn stack_flush_test() {
 
     for (key, utxo_entry) in &parent.utxos {
         let outpoint = key;
-        let utxo = cache3.get_utxo(outpoint);
+        let utxo = cache3.utxo(outpoint);
 
         assert_eq!(utxo_entry.utxo(), utxo);
     }
