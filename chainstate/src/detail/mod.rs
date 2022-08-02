@@ -25,6 +25,7 @@ use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
+use utxo::utxo_storage::UtxosDBMut;
 mod consensus_validator;
 mod orphan_blocks;
 
@@ -281,6 +282,10 @@ impl Chainstate {
         db_tx
             .set_mainchain_tx_index(&genesis_id.into(), &genesis_index)
             .map_err(BlockError::StorageError)?;
+
+        // initialize the utxo-set by adding genesis outputs to it
+        UtxosDBMut::initialize_db(&mut db_tx, &self.chain_config);
+
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
     }
