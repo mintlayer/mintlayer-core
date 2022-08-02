@@ -196,7 +196,7 @@ fn double_spend_tx_in_another_block(#[case] seed: Seed) {
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
-fn overspend(#[case] seed: Seed) {
+fn overspend_single_output(#[case] seed: Seed) {
     common::concurrency::model(move || {
         let mut tf = TestFramework::default();
 
@@ -221,7 +221,7 @@ fn overspend(#[case] seed: Seed) {
 }
 
 // Check that it is impossible to overspend the input using several outputs, even if each of the
-// individual outputs spent less than input.
+// individual outputs spends less than input.
 #[rstest]
 #[trace]
 #[case(Seed::from_entropy())]
