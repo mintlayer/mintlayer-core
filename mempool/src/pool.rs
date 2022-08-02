@@ -61,6 +61,7 @@ where
     T: GetTime,
     M: GetMemoryUsage,
 {
+    // TODO this calculation is already done in ChainState, reuse it
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
         let inputs = tx
             .inputs()
@@ -730,6 +731,8 @@ where
             return Err(TxValidationError::DuplicateInputs);
         }
 
+        // TODO see this issue:
+        // https://github.com/mintlayer/mintlayer-core/issues/331
         if tx.encoded_size() > MAX_BLOCK_SIZE_BYTES {
             return Err(TxValidationError::ExceedsMaxBlockSize);
         }

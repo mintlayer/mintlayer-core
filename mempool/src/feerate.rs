@@ -5,6 +5,9 @@ lazy_static::lazy_static! {
     pub(crate) static ref INCREMENTAL_RELAY_THRESHOLD: FeeRate = FeeRate::new(Amount::from_atoms(500));
 }
 
+// TODO we should reconsider using Amount and define functions for the specific operations required
+// on FeeRate. Previous attempts to do this did not pan out, but this should be revisited to avoid
+// dangerous arithmetic operations
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FeeRate {
     atoms_per_kb: u128,
