@@ -286,26 +286,8 @@ impl Chainstate {
             .map_err(BlockError::StorageError)?;
 
         // initialize the utxo-set by adding genesis outputs to it
-        {
-            let mut utxos_db = UtxosDBMut::new(&mut db_tx);
-            let mut utxos_cache = utxos_db.derive_cache();
-            utxos_cache.set_best_block(genesis_id);
-            for (index, output) in genesis.utxos().iter().enumerate() {
-                utxos_cache
-                    .add_utxo(
-                        &OutPoint::new(genesis_id.into(), index as u32),
-                        Utxo::new(output.clone(), false, BlockHeight::new(0)),
-                        false,
-                    )
-                    .expect("Adding genesis utxo failed");
-            }
+        UtxosDBMut::initialize_db(&mut db_tx, &self.chain_config);
 
-            let consumed_utxos_cache = utxos_cache.consume().expect("Consuming should never fail");
-
-            utxos_db
-                .batch_write(consumed_utxos_cache)
-                .expect("Writing genesis utxos failed");
-        }
         db_tx.commit().expect("Genesis database initialization failed");
         Ok(())
     }

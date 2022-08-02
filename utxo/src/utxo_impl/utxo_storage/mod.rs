@@ -20,11 +20,13 @@ pub mod in_memory;
 mod rw_impls;
 mod view_impls;
 
-use crate::{BlockUndo, Utxo};
+use std::collections::BTreeMap;
+
+use crate::{BlockUndo, Utxo, UtxosView};
 use chainstate_types::storage_result::Error;
 use common::{
-    chain::{Block, GenBlock, OutPoint},
-    primitives::Id,
+    chain::{Block, ChainConfig, GenBlock, OutPoint, TxOutput},
+    primitives::{BlockHeight, Id},
 };
 
 pub trait UtxosStorageRead {
@@ -46,18 +48,54 @@ pub trait UtxosStorageWrite: UtxosStorageRead {
 #[must_use]
 pub struct UtxosDB<'a, S>(&'a S);
 
-impl<'a, S> UtxosDB<'a, S> {
+impl<'a, S: UtxosStorageRead> UtxosDB<'a, S> {
     pub fn new(store: &'a S) -> Self {
-        Self(store)
+        let utxos_db = Self(store);
+        debug_assert!(
+            utxos_db.best_block_hash().is_some(),
+            "Attempted to load an uninitialized utxos db"
+        );
+        utxos_db
     }
 }
 
 #[must_use]
 pub struct UtxosDBMut<'a, S>(&'a mut S);
 
-impl<'a, S> UtxosDBMut<'a, S> {
+impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
     pub fn new(store: &'a mut S) -> Self {
-        Self(store)
+        let utxos_db = Self(store);
+        debug_assert!(
+            utxos_db.best_block_hash().is_some(),
+            "Attempted to load an uninitialized utxos db"
+        );
+        utxos_db
+    }
+
+    pub fn initialize_db(store: &'a mut S, chain_config: &ChainConfig) {
+        let utxos_db = Self(store);
+        assert!(
+            utxos_db.best_block_hash().is_none(),
+            "Attempted to reinitialized an initialized database"
+        );
+        utxos_db
+            .0
+            .set_best_block_for_utxos(&chain_config.genesis_block_id())
+            .expect("Setting best block should never fail");
+        let mut utxos_cache = utxos_db.derive_cache();
+
+        let genesis = chain_config.genesis_block();
+        let genesis_id = chain_config.genesis_block_id();
+
+        for (index, output) in genesis.utxos().iter().enumerate() {
+            utxos_cache
+                .add_utxo(
+                    &OutPoint::new(genesis_id.into(), index as u32),
+                    Utxo::new(output.clone(), false, BlockHeight::new(0)),
+                    false,
+                )
+                .expect("Adding genesis utxo failed");
+        }
     }
 }
 
