@@ -73,7 +73,7 @@ fn create_block(
 /// returns a tuple of the best block id and the outpoints (for spending)
 fn initialize_db(tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random());
-    let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id.into(), Default::default());
+    let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id, Default::default());
 
     // let's populate the db with outputs.
     let tx_outputs = create_tx_outputs(tx_outputs_size);
