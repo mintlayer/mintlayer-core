@@ -252,7 +252,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
                 .with_transactions(vec![tx1, tx2])
                 .build_and_process()
                 .unwrap_err(),
-            BlockError::StateUpdateFailed(StateUpdateError::AttemptToPrintMoney(
+            BlockError::StateUpdateFailed(ConnectTransactionError::AttemptToPrintMoney(
                 Amount::from_atoms(tx1_output_value),
                 Amount::from_atoms(tx2_output_value * 2)
             ))
