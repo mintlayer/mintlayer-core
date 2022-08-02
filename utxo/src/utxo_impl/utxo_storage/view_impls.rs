@@ -42,23 +42,16 @@ mod utxosdb_utxosview_impls {
         })
     }
 
-    pub fn has_utxo<S: UtxosStorageRead + UtxosView>(db: &S, outpoint: &OutPoint) -> bool {
+    pub fn has_utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> bool {
         utxo(db, outpoint).is_some()
     }
 
-    pub fn best_block_hash<S: UtxosStorageRead + UtxosView>(db: &S) -> Option<Id<GenBlock>> {
-        match db.get_best_block_for_utxos() {
-            Ok(opt_id) => opt_id,
-            Err(e) => {
-                panic!(
-                    "Database error while attempting to retrieve utxo set best block hash from the database: {}",
-                    e
-                );
-            }
-        }
+    pub fn best_block_hash<S: UtxosStorageRead>(db: &S) -> Option<Id<GenBlock>> {
+        db.get_best_block_for_utxos().unwrap_or_else(|e| panic!("Database error while attempting to retrieve utxo set best block hash from the database: {}",
+        e))
     }
 
-    pub fn estimated_size<S: UtxosStorageRead + UtxosView>(db: &S) -> Option<usize> {
+    pub fn estimated_size<S: UtxosStorageRead>(db: &S) -> Option<usize> {
         None
     }
 
