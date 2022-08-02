@@ -458,7 +458,6 @@ impl MempoolStore {
 
         self.add_to_descendant_score_index(&entry);
         self.txs_by_creation_time.entry(creation_time).or_default().insert(tx_id);
-        assert!(self.txs_by_id.get(&tx_id.get()).is_some());
         Ok(())
     }
 
