@@ -17,5 +17,6 @@ thiserror = "1.0"
 
 [dev-dependencies]
 crypto = { path = '../crypto' }
-
 itertools = "0.10"
+rstest = "0.15"
+test-utils = {path = '../test-utils'}

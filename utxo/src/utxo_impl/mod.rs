@@ -516,35 +516,44 @@ mod simulation;
 #[cfg(test)]
 mod unit_test {
     use common::primitives::H256;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
     use crate::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
     use crate::UtxosCache;
 
-    #[test]
-    fn test_uncache() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn test_uncache(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is not dirty and not fresh
-        let (utxo, outp) = insert_single_entry(&mut cache, &Presence::Present, Some(0), None);
+        let (utxo, outp) =
+            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(0), None);
         let res = cache.uncache(&outp).expect("should return an entry");
         assert_eq!(res.utxo(), Some(utxo));
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the outpoint does not exist.
-        let (_, outp) = insert_single_entry(&mut cache, &Presence::Absent, None, None);
+        let (_, outp) = insert_single_entry(&mut rng, &mut cache, &Presence::Absent, None, None);
         assert_eq!(cache.uncache(&outp), None);
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the entry is fresh, entry cannot be removed.
-        let (_, outp) = insert_single_entry(&mut cache, &Presence::Present, Some(FRESH), None);
+        let (_, outp) =
+            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
         assert_eq!(cache.uncache(&outp), None);
 
         // when the entry is dirty, entry cannot be removed.
-        let (_, outp) = insert_single_entry(&mut cache, &Presence::Present, Some(DIRTY), None);
+        let (_, outp) =
+            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(DIRTY), None);
         assert_eq!(cache.uncache(&outp), None);
 
         // when the entry is both fresh and dirty, entry cannot be removed.
-        let (_, outp) = insert_single_entry(&mut cache, &Presence::Present, Some(FRESH), None);
+        let (_, outp) =
+            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
         assert_eq!(cache.uncache(&outp), None);
     }
 }

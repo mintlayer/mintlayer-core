@@ -4459,7 +4459,9 @@ dependencies = [
  "itertools",
  "logging",
  "parity-scale-codec",
+ "rstest",
  "serialization",
+ "test-utils",
  "thiserror",
 ]
 
