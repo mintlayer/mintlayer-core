@@ -505,7 +505,7 @@ fn test_burn_tokens() {
             .unwrap()
             .unwrap();
 
-        // Try to burn it all
+        // Try to burn the rest 50%
         let values = vec![OutputValue::Token(TokenData::TokenBurnV1 {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
@@ -702,7 +702,7 @@ fn test_attempt_to_print_tokens() {
         assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
         let token_id = token_id(&block_a.transactions()[0]).unwrap();
 
-        // Try to transfer spent tokens
+        // Try to transfer a bunch of outputs where each separately do not exceed input tokens value, but a sum of outputs larger than inputs.
         let values = vec![
             OutputValue::Token(TokenData::TokenTransferV1 {
                 token_id,
@@ -726,5 +726,10 @@ fn test_attempt_to_print_tokens() {
         ));
     });
 }
+
+fn test_attempt_to_mix_input_tokens() {}
+
+fn test_attempt_to_overflow_outputs() {}
+
 
 //TODO: Due to much change in Test Framework, this file should be updated according to new features like TxBuilder
