@@ -14,15 +14,13 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-use crate::net::mock::types::Message;
+use crate::{constants::*, net::mock::types::Message};
 use bytes::{Buf, BytesMut};
 use serialization::{Decode, Encode};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_util::codec::{Decoder, Encoder};
 use utils::ensure;
-
-const MAX: usize = 10 * 1024 * 1024;
 
 struct MessageDecoder {}
 
@@ -40,7 +38,7 @@ impl Decoder for MessageDecoder {
         let length = u32::from_le_bytes(length_bytes) as usize;
 
         ensure!(
-            length <= MAX,
+            length <= MAX_MESSAGE_SIZE,
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Frame of length {} is too large.", length),
@@ -74,7 +72,7 @@ impl Encoder<Message> for MessageEncoder {
         let encoded = msg.encode();
 
         ensure!(
-            encoded.len() <= MAX,
+            encoded.len() <= MAX_MESSAGE_SIZE,
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("Frame of length {} is too large.", encoded.len()),
