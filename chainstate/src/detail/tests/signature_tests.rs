@@ -21,7 +21,7 @@ use common::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype::SigHashType,
         },
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput, tokens::OutputValue,
     },
     primitives::Amount,
 };
@@ -45,7 +45,7 @@ fn signed_tx() {
                 InputWitness::NoSignature(None),
             ))
             .add_output(TxOutput::new(
-                Amount::from_atoms(100),
+                OutputValue::Coin(Amount::from_atoms(100)),
                 OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
             ))
             .build();
@@ -59,7 +59,7 @@ fn signed_tx() {
                     InputWitness::NoSignature(None),
                 ))
                 .add_output(TxOutput::new(
-                    Amount::from_atoms(100),
+                    OutputValue::Coin(Amount::from_atoms(100)),
                     OutputPurpose::Transfer(Destination::PublicKey(public_key.clone())),
                 ))
                 .build();

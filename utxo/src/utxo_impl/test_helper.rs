@@ -15,6 +15,7 @@
 
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::signature::inputsig::InputWitness;
+use common::chain::tokens::OutputValue;
 use common::chain::{
     Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
     TxOutput,

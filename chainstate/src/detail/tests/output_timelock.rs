@@ -11,7 +11,7 @@ use common::{
         block::{timestamp::BlockTimestamp, GenBlock},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        OutPointSourceId, OutputPurpose, TxInput, TxOutput, tokens::OutputValue,
     },
     primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -147,7 +147,7 @@ fn output_lock_until_height_but_spend_at_same_block() {
             ))
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
+                OutputValue::Coin(Amount::from_atoms(100000)),
                 OutputPurpose::LockThenTransfer(
                     anyonecanspend_address(),
                     OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
@@ -288,7 +288,7 @@ fn output_lock_for_block_count_but_spend_at_same_block() {
             ))
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
+                OutputValue::Coin(Amount::from_atoms(100000)),
                 OutputPurpose::LockThenTransfer(
                     anyonecanspend_address(),
                     OutputTimeLock::ForBlockCount(block_count_that_unlocks),
@@ -457,7 +457,7 @@ fn output_lock_until_time_but_spend_at_same_block() {
             ))
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
+                OutputValue::Coin(Amount::from_atoms(100000)),
                 OutputPurpose::LockThenTransfer(
                     anyonecanspend_address(),
                     OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
@@ -596,7 +596,7 @@ fn output_lock_for_seconds_but_spend_at_same_block() {
             ))
             .add_anyone_can_spend_output(10000)
             .add_output(TxOutput::new(
-                Amount::from_atoms(100000),
+                OutputValue::Coin(Amount::from_atoms(100000)),
                 OutputPurpose::LockThenTransfer(
                     anyonecanspend_address(),
                     OutputTimeLock::ForSeconds(100),
@@ -673,7 +673,7 @@ fn add_block_with_locked_output(
                 ))
                 .add_anyone_can_spend_output(10000)
                 .add_output(TxOutput::new(
-                    Amount::from_atoms(100000),
+                    OutputValue::Coin(Amount::from_atoms(100000)),
                     OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
                 ))
                 .build(),
