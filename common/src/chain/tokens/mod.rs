@@ -22,7 +22,6 @@ use crate::primitives::Amount;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
     Coin(Amount),
-    Token(TokenData),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]

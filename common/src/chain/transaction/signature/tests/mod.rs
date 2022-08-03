@@ -329,7 +329,6 @@ fn check_mutate_output(original_tx: &Transaction, destination: &Destination, sho
             OutputValue::Coin(coin) => {
                 OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
             }
-            OutputValue::Token(_token) => todo!(),
         },
         tx_updater.outputs[0].purpose().clone(),
     );

@@ -74,7 +74,6 @@ fn create_utxo_data(
                     OutputPurpose::Transfer(anyonecanspend_address()),
                 )
             }
-            OutputValue::Token(_token) => return None,
         },
     ))
 }

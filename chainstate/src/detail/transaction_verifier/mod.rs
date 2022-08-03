@@ -279,8 +279,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     total = (total + output_amount)
                         .ok_or(ConnectTransactionError::InputAdditionError)?
                 }
-                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_tokens_total_inputs */
-                }
             }
         }
         Ok(total)
@@ -317,7 +315,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             .iter()
             .filter_map(|output| match output.value() {
                 OutputValue::Coin(coin) => Some(*coin),
-                OutputValue::Token(_) => None,
             })
             .try_fold(Amount::from_atoms(0), |accum, out| accum + out)
             .ok_or(ConnectTransactionError::OutputAdditionError)
