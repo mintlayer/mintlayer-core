@@ -28,6 +28,7 @@ use common::{
         block::timestamp::BlockTimestamp,
         calculate_tx_index_from_block,
         signature::{verify_signature, Transactable},
+        tokens::OutputValue,
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -211,11 +212,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn get_output_amount(
+    fn get_output_value(
         outputs: &[TxOutput],
         output_index: usize,
         spender_id: Spender,
-    ) -> Result<Amount, ConnectTransactionError> {
+    ) -> Result<&OutputValue, ConnectTransactionError> {
         let output =
             outputs
                 .get(output_index)
@@ -226,7 +227,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(output.value())
     }
 
-    fn calculate_total_inputs(
+    fn calculate_coins_total_inputs(
         &self,
         inputs: &[TxInput],
     ) -> Result<Amount, ConnectTransactionError> {
@@ -257,7 +258,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                             )
                         })?;
 
-                    Self::get_output_amount(tx.outputs(), output_index, tx.get_id().into())?
+                    Self::get_output_value(tx.outputs(), output_index, tx.get_id().into())
+                        .cloned()?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
                     let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
@@ -269,10 +271,17 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     let rewards_tx = block_index.block_reward_transactable();
 
                     let outputs = rewards_tx.outputs().unwrap_or(&[]);
-                    Self::get_output_amount(outputs, output_index, (*block_id).into())?
+                    Self::get_output_value(outputs, output_index, (*block_id).into()).cloned()?
                 }
             };
-            total = (total + output_amount).ok_or(ConnectTransactionError::InputAdditionError)?;
+            match output_amount {
+                OutputValue::Coin(output_amount) => {
+                    total = (total + output_amount)
+                        .ok_or(ConnectTransactionError::InputAdditionError)?
+                }
+                OutputValue::Token(_) => { /*For now we don't calculate here tokens, use calculate_tokens_total_inputs */
+                }
+            }
         }
         Ok(total)
     }
@@ -284,8 +293,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         let inputs = tx.inputs();
         let outputs = tx.outputs();
 
-        let inputs_total = self.calculate_total_inputs(inputs)?;
-        let outputs_total = Self::calculate_total_outputs(outputs)?;
+        let inputs_total = self.calculate_coins_total_inputs(inputs)?;
+        let outputs_total = Self::calculate_coins_total_outputs(outputs)?;
 
         if outputs_total > inputs_total {
             return Err(ConnectTransactionError::AttemptToPrintMoney(
@@ -301,10 +310,16 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         ))
     }
 
-    fn calculate_total_outputs(outputs: &[TxOutput]) -> Result<Amount, ConnectTransactionError> {
+    fn calculate_coins_total_outputs(
+        outputs: &[TxOutput],
+    ) -> Result<Amount, ConnectTransactionError> {
         outputs
             .iter()
-            .try_fold(Amount::from_atoms(0), |accum, out| accum + out.value())
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(coin) => Some(*coin),
+                OutputValue::Token(_) => None,
+            })
+            .try_fold(Amount::from_atoms(0), |accum, out| accum + out)
             .ok_or(ConnectTransactionError::OutputAdditionError)
     }
 
@@ -333,10 +348,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         let inputs_total = inputs.map_or_else(
             || Ok(Amount::from_atoms(0)),
-            |ins| self.calculate_total_inputs(ins),
+            |ins| self.calculate_coins_total_inputs(ins),
         )?;
-        let outputs_total =
-            outputs.map_or_else(|| Ok(Amount::from_atoms(0)), Self::calculate_total_outputs)?;
+        let outputs_total = outputs.map_or_else(
+            || Ok(Amount::from_atoms(0)),
+            Self::calculate_coins_total_outputs,
+        )?;
 
         let max_allowed_outputs_total =
             amount_sum!(inputs_total, block_subsidy_at_height, total_fees)

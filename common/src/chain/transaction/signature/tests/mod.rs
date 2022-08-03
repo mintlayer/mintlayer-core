@@ -26,6 +26,7 @@ use super::{
 use crate::{
     chain::{
         signature::{verify_signature, TransactionSigError},
+        tokens::OutputValue,
         Destination, OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
@@ -308,7 +309,7 @@ fn check_insert_output(original_tx: &Transaction, destination: &Destination, sho
     let mut tx_updater = MutableTransaction::from(original_tx);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     tx_updater.outputs.push(TxOutput::new(
-        Amount::from_atoms(1234567890),
+        OutputValue::Coin(Amount::from_atoms(1234567890)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     ));
     let tx = tx_updater.generate_tx().unwrap();

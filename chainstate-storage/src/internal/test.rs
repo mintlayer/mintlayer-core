@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use common::chain::tokens::OutputValue;
 use common::chain::{Destination, OutputPurpose, TxOutput};
 use common::primitives::{Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
@@ -257,7 +258,7 @@ fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
     let random_value = rng.gen_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
-        Amount::from_atoms(random_value),
+        OutputValue::Coin(Amount::from_atoms(random_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     );
     let is_block_reward = random_value % 3 == 0;
