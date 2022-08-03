@@ -8,6 +8,24 @@ import sys
 SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
 
+LICENSE_TEMPLATE = [
+    r'// Copyright \(c\) 202[0-9](-202[0-9])? RBB S\.r\.l',
+    r'// opensource@mintlayer\.org',
+    r'// SPDX-License-Identifier: MIT',
+    r'// Licensed under the MIT License;',
+    r'// you may not use this file except in compliance with the License\.',
+    r'// You may obtain a copy of the License at',
+    r'//',
+    r'//\s+http://spdx\.org/licenses/MIT',
+    r'//',
+    r'// Unless required by applicable law or agreed to in writing, software',
+    r'// distributed under the License is distributed on an "AS IS" BASIS,',
+    r'// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied\.',
+    r'// See the License for the specific language governing permissions and',
+    r'// limitations under the License\.',
+    r'|//'
+]
+
 # List Rust source files
 def rs_sources(exclude = []):
     exclude = [ os.path.normpath(dir) for dir in ['target', '.git', '.github'] + exclude ]
@@ -23,8 +41,8 @@ def rs_sources(exclude = []):
 def disallow(pat, exclude = []):
     print("Searching for '{}':".format(pat))
     pat = re.compile(pat)
-    found_re = False
 
+    found_re = False
     for path in rs_sources(exclude):
         with open(path) as file:
             for (line_num, line) in enumerate(file, start = 1):
@@ -36,10 +54,26 @@ def disallow(pat, exclude = []):
     print()
     return not found_re
 
+# Check license header
+def check_licenses():
+    print("Checking license headers")
+    template = re.compile(r'\n'.join(LICENSE_TEMPLATE))
+
+    ok = True
+    for path in rs_sources():
+        with open(path) as file:
+            if not template.search(file.read()):
+                ok = False
+                print("{}: License missing or incorrect".format(path))
+
+    print()
+    return ok
+
 def run_checks():
     ok = True
     ok = ok and disallow(SCALECODEC_RE, exclude = ['serialization/core'])
     ok = ok and disallow(JSONRPSEE_RE, exclude = ['rpc'])
+    ok = ok and check_licenses()
     return ok
 
 if __name__ == '__main__':
