@@ -21,7 +21,8 @@ use common::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype::SigHashType,
         },
-        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput, tokens::OutputValue,
+        tokens::OutputValue,
+        Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::Amount,
 };

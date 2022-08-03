@@ -11,7 +11,8 @@ use common::{
         block::{timestamp::BlockTimestamp, GenBlock},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        OutPointSourceId, OutputPurpose, TxInput, TxOutput, tokens::OutputValue,
+        tokens::OutputValue,
+        OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };

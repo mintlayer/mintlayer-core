@@ -17,7 +17,8 @@ use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
-        Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput, tokens::OutputValue,
+        tokens::OutputValue,
+        Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable},
 };

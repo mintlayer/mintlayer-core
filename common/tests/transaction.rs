@@ -76,13 +76,13 @@ fn transaction_id_snapshots() {
 
     let tx = Transaction::new(0x00, ins0, outs0.clone(), 0x123456).unwrap();
     expect![[r#"
-        0x07a948386ef5258e5ec5598b19264606c6e5806d520589c8c48fa948a67a7fd2
+        0x6e05b8807d81956bda8ed231cfe4ffeb50f193af6bd3d441185470905486145f
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 
     let tx = Transaction::new(0x00, ins1, outs0, 0x00).unwrap();
     expect![[r#"
-        0x24f76d842e2ea6a45398cc4af57241e4ed61f124ce27608ac56f6932e2fb2d75
+        0x425ca11b436a48b832e35475fa808fa9de0f8513ce9b4dd9cef39fccb2342c71
     "#]]
     .assert_debug_eq(&tx.get_id().get());
 }

@@ -15,8 +15,8 @@
 
 use common::{
     chain::{
-        signature::inputsig::InputWitness, Destination, OutPointSourceId, OutputPurpose,
-        Transaction, TxInput, TxOutput, tokens::OutputValue,
+        signature::inputsig::InputWitness, tokens::OutputValue, Destination, OutPointSourceId,
+        OutputPurpose, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
 };

@@ -18,8 +18,8 @@ use crypto::random::RngCore;
 
 use super::*;
 use crate::chain::block::timestamp::BlockTimestamp;
-use crate::chain::OutputPurpose;
 use crate::chain::tokens::OutputValue;
+use crate::chain::OutputPurpose;
 use crate::{
     chain::{
         block::ConsensusData,
