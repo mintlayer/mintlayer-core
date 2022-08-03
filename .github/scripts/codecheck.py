@@ -70,11 +70,11 @@ def check_licenses():
     return ok
 
 def run_checks():
-    ok = True
-    ok = ok and disallow(SCALECODEC_RE, exclude = ['serialization/core'])
-    ok = ok and disallow(JSONRPSEE_RE, exclude = ['rpc'])
-    ok = ok and check_licenses()
-    return ok
+    return all([
+            disallow(SCALECODEC_RE, exclude = ['serialization/core']),
+            disallow(JSONRPSEE_RE, exclude = ['rpc']),
+            check_licenses()
+        ])
 
 if __name__ == '__main__':
     if not run_checks():
