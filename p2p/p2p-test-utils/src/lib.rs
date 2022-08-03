@@ -25,6 +25,7 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         transaction::Transaction,
         Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose, TxInput,
         TxOutput,
@@ -112,13 +113,20 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    let new_value = (output.value() - Amount::from_atoms(1)).unwrap();
+    let output_value = match output.value() {
+        OutputValue::Coin(coin) => *coin,
+        OutputValue::Token(_) => return None,
+    };
+    let new_value = (output_value - Amount::from_atoms(1)).unwrap();
     if new_value == Amount::from_atoms(0) {
         return None;
     }
     Some((
         TxInput::new(outsrc, index as u32, nosig_random_witness()),
-        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+        TxOutput::new(
+            OutputValue::Coin(new_value),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ),
     ))
 }
 
