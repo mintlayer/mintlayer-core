@@ -2448,7 +2448,7 @@ dependencies = [
  "rpc",
  "serde",
  "subsystem",
- "tempdir",
+ "tempfile",
  "tokio",
  "toml",
 ]
