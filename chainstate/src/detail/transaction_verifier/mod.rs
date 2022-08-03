@@ -313,8 +313,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     ) -> Result<Amount, ConnectTransactionError> {
         outputs
             .iter()
-            .filter_map(|output| match output.value() {
-                OutputValue::Coin(coin) => Some(*coin),
+            .map(|output| match output.value() {
+                OutputValue::Coin(coin) => *coin,
             })
             .try_fold(Amount::from_atoms(0), |accum, out| accum + out)
             .ok_or(ConnectTransactionError::OutputAdditionError)
