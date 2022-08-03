@@ -22,6 +22,7 @@ pub use emission_schedule::{EmissionSchedule, EmissionScheduleTabular, Mlt};
 use hex::FromHex;
 
 use crate::chain::block::timestamp::BlockTimestamp;
+use crate::chain::tokens::OutputValue;
 use crate::chain::transaction::Destination;
 use crate::chain::upgrades::NetUpgrades;
 use crate::chain::OutputPurpose;
@@ -190,7 +191,7 @@ fn create_mainnet_genesis() -> Genesis {
 
     // TODO: replace this with the real genesis mint value
     let output = TxOutput::new(
-        Amount::from_atoms(100000000000000),
+        OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(genesis_mint_destination),
     );
 
@@ -207,7 +208,7 @@ fn create_unit_test_genesis(premine_destination: Destination) -> Genesis {
     let genesis_message = String::new();
 
     let output = TxOutput::new(
-        Amount::from_atoms(100000000000000),
+        OutputValue::Coin(Amount::from_atoms(100000000000000)),
         OutputPurpose::Transfer(premine_destination),
     );
 
