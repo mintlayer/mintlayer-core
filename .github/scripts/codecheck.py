@@ -39,7 +39,7 @@ def rs_sources(exclude = []):
 
 # Disallow certain pattern in source files, with exceptions
 def disallow(pat, exclude = []):
-    print("Searching for '{}':".format(pat))
+    print("==== Searching for '{}':".format(pat))
     pat = re.compile(pat)
 
     found_re = False
@@ -56,7 +56,7 @@ def disallow(pat, exclude = []):
 
 # Check license header
 def check_licenses():
-    print("Checking license headers")
+    print("==== Checking license headers:")
     template = re.compile(r'\n'.join(LICENSE_TEMPLATE))
 
     ok = True
