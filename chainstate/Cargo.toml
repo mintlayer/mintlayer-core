@@ -15,6 +15,7 @@ logging = {path = '../logging'}
 rpc = {path = '../rpc'}
 serialization = {path = "../serialization"}
 subsystem = {path = '../subsystem'}
+utxo = {path = '../utxo'}
 utils = {path = '../utils'}
 
 async-trait = "0.1"

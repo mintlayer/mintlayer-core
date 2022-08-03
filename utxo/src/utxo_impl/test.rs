@@ -43,12 +43,12 @@ fn check_add_utxo(
     result_flags: Option<u8>,
     op_result: Result<(), Error>,
 ) {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
     let (_, outpoint) = insert_single_entry(&mut cache, &cache_presence, cache_flags, None);
 
     // perform the add_utxo.
     let (utxo, _) = create_utxo(0);
-    let add_result = cache.add_utxo(utxo, &outpoint, possible_overwrite);
+    let add_result = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
     assert_eq!(add_result, op_result);
 
@@ -74,13 +74,13 @@ fn check_spend_utxo(
     result_flags: Option<u8>,
 ) {
     // initialize the parent cache.
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (_, parent_outpoint) =
         insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
 
     // initialize the child cache
     let mut child = match parent_presence {
-        Absent => UtxosCache::default(),
+        Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
 
@@ -119,7 +119,7 @@ fn check_write_utxo(
     result_flags: Option<u8>,
 ) {
     //initialize the parent cache
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (_, outpoint) = insert_single_entry(&mut parent, &parent_presence, parent_flags, None);
     let key = &outpoint;
 
@@ -183,12 +183,12 @@ fn check_get_mut_utxo(
     cache_flags: Option<u8>,
     result_flags: Option<u8>,
 ) {
-    let mut parent = UtxosCache::default();
+    let mut parent = UtxosCache::new_for_test(H256::random().into());
     let (parent_utxo, parent_outpoint) =
         insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
 
     let mut child = match parent_presence {
-        Absent => UtxosCache::default(),
+        Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
     let (child_utxo, child_outpoint) = insert_single_entry(
@@ -417,13 +417,13 @@ fn access_utxo_test() {
 
 #[test]
 fn derive_cache_test() {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     let (utxo, outpoint_1) = create_utxo(10);
-    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
     let (utxo, outpoint_2) = create_utxo(20);
-    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let mut extra_cache = cache.derive_cache();
     assert!(extra_cache.utxos.is_empty());
@@ -432,22 +432,22 @@ fn derive_cache_test() {
     assert!(extra_cache.has_utxo(&outpoint_2));
 
     let (utxo, outpoint) = create_utxo(30);
-    assert!(extra_cache.add_utxo(utxo, &outpoint, true).is_ok());
+    assert!(extra_cache.add_utxo(&outpoint, utxo, true).is_ok());
 
     assert!(!cache.has_utxo(&outpoint));
 }
 
 #[test]
 fn blockchain_or_mempool_utxo_test() {
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     let (utxo, outpoint_1) = create_utxo(10);
-    assert!(cache.add_utxo(utxo, &outpoint_1, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
     let (utxo, outpoint_2) = create_utxo_for_mempool();
-    assert!(cache.add_utxo(utxo, &outpoint_2, false).is_ok());
+    assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
-    let res = cache.get_utxo(&outpoint_2).expect("should countain utxo");
+    let res = cache.utxo(&outpoint_2).expect("should countain utxo");
     assert!(res.source_height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
 }
@@ -456,7 +456,7 @@ fn blockchain_or_mempool_utxo_test() {
 fn multiple_update_utxos_test() {
     use common::chain::signature::inputsig::InputWitness;
 
-    let mut cache = UtxosCache::default();
+    let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     // let's test `add_utxos`
     let tx = Transaction::new(0x00, vec![], create_tx_outputs(10), 0x01).unwrap();
@@ -467,7 +467,7 @@ fn multiple_update_utxos_test() {
         let id = OutPointSourceId::from(tx.get_id());
         let outpoint = OutPoint::new(id, i as u32);
 
-        let utxo = cache.get_utxo(&outpoint).expect("utxo should exist");
+        let utxo = cache.utxo(&outpoint).expect("utxo should exist");
         assert_eq!(utxo.output(), x);
     });
 
@@ -496,6 +496,6 @@ fn multiple_update_utxos_test() {
 
     // check that the spent utxos should not exist in the cache anymore.
     to_spend.iter().for_each(|input| {
-        assert!(cache.get_utxo(input.outpoint()).is_none());
+        assert!(cache.utxo(input.outpoint()).is_none());
     });
 }

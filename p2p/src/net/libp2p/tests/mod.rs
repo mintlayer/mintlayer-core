@@ -38,6 +38,7 @@ use std::{
     iter,
     num::NonZeroU32,
     sync::Arc,
+    time::Duration,
 };
 use tokio::sync::mpsc;
 
@@ -261,24 +262,27 @@ where
     B: NetworkBehaviour,
 {
     let addr = get_address::<A>(swarm1).await;
-    swarm2.dial(addr).expect("swarm dial failed");
 
-    loop {
-        tokio::select! {
-            event = swarm1.next() => match event {
-                Some(SwarmEvent::ConnectionEstablished { peer_id, .. }) => {
-                    if peer_id == *swarm2.local_peer_id() {
-                        break;
+    for _ in 0..3 {
+        swarm2.dial(addr.clone()).expect("swarm dial failed");
+
+        loop {
+            tokio::select! {
+                event = swarm1.select_next_some() => {
+                    if let  SwarmEvent::ConnectionEstablished { peer_id, .. } = event {
+                        if peer_id == *swarm2.local_peer_id() {
+                            return;
+                        }
                     }
+                },
+                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                    break;
                 }
-                Some(_) => {},
-                None => panic!("got None"),
-            },
-            _ = tokio::time::sleep(std::time::Duration::from_secs(2)) => {
-                panic!("didn't receive ConnectionEstablished event in time");
             }
         }
     }
+
+    panic!("failed to establish connection with other swarm");
 }
 
 #[allow(dead_code)]

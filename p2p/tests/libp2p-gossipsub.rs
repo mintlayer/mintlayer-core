@@ -53,7 +53,7 @@ async fn test_libp2p_gossipsub() {
     );
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
-        ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 
@@ -123,7 +123,7 @@ async fn connect_peers(
 
     let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
     let _peer1_id = match peer2_res {
-        ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 }
@@ -282,7 +282,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
     );
     let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
     let _conn1_id = match conn2_res {
-        ConnectivityEvent::IncomingConnection { peer_info, .. } => peer_info.peer_id,
+        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
         _ => panic!("invalid event received, expected incoming connection"),
     };
 

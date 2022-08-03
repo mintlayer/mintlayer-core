@@ -6,13 +6,13 @@ license = "MIT"
 
 [dependencies]
 async-trait = "0.1"
+either = "1.7"
 futures = "0.3"
 itertools = "0.10"
 parity-scale-codec = "3.1"
 sscanf = "0.2"
 thiserror = "1.0"
 void = "1.0"
-serde = { version = "1", features = ["derive"] }
 
 # local dependencies
 common = { path = "../common/" }
@@ -31,6 +31,10 @@ features = ["macros"]
 version = "0.45"
 default-features = false
 features = ["gossipsub", "identify", "mdns", "mplex", "noise", "ping", "request-response", "tcp-async-io"]
+
+[dependencies.serde]
+version = "1"
+features = ["derive"]
 
 [dependencies.tokio]
 version = "1"

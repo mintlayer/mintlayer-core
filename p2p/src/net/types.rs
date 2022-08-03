@@ -20,7 +20,7 @@ use super::*;
 #[derive(Debug, PartialEq, Eq)]
 pub struct AddrInfo<T: NetworkingService> {
     /// Unique ID of the peer
-    pub id: T::PeerId,
+    pub peer_id: T::PeerId,
 
     /// List of discovered IPv4 addresses
     pub ip4: Vec<T::Address>,
@@ -83,18 +83,18 @@ impl<T: NetworkingService> Display for PeerInfo<T> {
 #[derive(Debug)]
 pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection accepted
-    ConnectionAccepted {
+    OutboundAccepted {
         /// Peer address
-        addr: T::Address,
+        address: T::Address,
 
         /// Peer information
         peer_info: PeerInfo<T>,
     },
 
     /// Inbound connection received
-    IncomingConnection {
+    InboundAccepted {
         /// Peer address
-        addr: T::Address,
+        address: T::Address,
 
         /// Peer information
         peer_info: PeerInfo<T>,
@@ -103,7 +103,7 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     /// Outbound connection failed
     ConnectionError {
         /// Address that was dialed
-        addr: T::Address,
+        address: T::Address,
 
         /// Error that occurred
         error: error::P2pError,
@@ -125,12 +125,6 @@ pub enum ConnectivityEvent<T: NetworkingService> {
     Expired {
         /// Address information
         peers: Vec<AddrInfo<T>>,
-    },
-
-    /// Peer disconnected
-    Disconnected {
-        /// Unique ID of the peer
-        peer_id: T::PeerId,
     },
 
     /// Error occurred with peer

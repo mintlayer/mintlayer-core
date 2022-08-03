@@ -17,17 +17,16 @@
 
 use std::sync::Mutex;
 
-use crate::detail::{tests::test_framework::BlockTestFramework, *};
-use chainstate_storage::Store;
+use crate::detail::{tests::test_framework::TestFramework, *};
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
-        config::{create_regtest, create_unit_test_config},
+        config::create_regtest,
         signature::inputsig::InputWitness,
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
     },
-    primitives::{time, Amount, BlockHeight, Id, H256},
+    primitives::{Amount, BlockHeight, Id},
     Uint256,
 };
 use crypto::random::{Rng, SliceRandom};
@@ -45,11 +44,6 @@ mod syncing_tests;
 mod test_framework;
 
 type EventList = Arc<Mutex<Vec<(Id<Block>, BlockHeight)>>>;
-
-const ERR_BEST_BLOCK_NOT_FOUND: &str = "Best block not found";
-const ERR_STORAGE_FAIL: &str = "Storage failure";
-const ERR_CREATE_BLOCK_FAIL: &str = "Creating block caused fail";
-const ERR_CREATE_TX_FAIL: &str = "Creating tx caused fail";
 
 fn empty_witness(rng: &mut impl Rng) -> InputWitness {
     let mut msg: Vec<u8> = (1..100).collect();
@@ -76,24 +70,8 @@ fn create_utxo_data(
     ))
 }
 
-fn setup_chainstate() -> Chainstate {
-    chainstate_with_config(create_unit_test_config(), ChainstateConfig::new())
-}
-
-fn chainstate_with_config(
-    chain_config: ChainConfig,
-    chainstate_config: ChainstateConfig,
-) -> Chainstate {
-    Chainstate::new(
-        Arc::new(chain_config),
-        chainstate_config,
-        Store::new_empty().unwrap(),
-        None,
-        Default::default(),
-    )
-    .unwrap()
-}
-
+// TODO: Replace by a proper UTXO set abstraction
+// (https://github.com/mintlayer/mintlayer-core/issues/312).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestBlockInfo {
     pub(crate) txns: Vec<(OutPointSourceId, Vec<TxOutput>)>,
@@ -133,36 +111,6 @@ impl TestBlockInfo {
             }
         }
     }
-
-    fn orphan(mut self) -> Self {
-        self.id = Id::new(H256::random());
-        self
-    }
-}
-
-fn produce_test_block(prev_block: TestBlockInfo, rng: &mut impl Rng) -> Block {
-    produce_test_block_with_consensus_data(prev_block, ConsensusData::None, rng)
-}
-
-fn produce_test_block_with_consensus_data(
-    prev_block: TestBlockInfo,
-    consensus_data: ConsensusData,
-    rng: &mut impl Rng,
-) -> Block {
-    // The value of each output is decreased by a random amount to produce a new input and output.
-    let (inputs, outputs): (Vec<TxInput>, Vec<TxOutput>) = prev_block
-        .txns
-        .into_iter()
-        .flat_map(|(s, o)| create_new_outputs(s, &o, rng))
-        .unzip();
-
-    Block::new(
-        vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-        prev_block.id,
-        BlockTimestamp::from_duration_since_epoch(time::get()),
-        consensus_data,
-    )
-    .expect(ERR_CREATE_BLOCK_FAIL)
 }
 
 fn create_new_outputs(
@@ -184,23 +132,18 @@ fn create_new_outputs(
 #[case(Seed::from_entropy())]
 fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
-    let chain_config = create_regtest();
-    let mut prev_block = TestBlockInfo::from_genesis(chain_config.genesis_block());
-    let chainstate_config = ChainstateConfig::new();
-    let chainstate = chainstate_with_config(chain_config, chainstate_config);
-    let mut btf = BlockTestFramework::with_chainstate(chainstate);
+    let mut tf = TestFramework::builder().with_chain_config(create_regtest()).build();
     let difficulty =
         Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF]);
 
     for _ in 1..6 {
-        let mut mined_block = btf.random_block(prev_block, None, &mut rng);
+        let mut mined_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
         let bits = difficulty.into();
         assert!(
             crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
                 .expect("Unexpected conversion error")
         );
         println!("{}", hex::encode(mined_block.encode()));
-        prev_block = TestBlockInfo::from_block(&mined_block);
-        btf.add_special_block(mined_block).unwrap();
+        tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 }

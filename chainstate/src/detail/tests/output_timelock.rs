@@ -6,14 +6,12 @@ use std::{
     time::Duration,
 };
 
-use chainstate_storage::Store;
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, GenBlock},
-        config::create_unit_test_config,
+        block::{timestamp::BlockTimestamp, GenBlock},
         signature::inputsig::InputWitness,
         timelock::OutputTimeLock,
-        OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+        OutPointSourceId, OutputPurpose, TxInput, TxOutput,
     },
     primitives::{time, Amount, BlockDistance, BlockHeight, Id, Idable},
 };
@@ -21,573 +19,343 @@ use common::{
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
-        spend_cache::error::StateUpdateError,
-        tests::TestBlockInfo,
-        tests::{anyonecanspend_address, ERR_CREATE_BLOCK_FAIL, ERR_CREATE_TX_FAIL},
+        tests::{
+            anyonecanspend_address,
+            test_framework::{TestFramework, TransactionBuilder},
+        },
+        transaction_verifier::error::ConnectTransactionError,
     },
-    BlockError, BlockSource, Chainstate, ChainstateConfig, TimeGetter,
+    BlockError, TimeGetter,
 };
 
 #[test]
 fn output_lock_until_height() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         let block_height_that_unlocks = 10;
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
             BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output.clone()];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(1)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(locked_output.clone())
+                        .add_anyone_can_spend_output(5000)
+                        .build()
+                )
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
-        {
-            let prev_block_id =
-                chainstate.get_block_id_from_height(&BlockHeight::new(1)).unwrap().unwrap();
-            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id);
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(10000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![TxInput::new(
-                prev_block_info.txns[0].0.clone(),
-                0,
-                InputWitness::NoSignature(None),
-            )];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
+        let prev_block_info = tf.block_info(1);
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        prev_block_info.txns[0].0.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_anyone_can_spend_output(10000)
+                    .build(),
             )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(2)
-            );
-        }
+            .build_and_process()
+            .unwrap();
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
         // let's create more blocks until block_height_that_unlocks - 1, and always fail to spend, and build up the chain
         for height in 3..block_height_that_unlocks {
             assert_eq!(
                 BlockHeight::new(height - 1),
-                chainstate.get_best_block_index().unwrap().unwrap().block_height()
+                tf.best_block_index().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
 
-            // create another block, and spend the first input from the previous block
-            {
-                let outputs = vec![TxOutput::new(
-                    Amount::from_atoms(5000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                )];
-
-                let inputs = vec![locked_output.clone()];
-
-                let block = Block::new(
-                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id,
-                    BlockTimestamp::from_duration_since_epoch(time::get()),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                assert_eq!(
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                );
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height - 1)
-                );
-            }
+            // Create another block, and spend the first input from the previous block.
+            assert_eq!(
+                tf.make_block_builder()
+                    .add_transaction(
+                        TransactionBuilder::new()
+                            .add_input(locked_output.clone())
+                            .add_anyone_can_spend_output(5000)
+                            .build()
+                    )
+                    .build_and_process()
+                    .unwrap_err(),
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            );
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height - 1)
+            );
 
             // create another block, with no transactions, and get the blockchain to progress
-            {
-                let block = Block::new(
-                    vec![],
-                    prev_block_id,
-                    BlockTimestamp::from_duration_since_epoch(time::get()),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height)
-                );
-            }
-        }
-
-        // now we should be able to spend it at block_height_that_unlocks
-        {
-            let height = block_height_that_unlocks;
-            let prev_block_id = chainstate
-                .get_block_id_from_height(&BlockHeight::new(height - 1))
-                .unwrap()
-                .unwrap();
-
-            let tip_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-            assert_eq!(tip_id, prev_block_id);
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
+            tf.make_block_builder().build_and_process().unwrap();
             assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                tf.best_block_index().block_height(),
                 BlockHeight::new(height)
             );
         }
+
+        // now we should be able to spend it at block_height_that_unlocks
+        assert_eq!(
+            tf.best_block_id(),
+            tf.block_info(block_height_that_unlocks - 1).id
+        );
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(locked_output)
+                    .add_anyone_can_spend_output(5000)
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+        assert_eq!(
+            tf.best_block_index().block_height(),
+            BlockHeight::new(block_height_that_unlocks)
+        );
     });
 }
 
 #[test]
 fn output_lock_until_height_but_spend_at_same_block() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         let block_height_that_unlocks = 10;
 
         // create the first block, with a locked output
-        {
-            let prev_block = chainstate.chain_config.genesis_block();
+        let prev_block = tf.genesis();
 
-            let outputs1 = vec![
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::LockThenTransfer(
-                        anyonecanspend_address(),
-                        OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
-                    ),
-                ),
-            ];
-            let inputs1 = vec![TxInput::new(
+        let tx1 = TransactionBuilder::new()
+            .add_input(TxInput::new(
                 OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
                 0,
                 InputWitness::NoSignature(None),
-            )];
-            let tx1 = Transaction::new(0, inputs1, outputs1, 0).expect(ERR_CREATE_TX_FAIL);
-
-            let outputs2 = vec![TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-            let inputs2 = vec![TxInput::new(
+            ))
+            .add_anyone_can_spend_output(10000)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(100000),
+                OutputPurpose::LockThenTransfer(
+                    anyonecanspend_address(),
+                    OutputTimeLock::UntilHeight(BlockHeight::new(block_height_that_unlocks)),
+                ),
+            ))
+            .build();
+        let tx2 = TransactionBuilder::new()
+            .add_input(TxInput::new(
                 OutPointSourceId::Transaction(tx1.get_id()),
                 1,
                 InputWitness::NoSignature(None),
-            )];
-            let tx2 = Transaction::new(0, inputs2, outputs2, 0).expect(ERR_CREATE_TX_FAIL);
+            ))
+            .add_anyone_can_spend_output(5000)
+            .build();
 
-            let block = Block::new(
-                vec![tx1, tx2],
-                <Id<GenBlock>>::from(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(0)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
 
 #[test]
 fn output_lock_for_block_count() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = 20;
         let block_height_with_locked_output = 1;
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output.clone()];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(1)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(locked_output.clone())
+                        .add_anyone_can_spend_output(5000)
+                        .build()
+                )
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
 
         // create another block, and spend the first input from the previous block
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-            let prev_block_info = TestBlockInfo::from_id(&chainstate, prev_block_id);
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(10000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![TxInput::new(
-                prev_block_info.txns[0].0.clone(),
-                0,
-                InputWitness::NoSignature(None),
-            )];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_info.id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
+        let prev_block_info = tf.best_block_info();
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(TxInput::new(
+                        prev_block_info.txns[0].0.clone(),
+                        0,
+                        InputWitness::NoSignature(None),
+                    ))
+                    .add_anyone_can_spend_output(10000)
+                    .build(),
             )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(2)
-            );
-        }
+            .build_and_process()
+            .unwrap();
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(2));
 
         // let's create more blocks until block_count_that_unlocks + block_height_with_locked_output, and always fail to spend, and build up the chain
         for height in 3..block_count_that_unlocks + block_height_with_locked_output {
             assert_eq!(
                 BlockHeight::new(height - 1),
-                chainstate.get_best_block_index().unwrap().unwrap().block_height()
+                tf.best_block_index().block_height()
             );
             logging::log::info!("Submitting block of height: {}", height);
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
+
             // create another block, and spend the first input from the previous block
-            {
-                let outputs = vec![TxOutput::new(
-                    Amount::from_atoms(5000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                )];
-
-                let inputs = vec![locked_output.clone()];
-
-                let block = Block::new(
-                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id,
-                    BlockTimestamp::from_duration_since_epoch(time::get()),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                assert_eq!(
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                );
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height - 1)
-                );
-            }
+            assert_eq!(
+                tf.make_block_builder()
+                    .add_transaction(
+                        TransactionBuilder::new()
+                            .add_input(locked_output.clone())
+                            .add_anyone_can_spend_output(5000)
+                            .build()
+                    )
+                    .build_and_process()
+                    .unwrap_err(),
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            );
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height - 1)
+            );
 
             // create another block, with no transactions, and get the blockchain to progress
-            {
-                let block = Block::new(
-                    vec![],
-                    prev_block_id,
-                    BlockTimestamp::from_duration_since_epoch(time::get()),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height)
-                );
-            }
-        }
-
-        // now we should be able to spend it at block_count_that_unlocks
-        {
-            let height = block_count_that_unlocks + block_height_with_locked_output;
-            let prev_block_id = chainstate
-                .get_block_id_from_height(&BlockHeight::new(height - 1))
-                .unwrap()
-                .unwrap();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
+            tf.make_block_builder().build_and_process().unwrap();
             assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+                tf.best_block_index().block_height(),
                 BlockHeight::new(height)
             );
         }
+
+        // now we should be able to spend it at block_count_that_unlocks
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(locked_output)
+                    .add_anyone_can_spend_output(5000)
+                    .build(),
+            )
+            .build_and_process()
+            .unwrap();
+        assert_eq!(
+            tf.best_block_index().block_height(),
+            BlockHeight::new(block_count_that_unlocks + block_height_with_locked_output)
+        );
     });
 }
 
 #[test]
 fn output_lock_for_block_count_but_spend_at_same_block() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = 10;
 
         // create the first block, with a locked output
-        {
-            let prev_block = chainstate.chain_config.genesis_block();
-
-            let outputs1 = vec![
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::LockThenTransfer(
-                        anyonecanspend_address(),
-                        OutputTimeLock::ForBlockCount(block_count_that_unlocks),
-                    ),
-                ),
-            ];
-            let inputs1 = vec![TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
+        let tx1 = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                 0,
                 InputWitness::NoSignature(None),
-            )];
-            let tx1 = Transaction::new(0, inputs1, outputs1, 0).expect(ERR_CREATE_TX_FAIL);
-
-            let outputs2 = vec![TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-            let inputs2 = vec![TxInput::new(
+            ))
+            .add_anyone_can_spend_output(10000)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(100000),
+                OutputPurpose::LockThenTransfer(
+                    anyonecanspend_address(),
+                    OutputTimeLock::ForBlockCount(block_count_that_unlocks),
+                ),
+            ))
+            .build();
+        let tx2 = TransactionBuilder::new()
+            .add_input(TxInput::new(
                 OutPointSourceId::Transaction(tx1.get_id()),
                 1,
                 InputWitness::NoSignature(None),
-            )];
-            let tx2 = Transaction::new(0, inputs2, outputs2, 0).expect(ERR_CREATE_TX_FAIL);
-
-            let block = Block::new(
-                vec![tx1, tx2],
-                <Id<GenBlock>>::from(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(0)
-            );
-        }
+            ))
+            .add_anyone_can_spend_output(50000)
+            .build();
+        assert_eq!(
+            tf.make_block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
 
 #[test]
 fn output_lock_for_block_count_attempted_overflow() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         let block_count_that_unlocks = u64::MAX;
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::ForBlockCount(block_count_that_unlocks),
             BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::BlockHeightArithmeticError)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(1)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(locked_output)
+                        .add_anyone_can_spend_output(5000)
+                        .build()
+                )
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::BlockHeightArithmeticError)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
 }
 
 #[test]
 fn output_lock_until_time() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
-        let mut chainstate =
-            Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
+        let mut tf = TestFramework::builder().with_time_getter(time_getter).build();
 
-        let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
+        let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 4;
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
             .take(8)
@@ -604,192 +372,130 @@ fn output_lock_until_time() {
 
         let expected_height = 1;
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
         assert_eq!(
-            chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+            tf.best_block_index().block_height(),
             BlockHeight::new(expected_height as u64),
         );
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
             assert_eq!(
-                calculate_median_time_past(
-                    &chainstate.make_db_tx_ro(),
-                    &chainstate.get_best_block_index().unwrap().unwrap().block_id()
-                )
-                .as_int_seconds(),
+                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
+                    .as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
             // Check that the output still cannot be spent.
-            {
-                let outputs = vec![TxOutput::new(
-                    Amount::from_atoms(5000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                )];
-
-                let inputs = vec![locked_output.clone()];
-
-                let block = Block::new(
-                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id,
-                    BlockTimestamp::from_int_seconds(*block_time),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                assert_eq!(
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                );
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height as u64),
-                );
-            }
-
+            assert_eq!(
+                tf.make_block_builder()
+                    .add_transaction(
+                        TransactionBuilder::new()
+                            .add_input(locked_output.clone())
+                            .add_anyone_can_spend_output(5000)
+                            .build()
+                    )
+                    .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
+                    .build_and_process()
+                    .unwrap_err(),
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            );
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height as u64),
+            );
             // Create another block, with no transactions, and get the blockchain to progress.
-            {
-                let block = Block::new(
-                    vec![],
-                    prev_block_id,
-                    BlockTimestamp::from_int_seconds(*block_time),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height as u64 + 1),
-                );
-            }
+            tf.make_block_builder()
+                .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
+                .build_and_process()
+                .unwrap();
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height as u64 + 1),
+            );
         }
 
         // Check that the output can now be spent.
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                // The block that is being validated isn't taken into account when calculating the
-                // median time, so any time can be used here.
-                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
-                common::chain::block::ConsensusData::None,
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(locked_output)
+                    .add_anyone_can_spend_output(5000)
+                    .build(),
             )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(block_times.len() as u64)
-            );
-        }
+            // The block that is being validated isn't taken into account when calculating the
+            // median time, so any time can be used here.
+            .with_timestamp(BlockTimestamp::from_int_seconds(
+                *block_times.last().unwrap(),
+            ))
+            .build_and_process()
+            .unwrap();
+        assert_eq!(
+            tf.best_block_index().block_height(),
+            BlockHeight::new(block_times.len() as u64)
+        );
     });
 }
 
 #[test]
 fn output_lock_until_time_but_spend_at_same_block() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
-        let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
+        let genesis_timestamp = tf.genesis().timestamp();
         let lock_time = genesis_timestamp.as_int_seconds() + 3;
 
         // create the first block, with a locked output
-        {
-            let prev_block = chainstate.chain_config.genesis_block();
-
-            let outputs1 = vec![
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::LockThenTransfer(
-                        anyonecanspend_address(),
-                        OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
-                    ),
-                ),
-            ];
-            let inputs1 = vec![TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
+        let tx1 = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                 0,
                 InputWitness::NoSignature(None),
-            )];
-            let tx1 = Transaction::new(0, inputs1, outputs1, 0).expect(ERR_CREATE_TX_FAIL);
+            ))
+            .add_anyone_can_spend_output(10000)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(100000),
+                OutputPurpose::LockThenTransfer(
+                    anyonecanspend_address(),
+                    OutputTimeLock::UntilTime(BlockTimestamp::from_int_seconds(lock_time)),
+                ),
+            ))
+            .build();
 
-            let outputs2 = vec![TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-            let inputs2 = vec![TxInput::new(
+        let tx2 = TransactionBuilder::new()
+            .add_input(TxInput::new(
                 OutPointSourceId::Transaction(tx1.get_id()),
                 1,
                 InputWitness::NoSignature(None),
-            )];
-            let tx2 = Transaction::new(0, inputs2, outputs2, 0).expect(ERR_CREATE_TX_FAIL);
+            ))
+            .add_anyone_can_spend_output(50000)
+            .build();
 
-            let block = Block::new(
-                vec![tx1, tx2],
-                <Id<GenBlock>>::from(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(0)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
 
 #[test]
 fn output_lock_for_seconds() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
         let current_time = Arc::new(AtomicU64::new(1));
         let current_time_ = Arc::clone(&current_time);
         let time_getter = TimeGetter::new(Arc::new(move || {
             Duration::from_secs(current_time_.load(Ordering::SeqCst))
         }));
-        let mut chainstate =
-            Chainstate::new(chain_config, chainstate_config, storage, None, time_getter).unwrap();
+        let mut tf = TestFramework::builder().with_time_getter(time_getter).build();
 
-        let genesis_timestamp = chainstate.chain_config.genesis_block().timestamp();
+        let genesis_timestamp = tf.genesis().timestamp();
         let block_times: Vec<_> = itertools::iterate(genesis_timestamp.as_int_seconds(), |t| t + 1)
             .take(8)
             .collect();
@@ -807,272 +513,179 @@ fn output_lock_for_seconds() {
 
         let expected_height = 1;
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::ForSeconds(lock_seconds),
             BlockTimestamp::from_int_seconds(block_times[expected_height]),
         );
         assert_eq!(
-            chainstate.get_best_block_index().unwrap().unwrap().block_height(),
+            tf.best_block_index().block_height(),
             BlockHeight::new(expected_height as u64),
         );
 
         // Skip the genesis block and the block that contains the locked output.
         for (block_time, height) in block_times.iter().skip(2).zip(expected_height..) {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
             assert_eq!(
-                calculate_median_time_past(
-                    &chainstate.make_db_tx_ro(),
-                    &chainstate.get_best_block_index().unwrap().unwrap().block_id()
-                )
-                .as_int_seconds(),
+                calculate_median_time_past(&tf.chainstate.make_db_tx_ro(), &tf.best_block_id())
+                    .as_int_seconds(),
                 median_block_time(&block_times[..=height])
             );
 
             // Check that the output still cannot be spent.
-            {
-                let outputs = vec![TxOutput::new(
-                    Amount::from_atoms(5000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                )];
-
-                let inputs = vec![locked_output.clone()];
-
-                let block = Block::new(
-                    vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                    prev_block_id,
-                    BlockTimestamp::from_int_seconds(*block_time),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                assert_eq!(
-                    chainstate.process_block(block.clone(), BlockSource::Local).unwrap_err(),
-                    BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-                );
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height as u64),
-                );
-            }
+            assert_eq!(
+                tf.make_block_builder()
+                    .add_transaction(
+                        TransactionBuilder::new()
+                            .add_input(locked_output.clone())
+                            .add_anyone_can_spend_output(5000)
+                            .build()
+                    )
+                    .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
+                    .build_and_process()
+                    .unwrap_err(),
+                BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+            );
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height as u64),
+            );
 
             // Create another block, with no transactions, and get the blockchain to progress.
-            {
-                let block = Block::new(
-                    vec![],
-                    prev_block_id,
-                    BlockTimestamp::from_int_seconds(*block_time),
-                    common::chain::block::ConsensusData::None,
-                )
-                .expect(ERR_CREATE_BLOCK_FAIL);
-                chainstate.process_block(block.clone(), BlockSource::Local).unwrap();
-
-                assert_eq!(
-                    chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                    BlockHeight::new(height as u64 + 1),
-                );
-            }
+            tf.make_block_builder()
+                .with_timestamp(BlockTimestamp::from_int_seconds(*block_time))
+                .build_and_process()
+                .unwrap();
+            assert_eq!(
+                tf.best_block_index().block_height(),
+                BlockHeight::new(height as u64 + 1),
+            );
         }
 
         // Check that the output can now be spent.
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                // The block that is being validated isn't taken into account when calculating the
-                // median time, so any time can be used here.
-                BlockTimestamp::from_int_seconds(*block_times.last().unwrap()),
-                common::chain::block::ConsensusData::None,
+        tf.make_block_builder()
+            .add_transaction(
+                TransactionBuilder::new()
+                    .add_input(locked_output)
+                    .add_anyone_can_spend_output(5000)
+                    .build(),
             )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-
-            chainstate.process_block(block, BlockSource::Local).unwrap();
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(block_times.len() as u64)
-            );
-        }
+            // The block that is being validated isn't taken into account when calculating the
+            // median time, so any time can be used here.
+            .with_timestamp(BlockTimestamp::from_int_seconds(
+                *block_times.last().unwrap(),
+            ))
+            .build_and_process()
+            .unwrap();
+        assert_eq!(
+            tf.best_block_index().block_height(),
+            BlockHeight::new(block_times.len() as u64)
+        );
     });
 }
 
 #[test]
 fn output_lock_for_seconds_but_spend_at_same_block() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         // create the first block, with a locked output
-        {
-            let prev_block = chainstate.chain_config.genesis_block();
-
-            let outputs1 = vec![
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::Transfer(anyonecanspend_address()),
-                ),
-                TxOutput::new(
-                    Amount::from_atoms(100000),
-                    OutputPurpose::LockThenTransfer(
-                        anyonecanspend_address(),
-                        OutputTimeLock::ForSeconds(100),
-                    ),
-                ),
-            ];
-            let inputs1 = vec![TxInput::new(
-                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(prev_block.get_id())),
+        let tx1 = TransactionBuilder::new()
+            .add_input(TxInput::new(
+                OutPointSourceId::BlockReward(<Id<GenBlock>>::from(tf.genesis().get_id())),
                 0,
                 InputWitness::NoSignature(None),
-            )];
-            let tx1 = Transaction::new(0, inputs1, outputs1, 0).expect(ERR_CREATE_TX_FAIL);
+            ))
+            .add_anyone_can_spend_output(10000)
+            .add_output(TxOutput::new(
+                Amount::from_atoms(100000),
+                OutputPurpose::LockThenTransfer(
+                    anyonecanspend_address(),
+                    OutputTimeLock::ForSeconds(100),
+                ),
+            ))
+            .build();
 
-            let outputs2 = vec![TxOutput::new(
-                Amount::from_atoms(50000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-            let inputs2 = vec![TxInput::new(
+        let tx2 = TransactionBuilder::new()
+            .add_input(TxInput::new(
                 OutPointSourceId::Transaction(tx1.get_id()),
                 1,
                 InputWitness::NoSignature(None),
-            )];
-            let tx2 = Transaction::new(0, inputs2, outputs2, 0).expect(ERR_CREATE_TX_FAIL);
+            ))
+            .add_anyone_can_spend_output(50000)
+            .build();
 
-            let block = Block::new(
-                vec![tx1, tx2],
-                <Id<GenBlock>>::from(prev_block.get_id()),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::TimeLockViolation)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(0)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .with_transactions(vec![tx1, tx2])
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::TimeLockViolation)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(0));
     });
 }
 
 #[test]
 fn output_lock_for_seconds_attempted_overflow() {
     common::concurrency::model(|| {
-        let chain_config = Arc::new(create_unit_test_config());
-        let chainstate_config = ChainstateConfig::new();
-        let storage = Store::new_empty().unwrap();
-        let mut chainstate = Chainstate::new(
-            chain_config,
-            chainstate_config,
-            storage,
-            None,
-            Default::default(),
-        )
-        .unwrap();
+        let mut tf = TestFramework::default();
 
         // create the first block, with a locked output
         let locked_output = add_block_with_locked_output(
-            &mut chainstate,
+            &mut tf,
             OutputTimeLock::ForSeconds(u64::MAX),
             BlockTimestamp::from_duration_since_epoch(time::get()),
         );
 
         // attempt to create the next block, and attempt to spend the locked output
-        {
-            let prev_block_id = chainstate.get_best_block_index().unwrap().unwrap().block_id();
-
-            let outputs = vec![TxOutput::new(
-                Amount::from_atoms(5000),
-                OutputPurpose::Transfer(anyonecanspend_address()),
-            )];
-
-            let inputs = vec![locked_output];
-
-            let block = Block::new(
-                vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-                prev_block_id,
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                common::chain::block::ConsensusData::None,
-            )
-            .expect(ERR_CREATE_BLOCK_FAIL);
-            assert_eq!(
-                chainstate.process_block(block, BlockSource::Local).unwrap_err(),
-                BlockError::StateUpdateFailed(StateUpdateError::BlockTimestampArithmeticError)
-            );
-
-            assert_eq!(
-                chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-                BlockHeight::new(1)
-            );
-        }
+        assert_eq!(
+            tf.make_block_builder()
+                .add_transaction(
+                    TransactionBuilder::new()
+                        .add_input(locked_output)
+                        .add_anyone_can_spend_output(5000)
+                        .build()
+                )
+                .build_and_process()
+                .unwrap_err(),
+            BlockError::StateUpdateFailed(ConnectTransactionError::BlockTimestampArithmeticError)
+        );
+        assert_eq!(tf.best_block_index().block_height(), BlockHeight::new(1));
     });
 }
 
 /// Adds a block with the locked output and returns input corresponding to this output.
 fn add_block_with_locked_output(
-    chainstate: &mut Chainstate,
+    tf: &mut TestFramework,
     output_time_lock: OutputTimeLock,
     timestamp: BlockTimestamp,
 ) -> TxInput {
     // Find the last block.
-    let current_height = chainstate.get_best_block_index().unwrap().unwrap().block_height();
-    let prev_block_id = chainstate.get_block_id_from_height(&current_height).unwrap().unwrap();
-    let prev_block_info = TestBlockInfo::from_id(chainstate, prev_block_id);
+    let current_height = tf.best_block_index().block_height();
+    let prev_block_info = tf.block_info(current_height.into());
 
-    // Create and add a new block.
-    let outputs = vec![
-        TxOutput::new(
-            Amount::from_atoms(100000),
-            OutputPurpose::Transfer(anyonecanspend_address()),
-        ),
-        TxOutput::new(
-            Amount::from_atoms(100000),
-            OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
-        ),
-    ];
+    tf.make_block_builder()
+        .add_transaction(
+            TransactionBuilder::new()
+                .add_input(TxInput::new(
+                    prev_block_info.txns[0].0.clone(),
+                    0,
+                    InputWitness::NoSignature(None),
+                ))
+                .add_anyone_can_spend_output(10000)
+                .add_output(TxOutput::new(
+                    Amount::from_atoms(100000),
+                    OutputPurpose::LockThenTransfer(anyonecanspend_address(), output_time_lock),
+                ))
+                .build(),
+        )
+        .with_timestamp(timestamp)
+        .build_and_process()
+        .unwrap();
 
-    let inputs = vec![TxInput::new(
-        prev_block_info.txns[0].0.clone(),
-        0,
-        InputWitness::NoSignature(None),
-    )];
-
-    let block = Block::new(
-        vec![Transaction::new(0, inputs, outputs, 0).expect(ERR_CREATE_TX_FAIL)],
-        prev_block_id,
-        timestamp,
-        common::chain::block::ConsensusData::None,
-    )
-    .expect(ERR_CREATE_BLOCK_FAIL);
     let new_height = (current_height + BlockDistance::new(1)).unwrap();
-    chainstate.process_block(block, BlockSource::Local).unwrap();
-    assert_eq!(
-        chainstate.get_best_block_index().unwrap().unwrap().block_height(),
-        new_height,
-    );
+    assert_eq!(tf.best_block_index().block_height(), new_height);
 
-    let block_id = chainstate.get_block_id_from_height(&new_height).unwrap().unwrap();
-    let block_info = TestBlockInfo::from_id(chainstate, block_id);
+    let block_info = tf.block_info(new_height.into());
     TxInput::new(
         block_info.txns[0].0.clone(),
         1,

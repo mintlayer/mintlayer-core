@@ -10,6 +10,7 @@ license = "MIT"
 serialization = { path = "../serialization" }
 common = { path = "../common/" }
 crypto = { path = "../crypto" }
+storage = { path = "../storage/" }
 
 parity-scale-codec = "3.1"
 thiserror = "1.0"

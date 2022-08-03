@@ -45,7 +45,7 @@ use crate::{BlockError, BlockSource, ChainstateConfig};
 use super::{
     consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
-    spend_cache::{BlockTransactableRef, CachedInputs},
+    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
     PropertyQueryError,
 };
@@ -461,17 +461,17 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             for tx in block.transactions() {
                 let mut tx_inputs = BTreeSet::new();
                 for input in tx.inputs() {
-                    if !block_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInBlock(
-                            block.get_id(),
-                        ));
-                    }
-                    if !tx_inputs.insert(input.outpoint()) {
-                        return Err(CheckBlockTransactionsError::DuplicateInputInTransaction(
+                    ensure!(
+                        tx_inputs.insert(input.outpoint()),
+                        CheckBlockTransactionsError::DuplicateInputInTransaction(
                             tx.get_id(),
-                            block.get_id(),
-                        ));
-                    }
+                            block.get_id()
+                        )
+                    );
+                    ensure!(
+                        block_inputs.insert(input.outpoint()),
+                        CheckBlockTransactionsError::DuplicateInputInBlock(block.get_id())
+                    );
                 }
             }
         }
@@ -521,12 +521,12 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         block: &Block,
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
-    ) -> Result<CachedInputs<S>, BlockError> {
+    ) -> Result<TransactionVerifier<S>, BlockError> {
         // The comparison for timelock is done with median_time_past based on BIP-113, i.e., the median time instead of the block timestamp
         let median_time_past = calculate_median_time_past(self, &block.prev_block_id());
 
-        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
-        cached_inputs.spend(
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
+        tx_verifier.connect_transaction(
             BlockTransactableRef::BlockReward(block),
             spend_height,
             &median_time_past,
@@ -534,7 +534,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         )?;
 
         for (tx_num, _tx) in block.transactions().iter().enumerate() {
-            cached_inputs.spend(
+            tx_verifier.connect_transaction(
                 BlockTransactableRef::Transaction(block, tx_num),
                 spend_height,
                 &median_time_past,
@@ -543,21 +543,21 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
         }
 
         let block_subsidy = self.chain_config.block_subsidy_at_height(spend_height);
-        cached_inputs.check_block_reward(block, block_subsidy)?;
+        tx_verifier.check_block_reward(block, block_subsidy)?;
 
-        Ok(cached_inputs)
+        Ok(tx_verifier)
     }
 
     fn make_cache_with_disconnected_transactions(
         &self,
         block: &Block,
-    ) -> Result<CachedInputs<S>, BlockError> {
-        let mut cached_inputs = CachedInputs::new(&self.db_tx, self.chain_config);
+    ) -> Result<TransactionVerifier<S>, BlockError> {
+        let mut tx_verifier = TransactionVerifier::new(&self.db_tx, self.chain_config);
         block.transactions().iter().enumerate().try_for_each(|(tx_num, _tx)| {
-            cached_inputs.unspend(BlockTransactableRef::Transaction(block, tx_num))
+            tx_verifier.disconnect_transaction(BlockTransactableRef::Transaction(block, tx_num))
         })?;
-        cached_inputs.unspend(BlockTransactableRef::BlockReward(block))?;
-        Ok(cached_inputs)
+        tx_verifier.disconnect_transaction(BlockTransactableRef::BlockReward(block))?;
+        Ok(tx_verifier)
     }
 }
 
@@ -641,11 +641,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         spend_height: &BlockHeight,
         blockreward_maturity: &BlockDistance,
     ) -> Result<(), BlockError> {
-        let cached_inputs =
+        let connected_txs =
             self.make_cache_with_connected_transactions(block, spend_height, blockreward_maturity)?;
-        let cached_inputs = cached_inputs.consume()?;
+        let consumed = connected_txs.consume()?;
 
-        CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, consumed)?;
         Ok(())
     }
 
@@ -653,7 +653,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
         let cached_inputs = self.make_cache_with_disconnected_transactions(block)?;
         let cached_inputs = cached_inputs.consume()?;
 
-        CachedInputs::flush_to_storage(&mut self.db_tx, cached_inputs)?;
+        TransactionVerifier::flush_to_storage(&mut self.db_tx, cached_inputs)?;
         Ok(())
     }
 
@@ -696,7 +696,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .chain_block_id()
             .expect("Cannot disconnect genesis");
 
-        // Optionally, we can double-check that the tip is what we're discconnecting
+        // Optionally, we can double-check that the tip is what we're disconnecting
         if let Some(expected_tip_block_id) = expected_tip_block_id {
             debug_assert_eq!(expected_tip_block_id, &best_block_id);
         }
@@ -720,9 +720,11 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
     fn prepare_epoch_data(&mut self, height: BlockHeight) -> Result<(), BlockError> {
         if is_due_for_epoch_data_calculation(self.chain_config, height) {
-            // calculate the data that has to go to the EpochData type and store it to database
+            // TODO: calculate the data that has to go to the EpochData type and store it to database
         }
-        todo!()
+        // TODO
+
+        Ok(())
     }
 
     pub fn activate_best_chain(

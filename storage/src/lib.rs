@@ -37,7 +37,7 @@
 //! }
 //!
 //! // Our store type is parametrized by the schema.
-//! type MyStore = storage::Store<Schema>;
+//! type MyStore = storage::inmemory::Store<Schema>;
 //!
 //! // Initialize an empty store.
 //! let mut store = MyStore::default();
@@ -84,8 +84,3 @@ pub use storage_core::*;
 // Re-export the in-memory storage
 #[cfg(feature = "inmemory")]
 pub use storage_inmemory as inmemory;
-
-// TODO Just a temporary re-export for backwards compatibility. When multiple backend functionality
-//      is implemented, users will be required to pick and initialize the backend themselves.
-#[cfg(feature = "inmemory")]
-pub use inmemory::Store;

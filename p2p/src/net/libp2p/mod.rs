@@ -136,13 +136,13 @@ where
 {
     fn from_iter<I: IntoIterator<Item = (PeerId, Multiaddr)>>(iter: I) -> Self {
         let mut entry = net::types::AddrInfo {
-            id: PeerId::random(),
+            peer_id: PeerId::random(),
             ip4: Vec::new(),
             ip6: Vec::new(),
         };
 
         iter.into_iter().for_each(|(id, addr)| {
-            entry.id = id;
+            entry.peer_id = id;
             match get_addr_from_multiaddr(&addr) {
                 Some(Protocol::Ip4(_)) => entry.ip4.push(addr),
                 Some(Protocol::Ip6(_)) => entry.ip6.push(addr),
@@ -152,7 +152,7 @@ where
 
         log::trace!(
             "id {:?}, ipv4 {:#?}, ipv6 {:#?}",
-            entry.id,
+            entry.peer_id,
             entry.ip4,
             entry.ip6
         );
@@ -375,18 +375,18 @@ where
 
     async fn poll_next(&mut self) -> crate::Result<ConnectivityEvent<T>> {
         match self.conn_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
-            types::ConnectivityEvent::ConnectionAccepted { addr, peer_info } => {
-                Ok(ConnectivityEvent::ConnectionAccepted {
-                    addr,
+            types::ConnectivityEvent::OutboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::OutboundAccepted {
+                    address,
                     peer_info: peer_info.try_into()?,
                 })
             }
-            types::ConnectivityEvent::ConnectionError { addr, error } => {
-                Ok(ConnectivityEvent::ConnectionError { addr, error })
+            types::ConnectivityEvent::ConnectionError { address, error } => {
+                Ok(ConnectivityEvent::ConnectionError { address, error })
             }
-            types::ConnectivityEvent::IncomingConnection { addr, peer_info } => {
-                Ok(ConnectivityEvent::IncomingConnection {
-                    addr,
+            types::ConnectivityEvent::InboundAccepted { address, peer_info } => {
+                Ok(ConnectivityEvent::InboundAccepted {
+                    address,
                     peer_info: peer_info.try_into()?,
                 })
             }
@@ -399,9 +399,6 @@ where
             types::ConnectivityEvent::Expired { peers } => Ok(ConnectivityEvent::Expired {
                 peers: parse_peers(peers),
             }),
-            types::ConnectivityEvent::Disconnected { peer_id } => {
-                Ok(ConnectivityEvent::Disconnected { peer_id })
-            }
             types::ConnectivityEvent::Error { peer_id, error } => {
                 Ok(ConnectivityEvent::Error { peer_id, error })
             }

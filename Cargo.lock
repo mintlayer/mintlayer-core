@@ -536,6 +536,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "utils",
+ "utxo",
 ]
 
 [[package]]
@@ -552,7 +553,6 @@ dependencies = [
  "serialization",
  "storage",
  "test-utils",
- "thiserror",
  "utxo",
 ]
 
@@ -565,6 +565,7 @@ dependencies = [
  "generic-array",
  "parity-scale-codec",
  "serialization",
+ "storage",
  "thiserror",
 ]
 
@@ -1018,9 +1019,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+checksum = "3f107b87b6afc2a64fd13cac55fe06d6c8859f12d4b14cbcdd2c67d0976781be"
 
 [[package]]
 name = "env_logger"
@@ -2451,7 +2452,6 @@ dependencies = [
  "serde",
  "subsystem",
  "tempdir",
- "thiserror",
  "tokio",
  "toml",
 ]
@@ -2607,6 +2607,7 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crypto",
+ "either",
  "futures",
  "itertools",
  "jsonrpsee",
@@ -4455,6 +4456,7 @@ dependencies = [
 name = "utxo"
 version = "0.1.0"
 dependencies = [
+ "chainstate-types",
  "common",
  "crypto",
  "itertools",

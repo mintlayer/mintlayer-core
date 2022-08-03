@@ -24,7 +24,7 @@ use thiserror::Error;
 
 use super::{
     orphan_blocks::OrphanAddError, pos::error::ConsensusPoSError, pow::error::ConsensusPoWError,
-    spend_cache::error::StateUpdateError,
+    transaction_verifier::error::ConnectTransactionError,
 };
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -36,7 +36,7 @@ pub enum BlockError {
     #[error("Check block failed: {0}")]
     CheckBlockFailed(#[from] CheckBlockError),
     #[error("Failed to update the internal blockchain state: {0}")]
-    StateUpdateFailed(#[from] StateUpdateError),
+    StateUpdateFailed(#[from] ConnectTransactionError),
     #[error("Failed to load best block")]
     BestBlockLoadError(PropertyQueryError),
     #[error("Starting from block {0} with current best {1}, failed to find a path of blocks to connect to reorg with error: {2}")]
