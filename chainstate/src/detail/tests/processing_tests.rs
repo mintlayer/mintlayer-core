@@ -22,6 +22,7 @@ use common::{
     chain::{
         block::consensus_data::PoWData,
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
     },
     primitives::Compact,
@@ -516,7 +517,7 @@ fn consensus_type(#[case] seed: Seed) {
             u128::MAX,
             bits,
             vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key))
             )]
         )
@@ -577,7 +578,7 @@ fn consensus_type(#[case] seed: Seed) {
             u128::MAX,
             bits,
             vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key))
             )]
         )
@@ -640,7 +641,7 @@ fn pow(#[case] seed: Seed) {
         u128::MAX,
         bits,
         vec![TxOutput::new(
-            Amount::from_atoms(10),
+            OutputValue::Coin(Amount::from_atoms(10)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key))
         )]
     )

@@ -18,6 +18,7 @@ pub mod config;
 pub mod gen_block;
 pub mod genesis;
 mod pow;
+pub mod tokens;
 pub mod transaction;
 mod upgrades;
 

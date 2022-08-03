@@ -5,18 +5,26 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// 	http://spdx.org/licenses/MIT
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Author(s): A. Sinitsyn
 
-#![deny(clippy::clone_on_ref_ptr)]
+use serialization::{Decode, Encode};
 
-pub mod error;
-mod feerate;
-pub mod pool;
+use crate::primitives::Amount;
 
-pub use error::Error as MempoolError;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum OutputValue {
+    Coin(Amount),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum TokenData {
+    // Add todo in the code, if you should be processing tokens
+}

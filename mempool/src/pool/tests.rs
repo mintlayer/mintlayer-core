@@ -39,7 +39,9 @@ fn valued_outpoint(
 ) -> ValuedOutPoint {
     let outpoint_source_id = OutPointSourceId::Transaction(*tx_id);
     let outpoint = OutPoint::new(outpoint_source_id, outpoint_index);
-    let value = output.value();
+    let value = match output.value() {
+        OutputValue::Coin(coin) => *coin,
+    };
     ValuedOutPoint { outpoint, value }
 }
 
@@ -53,7 +55,7 @@ pub(crate) fn create_genesis_tx() -> Transaction {
         InputWitness::NoSignature(Some(genesis_message)),
     );
     let output = TxOutput::new(
-        Amount::from_atoms(TOTAL_SUPPLY),
+        OutputValue::Coin(Amount::from_atoms(TOTAL_SUPPLY)),
         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
     );
     Transaction::new(0, vec![input], vec![output], 0)
@@ -208,7 +210,9 @@ impl ChainState for ChainStateMock {
                 tx.outputs()
                     .get(outpoint.output_index() as usize)
                     .ok_or_else(|| anyhow::anyhow!("outpoint index out of bounds"))
-                    .map(|output| output.value())
+                    .map(|output| match output.value() {
+                        OutputValue::Coin(coin) => *coin,
+                    })
             })
     }
 }
@@ -346,14 +350,14 @@ impl TxGenerator {
 
         for _ in 0..self.num_outputs - 1 {
             outputs.push(TxOutput::new(
-                value,
+                OutputValue::Coin(value),
                 OutputPurpose::Transfer(Destination::AnyoneCanSpend),
             ));
             left_to_spend = (left_to_spend - value).expect("subtraction failed");
         }
 
         outputs.push(TxOutput::new(
-            left_to_spend,
+            OutputValue::Coin(left_to_spend),
             OutputPurpose::Transfer(Destination::AnyoneCanSpend),
         ));
         Ok(outputs)
@@ -608,7 +612,7 @@ fn outpoint_not_found() -> anyhow::Result<()> {
 fn tx_too_big() -> anyhow::Result<()> {
     let mut mempool = setup();
     let single_output_size = TxOutput::new(
-        Amount::from_atoms(100),
+        OutputValue::Coin(Amount::from_atoms(100)),
         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
     )
     .encoded_size();
@@ -834,8 +838,14 @@ fn tx_spend_several_inputs<T: GetTime, M: GetMemoryUsage>(
         flags,
         inputs.to_owned(),
         vec![
-            TxOutput::new(spent, OutputPurpose::Transfer(Destination::AnyoneCanSpend)),
-            TxOutput::new(change, OutputPurpose::Transfer(Destination::AnyoneCanSpend)),
+            TxOutput::new(
+                OutputValue::Coin(spent),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ),
+            TxOutput::new(
+                OutputValue::Coin(change),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ),
         ],
         locktime,
     )
@@ -899,7 +909,7 @@ fn one_ancestor_replaceability_signal_is_enough() -> anyhow::Result<()> {
     // TODO compute minimum necessary relay fee instead of just overestimating it
     let original_fee = Amount::from_atoms(200);
     let dummy_output = TxOutput::new(
-        original_fee,
+        OutputValue::Coin(original_fee),
         OutputPurpose::Transfer(Destination::AnyoneCanSpend),
     );
     let replaced_tx = tx_spend_several_inputs(
@@ -1369,7 +1379,7 @@ fn rolling_fee() -> anyhow::Result<()> {
         *INCREMENTAL_RELAY_FEE_RATE
             + FeeRate::from_total_tx_fee(child_0_fee, child_0.encoded_size())
     );
-    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3582)));
+    assert_eq!(rolling_fee, FeeRate::new(Amount::from_atoms(3591)));
     log::debug!(
         "minimum rolling fee after child_0's eviction {:?}",
         rolling_fee

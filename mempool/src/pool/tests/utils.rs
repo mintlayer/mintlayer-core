@@ -32,7 +32,7 @@ fn dummy_input() -> TxInput {
 fn dummy_output() -> TxOutput {
     let value = Amount::from_atoms(0);
     let purpose = OutputPurpose::Transfer(Destination::AnyoneCanSpend);
-    TxOutput::new(value, purpose)
+    TxOutput::new(OutputValue::Coin(value), purpose)
 }
 
 pub(in crate::pool::tests) fn estimate_tx_size(num_inputs: usize, num_outputs: usize) -> usize {

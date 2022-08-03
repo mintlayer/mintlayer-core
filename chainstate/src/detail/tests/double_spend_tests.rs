@@ -20,7 +20,7 @@ use crate::detail::{
     transaction_verifier::error::ConnectTransactionError,
 };
 use common::{
-    chain::{OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
+    chain::{tokens::OutputValue, OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
 
@@ -235,7 +235,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
 
         let tx2_output_value = tx1_output_value - 1;
         let tx2_output = TxOutput::new(
-            Amount::from_atoms(tx2_output_value),
+            OutputValue::Coin(Amount::from_atoms(tx2_output_value)),
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx2 = TransactionBuilder::new()
@@ -290,7 +290,7 @@ fn duplicate_input_in_the_same_tx(#[case] seed: Seed) {
             .add_input(input.clone())
             .add_input(input)
             .add_output(TxOutput::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
@@ -346,7 +346,7 @@ fn same_input_diff_sig_in_the_same_tx(#[case] seed: Seed) {
             .add_input(input1)
             .add_input(input2)
             .add_output(TxOutput::new(
-                Amount::from_atoms(rng.gen_range(100_000..200_000)),
+                OutputValue::Coin(Amount::from_atoms(rng.gen_range(100_000..200_000))),
                 OutputPurpose::Transfer(anyonecanspend_address()),
             ))
             .build();
@@ -417,7 +417,7 @@ fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) ->
             empty_witness(rng),
         ))
         .add_output(TxOutput::new(
-            Amount::from_atoms(output_value),
+            OutputValue::Coin(Amount::from_atoms(output_value)),
             OutputPurpose::Transfer(anyonecanspend_address()),
         ))
         .build()
@@ -427,7 +427,7 @@ fn tx_from_genesis(genesis: &Genesis, rng: &mut impl Rng, output_value: u128) ->
 fn tx_from_tx(tx: &Transaction, output_value: u128) -> Transaction {
     let input = TxInput::new(tx.get_id().into(), 0, InputWitness::NoSignature(None));
     let output = TxOutput::new(
-        Amount::from_atoms(output_value),
+        OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(anyonecanspend_address()),
     );
     Transaction::new(0, vec![input], vec![output], 0).unwrap()

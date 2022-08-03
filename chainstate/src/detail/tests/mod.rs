@@ -23,6 +23,7 @@ use common::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::create_regtest,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
     },
@@ -61,12 +62,19 @@ fn create_utxo_data(
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(TxInput, TxOutput)> {
-    let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
-    let new_value = (output.value() - spent_value).unwrap();
-    utils::ensure!(new_value >= Amount::from_atoms(1));
     Some((
         TxInput::new(outsrc, index as u32, empty_witness(rng)),
-        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+        match output.value() {
+            OutputValue::Coin(output_value) => {
+                let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                let new_value = (*output_value - spent_value).unwrap();
+                utils::ensure!(new_value >= Amount::from_atoms(1));
+                TxOutput::new(
+                    OutputValue::Coin(new_value),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )
+            }
+        },
     ))
 }
 
