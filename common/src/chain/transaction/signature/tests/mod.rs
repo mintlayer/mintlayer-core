@@ -325,7 +325,12 @@ fn check_mutate_output(original_tx: &Transaction, destination: &Destination, sho
     // Should failed due to change in output value
     let mut tx_updater = MutableTransaction::from(original_tx);
     tx_updater.outputs[0] = TxOutput::new(
-        (tx_updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+        match tx_updater.outputs[0].value() {
+            OutputValue::Coin(coin) => {
+                OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
+            }
+            OutputValue::Token(asset) => OutputValue::Token(asset.clone()),
+        },
         tx_updater.outputs[0].purpose().clone(),
     );
     let tx = tx_updater.generate_tx().unwrap();
