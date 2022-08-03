@@ -25,7 +25,7 @@ use p2p::{
     message::Announcement,
     net::{
         self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pService},
+        libp2p::{service::connectivity::Libp2pConnectivityHandle, Libp2pService},
         types::{ConnectivityEvent, PubSubEvent, PubSubTopic},
         ConnectivityService, NetworkingService, PubSubService,
     },

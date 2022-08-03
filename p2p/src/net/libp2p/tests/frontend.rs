@@ -18,7 +18,10 @@ use crate::{
     error::{ConversionError, DialError, P2pError},
     net::{
         self,
-        libp2p::{parse_discovered_addr, parse_peers, Libp2pService},
+        libp2p::{
+            service::connectivity::{parse_discovered_addr, parse_peers},
+            Libp2pService,
+        },
         types::ConnectivityEvent,
         ConnectivityService, NetworkingService,
     },
