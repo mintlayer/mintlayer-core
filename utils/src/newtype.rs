@@ -15,7 +15,7 @@
 
 #[macro_export]
 macro_rules! newtype {
-    ($(#[$meta:meta])* $vis:vis struct $name:ident($wrapped:ty)) => {
+    ($(#[$meta:meta])* $vis:vis struct $name:ident($wrapped:ty);) => {
         $(#[$meta])*
         $vis struct $name($wrapped);
 
@@ -65,9 +65,10 @@ mod tests {
         }
     }
 
-    newtype!(
+    newtype! {
         #[derive(Clone, Debug)]
-        struct NewInt(OldInt));
+        struct NewInt(OldInt);
+    }
 
     #[test]
     fn test_new_type() {

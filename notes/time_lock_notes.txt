@@ -1,0 +1,35 @@
+NOTE: This file was written before we had any implementation of timelocks. We should handle timelocks in the mempool, and then also remove this file.
+
+TIMELOCK NOTES
+
+1. There are two kinds of timelocks, absolute and relative. Absolute timelocks prevent transmitting a tx over the network or spending a utxo before a specific point in time (measured either in Unix Epoch Time or block height). Relative timelocks prevent spending an outputs before it has aged by a certain amount of time.
+
+2. Absolute timelocks:
+
+* Transaction-level timelocks
+In Bitcoin Core transactions have the nLocktime field. When a transaction is validated, if nLocktime is less than the current time, it won't be relayed to the network.
+Notes:
+  In this way Alice can create a transaction in which she sends "postdated" funds to Bob, send Bob that transaction, and now Bob can submit the transaction when enough time has passed (before that it will just be rejected).
+
+* UTXO-level timelocks
+There is an opcode, CHECKLOCKTIMEVERIFY. When a transaction is submitted, for every output being spent a script is run (locking, unlocking). CLTV can appear in the script and make it fail if the locktime parameter in the script is greater than the locktime of the transaction.
+So CLTV actually RELIES ON nLocktime.
+
+3. Relative Timelocks
+- the nSequence field was originally intended for something else
+NOTE: need to check the whole deal about it being used as a way to signal if CLTV applied.
+- Transaction validation fails unless all inputs have sufficiently aged (each according to its timelock type? need to check).
+- CHECKSEQUENCEVERIFY opcode. The use of this opcode makes reference to nSequence, need to see how they work together.
+
+The transaction structure will use an
+enum Locktime {
+    BlockHeight(RangedInt<0, 500,000,000>),
+    TimeStamp(UnixEpoch(Ranged))
+}
+
+We will need some conversions.
+QUESTION: need to map out the conversions.
+
+QUESTIONS:
+   Do we want to implement absolute tx level timelocks the exact same way Bitcoin Core implements them?
+   Do we want to do things differently with relative timelocks since nSequence is kind of a mess?
