@@ -134,7 +134,7 @@ mockall::mock! {
 
     impl storage::traits::TransactionRo for StoreTxRo {
         type Error = crate::Error;
-        fn finalize(self) -> crate::Result<()>;
+        fn finalize(&self) -> crate::Result<()>;
     }
 }
 
@@ -206,8 +206,8 @@ mockall::mock! {
 
     impl storage::traits::TransactionRw for StoreTxRw {
         type Error = crate::Error;
-        fn abort(self) -> crate::Result<()>;
-        fn commit(self) -> crate::Result<()>;
+        fn abort(&mut self) -> crate::Result<()>;
+        fn commit(&mut self) -> crate::Result<()>;
     }
 }
 

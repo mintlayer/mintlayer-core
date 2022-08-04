@@ -16,12 +16,12 @@
 //! Traits specifying the interface for database transactions.
 
 /// Low-level interface for read-only database transactions
-pub trait TransactionRo: Sized {
+pub trait TransactionRo {
     /// Errors that can occur during a transaction.
     type Error;
 
     /// Finalize the transaction.
-    fn finalize(self) -> Result<(), Self::Error>;
+    fn finalize(&self) -> Result<(), Self::Error>;
 
     /// Run a read-only transaction.
     ///
@@ -39,25 +39,28 @@ pub trait TransactionRo: Sized {
     ///
     /// Implementations are allowed to override this method provided semantics are preserved.
     fn run<R>(
-        self,
+        &self,
         tx_body: impl FnOnce(&Self) -> Result<R, Self::Error>,
-    ) -> Result<R, Self::Error> {
-        let result = tx_body(&self);
+    ) -> Result<R, Self::Error>
+    where
+        Self: Sized,
+    {
+        let result = tx_body(self);
         self.finalize()?;
         result
     }
 }
 
 /// Low-level interface for read-write database transactions
-pub trait TransactionRw: Sized {
+pub trait TransactionRw {
     /// Errors that can occur during a transaction.
     type Error;
 
     /// Commit a transaction
-    fn commit(self) -> Result<(), Self::Error>;
+    fn commit(&mut self) -> Result<(), Self::Error>;
 
     /// Abort a transaction.
-    fn abort(self) -> Result<(), Self::Error>;
+    fn abort(&mut self) -> Result<(), Self::Error>;
 
     /// Run a read-write transaction.
     ///
@@ -76,10 +79,13 @@ pub trait TransactionRw: Sized {
     ///
     /// Implementations are allowed to override this method provided semantics are preserved.
     fn run<R>(
-        mut self,
+        &mut self,
         tx_body: impl FnOnce(&mut Self) -> Result<Response<R>, Self::Error>,
-    ) -> Result<R, Self::Error> {
-        let result = tx_body(&mut self);
+    ) -> Result<R, Self::Error>
+    where
+        Self: Sized,
+    {
+        let result = tx_body(self);
         match result {
             Ok(Response::Commit(_)) => self.commit()?,
             Ok(Response::Abort(_)) => self.abort()?,

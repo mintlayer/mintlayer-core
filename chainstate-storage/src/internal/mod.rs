@@ -374,11 +374,11 @@ impl<'a, Tx: traits::GetMapMut<'a, Schema>> StoreTx<Tx> {
 impl<T: traits::TransactionRw<Error = storage::Error>> traits::TransactionRw for StoreTx<T> {
     type Error = crate::Error;
 
-    fn commit(self) -> crate::Result<()> {
+    fn commit(&mut self) -> crate::Result<()> {
         self.0.commit().map_err(Into::into)
     }
 
-    fn abort(self) -> crate::Result<()> {
+    fn abort(&mut self) -> crate::Result<()> {
         self.0.abort().map_err(Into::into)
     }
 }
@@ -386,7 +386,7 @@ impl<T: traits::TransactionRw<Error = storage::Error>> traits::TransactionRw for
 impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for StoreTx<T> {
     type Error = crate::Error;
 
-    fn finalize(self) -> crate::Result<()> {
+    fn finalize(&self) -> crate::Result<()> {
         self.0.finalize().map_err(Into::into)
     }
 }

@@ -230,7 +230,7 @@ impl<'st, 'm, Sch: Schema> traits::GetMapMut<'m, Sch> for TransactionRw<'st, Sch
 impl<'st, Sch: Schema> transaction::TransactionRo for TransactionRo<'st, Sch> {
     type Error = storage_core::Error;
 
-    fn finalize(self) -> Result<(), Self::Error> {
+    fn finalize(&self) -> Result<(), Self::Error> {
         Ok(())
     }
 }
@@ -239,18 +239,17 @@ impl<'st, Sch: Schema> transaction::TransactionRw for TransactionRw<'st, Sch> {
     type Error = storage_core::Error;
 
     /// Commit a transaction
-    fn commit(mut self) -> Result<(), Self::Error> {
-        self.store
-            .values_mut()
-            .zip(self.delta.into_values())
-            .for_each(|(store, delta)| {
-                delta.apply_to(store);
-            });
+    fn commit(&mut self) -> Result<(), Self::Error> {
+        let delta = std::mem::take(&mut self.delta);
+        self.store.values_mut().zip(delta.into_values()).for_each(|(store, delta)| {
+            delta.apply_to(store);
+        });
         Ok(())
     }
 
     /// Abort a transaction.
-    fn abort(self) -> Result<(), Self::Error> {
+    fn abort(&mut self) -> Result<(), Self::Error> {
+        self.delta.clear();
         Ok(())
     }
 }

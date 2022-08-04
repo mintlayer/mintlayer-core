@@ -91,7 +91,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> TransactionIndexHandle
 }
 
 impl<'a, S: TransactionRw<Error = chainstate_storage::Error>, O> ChainstateRef<'a, S, O> {
-    pub fn commit_db_tx(self) -> chainstate_storage::Result<()> {
+    pub fn commit_db_tx(mut self) -> chainstate_storage::Result<()> {
         self.db_tx.commit()
     }
 }
