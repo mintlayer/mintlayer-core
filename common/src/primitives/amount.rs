@@ -32,8 +32,6 @@ use std::iter::Sum;
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach
 
 // use only unsigned types
 // if you need a signed amount, we should create a separate type for it and implement proper conversion

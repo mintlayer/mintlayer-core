@@ -12,8 +12,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use crate::{constants::*, net::mock::types::Message};
 use bytes::{Buf, BytesMut};
 use serialization::{Decode, Encode};
