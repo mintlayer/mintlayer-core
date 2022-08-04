@@ -98,7 +98,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
             }
             BlockTransactableRef::BlockReward(block) => {
-                match block.header().block_reward_transactable().outputs() {
+                match block.block_reward_transactable().outputs() {
                     Some(outputs) => CachedInputsOperation::Write(TxMainChainIndex::new(
                         block.get_id().into(),
                         outputs
@@ -338,7 +338,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     ) -> Result<(), ConnectTransactionError> {
         let total_fees = self.calculate_block_total_fees(block)?;
 
-        let block_reward_transactable = block.header().block_reward_transactable();
+        let block_reward_transactable = block.block_reward_transactable();
 
         let inputs = block_reward_transactable.inputs();
         let outputs = block_reward_transactable.outputs();
@@ -556,7 +556,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
             }
             BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.header().block_reward_transactable();
+                let reward_transactable = block.block_reward_transactable();
                 let inputs = reward_transactable.inputs();
                 // TODO: test spending block rewards from chains outside the mainchain
                 match inputs {
@@ -613,7 +613,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
             }
             BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.header().block_reward_transactable();
+                let reward_transactable = block.block_reward_transactable();
                 match reward_transactable.inputs() {
                     Some(inputs) => {
                         // pre-cache all inputs

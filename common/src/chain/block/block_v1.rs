@@ -17,7 +17,7 @@ use serialization::{Decode, Encode};
 
 use crate::{
     chain::{
-        block::{Block, BlockReward, ConsensusData},
+        block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
         transaction::Transaction,
     },
     primitives::{
@@ -75,8 +75,12 @@ impl BlockV1 {
         &self.header.prev_block_id
     }
 
-    pub fn block_reward_transactable(&self) -> () {
-        // TODO: FIXME:
-        todo!()
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+        // TODO: FIXME: Fix inputs.
+        todo!();
+        BlockRewardTransactable {
+            inputs: None,
+            outputs: Some(self.reward.outputs()),
+        }
     }
 }

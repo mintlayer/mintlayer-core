@@ -199,7 +199,7 @@ impl Block {
         BlockSize::new_from_block(self)
     }
 
-    pub fn block_reward_transactable(&self) -> () {
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
         match &self {
             Block::V1(b) => b.block_reward_transactable(),
         }
