@@ -41,7 +41,7 @@ fn test_storage_get_default_version_in_tx() {
 fn test_storage_manipulation() {
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, ConsensusData},
+            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
             SpendablePosition,
         },
         primitives::H256,
@@ -55,6 +55,7 @@ fn test_storage_manipulation() {
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
     let block1 = Block::new(
@@ -62,6 +63,7 @@ fn test_storage_manipulation() {
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
 
