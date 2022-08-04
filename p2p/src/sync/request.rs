@@ -98,7 +98,7 @@ where
     /// * `request` - [`crate::message::Request`] containing the request
     /// * `request_type` - [`RequestType`] indicating the type, used for tracking progress
     /// * `retry_count` - how many times the request has been resent
-    async fn send_request(
+    pub async fn send_request(
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,

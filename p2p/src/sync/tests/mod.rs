@@ -115,3 +115,16 @@ pub async fn connect_services<T>(
         Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
     }
 }
+
+async fn register_peer<T>(mgr: &mut BlockSyncManager<T>, peer_id: T::PeerId)
+where
+    T: NetworkingService,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
+    let locator = mgr.chainstate_handle.call(|this| this.get_locator()).await.unwrap().unwrap();
+
+    mgr.peers.insert(
+        peer_id,
+        peer::PeerContext::new_with_locator(peer_id, locator),
+    );
+}

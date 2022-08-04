@@ -104,7 +104,12 @@ async fn invalid_sync_block() {
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (_conn1, _, sync1) =
+    let (mut conn1, _, sync1) =
+        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
+            .await
+            .unwrap();
+
+    let (mut conn2, _, _sync2) =
         Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
             .await
             .unwrap();
@@ -118,13 +123,15 @@ async fn invalid_sync_block() {
         tx_pubsub,
     );
 
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
-    // register random peer to the `SyncManager`, process a block response
+    // register `conn2` to the `SyncManager`, process a block response
     // and verify the `PeerManager` is notified of the protocol violation
-    let remote_id = libp2p::PeerId::random();
+    let remote_id = *conn2.peer_id();
 
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();

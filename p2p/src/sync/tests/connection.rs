@@ -16,16 +16,6 @@
 use super::*;
 use p2p_test_utils::make_libp2p_addr;
 
-// handle peer connection event
-#[tokio::test]
-async fn test_peer_connected() {
-    let (mut mgr, _conn, _sync, _pubsub, _swarm) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
-
-    assert_eq!(mgr.register_peer(PeerId::random()).await, Ok(()));
-    assert_eq!(mgr.peers.len(), 1);
-}
-
 // handle peer reconnection
 #[tokio::test]
 async fn test_peer_reconnected() {
@@ -33,7 +23,8 @@ async fn test_peer_reconnected() {
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
 
     let peer_id = PeerId::random();
-    assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
+    register_peer(&mut mgr, peer_id).await;
+
     assert_eq!(mgr.peers.len(), 1);
     assert_eq!(
         mgr.register_peer(peer_id).await,
@@ -49,8 +40,7 @@ async fn test_peer_disconnected() {
 
     // send Connected event to SyncManager
     let peer_id = PeerId::random();
-
-    assert_eq!(mgr.register_peer(peer_id).await, Ok(()));
+    register_peer(&mut mgr, peer_id).await;
     assert_eq!(mgr.peers.len(), 1);
 
     // no peer with this id exist, nothing happens
