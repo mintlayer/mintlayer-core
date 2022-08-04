@@ -20,7 +20,7 @@ use crate::detail::{
     transaction_verifier::error::ConnectTransactionError,
 };
 use common::{
-    chain::{OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
+    chain::{tokens::OutputValue, OutPointSourceId, Spender, Transaction, TxInput, TxOutput},
     primitives::{Amount, Id},
 };
 
@@ -235,7 +235,7 @@ fn overspend_multiple_outputs(#[case] seed: Seed) {
 
         let tx2_output_value = tx1_output_value - 1;
         let tx2_output = TxOutput::new(
-            common::chain::tokens::OutputValue::Coin(Amount::from_atoms(tx2_output_value)),
+            OutputValue::Coin(Amount::from_atoms(tx2_output_value)),
             OutputPurpose::Transfer(anyonecanspend_address()),
         );
         let tx2 = TransactionBuilder::new()

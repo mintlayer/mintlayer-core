@@ -22,6 +22,7 @@ use common::{
     chain::{
         block::consensus_data::PoWData,
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
     },
     primitives::Compact,

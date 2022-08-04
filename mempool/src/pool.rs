@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Duration;
 
+use common::chain::tokens::OutputValue;
 use mockall::*;
 use serialization::Encode;
 
@@ -81,7 +82,10 @@ where
         let sum_outputs = tx
             .outputs()
             .iter()
-            .map(|output| output.value())
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(coin) => Some(*coin),
+                OutputValue::Token(_) => None,
+            })
             .sum::<Option<_>>()
             .ok_or(TxValidationError::OutputValuesOverflow)?;
         (sum_inputs - sum_outputs).ok_or(TxValidationError::InputsBelowOutputs)
@@ -380,7 +384,10 @@ impl MempoolStore {
             .and_then(|entry| {
                 entry.tx.outputs().get(outpoint.output_index() as usize).ok_or_else(err)
             })
-            .map(|output| output.value())
+            .map(|output| match output.value() {
+                OutputValue::Coin(coin) => *coin,
+                OutputValue::Token(_) => Amount::from_atoms(0),
+            })
     }
 
     fn get_entry(&self, id: &Id<Transaction>) -> Option<&TxMempoolEntry> {

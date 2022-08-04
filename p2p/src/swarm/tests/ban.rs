@@ -14,24 +14,27 @@
 // limitations under the License.
 //
 // Author(s): A. Altonen
-#![allow(unused)]
 use crate::{
     error::{P2pError, PeerError},
-    net::{self, libp2p::Libp2pService, ConnectivityService},
-    swarm::{self, tests::make_peer_manager},
+    net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService},
+    swarm::tests::make_peer_manager,
 };
 use common::chain::config;
-use libp2p::{Multiaddr, PeerId};
-use p2p_test_utils::make_libp2p_addr;
+use libp2p::Multiaddr;
+use p2p_test_utils::{make_libp2p_addr, make_mock_addr};
 use std::sync::Arc;
 
 // ban peer whose connected to us
-#[tokio::test]
-async fn ban_connected_peer() {
+async fn ban_connected_peer<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 =
-        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let (_conn1_res, conn2_res) =
@@ -51,11 +54,26 @@ async fn ban_connected_peer() {
 }
 
 #[tokio::test]
-async fn banned_peer_attempts_to_connect() {
+async fn ban_connected_peer_libp2p() {
+    ban_connected_peer::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn ban_connected_peer_mock() {
+    // TODO: implement `ban_peer()`
+    // ban_connected_peer::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+async fn banned_peer_attempts_to_connect<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + std::fmt::Debug + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 =
-        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let (_conn1_res, conn2_res) =
@@ -85,13 +103,28 @@ async fn banned_peer_attempts_to_connect() {
     }
 }
 
-// attempt to connect to banned peer
 #[tokio::test]
-async fn connect_to_banned_peer() {
+async fn banned_peer_attempts_to_connect_libp2p() {
+    banned_peer_attempts_to_connect::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn banned_peer_attempts_to_connect_mock() {
+    // TODO: implement proper peer banning
+    // banned_peer_attempts_to_connect::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+// attempt to connect to banned peer
+async fn connect_to_banned_peer<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let config = Arc::new(config::create_mainnet());
-    let mut swarm1 =
-        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::clone(&config)).await;
-    let mut swarm2 = make_peer_manager::<Libp2pService>(make_libp2p_addr(), config).await;
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
+    let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let (_conn1_res, conn2_res) =
@@ -128,6 +161,17 @@ async fn connect_to_banned_peer() {
             P2pError::PeerError(PeerError::BannedPeer(remote_id.to_string()))
         );
     }
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer_libp2p() {
+    connect_to_banned_peer::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn connect_to_banned_peer_mock() {
+    // TODO: implement proper peer banning
+    // connect_to_banned_peer::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }
 
 #[tokio::test]
@@ -334,14 +378,16 @@ async fn validate_invalid_inbound_connection() {
     assert!(swarm.peerdb.is_id_banned(&peer_id));
 }
 
-#[tokio::test]
-async fn inbound_connection_invalid_magic() {
-    let mut swarm1 =
-        make_peer_manager::<Libp2pService>(make_libp2p_addr(), Arc::new(config::create_mainnet()))
-            .await;
-
-    let mut swarm2 = make_peer_manager::<Libp2pService>(
-        make_libp2p_addr(),
+async fn inbound_connection_invalid_magic<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
+    let mut swarm2 = make_peer_manager::<T>(
+        addr2,
         Arc::new(common::chain::config::Builder::test_chain().magic_bytes([1, 2, 3, 4]).build()),
     )
     .await;
@@ -349,7 +395,7 @@ async fn inbound_connection_invalid_magic() {
     let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
     let (_conn1_res, conn2_res) =
         tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
-    let _conn2_res: net::types::ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
+    let _conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
     let swarm1_id = *swarm1.handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
@@ -363,4 +409,14 @@ async fn inbound_connection_invalid_magic() {
     } else {
         panic!("invalid event received");
     }
+}
+
+#[tokio::test]
+async fn inbound_connection_invalid_magic_libp2p() {
+    inbound_connection_invalid_magic::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn inbound_connection_invalid_magic_mock() {
+    inbound_connection_invalid_magic::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }

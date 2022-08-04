@@ -27,6 +27,7 @@ use std::{fmt::Debug, str::FromStr, sync::Arc};
 use tokio::sync::{mpsc, oneshot};
 
 pub mod config;
+pub mod constants;
 pub mod error;
 pub mod event;
 pub mod message;

@@ -727,15 +727,15 @@ fn test_attempt_to_print_tokens() {
     });
 }
 
+#[allow(dead_code)]
 fn test_attempt_to_mix_input_tokens() {
 
     // Issuance a few different tokens
-    
-    // Try to spend sum of input tokens 
 
+    // Try to spend sum of input tokens
 }
 
+#[allow(dead_code)]
 fn test_attempt_to_overflow_outputs() {}
-
 
 //TODO: Due to much change in Test Framework, this file should be updated according to new features like TxBuilder

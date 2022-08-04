@@ -2610,6 +2610,7 @@ name = "p2p"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bytes",
  "chainstate",
  "chainstate-storage",
  "common",
@@ -2630,6 +2631,7 @@ dependencies = [
  "subsystem",
  "thiserror",
  "tokio",
+ "tokio-util",
  "utils",
  "void",
 ]
