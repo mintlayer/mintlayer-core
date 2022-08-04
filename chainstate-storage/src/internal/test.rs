@@ -23,7 +23,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{BlockUndo, TxUndo};
 
-type TestStore = Store<storage::inmemory::Store<Schema>>;
+type TestStore = crate::Store;
 
 #[test]
 fn test_storage_get_default_version_in_tx() {
@@ -153,7 +153,7 @@ fn get_set_transactions() {
 
         // Concurrently bump version and run a transactiomn that reads the version twice.
         let thr1 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let _ = store.transaction_rw().run(|tx| {
                     let v = tx.get_storage_version()?;
@@ -163,7 +163,7 @@ fn get_set_transactions() {
             })
         };
         let thr0 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let tx_result = store.transaction_ro().run(|tx| {
                     let v1 = tx.get_storage_version()?;
@@ -191,7 +191,7 @@ fn test_storage_transactions() {
 
         // Concurrently bump version by 3 and 5 in two separate threads
         let thr0 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let tx_result = store.transaction_rw().run(|tx| {
                     let v = tx.get_storage_version()?;
@@ -202,7 +202,7 @@ fn test_storage_transactions() {
             })
         };
         let thr1 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let tx_result = store.transaction_rw().run(|tx| {
                     let v = tx.get_storage_version()?;
@@ -228,7 +228,7 @@ fn test_storage_transactions_with_result_check() {
 
         // Concurrently bump version by 3 and 5 in two separate threads
         let thr0 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let mut tx = store.transaction_rw();
                 let v = tx.get_storage_version().unwrap();
@@ -237,7 +237,7 @@ fn test_storage_transactions_with_result_check() {
             })
         };
         let thr1 = {
-            let store = Store::clone(&store);
+            let store = TestStore::clone(&store);
             common::thread::spawn(move || {
                 let mut tx = store.transaction_rw();
                 let v = tx.get_storage_version().unwrap();
