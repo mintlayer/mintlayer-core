@@ -647,7 +647,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             GenBlockId::Block(id) => Ok(self
                 .db_tx
                 .get_block(id)?
-                .ok_or_else(|| ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
+                .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
                 .block_reward_transactable()
                 .outputs()
                 .unwrap_or(&[])
