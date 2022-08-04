@@ -76,10 +76,12 @@ impl BlockV1 {
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        // TODO: FIXME: Fix inputs.
-        todo!();
+        let inputs = match &self.header.consensus_data {
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+            ConsensusData::PoS(data) => Some(data.kernel_inputs().as_ref()),
+        };
         BlockRewardTransactable {
-            inputs: None,
+            inputs,
             outputs: Some(self.reward.outputs()),
         }
     }

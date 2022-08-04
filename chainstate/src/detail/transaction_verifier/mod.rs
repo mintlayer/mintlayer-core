@@ -262,16 +262,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .cloned()?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
-                        // TODO get rid of this coercion
-                        let block_id = Id::new(block_id.get());
-                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
-                    })?;
-
-                    let rewards_tx = block_index.block_reward_transactable();
-
-                    let outputs = rewards_tx.outputs().unwrap_or(&[]);
-                    Self::get_output_value(outputs, output_index, (*block_id).into()).cloned()?
+                    let outputs = self.block_reward_outputs(block_id)?;
+                    Self::get_output_value(&outputs, output_index, (*block_id).into()).cloned()?
                 }
             };
             match output_amount {
@@ -478,16 +470,13 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
                     })?;
 
-                    let reward_tx = block_index.block_reward_transactable();
-
-                    let output = reward_tx
-                        .outputs()
-                        .unwrap_or(&[])
-                        .get(input.outpoint().output_index() as usize)
-                        .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
+                    let outputs = self.block_reward_outputs(block_id)?;
+                    let output = outputs.get(input.outpoint().output_index() as usize).ok_or(
+                        ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: None,
                             source_output_index: outpoint.output_index() as usize,
-                        })?;
+                        },
+                    )?;
 
                     // TODO: see if a different treatment should be done for different output purposes
 
@@ -641,6 +630,29 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
         inputs.iter().try_for_each(|input| self.fetch_and_cache(input.outpoint()))
+    }
+
+    fn block_reward_outputs(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
+        match block_id.classify(self.chain_config) {
+            GenBlockId::Genesis(_) => Ok(self
+                .chain_config
+                .genesis_block()
+                .block_reward_transactable()
+                .outputs()
+                .unwrap_or(&[])
+                .to_vec()),
+            GenBlockId::Block(id) => Ok(self
+                .db_tx
+                .get_block(id)?
+                .ok_or_else(|| ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
+                .block_reward_transactable()
+                .outputs()
+                .unwrap_or(&[])
+                .to_vec()),
+        }
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {

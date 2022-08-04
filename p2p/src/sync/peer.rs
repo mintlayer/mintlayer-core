@@ -119,7 +119,9 @@ impl<T: NetworkingService> PeerContext<T> {
 mod tests {
     use super::*;
     use crate::net::mock::{types, MockService};
-    use common::chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp};
+    use common::chain::block::{
+        consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
+    };
     use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
@@ -141,6 +143,7 @@ mod tests {
             Id::new(common::primitives::H256([0x07; 32])),
             BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap()
         .header()

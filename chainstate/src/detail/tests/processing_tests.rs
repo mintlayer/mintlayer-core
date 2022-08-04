@@ -639,7 +639,6 @@ fn pow(#[case] seed: Seed) {
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
     let mut valid_block = random_invalid_block;
     let bits = difficulty.into();
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     assert!(
         crate::detail::pow::work::mine(&mut valid_block, u128::MAX, bits)
             .expect("Unexpected conversion error")
