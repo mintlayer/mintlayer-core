@@ -277,8 +277,8 @@ fn check_get_mut_utxo(
 fn add_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     /*
-                CACHE PRESENCE CACHE Flags      Possible    RESULT flags       RESULT of `add_utxo` method
-                                                Overwrite
+                             CACHE      CACHE Flags      Possible    RESULT flags       RESULT of `add_utxo` method
+                             PRESENCE                    Overwrite
     */
     check_add_utxo(&mut rng, Absent,    None,               false,  Some(FRESH | DIRTY), Ok(()));
     check_add_utxo(&mut rng, Absent,    None,               true,   Some(DIRTY),         Ok(()));
@@ -315,8 +315,8 @@ fn add_utxo_test(#[case] seed: Seed) {
 fn spend_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE
-                    PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
+                              PARENT     CACHE
+                              PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
     check_spend_utxo(&mut rng, Absent,  Absent,   None,                Err(Error::NoUtxoFound),      None);
     check_spend_utxo(&mut rng, Absent,  Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
@@ -356,8 +356,8 @@ fn spend_utxo_test(#[case] seed: Seed) {
 fn batch_write_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE     RESULT
-                    PRESENCE   PRESENCE  PRESENCE          PARENT Flags          CACHE Flags          RESULT Flags
+                              PARENT     CACHE     RESULT
+                              PRESENCE   PRESENCE  PRESENCE          PARENT Flags          CACHE Flags          RESULT Flags
     */
     check_write_utxo(&mut rng, Absent, Absent,    Ok(Absent),             None,               None,               None);
     check_write_utxo(&mut rng, Absent, Spent ,    Ok(Spent),              None,               Some(DIRTY),        Some(DIRTY));
@@ -413,8 +413,8 @@ fn batch_write_test(#[case] seed: Seed) {
 fn access_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE     RESULT     CACHE
-                    PRESENCE   PRESENCE  PRESENCE   Flags        RESULT Flags
+                               PARENT     CACHE     RESULT     CACHE
+                               PRESENCE   PRESENCE  PRESENCE   Flags        RESULT Flags
     */
     check_get_mut_utxo(&mut rng, Absent, Absent, Absent,   None,               None);
     check_get_mut_utxo(&mut rng, Absent, Spent , Spent ,   Some(0),            Some(0));
@@ -483,7 +483,7 @@ fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
     let (utxo, outpoint_2) = create_utxo_for_mempool(&mut rng);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
-    let res = cache.utxo(&outpoint_2).expect("should countain utxo");
+    let res = cache.utxo(&outpoint_2).expect("should contain utxo");
     assert!(res.source_height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
 }

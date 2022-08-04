@@ -448,10 +448,9 @@ impl<'a> UtxosView for UtxosCache<'a> {
 impl<'a> FlushableUtxoView for UtxosCache<'a> {
     fn batch_write(&mut self, utxo_entries: ConsumedUtxoCache) -> Result<(), Error> {
         for (key, entry) in utxo_entries.container {
-            let parent_entry = self.utxos.get(&key);
-
             // Ignore non-dirty entries (optimization).
             if entry.is_dirty {
+                let parent_entry = self.utxos.get(&key);
                 match parent_entry {
                     None => {
                         // The parent cache does not have an entry, while the child cache does.
