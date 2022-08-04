@@ -13,20 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-// Author(s): S. Afach
+// Author(s): A. Altonen
 
-use serialization::{Decode, Encode};
+//! P2P constants
+//!
+//! See protocol specification for more details
 
-use crate::{chain::block::timestamp::BlockTimestamp, primitives::BlockHeight};
+use std::time::Duration;
 
-#[derive(Debug, Clone, Ord, PartialOrd, Eq, PartialEq, Encode, Decode)]
-pub enum OutputTimeLock {
-    #[codec(index = 0)]
-    UntilHeight(BlockHeight),
-    #[codec(index = 1)]
-    UntilTime(BlockTimestamp),
-    #[codec(index = 2)]
-    ForBlockCount(#[codec(compact)] u64),
-    #[codec(index = 3)]
-    ForSeconds(#[codec(compact)] u64),
-}
+/// Ping configuration
+/// NOTE: these are not from config but part of Mintlayer's protocol specification
+pub const PING_TIMEOUT: Duration = Duration::from_secs(60);
+pub const PING_INTERVAL: Duration = Duration::from_secs(60);
+pub const PING_MAX_RETRIES: u32 = 3;
+
+/// Maximum message size
+pub const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
+
+// TODO: think about channel sizes
+pub const CHANNEL_SIZE: usize = 64;

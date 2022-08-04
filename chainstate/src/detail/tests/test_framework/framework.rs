@@ -17,6 +17,7 @@ use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
+        tokens::OutputValue,
         Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable},
@@ -184,7 +185,7 @@ fn process_block() {
         .add_transaction(
             TransactionBuilder::new()
                 .add_output(TxOutput::new(
-                    Amount::from_atoms(0),
+                    OutputValue::Coin(Amount::from_atoms(0)),
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                 ))
                 .build(),

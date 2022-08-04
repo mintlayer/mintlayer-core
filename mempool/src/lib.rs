@@ -13,20 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block;
-pub mod config;
-pub mod gen_block;
-pub mod genesis;
-mod pow;
-pub mod tokens;
-pub mod transaction;
-mod upgrades;
+#![deny(clippy::clone_on_ref_ptr)]
 
-pub use transaction::*;
+pub mod error;
+mod feerate;
+pub mod pool;
 
-pub use block::Block;
-pub use config::ChainConfig;
-pub use gen_block::{GenBlock, GenBlockId};
-pub use genesis::Genesis;
-pub use pow::PoWChainConfig;
-pub use upgrades::*;
+pub use error::Error as MempoolError;

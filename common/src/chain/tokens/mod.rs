@@ -5,28 +5,26 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// 	http://spdx.org/licenses/MIT
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+// Author(s): A. Sinitsyn
 
-pub mod block;
-pub mod config;
-pub mod gen_block;
-pub mod genesis;
-mod pow;
-pub mod tokens;
-pub mod transaction;
-mod upgrades;
+use serialization::{Decode, Encode};
 
-pub use transaction::*;
+use crate::primitives::Amount;
 
-pub use block::Block;
-pub use config::ChainConfig;
-pub use gen_block::{GenBlock, GenBlockId};
-pub use genesis::Genesis;
-pub use pow::PoWChainConfig;
-pub use upgrades::*;
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum OutputValue {
+    Coin(Amount),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+pub enum TokenData {
+    // Add todo in the code, if you should be processing tokens
+}

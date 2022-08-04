@@ -22,6 +22,7 @@ use common::{
     chain::{
         block::consensus_data::PoWData,
         config::{create_unit_test_config, Builder as ConfigBuilder},
+        tokens::OutputValue,
         ConsensusUpgrade, NetUpgrades, OutputPurpose, OutputSpentState, UpgradeVersion,
     },
     primitives::Compact,
@@ -516,7 +517,7 @@ fn consensus_type(#[case] seed: Seed) {
             .build();
         let bits = min_difficulty.into();
         assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits,)
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
                 .expect("Unexpected conversion error")
         );
         tf.process_block(mined_block, BlockSource::Local).unwrap();

@@ -25,6 +25,7 @@ use common::{
         block::{timestamp::BlockTimestamp, Block, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         transaction::Transaction,
         Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose, TxInput,
         TxOutput,
@@ -33,13 +34,25 @@ use common::{
 };
 use crypto::random::SliceRandom;
 use libp2p::Multiaddr;
-use p2p::net::{mock::MockService, NetworkingService};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
 
 pub fn make_libp2p_addr() -> Multiaddr {
     "/ip6/::1/tcp/0".parse().unwrap()
+}
+
+pub fn make_mock_addr() -> SocketAddr {
+    "[::1]:0".parse().unwrap()
+}
+
+pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
+    let addr = make_mock_addr();
+    let server = TcpListener::bind(addr).await.unwrap();
+    let peer_fut = TcpStream::connect(server.local_addr().unwrap());
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
 }
 
 pub async fn get_tcp_socket() -> TcpStream {
@@ -54,10 +67,6 @@ pub async fn get_tcp_socket() -> TcpStream {
     });
 
     TcpStream::connect(addr).await.unwrap()
-}
-
-pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
 }
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;
@@ -112,13 +121,19 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    let new_value = (output.value() - Amount::from_atoms(1)).unwrap();
+    let output_value = match output.value() {
+        OutputValue::Coin(coin) => *coin,
+    };
+    let new_value = (output_value - Amount::from_atoms(1)).unwrap();
     if new_value == Amount::from_atoms(0) {
         return None;
     }
     Some((
         TxInput::new(outsrc, index as u32, nosig_random_witness()),
-        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+        TxOutput::new(
+            OutputValue::Coin(new_value),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ),
     ))
 }
 

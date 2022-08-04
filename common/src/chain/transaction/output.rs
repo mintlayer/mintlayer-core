@@ -13,10 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{
-    address::pubkeyhash::PublicKeyHash,
-    primitives::{Amount, Id},
-};
+use crate::{address::pubkeyhash::PublicKeyHash, chain::tokens::OutputValue, primitives::Id};
 use script::Script;
 use serialization::{Decode, Encode};
 
@@ -58,17 +55,17 @@ impl OutputPurpose {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct TxOutput {
-    value: Amount,
+    value: OutputValue,
     purpose: OutputPurpose,
 }
 
 impl TxOutput {
-    pub fn new(value: Amount, purpose: OutputPurpose) -> Self {
+    pub fn new(value: OutputValue, purpose: OutputPurpose) -> Self {
         TxOutput { value, purpose }
     }
 
-    pub fn value(&self) -> Amount {
-        self.value
+    pub fn value(&self) -> &OutputValue {
+        &self.value
     }
 
     pub fn purpose(&self) -> &OutputPurpose {
