@@ -727,7 +727,13 @@ fn test_attempt_to_print_tokens() {
     });
 }
 
-fn test_attempt_to_mix_input_tokens() {}
+fn test_attempt_to_mix_input_tokens() {
+
+    // Issuance a few different tokens
+    
+    // Try to spend sum of input tokens 
+
+}
 
 fn test_attempt_to_overflow_outputs() {}
 
