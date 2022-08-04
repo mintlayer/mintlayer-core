@@ -16,7 +16,7 @@ LICENSE_TEMPLATE = [
     r'// you may not use this file except in compliance with the License\.',
     r'// You may obtain a copy of the License at',
     r'//',
-    r'//\s+https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE',
+    r'// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE',
     r'//',
     r'// Unless required by applicable law or agreed to in writing, software',
     r'// distributed under the License is distributed on an "AS IS" BASIS,',
