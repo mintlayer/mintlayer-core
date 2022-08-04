@@ -104,13 +104,23 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 }
 
+/// Trait alias for [traits::TransactionRo] + [BlockchainStorageRead]
+pub trait BlockchainTxRo: traits::TransactionRo<Error = Error> + BlockchainStorageRead {}
+
+impl<T: traits::TransactionRo<Error = Error> + BlockchainStorageRead> BlockchainTxRo for T {}
+
+/// Trait alias for [traits::TransactionRw] + [BlockchainStorageWrite]
+pub trait BlockchainTxRw: traits::TransactionRw<Error = Error> + BlockchainStorageWrite {}
+
+impl<T: traits::TransactionRw<Error = Error> + BlockchainStorageWrite> BlockchainTxRw for T {}
+
 /// Support for transactions over blockchain storage
 pub trait Transactional<'t> {
     /// Associated read-only transaction type.
-    type TransactionRo: traits::TransactionRo<Error = crate::Error> + BlockchainStorageRead + 't;
+    type TransactionRo: BlockchainTxRo + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: traits::TransactionRw<Error = crate::Error> + BlockchainStorageWrite + 't;
+    type TransactionRw: BlockchainTxRw + 't;
 
     /// Start a read-only transaction.
     fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;
