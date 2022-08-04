@@ -43,6 +43,32 @@ pub enum Command {
         peer_id: MockPeerId,
         response: oneshot::Sender<crate::Result<()>>,
     },
+    SendRequest {
+        peer_id: MockPeerId,
+        message: message::Request,
+        response: oneshot::Sender<crate::Result<MockRequestId>>,
+    },
+
+    /// Send response to remote peer
+    SendResponse {
+        request_id: MockRequestId,
+        message: message::Response,
+        response: oneshot::Sender<crate::Result<()>>,
+    },
+}
+
+pub enum SyncingEvent {
+    Request {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        request: message::Request,
+    },
+
+    Response {
+        peer_id: MockPeerId,
+        request_id: MockRequestId,
+        response: message::Response,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -74,7 +100,28 @@ pub enum PubSubEvent {
     },
 }
 
-pub enum SyncingEvent {}
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode, Default)]
+pub struct MockRequestId(u64);
+
+impl MockRequestId {
+    pub fn new(request_id: u64) -> Self {
+        Self(request_id)
+    }
+}
+
+impl std::ops::Deref for MockRequestId {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for MockRequestId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, Encode, Decode)]
 pub struct MockPeerId(u64);
@@ -109,19 +156,26 @@ pub struct MockPeerInfo {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum PeerEvent {
+    /// Peer information received from remote
     PeerInfoReceived {
         peer_id: MockPeerId,
         network: [u8; 4],
         version: semver::SemVer,
         protocols: Vec<Protocol>,
     },
+
+    /// Connection closed to remote
     ConnectionClosed,
+
+    /// Message received from remote
+    MessageReceived { message: Message },
 }
 
 /// Events sent by the mock backend to peers
 #[derive(Debug)]
 pub enum MockEvent {
     Disconnect,
+    SendMessage(Box<Message>),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -143,7 +197,12 @@ pub enum HandshakeMessage {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Message {
     Handshake(HandshakeMessage),
-    Announcement(message::Announcement),
-    Request(message::Request),
-    Response(message::Response),
+    Request {
+        request_id: MockRequestId,
+        request: message::Request,
+    },
+    Response {
+        request_id: MockRequestId,
+        response: message::Response,
+    },
 }

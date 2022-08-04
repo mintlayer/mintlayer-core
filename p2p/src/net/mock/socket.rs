@@ -113,7 +113,7 @@ impl MockSocket {
 
     pub async fn recv(&mut self) -> Result<Option<Message>, std::io::Error> {
         if self.socket.read_buf(&mut self.buffer).await? == 0 {
-            return self.decoder.decode_eof(&mut self.buffer);
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
         }
 
         self.decoder.decode(&mut self.buffer)
@@ -123,7 +123,7 @@ impl MockSocket {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::message::*;
+    use crate::{message::*, net::mock::types};
     use tokio::net::TcpListener;
 
     #[tokio::test]
@@ -136,7 +136,10 @@ mod tests {
         let mut server_socket = MockSocket::new(res1.unwrap().0);
         let mut peer_socket = MockSocket::new(res2.unwrap());
 
-        let msg = Message::Request(Request::BlockListRequest(BlockListRequest::new(vec![])));
+        let msg = Message::Request {
+            request_id: types::MockRequestId::new(1337u64),
+            request: Request::BlockListRequest(BlockListRequest::new(vec![])),
+        };
         peer_socket.send(msg.clone()).await.unwrap();
 
         assert_eq!(server_socket.recv().await.unwrap().unwrap(), msg);

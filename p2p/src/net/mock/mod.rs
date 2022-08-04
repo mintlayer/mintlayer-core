@@ -15,10 +15,11 @@
 
 pub mod backend;
 pub mod peer;
+pub mod request_manager;
 pub mod socket;
 pub mod types;
 
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::{
@@ -44,9 +45,6 @@ pub struct MockService;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MockMessageId(u64);
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct MockRequestId(u64);
 
 pub struct MockConnectivityHandle<T: NetworkingService> {
     /// Socket address of the network service provider
@@ -75,14 +73,12 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingCodecHandle<T>
-where
-    T: NetworkingService,
-{
+pub struct MockSyncingCodecHandle<T: NetworkingService> {
     /// TX channel for sending commands to mock backend
-    _cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::Sender<types::Command>,
 
-    _sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    /// RX channel for receiving syncing events
+    sync_rx: mpsc::Receiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
@@ -107,7 +103,7 @@ where
 impl NetworkingService for MockService {
     type Address = SocketAddr;
     type PeerId = types::MockPeerId;
-    type SyncingPeerRequestId = MockRequestId;
+    type SyncingPeerRequestId = types::MockRequestId;
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
@@ -125,7 +121,7 @@ impl NetworkingService for MockService {
         let (cmd_tx, cmd_rx) = mpsc::channel(16);
         let (conn_tx, conn_rx) = mpsc::channel(16);
         let (pubsub_tx, _pubsub_rx) = mpsc::channel(16);
-        let (sync_tx, _sync_rx) = mpsc::channel(16);
+        let (sync_tx, sync_rx) = mpsc::channel(16);
         let socket = TcpListener::bind(addr).await?;
         let local_addr = socket.local_addr().expect("to have bind address available");
 
@@ -160,8 +156,8 @@ impl NetworkingService for MockService {
                 _marker: Default::default(),
             },
             Self::SyncingMessagingHandle {
-                _cmd_tx: cmd_tx,
-                _sync_rx,
+                cmd_tx,
+                sync_rx,
                 _marker: Default::default(),
             },
         ))
@@ -281,26 +277,64 @@ where
 #[async_trait]
 impl<T> SyncingMessagingService<T> for MockSyncingCodecHandle<T>
 where
-    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = MockRequestId> + Send,
+    T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
+        + Send,
 {
     async fn send_request(
         &mut self,
-        _peer_id: T::PeerId,
-        _request: message::Request,
+        peer_id: T::PeerId,
+        request: message::Request,
     ) -> crate::Result<T::SyncingPeerRequestId> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+
+        self.cmd_tx
+            .send(types::Command::SendRequest {
+                peer_id,
+                message: request,
+                response: tx,
+            })
+            .await?;
+        rx.await?
     }
 
     async fn send_response(
         &mut self,
-        _request_id: T::SyncingPeerRequestId,
-        _response: message::Response,
+        request_id: T::SyncingPeerRequestId,
+        response: message::Response,
     ) -> crate::Result<()> {
-        todo!();
+        let (tx, rx) = oneshot::channel();
+
+        self.cmd_tx
+            .send(types::Command::SendResponse {
+                request_id,
+                message: response,
+                response: tx,
+            })
+            .await?;
+        rx.await?
     }
 
     async fn poll_next(&mut self) -> crate::Result<SyncingEvent<T>> {
-        todo!();
+        match self.sync_rx.recv().await.ok_or(P2pError::ChannelClosed)? {
+            types::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            } => Ok(net::types::SyncingEvent::Request {
+                peer_id,
+                request_id,
+                request,
+            }),
+            types::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            } => Ok(net::types::SyncingEvent::Response {
+                peer_id,
+                request_id,
+                response,
+            }),
+        }
     }
 }
 
