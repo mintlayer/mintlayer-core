@@ -228,8 +228,19 @@ impl Libp2pBackend {
     ) -> crate::Result<()> {
         log::trace!("send request to peer {peer_id}");
 
-        let request_id = self.swarm.behaviour_mut().sync.send_request(peer_id, request);
-        response.send(Ok(request_id)).map_err(|_| P2pError::ChannelClosed)
+        if !self.swarm.is_connected(peer_id) {
+            return response
+                .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
+                .map_err(|_| P2pError::ChannelClosed);
+        }
+
+        response
+            .send(Ok(self
+                .swarm
+                .behaviour_mut()
+                .sync
+                .send_request(peer_id, request)))
+            .map_err(|_| P2pError::ChannelClosed)
     }
 
     /// Send response to a received request

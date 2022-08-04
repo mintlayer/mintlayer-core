@@ -37,14 +37,16 @@ async fn valid_block() {
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
         TestBlockInfo::from_genesis(config.genesis_block()),
         1,
     );
+
     let first = blocks[0].header().clone();
     mgr.peers
         .get_mut(&peer_id)
@@ -64,8 +66,9 @@ async fn valid_block_invalid_state() {
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -86,8 +89,9 @@ async fn valid_block_resubmitted_chainstate() {
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let blocks = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -117,8 +121,9 @@ async fn invalid_block() {
 
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
+
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let mut blocks = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),

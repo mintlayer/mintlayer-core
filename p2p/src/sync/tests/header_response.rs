@@ -24,7 +24,7 @@ async fn too_many_headers() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -47,7 +47,7 @@ async fn empty_response() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     assert_eq!(
         mgr.validate_header_response(&peer_id, vec![]).await,
@@ -64,7 +64,7 @@ async fn valid_response() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -91,7 +91,7 @@ async fn header_doesnt_attach_to_local_chain() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -117,7 +117,7 @@ async fn headers_not_in_order() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     let mut headers = p2p_test_utils::create_n_blocks(
         Arc::clone(&config),
@@ -144,7 +144,7 @@ async fn invalid_state() {
     let (mut mgr, _conn, _sync, _pubsub, _swarm) =
         make_sync_manager::<Libp2pService>(make_libp2p_addr()).await;
     let peer_id = PeerId::random();
-    mgr.register_peer(peer_id).await.unwrap();
+    register_peer(&mut mgr, peer_id).await;
 
     mgr.peers.get_mut(&peer_id).unwrap().set_state(peer::PeerSyncState::Unknown);
 
