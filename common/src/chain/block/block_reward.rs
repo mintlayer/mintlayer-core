@@ -24,10 +24,12 @@ pub struct BlockReward {
 }
 
 impl BlockReward {
+    /// Constructs a new block reward instance with given outputs.
     pub fn new(reward_outputs: Vec<TxOutput>) -> Self {
         Self { reward_outputs }
     }
 
+    /// Returns reward outputs.
     pub fn outputs(&self) -> &[TxOutput] {
         &self.reward_outputs
     }

@@ -160,37 +160,37 @@ impl Block {
     }
 
     pub fn merkle_root(&self) -> Option<H256> {
-        match &self {
+        match self {
             Block::V1(blk) => blk.tx_merkle_root(),
         }
     }
 
     pub fn witness_merkle_root(&self) -> Option<H256> {
-        match &self {
+        match self {
             Block::V1(blk) => blk.witness_merkle_root(),
         }
     }
 
     pub fn header(&self) -> &BlockHeader {
-        match &self {
+        match self {
             Block::V1(blk) => blk.header(),
         }
     }
 
     pub fn timestamp(&self) -> BlockTimestamp {
-        match &self {
+        match self {
             Block::V1(blk) => blk.timestamp(),
         }
     }
 
     pub fn transactions(&self) -> &Vec<Transaction> {
-        match &self {
+        match self {
             Block::V1(blk) => blk.transactions(),
         }
     }
 
     pub fn prev_block_id(&self) -> Id<GenBlock> {
-        match &self {
+        match self {
             Block::V1(blk) => *blk.prev_block_id(),
         }
     }
@@ -199,8 +199,15 @@ impl Block {
         BlockSize::new_from_block(self)
     }
 
+    /// Returns a reward for this block.
+    pub fn block_reward(&self) -> &BlockReward {
+        match self {
+            Block::V1(b) => b.block_reward(),
+        }
+    }
+
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        match &self {
+        match self {
             Block::V1(b) => b.block_reward_transactable(),
         }
     }

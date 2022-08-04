@@ -75,6 +75,10 @@ impl BlockV1 {
         &self.header.prev_block_id
     }
 
+    pub fn block_reward(&self) -> &BlockReward {
+        &self.reward
+    }
+
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
         let inputs = match &self.header.consensus_data {
             ConsensusData::None | ConsensusData::PoW(_) => None,
