@@ -9,7 +9,7 @@ SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
 
 LICENSE_TEMPLATE = [
-    r'// Copyright \(c\) 202[0-9](-202[0-9])? RBB S\.r\.l',
+    r'// Copyright \(c\) 202[0-9](-202[0-9])? .+',
     r'// opensource@mintlayer\.org',
     r'// SPDX-License-Identifier: MIT',
     r'// Licensed under the MIT License;',
