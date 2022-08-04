@@ -510,7 +510,7 @@ fn consensus_type(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
@@ -569,7 +569,7 @@ fn consensus_type(#[case] seed: Seed) {
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
             .with_reward(vec![TxOutput::new(
-                Amount::from_atoms(10),
+                OutputValue::Coin(Amount::from_atoms(10)),
                 OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
             )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
@@ -620,7 +620,7 @@ fn pow(#[case] seed: Seed) {
     let mut random_invalid_block = tf
         .make_block_builder()
         .with_reward(vec![TxOutput::new(
-            Amount::from_atoms(10),
+            OutputValue::Coin(Amount::from_atoms(10)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         )])
         .add_test_transaction(&mut rng)
