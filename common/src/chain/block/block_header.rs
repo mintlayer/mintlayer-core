@@ -24,8 +24,8 @@ use crate::primitives::{id, VersionTag};
 pub struct BlockHeader {
     pub(super) version: VersionTag<1>,
     pub(super) prev_block_id: Id<GenBlock>,
-    pub(super) tx_merkle_root: Option<H256>,
-    pub(super) witness_merkle_root: Option<H256>,
+    pub(super) tx_merkle_root: H256,
+    pub(super) witness_merkle_root: H256,
     pub(super) timestamp: BlockTimestamp,
     pub(super) consensus_data: ConsensusData,
 }

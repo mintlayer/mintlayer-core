@@ -28,11 +28,16 @@ use crate::{
 
 use super::{block_header::BlockHeader, timestamp::BlockTimestamp};
 
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct BlockBody {
+    pub(super) reward: BlockReward,
+    pub(super) transactions: Vec<Transaction>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
-    pub(super) reward: BlockReward,
-    pub(super) transactions: Vec<Transaction>,
+    pub(super) body: BlockBody,
 }
 
 impl Idable for BlockV1 {
@@ -43,11 +48,11 @@ impl Idable for BlockV1 {
 }
 
 impl BlockV1 {
-    pub fn tx_merkle_root(&self) -> Option<H256> {
+    pub fn tx_merkle_root(&self) -> H256 {
         self.header.tx_merkle_root
     }
 
-    pub fn witness_merkle_root(&self) -> Option<H256> {
+    pub fn witness_merkle_root(&self) -> H256 {
         self.header.witness_merkle_root
     }
 
@@ -68,15 +73,19 @@ impl BlockV1 {
     }
 
     pub fn transactions(&self) -> &Vec<Transaction> {
-        &self.transactions
+        &self.body.transactions
     }
 
     pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
         &self.header.prev_block_id
     }
 
+    pub fn body(&self) -> &BlockBody {
+        &self.body
+    }
+
     pub fn block_reward(&self) -> &BlockReward {
-        &self.reward
+        &self.body.reward
     }
 
     pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
@@ -86,7 +95,7 @@ impl BlockV1 {
         };
         BlockRewardTransactable {
             inputs,
-            outputs: Some(self.reward.outputs()),
+            outputs: Some(self.body.reward.outputs()),
         }
     }
 }
