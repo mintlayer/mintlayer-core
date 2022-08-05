@@ -73,7 +73,7 @@ where
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
-pub struct MockSyncingCodecHandle<T: NetworkingService> {
+pub struct MockSyncingMessagingHandle<T: NetworkingService> {
     /// TX channel for sending commands to mock backend
     cmd_tx: mpsc::Sender<types::Command>,
 
@@ -107,7 +107,7 @@ impl NetworkingService for MockService {
     type PubSubMessageId = MockMessageId;
     type ConnectivityHandle = MockConnectivityHandle<Self>;
     type PubSubHandle = MockPubSubHandle<Self>;
-    type SyncingMessagingHandle = MockSyncingCodecHandle<Self>;
+    type SyncingMessagingHandle = MockSyncingMessagingHandle<Self>;
 
     async fn start(
         addr: Self::Address,
@@ -275,7 +275,7 @@ where
 }
 
 #[async_trait]
-impl<T> SyncingMessagingService<T> for MockSyncingCodecHandle<T>
+impl<T> SyncingMessagingService<T> for MockSyncingMessagingHandle<T>
 where
     T: NetworkingService<PeerId = types::MockPeerId, SyncingPeerRequestId = types::MockRequestId>
         + Send,

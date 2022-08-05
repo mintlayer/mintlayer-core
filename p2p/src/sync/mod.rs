@@ -169,10 +169,12 @@ where
     /// Process header request
     pub async fn process_header_request(
         &mut self,
-        _peer_id: T::PeerId,
+        peer_id: T::PeerId,
         request_id: T::SyncingPeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
+        log::debug!("send header response to peer {peer_id}, request_id: {request_id:?}");
+
         // TODO: check if remote has already asked for these headers?
         let headers = self.chainstate_handle.call(move |this| this.get_headers(locator)).await??;
         self.send_header_response(request_id, headers).await
