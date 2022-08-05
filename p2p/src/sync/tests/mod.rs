@@ -89,7 +89,7 @@ pub async fn connect_services<T>(
     conn1: &mut T::ConnectivityHandle,
     conn2: &mut T::ConnectivityHandle,
 ) where
-    T: NetworkingService + std::fmt::Debug,
+    T: NetworkingService + std::fmt::Debug + 'static,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
     let addr = timeout(Duration::from_secs(5), conn2.local_addr())

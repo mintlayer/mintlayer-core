@@ -107,13 +107,12 @@ impl MockRequestId {
     pub fn new(request_id: u64) -> Self {
         Self(request_id)
     }
-}
 
-impl std::ops::Deref for MockRequestId {
-    type Target = u64;
+    pub fn fetch_and_inc(&mut self) -> Self {
+        let id = self.0;
+        self.0 += 1;
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+        Self(id)
     }
 }
 

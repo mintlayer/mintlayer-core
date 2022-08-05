@@ -32,41 +32,18 @@ use crate::{
 use std::collections::{hash_map::Entry, HashMap, HashSet};
 
 #[derive(Debug, Default)]
-struct PeerContext {
-    ephemerals: HashSet<types::MockRequestId>,
-    request_id: u16,
-    base: u64,
-}
-
-impl PeerContext {
-    pub fn new(base: u64) -> Self {
-        Self {
-            base,
-            request_id: 0u16,
-            ephemerals: Default::default(),
-        }
-    }
-
-    pub fn allocate_request_id(&mut self) -> types::MockRequestId {
-        let id = self.base + self.request_id as u64;
-        self.request_id = self.request_id.overflowing_add(1).0;
-        types::MockRequestId::new(id)
-    }
-}
-
-#[derive(Debug, Default)]
 pub struct RequestManager {
-    /// Registered peers
-    peers: HashMap<types::MockPeerId, PeerContext>,
+    /// Active ephemeral IDs
+    ephemerals: HashMap<types::MockPeerId, HashSet<types::MockRequestId>>,
 
     /// Pending outbound requests (TODO: timeouts)
     _pending: HashMap<types::MockRequestId, types::MockRequestId>,
 
-    /// Request ID zone for allocating unique IDs for peers
-    req_id_zone: u64,
+    // Next ID for outbound request
+    next_request_id: types::MockRequestId,
 
     /// Next ephemeral request ID
-    next_ephemeral: types::MockRequestId,
+    next_ephemeral_id: types::MockRequestId,
 
     /// Ephemeral requests IDs which are mapped to remote peer ID/request ID pair
     ephemeral: HashMap<types::MockRequestId, (types::MockPeerId, types::MockRequestId)>,
@@ -81,12 +58,10 @@ impl RequestManager {
     ///
     /// Initialize peer context and allocate request ID slice for the peer
     pub fn register_peer(&mut self, peer_id: types::MockPeerId) -> crate::Result<()> {
-        match self.peers.entry(peer_id) {
+        match self.ephemerals.entry(peer_id) {
             Entry::Occupied(_) => Err(P2pError::PeerError(PeerError::PeerAlreadyExists)),
             Entry::Vacant(entry) => {
-                entry.insert(PeerContext::new(self.req_id_zone));
-                self.req_id_zone =
-                    self.req_id_zone.checked_add(0x10000).expect("number of peers to be lower");
+                entry.insert(Default::default());
                 Ok(())
             }
         }
@@ -94,28 +69,20 @@ impl RequestManager {
 
     /// Unregister peer from the request manager
     pub fn unregister_peer(&mut self, peer_id: &types::MockPeerId) {
-        if let Some(context) = self.peers.remove(peer_id) {
-            context.ephemerals.iter().for_each(|id| {
+        if let Some(ephemerals) = self.ephemerals.remove(peer_id) {
+            ephemerals.iter().for_each(|id| {
                 self.ephemeral.remove(id);
             });
         }
     }
 
     /// Create new outgoing request
-    ///
-    /// Allocate peer-specific request ID, create new request and return
-    /// both of them to the caller.
     pub fn make_request(
         &mut self,
-        peer_id: &types::MockPeerId,
+        _peer_id: &types::MockPeerId, // TODO: timeouts
         request: message::Request,
     ) -> crate::Result<(types::MockRequestId, Box<types::Message>)> {
-        let peer = self
-            .peers
-            .get_mut(peer_id)
-            .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
-
-        let request_id = peer.allocate_request_id();
+        let request_id = self.next_request_id.fetch_and_inc();
 
         Ok((
             request_id,
@@ -158,15 +125,14 @@ impl RequestManager {
         request_id: &types::MockRequestId,
         _request: &message::Request,
     ) -> crate::Result<types::MockRequestId> {
-        let peer = self
-            .peers
+        let peer_ephemerals = self
+            .ephemerals
             .get_mut(peer_id)
             .ok_or(P2pError::PeerError(PeerError::PeerDoesntExist))?;
 
-        let ephemeral_id = self.next_ephemeral;
-        self.next_ephemeral = types::MockRequestId::new(*ephemeral_id + 1);
+        let ephemeral_id = self.next_ephemeral_id.fetch_and_inc();
 
-        peer.ephemerals.insert(ephemeral_id);
+        peer_ephemerals.insert(ephemeral_id);
         self.ephemeral.insert(ephemeral_id, (*peer_id, *request_id));
         Ok(ephemeral_id)
     }
@@ -180,48 +146,5 @@ impl RequestManager {
     ) -> crate::Result<()> {
         // TODO: implement request timeouts
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // verify that there are no request id collisions in adjacent zones
-    #[test]
-    fn request_id_collision() {
-        let mut mgr = RequestManager::new();
-
-        let peer1 = types::MockPeerId::random();
-        let peer2 = types::MockPeerId::random();
-
-        mgr.register_peer(peer1).unwrap();
-        mgr.register_peer(peer2).unwrap();
-
-        // peers have different zones
-        assert_eq!(mgr.peers.get(&peer1).unwrap().base, 0);
-        assert_eq!(mgr.peers.get(&peer1).unwrap().request_id, 0);
-
-        assert_eq!(mgr.peers.get(&peer2).unwrap().base, 0x10000);
-        assert_eq!(mgr.peers.get(&peer2).unwrap().request_id, 0);
-
-        // allocate request ids from the full range
-        let peer1 = mgr.peers.get_mut(&peer1).unwrap();
-
-        for i in 0..0xffff {
-            assert_eq!(
-                types::MockRequestId::new(i as u64),
-                peer1.allocate_request_id()
-            );
-        }
-
-        // allocate the last request id and verify it's `0xffff`
-        assert_eq!(
-            types::MockRequestId::new(0xffff),
-            peer1.allocate_request_id()
-        );
-
-        // overflow the counter and verify that the request id has rolled to zero
-        assert_eq!(types::MockRequestId::new(0), peer1.allocate_request_id());
     }
 }

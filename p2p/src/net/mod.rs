@@ -166,7 +166,7 @@ where
     async fn poll_next(&mut self) -> crate::Result<types::PubSubEvent<T>>;
 }
 
-/// [SyncingCodecService] provides an interface for sending and receiving block
+/// [SyncingMessagingService] provides an interface for sending and receiving block
 /// and header requests with a remote peer.
 #[async_trait]
 pub trait SyncingMessagingService<T>

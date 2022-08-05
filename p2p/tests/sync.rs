@@ -23,13 +23,13 @@ use p2p::{
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
     message::{BlockListRequest, BlockListResponse, HeaderListResponse, Request, Response},
     net::{
-        self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
-        NetworkingService, SyncingMessagingService,
+        self, libp2p::Libp2pService, mock::MockService, types::ConnectivityEvent,
+        ConnectivityService, NetworkingService, SyncingMessagingService,
     },
     sync::BlockSyncManager,
     sync::SyncState,
 };
-use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{connect_services, make_libp2p_addr, make_mock_addr, TestBlockInfo};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -74,8 +74,7 @@ where
     )
 }
 
-// initialize two blockchains which have the same longest chain
-// that is `num_blocks` long
+// initialize two blockchains which have the same longest chain that is `num_blocks` long
 async fn init_chainstate_2(
     config: Arc<ChainConfig>,
     num_blocks: usize,
@@ -204,8 +203,12 @@ where
     mgr.check_state().await
 }
 
-#[tokio::test]
-async fn local_and_remote_in_sync() {
+async fn local_and_remote_in_sync<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     logging::init_logging::<&str>(None);
 
     let config = Arc::new(common::chain::config::create_unit_test_config());
@@ -213,13 +216,11 @@ async fn local_and_remote_in_sync() {
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // connect the two managers together so that they can exchange messages
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     // ensure that only a header request is received from the remote and
@@ -240,21 +241,33 @@ async fn local_and_remote_in_sync() {
     );
 }
 
+#[tokio::test]
+async fn local_and_remote_in_sync_libp2p() {
+    local_and_remote_in_sync::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn local_and_remote_in_sync_mock() {
+    local_and_remote_in_sync::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
 // local and remote nodes are in the same chain but remote is ahead 7 blocks
 //
 // this the remote node is synced first and as it's ahead of local node,
 // no blocks are downloaded whereas loca node downloads the 7 new blocks from remote
-#[tokio::test]
-async fn remote_ahead_by_7_blocks() {
+async fn remote_ahead_by_7_blocks<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 7 more blocks on top of the best block (which is also known by mgr1)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -262,7 +275,7 @@ async fn remote_ahead_by_7_blocks() {
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
@@ -334,18 +347,30 @@ async fn remote_ahead_by_7_blocks() {
     );
 }
 
-// local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
 #[tokio::test]
-async fn local_ahead_by_12_blocks() {
+async fn remote_ahead_by_7_blocks_libp2p() {
+    remote_ahead_by_7_blocks::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn remote_ahead_by_7_blocks_mock() {
+    remote_ahead_by_7_blocks::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+// local and remote nodes are in the same chain but local is ahead of remote by 12 blocks
+async fn local_ahead_by_12_blocks<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _pubsub2, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _pubsub2, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 12 more blocks on top of the best block (which is also known by mgr2)
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -353,7 +378,7 @@ async fn local_ahead_by_12_blocks() {
     assert!(!same_tip(&mgr1_handle, &mgr2_handle).await);
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
@@ -450,19 +475,31 @@ async fn local_ahead_by_12_blocks() {
     );
 }
 
+#[tokio::test]
+async fn local_ahead_by_12_blocks_libp2p() {
+    local_ahead_by_12_blocks::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn local_ahead_by_12_blocks_mock() {
+    local_ahead_by_12_blocks::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
 // local and remote nodes are in the same chain but local is ahead of remote by 14 blocks
 // verify that remote nodes does a reorg
-#[tokio::test]
-async fn remote_local_diff_chains_local_higher() {
+async fn remote_local_diff_chains_local_higher<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 14 more blocks to local chain and 7 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -476,7 +513,7 @@ async fn remote_local_diff_chains_local_higher() {
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
@@ -592,19 +629,32 @@ async fn remote_local_diff_chains_local_higher() {
     );
 }
 
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_libp2p() {
+    remote_local_diff_chains_local_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+        .await;
+}
+
+#[tokio::test]
+async fn remote_local_diff_chains_local_higher_mock() {
+    remote_local_diff_chains_local_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
 // local and remote nodes are in different chains and remote has longer chain
 // verify that local node does a reorg
-#[tokio::test]
-async fn remote_local_diff_chains_remote_higher() {
+async fn remote_local_diff_chains_remote_higher<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _pubsub2, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _pubsub2, _) = make_sync_manager::<T>(addr2, handle2).await;
 
     // add 5 more blocks to local chain and 12 more blocks to remote chain
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
@@ -618,7 +668,7 @@ async fn remote_local_diff_chains_remote_higher() {
     let remote_tip = get_tip(&mgr2_handle).await;
 
     // add peer to the hashmap of known peers and send getheaders request to them
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
 
@@ -735,19 +785,34 @@ async fn remote_local_diff_chains_remote_higher() {
 }
 
 #[tokio::test]
-async fn two_remote_nodes_different_chains() {
+async fn remote_local_diff_chains_remote_higher_libp2p() {
+    remote_local_diff_chains_remote_higher::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+        .await;
+}
+
+#[tokio::test]
+async fn remote_local_diff_chains_remote_higher_mock() {
+    remote_local_diff_chains_remote_higher::<MockService>(make_mock_addr(), make_mock_addr()).await;
+}
+
+async fn two_remote_nodes_different_chains<T>(
+    addr1: T::Address,
+    addr2: T::Address,
+    addr3: T::Address,
+) where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add 5 more blocks for first remote and 7 blocks to second remote
     p2p_test_utils::add_more_blocks(Arc::clone(&config), &mgr2_handle, 5).await;
@@ -758,8 +823,8 @@ async fn two_remote_nodes_different_chains() {
     let mgr3_tip = get_tip(&mgr3_handle).await;
 
     // connect remote peers to local peer
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
-    connect_services::<Libp2pService>(&mut conn1, &mut conn3).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
@@ -841,19 +906,40 @@ async fn two_remote_nodes_different_chains() {
 }
 
 #[tokio::test]
-async fn two_remote_nodes_same_chains() {
+async fn two_remote_nodes_different_chains_libp2p() {
+    two_remote_nodes_different_chains::<Libp2pService>(
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn two_remote_nodes_different_chains_mock() {
+    two_remote_nodes_different_chains::<MockService>(
+        make_mock_addr(),
+        make_mock_addr(),
+        make_mock_addr(),
+    )
+    .await;
+}
+
+async fn two_remote_nodes_same_chains<T>(addr1: T::Address, addr2: T::Address, addr3: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let blocks = p2p_test_utils::create_n_blocks(
@@ -873,8 +959,8 @@ async fn two_remote_nodes_same_chains() {
     assert!(!same_tip(&mgr2_handle, &mgr1_handle).await);
 
     // connect remote peers to local peer
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
-    connect_services::<Libp2pService>(&mut conn1, &mut conn3).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
@@ -963,19 +1049,43 @@ async fn two_remote_nodes_same_chains() {
 }
 
 #[tokio::test]
-async fn two_remote_nodes_same_chains_new_blocks() {
+async fn two_remote_nodes_same_chains_libp2p() {
+    two_remote_nodes_same_chains::<Libp2pService>(
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn two_remote_nodes_same_chains_mock() {
+    two_remote_nodes_same_chains::<MockService>(
+        make_mock_addr(),
+        make_mock_addr(),
+        make_mock_addr(),
+    )
+    .await;
+}
+
+async fn two_remote_nodes_same_chains_new_blocks<T>(
+    addr1: T::Address,
+    addr2: T::Address,
+    addr3: T::Address,
+) where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2, handle3) = init_chainstate_3(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
     let mgr3_handle = handle3.clone();
 
-    let (mut mgr1, mut conn1, _, mut pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
-    let (mut mgr3, mut conn3, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle3).await;
+    let (mut mgr1, mut conn1, _, mut pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
+    let (mut mgr3, mut conn3, _, _, _) = make_sync_manager::<T>(addr3, handle3).await;
 
     // add the same 32 new blocks for both mgr2 and mgr3
     let blocks = p2p_test_utils::create_n_blocks(
@@ -988,8 +1098,8 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     p2p_test_utils::import_blocks(&mgr3_handle, blocks).await;
 
     // connect remote peers to local peer
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
-    connect_services::<Libp2pService>(&mut conn1, &mut conn3).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn3).await;
 
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
     assert_eq!(mgr1.register_peer(*conn3.peer_id()).await, Ok(()));
@@ -1095,22 +1205,44 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     );
 }
 
-// connect two nodes, they are in sync so no blocks are downloaded
-// then disconnect them, add more blocks to remote chains and reconnect the nodes
-// verify that local node downloads the blocks and after that they are in sync
 #[tokio::test]
-async fn test_connect_disconnect_resyncing() {
+async fn two_remote_nodes_same_chains_new_blocks_libp2p() {
+    two_remote_nodes_same_chains_new_blocks::<Libp2pService>(
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+        make_libp2p_addr(),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn two_remote_nodes_same_chains_new_blocks_mock() {
+    two_remote_nodes_same_chains_new_blocks::<MockService>(
+        make_mock_addr(),
+        make_mock_addr(),
+        make_mock_addr(),
+    )
+    .await;
+}
+
+// // connect two nodes, they are in sync so no blocks are downloaded
+// // then disconnect them, add more blocks to remote chains and reconnect the nodes
+// // verify that local node downloads the blocks and after that they are in sync
+async fn test_connect_disconnect_resyncing<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + 'static + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+{
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let (handle1, handle2) = init_chainstate_2(Arc::clone(&config), 8).await;
     let mgr1_handle = handle1.clone();
     let mgr2_handle = handle2.clone();
 
-    let (mut mgr1, mut conn1, _, _pubsub, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle1).await;
-    let (mut mgr2, mut conn2, _, _, _) =
-        make_sync_manager::<Libp2pService>(make_libp2p_addr(), handle2).await;
+    let (mut mgr1, mut conn1, _, _pubsub, _) = make_sync_manager::<T>(addr1, handle1).await;
+    let (mut mgr2, mut conn2, _, _, _) = make_sync_manager::<T>(addr2, handle2).await;
 
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     // ensure that only a header request is received from the remote and
@@ -1141,7 +1273,7 @@ async fn test_connect_disconnect_resyncing() {
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), parent_info, 7);
     p2p_test_utils::import_blocks(&mgr2_handle, blocks.clone()).await;
 
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
     assert_eq!(mgr1.register_peer(*conn2.peer_id()).await, Ok(()));
 
     let handle = tokio::spawn(async move {
@@ -1207,4 +1339,15 @@ async fn test_connect_disconnect_resyncing() {
 
     assert!(same_tip(&mgr1_handle, &mgr2_handle).await);
     assert_eq!(mgr1.state(), &SyncState::Idle);
+}
+
+#[tokio::test]
+async fn test_connect_disconnect_resyncing_libp2p() {
+    test_connect_disconnect_resyncing::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr())
+        .await;
+}
+
+#[tokio::test]
+async fn test_connect_disconnect_resyncing_mock() {
+    test_connect_disconnect_resyncing::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }

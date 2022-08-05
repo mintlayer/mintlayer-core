@@ -17,11 +17,14 @@ use p2p::{
     error::{P2pError, PublishError},
     event::{PubSubControlEvent, SwarmEvent},
     message::Announcement,
-    net::{self, libp2p::Libp2pService, ConnectivityService, NetworkingService, PubSubService},
+    net::{
+        self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService,
+        PubSubService, SyncingMessagingService,
+    },
     pubsub::PubSubMessageHandler,
     sync::BlockSyncManager,
 };
-use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{connect_services, make_libp2p_addr, make_mock_addr, TestBlockInfo};
 use std::sync::Arc;
 use tokio::sync::mpsc;
 
@@ -95,9 +98,15 @@ async fn invalid_pubsub_block() {
     }
 }
 
-// start two libp2p services and give an invalid block, verify that `PeerManager` is informed
-#[tokio::test]
-async fn invalid_sync_block() {
+// start two networking services and give an invalid block, verify that `PeerManager` is informed
+async fn invalid_sync_block<T>(addr1: T::Address, addr2: T::Address)
+where
+    T: NetworkingService + std::fmt::Debug + 'static,
+    T::ConnectivityHandle: ConnectivityService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
+    <T as net::NetworkingService>::Address: std::str::FromStr,
+    <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
     let (tx_pubsub, _rx_pubsub) = mpsc::unbounded_channel();
     let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
@@ -105,16 +114,12 @@ async fn invalid_sync_block() {
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
     let (mut conn1, _, sync1) =
-        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+        T::start(addr1, Arc::clone(&config), Default::default()).await.unwrap();
 
     let (mut conn2, _, _sync2) =
-        Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
-            .await
-            .unwrap();
+        T::start(addr2, Arc::clone(&config), Default::default()).await.unwrap();
 
-    let mut sync1 = BlockSyncManager::<Libp2pService>::new(
+    let mut sync1 = BlockSyncManager::<T>::new(
         Arc::clone(&config),
         sync1,
         handle.clone(),
@@ -123,7 +128,7 @@ async fn invalid_sync_block() {
         tx_pubsub,
     );
 
-    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
+    connect_services::<T>(&mut conn1, &mut conn2).await;
 
     // create few blocks and offer an orphan block to the `SyncManager`
     let best_block = TestBlockInfo::from_genesis(config.genesis_block());
@@ -143,4 +148,14 @@ async fn invalid_sync_block() {
         assert_eq!(remote_id, peer_id);
         assert_eq!(score, 100);
     }
+}
+
+#[tokio::test]
+async fn invalid_sync_block_libp2p() {
+    invalid_sync_block::<Libp2pService>(make_libp2p_addr(), make_libp2p_addr()).await;
+}
+
+#[tokio::test]
+async fn invalid_sync_block_mock() {
+    invalid_sync_block::<MockService>(make_mock_addr(), make_mock_addr()).await;
 }
