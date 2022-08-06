@@ -359,7 +359,7 @@ mod tests {
         let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
         let body = BlockBody {
             reward: BlockReward::new(Vec::new()),
-            transactions: vec![one_transaction.clone()],
+            transactions: vec![one_transaction],
         };
 
         let block = Block::V1(BlockV1 { header, body });
