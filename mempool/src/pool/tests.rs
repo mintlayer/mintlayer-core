@@ -118,7 +118,7 @@ where
 
     fn process_block(&mut self, tx_id: &Id<Transaction>) -> anyhow::Result<()> {
         let mut chain_state = self.chain_state.clone();
-        chain_state.add_confirmed_tx(
+        chain_state.add_confirmed_tx(WithId::take(
             self.store
                 .txs_by_id
                 .get(&tx_id.get())
@@ -127,7 +127,7 @@ where
                     anyhow::anyhow!("process_block: tx {} not found in mempool", tx_id.get())
                 })?
                 .tx,
-        );
+        ));
         log::debug!("Setting tip to {:?}", chain_state);
         self.new_tip_set(chain_state);
         self.drop_transaction(tx_id);
