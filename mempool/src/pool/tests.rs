@@ -3,7 +3,9 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::transaction::{Destination, TxInput, TxOutput};
 use common::chain::OutPointSourceId;
 use common::chain::OutputPurpose;
+use common::primitives::H256;
 use core::panic;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 

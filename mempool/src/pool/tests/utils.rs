@@ -1,3 +1,5 @@
+use common::primitives::H256;
+
 use super::*;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
