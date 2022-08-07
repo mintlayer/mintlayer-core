@@ -644,6 +644,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 .outputs()
                 .unwrap_or(&[])
                 .to_vec()),
+            // TODO: Getting the whole block just for reward outputs isn't optimal. See the
+            // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
             GenBlockId::Block(id) => Ok(self
                 .db_tx
                 .get_block(id)?
