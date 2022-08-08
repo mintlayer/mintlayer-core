@@ -16,6 +16,6 @@
 use super::*;
 use static_assertions::*;
 
-assert_impl_all!(ChainstateInterfaceImpl: Send);
+assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store>: Send);
 
 // TODO: write tests for consensus crate
