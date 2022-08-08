@@ -15,7 +15,7 @@
 
 pub mod utxo_db;
 
-use chainstate_types::block_index::BlockIndex;
+use chainstate_types::BlockIndex;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
 use common::primitives::{BlockHeight, Id, Idable};

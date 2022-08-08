@@ -15,7 +15,7 @@
 
 //! A mock version of the blockchain storage.
 
-use chainstate_types::block_index::BlockIndex;
+use chainstate_types::BlockIndex;
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
 };

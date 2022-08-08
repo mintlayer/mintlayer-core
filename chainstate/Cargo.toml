@@ -17,12 +17,12 @@ serialization = {path = "../serialization"}
 subsystem = {path = '../subsystem'}
 utxo = {path = '../utxo'}
 utils = {path = '../utils'}
+consensus = {path = "../consensus"}
 
 async-trait = "0.1"
 hex = "0.4"
 itertools = "0.10"
 jsonrpsee = {version = "0.14", features = ["macros"]}
-num = "0.4.0"
 replace_with = "0.1"
 thiserror = "1.0"
 serde = { version = "1", features = ["derive"] }

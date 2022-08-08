@@ -13,10 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod chainstate_interface_impl;
-mod config;
-mod detail;
-
 pub mod chainstate_interface;
 pub mod rpc;
 
@@ -25,15 +21,21 @@ pub use crate::{
     detail::{ban_score, BlockError, BlockSource, Locator},
 };
 
+mod chainstate_interface_impl;
+mod config;
+mod detail;
+
 use std::sync::Arc;
 
-use chainstate_interface::ChainstateInterface;
-use chainstate_interface_impl::ChainstateInterfaceImpl;
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use detail::{time_getter::TimeGetter, Chainstate, PropertyQueryError};
+
+use chainstate_interface::ChainstateInterface;
+use chainstate_interface_impl::ChainstateInterfaceImpl;
+use detail::{time_getter::TimeGetter, Chainstate};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {

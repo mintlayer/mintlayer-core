@@ -13,12 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::block_index::BlockIndex;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::{GenBlock, Genesis};
-use common::primitives::{id::WithId, BlockHeight, Id, Idable};
-use common::Uint256;
 use std::sync::Arc;
+
+use common::{
+    chain::{block::timestamp::BlockTimestamp, GenBlock, Genesis},
+    primitives::{id::WithId, BlockHeight, Id, Idable},
+    Uint256,
+};
+
+use crate::block_index::BlockIndex;
 
 /// Generalized block index
 #[derive(Clone, Debug)]

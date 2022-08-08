@@ -13,37 +13,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use chainstate_storage::Transactional;
-use chainstate_types::block_index::BlockIndex;
-use common::chain::config::ChainConfig;
-use common::chain::{block::BlockHeader, Block, GenBlock};
-use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
-use itertools::Itertools;
-use logging::log;
+pub mod ban_score;
+pub mod time_getter;
+
+pub use self::error::*;
+pub use chainstate_types::Locator;
+
+mod block_index_history_iter;
+mod chainstateref;
+mod error;
+mod median_time;
+mod orphan_blocks;
+mod transaction_verifier;
+
 use std::sync::Arc;
+
+use itertools::Itertools;
+
+use chainstate_storage::Transactional;
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{block::BlockHeader, config::ChainConfig, Block, GenBlock},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
+use logging::log;
 use utils::eventhandler::{EventHandler, EventsController};
 use utxo::utxo_storage::UtxosDBMut;
-mod consensus_validator;
-mod orphan_blocks;
-
-mod error;
-pub use error::*;
 
 use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
-
-mod pow;
-
-pub mod ban_score;
-mod block_index_history_iter;
-mod median_time;
-
-pub use chainstate_types::locator::Locator;
-
-mod chainstateref;
-mod gen_block_index;
-
-use gen_block_index::GenBlockIndex;
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
+use time_getter::TimeGetter;
 
 type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
 type TxRo<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRo;
@@ -51,12 +50,7 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
-mod transaction_verifier;
-
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
-
-pub mod time_getter;
-use time_getter::TimeGetter;
 
 #[must_use]
 pub struct Chainstate {

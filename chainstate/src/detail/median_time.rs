@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use itertools::Itertools;
+
 use common::{
     chain::{block::timestamp::BlockTimestamp, GenBlock},
     primitives::Id,
 };
-use itertools::Itertools;
+use consensus::BlockIndexHandle;
 
 use crate::detail::block_index_history_iter::BlockIndexHistoryIterator;
-
-use super::consensus_validator::BlockIndexHandle;
 
 const MEDIAN_TIME_SPAN: usize = 11;
 

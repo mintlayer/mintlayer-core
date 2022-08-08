@@ -18,8 +18,8 @@ use std::{
     sync::Arc,
 };
 
-use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_types::GenBlockIndex;
 use common::{
     amount_sum,
     chain::{

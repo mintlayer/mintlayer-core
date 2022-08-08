@@ -26,12 +26,12 @@ use common::{
     primitives::Compact,
     Uint256,
 };
+use consensus::{ConsensusPoWError, ConsensusVerificationError};
 use crypto::key::{KeyKind, PrivateKey};
 
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
-        pow::error::ConsensusPoWError,
         tests::{test_framework::TestFramework, *},
     },
     make_chainstate, ChainstateConfig,
@@ -514,10 +514,8 @@ fn consensus_type(#[case] seed: Seed) {
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
         let bits = min_difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
-                .expect("Unexpected conversion error")
-        );
+        assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
+            .expect("Unexpected conversion error"));
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 
@@ -530,10 +528,8 @@ fn consensus_type(#[case] seed: Seed) {
         .add_test_transaction_from_block(&prev_block, &mut rng)
         .build();
     let bits = min_difficulty.into();
-    assert!(
-        crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
-            .expect("Unexpected conversion error")
-    );
+    assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
+        .expect("Unexpected conversion error"));
 
     assert!(matches!(
         tf.process_block(mined_block, BlockSource::Local).unwrap_err(),
@@ -573,10 +569,8 @@ fn consensus_type(#[case] seed: Seed) {
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
         let bits = min_difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
-                .expect("Unexpected conversion error")
-        );
+        assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
+            .expect("Unexpected conversion error"));
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 }
@@ -637,10 +631,8 @@ fn pow(#[case] seed: Seed) {
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
     let mut valid_block = random_invalid_block;
     let bits = difficulty.into();
-    assert!(
-        crate::detail::pow::work::mine(&mut valid_block, u128::MAX, bits)
-            .expect("Unexpected conversion error")
-    );
+    assert!(consensus::pow::mine(&mut valid_block, u128::MAX, bits)
+        .expect("Unexpected conversion error"));
     tf.process_block(valid_block.clone(), BlockSource::Local).unwrap();
 }
 
@@ -749,7 +741,7 @@ fn make_invalid_pow_block(
         data.update_nonce(nonce);
         block.update_consensus_data(ConsensusData::PoW(data.clone()));
 
-        if !crate::detail::pow::work::check_proof_of_work(block.get_id().get(), bits)? {
+        if !consensus::pow::check_proof_of_work(block.get_id().get(), bits)? {
             return Ok(true);
         }
     }

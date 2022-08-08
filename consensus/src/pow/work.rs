@@ -15,24 +15,28 @@
 
 #![allow(dead_code)]
 
-use crate::detail::consensus_validator::BlockIndexHandle;
-use crate::detail::pow::helpers::{
-    calculate_new_target, due_for_retarget, get_starting_block_time, special_rules,
+use chainstate_types::BlockIndex;
+use common::{
+    chain::{
+        block::consensus_data::PoWData,
+        block::{timestamp::BlockTimestamp, Block, BlockHeader, ConsensusData},
+        config::ChainConfig,
+        PoWStatus,
+    },
+    primitives::{Compact, Idable, H256},
+    Uint256,
 };
 
-use super::error::ConsensusPoWError;
-use crate::detail::pow::PoW;
-use chainstate_types::block_index::BlockIndex;
-use common::chain::block::consensus_data::PoWData;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::block::BlockHeader;
-use common::chain::block::{Block, ConsensusData};
-use common::chain::config::ChainConfig;
-use common::chain::PoWStatus;
-use common::primitives::{Compact, Idable, H256};
-use common::Uint256;
+use crate::{
+    pow::{
+        error::ConsensusPoWError,
+        helpers::{calculate_new_target, due_for_retarget, get_starting_block_time, special_rules},
+        PoW,
+    },
+    validator::BlockIndexHandle,
+};
 
-pub(crate) fn check_proof_of_work(
+pub fn check_proof_of_work(
     block_hash: H256,
     block_bits: Compact,
 ) -> Result<bool, ConsensusPoWError> {
@@ -45,7 +49,7 @@ pub(crate) fn check_proof_of_work(
         .map_err(|_| ConsensusPoWError::DecodingBitsFailed(block_bits))
 }
 
-pub(crate) fn check_pow_consensus<H: BlockIndexHandle>(
+pub fn check_pow_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     pow_status: &PoWStatus,
@@ -202,11 +206,7 @@ impl PoW {
     }
 }
 
-pub(crate) fn mine(
-    block: &mut Block,
-    max_nonce: u128,
-    bits: Compact,
-) -> Result<bool, ConsensusPoWError> {
+pub fn mine(block: &mut Block, max_nonce: u128, bits: Compact) -> Result<bool, ConsensusPoWError> {
     let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
@@ -223,7 +223,7 @@ pub(crate) fn mine(
 
 #[cfg(test)]
 mod tests {
-    use crate::detail::pow::work::check_proof_of_work;
+    use crate::pow::work::check_proof_of_work;
     use common::chain::config::create_mainnet;
     use common::primitives::{Compact, H256};
     use rstest::rstest;

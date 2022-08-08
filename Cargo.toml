@@ -13,6 +13,7 @@ edition = "2021"
 members = [
   "common",        # everything else, until it's moved to another crate
   "crypto",        # cryptographic primitives and their interfaces
+  "consensus",     # Consensus related logic.
   "chainstate",    # code on chainstate of blocks and transactions
   "script",        # bitcoin script and its interfaces
   "logging",       # logging engine and its interfaces
