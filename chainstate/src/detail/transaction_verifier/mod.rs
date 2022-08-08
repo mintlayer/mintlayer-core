@@ -694,12 +694,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         // Check amounts
         ensure!(
-            dbg!(input_amount) >= dbg!(token_amount),
+            input_amount >= token_amount,
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
         );
 
         ensure!(
-            input_amount >= dbg!(output_amount),
+            input_amount >= output_amount,
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
         );
 
