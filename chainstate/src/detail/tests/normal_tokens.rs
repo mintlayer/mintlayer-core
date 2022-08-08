@@ -24,6 +24,7 @@ use crate::{
     BlockError, BlockSource,
 };
 use chainstate_types::block_index::BlockIndex;
+use common::chain::block::BlockReward;
 use common::chain::config::TOKEN_MIN_ISSUANCE_FEE;
 use common::{
     chain::{
@@ -93,6 +94,7 @@ fn process_token_ex(
         parent_block_id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
 
@@ -319,6 +321,7 @@ fn couple_of_token_issuance_in_one_tx() {
             parent_block_id,
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap();
 
@@ -373,6 +376,7 @@ fn token_issuance_with_insufficient_fee() {
             parent_block_id,
             BlockTimestamp::from_duration_since_epoch(time::get()),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap();
 
