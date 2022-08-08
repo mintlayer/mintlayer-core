@@ -20,6 +20,8 @@ use crate::{
 };
 use chainstate::{make_chainstate, ChainstateConfig};
 use libp2p::PeerId;
+use std::time::Duration;
+use tokio::time::timeout;
 
 #[cfg(test)]
 mod block_response;
@@ -83,28 +85,33 @@ where
     )
 }
 
-async fn get_address<T>(handle: &mut T::ConnectivityHandle) -> T::Address
-where
-    T: NetworkingService,
+pub async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) where
+    T: NetworkingService + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    loop {
-        if let Some(addr) = handle.local_addr().await.unwrap() {
-            return addr;
-        }
-    }
-}
+    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap()
+        .unwrap();
+    conn1.connect(addr).await.expect("dial to succeed");
 
-async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = get_address::<T>(conn2).await;
-    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
-    let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
+    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { .. } => {}
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    }
+
+    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted { .. } => {}
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    }
 }

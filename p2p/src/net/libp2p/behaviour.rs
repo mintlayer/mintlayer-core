@@ -61,12 +61,12 @@ use std::{
     poll_method = "poll"
 )]
 pub struct Libp2pBehaviour {
+    pub connmgr: connectivity::ConnectionManager,
+    pub identify: identify::Identify,
+    pub discovery: discovery::DiscoveryManager,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
-    pub identify: identify::Identify,
     pub sync: RequestResponse<SyncingCodec>,
-    pub connmgr: connectivity::ConnectionManager,
-    pub discovery: discovery::DiscoveryManager,
 
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
