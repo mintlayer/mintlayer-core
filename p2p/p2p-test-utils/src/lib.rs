@@ -20,7 +20,7 @@ use chainstate::{
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
         tokens::OutputValue,
@@ -158,6 +158,7 @@ fn produce_test_block_with_consensus_data(
         prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
+        BlockReward::new(Vec::new()),
     )
     .expect("not to fail")
 }

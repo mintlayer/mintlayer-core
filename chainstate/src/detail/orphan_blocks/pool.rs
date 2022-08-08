@@ -170,7 +170,7 @@ mod tests {
     mod helpers {
         use super::*;
         use common::chain::block::timestamp::BlockTimestamp;
-        use common::chain::block::ConsensusData;
+        use common::chain::block::{BlockReward, ConsensusData};
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
         use crypto::random::Rng;
@@ -191,6 +191,7 @@ mod tests {
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,
+                BlockReward::new(Vec::new()),
             )
             .unwrap()
         }

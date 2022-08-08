@@ -29,7 +29,6 @@ use common::chain::block::BlockHeader;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
-use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
@@ -207,9 +206,8 @@ pub(crate) fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
-    block_rewards: Vec<TxOutput>,
 ) -> Result<bool, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0, block_rewards);
+    let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
         data.update_nonce(nonce);

@@ -133,7 +133,6 @@ async fn invalid_block() {
     blocks[0].update_consensus_data(common::chain::block::ConsensusData::PoW(PoWData::new(
         common::primitives::Compact(1337),
         0,
-        vec![],
     )));
 
     assert!(std::matches!(

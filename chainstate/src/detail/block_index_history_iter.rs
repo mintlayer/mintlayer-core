@@ -61,96 +61,51 @@ impl<'a, H: BlockIndexHandle> Iterator for BlockIndexHistoryIterator<'a, H> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
+    use common::primitives::{Idable, H256};
 
-    use chainstate_storage::Store;
-    use common::{
-        chain::{
-            block::{timestamp::BlockTimestamp, Block, ConsensusData},
-            config::create_unit_test_config,
-        },
-        primitives::{time, Idable, H256},
-    };
-
-    use crate::{BlockSource, Chainstate, ChainstateConfig};
+    use crate::{detail::tests::TestFramework, BlockSource};
 
     use super::*;
 
     #[test]
     fn history_iteration() {
         common::concurrency::model(|| {
-            let chain_config = Arc::new(create_unit_test_config());
-            let chainstate_config = ChainstateConfig::new();
-            let storage = Store::new_empty().unwrap();
-            let mut chainstate = Chainstate::new(
-                chain_config.clone(),
-                chainstate_config,
-                storage,
-                None,
-                Default::default(),
-            )
-            .unwrap();
+            let mut tf = TestFramework::default();
 
             // put three blocks in a chain after genesis
-            let block1 = Block::new(
-                vec![],
-                chainstate.chain_config.genesis_block_id(),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                ConsensusData::None,
-            )
-            .expect("Block creation failed");
-            chainstate.process_block(block1.clone(), BlockSource::Local).unwrap();
+            let block1 = tf.make_block_builder().build();
+            tf.process_block(block1.clone(), BlockSource::Local).unwrap();
 
-            let block2 = Block::new(
-                vec![],
-                block1.get_id().into(),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                ConsensusData::None,
-            )
-            .expect("Block creation failed");
-            chainstate.process_block(block2.clone(), BlockSource::Local).unwrap();
+            let block2 = tf.make_block_builder().build();
+            tf.process_block(block2.clone(), BlockSource::Local).unwrap();
 
-            let block3 = Block::new(
-                vec![],
-                block2.get_id().into(),
-                BlockTimestamp::from_duration_since_epoch(time::get()),
-                ConsensusData::None,
-            )
-            .expect("Block creation failed");
-            chainstate.process_block(block3.clone(), BlockSource::Local).unwrap();
+            let block3 = tf.make_block_builder().build();
+            tf.process_block(block3.clone(), BlockSource::Local).unwrap();
 
             ///// test history iterator - start from tip
             {
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = tf.chainstate.make_db_tx_ro();
                 let mut iter =
                     BlockIndexHistoryIterator::new(block3.get_id().into(), &chainstate_ref);
                 assert_eq!(iter.next().unwrap().block_id(), block3.get_id());
                 assert_eq!(iter.next().unwrap().block_id(), block2.get_id());
                 assert_eq!(iter.next().unwrap().block_id(), block1.get_id());
-                assert_eq!(
-                    iter.next().unwrap().block_id(),
-                    chain_config.genesis_block_id()
-                );
+                assert_eq!(iter.next().unwrap().block_id(), tf.genesis().get_id());
                 assert!(iter.next().is_none());
             }
 
             ///// test history iterator - start from genesis
             {
-                let chainstate_ref = chainstate.make_db_tx_ro();
-                let mut iter = BlockIndexHistoryIterator::new(
-                    chain_config.genesis_block_id(),
-                    &chainstate_ref,
-                );
-                assert_eq!(
-                    iter.next().unwrap().block_id(),
-                    chain_config.genesis_block_id(),
-                );
+                let chainstate_ref = tf.chainstate.make_db_tx_ro();
+                let mut iter =
+                    BlockIndexHistoryIterator::new(tf.genesis().get_id().into(), &chainstate_ref);
+                assert_eq!(iter.next().unwrap().block_id(), tf.genesis().get_id(),);
                 assert!(iter.next().is_none());
             }
 
             ///// test history iterator - start from an invalid non-existing block id
             {
-                let chainstate_ref = chainstate.make_db_tx_ro();
+                let chainstate_ref = tf.chainstate.make_db_tx_ro();
                 let mut iter =
                     BlockIndexHistoryIterator::new(Id::new(H256::zero()), &chainstate_ref);
 

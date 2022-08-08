@@ -476,7 +476,7 @@ fn consensus_type(#[case] seed: Seed) {
     assert!(matches!(
         tf.make_block_builder()
             .add_test_transaction(&mut rng)
-            .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0, vec![])))
+            .with_consensus_data(ConsensusData::PoW(PoWData::new(Compact(0), 0)))
             .build_and_process()
             .unwrap_err(),
         BlockError::CheckBlockFailed(CheckBlockError::ConsensusVerificationFailed(
@@ -502,24 +502,22 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mine blocks 5-9 with minimal difficulty, as expected by net upgrades
     for i in 5..10 {
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
+            .with_reward(vec![TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(10)),
+                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
         let bits = min_difficulty.into();
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        assert!(crate::detail::pow::work::mine(
-            &mut mined_block,
-            u128::MAX,
-            bits,
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key))
-            )]
-        )
-        .expect("Unexpected conversion error"));
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
+                .expect("Unexpected conversion error")
+        );
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 
@@ -533,7 +531,7 @@ fn consensus_type(#[case] seed: Seed) {
         .build();
     let bits = min_difficulty.into();
     assert!(
-        crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+        crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
             .expect("Unexpected conversion error")
     );
 
@@ -563,24 +561,22 @@ fn consensus_type(#[case] seed: Seed) {
 
     // Mining should work
     for i in 15..20 {
+        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let prev_block = tf.block(*tf.index_at(i - 1).block_id());
         let mut mined_block = tf
             .make_block_builder()
             .with_parent(prev_block.get_id().into())
+            .with_reward(vec![TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(10)),
+                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            )])
             .add_test_transaction_from_block(&prev_block, &mut rng)
             .build();
         let bits = min_difficulty.into();
-        let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-        assert!(crate::detail::pow::work::mine(
-            &mut mined_block,
-            u128::MAX,
-            bits,
-            vec![TxOutput::new(
-                OutputValue::Coin(Amount::from_atoms(10)),
-                OutputPurpose::Transfer(Destination::PublicKey(pub_key))
-            )]
-        )
-        .expect("Unexpected conversion error"));
+        assert!(
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
+                .expect("Unexpected conversion error")
+        );
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }
 }
@@ -618,7 +614,15 @@ fn pow(#[case] seed: Seed) {
 
     // Let's create a block with random (invalid) PoW data and see that it fails the consensus
     // checks
-    let mut random_invalid_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
+    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
+    let mut random_invalid_block = tf
+        .make_block_builder()
+        .with_reward(vec![TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(10)),
+            OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+        )])
+        .add_test_transaction(&mut rng)
+        .build();
     make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
         .expect("generate invalid block");
     assert!(matches!(
@@ -633,17 +637,10 @@ fn pow(#[case] seed: Seed) {
     // Now let's actually mine the block, i.e. find valid PoW and see that consensus checks pass
     let mut valid_block = random_invalid_block;
     let bits = difficulty.into();
-    let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
-    assert!(crate::detail::pow::work::mine(
-        &mut valid_block,
-        u128::MAX,
-        bits,
-        vec![TxOutput::new(
-            OutputValue::Coin(Amount::from_atoms(10)),
-            OutputPurpose::Transfer(Destination::PublicKey(pub_key))
-        )]
-    )
-    .expect("Unexpected conversion error"));
+    assert!(
+        crate::detail::pow::work::mine(&mut valid_block, u128::MAX, bits)
+            .expect("Unexpected conversion error")
+    );
     tf.process_block(valid_block.clone(), BlockSource::Local).unwrap();
 }
 
@@ -747,7 +744,7 @@ fn make_invalid_pow_block(
     max_nonce: u128,
     bits: Compact,
 ) -> Result<bool, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0, vec![]);
+    let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         data.update_nonce(nonce);
         block.update_consensus_data(ConsensusData::PoW(data.clone()));

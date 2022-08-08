@@ -74,6 +74,8 @@ pub enum ConnectTransactionError {
     InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
+    #[error("Unable to find block")]
+    InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
     #[error("Addition of all fees in block `{0}` failed")]
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]

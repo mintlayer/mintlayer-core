@@ -16,7 +16,7 @@
 use p2p_test_utils::make_libp2p_addr;
 
 use common::chain::{
-    block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block},
+    block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
     transaction::Transaction,
 };
 use common::primitives::{Id, H256};
@@ -68,6 +68,7 @@ async fn test_libp2p_gossipsub() {
                     Id::new(H256([0x01; 32])),
                     BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
+                    BlockReward::new(Vec::new()),
                 )
                 .unwrap(),
             ))
@@ -98,6 +99,7 @@ async fn test_libp2p_gossipsub() {
                 Id::new(H256([0x02; 32])),
                 BlockTimestamp::from_int_seconds(1338u64),
                 ConsensusData::None,
+                BlockReward::new(Vec::new()),
             )
             .unwrap(),
         ))
@@ -173,6 +175,7 @@ async fn test_libp2p_gossipsub_3_peers() {
                     Id::new(H256([0x03; 32])),
                     BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
+                    BlockReward::new(Vec::new()),
                 )
                 .unwrap(),
             ))
@@ -297,6 +300,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
             Id::new(H256([0x04; 32])),
             BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap(),
     );
