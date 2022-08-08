@@ -21,7 +21,7 @@ use super::{Id, Idable};
 ///
 /// This only allows immutable access to the underlying object to prevent it from going out of sync
 /// with the ID, which is calculated for its contents. Getting an ID just returns the stored one.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct WithId<T: Idable> {
     id: Id<T::Tag>,
     object: T,

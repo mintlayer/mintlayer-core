@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::primitives::{Id, Idable};
+use crate::primitives::{id::WithId, Id, Idable};
 use serialization::{DirectDecode, DirectEncode, Encode};
 use thiserror::Error;
 
@@ -52,6 +52,14 @@ impl Idable for Transaction {
         }
     }
 }
+
+impl PartialEq for WithId<Transaction> {
+    fn eq(&self, other: &Self) -> bool {
+        WithId::get(self) == WithId::get(other)
+    }
+}
+
+impl Eq for WithId<Transaction> {}
 
 #[derive(Error, Debug, Clone)]
 pub enum TransactionCreationError {
