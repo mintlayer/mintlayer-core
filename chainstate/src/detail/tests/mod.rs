@@ -5,19 +5,19 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach, A. Sinitsyn, S. Tkach
+
+pub use self::test_framework::TestFramework;
 
 use std::sync::Mutex;
 
-use crate::detail::{tests::test_framework::TestFramework, *};
+use crate::detail::*;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
@@ -178,7 +178,7 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
         let mut mined_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
         let bits = difficulty.into();
         assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
+            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits)
                 .expect("Unexpected conversion error")
         );
         println!("{}", hex::encode(mined_block.encode()));

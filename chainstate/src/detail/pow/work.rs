@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): C. Yap
 
 #![allow(dead_code)]
 
@@ -31,7 +29,6 @@ use common::chain::block::BlockHeader;
 use common::chain::block::{Block, ConsensusData};
 use common::chain::config::ChainConfig;
 use common::chain::PoWStatus;
-use common::chain::TxOutput;
 use common::primitives::{Compact, Idable, H256};
 use common::Uint256;
 
@@ -209,9 +206,8 @@ pub(crate) fn mine(
     block: &mut Block,
     max_nonce: u128,
     bits: Compact,
-    block_rewards: Vec<TxOutput>,
 ) -> Result<bool, ConsensusPoWError> {
-    let mut data = PoWData::new(bits, 0, block_rewards);
+    let mut data = PoWData::new(bits, 0);
     for nonce in 0..max_nonce {
         //TODO: optimize this: https://github.com/mintlayer/mintlayer-core/pull/99#discussion_r809713922
         data.update_nonce(nonce);

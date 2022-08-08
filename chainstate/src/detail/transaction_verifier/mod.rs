@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach
 
 use std::{
     collections::{btree_map::Entry, BTreeMap},
@@ -103,7 +101,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 CachedInputsOperation::Write(calculate_tx_index_from_block(block, tx_num)?)
             }
             BlockTransactableRef::BlockReward(block) => {
-                match block.header().block_reward_transactable().outputs() {
+                match block.block_reward_transactable().outputs() {
                     Some(outputs) => CachedInputsOperation::Write(TxMainChainIndex::new(
                         block.get_id().into(),
                         outputs
@@ -392,16 +390,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .cloned()?
                 }
                 common::chain::SpendablePosition::BlockReward(block_id) => {
-                    let block_index = self.get_gen_block_index(block_id)?.ok_or_else(|| {
-                        // TODO get rid of this coercion
-                        let block_id = Id::new(block_id.get());
-                        ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
-                    })?;
-
-                    let rewards_tx = block_index.block_reward_transactable();
-
-                    let outputs = rewards_tx.outputs().unwrap_or(&[]);
-                    Self::get_output_value(outputs, output_index, (*block_id).into()).cloned()?
+                    let outputs = self.block_reward_outputs(block_id)?;
+                    Self::get_output_value(&outputs, output_index, (*block_id).into()).cloned()?
                 }
             };
             match output_amount {
@@ -470,7 +460,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     ) -> Result<(), ConnectTransactionError> {
         let total_fees = self.calculate_block_total_fees(block)?;
 
-        let block_reward_transactable = block.header().block_reward_transactable();
+        let block_reward_transactable = block.block_reward_transactable();
 
         let inputs = block_reward_transactable.inputs();
         let outputs = block_reward_transactable.outputs();
@@ -610,16 +600,13 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(block_id)
                     })?;
 
-                    let reward_tx = block_index.block_reward_transactable();
-
-                    let output = reward_tx
-                        .outputs()
-                        .unwrap_or(&[])
-                        .get(input.outpoint().output_index() as usize)
-                        .ok_or(ConnectTransactionError::OutputIndexOutOfRange {
+                    let outputs = self.block_reward_outputs(block_id)?;
+                    let output = outputs.get(input.outpoint().output_index() as usize).ok_or(
+                        ConnectTransactionError::OutputIndexOutOfRange {
                             tx_id: None,
                             source_output_index: outpoint.output_index() as usize,
-                        })?;
+                        },
+                    )?;
 
                     // TODO: see if a different treatment should be done for different output purposes
 
@@ -877,7 +864,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 self.spend(tx.inputs(), spend_height, blockreward_maturity, spender)?;
             }
             BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.header().block_reward_transactable();
+                let reward_transactable = block.block_reward_transactable();
                 let inputs = reward_transactable.inputs();
                 // TODO: test spending block rewards from chains outside the mainchain
                 match inputs {
@@ -934,7 +921,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 }
             }
             BlockTransactableRef::BlockReward(block) => {
-                let reward_transactable = block.header().block_reward_transactable();
+                let reward_transactable = block.block_reward_transactable();
                 match reward_transactable.inputs() {
                     Some(inputs) => {
                         // pre-cache all inputs
@@ -962,6 +949,31 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     fn precache_inputs(&mut self, inputs: &[TxInput]) -> Result<(), ConnectTransactionError> {
         inputs.iter().try_for_each(|input| self.fetch_and_cache(input.outpoint()))
+    }
+
+    fn block_reward_outputs(
+        &self,
+        block_id: &Id<GenBlock>,
+    ) -> Result<Vec<TxOutput>, ConnectTransactionError> {
+        match block_id.classify(self.chain_config) {
+            GenBlockId::Genesis(_) => Ok(self
+                .chain_config
+                .genesis_block()
+                .block_reward_transactable()
+                .outputs()
+                .unwrap_or(&[])
+                .to_vec()),
+            // TODO: Getting the whole block just for reward outputs isn't optimal. See the
+            // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
+            GenBlockId::Block(id) => Ok(self
+                .db_tx
+                .get_block(id)?
+                .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
+                .block_reward_transactable()
+                .outputs()
+                .unwrap_or(&[])
+                .to_vec()),
+        }
     }
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {

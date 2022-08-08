@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -172,7 +170,7 @@ mod tests {
     mod helpers {
         use super::*;
         use common::chain::block::timestamp::BlockTimestamp;
-        use common::chain::block::ConsensusData;
+        use common::chain::block::{BlockReward, ConsensusData};
         use common::chain::transaction::Transaction;
         use common::primitives::H256;
         use crypto::random::Rng;
@@ -193,6 +191,7 @@ mod tests {
                 prev_block_id.unwrap_or_else(|| H256::from_low_u64_be(rng.gen()).into()),
                 BlockTimestamp::from_int_seconds(rng.gen()),
                 ConsensusData::None,
+                BlockReward::new(Vec::new()),
             )
             .unwrap()
         }

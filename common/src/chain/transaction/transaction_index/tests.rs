@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ use crate::chain::tokens::OutputValue;
 use crate::chain::OutputPurpose;
 use crate::{
     chain::{
-        block::ConsensusData,
+        block::{BlockReward, ConsensusData},
         signature::{
             inputsig::{InputWitness, StandardInputSignature},
             sighashtype::SigHashType,
@@ -276,12 +276,14 @@ fn generate_random_invalid_block() -> Block {
     };
     let time = rng.next_u64();
     let prev_id = Id::new(generate_random_h256(&mut rng));
+    let reward = BlockReward::new(Vec::new());
 
     Block::new(
         transactions,
         prev_id,
         BlockTimestamp::from_int_seconds(time),
         ConsensusData::None,
+        reward,
     )
     .expect("Creating block caused fail")
 }
@@ -292,9 +294,10 @@ fn test_indices_calculations() {
     let serialized_block = block.encode();
     let serialized_header = block.header().encode();
     let serialized_transactions = block.transactions().encode();
+    let serialized_reward = block.block_reward().encode();
     assert_eq!(
         // no need to add enum arm byte, the version is already a part of the header data
-        serialized_header.len() + serialized_transactions.len(),
+        serialized_header.len() + serialized_transactions.len() + serialized_reward.len(),
         serialized_block.len(),
     );
     // TODO: calculate block reward position

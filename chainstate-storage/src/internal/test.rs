@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,7 +41,7 @@ fn test_storage_get_default_version_in_tx() {
 fn test_storage_manipulation() {
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, ConsensusData},
+            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
             SpendablePosition,
         },
         primitives::H256,
@@ -55,6 +55,7 @@ fn test_storage_manipulation() {
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
     let block1 = Block::new(
@@ -62,6 +63,7 @@ fn test_storage_manipulation() {
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
 

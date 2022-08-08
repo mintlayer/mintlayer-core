@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -363,7 +363,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     fn check_block_detail(&self, block: &Block) -> Result<(), CheckBlockError> {
         // MerkleTree root
         let merkle_tree_root = block.merkle_root();
-        calculate_tx_merkle_root(block.transactions()).map_or(
+        calculate_tx_merkle_root(block.body()).map_or(
             Err(CheckBlockError::MerkleRootMismatch),
             |merkle_tree| {
                 ensure!(
@@ -376,7 +376,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
         // Witness merkle root
         let witness_merkle_root = block.witness_merkle_root();
-        calculate_witness_merkle_root(block.transactions()).map_or(
+        calculate_witness_merkle_root(block.body()).map_or(
             Err(CheckBlockError::WitnessMerkleRootMismatch),
             |witness_merkle| {
                 ensure!(

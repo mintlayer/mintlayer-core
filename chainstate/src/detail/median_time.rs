@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,7 +50,7 @@ mod test {
         chain::{
             block::{
                 timestamp::{BlockTimestamp, BlockTimestampInternalType},
-                Block, ConsensusData,
+                Block, BlockReward, ConsensusData,
             },
             config::create_unit_test_config,
         },
@@ -67,6 +67,7 @@ mod test {
             prev_block,
             BlockTimestamp::from_int_seconds(time),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .expect("Block creation failed")
     }

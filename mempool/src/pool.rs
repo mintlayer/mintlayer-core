@@ -14,6 +14,7 @@ use common::chain::transaction::Transaction;
 use common::chain::transaction::TxInput;
 use common::chain::OutPoint;
 use common::primitives::amount::Amount;
+use common::primitives::id::WithId;
 use common::primitives::Id;
 use common::primitives::Idable;
 use common::primitives::H256;
@@ -141,7 +142,7 @@ newtype! {
 
 #[derive(Debug, Eq, Clone)]
 struct TxMempoolEntry {
-    tx: Transaction,
+    tx: WithId<Transaction>,
     fee: Amount,
     parents: BTreeSet<Id<Transaction>>,
     children: BTreeSet<Id<Transaction>>,
@@ -158,7 +159,7 @@ impl TxMempoolEntry {
         creation_time: Time,
     ) -> TxMempoolEntry {
         Self {
-            tx,
+            tx: WithId::new(tx),
             fee,
             parents,
             children: BTreeSet::default(),
@@ -173,7 +174,7 @@ impl TxMempoolEntry {
     }
 
     fn tx_id(&self) -> Id<Transaction> {
-        self.tx.get_id()
+        WithId::id(&self.tx)
     }
 
     fn unconfirmed_parents(&self) -> impl Iterator<Item = &Id<Transaction>> {
@@ -1111,7 +1112,7 @@ where
             .txs_by_descendant_score
             .values()
             .flatten()
-            .map(|id| &self.store.get_entry(id).expect("entry").tx)
+            .map(|id| WithId::get(&self.store.get_entry(id).expect("entry").tx))
             .collect()
     }
 

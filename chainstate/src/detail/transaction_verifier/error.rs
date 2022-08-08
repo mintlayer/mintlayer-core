@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -76,6 +76,8 @@ pub enum ConnectTransactionError {
     InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
+    #[error("Unable to find block")]
+    InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
     #[error("Addition of all fees in block `{0}` failed")]
     FailedToAddAllFeesOfBlock(Id<Block>),
     #[error("Block reward addition error for block {0}")]

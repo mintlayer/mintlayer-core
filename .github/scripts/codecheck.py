@@ -9,14 +9,14 @@ SCALECODEC_RE = r'\bparity_scale_codec(_derive)?::'
 JSONRPSEE_RE = r'\bjsonrpsee[_a-z0-9]*::'
 
 LICENSE_TEMPLATE = [
-    r'// Copyright \(c\) 202[0-9](-202[0-9])? RBB S\.r\.l',
+    r'// Copyright \(c\) 202[0-9](-202[0-9])? .+',
     r'// opensource@mintlayer\.org',
     r'// SPDX-License-Identifier: MIT',
     r'// Licensed under the MIT License;',
     r'// you may not use this file except in compliance with the License\.',
     r'// You may obtain a copy of the License at',
     r'//',
-    r'//\s+http://spdx\.org/licenses/MIT',
+    r'// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE',
     r'//',
     r'// Unless required by applicable law or agreed to in writing, software',
     r'// distributed under the License is distributed on an "AS IS" BASIS,',
