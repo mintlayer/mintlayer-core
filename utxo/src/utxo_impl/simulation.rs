@@ -46,8 +46,8 @@ fn cache_simulation_test(
         .expect("batch write must succeed");
 
     for (outpoint, _) in &result {
-        let has_utxo = base.has_utxo(&outpoint);
-        let utxo = base.utxo(&outpoint);
+        let has_utxo = base.has_utxo(outpoint);
+        let utxo = base.utxo(outpoint);
         assert_eq!(has_utxo, utxo.is_some());
         if utxo.is_some() {
             assert!(base.has_utxo_in_cache(outpoint));
@@ -69,7 +69,7 @@ fn simulation_step<'a>(
     }
 
     let mut cache = UtxosCache::new(parent);
-    let mut new_cache_res = populate_cache(rng, &mut cache, iterations_per_cache, &result);
+    let mut new_cache_res = populate_cache(rng, &mut cache, iterations_per_cache, result);
     result.append(&mut new_cache_res);
 
     let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
@@ -141,8 +141,8 @@ fn populate_cache(
         // every 100 iterations check full cache
         if i % 100 == 0 {
             for (outpoint, _) in &result {
-                let has_utxo = cache.has_utxo(&outpoint);
-                let utxo = cache.utxo(&outpoint);
+                let has_utxo = cache.has_utxo(outpoint);
+                let utxo = cache.utxo(outpoint);
                 assert_eq!(has_utxo, utxo.is_some());
                 if utxo.is_some() {
                     assert!(cache.has_utxo_in_cache(outpoint));
