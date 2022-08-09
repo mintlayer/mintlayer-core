@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,6 +26,7 @@ use crate::{
             sighashtype::SigHashType,
             verify_signature, TransactionSigError,
         },
+        tokens::OutputValue,
         Destination, OutputPurpose, Transaction, TransactionCreationError, TxInput, TxOutput,
     },
     primitives::{amount::IntType, Amount, Id, H256},
@@ -81,7 +82,7 @@ pub fn generate_unsigned_tx(
 
     let outputs = std::iter::from_fn(|| {
         Some(TxOutput::new(
-            Amount::from_atoms(rng.gen::<IntType>()),
+            OutputValue::Coin(Amount::from_atoms(rng.gen::<IntType>())),
             OutputPurpose::Transfer(destination.clone()),
         ))
     })

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::block_index::BlockIndex;
-use common::chain::block::{consensus_data::BlockRewardTransactable, timestamp::BlockTimestamp};
+use common::chain::block::timestamp::BlockTimestamp;
 use common::chain::{GenBlock, Genesis};
 use common::primitives::{id::WithId, BlockHeight, Id, Idable};
 use common::Uint256;
@@ -61,13 +61,6 @@ impl GenBlockIndex {
         match self {
             GenBlockIndex::Block(b) => b.chain_trust(),
             GenBlockIndex::Genesis(_g) => &Uint256::ZERO,
-        }
-    }
-
-    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        match self {
-            GenBlockIndex::Block(b) => b.block_header().block_reward_transactable(),
-            GenBlockIndex::Genesis(g) => g.block_reward_transactable(),
         }
     }
 }

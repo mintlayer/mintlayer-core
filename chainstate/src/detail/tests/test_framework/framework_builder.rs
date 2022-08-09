@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use chainstate_storage::Store;
+use chainstate_storage::inmemory::Store;
 use common::chain::{
     config::{Builder as ChainConfigBuilder, ChainType},
     ChainConfig, Destination, NetUpgrades,

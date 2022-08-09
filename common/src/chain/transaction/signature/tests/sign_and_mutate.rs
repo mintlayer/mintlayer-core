@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,6 +28,7 @@ use crate::{
             },
             verify_signature, TransactionSigError,
         },
+        tokens::OutputValue,
         Destination, OutPointSourceId, Transaction, TxInput, TxOutput,
     },
     primitives::{Amount, Id, H256},
@@ -494,7 +495,11 @@ fn add_output(tx: &Transaction) -> Transaction {
 fn mutate_output(tx: &Transaction) -> Transaction {
     let mut updater = MutableTransaction::from(tx);
     updater.outputs[0] = TxOutput::new(
-        (updater.outputs[0].value() + Amount::from_atoms(100)).unwrap(),
+        match updater.outputs[0].value() {
+            OutputValue::Coin(coin) => {
+                OutputValue::Coin((*coin + Amount::from_atoms(100)).unwrap())
+            }
+        },
         updater.outputs[0].purpose().clone(),
     );
     updater.generate_tx().unwrap()

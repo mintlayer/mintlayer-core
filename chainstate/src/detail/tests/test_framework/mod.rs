@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,12 @@ mod block_builder;
 mod framework;
 mod framework_builder;
 mod transaction_builder;
+
+/// Storage backend used for testing (the in-memory backend)
+pub type TestStore = chainstate_storage::inmemory::Store;
+
+/// Chainstate instantiation for testing, using the in-memory storage backend
+pub type TestChainstate = crate::Chainstate<TestStore>;
 
 pub use self::{
     block_builder::BlockBuilder, framework::TestFramework, framework_builder::TestFrameworkBuilder,

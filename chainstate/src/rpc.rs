@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -90,7 +90,7 @@ mod test {
     async fn with_chainstate<F: 'static + Send + Future<Output = ()>>(
         proc: impl 'static + Send + FnOnce(crate::ChainstateHandle) -> F,
     ) {
-        let storage = chainstate_storage::Store::new_empty().unwrap();
+        let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
         let chain_config = Arc::new(common::chain::config::create_unit_test_config());
         let chainstate_config = ChainstateConfig::new();
         let mut man = subsystem::Manager::new("rpctest");

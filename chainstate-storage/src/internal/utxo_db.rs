@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,7 @@
 #[cfg(test)]
 mod test {
     use crate::internal::test::create_rand_block_undo;
+    use common::chain::tokens::OutputValue;
     use common::chain::{Block, Destination, OutPoint, OutPointSourceId, OutputPurpose, TxOutput};
     use common::primitives::{Amount, BlockHeight, Id, H256};
     use crypto::key::{KeyKind, PrivateKey};
@@ -30,7 +31,7 @@ mod test {
         // just a random value generated, and also a random `is_block_reward` value.
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         let output = TxOutput::new(
-            Amount::from_atoms(output_value),
+            OutputValue::Coin(Amount::from_atoms(output_value)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
         let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
@@ -49,7 +50,7 @@ mod test {
     #[case(Seed::from_entropy())]
     fn db_impl_test(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
-        let mut store = crate::Store::new_empty().expect("should create a store");
+        let mut store = crate::inmemory::Store::new_empty().expect("should create a store");
         store
             .set_best_block_for_utxos(&H256::random().into())
             .expect("Setting best block cannot fail");

@@ -5,18 +5,17 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach
 
-use crate::primitives::{Id, Idable};
+use crate::primitives::{id::WithId, Id, Idable};
 use serialization::{DirectDecode, DirectEncode, Encode};
+use thiserror::Error;
 
 use crate::chain::transaction::transaction_v1::TransactionV1;
 
@@ -54,8 +53,17 @@ impl Idable for Transaction {
     }
 }
 
-#[derive(Debug, Clone)]
+impl PartialEq for WithId<Transaction> {
+    fn eq(&self, other: &Self) -> bool {
+        WithId::get(self) == WithId::get(other)
+    }
+}
+
+impl Eq for WithId<Transaction> {}
+
+#[derive(Error, Debug, Clone)]
 pub enum TransactionCreationError {
+    #[error("An unknown error has occurred")]
     Unknown,
 }
 

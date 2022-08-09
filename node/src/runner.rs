@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -44,7 +44,8 @@ pub async fn initialize(
     let chain_config = Arc::new(chain_config);
 
     // Initialize storage.
-    let storage = chainstate_storage::Store::new_empty()?;
+    // TODO: Uses in-memory for now, will be configurable once multiple backends are implemented.
+    let storage = chainstate_storage::inmemory::Store::new_empty()?;
 
     // INITIALIZE SUBSYSTEMS
 

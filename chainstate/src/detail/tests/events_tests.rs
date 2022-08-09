@@ -5,19 +5,20 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Sinitsyn, S. Tkach
 
 use std::sync::Arc;
 
-use crate::detail::tests::{test_framework::TestFramework, *};
+use crate::detail::tests::{
+    test_framework::{TestChainstate, TestFramework},
+    *,
+};
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -183,7 +184,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
 }
 
 // Subscribes to events N times emulating different subscribers.
-fn subscribe(chainstate: &mut Chainstate, n: usize) -> EventList {
+fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
     let events = Arc::new(Mutex::new(Vec::new()));
 
     for _ in 0..n {

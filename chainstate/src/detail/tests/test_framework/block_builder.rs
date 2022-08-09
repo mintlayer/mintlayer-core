@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,7 @@
 
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, ConsensusData},
+        block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         signature::inputsig::InputWitness,
         Transaction, TxInput, TxOutput,
     },
@@ -38,6 +38,7 @@ pub struct BlockBuilder<'f> {
     prev_block_hash: Id<GenBlock>,
     timestamp: BlockTimestamp,
     consensus_data: ConsensusData,
+    reward: BlockReward,
     block_source: BlockSource,
 }
 
@@ -48,6 +49,7 @@ impl<'f> BlockBuilder<'f> {
         let prev_block_hash = framework.chainstate.get_best_block_id().unwrap();
         let timestamp = BlockTimestamp::from_duration_since_epoch(time::get());
         let consensus_data = ConsensusData::None;
+        let reward = BlockReward::new(Vec::new());
         let block_source = BlockSource::Local;
 
         Self {
@@ -56,6 +58,7 @@ impl<'f> BlockBuilder<'f> {
             prev_block_hash,
             timestamp,
             consensus_data,
+            reward,
             block_source,
         }
     }
@@ -142,6 +145,12 @@ impl<'f> BlockBuilder<'f> {
         self
     }
 
+    /// Overrides the block reward that is empty by default.
+    pub fn with_reward(mut self, reward: Vec<TxOutput>) -> Self {
+        self.reward = BlockReward::new(reward);
+        self
+    }
+
     /// Builds a block without processing it.
     pub fn build(self) -> Block {
         Block::new(
@@ -149,6 +158,7 @@ impl<'f> BlockBuilder<'f> {
             self.prev_block_hash,
             self.timestamp,
             self.consensus_data,
+            self.reward,
         )
         .unwrap()
     }
@@ -160,6 +170,7 @@ impl<'f> BlockBuilder<'f> {
             self.prev_block_hash,
             self.timestamp,
             self.consensus_data,
+            self.reward,
         )
         .unwrap();
         self.framework.process_block(block, self.block_source)

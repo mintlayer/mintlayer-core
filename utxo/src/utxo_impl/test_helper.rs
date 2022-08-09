@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,7 @@
 
 use crate::{Utxo, UtxoEntry, UtxosCache};
 use common::chain::signature::inputsig::InputWitness;
+use common::chain::tokens::OutputValue;
 use common::chain::{
     Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
     TxOutput,
@@ -43,7 +44,7 @@ pub fn create_tx_outputs(rng: &mut impl Rng, size: u32) -> Vec<TxOutput> {
         let random_amt = rng.gen_range(1..u128::MAX);
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_outputs.push(TxOutput::new(
-            Amount::from_atoms(random_amt),
+            OutputValue::Coin(Amount::from_atoms(random_amt)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         ));
     }
@@ -91,7 +92,7 @@ fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, Ou
     let output_value = rng.gen_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
-        Amount::from_atoms(output_value),
+        OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     );
     let is_block_reward = output_value % 3 == 0;
