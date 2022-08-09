@@ -11,29 +11,29 @@ edition = "2021"
 
 [workspace]
 members = [
-  "common",        # everything else, until it's moved to another crate
-  "crypto",        # cryptographic primitives and their interfaces
-  "consensus",     # Consensus related logic.
-  "chainstate",    # code on chainstate of blocks and transactions
-  "script",        # bitcoin script and its interfaces
-  "logging",       # logging engine and its interfaces
-  "mempool",       # mempool interface and implementation
-  "p2p",           # p2p communication interfaces and protocols
-  "rpc",           # rpc abstraction and implementation
-  "serialization", # full featured serialization interfaces and implementations
-  "serialization/core",    # serialization core tools
-  "serialization/tagged",  # serialization for direct/tagged encoding style
-  "serialization/tagged/derive",  # direct/tagged encoding style derive macros
-  "storage",       # storage abstraction layer and its implementation
-  "storage/core",  # Core backend-agnostic storage abstraction
-  "storage/inmemory",      # In-memory storage backend implementation
-  "subsystem",     # Utilities for working with concurrent subsystems
-  "node",          # node executable
-  "wallet",        # wallet executable
-  "utils",         # various utilities
-  "utxo",          # utxo and related utilities (cache, undo, etc.)
-  "test",          # integration tests
-  "test-utils",    # various utilities for tests
+  "common",                       # Everything else, until it's moved to another crate.
+  "crypto",                       # Cryptographic primitives and their interfaces.
+  "consensus",                    # Consensus related logic.
+  "chainstate",                   # Code on chainstate of blocks and transactions.
+  "script",                       # Bitcoin script and its interfaces.
+  "logging",                      # Logging engine and its interfaces.
+  "mempool",                      # Mempool interface and implementation.
+  "p2p",                          # P2p communication interfaces and protocols.
+  "rpc",                          # Rpc abstraction and implementation.
+  "serialization",                # Full featured serialization interfaces and implementations.
+  "serialization/core",           # Serialization core tools.
+  "serialization/tagged",         # Serialization for direct/tagged encoding style.
+  "serialization/tagged/derive",  # direct/tagged encoding style derive macros.
+  "storage",                      # storage abstraction layer and its implementation.
+  "storage/core",                 # Core backend-agnostic storage abstraction.
+  "storage/inmemory",             # In-memory storage backend implementation.
+  "subsystem",                    # Utilities for working with concurrent subsystems.
+  "node",                         # Node executable.
+  "wallet",                       # Wallet executable.
+  "utils",                        # Various utilities.
+  "utxo",                         # Utxo and related utilities (cache, undo, etc.).
+  "test",                         # Integration tests.
+  "test-utils",                   # Various utilities for tests.
 ]
 
 default-members = [

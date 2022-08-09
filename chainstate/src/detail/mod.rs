@@ -30,7 +30,7 @@ use std::sync::Arc;
 
 use itertools::Itertools;
 
-use chainstate_storage::Transactional;
+use chainstate_storage::{BlockchainStorage, Transactional};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{block::BlockHeader, config::ChainConfig, Block, GenBlock},
@@ -40,9 +40,11 @@ use logging::log;
 use utils::eventhandler::{EventHandler, EventsController};
 use utxo::utxo_storage::UtxosDBMut;
 
-use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
+use self::{
+    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
+    time_getter::TimeGetter,
+};
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use time_getter::TimeGetter;
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
