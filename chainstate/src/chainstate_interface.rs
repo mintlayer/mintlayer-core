@@ -66,5 +66,8 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Vec<BlockHeader>, ChainstateError>;
 
     /// Returns token info by token_id
-    fn token_info(&self, token_id: TokenId) -> Result<BlockHeight, ChainstateError>;
+    fn token_info(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<Id<common::chain::Transaction>>, ChainstateError>;
 }

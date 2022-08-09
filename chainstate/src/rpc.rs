@@ -50,7 +50,10 @@ trait ChainstateRpc {
 
     /// Get token information
     #[method(name = "token_info")]
-    async fn token_info(&self, token_id: TokenId) -> rpc::Result<BlockHeight>;
+    async fn token_info(
+        &self,
+        token_id: TokenId,
+    ) -> rpc::Result<Option<Id<common::chain::Transaction>>>;
 }
 
 #[async_trait::async_trait]
@@ -82,7 +85,10 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call(move |this| this.get_best_block_height()).await)
     }
 
-    async fn token_info(&self, token_id: TokenId) -> rpc::Result<BlockHeight> {
+    async fn token_info(
+        &self,
+        token_id: TokenId,
+    ) -> rpc::Result<Option<Id<common::chain::Transaction>>> {
         handle_error(self.call(move |this| this.token_info(token_id)).await)
     }
 }

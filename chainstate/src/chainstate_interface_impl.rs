@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::block::{Block, BlockHeader, GenBlock},
+    chain::{
+        block::{Block, BlockHeader, GenBlock},
+        tokens::TokenId,
+    },
     primitives::{BlockHeight, Id},
 };
 use utils::eventhandler::EventHandler;
@@ -119,12 +122,10 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
 
     fn token_info(
         &self,
-        token_id: common::chain::tokens::TokenId,
-    ) -> Result<BlockHeight, ChainstateError> {
-        let info = self
-            .chainstate
+        token_id: TokenId,
+    ) -> Result<Option<Id<common::chain::Transaction>>, ChainstateError> {
+        self.chainstate
             .get_token_tx(token_id)
-            .map_err(ChainstateError::FailedToReadProperty)?;
-        todo!()
+            .map_err(ChainstateError::FailedToReadProperty)
     }
 }

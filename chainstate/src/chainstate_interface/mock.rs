@@ -55,6 +55,6 @@ mockall::mock! {
             &self,
             headers: Vec<BlockHeader>,
         ) -> Result<Vec<BlockHeader>, ChainstateError>;
-        fn token_info(&self, token_id: TokenId) -> Result<BlockHeight, ChainstateError>;
+        fn token_info(&self, token_id: TokenId) -> Result<Option<Id<common::chain::Transaction>>, ChainstateError>;
     }
 }
