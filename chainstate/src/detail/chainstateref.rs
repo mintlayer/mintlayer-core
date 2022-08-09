@@ -25,7 +25,7 @@ use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
         config::TOKEN_MAX_ISSUANCE_ALLOWED,
-        tokens::{get_tokens_issuance_count, OutputValue},
+        tokens::{get_tokens_issuance_count, OutputValue, TokenId},
         ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
@@ -299,6 +299,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(&self.get_best_block_id()?)
+    }
+
+    pub fn get_token_tx(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<Id<common::chain::Transaction>>, PropertyQueryError> {
+        self.db_tx.get_token_tx(token_id).map_err(PropertyQueryError::from)
     }
 
     pub fn get_header_from_height(

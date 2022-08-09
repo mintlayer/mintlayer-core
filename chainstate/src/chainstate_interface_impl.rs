@@ -116,4 +116,15 @@ impl ChainstateInterface for ChainstateInterfaceImpl {
             .expect("Best block index could not be found");
         Ok(best_block_index.block_height())
     }
+
+    fn token_info(
+        &self,
+        token_id: common::chain::tokens::TokenId,
+    ) -> Result<BlockHeight, ChainstateError> {
+        let info = self
+            .chainstate
+            .get_token_tx(token_id)
+            .map_err(ChainstateError::FailedToReadProperty)?;
+        todo!()
+    }
 }

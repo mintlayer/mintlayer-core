@@ -17,6 +17,8 @@ use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, Chainstat
 use chainstate_storage::Transactional;
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
+use common::chain::tokens::TokenId;
+use common::chain::Transaction;
 use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
@@ -329,6 +331,13 @@ impl Chainstate {
 
     pub fn get_best_block_index(&self) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_index()
+    }
+
+    pub fn get_token_tx(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<Id<Transaction>>, PropertyQueryError> {
+        self.make_db_tx_ro().get_token_tx(token_id)
     }
 
     fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {

@@ -16,6 +16,7 @@
 //! Application-level interface for the persistent blockchain storage.
 
 use chainstate_types::block_index::BlockIndex;
+use common::chain::tokens::TokenId;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
@@ -64,6 +65,9 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
 
     /// Get mainchain block by its height
     fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>>;
+
+    /// Get token creation tx
+    fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
 }
 
 /// Modifying operations on persistent blockchain data
@@ -102,6 +106,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
 
     /// Remove block id from given mainchain height
     fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+
+    /// Set token creation tx
+    fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage

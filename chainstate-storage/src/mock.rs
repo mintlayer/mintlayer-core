@@ -16,6 +16,7 @@
 //! A mock version of the blockchain storage.
 
 use chainstate_types::block_index::BlockIndex;
+use common::chain::tokens::TokenId;
 use common::chain::transaction::{
     OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
 };
@@ -49,6 +50,8 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
+
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl UtxosStorageRead for Store {
@@ -77,6 +80,7 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -124,6 +128,8 @@ mockall::mock! {
             &self,
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
+
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl crate::UtxosStorageRead for StoreTxRo {
@@ -163,6 +169,7 @@ mockall::mock! {
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 
     impl UtxosStorageRead for StoreTxRw {
@@ -192,6 +199,7 @@ mockall::mock! {
         ) -> crate::Result<()>;
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
+        fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {
