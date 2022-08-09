@@ -44,7 +44,8 @@ pub async fn initialize(
     let chain_config = Arc::new(chain_config);
 
     // Initialize storage.
-    let storage = chainstate_storage::Store::new_empty()?;
+    // TODO: Uses in-memory for now, will be configurable once multiple backends are implemented.
+    let storage = chainstate_storage::inmemory::Store::new_empty()?;
 
     // INITIALIZE SUBSYSTEMS
 

@@ -18,6 +18,12 @@ mod framework;
 mod framework_builder;
 mod transaction_builder;
 
+/// Storage backend used for testing (the in-memory backend)
+pub type TestStore = chainstate_storage::inmemory::Store;
+
+/// Chainstate instantiation for testing, using the in-memory storage backend
+pub type TestChainstate = crate::Chainstate<TestStore>;
+
 pub use self::{
     block_builder::BlockBuilder, framework::TestFramework, framework_builder::TestFrameworkBuilder,
     transaction_builder::TransactionBuilder,
