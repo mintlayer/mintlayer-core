@@ -229,6 +229,8 @@ mod tests {
     };
     use storage::traits::{TransactionRo, TransactionRw};
 
+    type TestStore = crate::inmemory::Store;
+
     const TXFAIL: crate::Error =
         crate::Error::Storage(storage::error::Recoverable::TransactionFailed);
     const HASH1: H256 = H256([0x01; 32]);
@@ -304,7 +306,7 @@ mod tests {
     #[test]
     fn use_generic_test() {
         common::concurrency::model(|| {
-            let store = crate::Store::new_empty().unwrap();
+            let store = TestStore::new_empty().unwrap();
             generic_test(&store);
         });
     }
@@ -370,7 +372,7 @@ mod tests {
     #[test]
     fn attach_to_top_real_storage() {
         common::concurrency::model(|| {
-            let mut store = crate::Store::new_empty().unwrap();
+            let mut store = TestStore::new_empty().unwrap();
             let (_block0, block1) = sample_data();
             let _result = attach_block_to_top(&mut store, &block1);
         });

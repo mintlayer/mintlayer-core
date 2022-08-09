@@ -23,7 +23,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{BlockUndo, TxUndo};
 
-type TestStore = Store<storage::inmemory::Store<Schema>>;
+type TestStore = crate::inmemory::Store;
 
 #[test]
 fn test_storage_get_default_version_in_tx() {

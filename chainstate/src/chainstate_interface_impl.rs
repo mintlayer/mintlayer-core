@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_storage::BlockchainStorage;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
@@ -27,17 +28,17 @@ use crate::{
     ChainstateError, ChainstateEvent, ChainstateInterface, Locator,
 };
 
-pub struct ChainstateInterfaceImpl {
-    chainstate: detail::Chainstate,
+pub struct ChainstateInterfaceImpl<S> {
+    chainstate: detail::Chainstate<S>,
 }
 
-impl ChainstateInterfaceImpl {
-    pub fn new(chainstate: detail::Chainstate) -> Self {
+impl<S> ChainstateInterfaceImpl<S> {
+    pub fn new(chainstate: detail::Chainstate<S>) -> Self {
         Self { chainstate }
     }
 }
 
-impl ChainstateInterface for ChainstateInterfaceImpl {
+impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
     fn subscribe_to_events(&mut self, handler: EventHandler<ChainstateEvent>) {
         self.chainstate.subscribe_to_events(handler)
     }

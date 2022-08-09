@@ -186,7 +186,7 @@ fn anyonecanspend_address() -> Destination {
 pub async fn start_chainstate(
     chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
-    let storage = chainstate_storage::Store::new_empty().unwrap();
+    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",

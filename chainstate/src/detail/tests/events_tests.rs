@@ -15,7 +15,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::detail::tests::{test_framework::TestFramework, *};
+use crate::detail::tests::{
+    test_framework::{TestChainstate, TestFramework},
+    *,
+};
 
 type ErrorList = Arc<Mutex<Vec<BlockError>>>;
 
@@ -181,7 +184,7 @@ fn custom_orphan_error_hook(#[case] seed: Seed) {
 }
 
 // Subscribes to events N times emulating different subscribers.
-fn subscribe(chainstate: &mut Chainstate, n: usize) -> EventList {
+fn subscribe(chainstate: &mut TestChainstate, n: usize) -> EventList {
     let events = Arc::new(Mutex::new(Vec::new()));
 
     for _ in 0..n {

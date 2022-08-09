@@ -45,7 +45,7 @@ mod test {
     use crate::{detail::time_getter::TimeGetter, BlockSource, Chainstate, ChainstateConfig};
 
     use super::*;
-    use chainstate_storage::Store;
+    use chainstate_storage::inmemory::Store;
     use common::{
         chain::{
             block::{

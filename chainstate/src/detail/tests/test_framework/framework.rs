@@ -32,12 +32,12 @@ use crate::{
         },
         BlockIndex, GenBlockIndex, TimeGetter,
     },
-    BlockError, BlockHeight, BlockSource, Chainstate, ChainstateConfig,
+    BlockError, BlockHeight, BlockSource, ChainstateConfig,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
-    pub chainstate: Chainstate,
+    pub chainstate: super::TestChainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
