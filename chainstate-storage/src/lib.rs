@@ -20,22 +20,24 @@ use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosit
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
-use storage::{inmemory, traits};
+use storage::traits;
 use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 
 mod internal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 
-pub use internal::utxo_db;
+pub use internal::{utxo_db, Store};
 pub use storage::transaction::{TransactionRo, TransactionRw};
-
-// Alias the in-memory store as the store used by other crates for now
-pub type Store = internal::Store<inmemory::Store<internal::Schema>>;
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
+
+pub mod inmemory {
+    use crate::internal;
+    pub type Store = internal::Store<storage::inmemory::Store<internal::Schema>>;
+}
 
 /// Queries on persistent blockchain data
 pub trait BlockchainStorageRead: UtxosStorageRead {
@@ -119,4 +121,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
 }
 
-pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> {}
+pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

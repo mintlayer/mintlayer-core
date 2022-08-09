@@ -102,7 +102,7 @@ impl<'tx, B: traits::Transactional<'tx, Schema>> crate::Transactional<'tx> for S
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorage for Store<B> {}
+impl<B: for<'tx> traits::Transactional<'tx, Schema> + Send> BlockchainStorage for Store<B> {}
 
 macro_rules! delegate_to_transaction {
     ($(fn $f:ident $args:tt -> $ret:ty;)*) => {

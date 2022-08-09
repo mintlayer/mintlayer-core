@@ -109,7 +109,7 @@ impl TestBlockInfo {
         Self { txns, id }
     }
 
-    fn from_id(cs: &Chainstate, id: Id<GenBlock>) -> Self {
+    fn from_id(cs: &test_framework::TestChainstate, id: Id<GenBlock>) -> Self {
         use chainstate_storage::BlockchainStorageRead;
         match id.classify(&cs.chain_config) {
             GenBlockId::Genesis(_) => Self::from_genesis(cs.chain_config.genesis_block()),

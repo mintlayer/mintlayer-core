@@ -15,7 +15,7 @@
 
 use std::{sync::atomic::Ordering, time::Duration};
 
-use chainstate_storage::{BlockchainStorageRead, Store};
+use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         block::consensus_data::PoWData,
@@ -32,7 +32,10 @@ use crypto::key::{KeyKind, PrivateKey};
 use crate::{
     detail::{
         median_time::calculate_median_time_past,
-        tests::{test_framework::TestFramework, *},
+        tests::{
+            test_framework::{TestFramework, TestStore},
+            *,
+        },
     },
     make_chainstate, ChainstateConfig,
 };
@@ -720,7 +723,7 @@ fn blocks_from_the_future() {
 fn mainnet_initialization() {
     let chain_config = Arc::new(common::chain::config::create_mainnet());
     let chainstate_config = ChainstateConfig::new();
-    let storage = Store::new_empty().unwrap();
+    let storage = TestStore::new_empty().unwrap();
     make_chainstate(
         chain_config,
         chainstate_config,

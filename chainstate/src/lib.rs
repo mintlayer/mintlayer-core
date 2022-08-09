@@ -56,10 +56,10 @@ impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
 type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_chainstate(
+pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
-    chainstate_storage: chainstate_storage::Store,
+    chainstate_storage: S,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {

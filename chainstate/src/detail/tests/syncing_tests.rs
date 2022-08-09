@@ -15,11 +15,15 @@
 
 use std::iter;
 
-use crate::detail::tests::{test_framework::TestFramework, *};
+use crate::detail::tests::{
+    test_framework::{TestChainstate, TestFramework},
+    *,
+};
 
 #[test]
 fn locator_distances() {
-    let distances: Vec<i64> = Chainstate::locator_tip_distances().take(7).map(From::from).collect();
+    let distances: Vec<i64> =
+        TestChainstate::locator_tip_distances().take(7).map(From::from).collect();
     assert_eq!(distances, vec![0, 1, 2, 4, 8, 16, 32]);
 }
 

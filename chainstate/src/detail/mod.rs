@@ -44,8 +44,8 @@ use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 use time_getter::TimeGetter;
 
-type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
-type TxRo<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRo;
+type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
+type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
 type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
@@ -53,10 +53,10 @@ const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
 #[must_use]
-pub struct Chainstate {
+pub struct Chainstate<S> {
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
-    chainstate_storage: chainstate_storage::Store,
+    chainstate_storage: S,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
@@ -69,14 +69,14 @@ pub enum BlockSource {
     Local,
 }
 
-impl Chainstate {
+impl<S: BlockchainStorage> Chainstate<S> {
     #[allow(dead_code)]
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
 
     #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
+    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut> {
         let db_tx = self.chainstate_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
@@ -88,7 +88,7 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
         let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
@@ -106,12 +106,11 @@ impl Chainstate {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
-        chainstate_storage: chainstate_storage::Store,
+        chainstate_storage: S,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
-        use chainstate_storage::BlockchainStorageRead;
 
         let best_block_id = chainstate_storage.get_best_block_id().map_err(|e| {
             ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
@@ -136,7 +135,7 @@ impl Chainstate {
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
-        chainstate_storage: chainstate_storage::Store,
+        chainstate_storage: S,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Self {
