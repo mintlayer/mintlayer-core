@@ -18,6 +18,7 @@ mod error;
 mod storage;
 mod undo;
 mod utxo;
+mod utxo_entry;
 mod view;
 
 pub use crate::{

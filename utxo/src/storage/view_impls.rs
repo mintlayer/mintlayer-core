@@ -103,7 +103,7 @@ impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<'a, S> {
             let outpoint = &key;
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
-                    self.0.set_utxo(outpoint, utxo)?;
+                    self.0.set_utxo(outpoint, utxo.clone())?;
                 } else {
                     // entry is spent
                     self.0.del_utxo(outpoint)?;

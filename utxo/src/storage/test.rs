@@ -15,9 +15,9 @@
 
 use super::{in_memory::UtxosDBInMemoryImpl, *};
 use crate::{
-    cache::UtxoEntry,
     flush_to_base,
     tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
+    utxo_entry::UtxoEntry,
     ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView,
 };
 use common::{
@@ -329,7 +329,7 @@ fn test_utxo(#[case] seed: Seed) {
 
         let outpoint_key = &outpoint;
         let utxo_entry = utxos.container.get(outpoint_key).expect("an entry should be found");
-        assert_eq!(utxo_entry.utxo(), utxo_opt);
+        assert_eq!(utxo_entry.utxo(), utxo_opt.as_ref());
 
         // check has_utxo
         assert!(utxo_db.has_utxo(&outpoint));
@@ -368,7 +368,7 @@ fn test_utxo(#[case] seed: Seed) {
                 .expect("utxo should exist");
 
             let mut parent = UtxosCache::new_for_test(utxo_db.best_block_hash());
-            parent.add_utxo(outpoint, utxo, false).unwrap();
+            parent.add_utxo(outpoint, utxo.clone(), false).unwrap();
 
             let mut child = UtxosCache::new(&parent);
             child.spend_utxo(outpoint).unwrap();

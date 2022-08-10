@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{cache::UtxoEntry, Utxo, UtxosCache};
+use crate::{utxo_entry::UtxoEntry, Utxo, UtxosCache};
 use common::{
     chain::{
         signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,

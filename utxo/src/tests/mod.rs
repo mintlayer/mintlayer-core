@@ -17,12 +17,12 @@ pub mod simulation;
 pub mod test_helper;
 
 use crate::{
-    cache::UtxoEntry,
     flush_to_base,
     tests::test_helper::{
         Presence::{self, *},
         DIRTY, FRESH,
     },
+    utxo_entry::UtxoEntry,
     ConsumedUtxoCache,
     Error::{self, *},
     FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosView,
@@ -267,7 +267,7 @@ fn check_get_mut_utxo(
             if let Some(expected_utxo) = expected_utxo {
                 let actual_utxo_entry = &entry.expect("should have an existing entry");
                 let actual_utxo = actual_utxo_entry.utxo().expect("should have an existing utxo.");
-                assert_eq!(expected_utxo, actual_utxo);
+                assert_eq!(expected_utxo, *actual_utxo);
             }
             test_helper::check_flags(entry, result_flags, !(other == Present))
         }
