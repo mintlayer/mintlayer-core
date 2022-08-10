@@ -21,7 +21,7 @@ use common::{
 use p2p::{
     error::P2pError,
     event::{PubSubControlEvent, SwarmEvent, SyncControlEvent},
-    message::{BlockRequest, BlocksResponse, HeadersResponse, Request, Response},
+    message::{BlockListResponse, BlockRequest, HeaderListResponse, Request, Response},
     net::{
         self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
         NetworkingService, SyncingMessagingService,
@@ -154,7 +154,7 @@ where
             mgr.handle_mut()
                 .send_response(
                     request_id,
-                    Response::HeaderResponse(HeadersResponse::new(headers)),
+                    Response::HeaderResponse(HeaderListResponse::new(headers)),
                 )
                 .await
         }
@@ -288,7 +288,7 @@ async fn remote_ahead_by_7_blocks() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderResponse(HeadersResponse::new(headers)),
+                        Response::HeaderResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -309,7 +309,7 @@ async fn remote_ahead_by_7_blocks() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockResponse(BlocksResponse::new(blocks)),
+                        Response::BlockResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -382,7 +382,7 @@ async fn local_ahead_by_12_blocks() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderResponse(HeadersResponse::new(headers)),
+                        Response::HeaderResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -505,7 +505,7 @@ async fn remote_local_diff_chains_local_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderResponse(HeadersResponse::new(headers)),
+                        Response::HeaderResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -526,7 +526,7 @@ async fn remote_local_diff_chains_local_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockResponse(BlocksResponse::new(blocks)),
+                        Response::BlockResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -647,7 +647,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderResponse(HeadersResponse::new(headers)),
+                        Response::HeaderResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -668,7 +668,7 @@ async fn remote_local_diff_chains_remote_higher() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockResponse(BlocksResponse::new(blocks)),
+                        Response::BlockResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();
@@ -791,7 +791,7 @@ async fn two_remote_nodes_different_chains() {
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderResponse(HeadersResponse::new(headers));
+                let msg = Response::HeaderResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -806,7 +806,7 @@ async fn two_remote_nodes_different_chains() {
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockResponse(BlocksResponse::new(vec![mgr_handle
+                let msg = Response::BlockResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -913,7 +913,7 @@ async fn two_remote_nodes_same_chains() {
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderResponse(HeadersResponse::new(headers));
+                let msg = Response::HeaderResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -928,7 +928,7 @@ async fn two_remote_nodes_same_chains() {
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockResponse(BlocksResponse::new(vec![mgr_handle
+                let msg = Response::BlockResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -1031,7 +1031,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
                     .await
                     .unwrap()
                     .unwrap();
-                let msg = Response::HeaderResponse(HeadersResponse::new(headers));
+                let msg = Response::HeaderResponse(HeaderListResponse::new(headers));
 
                 if dest_peer_id == conn2.peer_id() {
                     mgr2.handle_mut().send_response(request_id, msg).await.unwrap()
@@ -1062,7 +1062,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             } => {
                 assert_eq!(request.block_ids().len(), 1);
                 let id = request.block_ids()[0];
-                let msg = Response::BlockResponse(BlocksResponse::new(vec![mgr_handle
+                let msg = Response::BlockResponse(BlockListResponse::new(vec![mgr_handle
                     .call(move |this| this.get_block(id))
                     .await
                     .unwrap()
@@ -1167,7 +1167,7 @@ async fn test_connect_disconnect_resyncing() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::HeaderResponse(HeadersResponse::new(headers)),
+                        Response::HeaderResponse(HeaderListResponse::new(headers)),
                     )
                     .await
                     .unwrap()
@@ -1188,7 +1188,7 @@ async fn test_connect_disconnect_resyncing() {
                 mgr2.handle_mut()
                     .send_response(
                         request_id,
-                        Response::BlockResponse(BlocksResponse::new(blocks)),
+                        Response::BlockResponse(BlockListResponse::new(blocks)),
                     )
                     .await
                     .unwrap();

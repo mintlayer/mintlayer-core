@@ -76,7 +76,7 @@ where
     /// # Arguments
     /// * `headers` - the headers that were requested
     pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> message::Response {
-        message::Response::HeaderResponse(message::HeadersResponse::new(headers))
+        message::Response::HeaderResponse(message::HeaderListResponse::new(headers))
     }
 
     /// Make block response
@@ -84,7 +84,7 @@ where
     /// # Arguments
     /// * `blocks` - the blocks that were requested
     pub fn make_block_response(&self, blocks: Vec<Block>) -> message::Response {
-        message::Response::BlockResponse(message::BlocksResponse::new(blocks))
+        message::Response::BlockResponse(message::BlockListResponse::new(blocks))
     }
 
     /// Helper function for sending a request to remote
