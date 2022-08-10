@@ -23,7 +23,7 @@ use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
-use utxo::utxo_storage::UtxosDBMut;
+use utxo::UtxosDBMut;
 mod consensus_validator;
 mod orphan_blocks;
 

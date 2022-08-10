@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Utxo, UtxoEntry, UtxosCache};
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::tokens::OutputValue;
-use common::chain::{
-    Destination, GenBlock, OutPoint, OutPointSourceId, OutputPurpose, Transaction, TxInput,
-    TxOutput,
+use crate::{cache::UtxoEntry, Utxo, UtxosCache};
+use common::{
+    chain::{
+        signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
+        OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+    },
+    primitives::{Amount, BlockHeight, Id, H256},
 };
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{seq, Rng};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::{seq, Rng},
+};
 use itertools::Itertools;
 
 pub const FRESH: u8 = 1;
@@ -34,9 +36,6 @@ pub enum Presence {
     Present,
     Spent,
 }
-
-use crate::UtxoStatus;
-use Presence::{Absent, Present, Spent};
 
 pub fn create_tx_outputs(rng: &mut impl Rng, size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
@@ -73,7 +72,7 @@ pub fn convert_to_utxo(output: TxOutput, height: u64, output_idx: usize) -> (Out
     let utxo_id: Id<GenBlock> = Id::new(H256::random());
     let id = OutPointSourceId::BlockReward(utxo_id);
     let outpoint = OutPoint::new(id, output_idx as u32);
-    let utxo = Utxo::new(output, true, BlockHeight::new(height));
+    let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(height));
 
     (outpoint, utxo)
 }
@@ -100,7 +99,7 @@ fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, Ou
     // generate utxo
     let utxo = match block_height {
         None => Utxo::new_for_mempool(output, is_block_reward),
-        Some(height) => Utxo::new(output, is_block_reward, BlockHeight::new(height)),
+        Some(height) => Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(height)),
     };
 
     // create the id based on the `is_block_reward` value.
@@ -139,7 +138,7 @@ pub fn insert_single_entry(
     let key = &outpoint;
 
     match cache_presence {
-        Absent => {
+        Presence::Absent => {
             // there shouldn't be an existing entry. Don't bother with the cache flags.
         }
         other => {
@@ -148,12 +147,8 @@ pub fn insert_single_entry(
             let is_fresh = (flags & FRESH) == FRESH;
 
             let entry = match other {
-                Present => UtxoEntry::new(utxo.clone(), is_fresh, is_dirty),
-                Spent => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty,
-                    is_fresh,
-                },
+                Presence::Present => UtxoEntry::new(Some(utxo.clone()), is_fresh, is_dirty),
+                Presence::Spent => UtxoEntry::new(None, is_fresh, is_dirty),
                 _ => {
                     panic!("something wrong in the code.")
                 }

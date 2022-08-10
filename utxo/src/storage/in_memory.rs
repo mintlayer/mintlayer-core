@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{BTreeMap, HashMap};
-
 use super::{UtxosStorageRead, UtxosStorageWrite};
 use crate::{BlockUndo, Utxo, UtxosCache, UtxosView};
 use chainstate_types::storage_result::Error;
@@ -22,6 +20,7 @@ use common::{
     chain::{Block, GenBlock, OutPoint},
     primitives::Id,
 };
+use std::collections::BTreeMap;
 
 #[derive(Clone)]
 pub struct UtxosDBInMemoryImpl {
@@ -31,7 +30,8 @@ pub struct UtxosDBInMemoryImpl {
 }
 
 impl UtxosDBInMemoryImpl {
-    pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
+    #[allow(dead_code)]
+    pub fn new(best_block: Id<GenBlock>, _initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
         Self {
             store: BTreeMap::new(),
             undo_store: BTreeMap::new(),
@@ -39,6 +39,7 @@ impl UtxosDBInMemoryImpl {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
         &self.store
     }

@@ -13,20 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::primitives::{BlockHeight, Id, Idable, H256};
+pub mod simulation;
+pub mod test_helper;
 
-use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
-use crate::Error::{self, FreshUtxoAlreadyExists, OverwritingUtxo};
 use crate::{
-    flush_to_base, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView,
+    cache::UtxoEntry,
+    flush_to_base,
+    tests::test_helper::{
+        Presence::{self, *},
+        DIRTY, FRESH,
+    },
+    ConsumedUtxoCache,
+    Error::{self, *},
+    FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosView,
 };
-
-use crate::test_helper::create_tx_outputs;
-use crate::utxo_impl::test_helper::{
-    check_flags, create_utxo, create_utxo_for_mempool, insert_single_entry, Presence, DIRTY, FRESH,
+use common::{
+    chain::{OutPoint, OutPointSourceId, Transaction, TxInput},
+    primitives::{BlockHeight, Id, Idable, H256},
 };
-use crate::utxo_impl::{UtxoSource, UtxoStatus};
-use common::chain::{OutPoint, OutPointSourceId, Transaction, TxInput};
 use crypto::random::{seq, Rng};
 use itertools::Itertools;
 use rstest::rstest;
@@ -49,10 +53,11 @@ fn check_add_utxo(
     op_result: Result<(), Error>,
 ) {
     let mut cache = UtxosCache::new_for_test(H256::random().into());
-    let (_, outpoint) = insert_single_entry(rng, &mut cache, &cache_presence, cache_flags, None);
+    let (_, outpoint) =
+        test_helper::insert_single_entry(rng, &mut cache, &cache_presence, cache_flags, None);
 
     // perform the add_utxo.
-    let (utxo, _) = create_utxo(rng, 0);
+    let (utxo, _) = test_helper::create_utxo(rng, 0);
     let add_result = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
     assert_eq!(add_result, op_result);
@@ -61,7 +66,7 @@ fn check_add_utxo(
         let key = &outpoint;
         let ret_value = cache.utxos.get(key);
 
-        check_flags(ret_value, result_flags, false);
+        test_helper::check_flags(ret_value, result_flags, false);
     }
 }
 
@@ -81,7 +86,7 @@ fn check_spend_utxo(
 ) {
     // initialize the parent cache.
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (_, parent_outpoint) = insert_single_entry(
+    let (_, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
         &parent_presence,
@@ -95,7 +100,7 @@ fn check_spend_utxo(
         _ => UtxosCache::new(&parent),
     };
 
-    let (_, child_outpoint) = insert_single_entry(
+    let (_, child_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut child,
         &cache_presence,
@@ -111,7 +116,7 @@ fn check_spend_utxo(
     let key = &child_outpoint;
     let ret_value = child.utxos.get(key);
 
-    check_flags(ret_value, result_flags, true);
+    test_helper::check_flags(ret_value, result_flags, true);
 }
 
 /// Checks `batch_write` method behaviour.
@@ -133,7 +138,8 @@ fn check_write_utxo(
 ) {
     //initialize the parent cache
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (_, outpoint) = insert_single_entry(rng, &mut parent, &parent_presence, parent_flags, None);
+    let (_, outpoint) =
+        test_helper::insert_single_entry(rng, &mut parent, &parent_presence, parent_flags, None);
     let key = &outpoint;
 
     // prepare the map for batch write.
@@ -149,16 +155,12 @@ fn check_write_utxo(
                 panic!("Please use `Present` or `Spent` presence when child flags are specified.");
             }
             Present => {
-                let (utxo, _) = create_utxo(rng, 0);
-                let entry = UtxoEntry::new(utxo, is_fresh, is_dirty);
+                let (utxo, _) = test_helper::create_utxo(rng, 0);
+                let entry = UtxoEntry::new(Some(utxo), is_fresh, is_dirty);
                 single_entry_map.insert(key.clone(), entry);
             }
             Spent => {
-                let entry = UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty,
-                    is_fresh,
-                };
+                let entry = UtxoEntry::new(None, is_fresh, is_dirty);
                 single_entry_map.insert(key.clone(), entry);
             }
         }
@@ -179,7 +181,7 @@ fn check_write_utxo(
                     // no need to check for the flags, it's empty.
                     assert!(entry.is_none());
                 }
-                other => check_flags(entry, result_flags, !(other == Present)),
+                other => test_helper::check_flags(entry, result_flags, !(other == Present)),
             }
         }
         Err(e) => {
@@ -198,7 +200,7 @@ fn check_get_mut_utxo(
     result_flags: Option<u8>,
 ) {
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (parent_utxo, parent_outpoint) = insert_single_entry(
+    let (parent_utxo, parent_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut parent,
         &parent_presence,
@@ -210,7 +212,7 @@ fn check_get_mut_utxo(
         Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
-    let (child_utxo, child_outpoint) = insert_single_entry(
+    let (child_utxo, child_outpoint) = test_helper::insert_single_entry(
         rng,
         &mut child,
         &cache_presence,
@@ -237,7 +239,7 @@ fn check_get_mut_utxo(
             }
 
             // let's try to update the utxo.
-            let old_height_num = match utxo.source_height() {
+            let old_height_num = match utxo.source() {
                 UtxoSource::BlockChain(h) => h,
                 UtxoSource::MemPool => panic!("Unexpected arm"),
             };
@@ -246,10 +248,10 @@ fn check_get_mut_utxo(
             let new_height = UtxoSource::BlockChain(new_height_num);
 
             utxo.set_height(new_height.clone());
-            assert_eq!(new_height, *utxo.source_height());
+            assert_eq!(new_height, *utxo.source());
             assert_eq!(
                 new_height_num,
-                utxo.source_height().blockchain_height().expect("Must be a height")
+                utxo.source().blockchain_height().expect("Must be a height")
             );
             expected_utxo = Some(utxo.clone());
         }
@@ -267,7 +269,7 @@ fn check_get_mut_utxo(
                 let actual_utxo = actual_utxo_entry.utxo().expect("should have an existing utxo.");
                 assert_eq!(expected_utxo, actual_utxo);
             }
-            check_flags(entry, result_flags, !(other == Present))
+            test_helper::check_flags(entry, result_flags, !(other == Present))
         }
     }
 }
@@ -454,10 +456,10 @@ fn derive_cache_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
-    let (utxo, outpoint_1) = create_utxo(&mut rng, 10);
+    let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
-    let (utxo, outpoint_2) = create_utxo(&mut rng, 20);
+    let (utxo, outpoint_2) = test_helper::create_utxo(&mut rng, 20);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let mut extra_cache = cache.derive_cache();
@@ -466,7 +468,7 @@ fn derive_cache_test(#[case] seed: Seed) {
     assert!(extra_cache.has_utxo(&outpoint_1));
     assert!(extra_cache.has_utxo(&outpoint_2));
 
-    let (utxo, outpoint) = create_utxo(&mut rng, 30);
+    let (utxo, outpoint) = test_helper::create_utxo(&mut rng, 30);
     assert!(extra_cache.add_utxo(&outpoint, utxo, true).is_ok());
 
     assert!(!cache.has_utxo(&outpoint));
@@ -479,15 +481,14 @@ fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
     let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
-    let (utxo, outpoint_1) = create_utxo(&mut rng, 10);
+    let (utxo, outpoint_1) = test_helper::create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
-    let (utxo, outpoint_2) = create_utxo_for_mempool(&mut rng);
+    let (utxo, outpoint_2) = test_helper::create_utxo_for_mempool(&mut rng);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let res = cache.utxo(&outpoint_2).expect("should contain utxo");
-    assert!(res.source_height().is_mempool());
-    assert_eq!(res.source, UtxoSource::MemPool);
+    assert!(res.source().is_mempool());
 }
 
 #[rstest]
@@ -500,7 +501,13 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     // let's test `add_utxos`
-    let tx = Transaction::new(0x00, vec![], create_tx_outputs(&mut rng, 10), 0x01).unwrap();
+    let tx = Transaction::new(
+        0x00,
+        vec![],
+        test_helper::create_tx_outputs(&mut rng, 10),
+        0x01,
+    )
+    .unwrap();
     assert!(cache.add_utxos(&tx, UtxoSource::BlockChain(BlockHeight::new(2)), false).is_ok());
 
     // check that the outputs of tx are added in the cache.

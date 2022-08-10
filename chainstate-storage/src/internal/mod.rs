@@ -21,8 +21,7 @@ use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
 use common::primitives::{BlockHeight, Id, Idable};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
-use utxo::{BlockUndo, Utxo};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
 

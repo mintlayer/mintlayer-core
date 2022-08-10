@@ -13,135 +13,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//TODO: remove once the functions are used.
-#![allow(dead_code)]
-use crate::{Error, TxUndo};
-use common::chain::{GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput};
-use common::primitives::{BlockHeight, Id, Idable};
+use crate::{Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView};
+use common::{
+    chain::{GenBlock, OutPoint, OutPointSourceId, Transaction},
+    primitives::{BlockHeight, Id, Idable},
+};
 use logging::log;
 use serialization::{Decode, Encode};
-use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter};
-
-pub mod utxo_storage;
-
-//todo: proper placement and derivation of this max
-const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
-
-// Determines whether the utxo is for the blockchain of for mempool
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub enum UtxoSource {
-    /// At which height this containing tx was included in the active block chain
-    BlockChain(BlockHeight),
-    MemPool,
-}
-
-impl UtxoSource {
-    fn is_mempool(&self) -> bool {
-        match self {
-            UtxoSource::BlockChain(_) => false,
-            UtxoSource::MemPool => true,
-        }
-    }
-
-    fn blockchain_height(&self) -> Result<BlockHeight, Error> {
-        match self {
-            UtxoSource::BlockChain(h) => Ok(*h),
-            UtxoSource::MemPool => Err(crate::Error::NoBlockchainHeightFound),
-        }
-    }
-}
-
-/// The Unspent Transaction Output
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Utxo {
-    output: TxOutput,
-    is_block_reward: bool,
-    /// identifies whether the utxo is for the blockchain or for mempool.
-    source: UtxoSource,
-}
-
-impl Utxo {
-    pub fn new(output: TxOutput, is_block_reward: bool, height: BlockHeight) -> Self {
-        Self {
-            output,
-            is_block_reward,
-            source: UtxoSource::BlockChain(height),
-        }
-    }
-
-    /// a utxo for mempool, that does not need the block height.
-    pub fn new_for_mempool(output: TxOutput, is_block_reward: bool) -> Self {
-        Self {
-            output,
-            is_block_reward,
-            source: UtxoSource::MemPool,
-        }
-    }
-
-    pub fn is_block_reward(&self) -> bool {
-        self.is_block_reward
-    }
-
-    pub fn source_height(&self) -> &UtxoSource {
-        &self.source
-    }
-
-    pub fn output(&self) -> &TxOutput {
-        &self.output
-    }
-
-    pub fn set_height(&mut self, value: UtxoSource) {
-        self.source = value
-    }
-}
-
-pub trait UtxosView {
-    /// Retrieves utxo.
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
-
-    /// Checks whether outpoint is unspent.
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool;
-
-    /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Id<GenBlock>;
-
-    /// Estimated size of the whole view (None if not implemented)
-    fn estimated_size(&self) -> Option<usize>;
-
-    fn derive_cache(&self) -> UtxosCache;
-}
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Formatter},
+};
 
 #[derive(Clone)]
 pub struct ConsumedUtxoCache {
-    container: BTreeMap<OutPoint, UtxoEntry>,
-    best_block: Id<GenBlock>,
-}
-
-pub trait FlushableUtxoView {
-    /// Performs bulk modification
-    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error>;
-}
-
-// flush the cache into the provided base. This will consume the cache and throw it away.
-// It uses the batch_write function since it's available in different kinds of views.
-pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> Result<(), Error> {
-    base.batch_write(cache.consume())
+    pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
+    pub(crate) best_block: Id<GenBlock>,
 }
 
 #[derive(Clone)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
     current_block_hash: Id<GenBlock>,
-    utxos: BTreeMap<OutPoint, UtxoEntry>,
-    //TODO: do we need this?
+    pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
+    #[allow(dead_code)]
     memory_usage: usize,
 }
 
 /// Tells the state of the utxo
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
-pub enum UtxoStatus {
+pub(crate) enum UtxoStatus {
     Spent,
     Entry(Utxo),
 }
@@ -167,9 +69,12 @@ pub(crate) struct UtxoEntry {
 }
 
 impl UtxoEntry {
-    pub fn new(utxo: Utxo, is_fresh: bool, is_dirty: bool) -> UtxoEntry {
+    pub fn new(utxo: Option<Utxo>, is_fresh: bool, is_dirty: bool) -> UtxoEntry {
         UtxoEntry {
-            status: UtxoStatus::Entry(utxo),
+            status: match utxo {
+                Some(utxo) => UtxoStatus::Entry(utxo),
+                None => UtxoStatus::Spent,
+            },
             is_dirty,
             is_fresh,
         }
@@ -268,12 +173,8 @@ impl<'a> UtxosCache<'a> {
             // by default no overwrite allowed.
             let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
 
-            let utxo = Utxo {
-                output: output.clone(),
-                // TODO: where do we get the block reward from the transaction?
-                is_block_reward: false,
-                source: source.clone(),
-            };
+            // TODO: where do we get the block reward from the transaction?
+            let utxo = Utxo::new(output.clone(), false, source.clone());
 
             self.add_utxo(&outpoint, utxo, overwrite)?;
         }
@@ -333,7 +234,7 @@ impl<'a> UtxosCache<'a> {
         };
 
         // create a new entry
-        let new_entry = UtxoEntry::new(utxo, is_fresh, true);
+        let new_entry = UtxoEntry::new(Some(utxo), is_fresh, true);
 
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
@@ -379,23 +280,24 @@ impl<'a> UtxosCache<'a> {
 
         let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
             //TODO: update the memory storage here
-            UtxoEntry::new(utxo, status.is_fresh, status.is_dirty)
+            UtxoEntry::new(Some(utxo), status.is_fresh, status.is_dirty)
         });
 
         utxo.utxo_mut()
     }
 
     /// removes the utxo in the cache with the outpoint
-    pub(crate) fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
+    pub fn uncache(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
         let key = outpoint;
         if let Some(entry) = self.utxos.get(key) {
             // see bitcoin's Uncache.
             if !entry.is_fresh && !entry.is_dirty {
                 //todo: decrement the memory usage
-                return self.utxos.remove(key);
+                self.utxos.remove(key);
+                return Ok(());
             }
         }
-        None
+        Err(Error::NoUtxoFound)
     }
 
     pub fn consume(self) -> ConsumedUtxoCache {
@@ -504,22 +406,12 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
-pub mod test_helper;
-
-#[cfg(test)]
-mod simulation;
-
-#[cfg(test)]
 mod unit_test {
+    use super::{Error, UtxosCache};
+    use crate::tests::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-
-    use crate::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
-    use crate::UtxosCache;
 
     #[rstest]
     #[trace]
@@ -529,30 +421,29 @@ mod unit_test {
         let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is not dirty and not fresh
-        let (utxo, outp) =
+        let (_, outp) =
             insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(0), None);
-        let res = cache.uncache(&outp).expect("should return an entry");
-        assert_eq!(res.utxo(), Some(utxo));
+        assert!(cache.uncache(&outp).is_ok());
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the outpoint does not exist.
         let (_, outp) = insert_single_entry(&mut rng, &mut cache, &Presence::Absent, None, None);
-        assert_eq!(cache.uncache(&outp), None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the entry is fresh, entry cannot be removed.
         let (_, outp) =
             insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
-        assert_eq!(cache.uncache(&outp), None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
 
         // when the entry is dirty, entry cannot be removed.
         let (_, outp) =
             insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(DIRTY), None);
-        assert_eq!(cache.uncache(&outp), None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
 
         // when the entry is both fresh and dirty, entry cannot be removed.
         let (_, outp) =
             insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
-        assert_eq!(cache.uncache(&outp), None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
     }
 }
