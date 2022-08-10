@@ -13,15 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use async_trait::async_trait;
+use itertools::Itertools;
+use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
+use tokio::sync::{mpsc, oneshot};
+
+use logging::log;
+
 use crate::{
     error::{ConversionError, P2pError, ProtocolError},
     net::{self, libp2p::types, types::ConnectivityEvent, ConnectivityService, NetworkingService},
 };
-use async_trait::async_trait;
-use itertools::*;
-use libp2p::{core::PeerId, multiaddr::Protocol, Multiaddr};
-use logging::log;
-use tokio::sync::{mpsc, oneshot};
 
 /// Connectivity handle for libp2p
 pub struct Libp2pConnectivityHandle<T: NetworkingService> {
@@ -124,7 +126,7 @@ where
         .group_by(|info| info.0)
         .into_iter()
         .map(|(_id, addrs)| net::types::AddrInfo::from_iter(addrs))
-        .collect::<Vec<net::types::AddrInfo<T>>>()
+        .collect()
 }
 
 impl<T> TryInto<net::types::PeerInfo<T>> for types::IdentifyInfoWrapper
@@ -255,13 +257,5 @@ where
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(1 + 1, 2);
     }
 }

@@ -25,12 +25,3 @@ mod fixed_hash;
 
 pub use concurrency_impl::*;
 pub use uint::{Uint128, Uint256};
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    #[allow(clippy::eq_op)]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-}
