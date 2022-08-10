@@ -17,12 +17,18 @@ mod ban;
 mod connections;
 mod peerdb;
 
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+
+use tokio::time::timeout;
+
 use crate::{
-    net::{ConnectivityService, NetworkingService},
+    net::{
+        types::{ConnectivityEvent, PeerInfo},
+        ConnectivityService, NetworkingService,
+    },
     peer_manager::PeerManager,
     P2pConfig,
 };
-use std::{fmt::Debug, str::FromStr, sync::Arc};
 
 async fn make_peer_manager<T>(
     addr: T::Address,
@@ -46,4 +52,38 @@ where
 
     let p2p_config = Arc::new(P2pConfig::new());
     PeerManager::<T>::new(Arc::clone(&config), p2p_config, conn, rx, tx_sync)
+}
+
+async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) -> (T::Address, PeerInfo<T>)
+where
+    T: NetworkingService + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap()
+        .unwrap();
+    conn1.connect(addr).await.expect("dial to succeed");
+
+    let (address, peer_info) = match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { address, peer_info } => (address, peer_info),
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    };
+
+    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted { .. } => {}
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    }
+
+    (address, peer_info)
 }

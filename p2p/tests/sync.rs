@@ -29,7 +29,7 @@ use p2p::{
     sync::BlockSyncManager,
     sync::SyncState,
 };
-use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -72,32 +72,6 @@ where
         rx_pubsub,
         rx_swarm,
     )
-}
-
-async fn get_address<T>(handle: &mut T::ConnectivityHandle) -> T::Address
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    loop {
-        if let Some(addr) = handle.local_addr().await.unwrap() {
-            return addr;
-        }
-    }
-}
-
-async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = get_address::<T>(conn2).await;
-    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
-    let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
 }
 
 // initialize two blockchains which have the same longest chain
@@ -1156,6 +1130,10 @@ async fn test_connect_disconnect_resyncing() {
     assert_eq!(conn1.disconnect(*conn2.peer_id()).await, Ok(()));
     assert!(std::matches!(
         conn2.poll_next().await,
+        Ok(ConnectivityEvent::ConnectionClosed { .. })
+    ));
+    assert!(std::matches!(
+        conn1.poll_next().await,
         Ok(ConnectivityEvent::ConnectionClosed { .. })
     ));
 

@@ -76,12 +76,12 @@ use sync_codec::{
     poll_method = "poll"
 )]
 pub struct Libp2pBehaviour {
+    pub connmgr: connection_manager::ConnectionManager,
+    pub identify: identify::Identify,
+    pub discovery: discovery::DiscoveryManager,
     pub gossipsub: Gossipsub,
     pub ping: ping::Behaviour,
-    pub identify: identify::Identify,
     pub sync: RequestResponse<SyncMessagingCodec>,
-    pub connmgr: connection_manager::ConnectionManager,
-    pub discovery: discovery::DiscoveryManager,
 
     #[behaviour(ignore)]
     pub events: VecDeque<Libp2pBehaviourEvent>,
