@@ -17,30 +17,13 @@ use p2p::{
     error::{P2pError, PublishError},
     event::{PubSubControlEvent, SwarmEvent},
     message::Announcement,
-    net::{
-        self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
-        NetworkingService, PubSubService,
-    },
+    net::{self, libp2p::Libp2pService, ConnectivityService, NetworkingService, PubSubService},
     pubsub::PubSubMessageHandler,
     sync::SyncManager,
 };
-use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
-async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = conn2.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
-    let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
-}
 
 // start two libp2p services, spawn a `PubSubMessageHandler` for the first service,
 // publish an invalid block from the first service and verify that the `PeerManager`

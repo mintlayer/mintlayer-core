@@ -32,9 +32,12 @@ use common::{
 };
 use crypto::random::SliceRandom;
 use libp2p::Multiaddr;
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
+use p2p::net::{types::ConnectivityEvent, ConnectivityService, NetworkingService};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    time::timeout,
+};
 
 pub fn make_libp2p_addr() -> Multiaddr {
     "/ip6/::1/tcp/0".parse().unwrap()
@@ -65,6 +68,37 @@ pub async fn get_tcp_socket() -> TcpStream {
     });
 
     TcpStream::connect(addr).await.unwrap()
+}
+
+pub async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) where
+    T: NetworkingService + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap()
+        .unwrap();
+    conn1.connect(addr).await.expect("dial to succeed");
+
+    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { .. } => {}
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    }
+
+    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted { .. } => {}
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    }
 }
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;
