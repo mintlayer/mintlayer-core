@@ -42,8 +42,8 @@ fn cache_simulation_test(
         iterations_per_cache,
         nested_level,
     );
-    base.batch_write(new_cache.unwrap().consume())
-        .expect("batch write must succeed");
+    let consumed_cache = new_cache.unwrap().consume();
+    base.batch_write(consumed_cache).expect("batch write must succeed");
 
     for (outpoint, _) in &result {
         let has_utxo = base.has_utxo(outpoint);
@@ -75,9 +75,8 @@ fn simulation_step<'a>(
     let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
 
     if let Some(new_cache) = new_cache {
-        cache
-            .batch_write(new_cache.clone().consume())
-            .expect("batch write must succeed");
+        let consumed_cache = new_cache.consume();
+        cache.batch_write(consumed_cache).expect("batch write must succeed");
     }
 
     Some(cache)
