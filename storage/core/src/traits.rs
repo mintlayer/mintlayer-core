@@ -82,10 +82,10 @@ impl<S: schema::Schema, T: TransactionRw<Error = crate::Error> + for<'m> GetMapM
 /// Type supporting storage transactions.
 pub trait Transactional<'t, Sch: schema::Schema> {
     /// Associated read-only transaction type.
-    type TransactionRo: TransactionRo<Error = crate::Error> + StoreTxRo<Sch> + 't;
+    type TransactionRo: StoreTxRo<Sch> + 't;
 
     /// Associated read-write transaction type.
-    type TransactionRw: TransactionRw<Error = crate::Error> + StoreTxRw<Sch> + 't;
+    type TransactionRw: StoreTxRw<Sch> + 't;
 
     /// Start a read-only transaction.
     fn transaction_ro<'s: 't>(&'s self) -> Self::TransactionRo;

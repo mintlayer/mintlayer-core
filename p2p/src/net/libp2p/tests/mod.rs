@@ -38,7 +38,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
 
 #[cfg(test)]
 mod frontend;
@@ -247,7 +247,11 @@ pub async fn make_libp2p_with_ping(
 
 async fn get_address<T: NetworkBehaviour>(swarm: &mut Swarm<T>) -> Multiaddr {
     loop {
-        if let SwarmEvent::NewListenAddr { address, .. } = swarm.select_next_some().await {
+        if let SwarmEvent::NewListenAddr { address, .. } =
+            timeout(Duration::from_secs(5), swarm.select_next_some())
+                .await
+                .expect("event to be received")
+        {
             return address;
         }
     }
@@ -262,7 +266,7 @@ where
     let addr = get_address::<A>(swarm1).await;
 
     for _ in 0..3 {
-        swarm2.dial(addr.clone()).expect("swarm dial failed");
+        swarm2.dial(addr.clone()).expect("dial to succeed");
 
         loop {
             tokio::select! {

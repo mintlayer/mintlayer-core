@@ -16,7 +16,7 @@
 use crate::{
     error::{P2pError, PeerError},
     net::{self, libp2p::Libp2pService, mock::MockService, ConnectivityService, NetworkingService},
-    swarm::tests::make_peer_manager,
+    swarm::tests::{connect_services, make_peer_manager},
 };
 use common::chain::config;
 use libp2p::Multiaddr;
@@ -26,7 +26,7 @@ use std::sync::Arc;
 // ban peer whose connected to us
 async fn ban_connected_peer<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -35,13 +35,8 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
-
-    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
-        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
-    }
+    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
 
     let peer_id = *swarm1.handle_mut().peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -74,13 +69,8 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
-
-    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
-        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
-    }
+    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
 
     let peer_id = *swarm1.handle_mut().peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -116,7 +106,7 @@ async fn banned_peer_attempts_to_connect_mock() {
 // attempt to connect to banned peer
 async fn connect_to_banned_peer<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -125,13 +115,8 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next(),);
-
-    if let Ok(net::types::ConnectivityEvent::InboundAccepted { peer_info, address }) = conn2_res {
-        swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
-    }
+    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    swarm2.accept_inbound_connection(address, peer_info).await.unwrap();
 
     let peer_id = *swarm1.handle_mut().peer_id();
     assert_eq!(swarm2.adjust_peer_score(peer_id, 1000).await, Ok(()));
@@ -391,10 +376,7 @@ where
     )
     .await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
-    let _conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
+    connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
     let swarm1_id = *swarm1.handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
