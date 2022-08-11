@@ -513,7 +513,7 @@ where
                         request_id,
                         request,
                     } => match request {
-                        message::Request::HeaderRequest(request) => {
+                        message::Request::HeaderListRequest(request) => {
                             log::debug!(
                                 "process header request (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -527,7 +527,7 @@ where
                             ).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                        message::Request::BlockRequest(request) => {
+                        message::Request::BlockListRequest(request) => {
                             log::debug!(
                                 "process block request (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -547,7 +547,7 @@ where
                         request_id,
                         response,
                     } => match response {
-                        message::Response::HeaderResponse(response) => {
+                        message::Response::HeaderListResponse(response) => {
                             log::debug!(
                                 "process header response (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -557,7 +557,7 @@ where
                             let result = self.process_header_response(peer_id, response.into_headers()).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                        message::Response::BlockResponse(response) => {
+                        message::Response::BlockListResponse(response) => {
                             log::debug!(
                                 "process block response (id {:?}) from peer {}",
                                 request_id, peer_id

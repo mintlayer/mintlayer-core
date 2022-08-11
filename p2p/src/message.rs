@@ -21,13 +21,13 @@ use common::{
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct HeaderRequest {
+pub struct HeaderListRequest {
     locator: Locator,
 }
 
-impl HeaderRequest {
+impl HeaderListRequest {
     pub fn new(locator: Locator) -> Self {
-        HeaderRequest { locator }
+        HeaderListRequest { locator }
     }
 
     pub fn locator(&self) -> &Locator {
@@ -40,11 +40,11 @@ impl HeaderRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockRequest {
+pub struct BlockListRequest {
     block_ids: Vec<Id<Block>>,
 }
 
-impl BlockRequest {
+impl BlockListRequest {
     pub fn new(block_ids: Vec<Id<Block>>) -> Self {
         Self { block_ids }
     }
@@ -61,9 +61,9 @@ impl BlockRequest {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {
     #[codec(index = 0)]
-    HeaderRequest(HeaderRequest),
+    HeaderListRequest(HeaderListRequest),
     #[codec(index = 1)]
-    BlockRequest(BlockRequest),
+    BlockListRequest(BlockListRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
@@ -107,9 +107,9 @@ impl BlockListResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
-    HeaderResponse(HeaderListResponse),
+    HeaderListResponse(HeaderListResponse),
     #[codec(index = 1)]
-    BlockResponse(BlockListResponse),
+    BlockListResponse(BlockListResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

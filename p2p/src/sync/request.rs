@@ -52,7 +52,7 @@ where
     /// * `block_ids` - IDs of the blocks that are requested
     pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> (message::Request, RequestType) {
         (
-            message::Request::BlockRequest(message::BlockRequest::new(block_ids.clone())),
+            message::Request::BlockListRequest(message::BlockListRequest::new(block_ids.clone())),
             RequestType::GetBlocks(block_ids),
         )
     }
@@ -66,7 +66,7 @@ where
     /// * `locator` - locator object that shows the state of the local node
     pub fn make_header_request(&self, locator: Locator) -> (message::Request, RequestType) {
         (
-            message::Request::HeaderRequest(message::HeaderRequest::new(locator)),
+            message::Request::HeaderListRequest(message::HeaderListRequest::new(locator)),
             RequestType::GetHeaders,
         )
     }
@@ -76,7 +76,7 @@ where
     /// # Arguments
     /// * `headers` - the headers that were requested
     pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> message::Response {
-        message::Response::HeaderResponse(message::HeaderListResponse::new(headers))
+        message::Response::HeaderListResponse(message::HeaderListResponse::new(headers))
     }
 
     /// Make block response
@@ -84,7 +84,7 @@ where
     /// # Arguments
     /// * `blocks` - the blocks that were requested
     pub fn make_block_response(&self, blocks: Vec<Block>) -> message::Response {
-        message::Response::BlockResponse(message::BlockListResponse::new(blocks))
+        message::Response::BlockListResponse(message::BlockListResponse::new(blocks))
     }
 
     /// Helper function for sending a request to remote

@@ -32,7 +32,7 @@ async fn test_request_response() {
     mgr1.peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -45,13 +45,13 @@ async fn test_request_response() {
     {
         assert_eq!(
             request,
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![])))
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
         );
 
         mgr2.peer_sync_handle
             .send_response(
                 request_id,
-                Response::HeaderResponse(HeaderListResponse::new(vec![])),
+                Response::HeaderListResponse(HeaderListResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -75,7 +75,7 @@ async fn test_multiple_requests_and_responses() {
         .peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -85,7 +85,7 @@ async fn test_multiple_requests_and_responses() {
         .peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -100,7 +100,7 @@ async fn test_multiple_requests_and_responses() {
                     mgr2.peer_sync_handle
                         .send_response(
                             request_id,
-                            Response::HeaderResponse(HeaderListResponse::new(vec![])),
+                            Response::HeaderListResponse(HeaderListResponse::new(vec![])),
                         )
                         .await
                         .unwrap();
