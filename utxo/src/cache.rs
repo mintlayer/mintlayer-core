@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    utxo_entry::UtxoEntry,
+    utxo_entry::{UtxoEntry, DIRTY, FRESH},
     {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
@@ -66,7 +66,7 @@ impl<'a> UtxosCache<'a> {
             // if the utxo exists in parent:
             // dirty is FALSE because this view does not have the utxo, therefore is different from parent
             // fresh is FALSE because this view does not have the utxo but the parent has.
-            parent.utxo(outpoint).map(|utxo| UtxoEntry::new(Some(utxo), false, false))
+            parent.utxo(outpoint).map(|utxo| UtxoEntry::new(Some(utxo), 0))
         })
     }
 
@@ -158,7 +158,8 @@ impl<'a> UtxosCache<'a> {
         };
 
         // create a new entry
-        let new_entry = UtxoEntry::new(Some(utxo), is_fresh, true);
+        let fresh_flag = if is_fresh { FRESH } else { 0 };
+        let new_entry = UtxoEntry::new(Some(utxo), fresh_flag | DIRTY);
 
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
@@ -181,7 +182,7 @@ impl<'a> UtxosCache<'a> {
             self.utxos.remove(outpoint);
         } else {
             // mark this as 'spent'
-            let new_entry = UtxoEntry::new(None, false, true);
+            let new_entry = UtxoEntry::new(None, DIRTY);
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
@@ -200,7 +201,9 @@ impl<'a> UtxosCache<'a> {
 
         let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
             //TODO: update the memory storage here
-            UtxoEntry::new(Some(utxo.clone()), entry.is_fresh(), entry.is_dirty())
+            let fresh_flag = if entry.is_fresh() { FRESH } else { 0 };
+            let dirty_flag = if entry.is_dirty() { DIRTY } else { 0 };
+            UtxoEntry::new(Some(utxo.clone()), fresh_flag | dirty_flag)
         });
 
         utxo.utxo_mut()
@@ -280,8 +283,9 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                         if !(entry.is_fresh() && entry.is_spent()) {
                             // Create the utxo in the parent cache, move the data up
                             // and mark it as dirty.
+                            let fresh_flag = if entry.is_fresh() { FRESH } else { 0 };
                             let entry_copy =
-                                UtxoEntry::new(entry.utxo().cloned(), entry.is_fresh(), true);
+                                UtxoEntry::new(entry.utxo().cloned(), fresh_flag | DIRTY);
 
                             self.utxos.insert(key, entry_copy);
                             // TODO: increase the memory usage
@@ -304,11 +308,9 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             self.utxos.remove(&key);
                         } else {
                             // A normal modification.
-                            let entry_copy = UtxoEntry::new(
-                                entry.utxo().cloned(),
-                                parent_entry.is_fresh(),
-                                true,
-                            );
+                            let fresh_flag = if parent_entry.is_fresh() { FRESH } else { 0 };
+                            let entry_copy =
+                                UtxoEntry::new(entry.utxo().cloned(), fresh_flag | DIRTY);
                             self.utxos.insert(key, entry_copy);
                             // TODO: update the memory usage
 
@@ -329,8 +331,8 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 
 #[cfg(test)]
 mod unit_test {
-    use super::{Error, UtxosCache};
-    use crate::tests::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
+    use super::*;
+    use crate::tests::test_helper::{insert_single_entry, Presence};
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};

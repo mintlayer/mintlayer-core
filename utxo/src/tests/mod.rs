@@ -18,11 +18,8 @@ pub mod test_helper;
 
 use crate::{
     flush_to_base,
-    tests::test_helper::{
-        Presence::{self, *},
-        DIRTY, FRESH,
-    },
-    utxo_entry::UtxoEntry,
+    tests::test_helper::Presence::{self, *},
+    utxo_entry::{UtxoEntry, DIRTY, FRESH},
     ConsumedUtxoCache,
     Error::{self, *},
     FlushableUtxoView, Utxo, UtxoSource, UtxosCache, UtxosView,
@@ -147,20 +144,17 @@ fn check_write_utxo(
 
     // inserts utxo in the map
     if let Some(child_flags) = child_flags {
-        let is_fresh = (child_flags & FRESH) == FRESH;
-        let is_dirty = (child_flags & DIRTY) == DIRTY;
-
         match child_presence {
             Absent => {
                 panic!("Please use `Present` or `Spent` presence when child flags are specified.");
             }
             Present => {
                 let (utxo, _) = test_helper::create_utxo(rng, 0);
-                let entry = UtxoEntry::new(Some(utxo), is_fresh, is_dirty);
+                let entry = UtxoEntry::new(Some(utxo), child_flags);
                 single_entry_map.insert(key.clone(), entry);
             }
             Spent => {
-                let entry = UtxoEntry::new(None, is_fresh, is_dirty);
+                let entry = UtxoEntry::new(None, child_flags);
                 single_entry_map.insert(key.clone(), entry);
             }
         }

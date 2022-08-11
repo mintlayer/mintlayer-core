@@ -13,7 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{utxo_entry::UtxoEntry, Utxo, UtxosCache};
+use crate::{
+    utxo_entry::{UtxoEntry, DIRTY, FRESH},
+    Utxo, UtxosCache,
+};
 use common::{
     chain::{
         signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
@@ -26,9 +29,6 @@ use crypto::{
     random::{seq, Rng},
 };
 use itertools::Itertools;
-
-pub const FRESH: u8 = 1;
-pub const DIRTY: u8 = 2;
 
 #[derive(Clone, Eq, PartialEq)]
 pub enum Presence {
@@ -143,12 +143,9 @@ pub fn insert_single_entry(
         }
         other => {
             let flags = cache_flags.expect("please provide flags.");
-            let is_dirty = (flags & DIRTY) == DIRTY;
-            let is_fresh = (flags & FRESH) == FRESH;
-
             let entry = match other {
-                Presence::Present => UtxoEntry::new(Some(utxo.clone()), is_fresh, is_dirty),
-                Presence::Spent => UtxoEntry::new(None, is_fresh, is_dirty),
+                Presence::Present => UtxoEntry::new(Some(utxo.clone()), flags),
+                Presence::Spent => UtxoEntry::new(None, flags),
                 _ => {
                     panic!("something wrong in the code.")
                 }

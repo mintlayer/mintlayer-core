@@ -17,6 +17,12 @@ use crate::Utxo;
 use serialization::{Decode, Encode};
 use std::fmt::Debug;
 
+/// The utxo entry is dirty when this version is different from the parent.
+pub const DIRTY: u8 = 0b01;
+/// The utxo entry is fresh when the parent does not have this utxo or
+/// if it exists in parent but not in current cache.
+pub const FRESH: u8 = 0b10;
+
 /// Tells the state of the utxo
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
@@ -29,31 +35,26 @@ pub enum UtxoStatus {
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct UtxoEntry {
     status: UtxoStatus,
-    /// The utxo entry is dirty when this version is different from the parent.
-    is_dirty: bool,
-    /// The utxo entry is fresh when the parent does not have this utxo or
-    /// if it exists in parent but not in current cache.
-    is_fresh: bool,
+    flags: u8,
 }
 
 impl UtxoEntry {
-    pub fn new(utxo: Option<Utxo>, is_fresh: bool, is_dirty: bool) -> UtxoEntry {
+    pub fn new(utxo: Option<Utxo>, flags: u8) -> UtxoEntry {
         UtxoEntry {
             status: match utxo {
                 Some(utxo) => UtxoStatus::Entry(utxo),
                 None => UtxoStatus::Spent,
             },
-            is_dirty,
-            is_fresh,
+            flags,
         }
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.is_dirty
+        self.flags & DIRTY != 0
     }
 
     pub fn is_fresh(&self) -> bool {
-        self.is_fresh
+        self.flags & FRESH != 0
     }
 
     pub fn is_spent(&self) -> bool {
