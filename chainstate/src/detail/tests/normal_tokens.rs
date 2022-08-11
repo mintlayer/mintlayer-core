@@ -805,7 +805,4 @@ fn test_attempt_to_mix_input_tokens() {
     ));
 }
 
-#[allow(dead_code)]
-fn test_attempt_to_overflow_outputs() {}
-
 //TODO: Due to much change in Test Framework, this file should be updated according to new features like TxBuilder

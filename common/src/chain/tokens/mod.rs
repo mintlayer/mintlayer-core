@@ -17,10 +17,13 @@ use serialization::{Decode, Encode};
 
 pub type TokenId = H256;
 pub type NftDataHash = Vec<u8>;
+use crate::primitives::{Amount, H256};
 
-use crate::primitives::{id::hash_encoded, Amount, H256};
+mod rpc;
+mod utils;
 
-use super::Transaction;
+pub use rpc::*;
+pub use utils::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub enum OutputValue {
@@ -60,33 +63,4 @@ pub enum TokenData {
     //     data_hash: NftDataHash,
     //     metadata_uri: Vec<u8>,
     // },
-}
-
-pub fn token_id(tx: &Transaction) -> Option<TokenId> {
-    Some(hash_encoded(tx.inputs().get(0)?))
-}
-
-pub fn get_tokens_issuance_count(tx: &Transaction) -> usize {
-    tx.outputs()
-        .iter()
-        .filter_map(|output| match output.value() {
-            OutputValue::Coin(_) => None,
-            OutputValue::Token(asset) => Some(asset),
-        })
-        .fold(0, |accum, asset| match asset {
-            TokenData::TokenTransferV1 {
-                token_id: _,
-                amount: _,
-            } => accum,
-            TokenData::TokenIssuanceV1 {
-                token_ticker: _,
-                amount_to_issue: _,
-                number_of_decimals: _,
-                metadata_uri: _,
-            } => accum + 1,
-            TokenData::TokenBurnV1 {
-                token_id: _,
-                amount_to_burn: _,
-            } => accum,
-        })
 }

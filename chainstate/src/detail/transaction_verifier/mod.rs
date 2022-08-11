@@ -301,7 +301,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         inputs: &[TxInput],
     ) -> Result<TokensMap, ConnectTransactionError> {
         let mut total_tokens: TokensMap = BTreeMap::new();
-        for (_input_idx, input) in inputs.iter().enumerate() {
+        for input in inputs.iter() {
             let outpoint = input.outpoint();
             let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;
@@ -336,11 +336,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                                     .ok_or(ConnectTransactionError::InputAdditionError)?,
                             );
                         }
-                        None => continue,
+                        None => {}
                     }
                 }
                 common::chain::SpendablePosition::BlockReward(_block_id) => {
-                    continue;
+                    {};
                 }
             }
         }
@@ -369,7 +369,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         inputs: &[TxInput],
     ) -> Result<Amount, ConnectTransactionError> {
         let mut total = Amount::from_atoms(0);
-        for (_input_idx, input) in inputs.iter().enumerate() {
+        for input in inputs.iter() {
             let outpoint = input.outpoint();
             let tx_index = self.get_tx_index_from_cache(outpoint)?;
             let output_index = outpoint.output_index() as usize;

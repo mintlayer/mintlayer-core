@@ -17,7 +17,7 @@
 
 use crate::{Block, BlockSource, ChainstateError, GenBlock};
 use common::{
-    chain::tokens::TokenId,
+    chain::tokens::{RPCTokenInfoV1, TokenId},
     primitives::{BlockHeight, Id},
 };
 use serialization::Decode;
@@ -50,10 +50,7 @@ trait ChainstateRpc {
 
     /// Get token information
     #[method(name = "token_info")]
-    async fn token_info(
-        &self,
-        token_id: TokenId,
-    ) -> rpc::Result<Option<Id<common::chain::Transaction>>>;
+    async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfoV1>>;
 }
 
 #[async_trait::async_trait]
@@ -85,10 +82,7 @@ impl ChainstateRpcServer for super::ChainstateHandle {
         handle_error(self.call(move |this| this.get_best_block_height()).await)
     }
 
-    async fn token_info(
-        &self,
-        token_id: TokenId,
-    ) -> rpc::Result<Option<Id<common::chain::Transaction>>> {
+    async fn token_info(&self, token_id: TokenId) -> rpc::Result<Option<RPCTokenInfoV1>> {
         handle_error(self.call(move |this| this.token_info(token_id)).await)
     }
 }

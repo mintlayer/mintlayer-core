@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use common::{
-    chain::{Block, GenBlock, Transaction},
+    chain::{tokens::TokenId, Block, GenBlock, Transaction},
     primitives::{BlockHeight, Id},
 };
 use thiserror::Error;
@@ -118,6 +118,8 @@ pub enum TokensError {
     NoTxInMainChainByOutpoint,
     #[error("Block reward output can't be used in tokens transaction")]
     BlockRewardOutputCantBeUsedInTokenTx,
+    #[error("Tokens with ID: `{0}` are not registered")]
+    TokensNotRegistered(TokenId),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -144,6 +146,8 @@ pub enum PropertyQueryError {
     BestBlockIndexNotFound,
     #[error("Block not found {0}")]
     BlockNotFound(Id<Block>),
+    #[error("Tokens error: {0}")]
+    TokensError(TokensError),
     #[error("Previous block index not found {0}")]
     PrevBlockIndexNotFound(Id<GenBlock>),
     #[error("Block for height {0} not found")]

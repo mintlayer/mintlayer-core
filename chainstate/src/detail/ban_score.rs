@@ -137,6 +137,7 @@ impl BanScore for TokensError {
             TokensError::NoTxInMainChainByOutpoint => 100,
             TokensError::BlockRewardOutputCantBeUsedInTokenTx => 100,
             TokensError::TransferZeroTokens(_, _) => 100,
+            TokensError::TokensNotRegistered(_) => 100,
         }
     }
 }

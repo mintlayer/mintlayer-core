@@ -88,7 +88,7 @@ fn create_utxo_data(
                     amount_to_issue: _,
                     number_of_decimals: _,
                     metadata_uri: _,
-                } => todo!("Add token_id info"),
+                } => todo!("Add token_id here and use bellow code"),
                 // TxOutput::new(
                 //     OutputValue::Asset(AssetData::TokenTransferV1 {
                 //         token_id: match outsrc {

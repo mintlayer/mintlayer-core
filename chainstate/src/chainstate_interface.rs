@@ -21,7 +21,7 @@ use std::sync::Arc;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
-        tokens::TokenId,
+        tokens::{RPCTokenInfoV1, TokenId},
     },
     primitives::{BlockHeight, Id},
 };
@@ -66,8 +66,5 @@ pub trait ChainstateInterface: Send {
     ) -> Result<Vec<BlockHeader>, ChainstateError>;
 
     /// Returns token info by token_id
-    fn token_info(
-        &self,
-        token_id: TokenId,
-    ) -> Result<Option<Id<common::chain::Transaction>>, ChainstateError>;
+    fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfoV1>, ChainstateError>;
 }

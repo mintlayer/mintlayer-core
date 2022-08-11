@@ -17,7 +17,7 @@ use chainstate_storage::BlockchainStorage;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
-        tokens::TokenId,
+        tokens::{RPCTokenInfoV1, TokenId},
     },
     primitives::{BlockHeight, Id},
 };
@@ -121,12 +121,9 @@ impl<S: BlockchainStorage> ChainstateInterface for ChainstateInterfaceImpl<S> {
         Ok(best_block_index.block_height())
     }
 
-    fn token_info(
-        &self,
-        token_id: TokenId,
-    ) -> Result<Option<Id<common::chain::Transaction>>, ChainstateError> {
+    fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfoV1>, ChainstateError> {
         self.chainstate
-            .get_token_tx(token_id)
+            .token_info(token_id)
             .map_err(ChainstateError::FailedToReadProperty)
     }
 }

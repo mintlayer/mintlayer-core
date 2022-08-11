@@ -39,7 +39,19 @@ pub type IntType = u128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
+#[derive(
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Encode,
+    Decode,
+    serde::Serialize,
+    serde::Deserialize,
+)]
 pub struct Amount {
     #[codec(compact)]
     val: IntType,

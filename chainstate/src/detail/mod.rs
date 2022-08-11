@@ -17,9 +17,9 @@ use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, Chainstat
 use chainstate_storage::{BlockchainStorage, Transactional};
 use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
-use common::chain::tokens::TokenId;
-use common::chain::Transaction;
+use common::chain::tokens::{OutputValue, RPCTokenInfoV1, TokenData, TokenId};
 use common::chain::{block::BlockHeader, Block, GenBlock};
+use common::chain::{OutPointSourceId, SpendablePosition, Transaction};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
@@ -332,13 +332,6 @@ impl<S: BlockchainStorage> Chainstate<S> {
         self.make_db_tx_ro().get_best_block_index()
     }
 
-    pub fn get_token_tx(
-        &self,
-        token_id: TokenId,
-    ) -> Result<Option<Id<Transaction>>, PropertyQueryError> {
-        self.make_db_tx_ro().get_token_tx(token_id)
-    }
-
     fn locator_tip_distances() -> impl Iterator<Item = BlockDistance> {
         itertools::iterate(0, |&i| std::cmp::max(1, i * 2)).map(BlockDistance::new)
     }
@@ -418,6 +411,90 @@ impl<S: BlockchainStorage> Chainstate<S> {
             .collect::<Vec<_>>();
 
         Ok(res)
+    }
+
+    pub fn get_token_detail(
+        &self,
+        token_id: TokenId,
+    ) -> Result<(Id<Block>, Transaction), PropertyQueryError> {
+        let chainstate_ref = self.make_db_tx_ro();
+        
+        // Find issuance transaction id by token_id
+        let creation_tx_id = chainstate_ref
+            .get_token_tx(token_id)?
+            .ok_or(TokensError::TokensNotRegistered(token_id))
+            .map_err(PropertyQueryError::TokensError)?;
+        let tx_index = chainstate_ref
+            .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx_id))?
+            .ok_or(TokensError::TokensNotRegistered(token_id))
+            .map_err(PropertyQueryError::TokensError)?;
+
+        // Find a block where the transaction was issued
+        let creation_block_id = match tx_index.position() {
+            SpendablePosition::Transaction(tx) => tx.block_id(),
+            SpendablePosition::BlockReward(_) => {
+                return Err(PropertyQueryError::TokensError(
+                    TokensError::BlockRewardOutputCantBeUsedInTokenTx,
+                ))
+            }
+        };
+        let block = chainstate_ref
+            .get_block(*creation_block_id)?
+            .ok_or(PropertyQueryError::BlockNotFound(*creation_block_id))?;
+
+        // Find the transaction
+        Ok((
+            *creation_block_id,
+            block
+                .transactions()
+                .iter()
+                .find(|&tx| tx.get_id() == creation_tx_id)
+                .cloned()
+                .ok_or(PropertyQueryError::TokensError(
+                    TokensError::NoTxInMainChainByOutpoint,
+                ))?,
+        ))
+    }
+
+    pub fn token_info(
+        &self,
+        token_id: TokenId,
+    ) -> Result<Option<RPCTokenInfoV1>, PropertyQueryError> {
+        let (block_id, tx) = self.get_token_detail(token_id)?;
+
+        Ok(tx
+            .outputs()
+            .iter()
+            // Filter tokens
+            .filter_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token_data) => Some(token_data),
+            })
+            // Find issuance data and return RPCTokenInfoV1
+            .find_map(|token_data| match token_data {
+                TokenData::TokenIssuanceV1 {
+                    token_ticker,
+                    amount_to_issue,
+                    number_of_decimals,
+                    metadata_uri,
+                } => Some(RPCTokenInfoV1::new(
+                    token_id,
+                    tx.get_id(),
+                    block_id,
+                    token_ticker.clone(),
+                    *amount_to_issue,
+                    *number_of_decimals,
+                    metadata_uri.clone(),
+                )),
+                TokenData::TokenTransferV1 {
+                    token_id: _,
+                    amount: _,
+                }
+                | TokenData::TokenBurnV1 {
+                    token_id: _,
+                    amount_to_burn: _,
+                } => None,
+            }))
     }
 }
 
