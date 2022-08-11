@@ -418,7 +418,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
         token_id: TokenId,
     ) -> Result<(Id<Block>, Transaction), PropertyQueryError> {
         let chainstate_ref = self.make_db_tx_ro();
-        
+
         // Find issuance transaction id by token_id
         let creation_tx_id = chainstate_ref
             .get_token_tx(token_id)?

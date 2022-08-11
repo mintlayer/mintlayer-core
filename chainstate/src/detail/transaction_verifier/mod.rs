@@ -758,6 +758,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     tx.get_id(),
                     block.get_id(),
                 )?;
+                self.register_new_token()?;
             }
             TokenData::TokenBurnV1 {
                 token_id,
