@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod in_memory;
 mod rw_impls;
 mod view_impls;
 
@@ -101,6 +100,9 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
             .expect("Writing genesis utxos failed");
     }
 }
+
+#[cfg(test)]
+mod in_memory;
 
 #[cfg(test)]
 mod test;

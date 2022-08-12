@@ -30,7 +30,6 @@ pub struct UtxosDBInMemoryImpl {
 }
 
 impl UtxosDBInMemoryImpl {
-    #[allow(dead_code)]
     pub fn new(best_block: Id<GenBlock>, _initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
         Self {
             store: BTreeMap::new(),
@@ -39,8 +38,7 @@ impl UtxosDBInMemoryImpl {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
+    pub fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
         &self.store
     }
 }

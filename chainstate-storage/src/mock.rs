@@ -21,8 +21,7 @@ use common::chain::transaction::{
 };
 use common::chain::{Block, GenBlock, OutPoint};
 use common::primitives::{BlockHeight, Id};
-use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
-use utxo::{BlockUndo, Utxo};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 mockall::mock! {
     /// A mock object for blockchain storage

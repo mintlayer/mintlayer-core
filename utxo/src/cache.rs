@@ -37,19 +37,18 @@ pub struct ConsumedUtxoCache {
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
     current_block_hash: Id<GenBlock>,
+    // pub(crate) visibility is required for tests that are in a different mod
     pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
-    #[allow(dead_code)]
-    memory_usage: usize,
+    // TODO: calculate memory usage (mintlayer/mintlayer-core#354)
 }
 
 impl<'a> UtxosCache<'a> {
     #[cfg(test)]
-    pub(crate) fn new_for_test(best_block: Id<GenBlock>) -> Self {
+    pub fn new_for_test(best_block: Id<GenBlock>) -> Self {
         Self {
             parent: None,
             current_block_hash: best_block,
             utxos: Default::default(),
-            memory_usage: 0,
         }
     }
 
@@ -75,7 +74,6 @@ impl<'a> UtxosCache<'a> {
             parent: Some(parent),
             current_block_hash: parent.best_block_hash(),
             utxos: BTreeMap::new(),
-            memory_usage: 0,
         }
     }
 
@@ -130,9 +128,6 @@ impl<'a> UtxosCache<'a> {
                 !possible_overwrite
             }
             Some(curr_entry) => {
-                // TODO: update the memory usage
-                // self.memory_usage should be deducted based on this current entry.
-
                 if !possible_overwrite {
                     if !curr_entry.is_spent() {
                         // Attempted to overwrite an existing utxo
@@ -161,9 +156,6 @@ impl<'a> UtxosCache<'a> {
         let fresh_flag = if is_fresh { FRESH } else { 0 };
         let new_entry = UtxoEntry::new(Some(utxo), fresh_flag | DIRTY);
 
-        // TODO: update the memory usage
-        // self.memory_usage should be added based on this new entry.
-
         self.utxos.insert(outpoint.clone(), new_entry);
 
         Ok(())
@@ -173,8 +165,6 @@ impl<'a> UtxosCache<'a> {
     /// Returns the Utxo if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
         let entry = self.get_utxo_entry(outpoint).ok_or(Error::NoUtxoFound)?;
-        // TODO: update the memory usage
-        // self.memory_usage must be deducted from this entry's size
 
         // check whether this entry is fresh
         if entry.is_fresh() {
