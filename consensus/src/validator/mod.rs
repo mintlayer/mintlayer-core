@@ -14,10 +14,12 @@
 // limitations under the License.
 
 pub use self::{
-    block_index_handle::BlockIndexHandle, transaction_index_handle::TransactionIndexHandle,
+    block_index_handle::BlockIndexHandle, error::ExtraConsensusDataError,
+    transaction_index_handle::TransactionIndexHandle,
 };
 
 mod block_index_handle;
+mod error;
 mod transaction_index_handle;
 
 use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, ConsensusExtraData};
@@ -72,15 +74,15 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
     header: &BlockHeader,
     block_index_handle: &H,
     tx_index_retriever: &T,
-) -> Result<ConsensusExtraData, ConsensusVerificationError> {
+) -> Result<ConsensusExtraData, ExtraConsensusDataError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
         ConsensusData::PoS(pos_data) => {
             let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
             let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
-                .map_err(|e| {
-                    ConsensusVerificationError::PoSKernelOutputRetrievalFailed(header.get_id(), e)
+                .map_err(|_| {
+                    ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id())
                 })?;
             let current_randomness = PoSRandomness::from_new_block(
                 chain_config,

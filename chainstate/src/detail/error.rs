@@ -15,12 +15,12 @@
 
 use thiserror::Error;
 
-use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, GenBlock, Transaction},
     primitives::Id,
 };
-use consensus::ConsensusVerificationError;
+use consensus::{ConsensusVerificationError, ExtraConsensusDataError};
 
 use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectTransactionError};
 
@@ -48,10 +48,8 @@ pub enum BlockError {
     DatabaseCommitError(Id<Block>, usize, chainstate_storage::Error),
     #[error("Block proof calculation error for block: {0}")]
     BlockProofCalculationError(Id<Block>),
-    #[error("Kernel output was not found in block: {0}")]
-    PoSKernelOutputRetrievalFailed(Id<Block>),
-    #[error("Randomness calculation failed for block: {0}")]
-    PoSRandomnessCalculationFailed(#[from] PoSRandomnessError),
+    #[error("Failed to compute consensus extra data: {0}")]
+    ConsensusExtraDataError(#[from] ExtraConsensusDataError),
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

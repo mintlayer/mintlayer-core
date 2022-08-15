@@ -15,7 +15,7 @@
 
 use thiserror::Error;
 
-use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, GenBlock},
     primitives::Id,
@@ -40,8 +40,4 @@ pub enum ConsensusVerificationError {
     PoSError(#[from] ConsensusPoSError),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
-    #[error("Kernel output was not found in block: {0}")]
-    PoSKernelOutputRetrievalFailed(Id<Block>, ConsensusPoSError),
-    #[error("Randomness calculation failed: {0}")]
-    PoSRandomnessCalculationFailed(#[from] PoSRandomnessError),
 }

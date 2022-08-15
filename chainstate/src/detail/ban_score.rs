@@ -14,7 +14,9 @@
 // limitations under the License.
 
 use chainstate_types::pos_randomness::PoSRandomnessError;
-use consensus::{ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError};
+use consensus::{
+    ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError, ExtraConsensusDataError,
+};
 
 use super::{
     transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,
@@ -44,8 +46,7 @@ impl BanScore for BlockError {
             BlockError::BlockAlreadyExists(_) => 0,
             BlockError::DatabaseCommitError(_, _, _) => 0,
             BlockError::BlockProofCalculationError(_) => 100,
-            BlockError::PoSKernelOutputRetrievalFailed(_) => 100,
-            BlockError::PoSRandomnessCalculationFailed(err) => err.ban_score(),
+            BlockError::ConsensusExtraDataError(e) => e.ban_score(),
         }
     }
 }
@@ -206,6 +207,15 @@ impl BanScore for PoSRandomnessError {
         match self {
             PoSRandomnessError::InvalidOutputPurposeInStakeKernel(_) => 100,
             PoSRandomnessError::VRFDataVerificationFailed(_) => 100,
+        }
+    }
+}
+
+impl BanScore for ExtraConsensusDataError {
+    fn ban_score(&self) -> u32 {
+        match self {
+            ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(_) => 100,
+            ExtraConsensusDataError::PoSRandomnessCalculationFailed(e) => e.ban_score(),
         }
     }
 }
