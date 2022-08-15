@@ -1,4 +1,4 @@
-// Copyright (c) 2022 RBB S.r.l
+// Copyright (c) 2021 RBB S.r.l
 // opensource@mintlayer.org
 // SPDX-License-Identifier: MIT
 // Licensed under the MIT License;
@@ -13,15 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod storage_result;
+//! A consensus related logic.
+
+pub mod pow;
 
 pub use crate::{
-    block_index::BlockIndex, error::PropertyQueryError, gen_block_index::GenBlockIndex,
-    height_skip::get_skip_height, locator::Locator,
+    error::ConsensusVerificationError,
+    pow::ConsensusPoWError,
+    validator::{validate_consensus, BlockIndexHandle, TransactionIndexHandle},
 };
 
-mod block_index;
 mod error;
-mod gen_block_index;
-mod height_skip;
-mod locator;
+mod validator;

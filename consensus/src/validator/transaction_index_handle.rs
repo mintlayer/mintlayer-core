@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::PropertyQueryError;
 use common::chain::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition};
 
-use crate::detail::PropertyQueryError;
-
+/// The interface for getting transactions and transaction indexes.
 pub trait TransactionIndexHandle {
+    /// Returns a transaction index in the main chain by the given out point source identifier.
     fn get_mainchain_tx_index(
         &self,
         tx_id: &OutPointSourceId,
     ) -> Result<Option<TxMainChainIndex>, PropertyQueryError>;
 
+    /// Returns a transaction by its position in the main chain.
     fn get_mainchain_tx_by_position(
         &self,
         tx_index: &TxMainChainPosition,

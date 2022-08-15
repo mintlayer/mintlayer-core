@@ -13,14 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use thiserror::Error;
+
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::block::Block,
     primitives::{BlockHeight, Compact, Id},
 };
-use thiserror::Error;
 
-use crate::detail::PropertyQueryError;
-
+/// A proof of work consensus error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConsensusPoWError {
     #[error("Invalid Proof of Work for block {0}")]

@@ -13,9 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::{consensus_validator::BlockIndexHandle, GenBlockIndex};
 use common::{chain::GenBlock, primitives::Id};
+use consensus::BlockIndexHandle;
 use logging::log;
+
+use super::GenBlockIndex;
 
 /// An iterator that starts at some block starting from a given it, and at every `next()` member call will provide the previous block index,
 /// The last viable block index is of the genesis block

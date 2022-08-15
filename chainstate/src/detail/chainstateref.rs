@@ -15,12 +15,8 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use super::{
-    consensus_validator::TransactionIndexHandle, gen_block_index::GenBlockIndex,
-    median_time::calculate_median_time_past, time_getter::TimeGetterFn,
-};
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
-use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
+use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader},
@@ -29,17 +25,17 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
+use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
 use utils::ensure;
 
+use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use crate::{BlockError, BlockSource, ChainstateConfig};
 
 use super::{
-    consensus_validator::{self, BlockIndexHandle},
     orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
     transaction_verifier::{BlockTransactableRef, TransactionVerifier},
     BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
-    PropertyQueryError,
 };
 
 pub(crate) struct ChainstateRef<'a, S, O> {
@@ -486,7 +482,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)
+        consensus::validate_consensus(self.chain_config, block.header(), self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
         Ok(())
