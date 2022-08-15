@@ -87,6 +87,10 @@ impl BlockIndex {
         &self.skip
     }
 
+    pub fn block_reward_byte_size(&self) -> usize {
+        self.block_reward_byte_size as usize
+    }
+
     pub fn into_block_header(self) -> BlockHeader {
         self.block_header
     }
