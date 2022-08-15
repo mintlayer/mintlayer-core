@@ -341,7 +341,7 @@ fn test_utxo(#[case] seed: Seed) {
         {
             let (utxo, outpoint) = create_utxo(&mut rng, 1);
             let mut map = BTreeMap::new();
-            let entry = UtxoEntry::new(Some(utxo), IsFresh::Yes, IsDirty::No);
+            let entry = UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No);
             map.insert(outpoint.clone(), entry);
 
             let new_hash = Id::new(H256::random());

@@ -70,14 +70,27 @@ pub struct UtxoEntry {
 
 impl UtxoEntry {
     pub fn new(utxo: Option<Utxo>, is_fresh: IsFresh, is_dirty: IsDirty) -> UtxoEntry {
-        UtxoEntry {
+        let entry = UtxoEntry {
             status: match utxo {
                 Some(utxo) => UtxoStatus::Entry(utxo),
                 None => UtxoStatus::Spent,
             },
             is_fresh,
             is_dirty,
+        };
+
+        // Out of these 2^3 = 8 states, only some combinations are valid:
+        // - unspent, FRESH, DIRTY (e.g. a new utxo created in the cache)
+        // - unspent, not FRESH, DIRTY (e.g. a utxo changed in the cache during a reorg)
+        // - unspent, not FRESH, not DIRTY (e.g. an unspent utxo fetched from the parent cache)
+        // - spent, FRESH, not DIRTY (e.g. a spent utxo fetched from the parent cache)
+        // - spent, not FRESH, DIRTY (e.g. a utxo is spent and spentness needs to be flushed to the parent)
+        match &entry.status {
+            UtxoStatus::Entry(_) => assert!(!entry.is_fresh() || entry.is_dirty()),
+            &UtxoStatus::Spent => assert!(entry.is_fresh() ^ entry.is_dirty()),
         }
+
+        entry
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -117,5 +130,48 @@ impl UtxoEntry {
             UtxoStatus::Spent => None,
             UtxoStatus::Entry(utxo) => Some(utxo),
         }
+    }
+}
+
+#[cfg(test)]
+mod unit_test {
+    use super::*;
+    use crate::UtxoSource;
+    use common::{
+        chain::{tokens::OutputValue, Destination, OutputPurpose, TxOutput},
+        primitives::Amount,
+    };
+    use rstest::rstest;
+
+    fn some_utxo() -> Option<Utxo> {
+        Some(Utxo::new(
+            TxOutput::new(
+                OutputValue::Coin(Amount::from_atoms(1)),
+                OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+            ),
+            false,
+            UtxoSource::Mempool,
+        ))
+    }
+
+    #[rustfmt::skip]
+    #[rstest]
+    #[case(some_utxo(), IsFresh::Yes, IsDirty::Yes)]
+    #[case(some_utxo(), IsFresh::No,  IsDirty::Yes)]
+    #[case(some_utxo(), IsFresh::No,  IsDirty::No)]
+    #[case(None,        IsFresh::Yes, IsDirty::No)]
+    #[case(None,        IsFresh::No,  IsDirty::Yes)]
+    #[should_panic]
+    #[case(None,        IsFresh::Yes, IsDirty::Yes)]
+    #[should_panic]
+    #[case(None,        IsFresh::No,  IsDirty::No)]
+    #[should_panic]
+    #[case(some_utxo(), IsFresh::Yes, IsDirty::No)]
+    fn create_utxo_entry(
+        #[case] utxo: Option<Utxo>,
+        #[case] is_fresh: IsFresh,
+        #[case] is_dirty: IsDirty,
+    ) {
+        let _ = UtxoEntry::new(utxo, is_fresh, is_dirty);
     }
 }

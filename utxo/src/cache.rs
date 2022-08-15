@@ -345,7 +345,20 @@ mod unit_test {
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_uncache(#[case] seed: Seed) {
+    fn uncache_absent(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+        // when the outpoint does not exist.
+        let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
+        assert!(!cache.has_utxo_in_cache(&outp));
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut cache = UtxosCache::new_for_test(H256::random().into());
 
@@ -359,21 +372,14 @@ mod unit_test {
         );
         assert!(cache.uncache(&outp).is_ok());
         assert!(!cache.has_utxo_in_cache(&outp));
+    }
 
-        // when the outpoint does not exist.
-        let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
-        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
-        assert!(!cache.has_utxo_in_cache(&outp));
-
-        // when the entry is fresh, entry cannot be removed.
-        let (_, outp) = insert_single_entry(
-            &mut rng,
-            &mut cache,
-            Presence::Present,
-            Some((IsFresh::Yes, IsDirty::No)),
-            None,
-        );
-        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_dirty_not_fresh(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
@@ -384,13 +390,21 @@ mod unit_test {
             None,
         );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_fresh_and_dirty(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is both fresh and dirty, entry cannot be removed.
         let (_, outp) = insert_single_entry(
             &mut rng,
             &mut cache,
             Presence::Present,
-            Some((IsFresh::Yes, IsDirty::No)),
+            Some((IsFresh::Yes, IsDirty::Yes)),
             None,
         );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());

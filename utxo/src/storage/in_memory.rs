@@ -38,7 +38,8 @@ impl UtxosDBInMemoryImpl {
         }
     }
 
-    pub(super) fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
+    #[cfg(test)]
+    pub fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
         &self.store
     }
 }

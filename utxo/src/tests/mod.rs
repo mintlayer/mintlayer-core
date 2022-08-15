@@ -87,7 +87,8 @@ fn check_spend_utxo(
         rng,
         &mut parent,
         parent_presence,
-        Some((IsFresh::Yes, IsDirty::Yes)),
+        // parent flags are irrelevant, but this combination can be used for both spent/unspent
+        Some((IsFresh::No, IsDirty::Yes)),
         None,
     );
 
@@ -198,7 +199,8 @@ fn check_get_mut_utxo(
         rng,
         &mut parent,
         parent_presence,
-        Some((IsFresh::Yes, IsDirty::Yes)),
+        // parent flags are irrelevant, but this combination can be used for both spent/unspent
+        Some((IsFresh::No, IsDirty::Yes)),
         None,
     );
 
@@ -281,23 +283,14 @@ fn add_utxo_test(#[case] seed: Seed) {
     check_add_utxo(&mut rng, Absent,  None,                               false, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
     check_add_utxo(&mut rng, Absent,  None,                               true,  Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
 
-    check_add_utxo(&mut rng, Spent,   Some((IsFresh::No, IsDirty::No)),   false, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
-    check_add_utxo(&mut rng, Spent,   Some((IsFresh::No, IsDirty::No)),   true,  Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
-
     check_add_utxo(&mut rng, Spent,   Some((IsFresh::Yes, IsDirty::No)),  false, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
     check_add_utxo(&mut rng, Spent,   Some((IsFresh::Yes, IsDirty::No)),  true,  Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
 
     check_add_utxo(&mut rng, Spent,   Some((IsFresh::No, IsDirty::Yes)),  false, Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
     check_add_utxo(&mut rng, Spent,   Some((IsFresh::No, IsDirty::Yes)),  true,  Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
 
-    check_add_utxo(&mut rng, Spent,   Some((IsFresh::Yes, IsDirty::Yes)), false, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
-    check_add_utxo(&mut rng, Spent,   Some((IsFresh::Yes, IsDirty::Yes)), true,  Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
-
     check_add_utxo(&mut rng, Present, Some((IsFresh::No, IsDirty::No)),   false, None,                               Err(OverwritingUtxo));
     check_add_utxo(&mut rng, Present, Some((IsFresh::No, IsDirty::No)),   true,  Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
-
-    check_add_utxo(&mut rng, Present, Some((IsFresh::Yes, IsDirty::No)),  false, None,                               Err(OverwritingUtxo));
-    check_add_utxo(&mut rng, Present, Some((IsFresh::Yes, IsDirty::No)),  true,  Some((IsFresh::Yes, IsDirty::Yes)), Ok(()));
 
     check_add_utxo(&mut rng, Present, Some((IsFresh::No, IsDirty::Yes)),  false, None,                               Err(OverwritingUtxo));
     check_add_utxo(&mut rng, Present, Some((IsFresh::No, IsDirty::Yes)),  true,  Some((IsFresh::No, IsDirty::Yes)),  Ok(()));
@@ -317,32 +310,20 @@ fn spend_utxo_test(#[case] seed: Seed) {
                               PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
     check_spend_utxo(&mut rng, Absent,  Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::No)),   Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Spent,   Some((IsFresh::Yes, IsDirty::Yes)), Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::No)),  Ok(()),                       None);
     check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Absent,  Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
-    // this should fail, since there's nothing to remove.
     check_spend_utxo(&mut rng, Spent,   Absent,  None,                               Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Spent,   Some((IsFresh::No, IsDirty::No)),   Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    // this should fail, as there's nothing to remove.
     check_spend_utxo(&mut rng, Spent,   Absent,  Some((IsFresh::Yes, IsDirty::No)),  Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(&mut rng, Spent,   Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Spent,   Some((IsFresh::Yes, IsDirty::Yes)), Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::No)),  Ok(()),                       None);
     check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Spent,   Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
     check_spend_utxo(&mut rng, Present, Absent,  None,                               Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::No)),   Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::No)),  Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::No, IsDirty::Yes)),  Err(Error::UtxoAlreadySpent), Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Spent,   Some((IsFresh::Yes, IsDirty::Yes)), Err(Error::UtxoAlreadySpent), None);
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::No)),   Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
-    check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::No)),  Ok(()),                       None);
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Ok(()),                       Some((IsFresh::No, IsDirty::Yes)));
     check_spend_utxo(&mut rng, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Ok(()),                       None);
 }
@@ -359,45 +340,24 @@ fn batch_write_test(#[case] seed: Seed) {
     */
     check_write_utxo(&mut rng, Absent,  Absent,   Ok(Absent),                  None,                               None,                               None);
     check_write_utxo(&mut rng, Absent,  Spent ,   Ok(Spent),                   None,                               Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Absent,  Spent ,   Ok(Absent),                  None,                               Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Absent,  Present,  Ok(Present),                 None,                               Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Absent,  Present,  Ok(Present),                 None,                               Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Absent,   Ok(Spent),                   Some((IsFresh::No, IsDirty::No)),   None,                               Some((IsFresh::No, IsDirty::No)));
     check_write_utxo(&mut rng, Spent ,  Absent,   Ok(Spent),                   Some((IsFresh::Yes, IsDirty::No)),  None,                               Some((IsFresh::Yes, IsDirty::No)));
     check_write_utxo(&mut rng, Spent ,  Absent,   Ok(Spent),                   Some((IsFresh::No, IsDirty::Yes)),  None,                               Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Absent,   Ok(Spent),                   Some((IsFresh::Yes, IsDirty::Yes)), None,                               Some((IsFresh::Yes, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::No, IsDirty::Yes)),  None);
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)),  None);
-    check_write_utxo(&mut rng, Spent ,  Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)), None);
-    check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)));
     check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Spent ,  Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_write_utxo(&mut rng, Present, Absent,   Ok(Present),                 Some((IsFresh::No, IsDirty::No)),   None,                               Some((IsFresh::No, IsDirty::No)));
-    check_write_utxo(&mut rng, Present, Absent,   Ok(Present),                 Some((IsFresh::Yes, IsDirty::No)),  None,                               Some((IsFresh::Yes, IsDirty::No)));
     check_write_utxo(&mut rng, Present, Absent,   Ok(Present),                 Some((IsFresh::No, IsDirty::Yes)),  None,                               Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Present, Absent,   Ok(Present),                 Some((IsFresh::Yes, IsDirty::Yes)), None ,                              Some((IsFresh::Yes, IsDirty::Yes)));
     check_write_utxo(&mut rng, Present, Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Present, Spent ,   Err(FreshUtxoAlreadyExists), Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::Yes, IsDirty::Yes)), None);
-    check_write_utxo(&mut rng, Present, Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::No, IsDirty::Yes)),  None);
-    check_write_utxo(&mut rng, Present, Spent ,   Err(FreshUtxoAlreadyExists), Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Present, Spent ,   Ok(Spent),                   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Present, Spent ,   Err(FreshUtxoAlreadyExists), Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Present, Spent ,   Ok(Absent),                  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)),  None);
-    check_write_utxo(&mut rng, Present, Spent ,   Err(FreshUtxoAlreadyExists), Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Present, Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Present, Present,  Err(FreshUtxoAlreadyExists), Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::Yes, IsDirty::Yes)), None);
-    check_write_utxo(&mut rng, Present, Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)));
-    check_write_utxo(&mut rng, Present, Present,  Err(FreshUtxoAlreadyExists), Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Present, Present,  Ok(Present),                 Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_write_utxo(&mut rng, Present, Present,  Err(FreshUtxoAlreadyExists), Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)), None);
     check_write_utxo(&mut rng, Present, Present,  Ok(Present),                 Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::Yes, IsDirty::Yes)));
@@ -415,30 +375,21 @@ fn access_utxo_test(#[case] seed: Seed) {
                                PRESENCE   PRESENCE  PRESENCE   Flags                            RESULT Flags
     */
     check_get_mut_utxo(&mut rng, Absent,  Absent,  Absent,  None,                               None);
-    check_get_mut_utxo(&mut rng, Absent,  Spent ,  Spent ,  Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Absent,  Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Absent,  Spent ,  Spent ,  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_get_mut_utxo(&mut rng, Absent,  Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Absent,  Present, Present, Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
-    check_get_mut_utxo(&mut rng, Absent,  Present, Present, Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Absent,  Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Absent,  Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Spent ,  Absent,  Absent,  None,                               None);
-    check_get_mut_utxo(&mut rng, Spent ,  Spent ,  Spent ,  Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Spent ,  Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Spent ,  Spent ,  Spent ,  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_get_mut_utxo(&mut rng, Spent ,  Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Spent ,  Present, Present, Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
-    check_get_mut_utxo(&mut rng, Spent ,  Present, Present, Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Spent ,  Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Spent ,  Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Present, Absent,  Present, None,                               Some((IsFresh::No, IsDirty::No)));
-    check_get_mut_utxo(&mut rng, Present, Spent ,  Spent ,  Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Present, Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Present, Spent ,  Spent ,  Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
-    check_get_mut_utxo(&mut rng, Present, Spent ,  Spent ,  Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Present, Present, Present, Some((IsFresh::No, IsDirty::No)),   Some((IsFresh::No, IsDirty::No)));
-    check_get_mut_utxo(&mut rng, Present, Present, Present, Some((IsFresh::Yes, IsDirty::No)),  Some((IsFresh::Yes, IsDirty::No)));
     check_get_mut_utxo(&mut rng, Present, Present, Present, Some((IsFresh::No, IsDirty::Yes)),  Some((IsFresh::No, IsDirty::Yes)));
     check_get_mut_utxo(&mut rng, Present, Present, Present, Some((IsFresh::Yes, IsDirty::Yes)), Some((IsFresh::Yes, IsDirty::Yes)));
 }
