@@ -5,19 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach, A. Sinitsyn
-
-mod chainstate_interface_impl;
-mod config;
-mod detail;
 
 pub mod chainstate_interface;
 pub mod rpc;
@@ -27,15 +21,21 @@ pub use crate::{
     detail::{ban_score, BlockError, BlockSource, Locator},
 };
 
+mod chainstate_interface_impl;
+mod config;
+mod detail;
+
 use std::sync::Arc;
 
-use chainstate_interface::ChainstateInterface;
-use chainstate_interface_impl::ChainstateInterfaceImpl;
+use chainstate_types::PropertyQueryError;
 use common::{
     chain::{Block, ChainConfig, GenBlock},
     primitives::{BlockHeight, Id},
 };
-use detail::{time_getter::TimeGetter, Chainstate, PropertyQueryError};
+
+use chainstate_interface::ChainstateInterface;
+use chainstate_interface_impl::ChainstateInterfaceImpl;
+use detail::{time_getter::TimeGetter, Chainstate};
 
 #[derive(Debug, Clone)]
 pub enum ChainstateEvent {
@@ -56,10 +56,10 @@ impl subsystem::Subsystem for Box<dyn ChainstateInterface> {}
 
 type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface>>;
 
-pub fn make_chainstate(
+pub fn make_chainstate<S: chainstate_storage::BlockchainStorage + 'static>(
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
-    chainstate_storage: chainstate_storage::Store,
+    chainstate_storage: S,
     custom_orphan_error_hook: Option<Arc<detail::OrphanErrorHandler>>,
     time_getter: TimeGetter,
 ) -> Result<Box<dyn ChainstateInterface>, ChainstateError> {

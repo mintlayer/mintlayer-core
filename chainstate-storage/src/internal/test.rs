@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,6 +14,7 @@
 // limitations under the License.
 
 use super::*;
+use common::chain::tokens::OutputValue;
 use common::chain::{Destination, OutputPurpose, TxOutput};
 use common::primitives::{Amount, H256};
 use crypto::key::{KeyKind, PrivateKey};
@@ -22,7 +23,7 @@ use rstest::rstest;
 use test_utils::random::{make_seedable_rng, Seed};
 use utxo::{BlockUndo, TxUndo};
 
-type TestStore = Store<storage::inmemory::Store<Schema>>;
+type TestStore = crate::inmemory::Store;
 
 #[test]
 fn test_storage_get_default_version_in_tx() {
@@ -40,7 +41,7 @@ fn test_storage_get_default_version_in_tx() {
 fn test_storage_manipulation() {
     use common::{
         chain::{
-            block::{timestamp::BlockTimestamp, ConsensusData},
+            block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
             SpendablePosition,
         },
         primitives::H256,
@@ -54,6 +55,7 @@ fn test_storage_manipulation() {
         Id::new(H256::default()),
         BlockTimestamp::from_int_seconds(12),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
     let block1 = Block::new(
@@ -61,6 +63,7 @@ fn test_storage_manipulation() {
         Id::new(block0.get_id().get()),
         BlockTimestamp::from_int_seconds(34),
         ConsensusData::None,
+        BlockReward::new(Vec::new()),
     )
     .unwrap();
 
@@ -257,7 +260,7 @@ fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
     let random_value = rng.gen_range(0..(u128::MAX - 1));
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
-        Amount::from_atoms(random_value),
+        OutputValue::Coin(Amount::from_atoms(random_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     );
     let is_block_reward = random_value % 3 == 0;

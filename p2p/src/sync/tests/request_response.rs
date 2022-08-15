@@ -5,15 +5,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use super::*;
 use crate::message::*;
 use p2p_test_utils::make_libp2p_addr;
@@ -30,10 +29,10 @@ async fn test_request_response() {
     // connect the two managers together so that they can exchange messages
     connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
-    mgr1.handle
+    mgr1.peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -42,17 +41,17 @@ async fn test_request_response() {
         peer_id: _,
         request_id,
         request,
-    }) = mgr2.handle.poll_next().await
+    }) = mgr2.peer_sync_handle.poll_next().await
     {
         assert_eq!(
             request,
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![])))
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![])))
         );
 
-        mgr2.handle
+        mgr2.peer_sync_handle
             .send_response(
                 request_id,
-                Response::HeaderResponse(HeaderResponse::new(vec![])),
+                Response::HeaderListResponse(HeaderListResponse::new(vec![])),
             )
             .await
             .unwrap();
@@ -73,20 +72,20 @@ async fn test_multiple_requests_and_responses() {
     let mut request_ids = HashSet::new();
 
     let id = mgr1
-        .handle
+        .peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
     request_ids.insert(id);
 
     let id = mgr1
-        .handle
+        .peer_sync_handle
         .send_request(
             *conn2.peer_id(),
-            Request::HeaderRequest(HeaderRequest::new(Locator::new(vec![]))),
+            Request::HeaderListRequest(HeaderListRequest::new(Locator::new(vec![]))),
         )
         .await
         .unwrap();
@@ -95,13 +94,13 @@ async fn test_multiple_requests_and_responses() {
     assert_eq!(request_ids.len(), 2);
 
     for i in 0..2 {
-        match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+        match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
                 Ok(net::types::SyncingEvent::Request { request_id, .. }) => {
-                    mgr2.handle
+                    mgr2.peer_sync_handle
                         .send_response(
                             request_id,
-                            Response::HeaderResponse(HeaderResponse::new(vec![])),
+                            Response::HeaderListResponse(HeaderListResponse::new(vec![])),
                         )
                         .await
                         .unwrap();
@@ -113,7 +112,7 @@ async fn test_multiple_requests_and_responses() {
     }
 
     for i in 0..2 {
-        match timeout(Duration::from_secs(15), mgr1.handle.poll_next()).await {
+        match timeout(Duration::from_secs(15), mgr1.peer_sync_handle.poll_next()).await {
             Ok(event) => match event {
                 Ok(net::types::SyncingEvent::Response { request_id, .. }) => {
                     request_ids.remove(&request_id);
@@ -143,7 +142,7 @@ async fn test_request_timeout_error() {
     tokio::spawn(async move {
         mgr1.register_peer(peer2_id).await.unwrap();
 
-        match mgr1.handle.poll_next().await.unwrap() {
+        match mgr1.peer_sync_handle.poll_next().await.unwrap() {
             net::types::SyncingEvent::Error {
                 peer_id,
                 request_id,
@@ -156,7 +155,7 @@ async fn test_request_timeout_error() {
         }
     });
 
-    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
         Ok(event) => match event {
             Ok(net::types::SyncingEvent::Request { .. }) => {}
             _ => panic!("invalid event: {:?}", event),
@@ -164,7 +163,7 @@ async fn test_request_timeout_error() {
         Err(_) => panic!("did not receive `Request` in time"),
     }
 
-    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
         Ok(event) => match event {
             Ok(net::types::SyncingEvent::Error { .. }) => {}
             _ => panic!("invalid event: {:?}", event),
@@ -172,7 +171,7 @@ async fn test_request_timeout_error() {
         Err(_) => panic!("did not receive `Error` in time"),
     }
 
-    match timeout(Duration::from_secs(15), mgr2.handle.poll_next()).await {
+    match timeout(Duration::from_secs(15), mgr2.peer_sync_handle.poll_next()).await {
         Ok(event) => match event {
             Ok(net::types::SyncingEvent::Request { .. }) => {}
             _ => panic!("invalid event: {:?}", event),
@@ -201,7 +200,7 @@ async fn request_timeout() {
         mgr1.register_peer(_peer2_id).await.unwrap();
 
         for _ in 0..4 {
-            match mgr1.handle.poll_next().await.unwrap() {
+            match mgr1.peer_sync_handle.poll_next().await.unwrap() {
                 net::types::SyncingEvent::Error {
                     peer_id,
                     request_id,
@@ -224,7 +223,7 @@ async fn request_timeout() {
 
     for _ in 0..8 {
         assert!(std::matches!(
-            mgr2.handle.poll_next().await,
+            mgr2.peer_sync_handle.poll_next().await,
             Ok(net::types::SyncingEvent::Request { .. } | net::types::SyncingEvent::Error { .. })
         ));
     }

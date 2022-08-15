@@ -6,34 +6,38 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 //! Libp2p backend service
 
 use crate::{
     error::{P2pError, PeerError},
-    net::libp2p::{
-        behaviour,
-        types::{self, ControlEvent, Libp2pBehaviourEvent},
+    net::{
+        self,
+        libp2p::{
+            behaviour,
+            types::{self, ControlEvent, Libp2pBehaviourEvent},
+        },
     },
 };
+use behaviour::sync_codec::message_types::{SyncRequest, SyncResponse};
 use futures::StreamExt;
 use libp2p::{
+    gossipsub::{IdentTopic, MessageAcceptance, MessageId},
+    request_response::RequestId,
     swarm::{Swarm, SwarmEvent},
-    Multiaddr,
+    Multiaddr, PeerId,
 };
 use logging::log;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 
-pub struct Backend {
+pub struct Libp2pBackend {
     /// Created libp2p swarm object
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
 
@@ -50,10 +54,11 @@ pub struct Backend {
     pub(super) sync_tx: mpsc::Sender<types::SyncingEvent>,
 
     /// Active listen address of the backend
+    // TODO: cache this inside `Libp2pConnectivityHandle`?
     listen_addr: Option<Multiaddr>,
 }
 
-impl Backend {
+impl Libp2pBackend {
     pub fn new(
         swarm: Swarm<behaviour::Libp2pBehaviour>,
         cmd_rx: mpsc::Receiver<types::Command>,
@@ -96,6 +101,7 @@ impl Backend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
+                        // TODO: `inspect_err`
                         match self.swarm.disconnect_peer_id(peer_id) {
                             Ok(_) => {}
                             Err(err) => {
@@ -115,131 +121,208 @@ impl Backend {
         }
     }
 
+    /// Start listening on the `address`
+    fn listen(
+        &mut self,
+        address: Multiaddr,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("listen on multiaddress {address}");
+
+        let res = self
+            .swarm
+            .listen_on(address)
+            .map(|_| ())
+            .map_err(|_| P2pError::Other("Failed to bind to address"));
+        response.send(res).map_err(|_| P2pError::ChannelClosed)
+    }
+
+    /// Dial remote peer `peer_id` at `address`
+    fn dial(
+        &mut self,
+        peer_id: PeerId,
+        address: Multiaddr,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("dial peer ({peer_id}) at address {address}");
+
+        match self.swarm.dial(address.clone()) {
+            Ok(_) => {
+                self.swarm.behaviour_mut().connmgr.dialing(peer_id, address);
+                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+            }
+            Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
+        }
+    }
+
+    /// Disconnect `peer_id`
+    fn disconnect(
+        &mut self,
+        peer_id: PeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("disconnect peer {peer_id}");
+
+        if !self.swarm.is_connected(&peer_id) {
+            return response
+                .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
+                .map_err(|_| P2pError::ChannelClosed);
+        }
+
+        match self.swarm.disconnect_peer_id(peer_id) {
+            Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+            Err(_) => response
+                .send(Err(P2pError::Other("`Swarm::disconnect_peer_id()` failed")))
+                .map_err(|_| P2pError::ChannelClosed),
+        }
+    }
+
+    /// Announce data on the network
+    fn announce_data(
+        &mut self,
+        topic: net::types::PubSubTopic,
+        message: Vec<u8>,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("publish message on gossipsub topic {topic:?}");
+
+        let res = self
+            .swarm
+            .behaviour_mut()
+            .gossipsub
+            .publish((&topic).into(), message)
+            .map(|_| ())
+            .map_err(|e| e.into());
+        response.send(res).map_err(|_| P2pError::ChannelClosed)
+    }
+
+    /// Report validation result to the GossipSub
+    fn report_validation_result(
+        &mut self,
+        message_id: MessageId,
+        source: PeerId,
+        result: MessageAcceptance,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("report gossipsub message validation result: {message_id} {source} {result:?}");
+
+        match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
+            &message_id,
+            &source,
+            result,
+        ) {
+            Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
+            Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
+        }
+    }
+
+    /// Send request to remote peer
+    fn send_request(
+        &mut self,
+        peer_id: &PeerId,
+        request: SyncRequest,
+        response: oneshot::Sender<crate::Result<RequestId>>,
+    ) -> crate::Result<()> {
+        log::trace!("send request to peer {peer_id}");
+
+        let request_id = self.swarm.behaviour_mut().sync.send_request(peer_id, request);
+        response.send(Ok(request_id)).map_err(|_| P2pError::ChannelClosed)
+    }
+
+    /// Send response to a received request
+    fn send_response(
+        &mut self,
+        request_id: RequestId,
+        response: SyncResponse,
+        channel: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("send response to request {request_id}");
+
+        match self.swarm.behaviour_mut().pending_reqs.remove(&request_id) {
+            None => {
+                log::error!("pending request {request_id} doesn't exist");
+                channel.send(Err(P2pError::ChannelClosed)).map_err(|_| P2pError::ChannelClosed)
+            }
+            Some(response_channel) => {
+                let res = self
+                    .swarm
+                    .behaviour_mut()
+                    .sync
+                    .send_response(response_channel, response)
+                    .map(|_| ())
+                    .map_err(|_| P2pError::Other("Channel closed or request timed out"));
+                channel.send(res).map_err(|_| P2pError::ChannelClosed)
+            }
+        }
+    }
+
+    /// Subscribe to GossipSub topics
+    fn subscribe(
+        &mut self,
+        topics: Vec<IdentTopic>,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("subscribe to gossipsub topics {topics:#?}");
+
+        for topic in topics {
+            if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
+                return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
+            }
+        }
+
+        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+    }
+
+    /// Ban peer
+    fn ban_peer(
+        &mut self,
+        peer_id: PeerId,
+        response: oneshot::Sender<crate::Result<()>>,
+    ) -> crate::Result<()> {
+        log::trace!("ban peer {peer_id}");
+
+        self.swarm.ban_peer_id(peer_id);
+        response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
+    }
+
     // TODO: design p2p global command system
     /// Handle command received from the libp2p front-end
     async fn on_command(&mut self, cmd: types::Command) -> crate::Result<()> {
-        log::debug!("handle incoming command {:?}", cmd);
+        log::trace!("handle incoming command {:?}", cmd);
 
         match cmd {
-            types::Command::Listen { addr, response } => {
-                let res = self
-                    .swarm
-                    .listen_on(addr)
-                    .map(|_| ())
-                    .map_err(|_| P2pError::Other("Failed to bind to address"));
-                response.send(res).map_err(|_| P2pError::ChannelClosed)
-            }
+            types::Command::Listen { addr, response } => self.listen(addr, response),
             types::Command::Connect {
                 peer_id,
                 peer_addr,
                 response,
-            } => match self.swarm.dial(peer_addr.clone()) {
-                Ok(_) => {
-                    self.swarm.behaviour_mut().connmgr.dialing(peer_id, peer_addr);
-                    response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-                }
-                Err(err) => response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed),
-            },
-            types::Command::Disconnect { peer_id, response } => {
-                log::debug!("disconnect peer {:?}", peer_id);
-
-                if !self.swarm.is_connected(&peer_id) {
-                    return response
-                        .send(Err(P2pError::PeerError(PeerError::PeerDoesntExist)))
-                        .map_err(|_| P2pError::ChannelClosed);
-                }
-
-                match self.swarm.disconnect_peer_id(peer_id) {
-                    Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
-                    Err(_) => response
-                        .send(Err(P2pError::Other("`Swarm::disconnect_peer_id()` failed")))
-                        .map_err(|_| P2pError::ChannelClosed),
-                }
-            }
-            types::Command::SendMessage {
+            } => self.dial(peer_id, peer_addr, response),
+            types::Command::Disconnect { peer_id, response } => self.disconnect(peer_id, response),
+            types::Command::AnnounceData {
                 topic,
                 message,
                 response,
-            } => {
-                log::trace!("publish message on gossipsub topic {:?}", topic);
-
-                let res = self
-                    .swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .publish((&topic).into(), message)
-                    .map(|_| ())
-                    .map_err(|e| e.into());
-                response.send(res).map_err(|_| P2pError::ChannelClosed)
-            }
+            } => self.announce_data(topic, message, response),
             types::Command::ReportValidationResult {
                 message_id,
                 source,
                 result,
                 response,
-            } => {
-                log::debug!(
-                    "report gossipsub message validation result: {:?} {:?} {:?}",
-                    message_id,
-                    source,
-                    result
-                );
-                match self.swarm.behaviour_mut().gossipsub.report_message_validation_result(
-                    &message_id,
-                    &source,
-                    result,
-                ) {
-                    Ok(_) => response.send(Ok(())).map_err(|_| P2pError::ChannelClosed),
-                    Err(e) => response.send(Err(e.into())).map_err(|_| P2pError::ChannelClosed),
-                }
-            }
+            } => self.report_validation_result(message_id, source, result, response),
             types::Command::SendRequest {
                 peer_id,
                 request,
                 response,
-            } => response
-                .send(Ok(self
-                    .swarm
-                    .behaviour_mut()
-                    .sync
-                    .send_request(&peer_id, *request)))
-                .map_err(|_| P2pError::ChannelClosed),
+            } => self.send_request(&peer_id, *request, response),
             types::Command::SendResponse {
                 request_id,
                 response,
                 channel,
-                // TODO: better API for requests/responses + extensibility
-            } => match self.swarm.behaviour_mut().pending_reqs.remove(&request_id) {
-                None => {
-                    log::error!("pending request ({:?}) doesn't exist", request_id);
-                    channel.send(Err(P2pError::ChannelClosed)).map_err(|_| P2pError::ChannelClosed)
-                }
-                Some(response_channel) => {
-                    let res = self
-                        .swarm
-                        .behaviour_mut()
-                        .sync
-                        .send_response(response_channel, *response)
-                        .map(|_| ())
-                        .map_err(|_| P2pError::Other("Channel closed or request timed out"));
-                    channel.send(res).map_err(|_| P2pError::ChannelClosed)
-                }
-            },
-            types::Command::Subscribe { topics, response } => {
-                for topic in topics {
-                    if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
-                        return response.send(Err(err.into())).map_err(|_| P2pError::ChannelClosed);
-                    }
-                }
-
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
-            }
+            } => self.send_response(request_id, *response, channel),
+            types::Command::Subscribe { topics, response } => self.subscribe(topics, response),
+            types::Command::BanPeer { peer_id, response } => self.ban_peer(peer_id, response),
             types::Command::ListenAddress { response } => {
                 response.send(self.listen_addr.clone()).map_err(|_| P2pError::ChannelClosed)
-            }
-            types::Command::BanPeer { peer_id, response } => {
-                self.swarm.ban_peer_id(peer_id);
-                response.send(Ok(())).map_err(|_| P2pError::ChannelClosed)
             }
         }
     }
@@ -248,9 +331,9 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::libp2p::{
-        behaviour, connectivity, discovery,
-        sync::{SyncingCodec, SyncingProtocol},
+    use crate::net::libp2p::behaviour::{
+        self, connection_manager, discovery,
+        sync_codec::{SyncMessagingCodec, SyncingProtocol},
     };
     use libp2p::{
         core::upgrade,
@@ -304,14 +387,14 @@ mod tests {
 
         let protocols = iter::once((SyncingProtocol(), ProtocolSupport::Full));
         let cfg = RequestResponseConfig::default();
-        let sync = RequestResponse::new(SyncingCodec(), protocols, cfg);
+        let sync = RequestResponse::new(SyncMessagingCodec(), protocols, cfg);
 
         let behaviour = behaviour::Libp2pBehaviour {
             ping: ping::Behaviour::new(ping::Config::new()),
             gossipsub,
             identify,
             sync,
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Default::default()).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -329,7 +412,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -356,7 +439,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
@@ -397,7 +480,7 @@ mod tests {
         let (gossip_tx, _) = mpsc::channel(64);
         let (conn_tx, _) = mpsc::channel(64);
         let (sync_tx, _) = mpsc::channel(64);
-        let mut backend = Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
+        let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         drop(cmd_tx);
         assert_eq!(backend.run().await, Err(P2pError::ChannelClosed));

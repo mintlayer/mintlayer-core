@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,11 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_index;
-pub mod epoch_data;
-pub mod height_skip;
-pub mod locator;
 pub mod pos_randomness;
-pub mod preconnect_data;
 pub mod storage_result;
-pub mod vrf_tools;
+
+pub use crate::{
+    block_index::BlockIndex,
+    epoch_data::EpochData,
+    error::PropertyQueryError,
+    gen_block_index::GenBlockIndex,
+    height_skip::get_skip_height,
+    locator::Locator,
+    preconnect_data::{BlockPreconnectData, ConsensusExtraData},
+};
+
+mod block_index;
+mod epoch_data;
+mod error;
+mod gen_block_index;
+mod height_skip;
+mod locator;
+mod preconnect_data;
+mod vrf_tools;

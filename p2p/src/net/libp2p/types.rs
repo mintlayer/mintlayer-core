@@ -6,20 +6,19 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use crate::{
     error, message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse},
+        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
     },
 };
 use libp2p::{
@@ -60,7 +59,6 @@ impl PartialEq for IdentifyInfoWrapper {
 
 impl Eq for IdentifyInfoWrapper {}
 
-// TODO: rename `response` -> `channel`
 #[derive(Debug)]
 pub enum Command {
     /// Start listening on the network interface specified by `addr`
@@ -82,9 +80,8 @@ pub enum Command {
         response: oneshot::Sender<crate::Result<()>>,
     },
 
-    // TODO: rethink this message
     /// Publish a message on the designated GossipSub topic
-    SendMessage {
+    AnnounceData {
         topic: net::types::PubSubTopic,
         message: Vec<u8>,
         response: oneshot::Sender<crate::Result<()>>,

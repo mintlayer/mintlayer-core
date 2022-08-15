@@ -5,69 +5,80 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach
 
-use crate::chain::transaction::Transaction;
-pub use crate::chain::GenBlock;
-
-use crate::primitives::merkle;
-use crate::primitives::merkle::MerkleTreeFormError;
-use crate::primitives::{Id, Idable, VersionTag, H256};
-mod block_v1;
-pub mod consensus_data;
-
-pub mod block_size;
-
-pub mod timestamp;
+pub use crate::chain::{
+    block::{
+        block_header::BlockHeader,
+        block_reward::{BlockReward, BlockRewardTransactable},
+        consensus_data::ConsensusData,
+    },
+    GenBlock,
+};
 
 pub mod block_header;
+pub mod block_size;
+pub mod consensus_data;
+pub mod timestamp;
 
-pub use block_header::BlockHeader;
-use block_v1::BlockV1;
-pub use consensus_data::ConsensusData;
+mod block_reward;
+mod block_v1;
+
+use std::iter;
+
 use serialization::{DirectDecode, DirectEncode};
 
-use self::block_size::BlockSize;
-use self::timestamp::BlockTimestamp;
+use crate::{
+    chain::{
+        block::{
+            block_size::BlockSize,
+            block_v1::{BlockBody, BlockV1},
+            timestamp::BlockTimestamp,
+        },
+        transaction::Transaction,
+    },
+    primitives::{
+        id,
+        merkle::{self, MerkleTreeFormError},
+        Id, Idable, VersionTag, H256,
+    },
+};
 
-pub fn calculate_tx_merkle_root(
-    transactions: &[Transaction],
-) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
+pub fn calculate_tx_merkle_root(body: &BlockBody) -> Result<H256, merkle::MerkleTreeFormError> {
     const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.get_id().get();
-    calculate_generic_merkle_root(&TX_HASHER, transactions)
+    calculate_generic_merkle_root(&TX_HASHER, body)
 }
 
 pub fn calculate_witness_merkle_root(
-    transactions: &[Transaction],
-) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
+    body: &BlockBody,
+) -> Result<H256, merkle::MerkleTreeFormError> {
     const TX_HASHER: fn(&Transaction) -> H256 = |tx: &Transaction| tx.serialized_hash().get();
-    calculate_generic_merkle_root(&TX_HASHER, transactions)
+    calculate_generic_merkle_root(&TX_HASHER, body)
 }
 
 fn calculate_generic_merkle_root(
     tx_hasher: &fn(&Transaction) -> H256,
-    transactions: &[Transaction],
-) -> Result<Option<H256>, merkle::MerkleTreeFormError> {
-    if transactions.is_empty() {
-        return Ok(None);
-    }
+    body: &BlockBody,
+) -> Result<H256, merkle::MerkleTreeFormError> {
+    let rewards_hash = id::hash_encoded(&body.reward);
 
-    if transactions.len() == 1 {
+    if body.transactions.is_empty() {
         // using bitcoin's way, blocks that only have the coinbase (or a single tx in general)
         // use their coinbase as the merkleroot
-        return Ok(Some(tx_hasher(&transactions[0])));
+        return Ok(rewards_hash);
     }
-    let hashes: Vec<H256> = transactions.iter().map(tx_hasher).collect();
+
+    let hashes: Vec<H256> = iter::once(rewards_hash)
+        .chain(body.transactions.iter().map(tx_hasher))
+        .collect();
     let t = merkle::merkletree_from_vec(&hashes)?;
-    Ok(Some(t.root()))
+    Ok(t.root())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,9 +104,14 @@ impl Block {
         prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
         consensus_data: ConsensusData,
+        reward: BlockReward,
     ) -> Result<Self, BlockCreationError> {
-        let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
+        let body = BlockBody {
+            reward,
+            transactions,
+        };
+        let tx_merkle_root = calculate_tx_merkle_root(&body)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&body)?;
 
         let header = BlockHeader {
             version: VersionTag::default(),
@@ -106,10 +122,7 @@ impl Block {
             witness_merkle_root,
         };
 
-        let block = Block::V1(BlockV1 {
-            header,
-            transactions,
-        });
+        let block = Block::V1(BlockV1 { header, body });
 
         Ok(block)
     }
@@ -120,8 +133,14 @@ impl Block {
         prev_block_hash: Id<GenBlock>,
         timestamp: BlockTimestamp,
     ) -> Result<Self, BlockCreationError> {
-        let tx_merkle_root = calculate_tx_merkle_root(&transactions)?;
-        let witness_merkle_root = calculate_witness_merkle_root(&transactions)?;
+        let reward = BlockReward::new(Vec::new());
+        let body = BlockBody {
+            reward,
+            transactions,
+        };
+
+        let tx_merkle_root = calculate_tx_merkle_root(&body)?;
+        let witness_merkle_root = calculate_witness_merkle_root(&body)?;
 
         let header = BlockHeader {
             version: VersionTag::default(),
@@ -132,10 +151,7 @@ impl Block {
             witness_merkle_root,
         };
 
-        let block = Block::V1(BlockV1 {
-            header,
-            transactions,
-        });
+        let block = Block::V1(BlockV1 { header, body });
 
         Ok(block)
     }
@@ -152,44 +168,63 @@ impl Block {
         }
     }
 
-    pub fn merkle_root(&self) -> Option<H256> {
-        match &self {
+    pub fn merkle_root(&self) -> H256 {
+        match self {
             Block::V1(blk) => blk.tx_merkle_root(),
         }
     }
 
-    pub fn witness_merkle_root(&self) -> Option<H256> {
-        match &self {
+    pub fn witness_merkle_root(&self) -> H256 {
+        match self {
             Block::V1(blk) => blk.witness_merkle_root(),
         }
     }
 
     pub fn header(&self) -> &BlockHeader {
-        match &self {
+        match self {
             Block::V1(blk) => blk.header(),
         }
     }
 
     pub fn timestamp(&self) -> BlockTimestamp {
-        match &self {
+        match self {
             Block::V1(blk) => blk.timestamp(),
         }
     }
 
     pub fn transactions(&self) -> &Vec<Transaction> {
-        match &self {
+        match self {
             Block::V1(blk) => blk.transactions(),
         }
     }
 
     pub fn prev_block_id(&self) -> Id<GenBlock> {
-        match &self {
+        match self {
             Block::V1(blk) => *blk.prev_block_id(),
         }
     }
 
     pub fn block_size(&self) -> BlockSize {
         BlockSize::new_from_block(self)
+    }
+
+    pub fn body(&self) -> &BlockBody {
+        match self {
+            Block::V1(b) => b.body(),
+        }
+    }
+
+    /// Returns a reward for this block.
+    pub fn block_reward(&self) -> &BlockReward {
+        match self {
+            Block::V1(b) => b.block_reward(),
+        }
+    }
+
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+        match self {
+            Block::V1(b) => b.block_reward_transactable(),
+        }
     }
 }
 
@@ -204,8 +239,12 @@ impl Idable for Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::chain::{
-        signature::inputsig::InputWitness, transaction::Transaction, OutPointSourceId, TxInput,
+    use crate::{
+        chain::{
+            signature::inputsig::InputWitness, tokens::OutputValue, transaction::Transaction,
+            Destination, OutPointSourceId, OutputPurpose, TxInput, TxOutput,
+        },
+        primitives::{id, Amount},
     };
 
     use super::*;
@@ -231,18 +270,73 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let block = Block::V1(BlockV1 {
-            header,
+        let body = BlockBody {
+            reward: BlockReward::new(Vec::new()),
             transactions: Vec::new(),
-        });
-        let _res = calculate_tx_merkle_root(block.transactions());
-        assert_eq!(_res.unwrap(), None);
+        };
+
+        let block = Block::V1(BlockV1 { header, body });
+        calculate_tx_merkle_root(block.body()).unwrap();
+
+        check_block_tag(&block);
+    }
+
+    #[test]
+    fn block_merkleroot_empty_reward() {
+        let mut rng = make_pseudo_rng();
+
+        let header = BlockHeader {
+            version: Default::default(),
+            consensus_data: ConsensusData::None,
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+        };
+
+        let body = BlockBody {
+            reward: BlockReward::new(Vec::new()),
+            transactions: Vec::new(),
+        };
+
+        let block = Block::V1(BlockV1 { header, body });
+        let res = calculate_tx_merkle_root(block.body()).unwrap();
+        assert_eq!(res, id::hash_encoded(block.block_reward()));
+
+        check_block_tag(&block);
+    }
+
+    #[test]
+    fn block_merkleroot_only_reward() {
+        let mut rng = make_pseudo_rng();
+
+        let header = BlockHeader {
+            version: Default::default(),
+            consensus_data: ConsensusData::None,
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
+            prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
+            timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
+        };
+
+        let reward = BlockReward::new(vec![TxOutput::new(
+            OutputValue::Coin(Amount::from_atoms(1)),
+            OutputPurpose::Transfer(Destination::AnyoneCanSpend),
+        )]);
+        let body = BlockBody {
+            reward,
+            transactions: Vec::new(),
+        };
+
+        let block = Block::V1(BlockV1 { header, body });
+        let res = calculate_tx_merkle_root(block.body()).unwrap();
+        assert_eq!(res, id::hash_encoded(block.block_reward()));
 
         check_block_tag(&block);
     }
@@ -254,21 +348,20 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
         let one_transaction = Transaction::new(0, Vec::new(), Vec::new(), 0).unwrap();
+        let body = BlockBody {
+            reward: BlockReward::new(Vec::new()),
+            transactions: vec![one_transaction],
+        };
 
-        let block = Block::V1(BlockV1 {
-            header,
-            transactions: vec![one_transaction.clone()],
-        });
-        let res = calculate_tx_merkle_root(block.transactions()).unwrap();
-        let res = res.unwrap();
-        assert_eq!(res, one_transaction.get_id().get());
+        let block = Block::V1(BlockV1 { header, body });
+        calculate_tx_merkle_root(block.body()).unwrap();
 
         check_block_tag(&block);
     }
@@ -282,9 +375,13 @@ mod tests {
         )];
 
         let one_transaction = Transaction::new(0, inputs, Vec::new(), 0).unwrap();
+        let body = BlockBody {
+            reward: BlockReward::new(Vec::new()),
+            transactions: vec![one_transaction],
+        };
 
-        let merkle_root = calculate_tx_merkle_root(&[one_transaction.clone()]);
-        let witness_merkle_root = calculate_witness_merkle_root(&[one_transaction]);
+        let merkle_root = calculate_tx_merkle_root(&body);
+        let witness_merkle_root = calculate_witness_merkle_root(&body);
 
         assert_ne!(merkle_root, witness_merkle_root);
     }
@@ -296,16 +393,18 @@ mod tests {
         let header = BlockHeader {
             version: Default::default(),
             consensus_data: ConsensusData::None,
-            tx_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
-            witness_merkle_root: Some(H256::from_low_u64_be(rng.gen())),
+            tx_merkle_root: H256::from_low_u64_be(rng.gen()),
+            witness_merkle_root: H256::from_low_u64_be(rng.gen()),
             prev_block_id: Id::new(H256::from_low_u64_be(rng.gen())),
             timestamp: BlockTimestamp::from_int_seconds(rng.gen()),
         };
 
-        let block = Block::V1(BlockV1 {
-            header,
+        let body = BlockBody {
+            reward: BlockReward::new(Vec::new()),
             transactions: Vec::new(),
-        });
+        };
+
+        let block = Block::V1(BlockV1 { header, body });
 
         check_block_tag(&block);
     }

@@ -5,19 +5,16 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
-use p2p_test_utils::make_libp2p_addr;
 
 use common::chain::{
-    block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block},
+    block::{consensus_data::ConsensusData, timestamp::BlockTimestamp, Block, BlockReward},
     transaction::Transaction,
 };
 use common::primitives::{Id, H256};
@@ -26,11 +23,12 @@ use p2p::{
     message::Announcement,
     net::{
         self,
-        libp2p::{Libp2pConnectivityHandle, Libp2pService},
-        types::{ConnectivityEvent, PubSubEvent, PubSubTopic},
-        ConnectivityService, NetworkingService, PubSubService,
+        libp2p::Libp2pService,
+        types::{PubSubEvent, PubSubTopic},
+        NetworkingService, PubSubService,
     },
 };
+use p2p_test_utils::{connect_services, make_libp2p_addr};
 use serialization::Encode;
 use std::sync::Arc;
 
@@ -47,15 +45,7 @@ async fn test_libp2p_gossipsub() {
             .await
             .unwrap();
 
-    let (_conn1_res, conn2_res) = tokio::join!(
-        conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
-        conn2.poll_next()
-    );
-    let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
     pubsub1.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
     pubsub2.subscribe(&[net::types::PubSubTopic::Blocks]).await.unwrap();
@@ -69,6 +59,7 @@ async fn test_libp2p_gossipsub() {
                     Id::new(H256([0x01; 32])),
                     BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
+                    BlockReward::new(Vec::new()),
                 )
                 .unwrap(),
             ))
@@ -99,6 +90,7 @@ async fn test_libp2p_gossipsub() {
                 Id::new(H256([0x02; 32])),
                 BlockTimestamp::from_int_seconds(1338u64),
                 ConsensusData::None,
+                BlockReward::new(Vec::new()),
             )
             .unwrap(),
         ))
@@ -112,20 +104,6 @@ async fn test_libp2p_gossipsub() {
         announcement: Announcement::Block(block),
     } = res1.unwrap();
     assert_eq!(block.timestamp(), BlockTimestamp::from_int_seconds(1338u64));
-}
-
-async fn connect_peers(
-    peer1: &mut Libp2pConnectivityHandle<Libp2pService>,
-    peer2: &mut Libp2pConnectivityHandle<Libp2pService>,
-) {
-    let addr = peer2.local_addr().await.unwrap().unwrap();
-    let (_peer1_res, peer2_res) = tokio::join!(peer1.connect(addr), peer2.poll_next());
-
-    let peer2_res: ConnectivityEvent<Libp2pService> = peer2_res.unwrap();
-    let _peer1_id = match peer2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
 }
 
 // test libp2p gossipsub with multiple peers and verify that as our libp2p requires message
@@ -156,9 +134,9 @@ async fn test_libp2p_gossipsub_3_peers() {
     };
 
     // connect peers into a partial mesh
-    connect_peers(&mut conn1, &mut peer1.0).await;
-    connect_peers(&mut peer1.0, &mut peer2.0).await;
-    connect_peers(&mut peer2.0, &mut peer3.0).await;
+    connect_services::<Libp2pService>(&mut conn1, &mut peer1.0).await;
+    connect_services::<Libp2pService>(&mut peer1.0, &mut peer2.0).await;
+    connect_services::<Libp2pService>(&mut peer2.0, &mut peer3.0).await;
 
     pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     peer1.1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
@@ -174,6 +152,7 @@ async fn test_libp2p_gossipsub_3_peers() {
                     Id::new(H256([0x03; 32])),
                     BlockTimestamp::from_int_seconds(1337u64),
                     ConsensusData::None,
+                    BlockReward::new(Vec::new()),
                 )
                 .unwrap(),
             ))
@@ -276,15 +255,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
             .await
             .unwrap();
 
-    let (_conn1_res, conn2_res) = tokio::join!(
-        conn1.connect(conn2.local_addr().await.unwrap().unwrap()),
-        conn2.poll_next()
-    );
-    let conn2_res: ConnectivityEvent<Libp2pService> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
+    connect_services::<Libp2pService>(&mut conn1, &mut conn2).await;
 
     pubsub1.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
     pubsub2.subscribe(&[PubSubTopic::Blocks]).await.unwrap();
@@ -298,6 +269,7 @@ async fn test_libp2p_gossipsub_too_big_message() {
             Id::new(H256([0x04; 32])),
             BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap(),
     );

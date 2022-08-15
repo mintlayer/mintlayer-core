@@ -5,67 +5,61 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach, A. Sinitsyn
-
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
-use chainstate_storage::Transactional;
-use chainstate_types::block_index::BlockIndex;
-use common::chain::config::ChainConfig;
-use common::chain::{block::BlockHeader, Block, GenBlock};
-use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
-use itertools::Itertools;
-use logging::log;
-use std::sync::Arc;
-use utils::eventhandler::{EventHandler, EventsController};
-use utxo::utxo_storage::UtxosDBMut;
-mod consensus_validator;
-mod orphan_blocks;
-
-mod error;
-pub use error::*;
-
-use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
-
-mod pos;
-mod pow;
 
 pub mod ban_score;
+pub mod time_getter;
+
+pub use self::error::*;
+pub use chainstate_types::Locator;
+
 mod block_index_history_iter;
-mod median_time;
-
-pub use chainstate_types::locator::Locator;
-
 mod chainstateref;
-mod gen_block_index;
+mod error;
+mod median_time;
+mod orphan_blocks;
+mod transaction_verifier;
+mod pos;
 
-use gen_block_index::GenBlockIndex;
+use std::sync::Arc;
 
-type TxRw<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRw;
-type TxRo<'a> = <chainstate_storage::Store as Transactional<'a>>::TransactionRo;
+use itertools::Itertools;
+
+use chainstate_storage::{BlockchainStorage, Transactional};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{block::BlockHeader, config::ChainConfig, Block, GenBlock},
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
+use logging::log;
+use utils::eventhandler::{EventHandler, EventsController};
+use utxo::utxo_storage::UtxosDBMut;
+
+use self::{
+    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
+    time_getter::TimeGetter,
+};
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
+
+type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
+type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
 type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
-mod transaction_verifier;
-
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
 
-pub mod time_getter;
-use time_getter::TimeGetter;
-
 #[must_use]
-pub struct Chainstate {
+pub struct Chainstate<S> {
     chain_config: Arc<ChainConfig>,
     chainstate_config: ChainstateConfig,
-    chainstate_storage: chainstate_storage::Store,
+    chainstate_storage: S,
     orphan_blocks: OrphanBlocksPool,
     custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
     events_controller: EventsController<ChainstateEvent>,
@@ -78,14 +72,14 @@ pub enum BlockSource {
     Local,
 }
 
-impl Chainstate {
+impl<S: BlockchainStorage> Chainstate<S> {
     #[allow(dead_code)]
     pub fn wait_for_all_events(&self) {
         self.events_controller.wait_for_all_events();
     }
 
     #[must_use]
-    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw, OrphanBlocksRefMut> {
+    fn make_db_tx(&mut self) -> chainstateref::ChainstateRef<TxRw<'_, S>, OrphanBlocksRefMut> {
         let db_tx = self.chainstate_storage.transaction_rw();
         chainstateref::ChainstateRef::new_rw(
             &self.chain_config,
@@ -97,7 +91,7 @@ impl Chainstate {
     }
 
     #[must_use]
-    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo, OrphanBlocksRef> {
+    fn make_db_tx_ro(&self) -> chainstateref::ChainstateRef<TxRo<'_, S>, OrphanBlocksRef> {
         let db_tx = self.chainstate_storage.transaction_ro();
         chainstateref::ChainstateRef::new_ro(
             &self.chain_config,
@@ -115,12 +109,11 @@ impl Chainstate {
     pub fn new(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
-        chainstate_storage: chainstate_storage::Store,
+        chainstate_storage: S,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Result<Self, crate::ChainstateError> {
         use crate::ChainstateError;
-        use chainstate_storage::BlockchainStorageRead;
 
         let best_block_id = chainstate_storage.get_best_block_id().map_err(|e| {
             ChainstateError::FailedToInitializeChainstate(format!("Database read error: {:?}", e))
@@ -145,7 +138,7 @@ impl Chainstate {
     fn new_no_genesis(
         chain_config: Arc<ChainConfig>,
         chainstate_config: ChainstateConfig,
-        chainstate_storage: chainstate_storage::Store,
+        chainstate_storage: S,
         custom_orphan_error_hook: Option<Arc<OrphanErrorHandler>>,
         time_getter: TimeGetter,
     ) -> Self {

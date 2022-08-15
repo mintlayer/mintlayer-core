@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 use super::*;
 use crate::{
@@ -22,6 +20,8 @@ use crate::{
 };
 use chainstate::{make_chainstate, ChainstateConfig};
 use libp2p::PeerId;
+use std::time::Duration;
+use tokio::time::timeout;
 
 #[cfg(test)]
 mod block_response;
@@ -35,7 +35,7 @@ mod request_response;
 async fn make_sync_manager<T>(
     addr: T::Address,
 ) -> (
-    SyncManager<T>,
+    BlockSyncManager<T>,
     T::ConnectivityHandle,
     mpsc::Sender<SyncControlEvent<T>>,
     mpsc::Receiver<PubSubControlEvent>,
@@ -44,12 +44,12 @@ async fn make_sync_manager<T>(
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
     let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, rx_swarm) = mpsc::channel(16);
-    let storage = chainstate_storage::Store::new_empty().unwrap();
+    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_config = ChainstateConfig::new();
     let mut man = subsystem::Manager::new("TODO");
@@ -70,7 +70,7 @@ where
     let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
 
     (
-        SyncManager::<T>::new(
+        BlockSyncManager::<T>::new(
             Arc::clone(&config),
             sync,
             handle,
@@ -85,28 +85,33 @@ where
     )
 }
 
-async fn get_address<T>(handle: &mut T::ConnectivityHandle) -> T::Address
-where
-    T: NetworkingService,
+pub async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) where
+    T: NetworkingService + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
 {
-    loop {
-        if let Some(addr) = handle.local_addr().await.unwrap() {
-            return addr;
-        }
-    }
-}
+    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap()
+        .unwrap();
+    conn1.connect(addr).await.expect("dial to succeed");
 
-async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = get_address::<T>(conn2).await;
-    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
-    let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
+    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { .. } => {}
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    }
+
+    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted { .. } => {}
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    }
 }

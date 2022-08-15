@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,6 +16,6 @@
 use super::*;
 use static_assertions::*;
 
-assert_impl_all!(ChainstateInterfaceImpl: Send);
+assert_impl_all!(ChainstateInterfaceImpl<chainstate_storage::inmemory::Store>: Send);
 
 // TODO: write tests for consensus crate

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,27 +15,33 @@
 
 //! Application-level interface for the persistent blockchain storage.
 
-use chainstate_types::block_index::BlockIndex;
-use chainstate_types::epoch_data::EpochData;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{block::Block, GenBlock, OutPointSourceId};
-use common::primitives::{BlockHeight, Id};
-use storage::{inmemory, traits};
+use chainstate_types::{BlockIndex, EpochData};
+use common::{
+    chain::{
+        block::Block,
+        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
+        GenBlock, OutPointSourceId,
+    },
+    primitives::{BlockHeight, Id},
+};
+use storage::traits;
 use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
 
 mod internal;
 #[cfg(any(test, feature = "mock"))]
 pub mod mock;
 
-pub use internal::utxo_db;
+pub use internal::{utxo_db, Store};
 pub use storage::transaction::{TransactionRo, TransactionRw};
-
-// Alias the in-memory store as the store used by other crates for now
-pub type Store = internal::Store<inmemory::Store<internal::Schema>>;
 
 /// Possibly failing result of blockchain storage query
 pub type Result<T> = chainstate_types::storage_result::Result<T>;
 pub type Error = chainstate_types::storage_result::Error;
+
+pub mod inmemory {
+    use crate::internal;
+    pub type Store = internal::Store<storage::inmemory::Store<internal::Schema>>;
+}
 
 /// Queries on persistent blockchain data
 pub trait BlockchainStorageRead: UtxosStorageRead {
@@ -128,4 +134,4 @@ pub trait Transactional<'t> {
     fn transaction_rw<'s: 't>(&'s self) -> Self::TransactionRw;
 }
 
-pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> {}
+pub trait BlockchainStorage: BlockchainStorageWrite + for<'tx> Transactional<'tx> + Send {}

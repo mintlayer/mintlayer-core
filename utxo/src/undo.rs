@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -75,12 +75,17 @@ impl BlockUndo {
 pub mod test {
     use super::*;
     use crate::test_helper::create_utxo;
-    use crypto::random::{make_pseudo_rng, Rng};
+    use crypto::random::Rng;
+    use rstest::rstest;
+    use test_utils::random::{make_seedable_rng, Seed};
 
-    #[test]
-    fn tx_undo_test() {
-        let (utxo0, _) = create_utxo(0);
-        let (utxo1, _) = create_utxo(1);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn tx_undo_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let (utxo0, _) = create_utxo(&mut rng, 0);
+        let (utxo1, _) = create_utxo(&mut rng, 1);
         let mut tx_undo = TxUndo::new(vec![utxo0.clone()]);
 
         // check push
@@ -102,16 +107,19 @@ pub mod test {
         }
     }
 
-    #[test]
-    fn block_undo_test() {
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn block_undo_test(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
         let expected_height = BlockHeight::new(5);
-        let (utxo0, _) = create_utxo(0);
-        let (utxo1, _) = create_utxo(1);
+        let (utxo0, _) = create_utxo(&mut rng, 0);
+        let (utxo1, _) = create_utxo(&mut rng, 1);
         let tx_undo0 = TxUndo::new(vec![utxo0, utxo1]);
 
-        let (utxo2, _) = create_utxo(2);
-        let (utxo3, _) = create_utxo(3);
-        let (utxo4, _) = create_utxo(4);
+        let (utxo2, _) = create_utxo(&mut rng, 2);
+        let (utxo3, _) = create_utxo(&mut rng, 3);
+        let (utxo4, _) = create_utxo(&mut rng, 4);
         let tx_undo1 = TxUndo::new(vec![utxo2, utxo3, utxo4]);
 
         let blockundo = BlockUndo::new(vec![tx_undo0.clone(), tx_undo1.clone()], expected_height);

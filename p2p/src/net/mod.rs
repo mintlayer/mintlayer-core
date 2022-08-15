@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 use crate::{config, error, message};
 use async_trait::async_trait;
@@ -45,8 +43,8 @@ pub trait NetworkingService {
     /// Unique ID assigned to a peer on the network
     type PeerId: Copy + Debug + Display + Eq + Hash + Send + Sync + ToString;
 
-    /// Unique ID assigned to each received request
-    type RequestId: Debug + Eq + Hash + Send + Sync;
+    /// Unique ID assigned to each received request from a peer
+    type SyncingPeerRequestId: Debug + Eq + Hash + Send + Sync;
 
     /// Id that identifies a protocol
     type ProtocolId: Clone + Debug + Display + Eq + PartialEq + Send;
@@ -57,11 +55,11 @@ pub trait NetworkingService {
     /// Handle for sending/receiving pubsub-related events
     type PubSubHandle: Send;
 
-    /// Handle for sending/receiving request-response events
-    type SyncingCodecHandle: Send;
+    /// Handle for sending/receiving request-response messages
+    type SyncingMessagingHandle: Send;
 
     /// Unique ID assigned to each pubsub message
-    type MessageId: Clone + Debug + Send;
+    type PubSubMessageId: Clone + Debug + Send;
 
     /// Initialize the network service provider
     ///
@@ -80,7 +78,7 @@ pub trait NetworkingService {
     ) -> crate::Result<(
         Self::ConnectivityHandle,
         Self::PubSubHandle,
-        Self::SyncingCodecHandle,
+        Self::SyncingMessagingHandle,
     )>;
 }
 
@@ -149,7 +147,7 @@ where
     async fn report_validation_result(
         &mut self,
         source: T::PeerId,
-        msg_id: T::MessageId,
+        msg_id: T::PubSubMessageId,
         result: types::ValidationResult,
     ) -> crate::Result<()>;
 
@@ -171,7 +169,7 @@ where
 /// [SyncingCodecService] provides an interface for sending and receiving block
 /// and header requests with a remote peer.
 #[async_trait]
-pub trait SyncingCodecService<T>
+pub trait SyncingMessagingService<T>
 where
     T: NetworkingService,
 {
@@ -184,7 +182,7 @@ where
         &mut self,
         peer_id: T::PeerId,
         request: message::Request,
-    ) -> crate::Result<T::RequestId>;
+    ) -> crate::Result<T::SyncingPeerRequestId>;
 
     /// Send block/header response to remote
     ///
@@ -193,7 +191,7 @@ where
     /// * `message` - Response to be sent
     async fn send_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         response: message::Response,
     ) -> crate::Result<()>;
 

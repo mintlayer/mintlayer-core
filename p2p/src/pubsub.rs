@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 //! Publish-subscribe message/event handling
 
@@ -94,7 +92,7 @@ where
     }
 
     /// Subscribe to events
-    async fn subscribe_to_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
+    async fn subscribe_to_chainstate_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
         let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
 
         let subscribe_func =
@@ -115,7 +113,6 @@ where
             .await
             .map_err(|_| P2pError::SubsystemFailure)?;
 
-        self.pubsub_handle.subscribe(&self.topics).await?;
         Ok(rx)
     }
 
@@ -123,7 +120,7 @@ where
     async fn process_block_announcement(
         &mut self,
         peer_id: T::PeerId,
-        message_id: T::MessageId,
+        message_id: T::PubSubMessageId,
         block: Block,
     ) -> crate::Result<()> {
         let result = match self
@@ -228,12 +225,21 @@ where
         }
 
         // subscribe to chainstate events and pubsub topics
-        let mut block_rx = self.subscribe_to_events().await?;
+        let mut block_rx = self.subscribe_to_chainstate_events().await?;
+
+        // tell peers what topics we're interested in
+        self.pubsub_handle.subscribe(&self.topics).await?;
 
         loop {
             tokio::select! {
                 event = self.pubsub_handle.poll_next() => match event? {
                     PubSubEvent::Announcement { peer_id, message_id, announcement } => match announcement {
+                        // TODO: we should discuss whether we should use blocks or headers (like bitcoin) here, because
+                        //       announcing blocks seems wasteful, in the sense that it's possible for peers to get blocks
+                        //       again, and again, wasting their bandwidth. The question is, whether the mechanism of
+                        //       libp2p's pubsub solves this problem. Libp2p now seems to be probabilistically distributing the
+                        //       blocks to a subset of the peers. We will have a discussion on whether we should continue
+                        //       announcing blocks
                         message::Announcement::Block(block) => {
                             self.process_block_announcement(peer_id, message_id, block).await?;
                         },
@@ -249,13 +255,5 @@ where
                 }
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    #[tokio::test]
-    async fn it_works() {
-        assert_eq!(1 + 1, 2);
     }
 }

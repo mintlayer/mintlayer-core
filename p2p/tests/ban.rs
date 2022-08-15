@@ -5,45 +5,25 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
-#![allow(unused)]
-use libp2p::Multiaddr;
+
 use p2p::{
     error::{P2pError, PublishError},
     event::{PubSubControlEvent, SwarmEvent},
     message::Announcement,
-    net::{
-        self, libp2p::Libp2pService, types::ConnectivityEvent, ConnectivityService,
-        NetworkingService, PubSubService,
-    },
+    net::{self, libp2p::Libp2pService, ConnectivityService, NetworkingService, PubSubService},
     pubsub::PubSubMessageHandler,
-    sync::SyncManager,
+    sync::BlockSyncManager,
 };
-use p2p_test_utils::{make_libp2p_addr, TestBlockInfo};
+use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
 use std::sync::Arc;
 use tokio::sync::mpsc;
-
-async fn connect_services<T>(conn1: &mut T::ConnectivityHandle, conn2: &mut T::ConnectivityHandle)
-where
-    T: NetworkingService,
-    T::ConnectivityHandle: ConnectivityService<T>,
-{
-    let addr = conn2.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) = tokio::join!(conn1.connect(addr), conn2.poll_next());
-    let conn2_res: ConnectivityEvent<T> = conn2_res.unwrap();
-    let _conn1_id = match conn2_res {
-        ConnectivityEvent::InboundAccepted { peer_info, .. } => peer_info.peer_id,
-        _ => panic!("invalid event received, expected incoming connection"),
-    };
-}
 
 // start two libp2p services, spawn a `PubSubMessageHandler` for the first service,
 // publish an invalid block from the first service and verify that the `PeerManager`
@@ -118,18 +98,18 @@ async fn invalid_pubsub_block() {
 // start two libp2p services and give an invalid block, verify that `PeerManager` is informed
 #[tokio::test]
 async fn invalid_sync_block() {
-    let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
-    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
+    let (_tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
+    let (tx_pubsub, _rx_pubsub) = mpsc::channel(16);
     let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
-    let (mut conn1, _, sync1) =
+    let (_conn1, _, sync1) =
         Libp2pService::start(make_libp2p_addr(), Arc::clone(&config), Default::default())
             .await
             .unwrap();
 
-    let mut sync1 = SyncManager::<Libp2pService>::new(
+    let mut sync1 = BlockSyncManager::<Libp2pService>::new(
         Arc::clone(&config),
         sync1,
         handle.clone(),
@@ -149,7 +129,7 @@ async fn invalid_sync_block() {
     tokio::spawn(async move {
         sync1.register_peer(remote_id).await.unwrap();
         let res = sync1.process_block_response(remote_id, vec![blocks[2].clone()]).await;
-        let res = sync1.handle_error(remote_id, res).await;
+        sync1.handle_error(remote_id, res).await.unwrap();
     });
 
     if let Some(SwarmEvent::AdjustPeerScore(peer_id, score, _)) = rx_swarm.recv().await {

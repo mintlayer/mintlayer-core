@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,15 +15,20 @@
 
 pub mod utxo_db;
 
-use chainstate_types::block_index::BlockIndex;
-use chainstate_types::epoch_data::EpochData;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
-use common::primitives::{BlockHeight, Id, Idable};
+use chainstate_types::{BlockIndex, EpochData};
+use common::{
+    chain::{
+        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
+        Block, GenBlock, OutPoint, OutPointSourceId,
+    },
+    primitives::{BlockHeight, Id, Idable},
+};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
-use utxo::{BlockUndo, Utxo};
+use utxo::{
+    utxo_storage::{UtxosStorageRead, UtxosStorageWrite},
+    BlockUndo, Utxo,
+};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
 
@@ -105,7 +110,7 @@ impl<'tx, B: traits::Transactional<'tx, Schema>> crate::Transactional<'tx> for S
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorage for Store<B> {}
+impl<B: for<'tx> traits::Transactional<'tx, Schema> + Send> BlockchainStorage for Store<B> {}
 
 macro_rules! delegate_to_transaction {
     ($(fn $f:ident $args:tt -> $ret:ty;)*) => {

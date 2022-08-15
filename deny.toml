@@ -44,6 +44,7 @@ skip = [
     {name = "textwrap"},
     {name = "wasi"},
     {name = "winapi"},
+    {name = "windows"},
     {name = "windows_aarch64_msvc" },
     {name = "windows_i686_gnu" },
     {name = "windows_i686_msvc" },
@@ -70,6 +71,7 @@ allow = [
     "LicenseRef-webpki",
     "WTFPL",
     "BSL-1.0",
+    "Unicode-DFS-2016",
     "Unlicense",#this is a specific license rather than no license at all
 ] #deny a license not in this set of licenses
 

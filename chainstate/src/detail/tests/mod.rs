@@ -5,24 +5,25 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): S. Afach, A. Sinitsyn, S. Tkach
+
+pub use self::test_framework::TestFramework;
 
 use std::sync::Mutex;
 
-use crate::detail::{tests::test_framework::TestFramework, *};
+use crate::detail::*;
 use common::{
     chain::{
         block::{timestamp::BlockTimestamp, ConsensusData},
         config::create_regtest,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         Block, Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose,
         Transaction, TxInput, TxOutput,
     },
@@ -61,12 +62,19 @@ fn create_utxo_data(
     output: &TxOutput,
     rng: &mut impl Rng,
 ) -> Option<(TxInput, TxOutput)> {
-    let spent_value = Amount::from_atoms(rng.gen_range(0..output.value().into_atoms()));
-    let new_value = (output.value() - spent_value).unwrap();
-    utils::ensure!(new_value >= Amount::from_atoms(1));
     Some((
         TxInput::new(outsrc, index as u32, empty_witness(rng)),
-        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+        match output.value() {
+            OutputValue::Coin(output_value) => {
+                let spent_value = Amount::from_atoms(rng.gen_range(0..output_value.into_atoms()));
+                let new_value = (*output_value - spent_value).unwrap();
+                utils::ensure!(new_value >= Amount::from_atoms(1));
+                TxOutput::new(
+                    OutputValue::Coin(new_value),
+                    OutputPurpose::Transfer(anyonecanspend_address()),
+                )
+            }
+        },
     ))
 }
 
@@ -101,7 +109,7 @@ impl TestBlockInfo {
         Self { txns, id }
     }
 
-    fn from_id(cs: &Chainstate, id: Id<GenBlock>) -> Self {
+    fn from_id(cs: &test_framework::TestChainstate, id: Id<GenBlock>) -> Self {
         use chainstate_storage::BlockchainStorageRead;
         match id.classify(&cs.chain_config) {
             GenBlockId::Genesis(_) => Self::from_genesis(cs.chain_config.genesis_block()),
@@ -139,10 +147,8 @@ fn generate_blocks_for_functional_tests(#[case] seed: Seed) {
     for _ in 1..6 {
         let mut mined_block = tf.make_block_builder().add_test_transaction(&mut rng).build();
         let bits = difficulty.into();
-        assert!(
-            crate::detail::pow::work::mine(&mut mined_block, u128::MAX, bits, vec![])
-                .expect("Unexpected conversion error")
-        );
+        assert!(consensus::pow::mine(&mut mined_block, u128::MAX, bits)
+            .expect("Unexpected conversion error"));
         println!("{}", hex::encode(mined_block.encode()));
         tf.process_block(mined_block, BlockSource::Local).unwrap();
     }

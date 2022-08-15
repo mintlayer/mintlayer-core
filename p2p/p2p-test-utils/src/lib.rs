@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 #![allow(clippy::unwrap_used)]
 
@@ -22,9 +20,10 @@ use chainstate::{
 };
 use common::{
     chain::{
-        block::{timestamp::BlockTimestamp, Block, ConsensusData},
+        block::{timestamp::BlockTimestamp, Block, BlockReward, ConsensusData},
         config::ChainConfig,
         signature::inputsig::InputWitness,
+        tokens::OutputValue,
         transaction::Transaction,
         Destination, GenBlock, GenBlockId, Genesis, OutPointSourceId, OutputPurpose, TxInput,
         TxOutput,
@@ -33,13 +32,28 @@ use common::{
 };
 use crypto::random::SliceRandom;
 use libp2p::Multiaddr;
-use p2p::net::{mock::MockService, NetworkingService};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::Arc;
-use tokio::net::{TcpListener, TcpStream};
+use p2p::net::{types::ConnectivityEvent, ConnectivityService, NetworkingService};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    time::timeout,
+};
 
 pub fn make_libp2p_addr() -> Multiaddr {
     "/ip6/::1/tcp/0".parse().unwrap()
+}
+
+pub fn make_mock_addr() -> SocketAddr {
+    "[::1]:0".parse().unwrap()
+}
+
+pub async fn get_two_connected_sockets() -> (TcpStream, TcpStream) {
+    let addr = make_mock_addr();
+    let server = TcpListener::bind(addr).await.unwrap();
+    let peer_fut = TcpStream::connect(server.local_addr().unwrap());
+
+    let (res1, res2) = tokio::join!(server.accept(), peer_fut);
+    (res1.unwrap().0, res2.unwrap())
 }
 
 pub async fn get_tcp_socket() -> TcpStream {
@@ -56,8 +70,35 @@ pub async fn get_tcp_socket() -> TcpStream {
     TcpStream::connect(addr).await.unwrap()
 }
 
-pub fn get_mock_id() -> <MockService as NetworkingService>::PeerId {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8888)
+pub async fn connect_services<T>(
+    conn1: &mut T::ConnectivityHandle,
+    conn2: &mut T::ConnectivityHandle,
+) where
+    T: NetworkingService + std::fmt::Debug,
+    T::ConnectivityHandle: ConnectivityService<T>,
+{
+    let addr = timeout(Duration::from_secs(5), conn2.local_addr())
+        .await
+        .expect("local address fetch not to timeout")
+        .unwrap()
+        .unwrap();
+    conn1.connect(addr).await.expect("dial to succeed");
+
+    match timeout(Duration::from_secs(5), conn2.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::InboundAccepted { .. } => {}
+            event => panic!("expected `InboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `InboundAccepted` in time"),
+    }
+
+    match timeout(Duration::from_secs(5), conn1.poll_next()).await {
+        Ok(event) => match event.unwrap() {
+            ConnectivityEvent::OutboundAccepted { .. } => {}
+            event => panic!("expected `OutboundAccepted`, got {event:?}"),
+        },
+        Err(_err) => panic!("did not receive `OutboundAccepted` in time"),
+    }
 }
 
 pub type ChainstateHandle = subsystem::Handle<Box<dyn ChainstateInterface + 'static>>;
@@ -112,13 +153,19 @@ fn create_utxo_data(
     index: usize,
     output: &TxOutput,
 ) -> Option<(TxInput, TxOutput)> {
-    let new_value = (output.value() - Amount::from_atoms(1)).unwrap();
+    let output_value = match output.value() {
+        OutputValue::Coin(coin) => *coin,
+    };
+    let new_value = (output_value - Amount::from_atoms(1)).unwrap();
     if new_value == Amount::from_atoms(0) {
         return None;
     }
     Some((
         TxInput::new(outsrc, index as u32, nosig_random_witness()),
-        TxOutput::new(new_value, OutputPurpose::Transfer(anyonecanspend_address())),
+        TxOutput::new(
+            OutputValue::Coin(new_value),
+            OutputPurpose::Transfer(anyonecanspend_address()),
+        ),
     ))
 }
 
@@ -145,6 +192,7 @@ fn produce_test_block_with_consensus_data(
         prev_block.id,
         BlockTimestamp::from_duration_since_epoch(time::get()),
         consensus_data,
+        BlockReward::new(Vec::new()),
     )
     .expect("not to fail")
 }
@@ -171,7 +219,7 @@ fn anyonecanspend_address() -> Destination {
 pub async fn start_chainstate(
     chain_config: Arc<ChainConfig>,
 ) -> subsystem::Handle<Box<dyn ChainstateInterface>> {
-    let storage = chainstate_storage::Store::new_empty().unwrap();
+    let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let mut man = subsystem::Manager::new("TODO");
     let handle = man.add_subsystem(
         "chainstate",

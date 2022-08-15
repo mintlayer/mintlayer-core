@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +17,7 @@ use std::{net::SocketAddr, path::Path, str::FromStr};
 
 use assert_cmd::Command;
 use directories::UserDirs;
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 use node::{NodeConfig, RunOptions};
 
@@ -38,7 +38,7 @@ fn no_args() {
 
 #[test]
 fn create_default_config() {
-    let data_dir = TempDir::new("").unwrap();
+    let data_dir = TempDir::new().unwrap();
 
     Command::new(BIN_NAME)
         .arg("--datadir")
@@ -70,7 +70,7 @@ fn create_default_config() {
 // Check that the config fields are overwritten by the run options.
 #[test]
 fn read_config_override_values() {
-    let data_dir = TempDir::new("").unwrap();
+    let data_dir = TempDir::new().unwrap();
 
     Command::new(BIN_NAME)
         .arg("--datadir")
@@ -120,7 +120,7 @@ fn read_config_override_values() {
 // Check that the `--conf` option has the precedence over the default data directory value.
 #[test]
 fn custom_config_path() {
-    let temp_dir = TempDir::new("").unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join(CONFIG_NAME);
 
     Command::new(BIN_NAME)
@@ -142,8 +142,8 @@ fn custom_config_path() {
 // Check that the `--conf` option has the precedence over the `--datadir` option.
 #[test]
 fn custom_config_path_and_data_dir() {
-    let data_dir = TempDir::new("").unwrap();
-    let temp_dir = TempDir::new("").unwrap();
+    let data_dir = TempDir::new().unwrap();
+    let temp_dir = TempDir::new().unwrap();
     let config_path = temp_dir.path().join(CONFIG_NAME);
 
     Command::new(BIN_NAME)

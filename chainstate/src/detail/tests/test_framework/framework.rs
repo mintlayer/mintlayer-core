@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,7 @@ use chainstate_storage::BlockchainStorageRead;
 use common::{
     chain::{
         config::{Builder as ChainConfigBuilder, ChainType},
+        tokens::OutputValue,
         Block, Destination, GenBlock, Genesis, NetUpgrades, OutputPurpose, TxOutput,
     },
     primitives::{id::WithId, Amount, Id, Idable},
@@ -31,12 +32,12 @@ use crate::{
         },
         BlockIndex, GenBlockIndex, TimeGetter,
     },
-    BlockError, BlockHeight, BlockSource, Chainstate, ChainstateConfig,
+    BlockError, BlockHeight, BlockSource, ChainstateConfig,
 };
 
 /// The `Chainstate` wrapper that simplifies operations and checks in the tests.
 pub struct TestFramework {
-    pub chainstate: Chainstate,
+    pub chainstate: super::TestChainstate,
     pub block_indexes: Vec<BlockIndex>,
 }
 
@@ -184,7 +185,7 @@ fn process_block() {
         .add_transaction(
             TransactionBuilder::new()
                 .add_output(TxOutput::new(
-                    Amount::from_atoms(0),
+                    OutputValue::Coin(Amount::from_atoms(0)),
                     OutputPurpose::Transfer(Destination::AnyoneCanSpend),
                 ))
                 .build(),

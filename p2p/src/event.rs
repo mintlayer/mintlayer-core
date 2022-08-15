@@ -5,15 +5,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use crate::net::NetworkingService;
 use common::chain::block::Block;
 use tokio::sync::oneshot;
@@ -49,10 +48,7 @@ pub enum SyncEvent {
 }
 
 #[derive(Debug)]
-pub enum SyncControlEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum SyncControlEvent<T: NetworkingService> {
     /// Peer connected
     Connected(T::PeerId),
 

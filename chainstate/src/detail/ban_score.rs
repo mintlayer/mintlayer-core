@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,14 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::BlockError;
+use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 use super::{
-    pos::error::ConsensusPoSError, pow::error::ConsensusPoWError,
     transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,
-    CheckBlockTransactionsError, ConsensusVerificationError, OrphanCheckError,
+    CheckBlockTransactionsError, OrphanCheckError,
 };
-use chainstate_types::pos_randomness::PoSRandomnessError;
+use crate::BlockError;
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file
@@ -95,6 +94,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
+            ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
             // Even though this is an invariant, we consider it a violation to be overly cautious

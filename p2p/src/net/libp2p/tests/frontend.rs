@@ -5,21 +5,23 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use crate::{
     config,
     error::{ConversionError, DialError, P2pError},
     net::{
         self,
-        libp2p::{parse_discovered_addr, parse_peers, Libp2pService},
+        libp2p::{
+            service::connectivity::{parse_discovered_addr, parse_peers},
+            Libp2pService,
+        },
         types::ConnectivityEvent,
         ConnectivityService, NetworkingService,
     },

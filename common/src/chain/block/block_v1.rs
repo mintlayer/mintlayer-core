@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,22 +13,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::chain::block::Block;
-use crate::chain::block::ConsensusData;
-use crate::chain::transaction::Transaction;
-use crate::primitives::id;
-use crate::primitives::id::Idable;
-use crate::primitives::{Id, H256};
-
 use serialization::{Decode, Encode};
 
-use super::block_header::BlockHeader;
-use super::timestamp::BlockTimestamp;
+use crate::{
+    chain::{
+        block::{Block, BlockReward, BlockRewardTransactable, ConsensusData},
+        transaction::Transaction,
+    },
+    primitives::{
+        id::{self, Idable},
+        Id, H256,
+    },
+};
+
+use super::{block_header::BlockHeader, timestamp::BlockTimestamp};
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode)]
+pub struct BlockBody {
+    pub(super) reward: BlockReward,
+    pub(super) transactions: Vec<Transaction>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, serialization::Tagged)]
 pub struct BlockV1 {
     pub(super) header: BlockHeader,
-    pub(super) transactions: Vec<Transaction>,
+    pub(super) body: BlockBody,
 }
 
 impl Idable for BlockV1 {
@@ -39,11 +48,11 @@ impl Idable for BlockV1 {
 }
 
 impl BlockV1 {
-    pub fn tx_merkle_root(&self) -> Option<H256> {
+    pub fn tx_merkle_root(&self) -> H256 {
         self.header.tx_merkle_root
     }
 
-    pub fn witness_merkle_root(&self) -> Option<H256> {
+    pub fn witness_merkle_root(&self) -> H256 {
         self.header.witness_merkle_root
     }
 
@@ -64,10 +73,29 @@ impl BlockV1 {
     }
 
     pub fn transactions(&self) -> &Vec<Transaction> {
-        &self.transactions
+        &self.body.transactions
     }
 
     pub fn prev_block_id(&self) -> &Id<crate::chain::GenBlock> {
         &self.header.prev_block_id
+    }
+
+    pub fn body(&self) -> &BlockBody {
+        &self.body
+    }
+
+    pub fn block_reward(&self) -> &BlockReward {
+        &self.body.reward
+    }
+
+    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
+        let inputs = match &self.header.consensus_data {
+            ConsensusData::None | ConsensusData::PoW(_) => None,
+            ConsensusData::PoS(data) => Some(data.kernel_inputs().as_ref()),
+        };
+        BlockRewardTransactable {
+            inputs,
+            outputs: Some(self.body.reward.outputs()),
+        }
     }
 }

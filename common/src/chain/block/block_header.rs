@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,7 +15,6 @@
 
 use serialization::{Decode, Encode};
 
-use super::consensus_data::BlockRewardTransactable;
 use super::timestamp::BlockTimestamp;
 use crate::chain::{block::ConsensusData, Block, GenBlock};
 use crate::primitives::id::{Id, Idable, H256};
@@ -25,8 +24,8 @@ use crate::primitives::{id, VersionTag};
 pub struct BlockHeader {
     pub(super) version: VersionTag<1>,
     pub(super) prev_block_id: Id<GenBlock>,
-    pub(super) tx_merkle_root: Option<H256>,
-    pub(super) witness_merkle_root: Option<H256>,
+    pub(super) tx_merkle_root: H256,
+    pub(super) witness_merkle_root: H256,
     pub(super) timestamp: BlockTimestamp,
     pub(super) consensus_data: ConsensusData,
 }
@@ -46,10 +45,6 @@ impl BlockHeader {
 
     pub fn timestamp(&self) -> BlockTimestamp {
         self.timestamp
-    }
-
-    pub fn block_reward_transactable(&self) -> BlockRewardTransactable {
-        self.consensus_data.derive_transactable()
     }
 }
 

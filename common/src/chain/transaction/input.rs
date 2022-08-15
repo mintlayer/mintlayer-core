@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -49,6 +49,15 @@ impl From<Id<Block>> for OutPointSourceId {
 impl From<Id<Genesis>> for OutPointSourceId {
     fn from(id: Id<Genesis>) -> OutPointSourceId {
         OutPointSourceId::BlockReward(id.into())
+    }
+}
+
+impl OutPointSourceId {
+    pub fn get_tx_id(&self) -> Option<&Id<Transaction>> {
+        match self {
+            OutPointSourceId::Transaction(id) => Some(id),
+            _ => None,
+        }
     }
 }
 

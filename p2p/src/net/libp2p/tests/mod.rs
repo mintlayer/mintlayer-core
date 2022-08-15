@@ -5,20 +5,19 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
+use behaviour::sync_codec::*;
 
 use crate::net::{
     self, config,
-    libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
+    libp2p::{backend::Libp2pBackend, behaviour, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -40,7 +39,9 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::timeout};
+
+use super::behaviour::{connection_manager, discovery};
 
 #[cfg(test)]
 mod frontend;
@@ -62,7 +63,7 @@ pub async fn make_libp2p(
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -113,7 +114,7 @@ pub async fn make_libp2p(
             ),
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
@@ -122,7 +123,7 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(p2p_config).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -145,7 +146,7 @@ pub async fn make_libp2p(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
@@ -161,7 +162,7 @@ pub async fn make_libp2p_with_ping(
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -207,7 +208,7 @@ pub async fn make_libp2p_with_ping(
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
@@ -216,7 +217,7 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -239,7 +240,7 @@ pub async fn make_libp2p_with_ping(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
@@ -249,7 +250,11 @@ pub async fn make_libp2p_with_ping(
 
 async fn get_address<T: NetworkBehaviour>(swarm: &mut Swarm<T>) -> Multiaddr {
     loop {
-        if let SwarmEvent::NewListenAddr { address, .. } = swarm.select_next_some().await {
+        if let SwarmEvent::NewListenAddr { address, .. } =
+            timeout(Duration::from_secs(5), swarm.select_next_some())
+                .await
+                .expect("event to be received")
+        {
             return address;
         }
     }
@@ -264,7 +269,7 @@ where
     let addr = get_address::<A>(swarm1).await;
 
     for _ in 0..3 {
-        swarm2.dial(addr.clone()).expect("swarm dial failed");
+        swarm2.dial(addr.clone()).expect("dial to succeed");
 
         loop {
             tokio::select! {

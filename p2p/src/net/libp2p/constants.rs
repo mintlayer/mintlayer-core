@@ -5,15 +5,13 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
 
 //! Libp2p constants
 //!
@@ -34,5 +32,6 @@ pub const PING_MAX_RETRIES: u32 = 3;
 
 /// Request-response configuration
 pub const REQ_RESP_TIMEOUT: Duration = Duration::from_secs(10);
+pub const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 // TODO: think about channel sizes
 pub const CHANNEL_SIZE: usize = 64;

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,15 +15,18 @@
 
 //! A mock version of the blockchain storage.
 
-use chainstate_types::block_index::BlockIndex;
-use chainstate_types::epoch_data::EpochData;
-use common::chain::transaction::{
-    OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
+use chainstate_types::{BlockIndex, EpochData};
+use common::{
+    chain::{
+        transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
+        Block, GenBlock, OutPoint,
+    },
+    primitives::{BlockHeight, Id},
 };
-use common::chain::{Block, GenBlock, OutPoint};
-use common::primitives::{BlockHeight, Id};
-use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
-use utxo::{BlockUndo, Utxo};
+use utxo::{
+    utxo_storage::{UtxosStorageRead, UtxosStorageWrite},
+    BlockUndo, Utxo,
+};
 
 mockall::mock! {
     /// A mock object for blockchain storage
@@ -230,10 +233,12 @@ mod tests {
     use super::*;
     use crate::{BlockchainStorageRead, BlockchainStorageWrite, Transactional};
     use common::{
-        chain::block::{timestamp::BlockTimestamp, ConsensusData},
+        chain::block::{timestamp::BlockTimestamp, BlockReward, ConsensusData},
         primitives::{Idable, H256},
     };
     use storage::traits::{TransactionRo, TransactionRw};
+
+    type TestStore = crate::inmemory::Store;
 
     const TXFAIL: crate::Error =
         crate::Error::Storage(storage::error::Recoverable::TransactionFailed);
@@ -310,7 +315,7 @@ mod tests {
     #[test]
     fn use_generic_test() {
         common::concurrency::model(|| {
-            let store = crate::Store::new_empty().unwrap();
+            let store = TestStore::new_empty().unwrap();
             generic_test(&store);
         });
     }
@@ -359,6 +364,7 @@ mod tests {
             Id::<GenBlock>::new(H256([0x23; 32])),
             BlockTimestamp::from_int_seconds(12),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap();
         let block1 = Block::new(
@@ -366,6 +372,7 @@ mod tests {
             block0.get_id().into(),
             BlockTimestamp::from_int_seconds(34),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap();
         (block0, block1)
@@ -374,7 +381,7 @@ mod tests {
     #[test]
     fn attach_to_top_real_storage() {
         common::concurrency::model(|| {
-            let mut store = crate::Store::new_empty().unwrap();
+            let mut store = TestStore::new_empty().unwrap();
             let (_block0, block1) = sample_data();
             let _result = attach_block_to_top(&mut store, &block1);
         });

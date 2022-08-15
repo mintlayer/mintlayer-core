@@ -5,15 +5,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use crate::{
     error::{P2pError, ProtocolError},
     net::NetworkingService,
@@ -88,16 +87,19 @@ impl<T: NetworkingService> PeerContext<T> {
         &mut self,
         header: &BlockHeader,
     ) -> crate::Result<Option<BlockHeader>> {
-        if let PeerSyncState::UploadingBlocks(expected) = &self.state {
-            ensure!(
-                expected == &header.get_id(),
-                P2pError::ProtocolError(ProtocolError::InvalidMessage),
-            );
+        match &self.state {
+            PeerSyncState::UploadingBlocks(expected) => {
+                ensure!(
+                    expected == &header.get_id(),
+                    P2pError::ProtocolError(ProtocolError::InvalidMessage),
+                );
 
-            return Ok(self.get_next_block());
+                Ok(self.get_next_block())
+            }
+            PeerSyncState::Idle | PeerSyncState::Unknown | PeerSyncState::UploadingHeaders(_) => {
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
         }
-
-        Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
     }
 
     fn get_next_block(&mut self) -> Option<BlockHeader> {
@@ -118,13 +120,15 @@ impl<T: NetworkingService> PeerContext<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::mock::MockService;
-    use common::chain::block::{consensus_data::ConsensusData, timestamp::BlockTimestamp};
+    use crate::net::mock::{types, MockService};
+    use common::chain::block::{
+        consensus_data::ConsensusData, timestamp::BlockTimestamp, BlockReward,
+    };
     use std::net::SocketAddr;
 
     fn new_mock_peersyncstate() -> PeerContext<MockService> {
-        let addr: SocketAddr = "[::1]:0".parse().unwrap();
-        PeerContext::<MockService>::new(addr)
+        let addr: SocketAddr = "[::1]:8888".parse().unwrap();
+        PeerContext::<MockService>::new(types::MockPeerId::from_socket_address(&addr))
     }
 
     #[test]
@@ -141,6 +145,7 @@ mod tests {
             Id::new(common::primitives::H256([0x07; 32])),
             BlockTimestamp::from_int_seconds(1337u64),
             ConsensusData::None,
+            BlockReward::new(Vec::new()),
         )
         .unwrap()
         .header()

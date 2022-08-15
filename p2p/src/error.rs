@@ -5,15 +5,14 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// 	http://spdx.org/licenses/MIT
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Author(s): A. Altonen
+
 use chainstate::ban_score::BanScore;
 use common::primitives::semver::SemVer;
 use libp2p::{
@@ -24,6 +23,8 @@ use libp2p::{
 };
 use thiserror::Error;
 
+/// Errors related to invalid data/peer information that results in connection getting closed
+/// and the peer getting banned.
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ProtocolError {
     #[error("Peer is in different network. Our network {0:?}, their network {1:?}")]
@@ -32,16 +33,17 @@ pub enum ProtocolError {
     InvalidVersion(SemVer, SemVer),
     #[error("Peer sent an invalid message")]
     InvalidMessage,
-    #[error("Peer is incompatible")] // TODO: remove?
+    #[error("Peer is incompatible")]
     Incompatible,
     #[error("Peer is unresponsive")]
     Unresponsive,
-    #[error("Peer uses an invalid protocol")] // TODO: remove?
+    #[error("Peer uses an invalid protocol")]
     InvalidProtocol,
     #[error("Peer state is invalid for this operation. State is {0} but should be {1}")]
     InvalidState(&'static str, &'static str),
 }
 
+/// Peer state errors (Errors either for an individual peer or for the [`PeerManager`])
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PeerError {
     #[error("Peer disconnected")]
@@ -62,6 +64,7 @@ pub enum PeerError {
     Pending(String),
 }
 
+/// PubSub errors for announcements
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum PublishError {
     #[error("Message has already been published")]
@@ -76,6 +79,7 @@ pub enum PublishError {
     TransformFailed,
 }
 
+/// PubSub errors for subscriptions
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum SubscriptionError {
     #[error("Failed to publish subscription: {0}")]
@@ -84,6 +88,7 @@ pub enum SubscriptionError {
     NotAllowed,
 }
 
+/// Errors related to establishing a connection with a remote peer
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum DialError {
     #[error("Peer is banned")]
@@ -108,6 +113,7 @@ pub enum DialError {
     Transport,
 }
 
+/// Low-level connection errors caused by libp2p
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConnectionError {
     #[error("Timeout")]
@@ -118,6 +124,7 @@ pub enum ConnectionError {
     Upgrade,
 }
 
+/// Conversion errors
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum ConversionError {
     #[error("Invalid peer ID: `{0}`")]
