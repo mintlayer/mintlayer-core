@@ -1,26 +1,40 @@
-use chainstate_types::vrf_tools::verify_vrf_and_get_vrf_output;
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+pub mod error;
+pub mod kernel;
+
+use chainstate_types::{vrf_tools::verify_vrf_and_get_vrf_output, GenBlockIndex};
 use common::{
     chain::{
         block::{consensus_data::PoSData, BlockHeader},
+        tokens::OutputValue,
         ChainConfig, OutputSpentState, TxOutput,
     },
     primitives::{BlockHeight, Idable, H256},
     Uint256,
 };
-
 use utils::ensure;
 
-use crate::detail::pos::kernel::{get_kernel_block_index, get_kernel_output};
-
-use self::error::ConsensusPoSError;
-
-use super::{
-    consensus_validator::{BlockIndexHandle, TransactionIndexHandle},
-    gen_block_index::GenBlockIndex,
+use crate::{
+    pos::{
+        error::ConsensusPoSError,
+        kernel::{get_kernel_block_index, get_kernel_output},
+    },
+    validator::{BlockIndexHandle, TransactionIndexHandle},
 };
-
-pub mod error;
-pub mod kernel;
 
 fn check_stake_kernel_hash(
     epoch_index: u64,
@@ -57,7 +71,9 @@ fn check_stake_kernel_hash(
     let hash_pos_arith: Uint256 = hash_pos.into();
 
     // TODO: calculate the total pool balance, not just from the delegation as done here, but also add all delegated stakes
-    let pool_balance = kernel_output.value().into();
+    let pool_balance = match kernel_output.value() {
+        OutputValue::Coin(a) => a.into_atoms().into(),
+    };
 
     // TODO: the target multiplication can overflow, use Uint512
     ensure!(

@@ -717,6 +717,7 @@ dependencies = [
  "num",
  "rstest",
  "thiserror",
+ "utils",
 ]
 
 [[package]]

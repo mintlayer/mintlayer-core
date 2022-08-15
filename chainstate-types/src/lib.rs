@@ -15,6 +15,7 @@
 
 pub mod pos_randomness;
 pub mod storage_result;
+pub mod vrf_tools;
 
 pub use crate::{
     block_index::BlockIndex,
@@ -33,4 +34,3 @@ mod gen_block_index;
 mod height_skip;
 mod locator;
 mod preconnect_data;
-mod vrf_tools;

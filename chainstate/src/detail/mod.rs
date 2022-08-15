@@ -25,7 +25,6 @@ mod error;
 mod median_time;
 mod orphan_blocks;
 mod transaction_verifier;
-mod pos;
 
 use std::sync::Arc;
 

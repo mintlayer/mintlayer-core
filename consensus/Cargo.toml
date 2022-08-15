@@ -8,6 +8,7 @@ version = "0.1.0"
 common = {path = '../common'}
 chainstate-types = {path = '../chainstate-types'}
 chainstate-storage = {path = '../chainstate-storage'}
+utils = {path = "../utils"}
 
 thiserror = "1.0"
 num = "0.4.0"

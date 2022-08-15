@@ -15,7 +15,7 @@
 
 use thiserror::Error;
 
-use chainstate_types::PropertyQueryError;
+use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
     chain::{Block, GenBlock, Transaction},
     primitives::Id,
@@ -55,9 +55,6 @@ pub enum BlockError {
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
-    PoWError(#[from] ConsensusPoWError),
-    #[error("PoW error: {0}")]
-    PoSError(#[from] ConsensusPoSError),
 pub enum CheckBlockError {
     #[error("Blockchain storage error: {0}")]
     StorageError(#[from] chainstate_storage::Error),

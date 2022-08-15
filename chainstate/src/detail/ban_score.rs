@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use consensus::{ConsensusPoWError, ConsensusVerificationError};
+use chainstate_types::pos_randomness::PoSRandomnessError;
+use consensus::{ConsensusPoSError, ConsensusPoWError, ConsensusVerificationError};
 
 use super::{
     transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,

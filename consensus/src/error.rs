@@ -15,13 +15,13 @@
 
 use thiserror::Error;
 
-use chainstate_types::PropertyQueryError;
+use chainstate_types::{pos_randomness::PoSRandomnessError, PropertyQueryError};
 use common::{
     chain::{Block, GenBlock},
     primitives::Id,
 };
 
-use crate::ConsensusPoWError;
+use crate::{pos::error::ConsensusPoSError, ConsensusPoWError};
 
 /// A consensus related error.
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
@@ -35,9 +35,13 @@ pub enum ConsensusVerificationError {
     #[error("Block consensus type does not match our chain configuration: {0}")]
     ConsensusTypeMismatch(String),
     #[error("PoW error: {0}")]
-    PoWError(ConsensusPoWError),
+    PoWError(#[from] ConsensusPoWError),
+    #[error("PoS error: {0}")]
+    PoSError(#[from] ConsensusPoSError),
     #[error("Unsupported consensus type")]
     UnsupportedConsensusType,
     #[error("Kernel output was not found in block: {0}")]
-    PoSKernelOutputRetrievalFailed(Id<Block>),
+    PoSKernelOutputRetrievalFailed(Id<Block>, ConsensusPoSError),
+    #[error("Randomness calculation failed: {0}")]
+    PoSRandomnessCalculationFailed(#[from] PoSRandomnessError),
 }

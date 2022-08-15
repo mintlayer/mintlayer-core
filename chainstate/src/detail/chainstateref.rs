@@ -16,7 +16,10 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
-use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
+use chainstate_types::{
+    get_skip_height, BlockIndex, BlockPreconnectData, ConsensusExtraData, EpochData, GenBlockIndex,
+    PropertyQueryError,
+};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader},
@@ -25,7 +28,10 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
-use consensus::{BlockIndexHandle, TransactionIndexHandle};
+use consensus::{
+    compute_extra_consensus_data, pos::is_due_for_epoch_data_calculation, BlockIndexHandle,
+    TransactionIndexHandle,
+};
 use logging::log;
 use utils::ensure;
 
@@ -490,7 +496,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        consensus::validate_consensus(self.chain_config, block.header(), self)
+        consensus::validate_consensus(self.chain_config, block.header(), self, self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
         Ok(())

@@ -20,7 +20,7 @@ pub use self::{
 mod block_index_handle;
 mod transaction_index_handle;
 
-use chainstate_types::{BlockIndex, ConsensusExtraData};
+use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, ConsensusExtraData};
 use common::{
     chain::{
         block::{BlockHeader, ConsensusData},
@@ -30,7 +30,11 @@ use common::{
     primitives::Idable,
 };
 
-use crate::{error::ConsensusVerificationError, pow::check_pow_consensus};
+use crate::{
+    error::ConsensusVerificationError,
+    pos::{check_proof_of_stake, kernel::get_kernel_output},
+    pow::check_pow_consensus,
+};
 
 /// Checks if the given block identified by the header contains the correct consensus data.  
 pub fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
@@ -68,15 +72,15 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
     header: &BlockHeader,
     block_index_handle: &H,
     tx_index_retriever: &T,
-) -> Result<ConsensusExtraData, BlockError> {
+) -> Result<ConsensusExtraData, ConsensusVerificationError> {
     match header.consensus_data() {
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
         ConsensusData::PoS(pos_data) => {
             let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
             let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
-                .map_err(|_| {
-                    ConsensusVerificationError::PoSKernelOutputRetrievalFailed(header.get_id())
+                .map_err(|e| {
+                    ConsensusVerificationError::PoSKernelOutputRetrievalFailed(header.get_id(), e)
                 })?;
             let current_randomness = PoSRandomness::from_new_block(
                 chain_config,
@@ -85,8 +89,7 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
                 header,
                 &kernel_output,
                 pos_data,
-            )
-            .map_err(BlockError::PoSRandomnessCalculationFailed)?;
+            )?;
             let data = ConsensusExtraData::PoS(current_randomness);
             Ok(data)
         }

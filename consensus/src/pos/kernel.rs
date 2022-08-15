@@ -1,12 +1,26 @@
+// Copyright (c) 2021 RBB S.r.l
+// opensource@mintlayer.org
+// SPDX-License-Identifier: MIT
+// Licensed under the MIT License;
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// https://github.com/mintlayer/mintlayer-core/blob/master/LICENSE
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use chainstate_types::GenBlockIndex;
 use common::chain::{block::consensus_data::PoSData, signature::Transactable, TxOutput};
 use utils::ensure;
 
-use crate::detail::{
-    consensus_validator::{BlockIndexHandle, TransactionIndexHandle},
-    gen_block_index::GenBlockIndex,
+use crate::{
+    pos::error::ConsensusPoSError,
+    validator::{BlockIndexHandle, TransactionIndexHandle},
 };
-
-use super::error::ConsensusPoSError;
 
 pub fn get_kernel_block_index(
     pos_data: &PoSData,
@@ -80,18 +94,23 @@ pub fn get_kernel_output(
                 ConsensusPoSError::KernelOutputIndexOutOfRange(kernel_outpoint.output_index())
             })?
             .clone(),
-        common::chain::SpendablePosition::BlockReward(block_id) => kernel_block_index
-            .block_reward_transactable()
-            .outputs()
-            .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
-            .get(kernel_outpoint.output_index() as usize)
-            .ok_or_else(|| {
-                ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
-                    *block_id,
-                    kernel_outpoint.output_index(),
-                )
-            })?
-            .clone(),
+        common::chain::SpendablePosition::BlockReward(block_id) =>
+        // TODO: FIXME!
+        {
+            todo!()
+        }
+        // kernel_block_index
+        // .block_reward_transactable()
+        // .outputs()
+        // .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
+        // .get(kernel_outpoint.output_index() as usize)
+        // .ok_or_else(|| {
+        //     ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
+        //         *block_id,
+        //         kernel_outpoint.output_index(),
+        //     )
+        // })?
+        // .clone(),
     };
 
     Ok(kernel_output)
