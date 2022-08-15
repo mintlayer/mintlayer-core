@@ -13,9 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 use chainstate_storage::{BlockchainStorage, Transactional};
-use chainstate_types::block_index::BlockIndex;
 use common::chain::config::ChainConfig;
 use common::chain::tokens::{OutputValue, RPCTokenInfoV1, TokenData, TokenId};
 use common::chain::{block::BlockHeader, Block, GenBlock};
@@ -23,30 +21,27 @@ use common::chain::{OutPointSourceId, SpendablePosition, Transaction};
 use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
 use itertools::Itertools;
 use logging::log;
+pub mod ban_score;
+pub mod time_getter;
+pub use self::error::*;
+mod block_index_history_iter;
+mod error;
+mod median_time;
+mod orphan_blocks;
+mod transaction_verifier;
+pub use chainstate_types::Locator;
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError, TokensError};
+pub use error::*;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
 use utxo::utxo_storage::UtxosDBMut;
-mod consensus_validator;
-mod orphan_blocks;
-
-mod error;
-pub use error::*;
-
-use self::orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut};
-
-mod pow;
-
-pub mod ban_score;
-mod block_index_history_iter;
-mod median_time;
-
-pub use chainstate_types::locator::Locator;
-
 mod chainstateref;
-mod gen_block_index;
 mod tokens;
-
-use gen_block_index::GenBlockIndex;
+use self::{
+    orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},
+    time_getter::TimeGetter,
+};
+use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;
@@ -54,12 +49,7 @@ type ChainstateEventHandler = EventHandler<ChainstateEvent>;
 
 const HEADER_LIMIT: BlockDistance = BlockDistance::new(2000);
 
-mod transaction_verifier;
-
 pub type OrphanErrorHandler = dyn Fn(&BlockError) + Send + Sync;
-
-pub mod time_getter;
-use time_getter::TimeGetter;
 
 #[must_use]
 pub struct Chainstate<S> {

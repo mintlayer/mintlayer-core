@@ -13,151 +13,153 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//TODO: need a better way than this.
+use crate::{utxo_impl::test_helper::create_utxo, FlushableUtxoView, Utxo, UtxosCache, UtxosView};
+use common::{chain::OutPoint, primitives::H256};
+use crypto::random::Rng;
+use rstest::rstest;
+use test_utils::random::{make_seedable_rng, Seed};
 
-use crate::utxo_impl::test_helper::{create_utxo, DIRTY, FRESH};
-use crate::{flush_to_base, UtxosCache, UtxosView};
-use crate::{UtxoEntry, UtxoStatus};
-use common::chain::OutPoint;
-use common::primitives::{Id, H256};
-use crypto::random::{make_pseudo_rng, Rng};
+// This test creates an arbitrary long chain of caches.
+// Every new cache is populated with random utxo values which can be created/spend/removed.
+// When the last cache in the chain is created and modified the chain starts to fold by flushing
+// result to a parent. One by one the chain is folded back to a single cache that is checked for consistency.
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy(), 10, 2000)]
+fn cache_simulation_test(
+    #[case] seed: Seed,
+    #[case] nested_level: usize,
+    #[case] iterations_per_cache: usize,
+) {
+    let mut rng = make_seedable_rng(seed);
+    let mut result: Vec<(OutPoint, Utxo)> = Vec::new();
+    let mut base = UtxosCache::new_for_test(H256::random().into());
 
-fn random_bool() -> bool {
-    make_pseudo_rng().gen::<bool>()
+    let new_cache = simulation_step(
+        &mut rng,
+        &mut result,
+        &base,
+        iterations_per_cache,
+        nested_level,
+    );
+    let consumed_cache = new_cache.unwrap().consume();
+    base.batch_write(consumed_cache).expect("batch write must succeed");
+
+    for (outpoint, _) in &result {
+        let has_utxo = base.has_utxo(outpoint);
+        let utxo = base.utxo(outpoint);
+        assert_eq!(has_utxo, utxo.is_some());
+        if utxo.is_some() {
+            assert!(base.has_utxo_in_cache(outpoint));
+        }
+    }
 }
 
-fn random_u64(max: u64) -> u64 {
-    make_pseudo_rng().gen_range(0..max)
-}
-
-fn populate_cache<'a>(
+// Each step a new cache is created based on parent. Then it is randomly modified and passed to the
+// next step as a parent. After recursion stops the resulting cache is returned and flushed to the base.
+fn simulation_step<'a>(
+    rng: &mut impl Rng,
+    result: &mut Vec<(OutPoint, Utxo)>,
     parent: &'a UtxosCache,
-    size: u64,
-    existing_outpoints: &[OutPoint],
-) -> (UtxosCache<'a>, Vec<OutPoint>) {
+    iterations_per_cache: usize,
+    nested_level: usize,
+) -> Option<UtxosCache<'a>> {
+    if nested_level == 0 {
+        return None;
+    }
+
     let mut cache = UtxosCache::new(parent);
+    let mut new_cache_res = populate_cache(rng, &mut cache, iterations_per_cache, result);
+    result.append(&mut new_cache_res);
 
-    // tracker
-    let mut outps: Vec<OutPoint> = vec![];
+    let new_cache = simulation_step(rng, result, &cache, iterations_per_cache, nested_level - 1);
 
-    // let's add utxos based on `size`.
-    for i in 0..size {
-        let block_height = if random_bool() {
-            i
-        } else {
-            // setting a random height based on the `size`.
-            make_pseudo_rng().gen_range(0..size)
-        };
-
-        let (utxo, outpoint) = create_utxo(block_height);
-
-        let outpoint = if random_bool() && existing_outpoints.len() > 1 {
-            // setting a random existing 'spent' outpoint
-            let rng = make_pseudo_rng().gen_range(0..existing_outpoints.len());
-            let outpoint = &existing_outpoints[rng];
-
-            outpoint.clone()
-        } else {
-            // tracking the outpoints
-            outps.push(outpoint.clone());
-            outpoint
-        };
-
-        // randomly set the `possible_overwrite`
-        let possible_overwrite = random_bool();
-        let _ = cache.add_utxo(&outpoint, utxo, possible_overwrite);
-
-        // println!("child, insert: {:?}, overwrite: {}", outpoint,possible_overwrite );
+    if let Some(new_cache) = new_cache {
+        let consumed_cache = new_cache.consume();
+        cache.batch_write(consumed_cache).expect("batch write must succeed");
     }
 
-    // let's create half of the outpoints provided, to be marked as spent.
-    // there's a possibility when randomly the same outpoint is used, so half seems okay.
-    let spent_size = outps.len() / 2;
-
-    for _ in 0..spent_size {
-        // randomly select which outpoint should be marked as "spent"
-        if random_bool() && existing_outpoints.len() > 1 {
-            // just call the `spend_utxo`. Does not matter if it removes the outpoint entirely,
-            // or just mark it as `spent`,
-            let outp_idx = make_pseudo_rng().gen_range(0..existing_outpoints.len());
-            let to_spend = &existing_outpoints[outp_idx];
-            assert!(cache.spend_utxo(to_spend).is_ok());
-
-            //println!("child, spend: {:?}, removed", to_spend);
-        } else {
-            // just mark it as "spent"
-
-            let outp_idx = make_pseudo_rng().gen_range(0..outps.len());
-            let to_spend = &outps[outp_idx];
-
-            let key = to_spend;
-
-            // randomly select which flags should the spent utxo have.
-            // 0 - NOT FRESH, NOT DIRTY, 1 - FRESH, 2 - DIRTY, 3 - FRESH AND DIRTY
-            let flags = make_pseudo_rng().gen_range(0..4u8);
-
-            let new_entry = match flags {
-                FRESH => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty: false,
-                    is_fresh: true,
-                },
-                DIRTY => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty: true,
-                    is_fresh: false,
-                },
-                flag if flag == (FRESH + DIRTY) => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty: true,
-                    is_fresh: true,
-                },
-                _ => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty: false,
-                    is_fresh: false,
-                },
-            };
-            cache.utxos.insert(key.clone(), new_entry);
-
-            //println!("child, spend: {:?}, flags: {}", to_spend,flags );
-        };
-    }
-
-    (cache, outps)
+    Some(cache)
 }
 
-// TODO: Fix the test (https://github.com/mintlayer/mintlayer-core/issues/219).
-#[ignore]
-#[test]
-fn stack_flush_test() {
-    let mut outps: Vec<OutPoint> = vec![];
+// Perform random modification on a cache (add new, spend existing, uncache), tracking the coverage
+fn populate_cache(
+    rng: &mut impl Rng,
+    cache: &mut UtxosCache,
+    iterations_count: usize,
+    prev_result: &[(OutPoint, Utxo)],
+) -> Vec<(OutPoint, Utxo)> {
+    let mut spent_an_entry = false;
+    let mut added_an_entry = false;
+    let mut removed_an_entry = false;
+    let mut verified_full_cache = false;
+    let mut missed_an_entry = false;
+    let mut found_an_entry = false;
+    // track outpoints and utxos
+    let mut result: Vec<(OutPoint, Utxo)> = Vec::new();
 
-    let block_hash = Id::new(H256::random());
-    let mut parent = UtxosCache::new_for_test(H256::random().into());
-    parent.set_best_block(block_hash);
+    for i in 0..iterations_count {
+        // select outpoint and utxo from existing or create new
+        let flip = rng.gen_range(0..3);
+        let (outpoint, utxo) = if flip == 0 && prev_result.len() > 1 {
+            let outpoint_idx = rng.gen_range(0..prev_result.len());
+            (prev_result[outpoint_idx].0.clone(), None)
+        } else if flip == 1 && result.len() > 1 {
+            let outpoint_idx = rng.gen_range(0..result.len());
+            (result[outpoint_idx].0.clone(), None)
+        } else {
+            let block_height = rng.gen_range(0..iterations_count);
+            let (utxo, outpoint) = create_utxo(rng, block_height.try_into().unwrap());
 
-    let parent_clone = parent.clone();
-    let (cache1, mut cache1_outps) = populate_cache(&parent_clone, random_u64(50), &outps);
-    outps.append(&mut cache1_outps);
+            result.push((outpoint.clone(), utxo.clone()));
+            (outpoint, Some(utxo))
+        };
 
-    let cache1_clone = cache1.clone();
-    let (cache2, mut cache2_outps) = populate_cache(&cache1_clone, random_u64(50), &outps);
-    outps.append(&mut cache2_outps);
+        // spend utxo or add new random one
+        if cache.has_utxo(&outpoint) {
+            assert!(cache.spend_utxo(&outpoint).is_ok());
+            spent_an_entry = true;
+        } else if utxo.is_some() {
+            let possible_overwrite = rng.gen::<bool>();
+            assert!(cache.add_utxo(&outpoint, utxo.unwrap(), possible_overwrite).is_ok());
+            added_an_entry = true;
+        }
 
-    let cache2_clone = cache2.clone();
-    let (mut cache3, mut cache3_outps) = populate_cache(&cache2_clone, random_u64(50), &outps);
-    outps.append(&mut cache3_outps);
+        // every 10 iterations call uncache
+        if i % 10 == 0 {
+            if rng.gen::<bool>() && prev_result.len() > 1 {
+                let idx = rng.gen_range(0..prev_result.len());
+                cache.uncache(&prev_result[idx].0);
+            } else if result.len() > 1 {
+                let idx = rng.gen_range(0..result.len());
+                cache.uncache(&result[idx].0);
+            }
+            removed_an_entry = true;
+        }
 
-    let new_block_hash = Id::new(H256::random());
-    cache3.set_best_block(new_block_hash);
-    let cache3_clone = cache3.clone();
-    assert!(flush_to_base(cache3_clone, &mut parent).is_ok());
-
-    for (key, utxo_entry) in &parent.utxos {
-        let outpoint = key;
-        let utxo = cache3.utxo(outpoint);
-
-        assert_eq!(utxo_entry.utxo(), utxo);
+        // every 100 iterations check full cache
+        if i % 100 == 0 {
+            for (outpoint, _) in &result {
+                let has_utxo = cache.has_utxo(outpoint);
+                let utxo = cache.utxo(outpoint);
+                assert_eq!(has_utxo, utxo.is_some());
+                if utxo.is_some() {
+                    assert!(cache.has_utxo_in_cache(outpoint));
+                    found_an_entry = true;
+                }
+                missed_an_entry = true;
+            }
+            verified_full_cache = true;
+        }
     }
+
+    //check coverage
+    assert!(spent_an_entry);
+    assert!(added_an_entry);
+    assert!(removed_an_entry);
+    assert!(verified_full_cache);
+    assert!(found_an_entry);
+    assert!(missed_an_entry);
+
+    result
 }

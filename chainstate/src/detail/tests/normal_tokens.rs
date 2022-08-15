@@ -23,7 +23,7 @@ use crate::{
     detail::{tests::TestBlockInfo, CheckBlockError, TokensError},
     BlockError, BlockSource,
 };
-use chainstate_types::block_index::BlockIndex;
+use chainstate_types::BlockIndex;
 use common::chain::block::BlockReward;
 use common::chain::config::TOKEN_MIN_ISSUANCE_FEE;
 use common::{

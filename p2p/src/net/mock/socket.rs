@@ -136,7 +136,7 @@ mod tests {
         let mut server_socket = MockSocket::new(res1.unwrap().0);
         let mut peer_socket = MockSocket::new(res2.unwrap());
 
-        let msg = Message::Request(Request::BlockRequest(BlockRequest::new(vec![])));
+        let msg = Message::Request(Request::BlockListRequest(BlockListRequest::new(vec![])));
         peer_socket.send(msg.clone()).await.unwrap();
 
         assert_eq!(server_socket.recv().await.unwrap().unwrap(), msg);

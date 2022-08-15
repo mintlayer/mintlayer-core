@@ -17,16 +17,18 @@ mod ban;
 mod connections;
 mod peerdb;
 
+use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
+
+use tokio::time::timeout;
+
 use crate::{
     net::{
         types::{ConnectivityEvent, PeerInfo},
         ConnectivityService, NetworkingService,
     },
-    swarm::PeerManager,
+    peer_manager::PeerManager,
     P2pConfig,
 };
-use std::{fmt::Debug, str::FromStr, sync::Arc, time::Duration};
-use tokio::time::timeout;
 
 async fn make_peer_manager<T>(
     addr: T::Address,

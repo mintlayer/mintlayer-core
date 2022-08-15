@@ -13,13 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::TokensError;
 use common::{
     chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition},
     primitives::{Amount, Id},
 };
 use thiserror::Error;
-
-use crate::detail::TokensError;
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]
 pub enum ConnectTransactionError {

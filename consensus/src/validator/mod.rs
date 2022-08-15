@@ -13,23 +13,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::block::BlockHeader;
-use common::chain::block::ConsensusData;
-use common::chain::config::ChainConfig;
-use common::chain::{PoWStatus, RequiredConsensus};
-use common::primitives::Idable;
-
-use crate::detail::pow::work::check_pow_consensus;
-
-pub use self::block_index_handle::BlockIndexHandle;
-pub use self::transaction_index_handle::TransactionIndexHandle;
-
-use super::ConsensusVerificationError;
+pub use self::{
+    block_index_handle::BlockIndexHandle, transaction_index_handle::TransactionIndexHandle,
+};
 
 mod block_index_handle;
 mod transaction_index_handle;
 
-pub(crate) fn validate_consensus<H: BlockIndexHandle>(
+use common::{
+    chain::{
+        block::{BlockHeader, ConsensusData},
+        config::ChainConfig,
+        PoWStatus, RequiredConsensus,
+    },
+    primitives::Idable,
+};
+
+use crate::{error::ConsensusVerificationError, pow::check_pow_consensus};
+
+/// Checks if the given block identified by the header contains the correct consensus data.  
+pub fn validate_consensus<H: BlockIndexHandle>(
     chain_config: &ChainConfig,
     header: &BlockHeader,
     block_index_handle: &H,

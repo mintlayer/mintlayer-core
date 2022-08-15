@@ -13,14 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{collections::BTreeSet, sync::Arc};
-
+use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
 use super::{
-    consensus_validator::TransactionIndexHandle, gen_block_index::GenBlockIndex,
-    median_time::calculate_median_time_past, time_getter::TimeGetterFn, TokensError,
+    orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
+    tokens,
+    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
+    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
 };
+use crate::{BlockError, BlockSource, ChainstateConfig};
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, TransactionRw};
-use chainstate_types::{block_index::BlockIndex, height_skip::get_skip_height};
+use chainstate_types::TokensError;
+use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
         block::{calculate_tx_merkle_root, calculate_witness_merkle_root, Block, BlockHeader},
@@ -31,19 +34,10 @@ use common::{
     primitives::{BlockDistance, BlockHeight, Id, Idable},
     Uint256,
 };
+use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
+use std::{collections::BTreeSet, sync::Arc};
 use utils::ensure;
-
-use crate::{BlockError, BlockSource, ChainstateConfig};
-
-use super::{
-    consensus_validator::{self, BlockIndexHandle},
-    orphan_blocks::{OrphanBlocks, OrphanBlocksMut},
-    tokens,
-    transaction_verifier::{BlockTransactableRef, TransactionVerifier},
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, OrphanCheckError,
-    PropertyQueryError,
-};
 
 pub(crate) struct ChainstateRef<'a, S, O> {
     chain_config: &'a ChainConfig,
@@ -525,7 +519,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     pub fn check_block(&self, block: &Block) -> Result<(), CheckBlockError> {
-        consensus_validator::validate_consensus(self.chain_config, block.header(), self)
+        consensus::validate_consensus(self.chain_config, block.header(), self)
             .map_err(CheckBlockError::ConsensusVerificationFailed)?;
         self.check_block_detail(block)?;
         Ok(())
@@ -727,7 +721,6 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
             .expect("Database error on retrieving current best block index")
             .expect("Best block index not present in the database");
         let block = self.get_block_from_index(&block_index)?.expect("Inconsistent DB");
-
         // Disconnect transactions
         self.disconnect_transactions(&block)?;
         self.db_tx.set_best_block_id(block_index.prev_block_id())?;

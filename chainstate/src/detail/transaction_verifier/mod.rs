@@ -13,15 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{
-    collections::{btree_map::Entry, BTreeMap},
-    sync::Arc,
-};
+pub mod error;
 
-use crate::detail::TokensError;
-
-use super::gen_block_index::GenBlockIndex;
+mod cached_operation;
+use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
+use cached_operation::CachedInputsOperation;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_types::GenBlockIndex;
+use chainstate_types::TokensError;
 use common::{
     amount_sum,
     chain::{
@@ -35,14 +34,11 @@ use common::{
     },
     primitives::{Amount, BlockDistance, BlockHeight, Id, Idable},
 };
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    sync::Arc,
+};
 use utils::ensure;
-
-mod cached_operation;
-use cached_operation::CachedInputsOperation;
-
-use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
-
-pub mod error;
 
 type TokensMap = BTreeMap<TokenId, Amount>;
 

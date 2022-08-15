@@ -18,7 +18,7 @@ use crate::{
     error, message,
     net::{
         self,
-        libp2p::sync::{SyncRequest, SyncResponse},
+        libp2p::behaviour::sync_codec::message_types::{SyncRequest, SyncResponse},
     },
 };
 use libp2p::{
@@ -59,7 +59,6 @@ impl PartialEq for IdentifyInfoWrapper {
 
 impl Eq for IdentifyInfoWrapper {}
 
-// TODO: rename `response` -> `channel`
 #[derive(Debug)]
 pub enum Command {
     /// Start listening on the network interface specified by `addr`
@@ -81,9 +80,8 @@ pub enum Command {
         response: oneshot::Sender<crate::Result<()>>,
     },
 
-    // TODO: rethink this message
     /// Publish a message on the designated GossipSub topic
-    SendMessage {
+    AnnounceData {
         topic: net::types::PubSubTopic,
         message: Vec<u8>,
         response: oneshot::Sender<crate::Result<()>>,

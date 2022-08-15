@@ -13,6 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chainstate_types::TokensError;
 use common::{
     chain::{
         config::{TOKEN_MAX_DEC_COUNT, TOKEN_MAX_TICKER_LEN, TOKEN_MAX_URI_LEN},
@@ -22,8 +23,6 @@ use common::{
     primitives::{Amount, Id, Idable},
 };
 use utils::ensure;
-
-use crate::detail::TokensError;
 
 pub fn check_token_transfer_data(
     block_id: Id<Block>,

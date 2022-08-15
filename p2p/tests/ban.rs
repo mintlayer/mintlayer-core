@@ -19,7 +19,7 @@ use p2p::{
     message::Announcement,
     net::{self, libp2p::Libp2pService, ConnectivityService, NetworkingService, PubSubService},
     pubsub::PubSubMessageHandler,
-    sync::SyncManager,
+    sync::BlockSyncManager,
 };
 use p2p_test_utils::{connect_services, make_libp2p_addr, TestBlockInfo};
 use std::sync::Arc;
@@ -109,7 +109,7 @@ async fn invalid_sync_block() {
             .await
             .unwrap();
 
-    let mut sync1 = SyncManager::<Libp2pService>::new(
+    let mut sync1 = BlockSyncManager::<Libp2pService>::new(
         Arc::clone(&config),
         sync1,
         handle.clone(),

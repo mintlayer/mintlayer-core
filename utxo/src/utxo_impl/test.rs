@@ -17,7 +17,9 @@ use common::primitives::{BlockHeight, Id, Idable, H256};
 
 use crate::utxo_impl::test_helper::Presence::{Absent, Present, Spent};
 use crate::Error::{self, FreshUtxoAlreadyExists, OverwritingUtxo};
-use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView};
+use crate::{
+    flush_to_base, ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView,
+};
 
 use crate::test_helper::create_tx_outputs;
 use crate::utxo_impl::test_helper::{
@@ -25,9 +27,11 @@ use crate::utxo_impl::test_helper::{
 };
 use crate::utxo_impl::{UtxoSource, UtxoStatus};
 use common::chain::{OutPoint, OutPointSourceId, Transaction, TxInput};
-use crypto::random::{make_pseudo_rng, seq};
+use crypto::random::{seq, Rng};
 use itertools::Itertools;
+use rstest::rstest;
 use std::collections::BTreeMap;
+use test_utils::random::{make_seedable_rng, Seed};
 
 /// Checks `add_utxo` method behaviour.
 /// # Arguments
@@ -37,6 +41,7 @@ use std::collections::BTreeMap;
 /// `result_flags` - the result ( dirty/not, fresh/not ) after calling the `add_utxo` method.
 /// `op_result` - the result of calling `add_utxo` method, whether it succeeded or not.
 fn check_add_utxo(
+    rng: &mut impl Rng,
     cache_presence: Presence,
     cache_flags: Option<u8>,
     possible_overwrite: bool,
@@ -44,10 +49,10 @@ fn check_add_utxo(
     op_result: Result<(), Error>,
 ) {
     let mut cache = UtxosCache::new_for_test(H256::random().into());
-    let (_, outpoint) = insert_single_entry(&mut cache, &cache_presence, cache_flags, None);
+    let (_, outpoint) = insert_single_entry(rng, &mut cache, &cache_presence, cache_flags, None);
 
     // perform the add_utxo.
-    let (utxo, _) = create_utxo(0);
+    let (utxo, _) = create_utxo(rng, 0);
     let add_result = cache.add_utxo(&outpoint, utxo, possible_overwrite);
 
     assert_eq!(add_result, op_result);
@@ -67,6 +72,7 @@ fn check_add_utxo(
 /// `cache_flags` - The flags of a utxo entry in a cache.
 /// `result_flags` - the result ( dirty/not, fresh/not ) after performing `spend_utxo`.
 fn check_spend_utxo(
+    rng: &mut impl Rng,
     parent_presence: Presence,
     cache_presence: Presence,
     cache_flags: Option<u8>,
@@ -75,8 +81,13 @@ fn check_spend_utxo(
 ) {
     // initialize the parent cache.
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (_, parent_outpoint) =
-        insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
+    let (_, parent_outpoint) = insert_single_entry(
+        rng,
+        &mut parent,
+        &parent_presence,
+        Some(FRESH | DIRTY),
+        None,
+    );
 
     // initialize the child cache
     let mut child = match parent_presence {
@@ -85,6 +96,7 @@ fn check_spend_utxo(
     };
 
     let (_, child_outpoint) = insert_single_entry(
+        rng,
         &mut child,
         &cache_presence,
         cache_flags,
@@ -111,6 +123,7 @@ fn check_spend_utxo(
 /// `result` - The result of the parent after performing the `batch_write`.
 /// `result_flags` - the pair of `result`, indicating whether it is dirty/not, fresh/not or nothing at all.
 fn check_write_utxo(
+    rng: &mut impl Rng,
     parent_presence: Presence,
     child_presence: Presence,
     result: Result<Presence, Error>,
@@ -120,7 +133,7 @@ fn check_write_utxo(
 ) {
     //initialize the parent cache
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (_, outpoint) = insert_single_entry(&mut parent, &parent_presence, parent_flags, None);
+    let (_, outpoint) = insert_single_entry(rng, &mut parent, &parent_presence, parent_flags, None);
     let key = &outpoint;
 
     // prepare the map for batch write.
@@ -136,7 +149,7 @@ fn check_write_utxo(
                 panic!("Please use `Present` or `Spent` presence when child flags are specified.");
             }
             Present => {
-                let (utxo, _) = create_utxo(0);
+                let (utxo, _) = create_utxo(rng, 0);
                 let entry = UtxoEntry::new(utxo, is_fresh, is_dirty);
                 single_entry_map.insert(key.clone(), entry);
             }
@@ -177,6 +190,7 @@ fn check_write_utxo(
 
 /// Checks the `get_mut_utxo` method behaviour.
 fn check_get_mut_utxo(
+    rng: &mut impl Rng,
     parent_presence: Presence,
     cache_presence: Presence,
     result_presence: Presence,
@@ -184,14 +198,20 @@ fn check_get_mut_utxo(
     result_flags: Option<u8>,
 ) {
     let mut parent = UtxosCache::new_for_test(H256::random().into());
-    let (parent_utxo, parent_outpoint) =
-        insert_single_entry(&mut parent, &parent_presence, Some(FRESH | DIRTY), None);
+    let (parent_utxo, parent_outpoint) = insert_single_entry(
+        rng,
+        &mut parent,
+        &parent_presence,
+        Some(FRESH | DIRTY),
+        None,
+    );
 
     let mut child = match parent_presence {
         Absent => UtxosCache::new_for_test(H256::random().into()),
         _ => UtxosCache::new(&parent),
     };
     let (child_utxo, child_outpoint) = insert_single_entry(
+        rng,
         &mut child,
         &cache_presence,
         cache_flags,
@@ -252,177 +272,192 @@ fn check_get_mut_utxo(
     }
 }
 
-#[test]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[rustfmt::skip]
-fn add_utxo_test() {
+fn add_utxo_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     /*
-                CACHE PRESENCE CACHE Flags      Possible    RESULT flags       RESULT of `add_utxo` method
-                                                Overwrite
+                             CACHE      CACHE Flags      Possible    RESULT flags       RESULT of `add_utxo` method
+                             PRESENCE                    Overwrite
     */
-    check_add_utxo(Absent,    None,               false,  Some(FRESH | DIRTY), Ok(()));
-    check_add_utxo(Absent,    None,               true,   Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Absent,    None,               false,  Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Absent,    None,               true,   Some(DIRTY),         Ok(()));
 
-    check_add_utxo(Spent,     Some(0),            false,  Some(FRESH | DIRTY), Ok(()));
-    check_add_utxo(Spent,     Some(0),            true,   Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(0),            false,  Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(0),            true,   Some(DIRTY),         Ok(()));
 
-    check_add_utxo(Spent,     Some(FRESH),        false,  Some(FRESH | DIRTY), Ok(()));
-    check_add_utxo(Spent,     Some(FRESH),        true,   Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(FRESH),        false,  Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(FRESH),        true,   Some(FRESH | DIRTY), Ok(()));
 
-    check_add_utxo(Spent,     Some(DIRTY),        false,  Some(DIRTY),         Ok(()));
-    check_add_utxo(Spent,     Some(DIRTY),        true,   Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(DIRTY),        false,  Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(DIRTY),        true,   Some(DIRTY),         Ok(()));
 
-    check_add_utxo(Spent,     Some(FRESH | DIRTY),false,  Some(FRESH | DIRTY), Ok(()));
-    check_add_utxo(Spent,     Some(FRESH | DIRTY),true,   Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(FRESH | DIRTY),false,  Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Spent,     Some(FRESH | DIRTY),true,   Some(FRESH | DIRTY), Ok(()));
 
-    check_add_utxo(Present,   Some(0),            false,  None,                Err(OverwritingUtxo));
-    check_add_utxo(Present,   Some(0),            true,   Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Present,   Some(0),            false,  None,                Err(OverwritingUtxo));
+    check_add_utxo(&mut rng, Present,   Some(0),            true,   Some(DIRTY),         Ok(()));
 
-    check_add_utxo(Present,   Some(FRESH),        false,  None,                Err(OverwritingUtxo));
-    check_add_utxo(Present,   Some(FRESH),        true,   Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Present,   Some(FRESH),        false,  None,                Err(OverwritingUtxo));
+    check_add_utxo(&mut rng, Present,   Some(FRESH),        true,   Some(FRESH | DIRTY), Ok(()));
 
-    check_add_utxo(Present,   Some(DIRTY),        false,  None,                Err(OverwritingUtxo));
-    check_add_utxo(Present,   Some(DIRTY),        true,   Some(DIRTY),         Ok(()));
+    check_add_utxo(&mut rng, Present,   Some(DIRTY),        false,  None,                Err(OverwritingUtxo));
+    check_add_utxo(&mut rng, Present,   Some(DIRTY),        true,   Some(DIRTY),         Ok(()));
 
-    check_add_utxo(Present,   Some(FRESH | DIRTY), false, None,                Err(OverwritingUtxo));
-    check_add_utxo(Present,   Some(FRESH | DIRTY), true,  Some(FRESH | DIRTY), Ok(()));
+    check_add_utxo(&mut rng, Present,   Some(FRESH | DIRTY), false, None,                Err(OverwritingUtxo));
+    check_add_utxo(&mut rng, Present,   Some(FRESH | DIRTY), true,  Some(FRESH | DIRTY), Ok(()));
 }
 
-#[test]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[rustfmt::skip]
-fn spend_utxo_test() {
+fn spend_utxo_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE
-                    PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
+                              PARENT     CACHE
+                              PRESENCE   PRESENCE  CACHE Flags          RESULT                       RESULT Flags
     */
-    check_spend_utxo(Absent,  Absent,   None,                Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(Absent,  Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Absent,  Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Absent,  Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Absent,  Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Absent,  Present,  Some(0),             Ok(()), Some(DIRTY));
-    check_spend_utxo(Absent,  Present,  Some(FRESH),         Ok(()), None);
-    check_spend_utxo(Absent,  Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
-    check_spend_utxo(Absent,  Present,  Some(FRESH | DIRTY), Ok(()), None);
+    check_spend_utxo(&mut rng, Absent,  Absent,   None,                Err(Error::NoUtxoFound),      None);
+    check_spend_utxo(&mut rng, Absent,  Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Absent,  Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(&mut rng, Absent,  Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Absent,  Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(&mut rng, Absent,  Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Absent,  Present,  Some(FRESH),         Ok(()), None);
+    check_spend_utxo(&mut rng, Absent,  Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Absent,  Present,  Some(FRESH | DIRTY), Ok(()), None);
     // this should fail, since there's nothing to remove.
-    check_spend_utxo(Spent,   Absent,   None,                Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(Spent,   Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Spent,   Absent,   None,                Err(Error::NoUtxoFound),      None);
+    check_spend_utxo(&mut rng, Spent,   Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
     // this should fail, as there's nothing to remove.
-    check_spend_utxo(Spent,   Absent,   Some(FRESH),         Err(Error::NoUtxoFound),      None);
-    check_spend_utxo(Spent,   Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Spent,   Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Spent,   Present,  Some(0),             Ok(()), Some(DIRTY));
-    check_spend_utxo(Spent,   Present,  Some(FRESH),         Ok(()), None);
-    check_spend_utxo(Spent,   Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
-    check_spend_utxo(Spent,   Present,  Some(FRESH | DIRTY), Ok(()), None);
-    check_spend_utxo(Present, Absent,   None,                Ok(()), Some(DIRTY));
-    check_spend_utxo(Present, Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Present, Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Present, Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
-    check_spend_utxo(Present, Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
-    check_spend_utxo(Present, Present,  Some(0),             Ok(()), Some(DIRTY));
-    check_spend_utxo(Present, Present,  Some(FRESH),         Ok(()), None);
-    check_spend_utxo(Present, Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
-    check_spend_utxo(Present, Present,  Some(FRESH | DIRTY), Ok(()), None);
+    check_spend_utxo(&mut rng, Spent,   Absent,   Some(FRESH),         Err(Error::NoUtxoFound),      None);
+    check_spend_utxo(&mut rng, Spent,   Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Spent,   Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(&mut rng, Spent,   Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Spent,   Present,  Some(FRESH),         Ok(()), None);
+    check_spend_utxo(&mut rng, Spent,   Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Spent,   Present,  Some(FRESH | DIRTY), Ok(()), None);
+    check_spend_utxo(&mut rng, Present, Absent,   None,                Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Present, Spent,    Some(0),             Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Present, Spent,    Some(FRESH),         Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(&mut rng, Present, Spent,    Some(DIRTY),         Err(Error::UtxoAlreadySpent), Some(DIRTY));
+    check_spend_utxo(&mut rng, Present, Spent,    Some(FRESH | DIRTY), Err(Error::UtxoAlreadySpent), None);
+    check_spend_utxo(&mut rng, Present, Present,  Some(0),             Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Present, Present,  Some(FRESH),         Ok(()), None);
+    check_spend_utxo(&mut rng, Present, Present,  Some(DIRTY),         Ok(()), Some(DIRTY));
+    check_spend_utxo(&mut rng, Present, Present,  Some(FRESH | DIRTY), Ok(()), None);
 }
 
-#[test]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[rustfmt::skip]
-fn batch_write_test() {
+fn batch_write_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE     RESULT
-                    PRESENCE   PRESENCE  PRESENCE          PARENT Flags          CACHE Flags          RESULT Flags
+                              PARENT     CACHE     RESULT
+                              PRESENCE   PRESENCE  PRESENCE          PARENT Flags          CACHE Flags          RESULT Flags
     */
-    check_write_utxo(Absent, Absent,    Ok(Absent),             None,               None,               None);
-    check_write_utxo(Absent, Spent ,    Ok(Spent),              None,               Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Absent, Spent ,    Ok(Absent),             None,               Some(FRESH | DIRTY),None );
-    check_write_utxo(Absent, Present,   Ok(Present),            None,               Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Absent, Present,   Ok(Present),            None,               Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_write_utxo(Spent , Absent,    Ok(Spent),              Some(0),            None,               Some(0));
-    check_write_utxo(Spent , Absent,    Ok(Spent),              Some(FRESH),        None,               Some(FRESH));
-    check_write_utxo(Spent , Absent,    Ok(Spent),              Some(DIRTY),        None,               Some(DIRTY));
-    check_write_utxo(Spent , Absent,    Ok(Spent),              Some(FRESH | DIRTY),None,               Some(FRESH | DIRTY));
-    check_write_utxo(Spent , Spent ,    Ok(Spent),              Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Spent , Spent ,    Ok(Spent),              Some(0),            Some(FRESH | DIRTY),Some(DIRTY));
-    check_write_utxo(Spent , Spent ,    Ok(Absent),             Some(FRESH),        Some(DIRTY),        None);
-    check_write_utxo(Spent , Spent ,    Ok(Absent),             Some(FRESH),        Some(FRESH | DIRTY),None);
-    check_write_utxo(Spent , Spent ,    Ok(Spent),              Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Spent , Spent ,    Ok(Spent),              Some(DIRTY),        Some(FRESH | DIRTY),Some(DIRTY));
-    check_write_utxo(Spent , Spent ,    Ok(Absent),             Some(FRESH | DIRTY),Some(DIRTY),        None);
-    check_write_utxo(Spent , Spent ,    Ok(Absent),             Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(0),            Some(FRESH | DIRTY),Some(DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(FRESH),        Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(FRESH),        Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(DIRTY),        Some(FRESH | DIRTY),Some(DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(FRESH | DIRTY),Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Spent , Present,   Ok(Present),            Some(FRESH | DIRTY),Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_write_utxo(Present, Absent,   Ok(Present),            Some(0),            None,               Some(0));
-    check_write_utxo(Present, Absent,   Ok(Present),            Some(FRESH),        None,               Some(FRESH));
-    check_write_utxo(Present, Absent,   Ok(Present),            Some(DIRTY),        None,               Some(DIRTY));
-    check_write_utxo(Present, Absent,   Ok(Present),            Some(FRESH | DIRTY),None ,              Some(FRESH | DIRTY));
-    check_write_utxo(Present, Spent ,   Ok(Spent),              Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Spent ,   Ok(Absent),             Some(FRESH),        Some(DIRTY),        None);
-    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Spent ,   Ok(Spent),              Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Spent ,   Ok(Absent),             Some(FRESH | DIRTY),Some(DIRTY),        None);
-    check_write_utxo(Present, Spent ,   Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Present,  Ok(Present),            Some(0),            Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(0),            Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Present,  Ok(Present),            Some(FRESH),        Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(FRESH),        Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Present,  Ok(Present),            Some(DIRTY),        Some(DIRTY),        Some(DIRTY));
-    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(DIRTY),        Some(FRESH | DIRTY),None);
-    check_write_utxo(Present, Present,  Ok(Present),            Some(FRESH | DIRTY),Some(DIRTY),        Some(FRESH | DIRTY));
-    check_write_utxo(Present, Present,  Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY),Some(FRESH | DIRTY),None);
+    check_write_utxo(&mut rng, Absent, Absent,   Ok(Absent),                  None,                None,                None);
+    check_write_utxo(&mut rng, Absent, Spent ,   Ok(Spent),                   None,                Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Absent, Spent ,   Ok(Absent),                  None,                Some(FRESH | DIRTY), None );
+    check_write_utxo(&mut rng, Absent, Present,  Ok(Present),                 None,                Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Absent, Present,  Ok(Present),                 None,                Some(FRESH | DIRTY), Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Spent , Absent,   Ok(Spent),                   Some(0),             None,                Some(0));
+    check_write_utxo(&mut rng, Spent , Absent,   Ok(Spent),                   Some(FRESH),         None,                Some(FRESH));
+    check_write_utxo(&mut rng, Spent , Absent,   Ok(Spent),                   Some(DIRTY),         None,                Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Absent,   Ok(Spent),                   Some(FRESH | DIRTY), None,                Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Spent),                   Some(0),             Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Spent),                   Some(0),             Some(FRESH | DIRTY), Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Absent),                  Some(FRESH),         Some(DIRTY),         None);
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Absent),                  Some(FRESH),         Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Spent),                   Some(DIRTY),         Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Spent),                   Some(DIRTY),         Some(FRESH | DIRTY), Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Absent),                  Some(FRESH | DIRTY), Some(DIRTY),         None);
+    check_write_utxo(&mut rng, Spent , Spent ,   Ok(Absent),                  Some(FRESH | DIRTY), Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(0),             Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(0),             Some(FRESH | DIRTY), Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(FRESH),         Some(DIRTY),         Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(FRESH),         Some(FRESH | DIRTY), Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(DIRTY),         Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(DIRTY),         Some(FRESH | DIRTY), Some(DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(FRESH | DIRTY), Some(DIRTY),         Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Spent , Present,  Ok(Present),                 Some(FRESH | DIRTY), Some(FRESH | DIRTY), Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Present, Absent,  Ok(Present),                 Some(0),             None,                Some(0));
+    check_write_utxo(&mut rng, Present, Absent,  Ok(Present),                 Some(FRESH),         None,                Some(FRESH));
+    check_write_utxo(&mut rng, Present, Absent,  Ok(Present),                 Some(DIRTY),         None,                Some(DIRTY));
+    check_write_utxo(&mut rng, Present, Absent,  Ok(Present),                 Some(FRESH | DIRTY), None ,               Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Present, Spent ,  Ok(Spent),                   Some(0),             Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Present, Spent ,  Err(FreshUtxoAlreadyExists), Some(0),             Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Spent ,  Ok(Absent),                  Some(FRESH),         Some(DIRTY),         None);
+    check_write_utxo(&mut rng, Present, Spent ,  Err(FreshUtxoAlreadyExists), Some(FRESH),         Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Spent ,  Ok(Spent),                   Some(DIRTY),         Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Present, Spent ,  Err(FreshUtxoAlreadyExists), Some(DIRTY),         Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Spent ,  Ok(Absent),                  Some(FRESH | DIRTY), Some(DIRTY),         None);
+    check_write_utxo(&mut rng, Present, Spent ,  Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY), Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Present, Ok(Present),                 Some(0),             Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Present, Present, Err(FreshUtxoAlreadyExists), Some(0),             Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Present, Ok(Present),                 Some(FRESH),         Some(DIRTY),         Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Present, Present, Err(FreshUtxoAlreadyExists), Some(FRESH),         Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Present, Ok(Present),                 Some(DIRTY),         Some(DIRTY),         Some(DIRTY));
+    check_write_utxo(&mut rng, Present, Present, Err(FreshUtxoAlreadyExists), Some(DIRTY),         Some(FRESH | DIRTY), None);
+    check_write_utxo(&mut rng, Present, Present, Ok(Present),                 Some(FRESH | DIRTY), Some(DIRTY),         Some(FRESH | DIRTY));
+    check_write_utxo(&mut rng, Present, Present, Err(FreshUtxoAlreadyExists), Some(FRESH | DIRTY), Some(FRESH | DIRTY), None);
 }
 
-#[test]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 #[rustfmt::skip]
-fn access_utxo_test() {
+fn access_utxo_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     /*
-                    PARENT     CACHE     RESULT     CACHE
-                    PRESENCE   PRESENCE  PRESENCE   Flags        RESULT Flags
+                               PARENT     CACHE     RESULT     CACHE
+                               PRESENCE   PRESENCE  PRESENCE   Flags        RESULT Flags
     */
-    check_get_mut_utxo(Absent, Absent, Absent,   None,               None);
-    check_get_mut_utxo(Absent, Spent , Spent ,   Some(0),            Some(0));
-    check_get_mut_utxo(Absent, Spent , Spent ,   Some(FRESH),        Some(FRESH));
-    check_get_mut_utxo(Absent, Spent , Spent ,   Some(DIRTY),        Some(DIRTY));
-    check_get_mut_utxo(Absent, Spent , Spent ,   Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_get_mut_utxo(Absent, Present, Present, Some(0),            Some(0));
-    check_get_mut_utxo(Absent, Present, Present, Some(FRESH),        Some(FRESH));
-    check_get_mut_utxo(Absent, Present, Present, Some(DIRTY),        Some(DIRTY));
-    check_get_mut_utxo(Absent, Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_get_mut_utxo(Spent , Absent, Absent,   None,               None);
-    check_get_mut_utxo(Spent , Spent , Spent ,   Some(0),            Some(0));
-    check_get_mut_utxo(Spent , Spent , Spent ,   Some(FRESH),        Some(FRESH));
-    check_get_mut_utxo(Spent , Spent , Spent ,   Some(DIRTY),        Some(DIRTY));
-    check_get_mut_utxo(Spent , Spent , Spent ,   Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_get_mut_utxo(Spent , Present, Present, Some(0),            Some(0));
-    check_get_mut_utxo(Spent , Present, Present, Some(FRESH),        Some(FRESH));
-    check_get_mut_utxo(Spent , Present, Present, Some(DIRTY),        Some(DIRTY));
-    check_get_mut_utxo(Spent , Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_get_mut_utxo(Present, Absent, Present, None,               Some(0));
-    check_get_mut_utxo(Present, Spent , Spent ,  Some(0),            Some(0));
-    check_get_mut_utxo(Present, Spent , Spent ,  Some(FRESH),        Some(FRESH));
-    check_get_mut_utxo(Present, Spent , Spent ,  Some(DIRTY),        Some(DIRTY));
-    check_get_mut_utxo(Present, Spent , Spent ,  Some(FRESH | DIRTY),Some(FRESH | DIRTY));
-    check_get_mut_utxo(Present, Present, Present, Some(0),           Some(0));
-    check_get_mut_utxo(Present, Present, Present, Some(FRESH),       Some(FRESH));
-    check_get_mut_utxo(Present, Present, Present, Some(DIRTY),       Some(DIRTY));
-    check_get_mut_utxo(Present, Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Absent, Absent, Absent,   None,               None);
+    check_get_mut_utxo(&mut rng, Absent, Spent , Spent ,   Some(0),            Some(0));
+    check_get_mut_utxo(&mut rng, Absent, Spent , Spent ,   Some(FRESH),        Some(FRESH));
+    check_get_mut_utxo(&mut rng, Absent, Spent , Spent ,   Some(DIRTY),        Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Absent, Spent , Spent ,   Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Absent, Present, Present, Some(0),            Some(0));
+    check_get_mut_utxo(&mut rng, Absent, Present, Present, Some(FRESH),        Some(FRESH));
+    check_get_mut_utxo(&mut rng, Absent, Present, Present, Some(DIRTY),        Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Absent, Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Spent , Absent, Absent,   None,               None);
+    check_get_mut_utxo(&mut rng, Spent , Spent , Spent ,   Some(0),            Some(0));
+    check_get_mut_utxo(&mut rng, Spent , Spent , Spent ,   Some(FRESH),        Some(FRESH));
+    check_get_mut_utxo(&mut rng, Spent , Spent , Spent ,   Some(DIRTY),        Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Spent , Spent , Spent ,   Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Spent , Present, Present, Some(0),            Some(0));
+    check_get_mut_utxo(&mut rng, Spent , Present, Present, Some(FRESH),        Some(FRESH));
+    check_get_mut_utxo(&mut rng, Spent , Present, Present, Some(DIRTY),        Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Spent , Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Present, Absent, Present, None,               Some(0));
+    check_get_mut_utxo(&mut rng, Present, Spent , Spent ,  Some(0),            Some(0));
+    check_get_mut_utxo(&mut rng, Present, Spent , Spent ,  Some(FRESH),        Some(FRESH));
+    check_get_mut_utxo(&mut rng, Present, Spent , Spent ,  Some(DIRTY),        Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Present, Spent , Spent ,  Some(FRESH | DIRTY),Some(FRESH | DIRTY));
+    check_get_mut_utxo(&mut rng, Present, Present, Present, Some(0),           Some(0));
+    check_get_mut_utxo(&mut rng, Present, Present, Present, Some(FRESH),       Some(FRESH));
+    check_get_mut_utxo(&mut rng, Present, Present, Present, Some(DIRTY),       Some(DIRTY));
+    check_get_mut_utxo(&mut rng, Present, Present, Present, Some(FRESH | DIRTY),Some(FRESH | DIRTY));
 }
 
-#[test]
-fn derive_cache_test() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn derive_cache_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
-    let (utxo, outpoint_1) = create_utxo(10);
+    let (utxo, outpoint_1) = create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
-    let (utxo, outpoint_2) = create_utxo(20);
+    let (utxo, outpoint_2) = create_utxo(&mut rng, 20);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
     let mut extra_cache = cache.derive_cache();
@@ -431,35 +466,41 @@ fn derive_cache_test() {
     assert!(extra_cache.has_utxo(&outpoint_1));
     assert!(extra_cache.has_utxo(&outpoint_2));
 
-    let (utxo, outpoint) = create_utxo(30);
+    let (utxo, outpoint) = create_utxo(&mut rng, 30);
     assert!(extra_cache.add_utxo(&outpoint, utxo, true).is_ok());
 
     assert!(!cache.has_utxo(&outpoint));
 }
 
-#[test]
-fn blockchain_or_mempool_utxo_test() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn blockchain_or_mempool_utxo_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
-    let (utxo, outpoint_1) = create_utxo(10);
+    let (utxo, outpoint_1) = create_utxo(&mut rng, 10);
     assert!(cache.add_utxo(&outpoint_1, utxo, false).is_ok());
 
-    let (utxo, outpoint_2) = create_utxo_for_mempool();
+    let (utxo, outpoint_2) = create_utxo_for_mempool(&mut rng);
     assert!(cache.add_utxo(&outpoint_2, utxo, false).is_ok());
 
-    let res = cache.utxo(&outpoint_2).expect("should countain utxo");
+    let res = cache.utxo(&outpoint_2).expect("should contain utxo");
     assert!(res.source_height().is_mempool());
     assert_eq!(res.source, UtxoSource::MemPool);
 }
 
-#[test]
-fn multiple_update_utxos_test() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn multiple_update_utxos_test(#[case] seed: Seed) {
     use common::chain::signature::inputsig::InputWitness;
 
+    let mut rng = make_seedable_rng(seed);
     let mut cache = UtxosCache::new_for_test(H256::random().into());
 
     // let's test `add_utxos`
-    let tx = Transaction::new(0x00, vec![], create_tx_outputs(10), 0x01).unwrap();
+    let tx = Transaction::new(0x00, vec![], create_tx_outputs(&mut rng, 10), 0x01).unwrap();
     assert!(cache.add_utxos(&tx, UtxoSource::BlockChain(BlockHeight::new(2)), false).is_ok());
 
     // check that the outputs of tx are added in the cache.
@@ -472,7 +513,6 @@ fn multiple_update_utxos_test() {
     });
 
     // let's spend some outputs.;
-    let mut rng = make_pseudo_rng();
     // randomly take half of the outputs to spend.
     let results =
         seq::index::sample(&mut rng, tx.outputs().len(), tx.outputs().len() / 2).into_vec();
@@ -498,4 +538,14 @@ fn multiple_update_utxos_test() {
     to_spend.iter().for_each(|input| {
         assert!(cache.utxo(input.outpoint()).is_none());
     });
+}
+
+#[test]
+fn check_best_block_after_flush() {
+    let mut cache1 = UtxosCache::new_for_test(H256::random().into());
+    let cache2 = UtxosCache::new_for_test(H256::random().into());
+    assert_ne!(cache1.best_block_hash(), cache2.best_block_hash());
+    let expected_hash = cache2.best_block_hash();
+    assert!(flush_to_base(cache2, &mut cache1).is_ok());
+    assert_eq!(expected_hash, cache1.best_block_hash());
 }

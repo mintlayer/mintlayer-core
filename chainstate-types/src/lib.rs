@@ -13,7 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod block_index;
-pub mod height_skip;
-pub mod locator;
 pub mod storage_result;
+
+pub use crate::{
+    block_index::BlockIndex, error::PropertyQueryError, error::TokensError,
+    gen_block_index::GenBlockIndex, height_skip::get_skip_height, locator::Locator,
+};
+
+mod block_index;
+mod error;
+mod gen_block_index;
+mod height_skip;
+mod locator;

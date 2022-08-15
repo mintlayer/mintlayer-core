@@ -18,11 +18,11 @@ use super::*;
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     net::libp2p::{
-        connectivity::*,
         types::{ConnectivityEvent, IdentifyInfoWrapper},
         DialError,
     },
 };
+
 use libp2p::{
     core::connection::{ConnectedPoint, Endpoint},
     identify, identity,
@@ -93,12 +93,6 @@ async fn connection_established_dialer() {
             types::ControlEvent::CloseConnection { peer_id },
         )),
     );
-    // assert_eq!(
-    //     connmgr.events.front(),
-    //     Some(&types::ConnectionManagerEvent::Behaviour(
-    //         types::BehaviourEvent::ConnectionClosed { peer_id },
-    //     ))
-    // );
     connmgr.events.clear();
 
     // known peer in `Active` state

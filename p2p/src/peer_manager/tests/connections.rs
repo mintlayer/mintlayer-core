@@ -21,7 +21,7 @@ use crate::{
         mock::{types::MockPeerId, MockService},
         ConnectivityService, NetworkingService,
     },
-    swarm::{
+    peer_manager::{
         self,
         tests::{connect_services, make_peer_manager},
     },
@@ -45,7 +45,7 @@ where
     swarm.connect(remote_addr).await.unwrap();
 
     assert!(std::matches!(
-        swarm.handle.poll_next().await,
+        swarm.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionError {
             address: _,
             error: P2pError::DialError(DialError::IoError(std::io::ErrorKind::ConnectionRefused))
@@ -85,12 +85,12 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let peer_id = *swarm2.handle.peer_id();
+    let addr = swarm2.peer_connectivity_handle.local_addr().await.unwrap().unwrap();
+    let peer_id = *swarm2.peer_connectivity_handle.peer_id();
 
     tokio::spawn(async move {
         loop {
-            assert!(swarm2.handle.poll_next().await.is_ok());
+            assert!(swarm2.peer_connectivity_handle.poll_next().await.is_ok());
         }
     });
 
@@ -104,7 +104,7 @@ where
 
     assert_eq!(swarm1.pending.len(), 1);
     assert!(std::matches!(
-        swarm1.handle.poll_next().await,
+        swarm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
     ));
 }
@@ -130,7 +130,11 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    connect_services::<T>(
+        &mut swarm1.peer_connectivity_handle,
+        &mut swarm2.peer_connectivity_handle,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -205,7 +209,11 @@ where
     )
     .await;
 
-    let (_address, peer_info) = connect_services::<T>(&mut swarm2.handle, &mut swarm1.handle).await;
+    let (_address, peer_info) = connect_services::<T>(
+        &mut swarm2.peer_connectivity_handle,
+        &mut swarm1.peer_connectivity_handle,
+    )
+    .await;
     assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
 }
 
@@ -231,7 +239,11 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    let (address, peer_info) = connect_services::<T>(
+        &mut swarm1.peer_connectivity_handle,
+        &mut swarm2.peer_connectivity_handle,
+    )
+    .await;
     assert_eq!(
         swarm2.accept_inbound_connection(address, peer_info).await,
         Ok(())
@@ -263,7 +275,11 @@ where
     )
     .await;
 
-    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    let (address, peer_info) = connect_services::<T>(
+        &mut swarm1.peer_connectivity_handle,
+        &mut swarm2.peer_connectivity_handle,
+    )
+    .await;
 
     assert_eq!(
         swarm2.accept_inbound_connection(address, peer_info).await,
@@ -295,15 +311,21 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, Arc::new(config::create_mainnet())).await;
 
-    let (_address, _peer_info) =
-        connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    let (_address, _peer_info) = connect_services::<T>(
+        &mut swarm1.peer_connectivity_handle,
+        &mut swarm2.peer_connectivity_handle,
+    )
+    .await;
 
     assert_eq!(
-        swarm2.handle.disconnect(*swarm1.handle.peer_id()).await,
+        swarm2
+            .peer_connectivity_handle
+            .disconnect(*swarm1.peer_connectivity_handle.peer_id())
+            .await,
         Ok(())
     );
     assert!(std::matches!(
-        swarm1.handle.poll_next().await,
+        swarm1.peer_connectivity_handle.poll_next().await,
         Ok(net::types::ConnectivityEvent::ConnectionClosed { .. })
     ));
 }
@@ -339,19 +361,22 @@ async fn inbound_connection_too_many_peers<T>(
     });
     assert_eq!(
         swarm1.peerdb.active_peer_count(),
-        swarm::MAX_ACTIVE_CONNECTIONS
+        peer_manager::MAX_ACTIVE_CONNECTIONS
     );
 
-    let (_address, _peer_info) =
-        connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
-    let swarm1_id = *swarm1.handle.peer_id();
+    let (_address, _peer_info) = connect_services::<T>(
+        &mut swarm1.peer_connectivity_handle,
+        &mut swarm2.peer_connectivity_handle,
+    )
+    .await;
+    let swarm1_id = *swarm1.peer_connectivity_handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager
     // that tries to connect to the first manager
     tokio::spawn(async move { swarm1.run().await });
 
     if let Ok(net::types::ConnectivityEvent::ConnectionClosed { peer_id }) =
-        swarm2.handle.poll_next().await
+        swarm2.peer_connectivity_handle.poll_next().await
     {
         assert_eq!(peer_id, swarm1_id);
     } else {
@@ -362,7 +387,7 @@ async fn inbound_connection_too_many_peers<T>(
 #[tokio::test]
 async fn inbound_connection_too_many_peers_libp2p() {
     let config = Arc::new(config::create_mainnet());
-    let peers = (0..swarm::MAX_ACTIVE_CONNECTIONS)
+    let peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(|_| net::types::PeerInfo {
             peer_id: PeerId::random(),
             magic_bytes: *config.magic_bytes(),
@@ -391,7 +416,7 @@ async fn inbound_connection_too_many_peers_libp2p() {
 #[tokio::test]
 async fn inbound_connection_too_many_peers_mock() {
     let config = Arc::new(config::create_mainnet());
-    let _peers = (0..swarm::MAX_ACTIVE_CONNECTIONS)
+    let _peers = (0..peer_manager::MAX_ACTIVE_CONNECTIONS)
         .map(|_| net::types::PeerInfo::<MockService> {
             peer_id: MockPeerId::random(),
             magic_bytes: *config.magic_bytes(),

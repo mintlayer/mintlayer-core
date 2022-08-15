@@ -517,13 +517,13 @@ dependencies = [
  "chainstate-storage",
  "chainstate-types",
  "common",
+ "consensus",
  "crypto",
  "hex",
  "itertools",
  "jsonrpsee",
  "logging",
  "mockall",
- "num",
  "replace_with",
  "rpc",
  "rstest",
@@ -702,6 +702,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af4780a44ab5696ea9e28294517f1fffb421a83a25af521333c838635509db9c"
 dependencies = [
  "cache-padded",
+]
+
+[[package]]
+name = "consensus"
+version = "0.1.0"
+dependencies = [
+ "chainstate-storage",
+ "chainstate-types",
+ "common",
+ "num",
+ "rstest",
+ "thiserror",
 ]
 
 [[package]]
@@ -2177,7 +2189,6 @@ dependencies = [
  "lazy_static",
  "logging",
  "mockall",
- "parity-scale-codec",
  "serialization",
  "thiserror",
  "utils",
@@ -2615,7 +2626,6 @@ dependencies = [
  "chainstate-storage",
  "common",
  "crypto",
- "either",
  "futures",
  "itertools",
  "jsonrpsee",
@@ -4475,7 +4485,9 @@ dependencies = [
  "itertools",
  "logging",
  "parity-scale-codec",
+ "rstest",
  "serialization",
+ "test-utils",
  "thiserror",
 ]
 

@@ -32,5 +32,6 @@ pub const PING_MAX_RETRIES: u32 = 3;
 
 /// Request-response configuration
 pub const REQ_RESP_TIMEOUT: Duration = Duration::from_secs(10);
+pub const MESSAGE_MAX_SIZE: usize = 10 * 1024 * 1024;
 // TODO: think about channel sizes
 pub const CHANNEL_SIZE: usize = 64;
