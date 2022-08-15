@@ -298,8 +298,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
     pub fn calculate_tokens_total_inputs(
         &self,
         inputs: &[TxInput],
-    ) -> Result<TokensMap, ConnectTransactionError> {
-        let mut total_tokens: TokensMap = BTreeMap::new();
+        token_id: &TokenId,
+    ) -> Result<Amount, ConnectTransactionError> {
+        let mut total_tokens = Amount::from_atoms(0);
         for input in inputs.iter() {
             let outpoint = input.outpoint();
             let tx_index = self.get_tx_index_from_cache(outpoint)?;
@@ -324,27 +325,71 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     )?;
 
                     match self.filter_transferred_and_issued_amounts(&tx, output) {
-                        Some((token_id, amount)) => {
-                            total_tokens.insert(
-                                token_id,
-                                (total_tokens
-                                    .get(&token_id)
-                                    .cloned()
-                                    .unwrap_or(Amount::from_atoms(0))
-                                    + amount)
-                                    .ok_or(ConnectTransactionError::InputAdditionError)?,
-                            );
+                        Some((ref input_token_id, amount)) => {
+                            if token_id == input_token_id {
+                                total_tokens = (total_tokens + amount)
+                                    .ok_or(ConnectTransactionError::InputAdditionError)?
+                            }
                         }
-                        None => {}
+                        None => { /* In this case, there are no calculations */ }
                     }
                 }
-                common::chain::SpendablePosition::BlockReward(_block_id) => {
-                    {};
+                common::chain::SpendablePosition::BlockReward(_block_id) => { /* In this case, there are no calculations */
                 }
             }
         }
         Ok(total_tokens)
     }
+
+    // pub fn calculate_tokens_total_inputs(
+    //     &self,
+    //     inputs: &[TxInput],
+    // ) -> Result<TokensMap, ConnectTransactionError> {
+    //     let mut total_tokens: TokensMap = BTreeMap::new();
+    //     for input in inputs.iter() {
+    //         let outpoint = input.outpoint();
+    //         let tx_index = self.get_tx_index_from_cache(outpoint)?;
+    //         let output_index = outpoint.output_index() as usize;
+    //         match tx_index.position() {
+    //             common::chain::SpendablePosition::Transaction(tx_pos) => {
+    //                 let tx = self
+    //                     .db_tx
+    //                     .get_mainchain_tx_by_position(tx_pos)
+    //                     .map_err(ConnectTransactionError::from)?
+    //                     .ok_or_else(|| {
+    //                         ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
+    //                             tx_pos.clone(),
+    //                         )
+    //                     })?;
+
+    //                 let output = tx.outputs().get(output_index).ok_or(
+    //                     ConnectTransactionError::OutputIndexOutOfRange {
+    //                         tx_id: Some(tx.get_id().into()),
+    //                         source_output_index: output_index,
+    //                     },
+    //                 )?;
+
+    //                 match self.filter_transferred_and_issued_amounts(&tx, output) {
+    //                     Some((token_id, amount)) => {
+    //                         total_tokens.insert(
+    //                             token_id,
+    //                             (total_tokens
+    //                                 .get(&token_id)
+    //                                 .cloned()
+    //                                 .unwrap_or(Amount::from_atoms(0))
+    //                                 + amount)
+    //                                 .ok_or(ConnectTransactionError::InputAdditionError)?,
+    //                         );
+    //                     }
+    //                     None => { /* In this case, there are no calculations */ }
+    //                 }
+    //             }
+    //             common::chain::SpendablePosition::BlockReward(_block_id) => { /* In this case, there are no calculations */
+    //             }
+    //         }
+    //     }
+    //     Ok(total_tokens)
+    // }
 
     fn get_tx_index_from_cache(
         &self,
@@ -627,28 +672,23 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         burn_token_id: &TokenId,
         amount_to_burn: &Amount,
     ) -> Result<(), TokensError> {
-        // Collect token inputs
-        let total_value_tokens = self
-            .calculate_tokens_total_inputs(tx.inputs())
+        // Calculate token inputs
+        let origin_amount = self
+            .calculate_tokens_total_inputs(tx.inputs(), burn_token_id)
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
-
-        // Is token exist in inputs?
-        let origin_amount = total_value_tokens
-            .get(burn_token_id)
-            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), *block_id))?;
 
         // Check amount
         ensure!(
-            origin_amount >= amount_to_burn,
+            origin_amount >= *amount_to_burn,
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), *block_id)
         );
 
         // If we burn a piece of the token, we have to check output with the rest tokens
-        if origin_amount > amount_to_burn {
+        if origin_amount > *amount_to_burn {
             // Check whether all tokens burn and transfer
             ensure!(
                 (*amount_to_burn + Self::get_change_amount(tx, burn_token_id)?)
-                    == Some(*origin_amount),
+                    == Some(origin_amount),
                 TokensError::SomeTokensLost(tx.get_id(), *block_id)
             );
         }
@@ -662,15 +702,10 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         token_id: &TokenId,
         token_amount: &Amount,
     ) -> Result<(), TokensError> {
-        // Collect token inputs
-        let total_input_tokens = self
-            .calculate_tokens_total_inputs(tx.inputs())
+        // Calculate token inputs
+        let input_amount = self
+            .calculate_tokens_total_inputs(tx.inputs(), token_id)
             .map_err(|_err| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
-
-        // Is token exist in inputs?
-        let input_amount = total_input_tokens
-            .get(token_id)
-            .ok_or_else(|| TokensError::NoTokenInInputs(tx.get_id(), block_id))?;
 
         // Is token exist in outputs?
         let total_output_tokens = Self::calculate_transfered_and_burned_tokens(tx.outputs())?;
@@ -680,12 +715,12 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
         // Check amounts
         ensure!(
-            input_amount >= token_amount,
+            input_amount >= *token_amount,
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
         );
 
         ensure!(
-            input_amount >= output_amount,
+            input_amount >= *output_amount,
             TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
         );
 
