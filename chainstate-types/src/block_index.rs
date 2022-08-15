@@ -29,6 +29,8 @@ pub struct BlockIndex {
     skip: Id<GenBlock>,
     chain_trust: Uint256,
     height: BlockHeight,
+    #[codec(compact)]
+    block_reward_byte_size: u32,
     time_max: BlockTimestamp,
 }
 
@@ -38,6 +40,7 @@ impl BlockIndex {
         chain_trust: Uint256,
         some_ancestor: Id<GenBlock>,
         height: BlockHeight,
+        block_reward_byte_size: u32,
         time_max: BlockTimestamp,
     ) -> Self {
         // We have to use the whole block because we are not able to take block_hash from the header
@@ -47,6 +50,7 @@ impl BlockIndex {
             skip: some_ancestor,
             chain_trust,
             height,
+            block_reward_byte_size,
             time_max,
         }
     }
