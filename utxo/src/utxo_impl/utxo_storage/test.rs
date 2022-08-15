@@ -26,11 +26,14 @@ use common::chain::signature::inputsig::InputWitness;
 use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
 use common::primitives::{Amount, BlockHeight, Idable};
 use common::primitives::{Id, H256};
-use crypto::random::{make_pseudo_rng, seq, Rng};
+use crypto::random::{seq, Rng};
 use itertools::Itertools;
+use rstest::rstest;
 use std::collections::{BTreeMap, HashMap};
+use test_utils::random::{make_seedable_rng, Seed};
 
 fn create_transactions(
+    rng: &mut impl Rng,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
@@ -39,14 +42,13 @@ fn create_transactions(
     let input_size = inputs.len() / num_of_txs;
 
     // create the multiple transactions based on the inputs.
-    // TODO: use proper test random number generation for tests here
     inputs
         .chunks(input_size)
         .into_iter()
         .map(|inputs| {
             let outputs = if max_num_of_outputs > 1 {
-                let rnd = make_pseudo_rng().gen_range(1..max_num_of_outputs);
-                create_tx_outputs(rnd as u32)
+                let rnd = rng.gen_range(1..max_num_of_outputs);
+                create_tx_outputs(rng, rnd as u32)
             } else {
                 vec![]
             };
@@ -58,24 +60,25 @@ fn create_transactions(
 }
 
 fn create_block(
+    rng: &mut impl Rng,
     prev_block_id: Id<GenBlock>,
     inputs: Vec<TxInput>,
     max_num_of_outputs: usize,
     num_of_txs: usize,
 ) -> Block {
-    let txs = create_transactions(inputs, max_num_of_outputs, num_of_txs);
+    let txs = create_transactions(rng, inputs, max_num_of_outputs, num_of_txs);
     Block::new_with_no_consensus(txs, prev_block_id, BlockTimestamp::from_int_seconds(1))
         .expect("should be able to create a block")
 }
 
 /// populate the db with random values, for testing.
 /// returns a tuple of the best block id and the outpoints (for spending)
-fn initialize_db(tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
+fn initialize_db(rng: &mut impl Rng, tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
     let best_block_id: Id<GenBlock> = Id::new(H256::random());
     let mut db_interface = UtxosDBInMemoryImpl::new(best_block_id, Default::default());
 
     // let's populate the db with outputs.
-    let tx_outputs = create_tx_outputs(tx_outputs_size);
+    let tx_outputs = create_tx_outputs(rng, tx_outputs_size);
 
     // collect outpoints for spending later
     let outpoints = tx_outputs
@@ -93,10 +96,10 @@ fn initialize_db(tx_outputs_size: u32) -> (UtxosDBInMemoryImpl, Vec<OutPoint>) {
     (db_interface, outpoints)
 }
 
-fn create_utxo_entries(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
+fn create_utxo_entries(rng: &mut impl Rng, num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
     let mut map = BTreeMap::new();
     for _ in 0..num_of_utxos {
-        let (utxo, outpoint) = create_utxo(0);
+        let (utxo, outpoint) = create_utxo(rng, 0);
         let entry = UtxoEntry::new(utxo.clone(), true, true);
         map.insert(outpoint, entry);
     }
@@ -104,16 +107,19 @@ fn create_utxo_entries(num_of_utxos: u8) -> BTreeMap<OutPoint, UtxoEntry> {
     map
 }
 
-#[test]
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
 // This tests the utxo and the undo. This does not include testing the state of the block.
-fn utxo_and_undo_test() {
+fn utxo_and_undo_test(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
     let tx_outputs_size = 3;
     let num_of_txs = 1;
 
     // initializing the db with existing utxos.
-    let (db_interface, outpoints) = initialize_db(tx_outputs_size);
+    let (db_interface, outpoints) = initialize_db(&mut rng, tx_outputs_size);
     // create the TxInputs for spending.
-    let expected_tx_inputs = create_tx_inputs(&outpoints);
+    let expected_tx_inputs = create_tx_inputs(&mut rng, &outpoints);
 
     // create the UtxosDB.
     let mut db_interface_clone = db_interface.clone();
@@ -144,6 +150,7 @@ fn utxo_and_undo_test() {
 
         // create a new block to spend.
         let block = create_block(
+            &mut rng,
             db_interface.best_block_hash(),
             expected_tx_inputs.clone(),
             0,
@@ -263,7 +270,7 @@ fn utxo_and_undo_test() {
     // For error testing: create dummy tx_inputs for spending.
     {
         let num_of_txs = 5;
-        let rnd = make_pseudo_rng().gen_range(num_of_txs..20);
+        let rnd = rng.gen_range(num_of_txs..20);
 
         let tx_inputs: Vec<TxInput> = (0..rnd)
             .into_iter()
@@ -278,7 +285,7 @@ fn utxo_and_undo_test() {
         let id = db.best_block_hash();
 
         // Create a dummy block.
-        let block = create_block(id, tx_inputs, 0, num_of_txs as usize);
+        let block = create_block(&mut rng, id, tx_inputs, 0, num_of_txs as usize);
 
         // Create a view.
         let mut view = db.derive_cache();
@@ -290,10 +297,13 @@ fn utxo_and_undo_test() {
     }
 }
 
-#[test]
-fn test_utxo() {
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn test_utxo(#[case] seed: Seed) {
     common::concurrency::model(move || {
-        let utxos = create_utxo_entries(10);
+        let mut rng = make_seedable_rng(seed);
+        let utxos = create_utxo_entries(&mut rng, 10);
         let new_best_block_hash = Id::new(H256::random());
 
         let utxos = ConsumedUtxoCache {
@@ -310,8 +320,8 @@ fn test_utxo() {
 
         // randomly get a key for checking
         let keys = utxos.container.keys().collect_vec();
-        let rng = make_pseudo_rng().gen_range(0..keys.len());
-        let outpoint = keys[rng].clone();
+        let key_index = rng.gen_range(0..keys.len());
+        let outpoint = keys[key_index].clone();
 
         // test the get_utxo
         let utxo_opt = utxo_db.utxo(&outpoint);
@@ -328,7 +338,7 @@ fn test_utxo() {
 
         // try to write a non-dirty utxo
         {
-            let (utxo, outpoint) = create_utxo(1);
+            let (utxo, outpoint) = create_utxo(&mut rng, 1);
             let mut map = BTreeMap::new();
             let entry = UtxoEntry::new(utxo, true, false);
             map.insert(outpoint.clone(), entry);
@@ -346,8 +356,8 @@ fn test_utxo() {
 
         // write down a spent utxo.
         {
-            let rng = make_pseudo_rng().gen_range(0..keys.len());
-            let outpoint_key = keys[rng];
+            let key_index = rng.gen_range(0..keys.len());
+            let outpoint_key = keys[key_index];
             let outpoint = outpoint_key;
             let utxo = utxos
                 .container

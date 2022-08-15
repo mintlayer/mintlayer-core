@@ -22,7 +22,7 @@ use common::chain::{
 };
 use common::primitives::{Amount, BlockHeight, Id, H256};
 use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{make_pseudo_rng, seq, Rng};
+use crypto::random::{seq, Rng};
 use itertools::Itertools;
 
 pub const FRESH: u8 = 1;
@@ -38,10 +38,10 @@ pub enum Presence {
 use crate::UtxoStatus;
 use Presence::{Absent, Present, Spent};
 
-pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
+pub fn create_tx_outputs(rng: &mut impl Rng, size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
     for _ in 0..size {
-        let random_amt = make_pseudo_rng().gen_range(1..u128::MAX);
+        let random_amt = rng.gen_range(1..u128::MAX);
         let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
         tx_outputs.push(TxOutput::new(
             OutputValue::Coin(Amount::from_atoms(random_amt)),
@@ -53,9 +53,8 @@ pub fn create_tx_outputs(size: u32) -> Vec<TxOutput> {
 }
 
 /// randomly select half of the provided outpoints to spend, and returns it in a vec of structure of TxInput
-pub fn create_tx_inputs(outpoints: &[OutPoint]) -> Vec<TxInput> {
-    let mut rng = make_pseudo_rng();
-    let to_spend = seq::index::sample(&mut rng, outpoints.len(), outpoints.len() / 2).into_vec();
+pub fn create_tx_inputs(rng: &mut impl Rng, outpoints: &[OutPoint]) -> Vec<TxInput> {
+    let to_spend = seq::index::sample(rng, outpoints.len(), outpoints.len() / 2).into_vec();
     to_spend
         .into_iter()
         .map(|idx| {
@@ -79,24 +78,24 @@ pub fn convert_to_utxo(output: TxOutput, height: u64, output_idx: usize) -> (Out
     (outpoint, utxo)
 }
 
-pub fn create_utxo(block_height: u64) -> (Utxo, OutPoint) {
-    inner_create_utxo(Some(block_height))
+pub fn create_utxo(rng: &mut impl Rng, block_height: u64) -> (Utxo, OutPoint) {
+    inner_create_utxo(rng, Some(block_height))
 }
 
-pub fn create_utxo_for_mempool() -> (Utxo, OutPoint) {
-    inner_create_utxo(None)
+pub fn create_utxo_for_mempool(rng: &mut impl Rng) -> (Utxo, OutPoint) {
+    inner_create_utxo(rng, None)
 }
 
 /// returns a tuple of utxo and outpoint, for testing.
-fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
+fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, OutPoint) {
     // just a random value generated, and also a random `is_block_reward` value.
-    let rng = make_pseudo_rng().gen_range(0..u128::MAX);
+    let output_value = rng.gen_range(0..u128::MAX);
     let (_, pub_key) = PrivateKey::new(KeyKind::RistrettoSchnorr);
     let output = TxOutput::new(
-        OutputValue::Coin(Amount::from_atoms(rng)),
+        OutputValue::Coin(Amount::from_atoms(output_value)),
         OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
     );
-    let is_block_reward = rng % 3 == 0;
+    let is_block_reward = output_value % 3 == 0;
 
     // generate utxo
     let utxo = match block_height {
@@ -128,13 +127,14 @@ fn inner_create_utxo(block_height: Option<u64>) -> (Utxo, OutPoint) {
 /// `cache_flags` - sets the entry of the utxo (fresh/not, dirty/not)
 /// `outpoint` - optional key to be used, rather than a randomly generated one.
 pub fn insert_single_entry(
+    rng: &mut impl Rng,
     cache: &mut UtxosCache,
     cache_presence: &Presence,
     cache_flags: Option<u8>,
     outpoint: Option<OutPoint>,
 ) -> (Utxo, OutPoint) {
-    let rng_height = make_pseudo_rng().gen_range(0..(u64::MAX - 1));
-    let (utxo, outpoint_x) = create_utxo(rng_height);
+    let rng_height = rng.gen_range(0..(u64::MAX - 1));
+    let (utxo, outpoint_x) = create_utxo(rng, rng_height);
     let outpoint = outpoint.unwrap_or(outpoint_x);
     let key = &outpoint;
 
