@@ -698,7 +698,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
             .expect("Unexpected conversion error"));
         valid_block
     };
-    tf.process_block(block.clone(), BlockSource::Local).unwrap();
+    tf.process_block(block, BlockSource::Local).unwrap();
 
     let block_index = tf.chainstate.get_best_block_index().unwrap().unwrap();
     let block_index = match block_index {
