@@ -713,8 +713,7 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
     }
 
     {
-        let block_index_handle: &dyn BlockIndexHandle =
-            &tf.chainstate.make_db_tx_ro() as &dyn BlockIndexHandle;
+        let block_index_handle = &tf.chainstate.make_db_tx_ro() as &dyn BlockIndexHandle;
 
         let block_reward = block_index_handle.get_block_reward(&block_index).unwrap().unwrap();
 
