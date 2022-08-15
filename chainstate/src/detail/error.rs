@@ -122,7 +122,6 @@ pub enum TokensError {
     TokensNotRegistered(TokenId),
     #[error("Token ID can't be calculated")]
     TokenIdCantBeCalculated,
-    
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

@@ -739,7 +739,11 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     fn register_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
         let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
-        self.tokens_cache.insert(token_id, CachedTokensOperation::Write(tx.get_id()));
+
+        let _tokens_op = match self.tokens_cache.entry(token_id) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(CachedTokensOperation::Write(tx.get_id())),
+        };
         Ok(())
     }
 
@@ -915,6 +919,39 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
+    fn remove_tokens(&mut self, tx: &Transaction) -> Result<(), ConnectTransactionError> {
+        let was_tokens_issued = tx
+            .outputs()
+            .iter()
+            .find_map(|output| match output.value() {
+                OutputValue::Coin(_) => None,
+                OutputValue::Token(token_data) => match token_data {
+                    TokenData::TokenTransferV1 {
+                        token_id: _,
+                        amount: _,
+                    } => None,
+                    TokenData::TokenIssuanceV1 {
+                        token_ticker: _,
+                        amount_to_issue: _,
+                        number_of_decimals: _,
+                        metadata_uri: _,
+                    } => Some(()),
+                    TokenData::TokenBurnV1 {
+                        token_id: _,
+                        amount_to_burn: _,
+                    } => None,
+                },
+            })
+            .is_some();
+        if was_tokens_issued {
+            let token_id = token_id(tx).ok_or(ConnectTransactionError::TokensError(
+                TokensError::TokenIdCantBeCalculated,
+            ))?;
+            self.undo_issuance(token_id)?;
+        }
+        Ok(())
+    }
+
     pub fn disconnect_transaction(
         &mut self,
         spend_ref: BlockTransactableRef,
@@ -942,6 +979,9 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .unspend(outpoint.output_index())
                         .map_err(ConnectTransactionError::from)?;
                 }
+
+                // Remove issued tokens
+                self.remove_tokens(tx)?;
             }
             BlockTransactableRef::BlockReward(block) => {
                 let reward_transactable = block.block_reward_transactable();
