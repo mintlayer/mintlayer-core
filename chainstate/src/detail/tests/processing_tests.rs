@@ -26,7 +26,7 @@ use common::{
     primitives::Compact,
     Uint256,
 };
-use consensus::{ConsensusPoWError, ConsensusVerificationError};
+use consensus::{BlockIndexHandle, ConsensusPoWError, ConsensusVerificationError};
 use crypto::key::{KeyKind, PrivateKey};
 
 use crate::{
@@ -705,9 +705,21 @@ fn read_block_reward_from_storage(#[case] seed: Seed) {
         GenBlockIndex::Block(bi) => bi,
         GenBlockIndex::Genesis(_) => unreachable!(),
     };
-    let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
 
-    assert_eq!(block_reward.outputs(), expected_block_reward);
+    {
+        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
+
+        assert_eq!(block_reward.outputs(), expected_block_reward);
+    }
+
+    {
+        let block_index_handle: &dyn BlockIndexHandle =
+            &tf.chainstate.make_db_tx_ro() as &dyn BlockIndexHandle;
+
+        let block_reward = block_index_handle.get_block_reward(&block_index).unwrap().unwrap();
+
+        assert_eq!(block_reward.outputs(), expected_block_reward);
+    }
 }
 
 #[test]
