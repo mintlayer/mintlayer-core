@@ -18,6 +18,7 @@
 use chainstate_types::BlockIndex;
 use common::{
     chain::{
+        block::BlockReward,
         transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint,
     },
@@ -37,6 +38,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
         fn get_mainchain_tx_index(
             &self,
@@ -113,6 +115,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
         fn get_mainchain_tx_index(
             &self,
@@ -151,6 +154,7 @@ mockall::mock! {
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+        fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
         fn get_mainchain_tx_index(
             &self,

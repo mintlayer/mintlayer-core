@@ -18,6 +18,7 @@ pub mod utxo_db;
 use chainstate_types::BlockIndex;
 use common::{
     chain::{
+        block::BlockReward,
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
     },
@@ -141,6 +142,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for S
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
         fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
         fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
         fn get_mainchain_tx_index(
             &self,
@@ -224,6 +226,23 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
 
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<DBBlock, _, _>(id.as_ref())
+    }
+
+    fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
+        match self.0.get::<DBBlock, _>().get(block_index.block_id().as_ref()) {
+            Err(e) => Err(e.into()),
+            Ok(None) => Ok(None),
+            Ok(Some(block)) => {
+                let header_size = block_index.block_header().encoded_size();
+                let begin = header_size;
+                let end = header_size + block_index.block_reward_byte_size();
+                let encoded_block_reward =
+                    block.get(begin..end).expect("Block reward outside of block range");
+                let block_reward = BlockReward::decode_all(&mut &*encoded_block_reward)
+                    .expect("Invalid block reward encoding in DB");
+                Ok(Some(block_reward))
+            }
+        }
     }
 
     fn get_mainchain_tx_index(

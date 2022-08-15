@@ -644,14 +644,19 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 .to_vec()),
             // TODO: Getting the whole block just for reward outputs isn't optimal. See the
             // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
-            GenBlockId::Block(id) => Ok(self
-                .db_tx
-                .get_block(id)?
-                .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
-                .block_reward_transactable()
-                .outputs()
-                .unwrap_or(&[])
-                .to_vec()),
+            GenBlockId::Block(id) => {
+                let block_index = self
+                    .db_tx
+                    .get_block_index(&id)?
+                    .ok_or(ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(id))?;
+                let reward = self
+                    .db_tx
+                    .get_block_reward(&block_index)?
+                    .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
+                    .outputs()
+                    .to_vec();
+                Ok(reward)
+            }
         }
     }
 
