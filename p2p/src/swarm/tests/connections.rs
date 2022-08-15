@@ -21,7 +21,10 @@ use crate::{
         mock::{types::MockPeerId, MockService},
         ConnectivityService, NetworkingService,
     },
-    swarm::{self, tests::make_peer_manager},
+    swarm::{
+        self,
+        tests::{connect_services, make_peer_manager},
+    },
 };
 use common::chain::config;
 use libp2p::{Multiaddr, PeerId};
@@ -31,7 +34,7 @@ use std::{net::SocketAddr, sync::Arc};
 // try to connect to an address that no one listening on and verify it fails
 async fn test_swarm_connect<T: NetworkingService>(bind_addr: T::Address, remote_addr: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -73,7 +76,7 @@ async fn test_swarm_connect_libp2p() {
 // is below the desired threshold and there are idle peers in the peerdb
 async fn test_auto_connect<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -118,7 +121,7 @@ async fn test_auto_connect_mock() {
 
 async fn connect_outbound_same_network<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -127,14 +130,7 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, _conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
-
-    assert!(std::matches!(
-        swarm1.handle.poll_next().await,
-        Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
-    ));
+    connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
 }
 
 #[tokio::test]
@@ -196,7 +192,7 @@ async fn test_validate_supported_protocols() {
 
 async fn connect_outbound_different_network<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -209,17 +205,8 @@ where
     )
     .await;
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    tokio::spawn(async move { swarm2.handle.poll_next().await.unwrap() });
-    swarm1.handle.connect(addr).await.unwrap();
-
-    if let Ok(net::types::ConnectivityEvent::OutboundAccepted {
-        peer_info,
-        address: _,
-    }) = swarm1.handle.poll_next().await
-    {
-        assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
-    }
+    let (_address, peer_info) = connect_services::<T>(&mut swarm2.handle, &mut swarm1.handle).await;
+    assert_ne!(peer_info.magic_bytes, *config.magic_bytes());
 }
 
 #[tokio::test]
@@ -235,7 +222,7 @@ async fn connect_outbound_different_network_mock() {
 
 async fn connect_inbound_same_network<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -244,19 +231,11 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::clone(&config)).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, config).await;
 
-    let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
-        swarm2.handle.poll_next()
+    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
+    assert_eq!(
+        swarm2.accept_inbound_connection(address, peer_info).await,
+        Ok(())
     );
-    let conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
-    if let net::types::ConnectivityEvent::InboundAccepted { peer_info, address } = conn2_res {
-        assert_eq!(
-            swarm2.accept_inbound_connection(address, peer_info).await,
-            Ok(())
-        );
-    } else {
-        panic!("invalid event received");
-    }
 }
 
 #[tokio::test]
@@ -272,7 +251,7 @@ async fn connect_inbound_same_network_mock() {
 
 async fn connect_inbound_different_network<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -284,23 +263,15 @@ where
     )
     .await;
 
-    let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
-        swarm2.handle.poll_next()
-    );
-    let conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
+    let (address, peer_info) = connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
 
-    if let net::types::ConnectivityEvent::InboundAccepted { peer_info, address } = conn2_res {
-        assert_eq!(
-            swarm2.accept_inbound_connection(address, peer_info).await,
-            Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
-                [1, 2, 3, 4],
-                *config::create_mainnet().magic_bytes(),
-            )))
-        );
-    } else {
-        panic!("invalid event received");
-    }
+    assert_eq!(
+        swarm2.accept_inbound_connection(address, peer_info).await,
+        Err(P2pError::ProtocolError(ProtocolError::DifferentNetwork(
+            [1, 2, 3, 4],
+            *config::create_mainnet().magic_bytes(),
+        )))
+    );
 }
 
 #[tokio::test]
@@ -316,7 +287,7 @@ async fn connect_inbound_different_network_mock() {
 
 async fn remote_closes_connection<T>(addr1: T::Address, addr2: T::Address)
 where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -324,20 +295,8 @@ where
     let mut swarm1 = make_peer_manager::<T>(addr1, Arc::new(config::create_mainnet())).await;
     let mut swarm2 = make_peer_manager::<T>(addr2, Arc::new(config::create_mainnet())).await;
 
-    let (_conn1_res, conn2_res) = tokio::join!(
-        swarm1.handle.connect(swarm2.handle.local_addr().await.unwrap().unwrap()),
-        swarm2.handle.poll_next()
-    );
-    let conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
-
-    assert!(std::matches!(
-        conn2_res,
-        net::types::ConnectivityEvent::InboundAccepted { .. }
-    ));
-    assert!(std::matches!(
-        swarm1.handle.poll_next().await,
-        Ok(net::types::ConnectivityEvent::OutboundAccepted { .. })
-    ));
+    let (_address, _peer_info) =
+        connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
 
     assert_eq!(
         swarm2.handle.disconnect(*swarm1.handle.peer_id()).await,
@@ -366,7 +325,7 @@ async fn inbound_connection_too_many_peers<T>(
     default_addr: T::Address,
     peers: Vec<net::types::PeerInfo<T>>,
 ) where
-    T: NetworkingService + 'static,
+    T: NetworkingService + 'static + std::fmt::Debug,
     T::ConnectivityHandle: ConnectivityService<T>,
     <T as net::NetworkingService>::Address: std::str::FromStr,
     <<T as net::NetworkingService>::Address as std::str::FromStr>::Err: std::fmt::Debug,
@@ -383,10 +342,8 @@ async fn inbound_connection_too_many_peers<T>(
         swarm::MAX_ACTIVE_CONNECTIONS
     );
 
-    let addr = swarm2.handle.local_addr().await.unwrap().unwrap();
-    let (_conn1_res, conn2_res) =
-        tokio::join!(swarm1.handle.connect(addr), swarm2.handle.poll_next());
-    let _conn2_res: net::types::ConnectivityEvent<T> = conn2_res.unwrap();
+    let (_address, _peer_info) =
+        connect_services::<T>(&mut swarm1.handle, &mut swarm2.handle).await;
     let swarm1_id = *swarm1.handle.peer_id();
 
     // run the first peer manager in the background and poll events from the peer manager

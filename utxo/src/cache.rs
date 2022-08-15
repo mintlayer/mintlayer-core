@@ -18,7 +18,7 @@ use crate::{
     {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
-    chain::{GenBlock, OutPoint, OutPointSourceId, Transaction},
+    chain::{block::BlockReward, GenBlock, OutPoint, OutPointSourceId, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -52,7 +52,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    /// returns a UtxoEntry, given the outpoint.
+    /// Returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
@@ -81,7 +81,8 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = block_hash;
     }
 
-    pub fn add_utxos(
+    /// Given a transaction adds its outputs to the utxo set
+    pub fn add_utxos_from_tx(
         &mut self,
         tx: &Transaction,
         source: UtxoSource,
@@ -91,11 +92,8 @@ impl<'a> UtxosCache<'a> {
 
         for (idx, output) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(id.clone(), idx as u32);
-
             // by default no overwrite allowed.
             let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
-
-            // TODO: where do we get the block reward from the transaction?
             let utxo = Utxo::new(output.clone(), false, source.clone());
 
             self.add_utxo(&outpoint, utxo, overwrite)?;
@@ -103,19 +101,41 @@ impl<'a> UtxosCache<'a> {
         Ok(())
     }
 
-    /// Mark the inputs of tx as 'spent'.
-    /// returns a TxUndo if function is a success;
-    /// or an error if the tx's input cannot be spent.
+    /// Given a block reward adds its outputs to the utxo set
+    pub fn add_utxos_from_block_reward(
+        &mut self,
+        reward: &BlockReward,
+        source: UtxoSource,
+        outpoint_source_id: OutPointSourceId,
+        check_for_overwrite: bool,
+    ) -> Result<(), Error> {
+        for (idx, output) in reward.outputs().iter().enumerate() {
+            let outpoint = OutPoint::new(outpoint_source_id.clone(), idx as u32);
+            // block reward transactions can always be overwritten
+            let overwrite = if check_for_overwrite {
+                self.has_utxo(&outpoint)
+            } else {
+                true
+            };
+            let utxo = Utxo::new(output.clone(), true, source.clone());
+
+            self.add_utxo(&outpoint, utxo, overwrite)?;
+        }
+        Ok(())
+    }
+
+    /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
+    /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
     pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
-        self.add_utxos(tx, UtxoSource::BlockChain(height), false)?;
+        self.add_utxos_from_tx(tx, UtxoSource::BlockChain(height), false)?;
 
         tx_undo.map(TxUndo::new)
     }
 
-    /// Adds a utxo entry in the cache.
+    /// Adds an utxo entry to the cache
     pub fn add_utxo(
         &mut self,
         outpoint: &OutPoint,
