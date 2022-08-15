@@ -13,12 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::error::ConsensusPoWError;
-use crate::detail::consensus_validator::BlockIndexHandle;
-use chainstate_types::block_index::BlockIndex;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::primitives::{BlockHeight, Compact};
-use common::Uint256;
+use chainstate_types::BlockIndex;
+use common::{
+    chain::block::timestamp::BlockTimestamp,
+    primitives::{BlockHeight, Compact},
+    Uint256,
+};
+
+use crate::{pow::error::ConsensusPoWError, validator::BlockIndexHandle};
 
 /// checks if retargeting is due for the provided block_height
 pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: BlockHeight) -> bool {
@@ -28,7 +30,7 @@ pub fn due_for_retarget(difficulty_adjustment_interval: u64, block_height: Block
 
 /// The block time of the first block, based on the difficulty adjustment interval,
 /// where first block = height of given block - difficulty adjustment interval - 1 (off by one)
-pub(crate) fn get_starting_block_time(
+pub fn get_starting_block_time(
     difficulty_adjustment_interval: u64,
     block_index: &BlockIndex,
     db_accessor: &dyn BlockIndexHandle,
@@ -103,7 +105,7 @@ pub mod special_rules {
 
 #[cfg(test)]
 mod tests {
-    use crate::detail::pow::helpers::due_for_retarget;
+    use super::*;
     use common::primitives::BlockHeight;
 
     #[test]

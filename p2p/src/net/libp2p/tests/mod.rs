@@ -13,10 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use behaviour::sync_codec::*;
+
 use crate::net::{
     self, config,
-    libp2p::sync::*,
-    libp2p::{backend::Backend, behaviour, connectivity, discovery, types},
+    libp2p::{backend::Libp2pBackend, behaviour, types},
 };
 use futures::prelude::*;
 use libp2p::{
@@ -40,6 +41,8 @@ use std::{
 };
 use tokio::{sync::mpsc, time::timeout};
 
+use super::behaviour::{connection_manager, discovery};
+
 #[cfg(test)]
 mod frontend;
 #[cfg(test)]
@@ -60,7 +63,7 @@ pub async fn make_libp2p(
     addr: Multiaddr,
     topics: &[net::types::PubSubTopic],
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -111,7 +114,7 @@ pub async fn make_libp2p(
             ),
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
@@ -120,7 +123,7 @@ pub async fn make_libp2p(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(p2p_config).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -143,7 +146,7 @@ pub async fn make_libp2p(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,
@@ -159,7 +162,7 @@ pub async fn make_libp2p_with_ping(
     topics: &[net::types::PubSubTopic],
     ping: libp2p_ping::Behaviour,
 ) -> (
-    Backend,
+    Libp2pBackend,
     mpsc::Sender<types::Command>,
     mpsc::Receiver<types::ConnectivityEvent>,
     mpsc::Receiver<types::PubSubEvent>,
@@ -205,7 +208,7 @@ pub async fn make_libp2p_with_ping(
             ping,
             identify: Identify::new(IdentifyConfig::new(protocol, id_keys.public())),
             sync: RequestResponse::new(
-                SyncingCodec(),
+                SyncMessagingCodec(),
                 iter::once((SyncingProtocol(), ProtocolSupport::Full)),
                 RequestResponseConfig::default(),
             ),
@@ -214,7 +217,7 @@ pub async fn make_libp2p_with_ping(
                 gossipsub_config,
             )
             .expect("configuration to be valid"),
-            connmgr: connectivity::ConnectionManager::new(),
+            connmgr: connection_manager::ConnectionManager::new(),
             discovery: discovery::DiscoveryManager::new(Arc::clone(&p2p_config)).await,
             events: VecDeque::new(),
             pending_reqs: HashMap::new(),
@@ -237,7 +240,7 @@ pub async fn make_libp2p_with_ping(
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
-        Backend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
+        Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx),
         cmd_tx,
         conn_rx,
         gossip_rx,

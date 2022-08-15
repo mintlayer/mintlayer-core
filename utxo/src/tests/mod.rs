@@ -502,9 +502,7 @@ fn multiple_update_utxos_test(#[case] seed: Seed) {
         0x01,
     )
     .unwrap();
-    assert!(cache
-        .add_utxos_from_tx(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false)
-        .is_ok());
+    assert!(cache.add_utxos(&tx, UtxoSource::Blockchain(BlockHeight::new(2)), false).is_ok());
 
     // check that the outputs of tx are added in the cache.
     tx.outputs().iter().enumerate().for_each(|(i, x)| {

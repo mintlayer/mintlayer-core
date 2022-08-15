@@ -18,7 +18,7 @@ use crate::{
     {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
-    chain::{block::BlockReward, GenBlock, OutPoint, OutPointSourceId, Transaction},
+    chain::{GenBlock, OutPoint, OutPointSourceId, Transaction},
     primitives::{BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -87,8 +87,7 @@ impl<'a> UtxosCache<'a> {
         self.current_block_hash = block_hash;
     }
 
-    /// Given a transaction adds its outputs to the utxo set
-    pub fn add_utxos_from_tx(
+    pub fn add_utxos(
         &mut self,
         tx: &Transaction,
         source: UtxoSource,
@@ -107,36 +106,13 @@ impl<'a> UtxosCache<'a> {
         Ok(())
     }
 
-    /// Given a block reward adds its outputs to the utxo set
-    pub fn add_utxos_from_block_reward(
-        &mut self,
-        reward: &BlockReward,
-        source: UtxoSource,
-        outpoint_source_id: OutPointSourceId,
-        check_for_overwrite: bool,
-    ) -> Result<(), Error> {
-        for (idx, output) in reward.outputs().iter().enumerate() {
-            let outpoint = OutPoint::new(outpoint_source_id.clone(), idx as u32);
-            // block reward transactions can always be overwritten
-            let overwrite = if check_for_overwrite {
-                self.has_utxo(&outpoint)
-            } else {
-                true
-            };
-            let utxo = Utxo::new(output.clone(), true, source.clone());
-
-            self.add_utxo(&outpoint, utxo, overwrite)?;
-        }
-        Ok(())
-    }
-
     /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
     /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
     pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
-        self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
+        self.add_utxos(tx, UtxoSource::Blockchain(height), false)?;
 
         tx_undo.map(TxUndo::new)
     }

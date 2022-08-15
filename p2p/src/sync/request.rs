@@ -38,10 +38,10 @@ pub struct RequestState<T: NetworkingService> {
     pub(super) retry_count: usize,
 }
 
-impl<T> SyncManager<T>
+impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     /// Make a block request message
     ///
@@ -52,7 +52,7 @@ where
     /// * `block_ids` - IDs of the blocks that are requested
     pub fn make_block_request(&self, block_ids: Vec<Id<Block>>) -> (message::Request, RequestType) {
         (
-            message::Request::BlockRequest(message::BlockRequest::new(block_ids.clone())),
+            message::Request::BlockListRequest(message::BlockListRequest::new(block_ids.clone())),
             RequestType::GetBlocks(block_ids),
         )
     }
@@ -66,7 +66,7 @@ where
     /// * `locator` - locator object that shows the state of the local node
     pub fn make_header_request(&self, locator: Locator) -> (message::Request, RequestType) {
         (
-            message::Request::HeaderRequest(message::HeaderRequest::new(locator)),
+            message::Request::HeaderListRequest(message::HeaderListRequest::new(locator)),
             RequestType::GetHeaders,
         )
     }
@@ -76,7 +76,7 @@ where
     /// # Arguments
     /// * `headers` - the headers that were requested
     pub fn make_header_response(&self, headers: Vec<BlockHeader>) -> message::Response {
-        message::Response::HeaderResponse(message::HeaderResponse::new(headers))
+        message::Response::HeaderListResponse(message::HeaderListResponse::new(headers))
     }
 
     /// Make block response
@@ -84,7 +84,7 @@ where
     /// # Arguments
     /// * `blocks` - the blocks that were requested
     pub fn make_block_response(&self, blocks: Vec<Block>) -> message::Response {
-        message::Response::BlockResponse(message::BlockResponse::new(blocks))
+        message::Response::BlockListResponse(message::BlockListResponse::new(blocks))
     }
 
     /// Helper function for sending a request to remote
@@ -105,7 +105,7 @@ where
         request_type: RequestType,
         retry_count: usize,
     ) -> crate::Result<()> {
-        let request_id = self.handle.send_request(peer_id, request).await?;
+        let request_id = self.peer_sync_handle.send_request(peer_id, request).await?;
         self.requests.insert(
             request_id,
             RequestState {
@@ -189,12 +189,12 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_header_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         headers: Vec<BlockHeader>,
     ) -> crate::Result<()> {
         // TODO: save sent header IDs somewhere and validate future requests against those?
         let message = self.make_header_response(headers);
-        self.handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message).await
     }
 
     /// Send header response to remote peer
@@ -207,11 +207,11 @@ where
     /// * `headers` - headers that the remote requested
     pub async fn send_block_response(
         &mut self,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
         // TODO: save sent block IDs somewhere and validate future requests against those?
         let message = self.make_block_response(blocks);
-        self.handle.send_response(request_id, message).await
+        self.peer_sync_handle.send_response(request_id, message).await
     }
 }

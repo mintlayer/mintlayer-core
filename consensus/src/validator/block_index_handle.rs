@@ -13,28 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::block_index::BlockIndex;
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
-use crate::detail::{gen_block_index::GenBlockIndex, PropertyQueryError};
-
+/// The interface for obtaining a block index by an identifier.
 pub trait BlockIndexHandle {
-    /// Get block index for given block ID
+    /// Returns a block index corresponding to the given block.
     fn get_block_index(
         &self,
         block_id: &Id<Block>,
     ) -> Result<Option<BlockIndex>, PropertyQueryError>;
 
-    /// Get generalized block index for given ID (block ID or genesis ID)
+    /// Returns a generalized block index corresponding to the given block or genesis identifier.
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError>;
 
-    /// Get a block ancestor
+    /// Returns an ancestor of the block.
     fn get_ancestor(
         &self,
         block_index: &BlockIndex,

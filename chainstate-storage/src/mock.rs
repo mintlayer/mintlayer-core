@@ -15,12 +15,14 @@
 
 //! A mock version of the blockchain storage.
 
-use chainstate_types::block_index::BlockIndex;
-use common::chain::transaction::{
-    OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition,
+use chainstate_types::BlockIndex;
+use common::{
+    chain::{
+        transaction::{OutPointSourceId, Transaction, TxMainChainIndex, TxMainChainPosition},
+        Block, GenBlock, OutPoint,
+    },
+    primitives::{BlockHeight, Id},
 };
-use common::chain::{Block, GenBlock, OutPoint};
-use common::primitives::{BlockHeight, Id};
 use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 mockall::mock! {

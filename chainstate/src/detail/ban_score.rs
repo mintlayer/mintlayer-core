@@ -13,13 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::BlockError;
+use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 use super::{
-    pow::error::ConsensusPoWError, transaction_verifier::error::ConnectTransactionError,
-    BlockSizeError, CheckBlockError, CheckBlockTransactionsError, ConsensusVerificationError,
-    OrphanCheckError,
+    transaction_verifier::error::ConnectTransactionError, BlockSizeError, CheckBlockError,
+    CheckBlockTransactionsError, OrphanCheckError,
 };
+use crate::BlockError;
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
 //       value of an error on the error enum arms instead of separately like in this file

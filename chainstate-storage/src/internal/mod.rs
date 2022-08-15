@@ -15,10 +15,14 @@
 
 pub mod utxo_db;
 
-use chainstate_types::block_index::BlockIndex;
-use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
-use common::chain::{Block, GenBlock, OutPoint, OutPointSourceId};
-use common::primitives::{BlockHeight, Id, Idable};
+use chainstate_types::BlockIndex;
+use common::{
+    chain::{
+        transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
+        Block, GenBlock, OutPoint, OutPointSourceId,
+    },
+    primitives::{BlockHeight, Id, Idable},
+};
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
 use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};

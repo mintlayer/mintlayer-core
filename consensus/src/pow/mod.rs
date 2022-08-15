@@ -13,13 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::chain::{ChainConfig, PoWChainConfig};
-use common::Uint256;
+pub use self::{
+    error::ConsensusPoWError,
+    work::mine,
+    work::{check_pow_consensus, check_proof_of_work},
+};
+
+mod error;
+mod helpers;
+mod work;
+
 use std::time::Duration;
 
-pub mod error;
-mod helpers;
-pub mod work;
+use common::{
+    chain::{ChainConfig, PoWChainConfig},
+    Uint256,
+};
 
 struct PoW(PoWChainConfig);
 

@@ -13,13 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod error;
+
+mod cached_operation;
+use cached_operation::CachedInputsOperation;
+
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     sync::Arc,
 };
 
-use super::gen_block_index::GenBlockIndex;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
+use chainstate_types::GenBlockIndex;
 use common::{
     amount_sum,
     chain::{
@@ -34,12 +39,7 @@ use common::{
 };
 use utils::ensure;
 
-mod cached_operation;
-use cached_operation::CachedInputsOperation;
-
 use self::error::ConnectTransactionError;
-
-pub mod error;
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
