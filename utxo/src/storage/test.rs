@@ -17,7 +17,7 @@ use super::{in_memory::UtxosDBInMemoryImpl, *};
 use crate::{
     flush_to_base,
     tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
-    utxo_entry::{UtxoEntry, DIRTY, FRESH},
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView,
 };
 use common::{
@@ -101,7 +101,7 @@ fn create_utxo_entries(rng: &mut impl Rng, num_of_utxos: u8) -> BTreeMap<OutPoin
     let mut map = BTreeMap::new();
     for _ in 0..num_of_utxos {
         let (utxo, outpoint) = create_utxo(rng, 0);
-        let entry = UtxoEntry::new(Some(utxo), FRESH | DIRTY);
+        let entry = UtxoEntry::new(Some(utxo), IsFresh::Yes, IsDirty::Yes);
         map.insert(outpoint, entry);
     }
 
@@ -341,7 +341,7 @@ fn test_utxo(#[case] seed: Seed) {
         {
             let (utxo, outpoint) = create_utxo(&mut rng, 1);
             let mut map = BTreeMap::new();
-            let entry = UtxoEntry::new(Some(utxo), FRESH);
+            let entry = UtxoEntry::new(Some(utxo), IsFresh::Yes, IsDirty::No);
             map.insert(outpoint.clone(), entry);
 
             let new_hash = Id::new(H256::random());

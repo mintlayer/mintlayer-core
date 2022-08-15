@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    utxo_entry::{UtxoEntry, DIRTY, FRESH},
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
 };
 use common::{
@@ -40,6 +40,8 @@ pub struct UtxosCache<'a> {
     // pub(crate) visibility is required for tests that are in a different mod
     pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
     // TODO: calculate memory usage (mintlayer/mintlayer-core#354)
+    #[allow(dead_code)]
+    memory_usage: usize,
 }
 
 impl<'a> UtxosCache<'a> {
@@ -49,6 +51,7 @@ impl<'a> UtxosCache<'a> {
             parent: None,
             current_block_hash: best_block,
             utxos: Default::default(),
+            memory_usage: 0,
         }
     }
 
@@ -65,7 +68,9 @@ impl<'a> UtxosCache<'a> {
             // if the utxo exists in parent:
             // dirty is FALSE because this view does not have the utxo, therefore is different from parent
             // fresh is FALSE because this view does not have the utxo but the parent has.
-            parent.utxo(outpoint).map(|utxo| UtxoEntry::new(Some(utxo), 0))
+            parent
+                .utxo(outpoint)
+                .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No))
         })
     }
 
@@ -74,6 +79,7 @@ impl<'a> UtxosCache<'a> {
             parent: Some(parent),
             current_block_hash: parent.best_block_hash(),
             utxos: BTreeMap::new(),
+            memory_usage: 0,
         }
     }
 
@@ -130,7 +136,7 @@ impl<'a> UtxosCache<'a> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
-        self.add_utxos_from_tx(tx, UtxoSource::BlockChain(height), false)?;
+        self.add_utxos_from_tx(tx, UtxoSource::Blockchain(height), false)?;
 
         tx_undo.map(TxUndo::new)
     }
@@ -142,6 +148,9 @@ impl<'a> UtxosCache<'a> {
         utxo: Utxo,
         possible_overwrite: bool, // TODO: change this to an enum that explains what happens
     ) -> Result<(), Error> {
+        // TODO: update the memory usage
+        // self.memory_usage should be deducted based on this current entry.
+
         let is_fresh = match self.utxos.get(outpoint) {
             None => {
                 // An insert can be done. This utxo doesn't exist yet, so it's fresh.
@@ -173,8 +182,10 @@ impl<'a> UtxosCache<'a> {
         };
 
         // create a new entry
-        let fresh_flag = if is_fresh { FRESH } else { 0 };
-        let new_entry = UtxoEntry::new(Some(utxo), fresh_flag | DIRTY);
+        let new_entry = UtxoEntry::new(Some(utxo), IsFresh::from(is_fresh), IsDirty::Yes);
+
+        // TODO: update the memory usage
+        // self.memory_usage should be added based on this new entry.
 
         self.utxos.insert(outpoint.clone(), new_entry);
 
@@ -185,6 +196,8 @@ impl<'a> UtxosCache<'a> {
     /// Returns the Utxo if an update was performed.
     pub fn spend_utxo(&mut self, outpoint: &OutPoint) -> Result<Utxo, Error> {
         let entry = self.get_utxo_entry(outpoint).ok_or(Error::NoUtxoFound)?;
+        // TODO: update the memory usage
+        // self.memory_usage must be deducted from this entry's size
 
         // check whether this entry is fresh
         if entry.is_fresh() {
@@ -192,7 +205,7 @@ impl<'a> UtxosCache<'a> {
             self.utxos.remove(outpoint);
         } else {
             // mark this as 'spent'
-            let new_entry = UtxoEntry::new(None, DIRTY);
+            let new_entry = UtxoEntry::new(None, IsFresh::No, IsDirty::Yes);
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
@@ -211,9 +224,11 @@ impl<'a> UtxosCache<'a> {
 
         let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
             //TODO: update the memory storage here
-            let fresh_flag = if entry.is_fresh() { FRESH } else { 0 };
-            let dirty_flag = if entry.is_dirty() { DIRTY } else { 0 };
-            UtxoEntry::new(Some(utxo.clone()), fresh_flag | dirty_flag)
+            UtxoEntry::new(
+                Some(utxo.clone()),
+                IsFresh::from(entry.is_fresh()),
+                IsDirty::from(entry.is_dirty()),
+            )
         });
 
         utxo.utxo_mut()
@@ -293,9 +308,11 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                         if !(entry.is_fresh() && entry.is_spent()) {
                             // Create the utxo in the parent cache, move the data up
                             // and mark it as dirty.
-                            let fresh_flag = if entry.is_fresh() { FRESH } else { 0 };
-                            let entry_copy =
-                                UtxoEntry::new(entry.utxo().cloned(), fresh_flag | DIRTY);
+                            let entry_copy = UtxoEntry::new(
+                                entry.utxo().cloned(),
+                                IsFresh::from(entry.is_fresh()),
+                                IsDirty::Yes,
+                            );
 
                             self.utxos.insert(key, entry_copy);
                             // TODO: increase the memory usage
@@ -318,9 +335,11 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             self.utxos.remove(&key);
                         } else {
                             // A normal modification.
-                            let fresh_flag = if parent_entry.is_fresh() { FRESH } else { 0 };
-                            let entry_copy =
-                                UtxoEntry::new(entry.utxo().cloned(), fresh_flag | DIRTY);
+                            let entry_copy = UtxoEntry::new(
+                                entry.utxo().cloned(),
+                                IsFresh::from(parent_entry.is_fresh()),
+                                IsDirty::Yes,
+                            );
                             self.utxos.insert(key, entry_copy);
                             // TODO: update the memory usage
 
@@ -355,29 +374,49 @@ mod unit_test {
         let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is not dirty and not fresh
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(0), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::No, IsDirty::No)),
+            None,
+        );
         assert!(cache.uncache(&outp).is_ok());
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the outpoint does not exist.
-        let (_, outp) = insert_single_entry(&mut rng, &mut cache, &Presence::Absent, None, None);
+        let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
         assert!(!cache.has_utxo_in_cache(&outp));
 
         // when the entry is fresh, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::Yes, IsDirty::No)),
+            None,
+        );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
 
         // when the entry is dirty, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(DIRTY), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::No, IsDirty::Yes)),
+            None,
+        );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
 
         // when the entry is both fresh and dirty, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::Yes, IsDirty::No)),
+            None,
+        );
         assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
     }
 }

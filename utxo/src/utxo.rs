@@ -22,22 +22,22 @@ use std::fmt::Debug;
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub enum UtxoSource {
     /// At which height this containing tx was included in the active block chain
-    BlockChain(BlockHeight),
-    MemPool,
+    Blockchain(BlockHeight),
+    Mempool,
 }
 
 impl UtxoSource {
     pub fn is_mempool(&self) -> bool {
         match self {
-            UtxoSource::BlockChain(_) => false,
-            UtxoSource::MemPool => true,
+            UtxoSource::Blockchain(_) => false,
+            UtxoSource::Mempool => true,
         }
     }
 
     pub fn blockchain_height(&self) -> Result<BlockHeight, Error> {
         match self {
-            UtxoSource::BlockChain(h) => Ok(*h),
-            UtxoSource::MemPool => Err(crate::Error::NoBlockchainHeightFound),
+            UtxoSource::Blockchain(h) => Ok(*h),
+            UtxoSource::Mempool => Err(crate::Error::NoBlockchainHeightFound),
         }
     }
 }
@@ -68,7 +68,7 @@ impl Utxo {
         Self {
             output,
             is_block_reward,
-            source: UtxoSource::BlockChain(height),
+            source: UtxoSource::Blockchain(height),
         }
     }
 
@@ -76,7 +76,7 @@ impl Utxo {
         Self {
             output,
             is_block_reward,
-            source: UtxoSource::MemPool,
+            source: UtxoSource::Mempool,
         }
     }
 

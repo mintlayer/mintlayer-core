@@ -17,12 +17,6 @@ use crate::Utxo;
 use serialization::{Decode, Encode};
 use std::fmt::Debug;
 
-/// The utxo entry is dirty when this version is different from the parent.
-pub const DIRTY: u8 = 0b01;
-/// The utxo entry is fresh when the parent does not have this utxo or
-/// if it exists in parent but not in current cache.
-pub const FRESH: u8 = 0b10;
-
 /// Tells the state of the utxo
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 #[allow(clippy::large_enum_variant)]
@@ -31,30 +25,73 @@ pub enum UtxoStatus {
     Entry(Utxo),
 }
 
+/// The utxo entry is fresh when the parent does not have this utxo or
+/// if it exists in parent but not in current cache.
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub enum IsFresh {
+    Yes,
+    No,
+}
+
+impl From<bool> for IsFresh {
+    fn from(v: bool) -> Self {
+        if v {
+            IsFresh::Yes
+        } else {
+            IsFresh::No
+        }
+    }
+}
+
+/// The utxo entry is dirty when this version is different from the parent.
+#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
+pub enum IsDirty {
+    Yes,
+    No,
+}
+
+impl From<bool> for IsDirty {
+    fn from(v: bool) -> Self {
+        if v {
+            IsDirty::Yes
+        } else {
+            IsDirty::No
+        }
+    }
+}
+
 /// Just the Utxo with additional information.
 #[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
 pub struct UtxoEntry {
     status: UtxoStatus,
-    flags: u8,
+    is_fresh: IsFresh,
+    is_dirty: IsDirty,
 }
 
 impl UtxoEntry {
-    pub fn new(utxo: Option<Utxo>, flags: u8) -> UtxoEntry {
+    pub fn new(utxo: Option<Utxo>, is_fresh: IsFresh, is_dirty: IsDirty) -> UtxoEntry {
         UtxoEntry {
             status: match utxo {
                 Some(utxo) => UtxoStatus::Entry(utxo),
                 None => UtxoStatus::Spent,
             },
-            flags,
+            is_fresh,
+            is_dirty,
         }
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.flags & DIRTY != 0
+        match self.is_dirty {
+            IsDirty::Yes => true,
+            IsDirty::No => false,
+        }
     }
 
     pub fn is_fresh(&self) -> bool {
-        self.flags & FRESH != 0
+        match self.is_fresh {
+            IsFresh::Yes => true,
+            IsFresh::No => false,
+        }
     }
 
     pub fn is_spent(&self) -> bool {

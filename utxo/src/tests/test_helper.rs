@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use crate::{
-    utxo_entry::{UtxoEntry, DIRTY, FRESH},
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
     Utxo, UtxosCache,
 };
 use common::{
@@ -30,7 +30,7 @@ use crypto::{
 };
 use itertools::Itertools;
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Presence {
     Absent,
     Present,
@@ -128,8 +128,8 @@ fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, Ou
 pub fn insert_single_entry(
     rng: &mut impl Rng,
     cache: &mut UtxosCache,
-    cache_presence: &Presence,
-    cache_flags: Option<u8>,
+    cache_presence: Presence,
+    cache_flags: Option<(IsFresh, IsDirty)>,
     outpoint: Option<OutPoint>,
 ) -> (Utxo, OutPoint) {
     let rng_height = rng.gen_range(0..(u64::MAX - 1));
@@ -142,10 +142,10 @@ pub fn insert_single_entry(
             // there shouldn't be an existing entry. Don't bother with the cache flags.
         }
         other => {
-            let flags = cache_flags.expect("please provide flags.");
+            let (is_fresh, is_dirty) = cache_flags.expect("please provide flags.");
             let entry = match other {
-                Presence::Present => UtxoEntry::new(Some(utxo.clone()), flags),
-                Presence::Spent => UtxoEntry::new(None, flags),
+                Presence::Present => UtxoEntry::new(Some(utxo.clone()), is_fresh, is_dirty),
+                Presence::Spent => UtxoEntry::new(None, is_fresh, is_dirty),
                 _ => {
                     panic!("something wrong in the code.")
                 }
@@ -162,14 +162,14 @@ pub fn insert_single_entry(
 /// checks the dirty, fresh, and spent flags.
 pub(crate) fn check_flags(
     result_entry: Option<&UtxoEntry>,
-    expected_flags: Option<u8>,
+    expected_flags: Option<(IsFresh, IsDirty)>,
     is_spent: bool,
 ) {
-    if let Some(flags) = expected_flags {
+    if let Some((is_fresh, is_dirty)) = expected_flags {
         let result_entry = result_entry.expect("this should have an entry inside");
 
-        assert_eq!(result_entry.is_dirty(), (flags & DIRTY) == DIRTY);
-        assert_eq!(result_entry.is_fresh(), (flags & FRESH) == FRESH);
+        assert_eq!(IsDirty::from(result_entry.is_dirty()), is_dirty);
+        assert_eq!(IsFresh::from(result_entry.is_fresh()), is_fresh);
         assert_eq!(result_entry.is_spent(), is_spent);
     } else {
         assert!(result_entry.is_none());

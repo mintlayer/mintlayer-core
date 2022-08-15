@@ -30,15 +30,15 @@ pub struct UtxosDBInMemoryImpl {
 }
 
 impl UtxosDBInMemoryImpl {
-    pub fn new(best_block: Id<GenBlock>, _initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
+    pub fn new(best_block: Id<GenBlock>, initial_utxos: BTreeMap<OutPoint, Utxo>) -> Self {
         Self {
-            store: BTreeMap::new(),
+            store: initial_utxos,
             undo_store: BTreeMap::new(),
             best_block_id: best_block,
         }
     }
 
-    pub fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
+    pub(super) fn internal_store(&mut self) -> &BTreeMap<OutPoint, Utxo> {
         &self.store
     }
 }
