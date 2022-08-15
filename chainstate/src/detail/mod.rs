@@ -420,14 +420,14 @@ impl<S: BlockchainStorage> Chainstate<S> {
         let chainstate_ref = self.make_db_tx_ro();
 
         // Find issuance transaction id by token_id
-        let creation_tx_id = chainstate_ref
-            .get_token_tx(token_id)?
-            .ok_or(TokensError::TokensNotRegistered(token_id))
-            .map_err(PropertyQueryError::TokensError)?;
+        let creation_tx_id = chainstate_ref.get_token_tx(token_id)?.ok_or(
+            PropertyQueryError::TokensError(TokensError::TokensNotRegistered(token_id)),
+        )?;
         let tx_index = chainstate_ref
             .get_mainchain_tx_index(&OutPointSourceId::Transaction(creation_tx_id))?
-            .ok_or(TokensError::TokensNotRegistered(token_id))
-            .map_err(PropertyQueryError::TokensError)?;
+            .ok_or(PropertyQueryError::TokensError(
+                TokensError::TokensNotRegistered(token_id),
+            ))?;
 
         // Find a block where the transaction was issued
         let creation_block_id = match tx_index.position() {

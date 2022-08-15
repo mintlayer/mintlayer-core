@@ -81,6 +81,7 @@ mockall::mock! {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
         fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+        fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for Store {
@@ -200,6 +201,7 @@ mockall::mock! {
 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
         fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+        fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
 
     impl UtxosStorageWrite for StoreTxRw {

@@ -191,6 +191,8 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
         fn del_block_id_at_height(&mut self, height: &BlockHeight) -> crate::Result<()>;
 
         fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+
+        fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
     }
 }
 
@@ -322,6 +324,10 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
 
     fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()> {
         self.write::<DBTokensInfo, _, _>(token_id.encode(), &tx_id)
+    }
+
+    fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()> {
+        self.0.get_mut::<DBTokensInfo, _>().del(&token_id.encode()).map_err(Into::into)
     }
 }
 

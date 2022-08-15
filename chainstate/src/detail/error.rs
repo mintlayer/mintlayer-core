@@ -120,6 +120,9 @@ pub enum TokensError {
     BlockRewardOutputCantBeUsedInTokenTx,
     #[error("Tokens with ID: `{0}` are not registered")]
     TokensNotRegistered(TokenId),
+    #[error("Token ID can't be calculated")]
+    TokenIdCantBeCalculated,
+    
 }
 
 #[derive(Error, Debug, PartialEq, Eq, Clone)]

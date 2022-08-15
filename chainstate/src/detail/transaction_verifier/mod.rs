@@ -40,7 +40,7 @@ use utils::ensure;
 mod cached_operation;
 use cached_operation::CachedInputsOperation;
 
-use self::error::ConnectTransactionError;
+use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionError};
 
 pub mod error;
 
@@ -55,13 +55,15 @@ pub enum BlockTransactableRef<'a> {
 
 /// The change that a block has caused to the blockchain state
 pub struct TransactionVerifierDelta {
-    data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tx_index_data: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tokens_data: BTreeMap<TokenId, CachedTokensOperation>,
 }
 
 /// The tool used to verify transaction and cache their updated states in memory
 pub struct TransactionVerifier<'a, S> {
     db_tx: &'a S,
     tx_index_cache: BTreeMap<OutPointSourceId, CachedInputsOperation>,
+    tokens_cache: BTreeMap<TokenId, CachedTokensOperation>,
     chain_config: &'a ChainConfig,
 }
 
@@ -71,6 +73,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
             db_tx,
             chain_config,
             tx_index_cache: BTreeMap::new(),
+            tokens_cache: BTreeMap::new(),
         }
     }
 }
@@ -734,8 +737,27 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(change_amount)
     }
 
+    fn register_issuance(&mut self, tx: &Transaction) -> Result<(), TokensError> {
+        let token_id = token_id(tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
+        self.tokens_cache.insert(token_id, CachedTokensOperation::Write(tx.get_id()));
+        Ok(())
+    }
+
+    fn undo_issuance(&mut self, token_id: TokenId) -> Result<(), TokensError> {
+        match self.tokens_cache.entry(token_id) {
+            Entry::Occupied(entry) => {
+                let tokens_op = entry.into_mut();
+                *tokens_op = CachedTokensOperation::Erase;
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(CachedTokensOperation::Erase);
+            }
+        }
+        Ok(())
+    }
+
     fn check_connected_tokens(
-        &self,
+        &mut self,
         token_data: &TokenData,
         tx: &Transaction,
         block: &Block,
@@ -758,7 +780,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                     tx.get_id(),
                     block.get_id(),
                 )?;
-                self.register_new_token()?;
+                self.register_issuance(tx)?;
             }
             TokenData::TokenBurnV1 {
                 token_id,
@@ -770,7 +792,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(())
     }
 
-    fn check_tokens_values(&self, block: &Block) -> Result<(), ConnectTransactionError> {
+    fn check_tokens_values(&mut self, block: &Block) -> Result<(), ConnectTransactionError> {
         for tx in block.transactions() {
             // Check tokens before connect tx
             tx.outputs()
@@ -979,24 +1001,50 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
 
     pub fn consume(self) -> Result<TransactionVerifierDelta, ConnectTransactionError> {
         Ok(TransactionVerifierDelta {
-            data: self.tx_index_cache,
+            tx_index_data: self.tx_index_cache,
+            tokens_data: self.tokens_cache,
         })
     }
 }
 
-impl<'a, S: BlockchainStorageWrite> TransactionVerifier<'a, S> {
+impl<'a, S: BlockchainStorageWrite + 'a> TransactionVerifier<'a, S> {
+    fn flush_tx_index_data(
+        db_tx: &mut S,
+        tx_id: OutPointSourceId,
+        tx_index_op: CachedInputsOperation,
+    ) -> Result<(), ConnectTransactionError> {
+        match tx_index_op {
+            CachedInputsOperation::Write(ref tx_index) => {
+                db_tx.set_mainchain_tx_index(&tx_id, tx_index)?
+            }
+            CachedInputsOperation::Read(_) => (),
+            CachedInputsOperation::Erase => db_tx.del_mainchain_tx_index(&tx_id)?,
+        }
+        Ok(())
+    }
+
+    fn flush_tokens(
+        db_tx: &mut S,
+        token_id: TokenId,
+        token_op: CachedTokensOperation,
+    ) -> Result<(), ConnectTransactionError> {
+        match token_op {
+            CachedTokensOperation::Write(ref tx_id) => db_tx.set_token_tx(token_id, *tx_id)?,
+            CachedTokensOperation::Read(_) => (),
+            CachedTokensOperation::Erase => db_tx.del_token_tx(token_id)?,
+        }
+        Ok(())
+    }
+
     pub fn flush_to_storage(
         db_tx: &mut S,
         input_data: TransactionVerifierDelta,
     ) -> Result<(), ConnectTransactionError> {
-        for (tx_id, tx_index_op) in input_data.data {
-            match tx_index_op {
-                CachedInputsOperation::Write(ref tx_index) => {
-                    db_tx.set_mainchain_tx_index(&tx_id, tx_index)?
-                }
-                CachedInputsOperation::Read(_) => (),
-                CachedInputsOperation::Erase => db_tx.del_mainchain_tx_index(&tx_id)?,
-            }
+        for (tx_id, tx_index_op) in input_data.tx_index_data {
+            Self::flush_tx_index_data(db_tx, tx_id, tx_index_op)?;
+        }
+        for (token_id, token_op) in input_data.tokens_data {
+            Self::flush_tokens(db_tx, token_id, token_op)?;
         }
         Ok(())
     }

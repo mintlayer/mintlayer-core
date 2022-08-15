@@ -111,6 +111,9 @@ pub trait BlockchainStorageWrite: BlockchainStorageRead + UtxosStorageWrite {
 
     /// Set token creation tx
     fn set_token_tx(&mut self, token_id: TokenId, tx_id: Id<Transaction>) -> crate::Result<()>;
+
+    // Remove token tx
+    fn del_token_tx(&mut self, token_id: TokenId) -> crate::Result<()>;
 }
 
 /// Support for transactions over blockchain storage
