@@ -48,10 +48,7 @@ pub enum SyncEvent {
 }
 
 #[derive(Debug)]
-pub enum SyncControlEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum SyncControlEvent<T: NetworkingService> {
     /// Peer connected
     Connected(T::PeerId),
 

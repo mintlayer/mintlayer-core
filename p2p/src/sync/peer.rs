@@ -87,16 +87,19 @@ impl<T: NetworkingService> PeerContext<T> {
         &mut self,
         header: &BlockHeader,
     ) -> crate::Result<Option<BlockHeader>> {
-        if let PeerSyncState::UploadingBlocks(expected) = &self.state {
-            ensure!(
-                expected == &header.get_id(),
-                P2pError::ProtocolError(ProtocolError::InvalidMessage),
-            );
+        match &self.state {
+            PeerSyncState::UploadingBlocks(expected) => {
+                ensure!(
+                    expected == &header.get_id(),
+                    P2pError::ProtocolError(ProtocolError::InvalidMessage),
+                );
 
-            return Ok(self.get_next_block());
+                Ok(self.get_next_block())
+            }
+            PeerSyncState::Idle | PeerSyncState::Unknown | PeerSyncState::UploadingHeaders(_) => {
+                Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
+            }
         }
-
-        Err(P2pError::ProtocolError(ProtocolError::InvalidMessage))
     }
 
     fn get_next_block(&mut self) -> Option<BlockHeader> {

@@ -36,10 +36,7 @@ pub struct AddrInfo<T: NetworkingService> {
 /// the information is passed on to [crate::swarm::PeerManager] which decides whether it wants to keep
 /// the connection open or close it and possibly ban the peer from.
 #[derive(Debug)]
-pub struct PeerInfo<T>
-where
-    T: NetworkingService,
-{
+pub struct PeerInfo<T: NetworkingService> {
     /// Unique ID of the peer
     pub peer_id: T::PeerId,
 
@@ -114,13 +111,13 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peer_id: T::PeerId,
     },
 
-    /// One or more peers discovered
+    /// One or more peers discovered (libp2p defines discovering as finding new addresses through mDNS or otherwise)
     Discovered {
         /// Address information
         peers: Vec<AddrInfo<T>>,
     },
 
-    /// One one more peers have expired
+    /// One one more peers have expired (libp2p defines expired addresses as addresses that haven't appeared in later refreshes of available addresses)
     Expired {
         /// Address information
         peers: Vec<AddrInfo<T>>,
@@ -154,7 +151,7 @@ pub enum PubSubEvent<T: NetworkingService> {
         peer_id: T::PeerId,
 
         /// Unique ID of the message
-        message_id: T::MessageId,
+        message_id: T::PubSubMessageId,
 
         /// Received data, block/transaction
         announcement: message::Announcement,
@@ -166,25 +163,18 @@ pub enum PubSubEvent<T: NetworkingService> {
 pub enum RequestResponseError {
     /// Request timed out
     Timeout,
-
-    /// Connection was closed by remote
-    // TODO: peer manager
-    ConnectionClosed,
 }
 
 /// Syncing-related events
 #[derive(Debug)]
-pub enum SyncingEvent<T>
-where
-    T: NetworkingService,
-{
+pub enum SyncingEvent<T: NetworkingService> {
     /// Incoming request
     Request {
         /// Unique ID of the sender
         peer_id: T::PeerId,
 
         /// Unique ID of the request
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
 
         /// Received request
         request: message::Request,
@@ -196,7 +186,7 @@ where
         peer_id: T::PeerId,
 
         /// Unique ID of the request this message is a response to
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
 
         /// Received response
         response: message::Response,
@@ -205,7 +195,7 @@ where
     /// Error occurred with syncing codec
     Error {
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         error: RequestResponseError,
     },
 }

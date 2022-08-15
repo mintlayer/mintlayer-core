@@ -21,13 +21,13 @@ use common::{
 use serialization::{Decode, Encode};
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct HeaderRequest {
+pub struct HeaderListRequest {
     locator: Locator,
 }
 
-impl HeaderRequest {
+impl HeaderListRequest {
     pub fn new(locator: Locator) -> Self {
-        HeaderRequest { locator }
+        HeaderListRequest { locator }
     }
 
     pub fn locator(&self) -> &Locator {
@@ -40,11 +40,11 @@ impl HeaderRequest {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockRequest {
+pub struct BlockListRequest {
     block_ids: Vec<Id<Block>>,
 }
 
-impl BlockRequest {
+impl BlockListRequest {
     pub fn new(block_ids: Vec<Id<Block>>) -> Self {
         Self { block_ids }
     }
@@ -61,17 +61,17 @@ impl BlockRequest {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Request {
     #[codec(index = 0)]
-    HeaderRequest(HeaderRequest),
+    HeaderListRequest(HeaderListRequest),
     #[codec(index = 1)]
-    BlockRequest(BlockRequest),
+    BlockListRequest(BlockListRequest),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct HeaderResponse {
+pub struct HeaderListResponse {
     headers: Vec<BlockHeader>,
 }
 
-impl HeaderResponse {
+impl HeaderListResponse {
     pub fn new(headers: Vec<BlockHeader>) -> Self {
         Self { headers }
     }
@@ -86,11 +86,11 @@ impl HeaderResponse {
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
-pub struct BlockResponse {
+pub struct BlockListResponse {
     blocks: Vec<Block>,
 }
 
-impl BlockResponse {
+impl BlockListResponse {
     pub fn new(blocks: Vec<Block>) -> Self {
         Self { blocks }
     }
@@ -107,9 +107,9 @@ impl BlockResponse {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Response {
     #[codec(index = 0)]
-    HeaderResponse(HeaderResponse),
+    HeaderListResponse(HeaderListResponse),
     #[codec(index = 1)]
-    BlockResponse(BlockResponse),
+    BlockListResponse(BlockListResponse),
 }
 
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]

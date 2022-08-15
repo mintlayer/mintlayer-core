@@ -34,12 +34,7 @@
 
 use crate::{
     error::{DialError, P2pError, PeerError},
-    net::libp2p::{
-        connectivity::types::{
-            BehaviourEvent, Connection, ConnectionManagerEvent, ConnectionState, ControlEvent,
-        },
-        types::IdentifyInfoWrapper,
-    },
+    net::libp2p::types::IdentifyInfoWrapper,
 };
 use libp2p::{
     core::{
@@ -59,9 +54,13 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+use self::types::{
+    BehaviourEvent, Connection, ConnectionManagerEvent, ConnectionState, ControlEvent,
+};
+
 pub mod types;
 
-/// Connection manager
+/// Connection manager is responsible for handling low-level connection stuff, like connect/disconnect and handshakes
 pub struct ConnectionManager {
     /// Handler for waking when a new event is produced
     waker: Option<Waker>,
@@ -292,6 +291,11 @@ impl ConnectionManager {
 }
 
 impl NetworkBehaviour for ConnectionManager {
+    // `ConnectionHandler` is used to negotiate the protocols that are used for communication with the
+    // remote peer. It's the job of the `ConnectionHandler` to select the protocols and open substreams
+    // for each selected protocol.
+    //
+    // `DummyConnectionHandler` is an implementation of a connection handler that doesn't handle anything
     type ConnectionHandler = DummyConnectionHandler;
     type OutEvent = ConnectionManagerEvent;
 

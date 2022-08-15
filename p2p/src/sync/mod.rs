@@ -16,7 +16,7 @@
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event, message,
-    net::{self, types::SyncingEvent, NetworkingService, SyncingCodecService},
+    net::{self, types::SyncingEvent, NetworkingService, SyncingMessagingService},
 };
 use chainstate::{
     ban_score::BanScore, chainstate_interface, BlockError, ChainstateError::ProcessBlockError,
@@ -71,15 +71,15 @@ pub enum SyncState {
 ///
 /// Currently its only mode of operation is greedy so it will download all changes from every
 /// peer it's connected to and actively keep track of the peer's state.
-pub struct SyncManager<T: NetworkingService> {
+pub struct BlockSyncManager<T: NetworkingService> {
     /// Chain config
     config: Arc<ChainConfig>,
 
     /// Syncing state of the local node
     state: SyncState,
 
-    /// Handle for sending/receiving connectivity events
-    handle: T::SyncingCodecHandle,
+    /// Handle for sending/receiving syncing events
+    peer_sync_handle: T::SyncingMessagingHandle,
 
     /// RX channel for receiving control events
     rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
@@ -87,7 +87,7 @@ pub struct SyncManager<T: NetworkingService> {
     /// TX channel for sending control events to swarm
     tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
 
-    /// TX channel for sending control events to pubsub
+    /// TX channel for sending control events to pubsub (used to tell pubsub that syncing to best block is done)
     tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
 
     /// Hashmap of connected peers
@@ -97,18 +97,18 @@ pub struct SyncManager<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// Pending requests
-    requests: HashMap<T::RequestId, request::RequestState<T>>,
+    requests: HashMap<T::SyncingPeerRequestId, request::RequestState<T>>,
 }
 
 /// Syncing manager
-impl<T> SyncManager<T>
+impl<T> BlockSyncManager<T>
 where
     T: NetworkingService,
-    T::SyncingCodecHandle: SyncingCodecService<T>,
+    T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
     pub fn new(
         config: Arc<ChainConfig>,
-        handle: T::SyncingCodecHandle,
+        handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
         rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
         tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
@@ -116,7 +116,7 @@ where
     ) -> Self {
         Self {
             config,
-            handle,
+            peer_sync_handle: handle,
             rx_sync,
             tx_swarm,
             tx_pubsub,
@@ -133,8 +133,11 @@ where
     }
 
     /// Get mutable reference to the handle
-    pub fn handle_mut(&mut self) -> &mut T::SyncingCodecHandle {
-        &mut self.handle
+    pub fn handle_mut(&mut self) -> &mut T::SyncingMessagingHandle {
+        // TODO: get rid of this function as it's used only in tests; perhaps a better way to do this is by
+        // creating p2p objects and make them communicate together instead of having access to internal
+        // private parts of the sync manager
+        &mut self.peer_sync_handle
     }
 
     /// Register peer to the `SyncManager`
@@ -161,7 +164,7 @@ where
     pub async fn process_header_request(
         &mut self,
         _peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         locator: Locator,
     ) -> crate::Result<()> {
         // TODO: check if remote has already asked for these headers?
@@ -173,22 +176,24 @@ where
     pub async fn process_block_request(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         headers: Vec<Id<Block>>,
     ) -> crate::Result<()> {
         ensure!(
             headers.len() == 1,
             P2pError::ProtocolError(ProtocolError::InvalidMessage),
         );
+
+        // TODO: handle processing requests for multiple blocks
+        let block_id =
+            *headers.get(0).ok_or(P2pError::ProtocolError(ProtocolError::InvalidMessage))?;
         ensure!(
             self.peers.contains_key(&peer_id),
             P2pError::PeerError(PeerError::PeerDoesntExist),
         );
 
-        let block_result = self
-            .chainstate_handle
-            .call(move |this| this.get_block(headers.into_iter().next().expect("header to exist")))
-            .await?;
+        let block_result =
+            self.chainstate_handle.call(move |this| this.get_block(block_id)).await?;
 
         match block_result {
             Ok(Some(block)) => self.send_block_response(request_id, vec![block]).await,
@@ -318,6 +323,7 @@ where
         peer_id: T::PeerId,
         blocks: Vec<Block>,
     ) -> crate::Result<()> {
+        // TODO: remove the limitation of sending only one block, and allow sending multiple blocks (up to a cap)
         ensure!(
             blocks.len() == 1,
             P2pError::ProtocolError(ProtocolError::InvalidMessage),
@@ -374,14 +380,10 @@ where
     pub async fn process_error(
         &mut self,
         peer_id: T::PeerId,
-        request_id: T::RequestId,
+        request_id: T::SyncingPeerRequestId,
         error: net::types::RequestResponseError,
     ) -> crate::Result<()> {
         match error {
-            // TODO: through peermanager!
-            net::types::RequestResponseError::ConnectionClosed => {
-                self.unregister_peer(peer_id);
-            }
             net::types::RequestResponseError::Timeout => {
                 if let Some(request) = self.requests.remove(&request_id) {
                     log::warn!(
@@ -425,6 +427,7 @@ where
                 }
             }
         }
+
         Ok(())
     }
 
@@ -504,13 +507,13 @@ where
 
         loop {
             tokio::select! {
-                event = self.handle.poll_next() => match event? {
+                event = self.peer_sync_handle.poll_next() => match event? {
                     SyncingEvent::Request {
                         peer_id,
                         request_id,
                         request,
                     } => match request {
-                        message::Request::HeaderRequest(request) => {
+                        message::Request::HeaderListRequest(request) => {
                             log::debug!(
                                 "process header request (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -524,7 +527,7 @@ where
                             ).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                        message::Request::BlockRequest(request) => {
+                        message::Request::BlockListRequest(request) => {
                             log::debug!(
                                 "process block request (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -544,7 +547,7 @@ where
                         request_id,
                         response,
                     } => match response {
-                        message::Response::HeaderResponse(response) => {
+                        message::Response::HeaderListResponse(response) => {
                             log::debug!(
                                 "process header response (id {:?}) from peer {}",
                                 request_id, peer_id
@@ -554,7 +557,7 @@ where
                             let result = self.process_header_response(peer_id, response.into_headers()).await;
                             self.handle_error(peer_id, result).await?;
                         }
-                        message::Response::BlockResponse(response) => {
+                        message::Response::BlockListResponse(response) => {
                             log::debug!(
                                 "process block response (id {:?}) from peer {}",
                                 request_id, peer_id

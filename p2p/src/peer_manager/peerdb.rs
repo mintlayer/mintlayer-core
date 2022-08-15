@@ -77,6 +77,8 @@ pub enum Peer<T: NetworkingService> {
 }
 
 // TODO: store available peers into a binary heap
+// TODO: find a way to persist this data in some database for when the node is restarted
+// (data of banned, discovered, and at-least-once used should be stored)
 pub struct PeerDb<T: NetworkingService> {
     /// P2P configuration
     p2p_config: Arc<config::P2pConfig>,

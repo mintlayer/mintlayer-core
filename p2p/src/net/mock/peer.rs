@@ -395,9 +395,11 @@ mod tests {
 
         assert!(socket2.recv().now_or_never().is_none());
         socket2
-            .send(types::Message::Request(message::Request::HeaderRequest(
-                message::HeaderRequest::new(Locator::new(vec![])),
-            )))
+            .send(types::Message::Request(
+                message::Request::HeaderListRequest(message::HeaderListRequest::new(Locator::new(
+                    vec![],
+                ))),
+            ))
             .await
             .unwrap();
 
