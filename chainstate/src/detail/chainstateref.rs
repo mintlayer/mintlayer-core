@@ -29,7 +29,6 @@ use common::{
 };
 use consensus::{BlockIndexHandle, TransactionIndexHandle};
 use logging::log;
-use serialization::Encode;
 use utils::ensure;
 
 use super::{median_time::calculate_median_time_past, time_getter::TimeGetterFn};
@@ -760,15 +759,7 @@ impl<'a, S: BlockchainStorageWrite, O: OrphanBlocksMut> ChainstateRef<'a, S, O> 
 
         // Set Chain Trust
         let chain_trust = *prev_block_index.chain_trust() + self.get_block_proof(block)?;
-        let block_reward_byte_size = block.block_reward().encoded_size();
-        let block_index = BlockIndex::new(
-            block,
-            chain_trust,
-            some_ancestor,
-            height,
-            block_reward_byte_size.try_into().expect("Huge block reward"),
-            time_max,
-        );
+        let block_index = BlockIndex::new(block, chain_trust, some_ancestor, height, time_max);
         Ok(block_index)
     }
 

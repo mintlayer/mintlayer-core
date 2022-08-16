@@ -235,10 +235,9 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
             Ok(Some(block)) => {
                 let header_size = block_index.block_header().encoded_size();
                 let begin = header_size;
-                let end = header_size + block_index.block_reward_byte_size();
-                let encoded_block_reward =
-                    block.get(begin..end).expect("Block reward outside of block range");
-                let block_reward = BlockReward::decode_all(&mut &*encoded_block_reward)
+                let encoded_block_reward_begin =
+                    block.get(begin..).expect("Block reward outside of block range");
+                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
                     .expect("Invalid block reward encoding in DB");
                 Ok(Some(block_reward))
             }
