@@ -13,9 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::net::NetworkingService;
+use crate::{error::P2pError, net::NetworkingService};
 use common::chain::block::Block;
-use tokio::sync::oneshot;
+use p2p_util_derive::Handle;
+use tokio::sync::{mpsc, oneshot};
+
+// TODO: remove
+#[derive(Debug, Handle)]
+pub enum SwarmTestEvent {
+    AdjustPeerScore {
+        peer_id: u64,
+        score: u32,
+        #[return_value]
+        response: oneshot::Sender<crate::Result<bool>>,
+    },
+}
+
+// TODO: remove
+#[derive(Debug, Handle)]
+pub enum SyncControlTestEvent {
+    /// Peer connected
+    #[name = "send_connected"]
+    Connected { peer_id: u64 },
+
+    /// Peer disconnected
+    Disconnected { peer_id: u64 },
+}
 
 #[derive(Debug)]
 pub enum SwarmEvent<T: NetworkingService> {

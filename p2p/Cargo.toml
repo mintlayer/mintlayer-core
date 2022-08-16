@@ -23,6 +23,7 @@ rpc = { path = "../rpc/" }
 serialization = { path = "../serialization/" }
 subsystem = { path = "../subsystem/" }
 utils = { path = "../utils/" }
+p2p-util-derive = { path = "src/util" }
 
 [dependencies.jsonrpsee]
 version = "0.14"
