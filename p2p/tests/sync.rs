@@ -42,18 +42,18 @@ async fn make_sync_manager<T>(
 ) -> (
     BlockSyncManager<T>,
     T::ConnectivityHandle,
-    mpsc::Sender<SyncControlEvent<T>>,
-    mpsc::Receiver<PubSubControlEvent>,
-    mpsc::Receiver<SwarmEvent<T>>,
+    mpsc::UnboundedSender<SyncControlEvent<T>>,
+    mpsc::UnboundedReceiver<PubSubControlEvent>,
+    mpsc::UnboundedReceiver<SwarmEvent<T>>,
 )
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
-    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
-    let (tx_swarm, rx_swarm) = mpsc::channel(16);
+    let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
+    let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
+    let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
 
     let config = Arc::new(common::chain::config::create_mainnet());
     let (conn, _, sync) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
@@ -881,7 +881,7 @@ async fn two_remote_nodes_same_chains() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
-    let (tx, mut rx) = mpsc::channel(1);
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let handle = tokio::spawn(async move {
         loop {
             advance_mgr_state(&mut mgr1).await.unwrap();
@@ -891,7 +891,7 @@ async fn two_remote_nodes_same_chains() {
             }
         }
 
-        tx.send(()).await.unwrap();
+        tx.send(()).unwrap();
         mgr1
     });
 
@@ -996,7 +996,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
     assert_eq!(mgr2.register_peer(*conn1.peer_id()).await, Ok(()));
     assert_eq!(mgr3.register_peer(*conn1.peer_id()).await, Ok(()));
 
-    let (tx, mut rx) = mpsc::channel(1);
+    let (tx, mut rx) = mpsc::unbounded_channel();
     let mut gethdr_received = HashSet::new();
     let mut blocks = vec![];
 
@@ -1009,7 +1009,7 @@ async fn two_remote_nodes_same_chains_new_blocks() {
             }
         }
 
-        tx.send(()).await.unwrap();
+        tx.send(()).unwrap();
         mgr1
     });
 

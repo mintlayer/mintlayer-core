@@ -41,8 +41,8 @@ where
     <<T as NetworkingService>::Address as FromStr>::Err: Debug,
 {
     let (conn, _, _) = T::start(addr, Arc::clone(&config), Default::default()).await.unwrap();
-    let (_, rx) = tokio::sync::mpsc::channel(16);
-    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::channel(16);
+    let (_, rx) = tokio::sync::mpsc::unbounded_channel();
+    let (tx_sync, mut rx_sync) = tokio::sync::mpsc::unbounded_channel();
 
     tokio::spawn(async move {
         loop {

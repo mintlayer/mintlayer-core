@@ -64,10 +64,10 @@ pub async fn make_libp2p(
     topics: &[net::types::PubSubTopic],
 ) -> (
     Libp2pBackend,
-    mpsc::Sender<types::Command>,
-    mpsc::Receiver<types::ConnectivityEvent>,
-    mpsc::Receiver<types::PubSubEvent>,
-    mpsc::Receiver<types::SyncingEvent>,
+    mpsc::UnboundedSender<types::Command>,
+    mpsc::UnboundedReceiver<types::ConnectivityEvent>,
+    mpsc::UnboundedReceiver<types::PubSubEvent>,
+    mpsc::UnboundedReceiver<types::SyncingEvent>,
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
@@ -139,10 +139,10 @@ pub async fn make_libp2p(
         SwarmBuilder::new(transport, behaviour, peer_id).build()
     };
 
-    let (cmd_tx, cmd_rx) = mpsc::channel(16);
-    let (gossip_tx, gossip_rx) = mpsc::channel(64);
-    let (conn_tx, conn_rx) = mpsc::channel(64);
-    let (sync_tx, sync_rx) = mpsc::channel(64);
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
+    let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (
@@ -163,10 +163,10 @@ pub async fn make_libp2p_with_ping(
     ping: libp2p_ping::Behaviour,
 ) -> (
     Libp2pBackend,
-    mpsc::Sender<types::Command>,
-    mpsc::Receiver<types::ConnectivityEvent>,
-    mpsc::Receiver<types::PubSubEvent>,
-    mpsc::Receiver<types::SyncingEvent>,
+    mpsc::UnboundedSender<types::Command>,
+    mpsc::UnboundedReceiver<types::ConnectivityEvent>,
+    mpsc::UnboundedReceiver<types::PubSubEvent>,
+    mpsc::UnboundedReceiver<types::SyncingEvent>,
 ) {
     let id_keys = identity::Keypair::generate_ed25519();
     let peer_id = id_keys.public().to_peer_id();
@@ -233,10 +233,10 @@ pub async fn make_libp2p_with_ping(
         SwarmBuilder::new(transport, behaviour, peer_id).build()
     };
 
-    let (cmd_tx, cmd_rx) = mpsc::channel(16);
-    let (gossip_tx, gossip_rx) = mpsc::channel(64);
-    let (conn_tx, conn_rx) = mpsc::channel(64);
-    let (sync_tx, sync_rx) = mpsc::channel(64);
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
+    let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+    let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
     swarm.listen_on(addr).expect("swarm listen failed");
     (

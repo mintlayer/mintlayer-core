@@ -56,10 +56,10 @@ where
     peer_connectivity_handle: T::ConnectivityHandle,
 
     /// RX channel for receiving control events
-    rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
+    rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
 
     /// TX channel for sending events to SyncManager
-    tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+    tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,
 
     /// Hashmap of pending outbound connections
     pending: HashMap<T::Address, Option<oneshot::Sender<crate::Result<()>>>>,
@@ -79,8 +79,8 @@ where
         chain_config: Arc<ChainConfig>,
         p2p_config: Arc<P2pConfig>,
         handle: T::ConnectivityHandle,
-        rx_swarm: mpsc::Receiver<event::SwarmEvent<T>>,
-        tx_sync: mpsc::Sender<event::SyncControlEvent<T>>,
+        rx_swarm: mpsc::UnboundedReceiver<event::SwarmEvent<T>>,
+        tx_sync: mpsc::UnboundedSender<event::SyncControlEvent<T>>,
     ) -> Self {
         Self {
             peer_connectivity_handle: handle,
@@ -202,7 +202,6 @@ where
         self.peerdb.peer_connected(address, info);
         self.tx_sync
             .send(event::SyncControlEvent::Connected(peer_id))
-            .await
             .map_err(P2pError::from)
     }
 
@@ -255,7 +254,7 @@ where
     async fn close_connection(&mut self, peer_id: T::PeerId) -> crate::Result<()> {
         log::debug!("connection closed for peer {peer_id}");
 
-        self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id)).await?;
+        self.tx_sync.send(event::SyncControlEvent::Disconnected(peer_id))?;
         self.peerdb.peer_disconnected(&peer_id);
         Ok(())
     }
