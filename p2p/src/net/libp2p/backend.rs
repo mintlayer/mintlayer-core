@@ -101,12 +101,8 @@ impl Libp2pBackend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
-                        // TODO: `inspect_err`
-                        match self.swarm.disconnect_peer_id(peer_id) {
-                            Ok(_) => {}
-                            Err(err) => {
-                                log::error!("Failed to disconnect peer {}: {:?}", peer_id, err);
-                            }
+                        if let Err(e) =  self.swarm.disconnect_peer_id(peer_id) {
+                            log::error!("Failed to disconnect peer {peer_id}: {e:?}");
                         }
                     }
                     _ => {
