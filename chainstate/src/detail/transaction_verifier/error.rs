@@ -14,7 +14,10 @@
 // limitations under the License.
 
 use common::{
-    chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition, tokens::TokensError},
+    chain::{
+        block::Block, tokens::TokensError, SpendError, Spender, TxMainChainIndexError,
+        TxMainChainPosition,
+    },
     primitives::{Amount, Id},
 };
 use thiserror::Error;

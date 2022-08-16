@@ -27,7 +27,9 @@ use common::{
         calculate_tx_index_from_block,
         config::{TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MIN_ISSUANCE_FEE},
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId, TokensError},
+        tokens::{
+            get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId, TokensError,
+        },
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
