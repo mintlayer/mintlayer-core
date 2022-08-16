@@ -49,6 +49,8 @@ pub enum ConsensusPoSError {
     KernelBlockIndexNotFound(Id<GenBlock>),
     #[error("Kernel input transaction retrieval error: {0}")]
     KernelTransactionRetrievalFailed(PropertyQueryError),
+    #[error("Kernel block reward does not exist: {0}")]
+    KernelBlockRewardRetrievalFailed(PropertyQueryError),
     #[error("Kernel output index out of range: {0}")]
     KernelOutputIndexOutOfRange(u32),
     #[error("Kernel input transaction not found")]

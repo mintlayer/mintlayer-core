@@ -15,7 +15,7 @@
 
 use chainstate_types::{BlockIndex, EpochData, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::{Block, GenBlock},
+    chain::{block::BlockReward, Block, GenBlock},
     primitives::{BlockHeight, Id},
 };
 
@@ -39,5 +39,12 @@ pub trait BlockIndexHandle {
         block_index: &BlockIndex,
         ancestor_height: BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError>;
+
+    /// Returns the block reward of the given block
+    fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError>;
+
     fn get_epoch_data(&self, epoch_index: u64) -> Result<Option<EpochData>, PropertyQueryError>;
 }

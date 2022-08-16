@@ -18,6 +18,7 @@ pub mod utxo_db;
 use chainstate_types::{BlockIndex, EpochData};
 use common::{
     chain::{
+        block::BlockReward,
         transaction::{Transaction, TxMainChainIndex, TxMainChainPosition},
         Block, GenBlock, OutPoint, OutPointSourceId,
     },
@@ -139,27 +140,28 @@ macro_rules! delegate_to_transaction {
 
 impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
-            fn get_storage_version(&self) -> crate::Result<u32>;
-            fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
-            fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
-            fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_storage_version(&self) -> crate::Result<u32>;
+        fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
+        fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+        fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
+        fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
-            fn get_mainchain_tx_index(
+        fn get_mainchain_tx_index(
                 &self,
                 tx_id: &OutPointSourceId,
             ) -> crate::Result<Option<TxMainChainIndex>>;
 
-            fn get_mainchain_tx_by_position(
+        fn get_mainchain_tx_by_position(
                 &self,
                 tx_index: &TxMainChainPosition,
             ) -> crate::Result<Option<Transaction>>;
 
-            fn get_block_id_by_height(
+        fn get_block_id_by_height(
                 &self,
                 height: &BlockHeight,
             ) -> crate::Result<Option<Id<GenBlock>>>;
 
-            fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
+        fn get_epoch_data(&self, epoch_index: u64) -> crate::Result<Option<EpochData>>;
     }
 }
 
@@ -231,6 +233,22 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
 
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
         self.read::<DBBlock, _, _>(id.as_ref())
+    }
+
+    fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
+        match self.0.get::<DBBlock, _>().get(block_index.block_id().as_ref()) {
+            Err(e) => Err(e.into()),
+            Ok(None) => Ok(None),
+            Ok(Some(block)) => {
+                let header_size = block_index.block_header().encoded_size();
+                let begin = header_size;
+                let encoded_block_reward_begin =
+                    block.get(begin..).expect("Block reward outside of block range");
+                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
+                    .expect("Invalid block reward encoding in DB");
+                Ok(Some(block_reward))
+            }
+        }
     }
 
     fn get_mainchain_tx_index(

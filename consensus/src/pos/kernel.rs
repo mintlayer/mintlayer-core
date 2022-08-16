@@ -14,7 +14,7 @@
 // limitations under the License.
 
 use chainstate_types::GenBlockIndex;
-use common::chain::{block::consensus_data::PoSData, signature::Transactable, TxOutput};
+use common::chain::{block::consensus_data::PoSData, TxOutput};
 use utils::ensure;
 
 use crate::{
@@ -94,23 +94,31 @@ pub fn get_kernel_output(
                 ConsensusPoSError::KernelOutputIndexOutOfRange(kernel_outpoint.output_index())
             })?
             .clone(),
-        common::chain::SpendablePosition::BlockReward(block_id) =>
-        // TODO: FIXME!
-        {
-            todo!()
-        }
-        // kernel_block_index
-        // .block_reward_transactable()
-        // .outputs()
-        // .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
-        // .get(kernel_outpoint.output_index() as usize)
-        // .ok_or_else(|| {
-        //     ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
-        //         *block_id,
-        //         kernel_outpoint.output_index(),
-        //     )
-        // })?
-        // .clone(),
+        common::chain::SpendablePosition::BlockReward(block_id) => match kernel_block_index {
+            GenBlockIndex::Block(block_index) => block_index_handle
+                .get_block_reward(&block_index)
+                .map_err(ConsensusPoSError::KernelBlockRewardRetrievalFailed)?
+                .ok_or(ConsensusPoSError::KernelHeaderOutputDoesNotExist(*block_id))?
+                .outputs()
+                .get(kernel_outpoint.output_index() as usize)
+                .ok_or_else(|| {
+                    ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
+                        *block_id,
+                        kernel_outpoint.output_index(),
+                    )
+                })?
+                .clone(),
+            GenBlockIndex::Genesis(genesis) => genesis
+                .utxos()
+                .get(kernel_outpoint.output_index() as usize)
+                .ok_or_else(|| {
+                    ConsensusPoSError::KernelHeaderOutputIndexOutOfRange(
+                        *block_id,
+                        kernel_outpoint.output_index(),
+                    )
+                })?
+                .clone(),
+        },
     };
 
     Ok(kernel_output)

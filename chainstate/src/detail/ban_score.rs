@@ -96,6 +96,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
+            ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,
@@ -198,6 +199,7 @@ impl BanScore for ConsensusPoSError {
             ConsensusPoSError::VRFDataVerificationFailed(_) => 100,
             ConsensusPoSError::EpochDataRetrievalQueryError(_, _) => 0,
             ConsensusPoSError::EpochDataNotFound(_) => 0,
+            ConsensusPoSError::KernelBlockRewardRetrievalFailed(_) => 100,
         }
     }
 }
