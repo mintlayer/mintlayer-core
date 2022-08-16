@@ -156,12 +156,6 @@ pub enum ConnectivityEvent {
     /// One or more peers that were previously discovered have expired
     Expired { peers: Vec<(PeerId, Multiaddr)> },
 
-    /// An error occurred with a connected peer
-    Error {
-        peer_id: PeerId,
-        error: error::P2pError,
-    },
-
     /// Peer misbehaved, adjust its reputation
     Misbehaved {
         peer_id: PeerId,

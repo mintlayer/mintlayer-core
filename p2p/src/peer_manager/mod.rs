@@ -511,9 +511,6 @@ where
                             let res = self.adjust_peer_score(peer_id, error.ban_score()).await;
                             self.handle_result(Some(peer_id), res).await?;
                         }
-                        net::types::ConnectivityEvent::Error { .. } => {
-                            // TODO:
-                        }
                     }
                     Err(err) => {
                         log::error!("failed to read network event: {err:?}");

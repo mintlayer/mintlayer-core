@@ -250,9 +250,6 @@ where
             types::ConnectivityEvent::Expired { peers } => Ok(ConnectivityEvent::Expired {
                 peers: parse_peers(peers),
             }),
-            types::ConnectivityEvent::Error { peer_id, error } => {
-                Ok(ConnectivityEvent::Error { peer_id, error })
-            }
             types::ConnectivityEvent::Misbehaved { peer_id, error } => {
                 Ok(ConnectivityEvent::Misbehaved { peer_id, error })
             }
