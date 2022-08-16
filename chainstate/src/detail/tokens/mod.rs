@@ -24,14 +24,14 @@ use common::{
 use utils::ensure;
 
 pub fn check_tokens_transfer_data(
-    block_id: Id<Block>,
+    source_block_id: Id<Block>,
     tx: &Transaction,
     amount: &Amount,
 ) -> Result<(), TokensError> {
     // Check amount
     ensure!(
         amount > &Amount::from_atoms(0),
-        TokensError::TransferZeroTokens(tx.get_id(), block_id)
+        TokensError::TransferZeroTokens(tx.get_id(), source_block_id)
     );
 
     Ok(())
@@ -39,13 +39,13 @@ pub fn check_tokens_transfer_data(
 
 pub fn check_tokens_burn_data(
     tx: &Transaction,
-    block_id: &Id<Block>,
+    source_block_id: &Id<Block>,
     amount_to_burn: &Amount,
 ) -> Result<(), TokensError> {
     // Check amount
     ensure!(
         amount_to_burn != &Amount::from_atoms(0),
-        TokensError::BurnZeroTokens(tx.get_id(), *block_id)
+        TokensError::BurnZeroTokens(tx.get_id(), *source_block_id)
     );
     Ok(())
 }
@@ -56,7 +56,7 @@ pub fn check_tokens_issuance_data(
     number_of_decimals: &u8,
     metadata_uri: &Vec<u8>,
     tx_id: Id<Transaction>,
-    block_id: Id<Block>,
+    source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     //TODO: Shall we have a check for unique token name?
 
@@ -65,22 +65,22 @@ pub fn check_tokens_issuance_data(
         || token_ticker.is_empty()
         || !String::from_utf8_lossy(token_ticker).is_ascii()
     {
-        return Err(TokensError::IssueErrorIncorrectTicker(tx_id, block_id));
+        return Err(TokensError::IssueErrorIncorrectTicker(tx_id, source_block_id));
     }
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
-        return Err(TokensError::IssueErrorIncorrectAmount(tx_id, block_id));
+        return Err(TokensError::IssueErrorIncorrectAmount(tx_id, source_block_id));
     }
 
     // Check decimals
     if number_of_decimals > &TOKEN_MAX_DEC_COUNT {
-        return Err(TokensError::IssueErrorTooManyDecimals(tx_id, block_id));
+        return Err(TokensError::IssueErrorTooManyDecimals(tx_id, source_block_id));
     }
 
     // Check URI
     if metadata_uri.len() > TOKEN_MAX_URI_LEN || !String::from_utf8_lossy(metadata_uri).is_ascii() {
-        return Err(TokensError::IssueErrorIncorrectMetadataURI(tx_id, block_id));
+        return Err(TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id));
     }
     Ok(())
 }
@@ -88,14 +88,14 @@ pub fn check_tokens_issuance_data(
 pub fn check_tokens_data(
     token_data: &TokenData,
     tx: &Transaction,
-    block: &Block,
+    source_block_id: Id<Block>,
 ) -> Result<(), TokensError> {
     match token_data {
         TokenData::TokenTransferV1 {
             token_id: _,
             amount,
         } => {
-            check_tokens_transfer_data(block.get_id(), tx, amount)?;
+            check_tokens_transfer_data(source_block_id, tx, amount)?;
         }
         TokenData::TokenIssuanceV1 {
             token_ticker,
@@ -109,14 +109,14 @@ pub fn check_tokens_data(
                 number_of_decimals,
                 metadata_uri,
                 tx.get_id(),
-                block.get_id(),
+                source_block_id,
             )?;
         }
         TokenData::TokenBurnV1 {
             token_id: _,
             amount_to_burn,
         } => {
-            check_tokens_burn_data(tx, &block.get_id(), amount_to_burn)?;
+            check_tokens_burn_data(tx, &source_block_id, amount_to_burn)?;
         }
     }
     Ok(())

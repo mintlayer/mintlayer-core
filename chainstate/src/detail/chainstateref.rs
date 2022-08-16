@@ -518,7 +518,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
                     OutputValue::Coin(_) => None,
                     OutputValue::Token(token) => Some(token),
                 })
-                .try_for_each(|token| tokens::check_tokens_data(token, tx, block))
+                .try_for_each(|token| tokens::check_tokens_data(token, tx, block.get_id()))
                 .map_err(CheckBlockTransactionsError::TokensError)?;
         }
         Ok(())
