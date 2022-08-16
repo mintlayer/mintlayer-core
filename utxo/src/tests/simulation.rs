@@ -13,7 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{utxo_impl::test_helper::create_utxo, FlushableUtxoView, Utxo, UtxosCache, UtxosView};
+use super::test_helper::create_utxo;
+use crate::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use common::{chain::OutPoint, primitives::H256};
 use crypto::random::Rng;
 use rstest::rstest;
@@ -129,10 +130,10 @@ fn populate_cache(
         if i % 10 == 0 {
             if rng.gen::<bool>() && prev_result.len() > 1 {
                 let idx = rng.gen_range(0..prev_result.len());
-                cache.uncache(&prev_result[idx].0);
+                let _ = cache.uncache(&prev_result[idx].0);
             } else if result.len() > 1 {
                 let idx = rng.gen_range(0..result.len());
-                cache.uncache(&result[idx].0);
+                let _ = cache.uncache(&result[idx].0);
             }
             removed_an_entry = true;
         }

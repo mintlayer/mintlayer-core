@@ -42,7 +42,7 @@ use common::{
 };
 use logging::log;
 use utils::eventhandler::{EventHandler, EventsController};
-use utxo::utxo_storage::UtxosDBMut;
+use utxo::UtxosDBMut;
 
 use self::{
     orphan_blocks::{OrphanBlocksRef, OrphanBlocksRefMut},

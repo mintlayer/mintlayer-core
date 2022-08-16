@@ -13,8 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(unused, dead_code)]
-
 use crate::Utxo;
 use common::primitives::BlockHeight;
 use serialization::{Decode, Encode};
@@ -74,8 +72,7 @@ impl BlockUndo {
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::test_helper::create_utxo;
-    use crypto::random::Rng;
+    use crate::tests::test_helper::create_utxo;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 

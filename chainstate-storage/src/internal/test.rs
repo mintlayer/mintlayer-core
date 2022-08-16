@@ -265,7 +265,7 @@ fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
     let is_block_reward = random_value % 3 == 0;
 
     // generate utxo
-    Utxo::new(output, is_block_reward, BlockHeight::new(block_height))
+    Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(block_height))
 }
 
 /// returns a block undo with random utxos and TxUndos.

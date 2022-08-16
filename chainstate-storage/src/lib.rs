@@ -22,7 +22,7 @@ use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
 use common::primitives::{BlockHeight, Id};
 use storage::traits;
-use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
+use utxo::{UtxosStorageRead, UtxosStorageWrite};
 
 mod internal;
 #[cfg(any(test, feature = "mock"))]

@@ -26,10 +26,7 @@ use common::{
 };
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::{
-    utxo_storage::{UtxosStorageRead, UtxosStorageWrite},
-    BlockUndo, Utxo,
-};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
 

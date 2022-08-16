@@ -13,35 +13,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod cache;
+mod error;
+mod storage;
 mod undo;
-mod utxo_impl;
+mod utxo;
+mod utxo_entry;
+mod view;
 
-pub use undo::*;
-pub use utxo_impl::*;
+pub use crate::{
+    cache::{ConsumedUtxoCache, UtxosCache},
+    error::Error,
+    storage::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite},
+    undo::{BlockUndo, TxUndo},
+    utxo::{Utxo, UtxoSource},
+    view::{flush_to_base, FlushableUtxoView, UtxosView},
+};
 
-use thiserror::Error;
-
-#[allow(dead_code)]
-#[derive(Error, Debug, Eq, PartialEq)]
-pub enum Error {
-    #[error("Attempted to overwrite an existing utxo")]
-    OverwritingUtxo,
-    #[error(
-        "The utxo was marked FRESH in the child cache, but the utxo exists in the parent cache. This can be considered a fatal error."
-    )]
-    FreshUtxoAlreadyExists,
-    #[error("Attempted to spend a UTXO that's already spent")]
-    UtxoAlreadySpent,
-    #[error("Attempted to spend a non-existing UTXO")]
-    NoUtxoFound,
-    #[error("Attempted to get the block height of a UTXO source that is based on the mempool")]
-    NoBlockchainHeightFound,
-    #[error("Database error: `{0}`")]
-    DBError(String),
-}
-
-impl From<chainstate_types::storage_result::Error> for Error {
-    fn from(e: chainstate_types::storage_result::Error) -> Self {
-        Error::DBError(format!("{:?}", e))
-    }
-}
+#[cfg(test)]
+mod tests;

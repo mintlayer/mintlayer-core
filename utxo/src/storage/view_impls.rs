@@ -13,24 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use crate::{ConsumedUtxoCache, FlushableUtxoView, Utxo, UtxosCache, UtxosView};
 use common::{
     chain::{GenBlock, OutPoint},
     primitives::Id,
 };
 
-use crate::{FlushableUtxoView, Utxo, UtxosCache, UtxosView};
-
-use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
-
 mod utxosdb_utxosview_impls {
-    use common::{
-        chain::{GenBlock, OutPoint},
-        primitives::Id,
-    };
-
-    use crate::{utxo_storage::UtxosStorageRead, Utxo, UtxosCache, UtxosView};
-
     use super::*;
+
     pub fn utxo<S: UtxosStorageRead>(db: &S, outpoint: &OutPoint) -> Option<Utxo> {
         db.get_utxo(outpoint).unwrap_or_else(|e| {
             panic!(
@@ -49,7 +41,7 @@ mod utxosdb_utxosview_impls {
         e))
     }
 
-    pub fn estimated_size<S: UtxosStorageRead>(db: &S) -> Option<usize> {
+    pub fn estimated_size<S: UtxosStorageRead>(_db: &S) -> Option<usize> {
         None
     }
 
@@ -105,16 +97,13 @@ impl<'a, S: UtxosStorageWrite> UtxosView for UtxosDBMut<'a, S> {
 }
 
 impl<'a, S: UtxosStorageWrite> FlushableUtxoView for UtxosDBMut<'a, S> {
-    fn batch_write(
-        &mut self,
-        utxos: crate::utxo_impl::ConsumedUtxoCache,
-    ) -> Result<(), crate::Error> {
+    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), crate::Error> {
         // check each entry if it's dirty. Only then will the db be updated.
         for (key, entry) in utxos.container {
             let outpoint = &key;
             if entry.is_dirty() {
                 if let Some(utxo) = entry.utxo() {
-                    self.0.set_utxo(outpoint, utxo)?;
+                    self.0.set_utxo(outpoint, utxo.clone())?;
                 } else {
                     // entry is spent
                     self.0.del_utxo(outpoint)?;
