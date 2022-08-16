@@ -19,7 +19,9 @@ use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite, Transact
 use chainstate_types::{get_skip_height, BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
     chain::{
-        block::{calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader},
+        block::{
+            calculate_tx_merkle_root, calculate_witness_merkle_root, BlockHeader, BlockReward,
+        },
         Block, ChainConfig, GenBlock, GenBlockId, OutPointSourceId,
     },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
@@ -53,18 +55,27 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> BlockIndexHandle for Chainst
     ) -> Result<Option<BlockIndex>, PropertyQueryError> {
         self.get_block_index(block_id)
     }
+
     fn get_gen_block_index(
         &self,
         block_id: &Id<GenBlock>,
     ) -> Result<Option<GenBlockIndex>, PropertyQueryError> {
         self.get_gen_block_index(block_id)
     }
+
     fn get_ancestor(
         &self,
         block_index: &BlockIndex,
         ancestor_height: BlockHeight,
     ) -> Result<GenBlockIndex, PropertyQueryError> {
         self.get_ancestor(&GenBlockIndex::Block(block_index.clone()), ancestor_height)
+    }
+
+    fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        self.get_block_reward(block_index)
     }
 }
 
@@ -306,6 +317,13 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
             .chain_block_id()
             .ok_or(PropertyQueryError::GenesisHeaderRequested)?;
         Ok(self.get_block_index(&id)?.map(|block_index| block_index.into_block_header()))
+    }
+
+    pub fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        Ok(self.db_tx.get_block_reward(block_index)?)
     }
 
     pub fn get_block_height_in_main_chain(

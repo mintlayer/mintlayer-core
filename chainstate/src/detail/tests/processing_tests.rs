@@ -26,7 +26,7 @@ use common::{
     primitives::Compact,
     Uint256,
 };
-use consensus::{ConsensusPoWError, ConsensusVerificationError};
+use consensus::{BlockIndexHandle, ConsensusPoWError, ConsensusVerificationError};
 use crypto::key::{KeyKind, PrivateKey};
 
 use crate::{
@@ -637,6 +637,88 @@ fn pow(#[case] seed: Seed) {
     assert!(consensus::pow::mine(&mut valid_block, u128::MAX, bits)
         .expect("Unexpected conversion error"));
     tf.process_block(valid_block.clone(), BlockSource::Local).unwrap();
+}
+
+#[rstest]
+#[trace]
+#[case(Seed::from_entropy())]
+fn read_block_reward_from_storage(#[case] seed: Seed) {
+    let mut rng = make_seedable_rng(seed);
+    let ignore_consensus = BlockHeight::new(0);
+    let pow_consensus = BlockHeight::new(1);
+    let difficulty =
+        Uint256([0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF]);
+
+    let upgrades = vec![
+        (
+            ignore_consensus,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::IgnoreConsensus),
+        ),
+        (
+            pow_consensus,
+            UpgradeVersion::ConsensusUpgrade(ConsensusUpgrade::PoW {
+                initial_difficulty: difficulty.into(),
+            }),
+        ),
+    ];
+
+    let net_upgrades = NetUpgrades::initialize(upgrades).expect("valid netupgrades");
+    // Internally this calls Consensus::new, which processes the genesis block
+    // This should succeed because TestChainConfig by default uses create_mainnet_genesis to
+    // create the genesis_block, and this function creates a genesis block with
+    // ConsensusData::None, which agrees with the net_upgrades we defined above.
+    let chain_config = ConfigBuilder::test_chain().net_upgrades(net_upgrades).build();
+    let mut tf = TestFramework::builder().with_chain_config(chain_config).build();
+
+    let block_reward_output_count = rng.gen::<usize>() % 20;
+    let expected_block_reward = (0..block_reward_output_count)
+        .map(|_| {
+            let amount = Amount::from_atoms(rng.gen::<u128>() % 50);
+            let pub_key = PrivateKey::new(KeyKind::RistrettoSchnorr).1;
+            TxOutput::new(
+                OutputValue::Coin(amount),
+                OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // We generate a PoW block, then use its reward to test the storage of block rewards
+    let block = {
+        let mut random_invalid_block = tf
+            .make_block_builder()
+            .with_reward(expected_block_reward.clone())
+            .add_test_transaction(&mut rng)
+            .build();
+        make_invalid_pow_block(&mut random_invalid_block, u128::MAX, difficulty.into())
+            .expect("generate invalid block");
+
+        let mut valid_block = random_invalid_block;
+        let bits = difficulty.into();
+        assert!(consensus::pow::mine(&mut valid_block, u128::MAX, bits)
+            .expect("Unexpected conversion error"));
+        valid_block
+    };
+    tf.process_block(block, BlockSource::Local).unwrap();
+
+    let block_index = tf.chainstate.get_best_block_index().unwrap().unwrap();
+    let block_index = match block_index {
+        GenBlockIndex::Block(bi) => bi,
+        GenBlockIndex::Genesis(_) => unreachable!(),
+    };
+
+    {
+        let block_reward = tf.chainstate.get_block_reward(&block_index).unwrap().unwrap();
+
+        assert_eq!(block_reward.outputs(), expected_block_reward);
+    }
+
+    {
+        let block_index_handle = &tf.chainstate.make_db_tx_ro() as &dyn BlockIndexHandle;
+
+        let block_reward = block_index_handle.get_block_reward(&block_index).unwrap().unwrap();
+
+        assert_eq!(block_reward.outputs(), expected_block_reward);
+    }
 }
 
 #[test]

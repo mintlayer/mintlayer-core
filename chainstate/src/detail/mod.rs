@@ -33,7 +33,11 @@ use itertools::Itertools;
 use chainstate_storage::{BlockchainStorage, Transactional};
 use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
 use common::{
-    chain::{block::BlockHeader, config::ChainConfig, Block, GenBlock},
+    chain::{
+        block::{BlockHeader, BlockReward},
+        config::ChainConfig,
+        Block, GenBlock,
+    },
     primitives::{BlockDistance, BlockHeight, Id, Idable},
 };
 use logging::log;
@@ -291,6 +295,14 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_id()
+    }
+
+    #[allow(dead_code)]
+    pub fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        self.make_db_tx_ro().get_block_reward(block_index)
     }
 
     #[allow(dead_code)]

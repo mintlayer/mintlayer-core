@@ -92,6 +92,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
+            ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,

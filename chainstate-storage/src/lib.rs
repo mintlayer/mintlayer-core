@@ -16,6 +16,7 @@
 //! Application-level interface for the persistent blockchain storage.
 
 use chainstate_types::BlockIndex;
+use common::chain::block::BlockReward;
 use common::chain::transaction::{Transaction, TxMainChainIndex, TxMainChainPosition};
 use common::chain::OutPointSourceId;
 use common::chain::{Block, GenBlock};
@@ -48,6 +49,8 @@ pub trait BlockchainStorageRead: UtxosStorageRead {
     fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
 
     fn get_block_index(&self, block_id: &Id<Block>) -> crate::Result<Option<BlockIndex>>;
+
+    fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>>;
 
     /// Get block by its hash
     fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>>;
