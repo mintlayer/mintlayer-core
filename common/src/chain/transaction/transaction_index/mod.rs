@@ -64,15 +64,13 @@ pub enum OutputSpentState {
 pub struct TxMainChainPosition {
     block_id: Id<Block>,
     byte_offset_in_block: u32,
-    serialized_size: u32,
 }
 
 impl TxMainChainPosition {
-    pub fn new(block_id: Id<Block>, byte_offset_in_block: u32, serialized_size: u32) -> Self {
+    pub fn new(block_id: Id<Block>, byte_offset_in_block: u32) -> Self {
         TxMainChainPosition {
             block_id,
             byte_offset_in_block,
-            serialized_size,
         }
     }
 
@@ -82,10 +80,6 @@ impl TxMainChainPosition {
 
     pub fn byte_offset_in_block(&self) -> u32 {
         self.byte_offset_in_block
-    }
-
-    pub fn serialized_size(&self) -> u32 {
-        self.serialized_size
     }
 }
 
@@ -175,14 +169,7 @@ pub fn calculate_tx_index_from_block(
         .try_into()
         .expect("Number conversion from usize to u32 should not fail here (1)");
 
-    let tx_position = TxMainChainPosition::new(
-        block.get_id(),
-        offset_tx,
-        enc_tx
-            .len()
-            .try_into()
-            .expect("Number conversion from usize to u32 should not fail here (2)"),
-    );
+    let tx_position = TxMainChainPosition::new(block.get_id(), offset_tx);
 
     TxMainChainIndex::new(
         SpendablePosition::from(tx_position),

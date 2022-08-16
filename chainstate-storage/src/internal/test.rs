@@ -103,8 +103,7 @@ fn test_storage_manipulation() {
         &enc_block0[offset_tx0..].starts_with(&enc_tx0),
         "Transaction format has changed, adjust the offset in this test",
     );
-    let pos_tx0 =
-        TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32, enc_tx0.len() as u32);
+    let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
     assert_eq!(
         &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
         &tx0
