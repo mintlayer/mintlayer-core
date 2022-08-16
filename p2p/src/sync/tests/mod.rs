@@ -37,18 +37,18 @@ async fn make_sync_manager<T>(
 ) -> (
     BlockSyncManager<T>,
     T::ConnectivityHandle,
-    mpsc::Sender<SyncControlEvent<T>>,
-    mpsc::Receiver<PubSubControlEvent>,
-    mpsc::Receiver<SwarmEvent<T>>,
+    mpsc::UnboundedSender<SyncControlEvent<T>>,
+    mpsc::UnboundedReceiver<PubSubControlEvent>,
+    mpsc::UnboundedReceiver<SwarmEvent<T>>,
 )
 where
     T: NetworkingService,
     T::ConnectivityHandle: ConnectivityService<T>,
     T::SyncingMessagingHandle: SyncingMessagingService<T>,
 {
-    let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
-    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
-    let (tx_swarm, rx_swarm) = mpsc::channel(16);
+    let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
+    let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
+    let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
     let storage = chainstate_storage::inmemory::Store::new_empty().unwrap();
     let chain_config = Arc::new(common::chain::config::create_unit_test_config());
     let chainstate_config = ChainstateConfig::new();

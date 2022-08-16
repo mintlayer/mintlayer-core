@@ -13,11 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::TokensError;
 use common::{
     chain::{
         config::{TOKEN_MAX_DEC_COUNT, TOKEN_MAX_TICKER_LEN, TOKEN_MAX_URI_LEN},
-        tokens::{token_id, OutputValue, TokenData, TokenId},
+        tokens::{token_id, OutputValue, TokenData, TokenId, TokensError},
         Block, Transaction,
     },
     primitives::{Amount, Id, Idable},

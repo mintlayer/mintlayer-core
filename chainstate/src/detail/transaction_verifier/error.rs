@@ -13,9 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use chainstate_types::TokensError;
 use common::{
-    chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition},
+    chain::{block::Block, SpendError, Spender, TxMainChainIndexError, TxMainChainPosition, tokens::TokensError},
     primitives::{Amount, Id},
 };
 use thiserror::Error;
@@ -75,6 +74,8 @@ pub enum ConnectTransactionError {
     InvariantErrorTransactionCouldNotBeLoaded(TxMainChainPosition),
     #[error("Transaction index for header found but header not found")]
     InvariantErrorHeaderCouldNotBeLoaded(Id<Block>),
+    #[error("Unable to find block index")]
+    InvariantErrorBlockIndexCouldNotBeLoaded(Id<Block>),
     #[error("Unable to find block")]
     InvariantErrorBlockCouldNotBeLoaded(Id<Block>),
     #[error("Addition of all fees in block `{0}` failed")]

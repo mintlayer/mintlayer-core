@@ -14,13 +14,9 @@
 // limitations under the License.
 
 use chainstate_storage::{BlockchainStorage, Transactional};
-use common::chain::config::ChainConfig;
+use common::chain::tokens::TokensError;
 use common::chain::tokens::{OutputValue, RPCTokenInfoV1, TokenData, TokenId};
-use common::chain::{block::BlockHeader, Block, GenBlock};
 use common::chain::{OutPointSourceId, SpendablePosition, Transaction};
-use common::primitives::{BlockDistance, BlockHeight, Id, Idable};
-use itertools::Itertools;
-use logging::log;
 pub mod ban_score;
 pub mod time_getter;
 pub use self::error::*;
@@ -30,8 +26,18 @@ mod median_time;
 mod orphan_blocks;
 mod transaction_verifier;
 pub use chainstate_types::Locator;
-use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError, TokensError};
+use chainstate_types::{BlockIndex, GenBlockIndex, PropertyQueryError};
+use common::{
+    chain::{
+        block::{BlockHeader, BlockReward},
+        config::ChainConfig,
+        Block, GenBlock,
+    },
+    primitives::{BlockDistance, BlockHeight, Id, Idable},
+};
 pub use error::*;
+use itertools::Itertools;
+use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
 use utxo::utxo_storage::UtxosDBMut;
@@ -288,6 +294,14 @@ impl<S: BlockchainStorage> Chainstate<S> {
 
     pub fn get_best_block_id(&self) -> Result<Id<GenBlock>, PropertyQueryError> {
         self.make_db_tx_ro().get_best_block_id()
+    }
+
+    #[allow(dead_code)]
+    pub fn get_block_reward(
+        &self,
+        block_index: &BlockIndex,
+    ) -> Result<Option<BlockReward>, PropertyQueryError> {
+        self.make_db_tx_ro().get_block_reward(block_index)
     }
 
     #[allow(dead_code)]

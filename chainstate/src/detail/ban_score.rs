@@ -18,7 +18,7 @@ use super::{
     CheckBlockTransactionsError, OrphanCheckError,
 };
 use crate::BlockError;
-use chainstate_types::TokensError;
+use common::chain::tokens::TokensError;
 use consensus::{ConsensusPoWError, ConsensusVerificationError};
 
 // TODO: use a ban_score macro in a form similar to thiserror::Error in order to define the ban score
@@ -92,6 +92,7 @@ impl BanScore for ConnectTransactionError {
             ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(_) => 100,
             // Even though this is an invariant error, it stems from a block reward that doesn't exist
             ConnectTransactionError::InvariantErrorHeaderCouldNotBeLoaded(_) => 100,
+            ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(_) => 100,
             ConnectTransactionError::FailedToAddAllFeesOfBlock(_) => 100,
             ConnectTransactionError::RewardAdditionError(_) => 100,

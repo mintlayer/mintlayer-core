@@ -15,9 +15,8 @@
 
 use super::{orphan_blocks::OrphanAddError, transaction_verifier::error::ConnectTransactionError};
 use chainstate_types::PropertyQueryError;
-use chainstate_types::TokensError;
 use common::{
-    chain::{Block, GenBlock, Transaction},
+    chain::{Block, GenBlock, Transaction, tokens::TokensError},
     primitives::Id,
 };
 use consensus::ConsensusVerificationError;

@@ -103,11 +103,10 @@ impl NetworkingService for Libp2pService {
         )
         .build();
 
-        // TODO: unbounded
-        let (cmd_tx, cmd_rx) = mpsc::channel(constants::CHANNEL_SIZE);
-        let (gossip_tx, gossip_rx) = mpsc::channel(constants::CHANNEL_SIZE);
-        let (conn_tx, conn_rx) = mpsc::channel(constants::CHANNEL_SIZE);
-        let (sync_tx, sync_rx) = mpsc::channel(constants::CHANNEL_SIZE);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (gossip_tx, gossip_rx) = mpsc::unbounded_channel();
+        let (conn_tx, conn_rx) = mpsc::unbounded_channel();
+        let (sync_tx, sync_rx) = mpsc::unbounded_channel();
 
         // run the libp2p backend in a background task
         tokio::spawn(async move {
@@ -119,12 +118,10 @@ impl NetworkingService for Libp2pService {
         // send listen command to the libp2p backend and if it succeeds,
         // create a multiaddress for local peer and return the Libp2pService object
         let (tx, rx) = oneshot::channel();
-        cmd_tx
-            .send(types::Command::Listen {
-                addr: bind_addr.clone(),
-                response: tx,
-            })
-            .await?;
+        cmd_tx.send(types::Command::Listen {
+            addr: bind_addr.clone(),
+            response: tx,
+        })?;
         rx.await?
             .map_err(|_| P2pError::DialError(DialError::IoError(std::io::ErrorKind::AddrInUse)))?;
 

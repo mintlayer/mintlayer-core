@@ -20,7 +20,6 @@ use self::{cached_operation::CachedTokensOperation, error::ConnectTransactionErr
 use cached_operation::CachedInputsOperation;
 use chainstate_storage::{BlockchainStorageRead, BlockchainStorageWrite};
 use chainstate_types::GenBlockIndex;
-use chainstate_types::TokensError;
 use common::{
     amount_sum,
     chain::{
@@ -28,7 +27,7 @@ use common::{
         calculate_tx_index_from_block,
         config::{TOKEN_MAX_ISSUANCE_ALLOWED, TOKEN_MIN_ISSUANCE_FEE},
         signature::{verify_signature, Transactable},
-        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId},
+        tokens::{get_tokens_issuance_count, token_id, OutputValue, TokenData, TokenId, TokensError},
         Block, ChainConfig, GenBlock, GenBlockId, OutPoint, OutPointSourceId, SpendablePosition,
         Spender, Transaction, TxInput, TxMainChainIndex, TxOutput,
     },
@@ -976,14 +975,19 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 .to_vec()),
             // TODO: Getting the whole block just for reward outputs isn't optimal. See the
             // https://github.com/mintlayer/mintlayer-core/issues/344 issue for details.
-            GenBlockId::Block(id) => Ok(self
-                .db_tx
-                .get_block(id)?
-                .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
-                .block_reward_transactable()
-                .outputs()
-                .unwrap_or(&[])
-                .to_vec()),
+            GenBlockId::Block(id) => {
+                let block_index = self
+                    .db_tx
+                    .get_block_index(&id)?
+                    .ok_or(ConnectTransactionError::InvariantErrorBlockIndexCouldNotBeLoaded(id))?;
+                let reward = self
+                    .db_tx
+                    .get_block_reward(&block_index)?
+                    .ok_or(ConnectTransactionError::InvariantErrorBlockCouldNotBeLoaded(id))?
+                    .outputs()
+                    .to_vec();
+                Ok(reward)
+            }
         }
     }
 
