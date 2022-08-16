@@ -13,21 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use serialization::Decode;
-use serialization::Encode;
-
-// use crate::primitives::VersionTag;
+use super::TokenId;
 use crate::{
     chain::{Block, Transaction},
     primitives::{Amount, Id},
 };
-
-use super::TokenId;
+use serialization::{Decode, Encode};
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct RPCTokenInfo {
-    // TODO: Should we use here VersionTag?
-    pub version: u32,
     pub token_id: TokenId,
     // TODO: Should we return in RPC the owner info
     // pub owner: u8,
@@ -42,7 +36,6 @@ pub struct RPCTokenInfo {
 impl RPCTokenInfo {
     pub fn new(
         token_id: TokenId,
-        // owner: u8,
         creation_tx_id: Id<Transaction>,
         creation_block_id: Id<Block>,
         token_ticker: Vec<u8>,
@@ -51,9 +44,8 @@ impl RPCTokenInfo {
         metadata_uri: Vec<u8>,
     ) -> Self {
         Self {
-            version: 1,
             token_id,
-            // owner,
+            // TODO: We have to add owner field here
             creation_tx_id,
             creation_block_id,
             token_ticker,
