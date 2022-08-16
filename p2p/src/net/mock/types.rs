@@ -156,7 +156,7 @@ pub enum HandshakeMessage {
 #[derive(Debug, Encode, Decode, Clone, PartialEq, Eq)]
 pub enum Message {
     Handshake(HandshakeMessage),
-    Announcement(message::Announcement),
+    Announcement(Box<message::Announcement>),
     Request(message::Request),
     Response(message::Response),
 }
