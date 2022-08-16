@@ -37,7 +37,7 @@ use std::str::FromStr;
 fn invalid_output_count_for_transaction() {
     let block_id =
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b").unwrap();
-    let pos = TxMainChainPosition::new(block_id.into(), 1, 2).into();
+    let pos = TxMainChainPosition::new(block_id.into(), 1).into();
     let tx_index = TxMainChainIndex::new(pos, 0);
     assert_eq!(
         tx_index.unwrap_err(),
@@ -60,7 +60,7 @@ fn basic_spending() {
         H256::from_str("000000000000000000000000000000000000000000000000000000000000007b")
             .unwrap()
             .into();
-    let pos = TxMainChainPosition::new(block_id, 1, 2).into();
+    let pos = TxMainChainPosition::new(block_id, 1).into();
     let mut tx_index = TxMainChainIndex::new(pos, 3).unwrap();
 
     // ensure index accesses are correct
@@ -311,10 +311,9 @@ fn test_indices_calculations() {
             SpendablePosition::BlockReward(_) => unreachable!(),
         };
         let tx_start_pos = pos.byte_offset_in_block() as usize;
-        let tx_end_pos = pos.byte_offset_in_block() as usize + pos.serialized_size() as usize;
-        let tx_serialized_in_block = &serialized_block[tx_start_pos..tx_end_pos];
+        let tx_serialized_in_block = &serialized_block[tx_start_pos..];
         let tx_serialized = tx.encode();
-        assert_eq!(tx_serialized_in_block, tx_serialized);
+        assert_eq!(tx_serialized_in_block[..tx_serialized.len()], tx_serialized);
 
         // to ensure Vec comparison is correct since I'm a paranoid C++ dude, let's mess things up
         let tx_messed = tx_serialized.iter().map(|c| c.wrapping_add(1)).collect::<Vec<u8>>();
