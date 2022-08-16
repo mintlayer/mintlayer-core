@@ -23,8 +23,8 @@ use serialization::{Decode, Encode};
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
 pub struct RPCTokenInfo {
     pub token_id: TokenId,
-    // TODO: Should we return in RPC the owner info
-    // pub owner: u8,
+    // TODO: Should we return in RPC the owner info?
+    // pub owner: ,
     pub creation_tx_id: Id<Transaction>,
     pub creation_block_id: Id<Block>,
     pub token_ticker: Vec<u8>,
