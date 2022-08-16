@@ -15,7 +15,7 @@
 
 use chainstate_storage::{BlockchainStorage, Transactional};
 use common::chain::tokens::TokensError;
-use common::chain::tokens::{OutputValue, RPCTokenInfoV1, TokenData, TokenId};
+use common::chain::tokens::{OutputValue, RPCTokenInfo, TokenData, TokenId};
 use common::chain::{OutPointSourceId, SpendablePosition, Transaction};
 pub mod ban_score;
 pub mod time_getter;
@@ -463,7 +463,7 @@ impl<S: BlockchainStorage> Chainstate<S> {
     pub fn token_info(
         &self,
         token_id: TokenId,
-    ) -> Result<Option<RPCTokenInfoV1>, PropertyQueryError> {
+    ) -> Result<Option<RPCTokenInfo>, PropertyQueryError> {
         let (block_id, tx) = self.get_token_detail(token_id)?;
 
         Ok(tx
@@ -474,14 +474,14 @@ impl<S: BlockchainStorage> Chainstate<S> {
                 OutputValue::Coin(_) => None,
                 OutputValue::Token(token_data) => Some(token_data),
             })
-            // Find issuance data and return RPCTokenInfoV1
+            // Find issuance data and return RPCTokenInfo
             .find_map(|token_data| match token_data {
                 TokenData::TokenIssuanceV1 {
                     token_ticker,
                     amount_to_issue,
                     number_of_decimals,
                     metadata_uri,
-                } => Some(RPCTokenInfoV1::new(
+                } => Some(RPCTokenInfo::new(
                     token_id,
                     tx.get_id(),
                     block_id,

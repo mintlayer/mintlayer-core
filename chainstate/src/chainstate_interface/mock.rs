@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common::{
     chain::{
         block::{Block, BlockHeader, GenBlock},
-        tokens::{RPCTokenInfoV1, TokenId},
+        tokens::{RPCTokenInfo, TokenId},
     },
     primitives::{BlockHeight, Id},
 };
@@ -55,6 +55,6 @@ mockall::mock! {
             &self,
             headers: Vec<BlockHeader>,
         ) -> Result<Vec<BlockHeader>, ChainstateError>;
-        fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfoV1>, ChainstateError>;
+        fn token_info(&self, token_id: TokenId) -> Result<Option<RPCTokenInfo>, ChainstateError>;
     }
 }

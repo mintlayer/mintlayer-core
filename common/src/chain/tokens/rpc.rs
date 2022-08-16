@@ -25,7 +25,7 @@ use crate::{
 use super::TokenId;
 
 #[derive(Debug, Clone, Encode, Decode, serde::Serialize, serde::Deserialize)]
-pub struct RPCTokenInfoV1 {
+pub struct RPCTokenInfo {
     // TODO: Should we use here VersionTag?
     pub version: u32,
     pub token_id: TokenId,
@@ -39,7 +39,7 @@ pub struct RPCTokenInfoV1 {
     pub metadata_uri: Vec<u8>,
 }
 
-impl RPCTokenInfoV1 {
+impl RPCTokenInfo {
     pub fn new(
         token_id: TokenId,
         // owner: u8,
