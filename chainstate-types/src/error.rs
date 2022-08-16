@@ -34,9 +34,9 @@ pub enum TokensError {
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or token overflow")]
     CoinOrTokenOverflow,
-    #[error("Token fees insuffience in transaction {0} in block {1}")]
+    #[error("Tokens fees insuffience in transaction {0} in block {1}")]
     InsuffienceTokenFees(Id<Transaction>, Id<Block>),
-    #[error("Token value in inputs insuffience in transaction {0} in block {1}")]
+    #[error("Tokens value in inputs insuffience in transaction {0} in block {1}")]
     InsuffienceTokenValueInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't burn zero value in transaction {0} in block {1}")]
     BurnZeroTokens(Id<Transaction>, Id<Block>),
@@ -44,7 +44,7 @@ pub enum TokensError {
     TransferZeroTokens(Id<Transaction>, Id<Block>),
     #[error("Some of the tokens are lost in transaction {0} in block {1}")]
     SomeTokensLost(Id<Transaction>, Id<Block>),
-    #[error("Can't find token in inputs in transaction {0} in block {1}")]
+    #[error("Can't find tokens in inputs in transaction {0} in block {1}")]
     NoTokenInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't fetch transaction inputs in main chain by outpoint")]
     NoTxInMainChainByOutpoint,
@@ -52,7 +52,7 @@ pub enum TokensError {
     BlockRewardOutputCantBeUsedInTokenTx,
     #[error("Tokens with ID: `{0}` are not registered")]
     TokensNotRegistered(TokenId),
-    #[error("Token ID can't be calculated")]
+    #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
 }
 

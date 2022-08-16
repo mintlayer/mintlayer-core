@@ -91,8 +91,6 @@ pub enum ConnectTransactionError {
 
 impl From<TokensError> for ConnectTransactionError {
     fn from(err: TokensError) -> Self {
-        // On storage level called err.recoverable(), if an error is unrecoverable then it calls panic!
-        // We don't need to cause panic here
         ConnectTransactionError::TokensError(err)
     }
 }

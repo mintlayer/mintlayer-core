@@ -741,75 +741,97 @@ fn test_attempt_to_print_tokens() {
 
 #[test]
 fn test_attempt_to_mix_input_tokens() {
-    const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
-    // Issuance a few different tokens
-    let mut test_framework = TestFramework::default();
-    let values = vec![
-        OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
-            amount_to_issue: ISSUED_FUNDS,
-            number_of_decimals: 1,
-            metadata_uri: b"https://some_site.meta".to_vec(),
-        }),
-        OutputValue::Coin((TOKEN_MIN_ISSUANCE_FEE * 2).unwrap()),
-    ];
-    let (block_a, _) = process_token_ex(
-        &mut test_framework,
-        vec![],
-        ParentBlock::BestBlock,
-        values.clone(),
-    )
-    .unwrap();
-    assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
-    let first_token_id = token_id(&block_a.transactions()[0]).unwrap();
+    common::concurrency::model(|| {
+        const ISSUED_FUNDS: Amount = Amount::from_atoms(987_654_321);
+        // Issuance a few different tokens
+        let mut test_framework = TestFramework::default();
+        let values = vec![
+            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                token_ticker: b"USDC".to_vec(),
+                amount_to_issue: ISSUED_FUNDS,
+                number_of_decimals: 1,
+                metadata_uri: b"https://some_site.meta".to_vec(),
+            }),
+            OutputValue::Coin((TOKEN_MIN_ISSUANCE_FEE * 2).unwrap()),
+        ];
+        let (block_a, _) = process_token_ex(
+            &mut test_framework,
+            vec![],
+            ParentBlock::BestBlock,
+            values.clone(),
+        )
+        .unwrap();
+        assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
+        let first_token_id = token_id(&block_a.transactions()[0]).unwrap();
 
-    let values = vec![
-        OutputValue::Token(TokenData::TokenTransferV1 {
+        let values = vec![
+            OutputValue::Token(TokenData::TokenTransferV1 {
+                token_id: first_token_id,
+                amount: ISSUED_FUNDS,
+            }),
+            OutputValue::Token(TokenData::TokenIssuanceV1 {
+                token_ticker: b"USDX".to_vec(),
+                amount_to_issue: ISSUED_FUNDS,
+                number_of_decimals: 1,
+                metadata_uri: b"https://123.meta".to_vec(),
+            }),
+            OutputValue::Coin(TOKEN_MIN_ISSUANCE_FEE),
+        ];
+        let (block_a, _) = process_token_ex(
+            &mut test_framework,
+            vec![],
+            ParentBlock::BestBlock,
+            values.clone(),
+        )
+        .unwrap();
+        assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
+        let second_token_id = token_id(&block_a.transactions()[0]).unwrap();
+
+        // Try to spend sum of input tokens
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id: first_token_id,
-            amount: ISSUED_FUNDS,
-        }),
-        OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDX".to_vec(),
-            amount_to_issue: ISSUED_FUNDS,
-            number_of_decimals: 1,
-            metadata_uri: b"https://123.meta".to_vec(),
-        }),
-        OutputValue::Coin(TOKEN_MIN_ISSUANCE_FEE),
-    ];
-    let (block_a, _) = process_token_ex(
-        &mut test_framework,
-        vec![],
-        ParentBlock::BestBlock,
-        values.clone(),
-    )
-    .unwrap();
-    assert_eq!(block_a.transactions()[0].outputs()[0].value(), &values[0]);
-    let second_token_id = token_id(&block_a.transactions()[0]).unwrap();
+            amount: (ISSUED_FUNDS * 2).unwrap(),
+        })];
 
-    // Try to spend sum of input tokens
-    let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-        token_id: first_token_id,
-        amount: (ISSUED_FUNDS * 2).unwrap(),
-    })];
+        assert!(matches!(
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            Err(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
+                    _,
+                    _
+                ))
+            ))
+        ));
 
-    assert!(matches!(
-        process_token(&mut test_framework, ParentBlock::BestBlock, values),
-        Err(BlockError::StateUpdateFailed(
-            ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
-        ))
-    ));
+        let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
+            token_id: second_token_id,
+            amount: (ISSUED_FUNDS * 2).unwrap(),
+        })];
 
-    let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
-        token_id: second_token_id,
-        amount: (ISSUED_FUNDS * 2).unwrap(),
-    })];
+        assert!(matches!(
+            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            Err(BlockError::StateUpdateFailed(
+                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
+                    _,
+                    _
+                ))
+            ))
+        ));
+    })
+}
 
-    assert!(matches!(
-        process_token(&mut test_framework, ParentBlock::BestBlock, values),
-        Err(BlockError::StateUpdateFailed(
-            ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(_, _))
-        ))
-    ));
+#[test]
+fn test_tokens_storage() {
+    common::concurrency::model(|| {
+        // TODO: Test tokens records in the storage before and after token issuance, also after reorg
+    })
+}
+
+#[test]
+fn snapshot_testing_tokens_data() {
+    common::concurrency::model(|| {
+        // TODO: Add tests, that will prevent change fields order
+    })
 }
 
 //TODO: Due to much change in Test Framework, this file should be updated according to new features like TxBuilder

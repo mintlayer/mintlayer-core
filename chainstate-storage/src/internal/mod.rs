@@ -160,7 +160,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for S
             height: &BlockHeight,
         ) -> crate::Result<Option<Id<GenBlock>>>;
 
-        fn get_token_tx(&self, token_id: common::chain::tokens::TokenId) -> crate::Result<Option<Id<Transaction>>>;
+        fn get_token_tx(&self, token_id: TokenId) -> crate::Result<Option<Id<Transaction>>>;
     }
 }
 

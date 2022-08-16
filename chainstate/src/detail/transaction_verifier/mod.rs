@@ -40,6 +40,9 @@ use std::{
 };
 use utils::ensure;
 
+use super::tokens::filter_transferred_and_burn_amounts;
+use super::tokens::filter_transferred_and_issued_amounts;
+
 type TokensMap = BTreeMap<TokenId, Amount>;
 
 /// A BlockTransactableRef is a reference to an operation in a block that causes inputs to be spent, outputs to be created, or both
@@ -74,7 +77,7 @@ impl<'a, S> TransactionVerifier<'a, S> {
     }
 }
 
-impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
+impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
     fn outpoint_source_id_from_spend_ref(
         spend_ref: BlockTransactableRef,
     ) -> Result<OutPointSourceId, ConnectTransactionError> {
@@ -229,57 +232,16 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         Ok(output.value())
     }
 
-    // Get TokenId and Amount in input
-    fn filter_transferred_and_issued_amounts(
-        &self,
-        prev_tx: &Transaction,
-        output: &common::chain::TxOutput,
-    ) -> Option<(TokenId, Amount)> {
-        match output.value() {
-            OutputValue::Coin(_) => None,
-            OutputValue::Token(token) => Some(match token {
-                TokenData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
-                TokenData::TokenIssuanceV1 {
-                    token_ticker: _,
-                    amount_to_issue,
-                    number_of_decimals: _,
-                    metadata_uri: _,
-                } => {
-                    let token_id = token_id(prev_tx)?;
-                    (token_id, *amount_to_issue)
-                }
-                TokenData::TokenBurnV1 {
-                    token_id: _,
-                    amount_to_burn: _,
-                } => {
-                    /* Token have burned and can't be transferred */
-                    return None;
-                }
-            }),
-        }
-    }
-
     pub fn calculate_transfered_and_burned_tokens(
         outputs: &[TxOutput],
     ) -> Result<TokensMap, TokensError> {
         let mut total_tokens: TokensMap = BTreeMap::new();
-        let iter_res: Result<(), TokensError> = outputs
+
+        outputs
             .iter()
             .filter_map(|x| match x.value() {
                 OutputValue::Coin(_) => None,
-                OutputValue::Token(token) => match token {
-                    TokenData::TokenTransferV1 { token_id, amount } => Some((*token_id, *amount)),
-                    TokenData::TokenIssuanceV1 {
-                        token_ticker: _,
-                        amount_to_issue: _,
-                        number_of_decimals: _,
-                        metadata_uri: _,
-                    } => None,
-                    TokenData::TokenBurnV1 {
-                        token_id,
-                        amount_to_burn,
-                    } => Some((*token_id, *amount_to_burn)),
-                },
+                OutputValue::Token(token_data) => filter_transferred_and_burn_amounts(token_data),
             })
             .try_for_each(|(token_id, amount)| {
                 total_tokens.insert(
@@ -289,8 +251,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         .ok_or(TokensError::CoinOrTokenOverflow)?,
                 );
                 Ok(())
-            });
-        iter_res?;
+            })?;
 
         Ok(total_tokens)
     }
@@ -324,7 +285,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                         },
                     )?;
 
-                    match self.filter_transferred_and_issued_amounts(&tx, output) {
+                    match filter_transferred_and_issued_amounts(&tx, output) {
                         Some((ref input_token_id, amount)) => {
                             if token_id == input_token_id {
                                 total_tokens = (total_tokens + amount)
@@ -340,56 +301,6 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         }
         Ok(total_tokens)
     }
-
-    // pub fn calculate_tokens_total_inputs(
-    //     &self,
-    //     inputs: &[TxInput],
-    // ) -> Result<TokensMap, ConnectTransactionError> {
-    //     let mut total_tokens: TokensMap = BTreeMap::new();
-    //     for input in inputs.iter() {
-    //         let outpoint = input.outpoint();
-    //         let tx_index = self.get_tx_index_from_cache(outpoint)?;
-    //         let output_index = outpoint.output_index() as usize;
-    //         match tx_index.position() {
-    //             common::chain::SpendablePosition::Transaction(tx_pos) => {
-    //                 let tx = self
-    //                     .db_tx
-    //                     .get_mainchain_tx_by_position(tx_pos)
-    //                     .map_err(ConnectTransactionError::from)?
-    //                     .ok_or_else(|| {
-    //                         ConnectTransactionError::InvariantErrorTransactionCouldNotBeLoaded(
-    //                             tx_pos.clone(),
-    //                         )
-    //                     })?;
-
-    //                 let output = tx.outputs().get(output_index).ok_or(
-    //                     ConnectTransactionError::OutputIndexOutOfRange {
-    //                         tx_id: Some(tx.get_id().into()),
-    //                         source_output_index: output_index,
-    //                     },
-    //                 )?;
-
-    //                 match self.filter_transferred_and_issued_amounts(&tx, output) {
-    //                     Some((token_id, amount)) => {
-    //                         total_tokens.insert(
-    //                             token_id,
-    //                             (total_tokens
-    //                                 .get(&token_id)
-    //                                 .cloned()
-    //                                 .unwrap_or(Amount::from_atoms(0))
-    //                                 + amount)
-    //                                 .ok_or(ConnectTransactionError::InputAdditionError)?,
-    //                         );
-    //                     }
-    //                     None => { /* In this case, there are no calculations */ }
-    //                 }
-    //             }
-    //             common::chain::SpendablePosition::BlockReward(_block_id) => { /* In this case, there are no calculations */
-    //             }
-    //         }
-    //     }
-    //     Ok(total_tokens)
-    // }
 
     fn get_tx_index_from_cache(
         &self,
@@ -551,8 +462,8 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
         let source_block_time = source_block_index.block_timestamp();
 
         let past_lock = match timelock {
-            OutputTimeLock::UntilHeight(h) => (spend_height >= h),
-            OutputTimeLock::UntilTime(t) => (spending_time >= t),
+            OutputTimeLock::UntilHeight(h) => spend_height >= h,
+            OutputTimeLock::UntilTime(t) => spending_time >= t,
             OutputTimeLock::ForBlockCount(d) => {
                 let d: i64 = (*d)
                     .try_into()
@@ -839,14 +750,7 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
                 .try_for_each(|token_data| self.check_connected_tokens(token_data, tx, block))
                 .map_err(ConnectTransactionError::TokensError)?;
 
-            // If it is not a genesis and in tx issuance
-            if self
-                .db_tx
-                .get_best_block_id()
-                .map_err(ConnectTransactionError::StorageError)?
-                .is_some()
-                && get_tokens_issuance_count(tx) == TOKEN_MAX_ISSUANCE_ALLOWED
-            {
+            if self.is_issuance_in_custom_block(tx)? {
                 // check is fee enough for issuance
                 ensure!(
                     self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
@@ -863,6 +767,19 @@ impl<'a, S: BlockchainStorageRead> TransactionVerifier<'a, S> {
             }
         }
         Ok(())
+    }
+
+    fn is_issuance_in_custom_block(
+        &mut self,
+        tx: &Transaction,
+    ) -> Result<bool, ConnectTransactionError> {
+        // If it is not a genesis and in tx issuance
+        Ok(self
+            .db_tx
+            .get_best_block_id()
+            .map_err(ConnectTransactionError::StorageError)?
+            .is_some()
+            && get_tokens_issuance_count(tx) == TOKEN_MAX_ISSUANCE_ALLOWED)
     }
 
     fn spend(

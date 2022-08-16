@@ -17,14 +17,14 @@ use chainstate_types::TokensError;
 use common::{
     chain::{
         config::{TOKEN_MAX_DEC_COUNT, TOKEN_MAX_TICKER_LEN, TOKEN_MAX_URI_LEN},
-        tokens::{TokenData, TokenId},
+        tokens::{token_id, OutputValue, TokenData, TokenId},
         Block, Transaction,
     },
     primitives::{Amount, Id, Idable},
 };
 use utils::ensure;
 
-pub fn check_token_transfer_data(
+pub fn check_tokens_transfer_data(
     block_id: Id<Block>,
     tx: &Transaction,
     amount: &Amount,
@@ -38,10 +38,9 @@ pub fn check_token_transfer_data(
     Ok(())
 }
 
-pub fn check_token_burn_data(
+pub fn check_tokens_burn_data(
     tx: &Transaction,
     block_id: &Id<Block>,
-    _burn_token_id: &TokenId,
     amount_to_burn: &Amount,
 ) -> Result<(), TokensError> {
     // Check amount
@@ -52,7 +51,7 @@ pub fn check_token_burn_data(
     Ok(())
 }
 
-pub fn check_token_issuance_data(
+pub fn check_tokens_issuance_data(
     token_ticker: &Vec<u8>,
     amount_to_issue: &Amount,
     number_of_decimals: &u8,
@@ -60,7 +59,7 @@ pub fn check_token_issuance_data(
     tx_id: Id<Transaction>,
     block_id: Id<Block>,
 ) -> Result<(), TokensError> {
-    //TODO: Shall we have check for unique token name?
+    //TODO: Shall we have a check for unique token name?
 
     // Check token name
     if token_ticker.len() > TOKEN_MAX_TICKER_LEN
@@ -88,16 +87,16 @@ pub fn check_token_issuance_data(
 }
 
 pub fn check_tokens_data(
-    token: &TokenData,
+    token_data: &TokenData,
     tx: &Transaction,
     block: &Block,
 ) -> Result<(), TokensError> {
-    match token {
+    match token_data {
         TokenData::TokenTransferV1 {
             token_id: _,
             amount,
         } => {
-            check_token_transfer_data(block.get_id(), tx, amount)?;
+            check_tokens_transfer_data(block.get_id(), tx, amount)?;
         }
         TokenData::TokenIssuanceV1 {
             token_ticker,
@@ -105,7 +104,7 @@ pub fn check_tokens_data(
             number_of_decimals,
             metadata_uri,
         } => {
-            check_token_issuance_data(
+            check_tokens_issuance_data(
                 token_ticker,
                 amount_to_issue,
                 number_of_decimals,
@@ -115,11 +114,56 @@ pub fn check_tokens_data(
             )?;
         }
         TokenData::TokenBurnV1 {
-            token_id,
+            token_id: _,
             amount_to_burn,
         } => {
-            check_token_burn_data(tx, &block.get_id(), token_id, amount_to_burn)?;
+            check_tokens_burn_data(tx, &block.get_id(), amount_to_burn)?;
         }
     }
     Ok(())
+}
+
+// Get TokenId and Amount in input
+pub fn filter_transferred_and_issued_amounts(
+    prev_tx: &Transaction,
+    output: &common::chain::TxOutput,
+) -> Option<(TokenId, Amount)> {
+    match output.value() {
+        OutputValue::Coin(_) => None,
+        OutputValue::Token(token) => Some(match token {
+            TokenData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
+            TokenData::TokenIssuanceV1 {
+                token_ticker: _,
+                amount_to_issue,
+                number_of_decimals: _,
+                metadata_uri: _,
+            } => {
+                let token_id = token_id(prev_tx)?;
+                (token_id, *amount_to_issue)
+            }
+            TokenData::TokenBurnV1 {
+                token_id: _,
+                amount_to_burn: _,
+            } => {
+                /* Token have burned and can't be transferred */
+                return None;
+            }
+        }),
+    }
+}
+
+pub fn filter_transferred_and_burn_amounts(token_data: &TokenData) -> Option<(TokenId, Amount)> {
+    match token_data {
+        TokenData::TokenTransferV1 { token_id, amount } => Some((*token_id, *amount)),
+        TokenData::TokenIssuanceV1 {
+            token_ticker: _,
+            amount_to_issue: _,
+            number_of_decimals: _,
+            metadata_uri: _,
+        } => None,
+        TokenData::TokenBurnV1 {
+            token_id,
+            amount_to_burn,
+        } => Some((*token_id, *amount_to_burn)),
+    }
 }

@@ -485,7 +485,7 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
 
     fn check_tokens_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
         for tx in block.transactions() {
-            // We can't issue any count of token types in one tx
+            // We can't issue a few token types in one tx
             let issuance_count = get_tokens_issuance_count(tx);
             ensure!(
                 issuance_count <= TOKEN_MAX_ISSUANCE_ALLOWED,
