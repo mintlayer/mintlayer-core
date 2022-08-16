@@ -13,16 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
+use crate::{BlockUndo, Utxo};
+use chainstate_types::storage_result::Error as StorageError;
 use common::{
     chain::{Block, GenBlock, OutPoint},
     primitives::Id,
 };
-
-use crate::{BlockUndo, Utxo};
-
-use super::{UtxosDB, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
-
-use chainstate_types::storage_result::Error as StorageError;
 
 impl<'a, S: UtxosStorageRead> UtxosStorageRead for UtxosDBMut<'a, S> {
     fn get_utxo(&self, outpoint: &OutPoint) -> Result<Option<Utxo>, StorageError> {

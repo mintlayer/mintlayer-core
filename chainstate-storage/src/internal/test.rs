@@ -103,8 +103,7 @@ fn test_storage_manipulation() {
         &enc_block0[offset_tx0..].starts_with(&enc_tx0),
         "Transaction format has changed, adjust the offset in this test",
     );
-    let pos_tx0 =
-        TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32, enc_tx0.len() as u32);
+    let pos_tx0 = TxMainChainPosition::new(block0.get_id(), offset_tx0 as u32);
     assert_eq!(
         &store.get_mainchain_tx_by_position(&pos_tx0).unwrap().unwrap(),
         &tx0
@@ -266,7 +265,7 @@ fn create_rand_utxo(rng: &mut impl Rng, block_height: u64) -> Utxo {
     let is_block_reward = random_value % 3 == 0;
 
     // generate utxo
-    Utxo::new(output, is_block_reward, BlockHeight::new(block_height))
+    Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(block_height))
 }
 
 /// returns a block undo with random utxos and TxUndos.

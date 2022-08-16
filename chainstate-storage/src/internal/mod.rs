@@ -27,10 +27,7 @@ use common::{
 };
 use serialization::{Codec, Decode, DecodeAll, Encode};
 use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
-use utxo::{
-    utxo_storage::{UtxosStorageRead, UtxosStorageWrite},
-    BlockUndo, Utxo,
-};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
 
@@ -269,10 +266,8 @@ impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreT
             Ok(None) => Ok(None),
             Ok(Some(block)) => {
                 let begin = tx_index.byte_offset_in_block() as usize;
-                let end = begin + tx_index.serialized_size() as usize;
-                let encoded_tx = block.get(begin..end).expect("Transaction outside of block range");
-                let tx =
-                    Transaction::decode_all(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
+                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
+                let tx = Transaction::decode(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
                 Ok(Some(tx))
             }
         }

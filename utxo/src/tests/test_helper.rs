@@ -13,28 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{Utxo, UtxoEntry, UtxosCache};
-use common::chain::{
-    signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
-    OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+use crate::{
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
+    Utxo, UtxosCache,
 };
-use common::primitives::{Amount, BlockHeight, Id, H256};
-use crypto::key::{KeyKind, PrivateKey};
-use crypto::random::{seq, Rng};
+use common::{
+    chain::{
+        signature::inputsig::InputWitness, tokens::OutputValue, Destination, GenBlock, OutPoint,
+        OutPointSourceId, OutputPurpose, Transaction, TxInput, TxOutput,
+    },
+    primitives::{Amount, BlockHeight, Id, H256},
+};
+use crypto::{
+    key::{KeyKind, PrivateKey},
+    random::{seq, Rng},
+};
 use itertools::Itertools;
 
-pub const FRESH: u8 = 1;
-pub const DIRTY: u8 = 2;
-
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Presence {
     Absent,
     Present,
     Spent,
 }
-
-use crate::UtxoStatus;
-use Presence::{Absent, Present, Spent};
 
 pub fn create_tx_outputs(rng: &mut impl Rng, size: u32) -> Vec<TxOutput> {
     let mut tx_outputs = vec![];
@@ -71,7 +72,7 @@ pub fn convert_to_utxo(output: TxOutput, height: u64, output_idx: usize) -> (Out
     let utxo_id: Id<GenBlock> = Id::new(H256::random());
     let id = OutPointSourceId::BlockReward(utxo_id);
     let outpoint = OutPoint::new(id, output_idx as u32);
-    let utxo = Utxo::new(output, true, BlockHeight::new(height));
+    let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(height));
 
     (outpoint, utxo)
 }
@@ -98,7 +99,7 @@ fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, Ou
     // generate utxo
     let utxo = match block_height {
         None => Utxo::new_for_mempool(output, is_block_reward),
-        Some(height) => Utxo::new(output, is_block_reward, BlockHeight::new(height)),
+        Some(height) => Utxo::new_for_blockchain(output, is_block_reward, BlockHeight::new(height)),
     };
 
     // create the id based on the `is_block_reward` value.
@@ -127,8 +128,8 @@ fn inner_create_utxo(rng: &mut impl Rng, block_height: Option<u64>) -> (Utxo, Ou
 pub fn insert_single_entry(
     rng: &mut impl Rng,
     cache: &mut UtxosCache,
-    cache_presence: &Presence,
-    cache_flags: Option<u8>,
+    cache_presence: Presence,
+    cache_flags: Option<(IsFresh, IsDirty)>,
     outpoint: Option<OutPoint>,
 ) -> (Utxo, OutPoint) {
     let rng_height = rng.gen_range(0..(u64::MAX - 1));
@@ -137,21 +138,14 @@ pub fn insert_single_entry(
     let key = &outpoint;
 
     match cache_presence {
-        Absent => {
+        Presence::Absent => {
             // there shouldn't be an existing entry. Don't bother with the cache flags.
         }
         other => {
-            let flags = cache_flags.expect("please provide flags.");
-            let is_dirty = (flags & DIRTY) == DIRTY;
-            let is_fresh = (flags & FRESH) == FRESH;
-
+            let (is_fresh, is_dirty) = cache_flags.expect("please provide flags.");
             let entry = match other {
-                Present => UtxoEntry::new(utxo.clone(), is_fresh, is_dirty),
-                Spent => UtxoEntry {
-                    status: UtxoStatus::Spent,
-                    is_dirty,
-                    is_fresh,
-                },
+                Presence::Present => UtxoEntry::new(Some(utxo.clone()), is_fresh, is_dirty),
+                Presence::Spent => UtxoEntry::new(None, is_fresh, is_dirty),
                 _ => {
                     panic!("something wrong in the code.")
                 }
@@ -168,14 +162,14 @@ pub fn insert_single_entry(
 /// checks the dirty, fresh, and spent flags.
 pub(crate) fn check_flags(
     result_entry: Option<&UtxoEntry>,
-    expected_flags: Option<u8>,
+    expected_flags: Option<(IsFresh, IsDirty)>,
     is_spent: bool,
 ) {
-    if let Some(flags) = expected_flags {
+    if let Some((is_fresh, is_dirty)) = expected_flags {
         let result_entry = result_entry.expect("this should have an entry inside");
 
-        assert_eq!(result_entry.is_dirty(), (flags & DIRTY) == DIRTY);
-        assert_eq!(result_entry.is_fresh(), (flags & FRESH) == FRESH);
+        assert_eq!(IsDirty::from(result_entry.is_dirty()), is_dirty);
+        assert_eq!(IsFresh::from(result_entry.is_fresh()), is_fresh);
         assert_eq!(result_entry.is_spent(), is_spent);
     } else {
         assert!(result_entry.is_none());

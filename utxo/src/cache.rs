@@ -13,205 +13,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//TODO: remove once the functions are used.
-#![allow(dead_code)]
-use crate::{Error, TxUndo};
-use common::chain::{GenBlock, OutPoint, OutPointSourceId, Transaction, TxOutput};
-use common::primitives::{BlockHeight, Id, Idable};
+use crate::{
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
+    {Error, FlushableUtxoView, TxUndo, Utxo, UtxoSource, UtxosView},
+};
+use common::{
+    chain::{GenBlock, OutPoint, OutPointSourceId, Transaction},
+    primitives::{BlockHeight, Id, Idable},
+};
 use logging::log;
-use serialization::{Decode, Encode};
-use std::collections::BTreeMap;
-use std::fmt::{Debug, Formatter};
-
-pub mod utxo_storage;
-
-//todo: proper placement and derivation of this max
-const MAX_OUTPUTS_PER_BLOCK: u32 = 500;
-
-// Determines whether the utxo is for the blockchain of for mempool
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub enum UtxoSource {
-    /// At which height this containing tx was included in the active block chain
-    BlockChain(BlockHeight),
-    MemPool,
-}
-
-impl UtxoSource {
-    fn is_mempool(&self) -> bool {
-        match self {
-            UtxoSource::BlockChain(_) => false,
-            UtxoSource::MemPool => true,
-        }
-    }
-
-    fn blockchain_height(&self) -> Result<BlockHeight, Error> {
-        match self {
-            UtxoSource::BlockChain(h) => Ok(*h),
-            UtxoSource::MemPool => Err(crate::Error::NoBlockchainHeightFound),
-        }
-    }
-}
-
-/// The Unspent Transaction Output
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub struct Utxo {
-    output: TxOutput,
-    is_block_reward: bool,
-    /// identifies whether the utxo is for the blockchain or for mempool.
-    source: UtxoSource,
-}
-
-impl Utxo {
-    pub fn new(output: TxOutput, is_block_reward: bool, height: BlockHeight) -> Self {
-        Self {
-            output,
-            is_block_reward,
-            source: UtxoSource::BlockChain(height),
-        }
-    }
-
-    /// a utxo for mempool, that does not need the block height.
-    pub fn new_for_mempool(output: TxOutput, is_block_reward: bool) -> Self {
-        Self {
-            output,
-            is_block_reward,
-            source: UtxoSource::MemPool,
-        }
-    }
-
-    pub fn is_block_reward(&self) -> bool {
-        self.is_block_reward
-    }
-
-    pub fn source_height(&self) -> &UtxoSource {
-        &self.source
-    }
-
-    pub fn output(&self) -> &TxOutput {
-        &self.output
-    }
-
-    pub fn set_height(&mut self, value: UtxoSource) {
-        self.source = value
-    }
-}
-
-pub trait UtxosView {
-    /// Retrieves utxo.
-    fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo>;
-
-    /// Checks whether outpoint is unspent.
-    fn has_utxo(&self, outpoint: &OutPoint) -> bool;
-
-    /// Retrieves the block hash of the best block in this view
-    fn best_block_hash(&self) -> Id<GenBlock>;
-
-    /// Estimated size of the whole view (None if not implemented)
-    fn estimated_size(&self) -> Option<usize>;
-
-    fn derive_cache(&self) -> UtxosCache;
-}
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Formatter},
+};
 
 #[derive(Clone)]
 pub struct ConsumedUtxoCache {
-    container: BTreeMap<OutPoint, UtxoEntry>,
-    best_block: Id<GenBlock>,
-}
-
-pub trait FlushableUtxoView {
-    /// Performs bulk modification
-    fn batch_write(&mut self, utxos: ConsumedUtxoCache) -> Result<(), Error>;
-}
-
-// flush the cache into the provided base. This will consume the cache and throw it away.
-// It uses the batch_write function since it's available in different kinds of views.
-pub fn flush_to_base<T: FlushableUtxoView>(cache: UtxosCache, base: &mut T) -> Result<(), Error> {
-    base.batch_write(cache.consume())
+    pub(crate) container: BTreeMap<OutPoint, UtxoEntry>,
+    pub(crate) best_block: Id<GenBlock>,
 }
 
 #[derive(Clone)]
 pub struct UtxosCache<'a> {
     parent: Option<&'a dyn UtxosView>,
     current_block_hash: Id<GenBlock>,
-    utxos: BTreeMap<OutPoint, UtxoEntry>,
-    //TODO: do we need this?
+    // pub(crate) visibility is required for tests that are in a different mod
+    pub(crate) utxos: BTreeMap<OutPoint, UtxoEntry>,
+    // TODO: calculate memory usage (mintlayer/mintlayer-core#354)
+    #[allow(dead_code)]
     memory_usage: usize,
-}
-
-/// Tells the state of the utxo
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-#[allow(clippy::large_enum_variant)]
-pub enum UtxoStatus {
-    Spent,
-    Entry(Utxo),
-}
-
-impl UtxoStatus {
-    fn into_option(self) -> Option<Utxo> {
-        match self {
-            UtxoStatus::Spent => None,
-            UtxoStatus::Entry(utxo) => Some(utxo),
-        }
-    }
-}
-
-/// Just the Utxo with additional information.
-#[derive(Debug, Clone, Eq, PartialEq, Encode, Decode)]
-pub(crate) struct UtxoEntry {
-    status: UtxoStatus,
-    /// The utxo entry is dirty when this version is different from the parent.
-    is_dirty: bool,
-    /// The utxo entry is fresh when the parent does not have this utxo or
-    /// if it exists in parent but not in current cache.
-    is_fresh: bool,
-}
-
-impl UtxoEntry {
-    pub fn new(utxo: Utxo, is_fresh: bool, is_dirty: bool) -> UtxoEntry {
-        UtxoEntry {
-            status: UtxoStatus::Entry(utxo),
-            is_dirty,
-            is_fresh,
-        }
-    }
-
-    pub fn is_dirty(&self) -> bool {
-        self.is_dirty
-    }
-
-    pub fn is_fresh(&self) -> bool {
-        self.is_fresh
-    }
-
-    pub fn is_spent(&self) -> bool {
-        self.status == UtxoStatus::Spent
-    }
-
-    pub fn utxo(&self) -> Option<Utxo> {
-        match &self.status {
-            UtxoStatus::Spent => None,
-            UtxoStatus::Entry(utxo) => Some(utxo.clone()),
-        }
-    }
-
-    pub fn take_utxo(self) -> Option<Utxo> {
-        match self.status {
-            UtxoStatus::Spent => None,
-            UtxoStatus::Entry(utxo) => Some(utxo),
-        }
-    }
-
-    fn utxo_mut(&mut self) -> Option<&mut Utxo> {
-        match &mut self.status {
-            UtxoStatus::Spent => None,
-            UtxoStatus::Entry(utxo) => Some(utxo),
-        }
-    }
 }
 
 impl<'a> UtxosCache<'a> {
     #[cfg(test)]
-    pub(crate) fn new_for_test(best_block: Id<GenBlock>) -> Self {
+    pub fn new_for_test(best_block: Id<GenBlock>) -> Self {
         Self {
             parent: None,
             current_block_hash: best_block,
@@ -220,7 +55,7 @@ impl<'a> UtxosCache<'a> {
         }
     }
 
-    /// returns a UtxoEntry, given the outpoint.
+    /// Returns a UtxoEntry, given the outpoint.
     // the reason why it's not a `&UtxoEntry`, is because the flags are bound to change esp.
     // when the utxo was actually retrieved from the parent.
     fn get_utxo_entry(&self, outpoint: &OutPoint) -> Option<UtxoEntry> {
@@ -230,14 +65,12 @@ impl<'a> UtxosCache<'a> {
 
         // since the utxo does not exist in this view, try to check from parent.
         self.parent.and_then(|parent| {
-            parent.utxo(outpoint).map(|utxo| UtxoEntry {
-                // if the utxo exists in parent:
-                // dirty is FALSE because this view does not have the utxo, therefore is different from parent
-                // fresh is FALSE because this view does not have the utxo but the parent has.
-                status: UtxoStatus::Entry(utxo),
-                is_dirty: false,
-                is_fresh: false,
-            })
+            // if the utxo exists in parent:
+            // dirty is FALSE because this view does not have the utxo, therefore is different from parent
+            // fresh is FALSE because this view does not have the utxo but the parent has.
+            parent
+                .utxo(outpoint)
+                .map(|utxo| UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No))
         })
     }
 
@@ -264,50 +97,42 @@ impl<'a> UtxosCache<'a> {
 
         for (idx, output) in tx.outputs().iter().enumerate() {
             let outpoint = OutPoint::new(id.clone(), idx as u32);
-
             // by default no overwrite allowed.
             let overwrite = check_for_overwrite && self.has_utxo(&outpoint);
-
-            let utxo = Utxo {
-                output: output.clone(),
-                // TODO: where do we get the block reward from the transaction?
-                is_block_reward: false,
-                source: source.clone(),
-            };
+            let utxo = Utxo::new(output.clone(), false, source.clone());
 
             self.add_utxo(&outpoint, utxo, overwrite)?;
         }
         Ok(())
     }
 
-    /// Mark the inputs of tx as 'spent'.
-    /// returns a TxUndo if function is a success;
-    /// or an error if the tx's input cannot be spent.
+    /// Marks the inputs of a transaction as 'spent', adds outputs to the utxo set.
+    /// Returns a TxUndo if function is a success or an error if the tx's input cannot be spent.
     pub fn spend_utxos(&mut self, tx: &Transaction, height: BlockHeight) -> Result<TxUndo, Error> {
         let tx_undo: Result<Vec<Utxo>, Error> =
             tx.inputs().iter().map(|tx_in| self.spend_utxo(tx_in.outpoint())).collect();
 
-        self.add_utxos(tx, UtxoSource::BlockChain(height), false)?;
+        self.add_utxos(tx, UtxoSource::Blockchain(height), false)?;
 
         tx_undo.map(TxUndo::new)
     }
 
-    /// Adds a utxo entry in the cache.
+    /// Adds an utxo entry to the cache
     pub fn add_utxo(
         &mut self,
         outpoint: &OutPoint,
         utxo: Utxo,
         possible_overwrite: bool, // TODO: change this to an enum that explains what happens
     ) -> Result<(), Error> {
+        // TODO: update the memory usage
+        // self.memory_usage should be deducted based on this current entry.
+
         let is_fresh = match self.utxos.get(outpoint) {
             None => {
                 // An insert can be done. This utxo doesn't exist yet, so it's fresh.
                 !possible_overwrite
             }
             Some(curr_entry) => {
-                // TODO: update the memory usage
-                // self.memory_usage should be deducted based on this current entry.
-
                 if !possible_overwrite {
                     if !curr_entry.is_spent() {
                         // Attempted to overwrite an existing utxo
@@ -324,16 +149,16 @@ impl<'a> UtxosCache<'a> {
                     // is 'spent' when the block adding it is disconnected and then
                     // re-added when it is also added in a newly connected block).
                     // if utxo is spent and is not dirty, then it can be marked as fresh.
-                    !curr_entry.is_dirty || curr_entry.is_fresh
+                    !curr_entry.is_dirty() || curr_entry.is_fresh()
                 } else {
                     // copy from the original entry
-                    curr_entry.is_fresh
+                    curr_entry.is_fresh()
                 }
             }
         };
 
         // create a new entry
-        let new_entry = UtxoEntry::new(utxo, is_fresh, true);
+        let new_entry = UtxoEntry::new(Some(utxo), IsFresh::from(is_fresh), IsDirty::Yes);
 
         // TODO: update the memory usage
         // self.memory_usage should be added based on this new entry.
@@ -351,16 +176,12 @@ impl<'a> UtxosCache<'a> {
         // self.memory_usage must be deducted from this entry's size
 
         // check whether this entry is fresh
-        if entry.is_fresh {
+        if entry.is_fresh() {
             // This is only available in this view. Remove immediately.
             self.utxos.remove(outpoint);
         } else {
             // mark this as 'spent'
-            let new_entry = UtxoEntry {
-                status: UtxoStatus::Spent,
-                is_dirty: true,
-                is_fresh: false,
-            };
+            let new_entry = UtxoEntry::new(None, IsFresh::No, IsDirty::Yes);
             self.utxos.insert(outpoint.clone(), new_entry);
         }
 
@@ -374,28 +195,33 @@ impl<'a> UtxosCache<'a> {
 
     /// Returns a mutable reference of the utxo, given the outpoint.
     pub fn get_mut_utxo(&mut self, outpoint: &OutPoint) -> Option<&mut Utxo> {
-        let status = self.get_utxo_entry(outpoint)?;
-        let utxo: Utxo = status.status.into_option()?;
+        let entry = self.get_utxo_entry(outpoint)?;
+        let utxo = entry.utxo()?;
 
         let utxo: &mut UtxoEntry = self.utxos.entry(outpoint.clone()).or_insert_with(|| {
             //TODO: update the memory storage here
-            UtxoEntry::new(utxo, status.is_fresh, status.is_dirty)
+            UtxoEntry::new(
+                Some(utxo.clone()),
+                IsFresh::from(entry.is_fresh()),
+                IsDirty::from(entry.is_dirty()),
+            )
         });
 
         utxo.utxo_mut()
     }
 
     /// removes the utxo in the cache with the outpoint
-    pub(crate) fn uncache(&mut self, outpoint: &OutPoint) -> Option<UtxoEntry> {
+    pub fn uncache(&mut self, outpoint: &OutPoint) -> Result<(), Error> {
         let key = outpoint;
         if let Some(entry) = self.utxos.get(key) {
             // see bitcoin's Uncache.
-            if !entry.is_fresh && !entry.is_dirty {
+            if !entry.is_fresh() && !entry.is_dirty() {
                 //todo: decrement the memory usage
-                return self.utxos.remove(key);
+                self.utxos.remove(key);
+                return Ok(());
             }
         }
-        None
+        Err(Error::NoUtxoFound)
     }
 
     pub fn consume(self) -> ConsumedUtxoCache {
@@ -421,7 +247,7 @@ impl<'a> UtxosView for UtxosCache<'a> {
     fn utxo(&self, outpoint: &OutPoint) -> Option<Utxo> {
         let key = outpoint;
         if let Some(res) = self.utxos.get(key) {
-            return res.utxo();
+            return res.utxo().cloned();
         }
 
         // if utxo is not found in this view, use parent's `get_utxo`.
@@ -449,17 +275,20 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
     fn batch_write(&mut self, utxo_entries: ConsumedUtxoCache) -> Result<(), Error> {
         for (key, entry) in utxo_entries.container {
             // Ignore non-dirty entries (optimization).
-            if entry.is_dirty {
+            if entry.is_dirty() {
                 let parent_entry = self.utxos.get(&key);
                 match parent_entry {
                     None => {
                         // The parent cache does not have an entry, while the child cache does.
                         // We can ignore it if it's both spent and FRESH in the child
-                        if !(entry.is_fresh && entry.is_spent()) {
+                        if !(entry.is_fresh() && entry.is_spent()) {
                             // Create the utxo in the parent cache, move the data up
                             // and mark it as dirty.
-                            let mut entry_copy = entry.clone();
-                            entry_copy.is_dirty = true;
+                            let entry_copy = UtxoEntry::new(
+                                entry.utxo().cloned(),
+                                IsFresh::from(entry.is_fresh()),
+                                IsDirty::Yes,
+                            );
 
                             self.utxos.insert(key, entry_copy);
                             // TODO: increase the memory usage
@@ -476,15 +305,17 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
                             return Err(Error::FreshUtxoAlreadyExists);
                         }
 
-                        if parent_entry.is_fresh && entry.is_spent() {
+                        if parent_entry.is_fresh() && entry.is_spent() {
                             // The grandparent cache does not have an entry, and the utxo
                             // has been spent. We can just delete it from the parent cache.
                             self.utxos.remove(&key);
                         } else {
                             // A normal modification.
-                            let mut entry_copy = entry.clone();
-                            entry_copy.is_dirty = true;
-                            entry_copy.is_fresh = parent_entry.is_fresh;
+                            let entry_copy = UtxoEntry::new(
+                                entry.utxo().cloned(),
+                                IsFresh::from(parent_entry.is_fresh()),
+                                IsDirty::Yes,
+                            );
                             self.utxos.insert(key, entry_copy);
                             // TODO: update the memory usage
 
@@ -504,55 +335,78 @@ impl<'a> FlushableUtxoView for UtxosCache<'a> {
 }
 
 #[cfg(test)]
-mod test;
-
-#[cfg(test)]
-pub mod test_helper;
-
-#[cfg(test)]
-mod simulation;
-
-#[cfg(test)]
 mod unit_test {
+    use super::*;
+    use crate::tests::test_helper::{insert_single_entry, Presence};
     use common::primitives::H256;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
 
-    use crate::test_helper::{insert_single_entry, Presence, DIRTY, FRESH};
-    use crate::UtxosCache;
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_absent(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
+
+        // when the outpoint does not exist.
+        let (_, outp) = insert_single_entry(&mut rng, &mut cache, Presence::Absent, None, None);
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
+        assert!(!cache.has_utxo_in_cache(&outp));
+    }
 
     #[rstest]
     #[trace]
     #[case(Seed::from_entropy())]
-    fn test_uncache(#[case] seed: Seed) {
+    fn uncache_not_fresh_not_dirty(#[case] seed: Seed) {
         let mut rng = make_seedable_rng(seed);
         let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is not dirty and not fresh
-        let (utxo, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(0), None);
-        let res = cache.uncache(&outp).expect("should return an entry");
-        assert_eq!(res.utxo(), Some(utxo));
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::No, IsDirty::No)),
+            None,
+        );
+        assert!(cache.uncache(&outp).is_ok());
         assert!(!cache.has_utxo_in_cache(&outp));
+    }
 
-        // when the outpoint does not exist.
-        let (_, outp) = insert_single_entry(&mut rng, &mut cache, &Presence::Absent, None, None);
-        assert_eq!(cache.uncache(&outp), None);
-        assert!(!cache.has_utxo_in_cache(&outp));
-
-        // when the entry is fresh, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
-        assert_eq!(cache.uncache(&outp), None);
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_dirty_not_fresh(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is dirty, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(DIRTY), None);
-        assert_eq!(cache.uncache(&outp), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::No, IsDirty::Yes)),
+            None,
+        );
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
+    }
+
+    #[rstest]
+    #[trace]
+    #[case(Seed::from_entropy())]
+    fn uncache_fresh_and_dirty(#[case] seed: Seed) {
+        let mut rng = make_seedable_rng(seed);
+        let mut cache = UtxosCache::new_for_test(H256::random().into());
 
         // when the entry is both fresh and dirty, entry cannot be removed.
-        let (_, outp) =
-            insert_single_entry(&mut rng, &mut cache, &Presence::Present, Some(FRESH), None);
-        assert_eq!(cache.uncache(&outp), None);
+        let (_, outp) = insert_single_entry(
+            &mut rng,
+            &mut cache,
+            Presence::Present,
+            Some((IsFresh::Yes, IsDirty::Yes)),
+            None,
+        );
+        assert_eq!(Error::NoUtxoFound, cache.uncache(&outp).unwrap_err());
     }
 }

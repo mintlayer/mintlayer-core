@@ -25,10 +25,7 @@ use common::{
     },
     primitives::{BlockHeight, Id},
 };
-use utxo::{
-    utxo_storage::{UtxosStorageRead, UtxosStorageWrite},
-    BlockUndo, Utxo,
-};
+use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
 mockall::mock! {
     /// A mock object for blockchain storage

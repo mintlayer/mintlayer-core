@@ -13,19 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(dead_code, unused_variables, unused_imports)]
-// todo: remove ^ when all untested codes are tested
-
-pub mod in_memory;
 mod rw_impls;
 mod view_impls;
-
-use std::collections::BTreeMap;
 
 use crate::{BlockUndo, FlushableUtxoView, Utxo, UtxosView};
 use chainstate_types::storage_result::Error;
 use common::{
-    chain::{Block, ChainConfig, GenBlock, OutPoint, TxOutput},
+    chain::{Block, ChainConfig, GenBlock, OutPoint},
     primitives::{BlockHeight, Id},
 };
 
@@ -93,7 +87,7 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
             utxos_cache
                 .add_utxo(
                     &OutPoint::new(genesis_id.into(), index as u32),
-                    Utxo::new(output.clone(), false, BlockHeight::new(0)),
+                    Utxo::new_for_blockchain(output.clone(), false, BlockHeight::new(0)),
                     false,
                 )
                 .expect("Adding genesis utxo failed");
@@ -106,6 +100,9 @@ impl<'a, S: UtxosStorageWrite> UtxosDBMut<'a, S> {
             .expect("Writing genesis utxos failed");
     }
 }
+
+#[cfg(test)]
+mod in_memory;
 
 #[cfg(test)]
 mod test;

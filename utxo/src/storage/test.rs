@@ -13,23 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::in_memory::UtxosDBInMemoryImpl;
-use super::*;
-use crate::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo};
-use crate::utxo_impl::{
-    flush_to_base, utxo_storage::UtxosDB, FlushableUtxoView, Utxo, UtxoEntry, UtxosCache, UtxosView,
+use super::{in_memory::UtxosDBInMemoryImpl, *};
+use crate::{
+    flush_to_base,
+    tests::test_helper::{convert_to_utxo, create_tx_inputs, create_tx_outputs, create_utxo},
+    utxo_entry::{IsDirty, IsFresh, UtxoEntry},
+    ConsumedUtxoCache, FlushableUtxoView, UtxosCache, UtxosView,
 };
-use crate::ConsumedUtxoCache;
-use common::chain::block::timestamp::BlockTimestamp;
-use common::chain::config::create_mainnet;
-use common::chain::signature::inputsig::InputWitness;
-use common::chain::{Destination, OutPointSourceId, Transaction, TxInput, TxOutput};
-use common::primitives::{Amount, BlockHeight, Idable};
-use common::primitives::{Id, H256};
-use crypto::random::{seq, Rng};
+use common::{
+    chain::{
+        block::timestamp::BlockTimestamp, signature::inputsig::InputWitness, OutPointSourceId,
+        Transaction, TxInput,
+    },
+    primitives::{BlockHeight, Id, Idable, H256},
+};
+use crypto::random::Rng;
 use itertools::Itertools;
 use rstest::rstest;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use test_utils::random::{make_seedable_rng, Seed};
 
 fn create_transactions(
@@ -100,7 +101,7 @@ fn create_utxo_entries(rng: &mut impl Rng, num_of_utxos: u8) -> BTreeMap<OutPoin
     let mut map = BTreeMap::new();
     for _ in 0..num_of_utxos {
         let (utxo, outpoint) = create_utxo(rng, 0);
-        let entry = UtxoEntry::new(utxo.clone(), true, true);
+        let entry = UtxoEntry::new(Some(utxo), IsFresh::Yes, IsDirty::Yes);
         map.insert(outpoint, entry);
     }
 
@@ -328,7 +329,7 @@ fn test_utxo(#[case] seed: Seed) {
 
         let outpoint_key = &outpoint;
         let utxo_entry = utxos.container.get(outpoint_key).expect("an entry should be found");
-        assert_eq!(utxo_entry.utxo(), utxo_opt);
+        assert_eq!(utxo_entry.utxo(), utxo_opt.as_ref());
 
         // check has_utxo
         assert!(utxo_db.has_utxo(&outpoint));
@@ -340,7 +341,7 @@ fn test_utxo(#[case] seed: Seed) {
         {
             let (utxo, outpoint) = create_utxo(&mut rng, 1);
             let mut map = BTreeMap::new();
-            let entry = UtxoEntry::new(utxo, true, false);
+            let entry = UtxoEntry::new(Some(utxo), IsFresh::No, IsDirty::No);
             map.insert(outpoint.clone(), entry);
 
             let new_hash = Id::new(H256::random());
@@ -367,7 +368,7 @@ fn test_utxo(#[case] seed: Seed) {
                 .expect("utxo should exist");
 
             let mut parent = UtxosCache::new_for_test(utxo_db.best_block_hash());
-            parent.add_utxo(outpoint, utxo, false).unwrap();
+            parent.add_utxo(outpoint, utxo.clone(), false).unwrap();
 
             let mut child = UtxosCache::new(&parent);
             child.spend_utxo(outpoint).unwrap();

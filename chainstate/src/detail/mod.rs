@@ -40,7 +40,6 @@ use itertools::Itertools;
 use logging::log;
 use std::sync::Arc;
 use utils::eventhandler::{EventHandler, EventsController};
-use utxo::utxo_storage::UtxosDBMut;
 mod chainstateref;
 mod tokens;
 use self::{
@@ -48,6 +47,7 @@ use self::{
     time_getter::TimeGetter,
 };
 use crate::{detail::orphan_blocks::OrphanBlocksPool, ChainstateConfig, ChainstateEvent};
+use utxo::UtxosDBMut;
 
 type TxRw<'a, S> = <S as Transactional<'a>>::TransactionRw;
 type TxRo<'a, S> = <S as Transactional<'a>>::TransactionRo;

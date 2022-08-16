@@ -25,9 +25,7 @@ mod test {
     use crypto::random::Rng;
     use rstest::rstest;
     use test_utils::random::{make_seedable_rng, Seed};
-    use utxo::utxo_storage::UtxosDBMut;
-    use utxo::utxo_storage::{UtxosStorageRead, UtxosStorageWrite};
-    use utxo::Utxo;
+    use utxo::{Utxo, UtxosDBMut, UtxosStorageRead, UtxosStorageWrite};
 
     fn create_utxo(block_height: u64, output_value: u128) -> (Utxo, OutPoint) {
         // just a random value generated, and also a random `is_block_reward` value.
@@ -36,7 +34,7 @@ mod test {
             OutputValue::Coin(Amount::from_atoms(output_value)),
             OutputPurpose::Transfer(Destination::PublicKey(pub_key)),
         );
-        let utxo = Utxo::new(output, true, BlockHeight::new(block_height));
+        let utxo = Utxo::new_for_blockchain(output, true, BlockHeight::new(block_height));
 
         // create the id based on the `is_block_reward` value.
         let id = OutPointSourceId::BlockReward(Id::new(H256::random()));
