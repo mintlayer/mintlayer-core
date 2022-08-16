@@ -65,22 +65,34 @@ pub fn check_tokens_issuance_data(
         || token_ticker.is_empty()
         || !String::from_utf8_lossy(token_ticker).is_ascii()
     {
-        return Err(TokensError::IssueErrorIncorrectTicker(tx_id, source_block_id));
+        return Err(TokensError::IssueErrorIncorrectTicker(
+            tx_id,
+            source_block_id,
+        ));
     }
 
     // Check amount
     if amount_to_issue == &Amount::from_atoms(0) {
-        return Err(TokensError::IssueErrorIncorrectAmount(tx_id, source_block_id));
+        return Err(TokensError::IssueErrorIncorrectAmount(
+            tx_id,
+            source_block_id,
+        ));
     }
 
     // Check decimals
     if number_of_decimals > &TOKEN_MAX_DEC_COUNT {
-        return Err(TokensError::IssueErrorTooManyDecimals(tx_id, source_block_id));
+        return Err(TokensError::IssueErrorTooManyDecimals(
+            tx_id,
+            source_block_id,
+        ));
     }
 
     // Check URI
     if metadata_uri.len() > TOKEN_MAX_URI_LEN || !String::from_utf8_lossy(metadata_uri).is_ascii() {
-        return Err(TokensError::IssueErrorIncorrectMetadataURI(tx_id, source_block_id));
+        return Err(TokensError::IssueErrorIncorrectMetadataURI(
+            tx_id,
+            source_block_id,
+        ));
     }
     Ok(())
 }
