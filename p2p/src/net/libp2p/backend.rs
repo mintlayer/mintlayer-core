@@ -42,16 +42,16 @@ pub struct Libp2pBackend {
     pub(super) swarm: Swarm<behaviour::Libp2pBehaviour>,
 
     /// Receiver for incoming commands
-    cmd_rx: mpsc::Receiver<types::Command>,
+    cmd_rx: mpsc::UnboundedReceiver<types::Command>,
 
     /// Sender for outgoing connectivity events
-    pub(super) conn_tx: mpsc::Sender<types::ConnectivityEvent>,
+    pub(super) conn_tx: mpsc::UnboundedSender<types::ConnectivityEvent>,
 
     /// Sender for outgoing gossipsub events
-    pub(super) gossip_tx: mpsc::Sender<types::PubSubEvent>,
+    pub(super) gossip_tx: mpsc::UnboundedSender<types::PubSubEvent>,
 
     /// Sender for outgoing syncing events
-    pub(super) sync_tx: mpsc::Sender<types::SyncingEvent>,
+    pub(super) sync_tx: mpsc::UnboundedSender<types::SyncingEvent>,
 
     /// Active listen address of the backend
     // TODO: cache this inside `Libp2pConnectivityHandle`?
@@ -61,10 +61,10 @@ pub struct Libp2pBackend {
 impl Libp2pBackend {
     pub fn new(
         swarm: Swarm<behaviour::Libp2pBehaviour>,
-        cmd_rx: mpsc::Receiver<types::Command>,
-        conn_tx: mpsc::Sender<types::ConnectivityEvent>,
-        gossip_tx: mpsc::Sender<types::PubSubEvent>,
-        sync_tx: mpsc::Sender<types::SyncingEvent>,
+        cmd_rx: mpsc::UnboundedReceiver<types::Command>,
+        conn_tx: mpsc::UnboundedSender<types::ConnectivityEvent>,
+        gossip_tx: mpsc::UnboundedSender<types::PubSubEvent>,
+        sync_tx: mpsc::UnboundedSender<types::SyncingEvent>,
     ) -> Self {
         Self {
             swarm,
@@ -90,13 +90,13 @@ impl Libp2pBackend {
                         self.swarm.behaviour_mut().connmgr.handle_banned_peer(peer_id);
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Connectivity(event)) => {
-                        self.conn_tx.send(event).await.map_err(P2pError::from)?;
+                        self.conn_tx.send(event).map_err(P2pError::from)?;
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Syncing(event)) => {
-                        self.sync_tx.send(event).await.map_err(P2pError::from)?;
+                        self.sync_tx.send(event).map_err(P2pError::from)?;
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::PubSub(event)) => {
-                        self.gossip_tx.send(event).await.map_err(P2pError::from)?;
+                        self.gossip_tx.send(event).map_err(P2pError::from)?;
                     }
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
@@ -408,21 +408,19 @@ mod tests {
     #[tokio::test]
     async fn test_command_listen_success() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (gossip_tx, _) = mpsc::channel(64);
-        let (conn_tx, _) = mpsc::channel(64);
-        let (sync_tx, _) = mpsc::channel(64);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (gossip_tx, _) = mpsc::unbounded_channel();
+        let (conn_tx, _) = mpsc::unbounded_channel();
+        let (sync_tx, _) = mpsc::unbounded_channel();
         let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
         let (tx, rx) = oneshot::channel();
-        let res = cmd_tx
-            .send(types::Command::Listen {
-                addr: p2p_test_utils::make_libp2p_addr(),
-                response: tx,
-            })
-            .await;
+        let res = cmd_tx.send(types::Command::Listen {
+            addr: p2p_test_utils::make_libp2p_addr(),
+            response: tx,
+        });
         assert!(res.is_ok());
 
         let res = rx.await;
@@ -435,21 +433,19 @@ mod tests {
     #[tokio::test]
     async fn test_command_listen_addrinuse() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (gossip_tx, _) = mpsc::channel(64);
-        let (conn_tx, _) = mpsc::channel(64);
-        let (sync_tx, _) = mpsc::channel(64);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (gossip_tx, _) = mpsc::unbounded_channel();
+        let (conn_tx, _) = mpsc::unbounded_channel();
+        let (sync_tx, _) = mpsc::unbounded_channel();
         let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         tokio::spawn(async move { backend.run().await });
 
         let (tx, rx) = oneshot::channel();
-        let res = cmd_tx
-            .send(types::Command::Listen {
-                addr: p2p_test_utils::make_libp2p_addr(),
-                response: tx,
-            })
-            .await;
+        let res = cmd_tx.send(types::Command::Listen {
+            addr: p2p_test_utils::make_libp2p_addr(),
+            response: tx,
+        });
         assert!(res.is_ok());
 
         let res = rx.await;
@@ -458,12 +454,10 @@ mod tests {
 
         // try to bind to the same interface again
         let (tx, rx) = oneshot::channel();
-        let res = cmd_tx
-            .send(types::Command::Listen {
-                addr: p2p_test_utils::make_libp2p_addr(),
-                response: tx,
-            })
-            .await;
+        let res = cmd_tx.send(types::Command::Listen {
+            addr: p2p_test_utils::make_libp2p_addr(),
+            response: tx,
+        });
         assert!(res.is_ok());
 
         let res = rx.await;
@@ -476,10 +470,10 @@ mod tests {
     #[tokio::test]
     async fn test_drop_command_tx() {
         let swarm = make_swarm().await;
-        let (cmd_tx, cmd_rx) = mpsc::channel(16);
-        let (gossip_tx, _) = mpsc::channel(64);
-        let (conn_tx, _) = mpsc::channel(64);
-        let (sync_tx, _) = mpsc::channel(64);
+        let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+        let (gossip_tx, _) = mpsc::unbounded_channel();
+        let (conn_tx, _) = mpsc::unbounded_channel();
+        let (sync_tx, _) = mpsc::unbounded_channel();
         let mut backend = Libp2pBackend::new(swarm, cmd_rx, conn_tx, gossip_tx, sync_tx);
 
         drop(cmd_tx);

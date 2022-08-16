@@ -33,17 +33,17 @@ use tokio::sync::{mpsc, oneshot};
 
 pub struct Libp2pSyncHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::UnboundedSender<types::Command>,
 
     /// Channel for receiving pubsub events from libp2p backend
-    sync_rx: mpsc::Receiver<types::SyncingEvent>,
+    sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: NetworkingService> Libp2pSyncHandle<T> {
     pub fn new(
-        cmd_tx: mpsc::Sender<types::Command>,
-        sync_rx: mpsc::Receiver<types::SyncingEvent>,
+        cmd_tx: mpsc::UnboundedSender<types::Command>,
+        sync_rx: mpsc::UnboundedReceiver<types::SyncingEvent>,
     ) -> Self {
         Self {
             cmd_tx,
@@ -68,13 +68,11 @@ where
         request: message::Request,
     ) -> crate::Result<T::SyncingPeerRequestId> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::SendRequest {
-                peer_id,
-                request: Box::new(SyncRequest::new(request.encode())),
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendRequest {
+            peer_id,
+            request: Box::new(SyncRequest::new(request.encode())),
+            response: tx,
+        })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?
@@ -86,13 +84,11 @@ where
         response: message::Response,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::SendResponse {
-                request_id,
-                response: Box::new(SyncResponse::new(response.encode())),
-                channel: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::SendResponse {
+            request_id,
+            response: Box::new(SyncResponse::new(response.encode())),
+            channel: tx,
+        })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?

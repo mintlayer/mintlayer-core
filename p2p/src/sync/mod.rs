@@ -82,13 +82,13 @@ pub struct BlockSyncManager<T: NetworkingService> {
     peer_sync_handle: T::SyncingMessagingHandle,
 
     /// RX channel for receiving control events
-    rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
+    rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
 
     /// TX channel for sending control events to swarm
-    tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
+    tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 
     /// TX channel for sending control events to pubsub (used to tell pubsub that syncing to best block is done)
-    tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
+    tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
 
     /// Hashmap of connected peers
     peers: HashMap<T::PeerId, peer::PeerContext<T>>,
@@ -110,9 +110,9 @@ where
         config: Arc<ChainConfig>,
         handle: T::SyncingMessagingHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        rx_sync: mpsc::Receiver<event::SyncControlEvent<T>>,
-        tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
-        tx_pubsub: mpsc::Sender<event::PubSubControlEvent>,
+        rx_sync: mpsc::UnboundedReceiver<event::SyncControlEvent<T>>,
+        tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
+        tx_pubsub: mpsc::UnboundedSender<event::PubSubControlEvent>,
     ) -> Self {
         Self {
             config,
@@ -373,7 +373,6 @@ where
         // TODO: global event system
         self.tx_pubsub
             .send(event::PubSubControlEvent::InitialBlockDownloadDone)
-            .await
             .map_err(P2pError::from)
     }
 
@@ -402,7 +401,6 @@ where
                         let (tx, rx) = oneshot::channel();
                         self.tx_swarm
                             .send(event::SwarmEvent::Disconnect(peer_id, tx))
-                            .await
                             .map_err(P2pError::from)?;
                         return rx.await.map_err(P2pError::from)?;
                     }
@@ -449,7 +447,6 @@ where
                         err.ban_score(),
                         tx,
                     ))
-                    .await
                     .map_err(P2pError::from)?;
                 rx.await.map_err(P2pError::from)?
             }
@@ -463,7 +460,6 @@ where
                                 err.ban_score(),
                                 tx,
                             ))
-                            .await
                             .map_err(P2pError::from)?;
                         let _ = rx.await.map_err(P2pError::from);
                     }
@@ -491,7 +487,6 @@ where
                             err.ban_score(),
                             tx,
                         ))
-                        .await
                         .map_err(P2pError::from)?;
                     let _ = rx.await.map_err(P2pError::from);
                 }

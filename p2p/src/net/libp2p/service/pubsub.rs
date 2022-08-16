@@ -31,17 +31,17 @@ use utils::ensure;
 
 pub struct Libp2pPubSubHandle<T: NetworkingService> {
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::UnboundedSender<types::Command>,
 
     /// Channel for receiving pubsub events from libp2p backend
-    gossip_rx: mpsc::Receiver<types::PubSubEvent>,
+    gossip_rx: mpsc::UnboundedReceiver<types::PubSubEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: NetworkingService> Libp2pPubSubHandle<T> {
     pub fn new(
-        cmd_tx: mpsc::Sender<types::Command>,
-        gossip_rx: mpsc::Receiver<types::PubSubEvent>,
+        cmd_tx: mpsc::UnboundedSender<types::Command>,
+        gossip_rx: mpsc::UnboundedReceiver<types::PubSubEvent>,
     ) -> Self {
         Self {
             cmd_tx,
@@ -72,13 +72,11 @@ where
         };
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::AnnounceData {
-                topic,
-                message: encoded,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::AnnounceData {
+            topic,
+            message: encoded,
+            response: tx,
+        })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?
@@ -91,14 +89,12 @@ where
         result: net::types::ValidationResult,
     ) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::ReportValidationResult {
-                message_id,
-                source,
-                result: result.into(),
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::ReportValidationResult {
+            message_id,
+            source,
+            result: result.into(),
+            response: tx,
+        })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?
@@ -106,12 +102,10 @@ where
 
     async fn subscribe(&mut self, topics: &[PubSubTopic]) -> crate::Result<()> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Subscribe {
-                topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Subscribe {
+            topics: topics.iter().map(|topic| topic.into()).collect::<Vec<_>>(),
+            response: tx,
+        })?;
 
         // The first error indicates the channel being closed and the second one is a p2p error.
         rx.await?

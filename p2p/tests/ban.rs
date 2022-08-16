@@ -31,8 +31,8 @@ use tokio::sync::mpsc;
 // the second service.
 #[tokio::test]
 async fn invalid_pubsub_block() {
-    let (tx_pubsub, rx_pubsub) = mpsc::channel(16);
-    let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
+    let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
+    let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
@@ -64,7 +64,7 @@ async fn invalid_pubsub_block() {
     let blocks = p2p_test_utils::create_n_blocks(Arc::clone(&config), best_block, 3);
 
     tokio::spawn(async move {
-        tx_pubsub.send(PubSubControlEvent::InitialBlockDownloadDone).await.unwrap();
+        tx_pubsub.send(PubSubControlEvent::InitialBlockDownloadDone).unwrap();
         pubsub1.run().await
     });
 
@@ -98,9 +98,9 @@ async fn invalid_pubsub_block() {
 // start two libp2p services and give an invalid block, verify that `PeerManager` is informed
 #[tokio::test]
 async fn invalid_sync_block() {
-    let (_tx_p2p_sync, rx_p2p_sync) = mpsc::channel(16);
-    let (tx_pubsub, _rx_pubsub) = mpsc::channel(16);
-    let (tx_swarm, mut rx_swarm) = mpsc::channel(16);
+    let (_tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
+    let (tx_pubsub, _rx_pubsub) = mpsc::unbounded_channel();
+    let (tx_swarm, mut rx_swarm) = mpsc::unbounded_channel();
     let config = Arc::new(common::chain::config::create_unit_test_config());
     let handle = p2p_test_utils::start_chainstate(Arc::clone(&config)).await;
 
