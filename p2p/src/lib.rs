@@ -38,9 +38,6 @@ pub mod sync;
 /// Result type with P2P errors
 pub type Result<T> = core::result::Result<T, P2pError>;
 
-// TODO: figure out proper channel sizes
-const CHANNEL_SIZE: usize = 64;
-
 pub struct P2pInterface<T: NetworkingService> {
     p2p: P2P<T>,
 }
@@ -65,7 +62,6 @@ where
                 })?,
                 tx,
             ))
-            .await
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await.map_err(P2pError::from)?
     }
@@ -83,7 +79,6 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::Disconnect(peer_id, tx))
-            .await
             .map_err(|_| P2pError::ChannelClosed)?;
         rx.await.map_err(P2pError::from)?
     }
@@ -93,7 +88,6 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetPeerCount(tx))
-            .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
@@ -103,7 +97,6 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetBindAddress(tx))
-            .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
@@ -113,7 +106,6 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetPeerId(tx))
-            .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
@@ -123,7 +115,6 @@ where
         self.p2p
             .tx_swarm
             .send(event::SwarmEvent::GetConnectedPeers(tx))
-            .await
             .map_err(P2pError::from)?;
         rx.await.map_err(P2pError::from)
     }
@@ -132,10 +123,10 @@ where
 struct P2P<T: NetworkingService> {
     // TODO: add abstration for channels
     /// TX channel for sending swarm control events
-    pub tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
+    pub tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 
     /// TX channel for sending syncing/pubsub events
-    pub _tx_sync: mpsc::Sender<event::SyncEvent>,
+    pub _tx_sync: mpsc::UnboundedSender<event::SyncEvent>,
 }
 
 impl<T> P2P<T>
@@ -177,10 +168,10 @@ where
         //
         // The difference between these types is that enums that contain the events *can* have
         // a `oneshot::channel` object that must be used to send the response.
-        let (tx_swarm, rx_swarm) = mpsc::channel(CHANNEL_SIZE);
-        let (tx_p2p_sync, rx_p2p_sync) = mpsc::channel(CHANNEL_SIZE);
-        let (_tx_sync, _rx_sync) = mpsc::channel(CHANNEL_SIZE);
-        let (tx_pubsub, rx_pubsub) = mpsc::channel(CHANNEL_SIZE);
+        let (tx_swarm, rx_swarm) = mpsc::unbounded_channel();
+        let (tx_p2p_sync, rx_p2p_sync) = mpsc::unbounded_channel();
+        let (_tx_sync, _rx_sync) = mpsc::unbounded_channel();
+        let (tx_pubsub, rx_pubsub) = mpsc::unbounded_channel();
 
         {
             let chain_config = Arc::clone(&chain_config);

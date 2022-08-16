@@ -27,6 +27,3 @@ pub const PING_MAX_RETRIES: u32 = 3;
 
 /// Maximum message size
 pub const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024;
-
-// TODO: think about channel sizes
-pub const CHANNEL_SIZE: usize = 64;

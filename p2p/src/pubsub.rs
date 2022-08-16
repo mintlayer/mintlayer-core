@@ -37,9 +37,6 @@ use logging::log;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot};
 
-// TODO: figure out proper channel sizes
-const CHANNEL_SIZE: usize = 64;
-
 /// Publish-subscribe message handler
 pub struct PubSubMessageHandler<T: NetworkingService> {
     /// Chain config
@@ -52,10 +49,10 @@ pub struct PubSubMessageHandler<T: NetworkingService> {
     chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
 
     /// TX channel for sending control events to `PeerManager`
-    tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
+    tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
 
     /// RX channel for receiving control events from RPC/[`crate::swarm::PeerManager`]
-    rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
+    rx_pubsub: mpsc::UnboundedReceiver<event::PubSubControlEvent>,
 
     /// Topics that the `PubSubMessageHandler` listens to
     topics: Vec<PubSubTopic>,
@@ -77,8 +74,8 @@ where
         _chain_config: Arc<ChainConfig>,
         pubsub_handle: T::PubSubHandle,
         chainstate_handle: subsystem::Handle<Box<dyn chainstate_interface::ChainstateInterface>>,
-        tx_swarm: mpsc::Sender<event::SwarmEvent<T>>,
-        rx_pubsub: mpsc::Receiver<event::PubSubControlEvent>,
+        tx_swarm: mpsc::UnboundedSender<event::SwarmEvent<T>>,
+        rx_pubsub: mpsc::UnboundedReceiver<event::PubSubControlEvent>,
         topics: &[PubSubTopic],
     ) -> Self {
         Self {
@@ -92,15 +89,17 @@ where
     }
 
     /// Subscribe to events
-    async fn subscribe_to_chainstate_events(&mut self) -> crate::Result<mpsc::Receiver<Id<Block>>> {
-        let (tx, rx) = mpsc::channel(CHANNEL_SIZE);
+    async fn subscribe_to_chainstate_events(
+        &mut self,
+    ) -> crate::Result<mpsc::UnboundedReceiver<Id<Block>>> {
+        let (tx, rx) = mpsc::unbounded_channel();
 
         let subscribe_func =
             Arc::new(
                 move |chainstate_event: chainstate::ChainstateEvent| match chainstate_event {
                     chainstate::ChainstateEvent::NewTip(block_id, _) => {
                         futures::executor::block_on(async {
-                            if let Err(e) = tx.send(block_id).await {
+                            if let Err(e) = tx.send(block_id) {
                                 log::error!("PubSubMessageHandler closed: {:?}", e)
                             }
                         });
@@ -179,7 +178,6 @@ where
             let (tx, rx) = oneshot::channel();
             self.tx_swarm
                 .send(event::SwarmEvent::AdjustPeerScore(peer_id, score, tx))
-                .await
                 .map_err(P2pError::from)?;
             let _ = rx.await.map_err(P2pError::from)?;
         }

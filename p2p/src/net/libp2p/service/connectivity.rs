@@ -31,18 +31,18 @@ pub struct Libp2pConnectivityHandle<T: NetworkingService> {
     peer_id: PeerId,
 
     /// Channel for sending commands to libp2p backend
-    cmd_tx: mpsc::Sender<types::Command>,
+    cmd_tx: mpsc::UnboundedSender<types::Command>,
 
     /// Channel for receiving connectivity events from libp2p backend
-    conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+    conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent>,
     _marker: std::marker::PhantomData<fn() -> T>,
 }
 
 impl<T: NetworkingService> Libp2pConnectivityHandle<T> {
     pub fn new(
         peer_id: PeerId,
-        cmd_tx: mpsc::Sender<types::Command>,
-        conn_rx: mpsc::Receiver<types::ConnectivityEvent>,
+        cmd_tx: mpsc::UnboundedSender<types::Command>,
+        conn_rx: mpsc::UnboundedReceiver<types::ConnectivityEvent>,
     ) -> Self {
         Self {
             peer_id,
@@ -177,13 +177,11 @@ where
 
         // try to connect to remote peer
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Connect {
-                peer_id,
-                peer_addr: addr.clone(),
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Connect {
+            peer_id,
+            peer_addr: addr.clone(),
+            response: tx,
+        })?;
 
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
@@ -192,18 +190,16 @@ where
         log::debug!("disconnect peer {:?}", peer_id);
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::Disconnect {
-                peer_id,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::Disconnect {
+            peer_id,
+            response: tx,
+        })?;
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
     async fn local_addr(&self) -> crate::Result<Option<T::Address>> {
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx.send(types::Command::ListenAddress { response: tx }).await?;
+        self.cmd_tx.send(types::Command::ListenAddress { response: tx })?;
         rx.await.map_err(P2pError::from)
     }
 
@@ -215,12 +211,10 @@ where
         log::debug!("ban peer {}", peer_id);
 
         let (tx, rx) = oneshot::channel();
-        self.cmd_tx
-            .send(types::Command::BanPeer {
-                peer_id,
-                response: tx,
-            })
-            .await?;
+        self.cmd_tx.send(types::Command::BanPeer {
+            peer_id,
+            response: tx,
+        })?;
         rx.await.map_err(P2pError::from)?.map_err(P2pError::from)
     }
 
