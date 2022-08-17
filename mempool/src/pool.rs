@@ -113,7 +113,6 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
 }
 
 pub trait MempoolInterface<C, T, M> {
-    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self;
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
 
@@ -215,6 +214,18 @@ where
     T: GetTime,
     M: GetMemoryUsage,
 {
+    pub(crate) fn new(chain_state: C, clock: T, memory_usage_estimator: M) -> Self {
+        Self {
+            store: MempoolStore::new(),
+            chain_state,
+            max_size: MAX_MEMPOOL_SIZE_BYTES,
+            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
+            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
+            clock,
+            memory_usage_estimator,
+        }
+    }
+
     fn rolling_fee_halflife(&self) -> Time {
         let mem_usage = self.get_memory_usage();
         if mem_usage < self.max_size / 4 {
@@ -717,18 +728,6 @@ where
     T: GetTime,
     M: GetMemoryUsage,
 {
-    fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self {
-        Self {
-            store: MempoolStore::new(),
-            chain_state,
-            max_size: MAX_MEMPOOL_SIZE_BYTES,
-            max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
-            rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
-            clock,
-            memory_usage_estimator,
-        }
-    }
-
     fn new_tip_set(&mut self, chain_state: C) {
         self.chain_state = chain_state;
         self.rolling_fee_rate.set({

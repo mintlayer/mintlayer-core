@@ -492,7 +492,7 @@ fn tx_no_inputs() -> anyhow::Result<()> {
 
 fn setup() -> Mempool<ChainStateMock, SystemClock, SystemUsageEstimator> {
     logging::init_logging::<&str>(None);
-    Mempool::create(
+    Mempool::new(
         ChainStateMock::new(),
         SystemClock {},
         SystemUsageEstimator {},
@@ -1250,7 +1250,7 @@ impl GetTime for MockClock {
 fn only_expired_entries_removed() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
 
-    let mut mempool = Mempool::create(
+    let mut mempool = Mempool::new(
         ChainStateMock::new(),
         mock_clock.clone(),
         SystemUsageEstimator {},
@@ -1328,7 +1328,7 @@ fn rolling_fee() -> anyhow::Result<()> {
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = Mempool::create(chain_state, mock_clock.clone(), mock_usage);
+    let mut mempool = Mempool::new(chain_state, mock_clock.clone(), mock_usage);
 
     let num_inputs = 1;
     let num_outputs = 3;
@@ -1655,7 +1655,7 @@ fn descendant_of_expired_entry() -> anyhow::Result<()> {
     let mock_clock = MockClock::new();
     logging::init_logging::<&str>(None);
 
-    let mut mempool = Mempool::create(
+    let mut mempool = Mempool::new(
         ChainStateMock::new(),
         mock_clock.clone(),
         SystemUsageEstimator {},
@@ -1711,7 +1711,7 @@ fn mempool_full() -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = Mempool::create(chain_state, SystemClock, mock_usage);
+    let mut mempool = Mempool::new(chain_state, SystemClock, mock_usage);
 
     let tx = TxGenerator::new().generate_tx(&mempool)?;
     log::debug!("mempool_full: tx has is {}", tx.get_id().get());

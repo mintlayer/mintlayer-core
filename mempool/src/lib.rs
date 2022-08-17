@@ -15,8 +15,33 @@
 
 #![deny(clippy::clone_on_ref_ptr)]
 
+use pool::MempoolInterface;
+
+use crate::error::Error as MempoolError;
+use crate::pool::ChainState;
+use crate::pool::GetMemoryUsage;
+use crate::pool::GetTime;
+use crate::pool::Mempool;
+
 pub mod error;
 mod feerate;
 pub mod pool;
 
-pub use error::Error as MempoolError;
+pub type Result<T> = core::result::Result<T, MempoolError>;
+
+pub fn make_mempool<C, T, M>(
+    chainstate: C,
+    time_getter: T,
+    memory_usage_estimator: M,
+) -> crate::Result<Box<dyn MempoolInterface<C, T, M>>>
+where
+    C: ChainState + 'static,
+    T: GetTime + 'static,
+    M: GetMemoryUsage + 'static,
+{
+    Ok(Box::new(Mempool::new(
+        chainstate,
+        time_getter,
+        memory_usage_estimator,
+    )))
+}
