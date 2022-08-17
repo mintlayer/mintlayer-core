@@ -379,7 +379,7 @@ fn token_issuance_with_insufficient_fee() {
         assert!(matches!(
             test_framework.process_block(block, BlockSource::Local),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(_, _))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(_, _))
             ))
         ));
     })

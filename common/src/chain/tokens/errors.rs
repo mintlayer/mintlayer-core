@@ -34,8 +34,8 @@ pub enum TokensError {
     MultipleTokenIssuanceInTransaction(Id<Transaction>, Id<Block>),
     #[error("Coin or token overflow")]
     CoinOrTokenOverflow,
-    #[error("Tokens fees insuffience in transaction {0} in block {1}")]
-    InsuffienceTokenFees(Id<Transaction>, Id<Block>),
+    #[error("Insufficient token fees insuffience in transaction {0} in block {1}")]
+    InsufficientTokenFees(Id<Transaction>, Id<Block>),
     #[error("Insufficient tokens in inputs in transaction {0} in block {1}")]
     InsufficientTokensInInputs(Id<Transaction>, Id<Block>),
     #[error("Can't burn zero value in transaction {0} in block {1}")]

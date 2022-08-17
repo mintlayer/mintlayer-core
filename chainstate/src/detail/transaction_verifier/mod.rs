@@ -755,12 +755,12 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                 // check is fee enough for issuance
                 ensure!(
                     self.check_transferred_amounts_and_get_fee(tx).map_err(|_| {
-                        ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(
+                        ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
                             tx.get_id(),
                             block.get_id(),
                         ))
                     })? >= TOKEN_MIN_ISSUANCE_FEE,
-                    ConnectTransactionError::TokensError(TokensError::InsuffienceTokenFees(
+                    ConnectTransactionError::TokensError(TokensError::InsufficientTokenFees(
                         tx.get_id(),
                         block.get_id()
                     ),)
