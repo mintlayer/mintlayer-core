@@ -110,7 +110,7 @@ fn token_issue_test() {
         let mut test_framework = TestFramework::default();
         // let mut chainstate = setup_chainstate();
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -172,7 +172,7 @@ fn token_issue_test() {
 
         // Issue amount is too low
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: "USDT".as_bytes().to_vec(),
+            token_ticker: "SOME".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(0),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -188,7 +188,7 @@ fn token_issue_test() {
 
         // Too many decimals
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: "USDT".as_bytes().to_vec(),
+            token_ticker: "SOME".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(123456789),
             number_of_decimals: 123,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -204,7 +204,7 @@ fn token_issue_test() {
 
         // URI is too long
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: "https://some_site.meta".repeat(1024).as_bytes().to_vec(),
@@ -226,7 +226,7 @@ fn token_transfer_test() {
         let mut test_framework = TestFramework::default();
         // Issue a new token
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -302,7 +302,7 @@ fn couple_of_token_issuance_in_one_tx() {
         let test_block_info = TestBlockInfo::from_id(&test_framework.chainstate, parent_block_id);
         let receiver = anyonecanspend_address();
         let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -348,7 +348,7 @@ fn token_issuance_with_insufficient_fee() {
 
         let receiver = anyonecanspend_address();
         let value = OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -399,7 +399,7 @@ fn transfer_tokens() {
         // Process token without errors
         let mut test_framework = TestFramework::default();
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: TOTAL_TOKEN_VALUE,
             number_of_decimals: 1,
             metadata_uri: b"https://52292852472.meta".to_vec(),
@@ -447,7 +447,7 @@ fn test_burn_tokens() {
         let mut test_framework = TestFramework::default();
         // Issue a new token
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
-            token_ticker: b"USDC".to_vec(),
+            token_ticker: b"SOME".to_vec(),
             amount_to_issue: ISSUED_FUNDS,
             number_of_decimals: 1,
             metadata_uri: b"https://some_site.meta".to_vec(),
@@ -558,7 +558,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         let mut test_framework = TestFramework::default();
         let values = vec![
             OutputValue::Token(TokenData::TokenIssuanceV1 {
-                token_ticker: b"USDC".to_vec(),
+                token_ticker: b"SOME".to_vec(),
                 amount_to_issue: ISSUED_FUNDS,
                 number_of_decimals: 1,
                 metadata_uri: b"https://some_site.meta".to_vec(),
@@ -697,7 +697,7 @@ fn test_attempt_to_print_tokens() {
         let mut test_framework = TestFramework::default();
         let values = vec![
             OutputValue::Token(TokenData::TokenIssuanceV1 {
-                token_ticker: b"USDC".to_vec(),
+                token_ticker: b"SOME".to_vec(),
                 amount_to_issue: ISSUED_FUNDS,
                 number_of_decimals: 1,
                 metadata_uri: b"https://some_site.meta".to_vec(),
@@ -747,7 +747,7 @@ fn test_attempt_to_mix_input_tokens() {
         let mut test_framework = TestFramework::default();
         let values = vec![
             OutputValue::Token(TokenData::TokenIssuanceV1 {
-                token_ticker: b"USDC".to_vec(),
+                token_ticker: b"SOME".to_vec(),
                 amount_to_issue: ISSUED_FUNDS,
                 number_of_decimals: 1,
                 metadata_uri: b"https://some_site.meta".to_vec(),
@@ -770,7 +770,7 @@ fn test_attempt_to_mix_input_tokens() {
                 amount: ISSUED_FUNDS,
             }),
             OutputValue::Token(TokenData::TokenIssuanceV1 {
-                token_ticker: b"USDX".to_vec(),
+                token_ticker: b"SOME".to_vec(),
                 amount_to_issue: ISSUED_FUNDS,
                 number_of_decimals: 1,
                 metadata_uri: b"https://123.meta".to_vec(),
