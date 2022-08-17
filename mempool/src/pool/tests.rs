@@ -99,10 +99,11 @@ impl MempoolStore {
     }
 }
 
-impl<T, M> Mempool<ChainStateMock, T, M>
+impl<H, T, M> Mempool<ChainStateMock, H, T, M>
 where
-    T: GetTime,
-    M: GetMemoryUsage,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
     fn available_outpoints(&self, allow_double_spend: bool) -> BTreeSet<ValuedOutPoint> {
         let mut available = self
@@ -282,9 +283,9 @@ impl TxGenerator {
         }
     }
 
-    fn generate_tx<T: GetTime, M: GetMemoryUsage>(
+    fn generate_tx<H: Send, T: GetTime + Send, M: GetMemoryUsage + Send>(
         &mut self,
-        mempool: &Mempool<ChainStateMock, T, M>,
+        mempool: &Mempool<ChainStateMock, H, T, M>,
     ) -> anyhow::Result<Transaction> {
         self.coin_pool = mempool.available_outpoints(self.allow_double_spend);
         let fee = if let Some(tx_fee) = self.tx_fee {
@@ -490,10 +491,12 @@ fn tx_no_inputs() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn setup() -> Mempool<ChainStateMock, SystemClock, SystemUsageEstimator> {
-    logging::init_logging::<&str>(None);
+struct ChainstateInterfaceMock;
+fn setup() -> Mempool<ChainStateMock, ChainstateInterfaceMock, SystemClock, SystemUsageEstimator> {
+    let chainstate_interface = ChainstateInterfaceMock {};
     Mempool::new(
         ChainStateMock::new(),
+        chainstate_interface,
         SystemClock {},
         SystemUsageEstimator {},
     )
@@ -803,8 +806,8 @@ fn tx_replace_child() -> anyhow::Result<()> {
 // To test our validation of BIP125 Rule#4 (replacement transaction pays for its own bandwidth), we need to know the necessary relay fee before creating the transaction. The relay fee depends on the size of the transaction. The usual way to get the size of a transaction is to call `tx.encoded_size` but we cannot do this until we have created the transaction itself. To get around this cycle, we have precomputed the size of all transaction created by `tx_spend_input`. This value will be the same for all transactions created by this function.
 const TX_SPEND_INPUT_SIZE: usize = 213;
 
-fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
-    mempool: &Mempool<ChainStateMock, T, M>,
+fn tx_spend_input<T: GetTime + Send, H: Send, M: GetMemoryUsage + Send>(
+    mempool: &Mempool<ChainStateMock, H, T, M>,
     input: TxInput,
     fee: impl Into<Option<Amount>>,
     flags: u32,
@@ -817,8 +820,8 @@ fn tx_spend_input<T: GetTime, M: GetMemoryUsage>(
     tx_spend_several_inputs(mempool, &[input], fee, flags, locktime)
 }
 
-fn tx_spend_several_inputs<T: GetTime, M: GetMemoryUsage>(
-    mempool: &Mempool<ChainStateMock, T, M>,
+fn tx_spend_several_inputs<T: GetTime + Send, H: Send, M: GetMemoryUsage + Send>(
+    mempool: &Mempool<ChainStateMock, H, T, M>,
     inputs: &[TxInput],
     fee: Amount,
     flags: u32,
@@ -1015,8 +1018,8 @@ fn tx_mempool_entry() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn test_bip125_max_replacements<T: GetTime, M: GetMemoryUsage>(
-    mempool: &mut Mempool<ChainStateMock, T, M>,
+fn test_bip125_max_replacements<H: Send, T: GetTime + Send, M: GetMemoryUsage + Send>(
+    mempool: &mut Mempool<ChainStateMock, H, T, M>,
     num_potential_replacements: usize,
 ) -> anyhow::Result<()> {
     let tx = TxGenerator::new()
@@ -1252,6 +1255,7 @@ fn only_expired_entries_removed() -> anyhow::Result<()> {
 
     let mut mempool = Mempool::new(
         ChainStateMock::new(),
+        ChainstateInterfaceMock {},
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
@@ -1328,7 +1332,12 @@ fn rolling_fee() -> anyhow::Result<()> {
     mock_usage.expect_get_memory_usage().return_const(0usize);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = Mempool::new(chain_state, mock_clock.clone(), mock_usage);
+    let mut mempool = Mempool::new(
+        chain_state,
+        ChainstateInterfaceMock {},
+        mock_clock.clone(),
+        mock_usage,
+    );
 
     let num_inputs = 1;
     let num_outputs = 3;
@@ -1632,8 +1641,8 @@ fn descendant_score() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn check_txs_sorted_by_descendant_sore(
-    mempool: &Mempool<ChainStateMock, SystemClock, SystemUsageEstimator>,
+fn check_txs_sorted_by_descendant_sore<H: Send>(
+    mempool: &Mempool<ChainStateMock, H, SystemClock, SystemUsageEstimator>,
 ) {
     let txs_by_descendant_score =
         mempool.store.txs_by_descendant_score.values().flatten().collect::<Vec<_>>();
@@ -1657,6 +1666,7 @@ fn descendant_of_expired_entry() -> anyhow::Result<()> {
 
     let mut mempool = Mempool::new(
         ChainStateMock::new(),
+        ChainstateInterfaceMock {},
         mock_clock.clone(),
         SystemUsageEstimator {},
     );
@@ -1711,7 +1721,12 @@ fn mempool_full() -> anyhow::Result<()> {
         .return_const(MAX_MEMPOOL_SIZE_BYTES + 1);
 
     let chain_state = ChainStateMock::new();
-    let mut mempool = Mempool::new(chain_state, SystemClock, mock_usage);
+    let mut mempool = Mempool::new(
+        chain_state,
+        ChainstateInterfaceMock {},
+        SystemClock,
+        mock_usage,
+    );
 
     let tx = TxGenerator::new().generate_tx(&mempool)?;
     log::debug!("mempool_full: tx has is {}", tx.get_id().get());

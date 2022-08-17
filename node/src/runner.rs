@@ -18,6 +18,7 @@
 use std::{fs, path::Path, str::FromStr, sync::Arc, time::Duration};
 
 use anyhow::{anyhow, Context, Result};
+use mempool::DummyMempoolChainState;
 use paste::paste;
 
 use chainstate::rpc::ChainstateRpcServer;
@@ -28,6 +29,9 @@ use common::{
     primitives::{semver::SemVer, BlockDistance},
 };
 use logging::log;
+
+use mempool::rpc::MempoolRpcServer;
+
 use p2p::rpc::P2pRpcServer;
 
 use crate::{
@@ -64,6 +68,18 @@ pub async fn initialize(
         )?,
     );
 
+    // Mempool subsystem
+    // TODO use TimeGetter from chainstate
+    let mempool = manager.add_subsystem(
+        "mempool",
+        mempool::make_mempool(
+            DummyMempoolChainState {},
+            chainstate.clone(),
+            mempool::pool::SystemClock {},
+            mempool::pool::SystemUsageEstimator {},
+        )?,
+    );
+
     // P2P subsystem
     let p2p = manager.add_subsystem(
         "p2p",
@@ -81,6 +97,7 @@ pub async fn initialize(
         "rpc",
         rpc::Builder::new(node_config.rpc)
             .register(chainstate.clone().into_rpc())
+            .register(mempool.into_rpc())
             .register(NodeRpc::new(manager.make_shutdown_trigger()).into_rpc())
             .register(p2p.clone().into_rpc())
             .build()

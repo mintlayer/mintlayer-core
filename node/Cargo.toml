@@ -12,6 +12,7 @@ chainstate-storage = { path = "../chainstate-storage/" }
 common = { path = "../common/" }
 chainstate = { path = "../chainstate/" }
 logging = { path = "../logging/" }
+mempool = { path = "../mempool/" }
 p2p = { path = "../p2p/" }
 rpc = { path = "../rpc/" }
 subsystem = { path = "../subsystem/" }

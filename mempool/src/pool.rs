@@ -72,11 +72,12 @@ pub trait GetTime {
     fn get_time(&self) -> Time;
 }
 
-impl<C, T, M> TryGetFee for Mempool<C, T, M>
+impl<C, H, T, M> TryGetFee for Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
     // TODO this calculation is already done in ChainState, reuse it
     fn try_get_fee(&self, tx: &Transaction) -> Result<Amount, TxValidationError> {
@@ -112,7 +113,7 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait MempoolInterface<C, T, M> {
+pub trait MempoolInterface<C, T, M>: Send {
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
 
@@ -198,26 +199,40 @@ impl RollingFeeRate {
 }
 
 #[derive(Debug)]
-pub struct Mempool<C: ChainState, T: GetTime, M: GetMemoryUsage> {
+pub struct Mempool<
+    C: ChainState + 'static + Send,
+    H: 'static + Send,
+    T: GetTime + 'static + Send,
+    M: GetMemoryUsage + 'static + Send,
+> {
     store: MempoolStore,
     rolling_fee_rate: Cell<RollingFeeRate>,
     max_size: usize,
     max_tx_age: Duration,
     chain_state: C,
+    #[allow(unused)]
+    chainstate_handle: H,
     clock: T,
     memory_usage_estimator: M,
 }
 
-impl<C, T, M> Mempool<C, T, M>
+impl<C, H, T, M> Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    pub(crate) fn new(chain_state: C, clock: T, memory_usage_estimator: M) -> Self {
+    pub(crate) fn new(
+        chain_state: C,
+        chainstate_handle: H,
+        clock: T,
+        memory_usage_estimator: M,
+    ) -> Self {
         Self {
             store: MempoolStore::new(),
             chain_state,
+            chainstate_handle,
             max_size: MAX_MEMPOOL_SIZE_BYTES,
             max_tx_age: DEFAULT_MEMPOOL_EXPIRY,
             rolling_fee_rate: Cell::new(RollingFeeRate::new(clock.get_time())),
@@ -685,28 +700,30 @@ where
     }
 }
 
-trait SpendsUnconfirmed<C, T, M>
+trait SpendsUnconfirmed<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<C, T, M>) -> bool;
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool;
 }
 
-impl<C, T, M> SpendsUnconfirmed<C, T, M> for TxInput
+impl<C, H, T, M> SpendsUnconfirmed<C, H, T, M> for TxInput
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
-    fn spends_unconfirmed(&self, mempool: &Mempool<C, T, M>) -> bool {
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, H, T, M>) -> bool {
         mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
 
 #[derive(Clone)]
-struct SystemClock;
+pub struct SystemClock;
 impl GetTime for SystemClock {
     fn get_time(&self) -> Duration {
         common::primitives::time::get()
@@ -714,7 +731,7 @@ impl GetTime for SystemClock {
 }
 
 #[derive(Clone)]
-struct SystemUsageEstimator;
+pub struct SystemUsageEstimator;
 impl GetMemoryUsage for SystemUsageEstimator {
     fn get_memory_usage(&self) -> MemoryUsage {
         //TODO implement real usage estimation here
@@ -722,11 +739,12 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-impl<C, T, M> MempoolInterface<C, T, M> for Mempool<C, T, M>
+impl<C, H, T, M> MempoolInterface<C, T, M> for Mempool<C, H, T, M>
 where
-    C: ChainState,
-    T: GetTime,
-    M: GetMemoryUsage,
+    C: ChainState + Send,
+    H: Send,
+    T: GetTime + Send,
+    M: GetMemoryUsage + Send,
 {
     fn new_tip_set(&mut self, chain_state: C) {
         self.chain_state = chain_state;

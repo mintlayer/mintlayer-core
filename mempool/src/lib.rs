@@ -26,21 +26,48 @@ use crate::pool::Mempool;
 pub mod error;
 mod feerate;
 pub mod pool;
+pub mod rpc;
+
+impl<C: 'static, T: 'static, M: 'static> subsystem::Subsystem
+    for Box<dyn MempoolInterface<C, T, M>>
+{
+}
+
+#[allow(dead_code)]
+type MempoolHandle<C, T, M> = subsystem::Handle<Box<dyn MempoolInterface<C, T, M>>>;
 
 pub type Result<T> = core::result::Result<T, MempoolError>;
 
-pub fn make_mempool<C, T, M>(
+#[derive(Debug)]
+pub struct DummyMempoolChainState;
+
+impl ChainState for DummyMempoolChainState {
+    fn contains_outpoint(&self, _outpoint: &common::chain::OutPoint) -> bool {
+        false
+    }
+    fn get_outpoint_value(
+        &self,
+        _outpoint: &common::chain::OutPoint,
+    ) -> core::result::Result<common::primitives::Amount, anyhow::Error> {
+        Err(anyhow::Error::msg("this is a dummy placeholder chainstate"))
+    }
+}
+
+pub fn make_mempool<C, T, M, H>(
     chainstate: C,
+    chainstate_handle: H,
     time_getter: T,
     memory_usage_estimator: M,
 ) -> crate::Result<Box<dyn MempoolInterface<C, T, M>>>
 where
-    C: ChainState + 'static,
-    T: GetTime + 'static,
-    M: GetMemoryUsage + 'static,
+    C: ChainState + 'static + Send,
+    H: 'static + Send,
+    T: GetTime + 'static + Send,
+    M: GetMemoryUsage + 'static + Send,
 {
     Ok(Box::new(Mempool::new(
         chainstate,
+        chainstate_handle,
         time_getter,
         memory_usage_estimator,
     )))
