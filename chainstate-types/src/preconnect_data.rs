@@ -17,12 +17,15 @@ use serialization::{Decode, Encode};
 
 use crate::pos_randomness::PoSRandomness;
 
+/// ConsensusExtraData contains any data that can be derived from consensus and has to be separately persisted
 #[derive(Debug, Encode, Decode, Clone)]
 pub enum ConsensusExtraData {
     None,
     PoS(PoSRandomness),
 }
 
+/// BlockPreconnectData is data that we can extract from a block before having to connect it (before it being part of mainchain)
+/// This can be important to avoid having to collect data during a specific block height; like for accumulated randomness, for example
 #[derive(Debug, Encode, Decode, Clone)]
 pub struct BlockPreconnectData {
     consensus_extra: ConsensusExtraData,
