@@ -72,7 +72,7 @@ pub trait GetTime {
     fn get_time(&self) -> Time;
 }
 
-impl<C, T, M> TryGetFee for MempoolImpl<C, T, M>
+impl<C, T, M> TryGetFee for Mempool<C, T, M>
 where
     C: ChainState,
     T: GetTime,
@@ -112,7 +112,7 @@ fn get_relay_fee(tx: &Transaction) -> Amount {
     Amount::from_atoms(u128::try_from(tx.encoded_size() * RELAY_FEE_PER_BYTE).expect("Overflow"))
 }
 
-pub trait Mempool<C, T, M> {
+pub trait MempoolInterface<C, T, M> {
     fn create(chain_state: C, clock: T, memory_usage_estimator: M) -> Self;
     fn add_transaction(&mut self, tx: Transaction) -> Result<(), Error>;
     fn get_all(&self) -> Vec<&Transaction>;
@@ -199,7 +199,7 @@ impl RollingFeeRate {
 }
 
 #[derive(Debug)]
-pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
+pub struct Mempool<C: ChainState, T: GetTime, M: GetMemoryUsage> {
     store: MempoolStore,
     rolling_fee_rate: Cell<RollingFeeRate>,
     max_size: usize,
@@ -209,7 +209,7 @@ pub struct MempoolImpl<C: ChainState, T: GetTime, M: GetMemoryUsage> {
     memory_usage_estimator: M,
 }
 
-impl<C, T, M> MempoolImpl<C, T, M>
+impl<C, T, M> Mempool<C, T, M>
 where
     C: ChainState,
     T: GetTime,
@@ -680,7 +680,7 @@ where
     T: GetTime,
     M: GetMemoryUsage,
 {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool;
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, T, M>) -> bool;
 }
 
 impl<C, T, M> SpendsUnconfirmed<C, T, M> for TxInput
@@ -689,7 +689,7 @@ where
     T: GetTime,
     M: GetMemoryUsage,
 {
-    fn spends_unconfirmed(&self, mempool: &MempoolImpl<C, T, M>) -> bool {
+    fn spends_unconfirmed(&self, mempool: &Mempool<C, T, M>) -> bool {
         mempool.contains_transaction(self.outpoint().tx_id().get_tx_id().expect("Not coinbase"))
     }
 }
@@ -711,7 +711,7 @@ impl GetMemoryUsage for SystemUsageEstimator {
     }
 }
 
-impl<C, T, M> Mempool<C, T, M> for MempoolImpl<C, T, M>
+impl<C, T, M> MempoolInterface<C, T, M> for Mempool<C, T, M>
 where
     C: ChainState,
     T: GetTime,
