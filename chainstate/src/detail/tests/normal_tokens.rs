@@ -256,10 +256,7 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
 
@@ -271,10 +268,7 @@ fn token_transfer_test() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
 
@@ -477,10 +471,7 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
 
@@ -528,10 +519,7 @@ fn test_burn_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
     })
@@ -604,10 +592,7 @@ fn test_reorg_and_try_to_double_spend_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
 
@@ -730,10 +715,7 @@ fn test_attempt_to_print_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
     });
@@ -796,10 +778,7 @@ fn test_attempt_to_mix_input_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
 
@@ -811,10 +790,7 @@ fn test_attempt_to_mix_input_tokens() {
         assert!(matches!(
             process_token(&mut test_framework, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
-                ConnectTransactionError::TokensError(TokensError::InsuffienceTokenValueInInputs(
-                    _,
-                    _
-                ))
+                ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))
         ));
     })

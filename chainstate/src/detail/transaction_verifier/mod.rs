@@ -592,7 +592,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         // Check amount
         ensure!(
             origin_amount >= *amount_to_burn,
-            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), *block_id)
+            TokensError::InsufficientTokensInInputs(tx.get_id(), *block_id)
         );
 
         // If we burn a piece of the token, we have to check output with the rest tokens
@@ -628,12 +628,12 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
         // Check amounts
         ensure!(
             input_amount >= *token_amount,
-            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
+            TokensError::InsufficientTokensInInputs(tx.get_id(), block_id,)
         );
 
         ensure!(
             input_amount >= *output_amount,
-            TokensError::InsuffienceTokenValueInInputs(tx.get_id(), block_id,)
+            TokensError::InsufficientTokensInInputs(tx.get_id(), block_id,)
         );
 
         Ok(())
