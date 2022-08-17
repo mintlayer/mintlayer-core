@@ -87,12 +87,13 @@ impl SignedAmount {
             return None;
         }
 
+        #[allow(clippy::if_same_then_else)]
         if amount_str.matches('.').count() > 1 {
             // only 1 decimal point allowed
             None
         } else if amount_str.matches('-').count() > 1 {
             None
-        } else if amount_str.contains('-') && amount_str.chars().next() != Some('-') {
+        } else if amount_str.contains('-') && !amount_str.starts_with('-') {
             None
         } else if amount_str.matches('.').count() == 0 {
             // if there is no decimal point, then just add N zeros to the right and we're done
