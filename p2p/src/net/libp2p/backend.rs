@@ -16,17 +16,6 @@
 
 //! Libp2p backend service
 
-use crate::{
-    error::{P2pError, PeerError},
-    net::{
-        self,
-        libp2p::{
-            behaviour,
-            types::{self, ControlEvent, Libp2pBehaviourEvent},
-        },
-    },
-};
-use behaviour::sync_codec::message_types::{SyncRequest, SyncResponse};
 use futures::StreamExt;
 use libp2p::{
     gossipsub::{IdentTopic, MessageAcceptance, MessageId},
@@ -34,8 +23,24 @@ use libp2p::{
     swarm::{Swarm, SwarmEvent},
     Multiaddr, PeerId,
 };
-use logging::log;
+use tap::TapFallible;
 use tokio::sync::{mpsc, oneshot};
+
+use logging::log;
+
+use crate::{
+    error::{P2pError, PeerError},
+    net::{
+        self,
+        libp2p::{
+            behaviour::{
+                self,
+                sync_codec::message_types::{SyncRequest, SyncResponse},
+            },
+            types::{self, ControlEvent, Libp2pBehaviourEvent},
+        },
+    },
+};
 
 pub struct Libp2pBackend {
     /// Created libp2p swarm object
@@ -101,9 +106,8 @@ impl Libp2pBackend {
                     SwarmEvent::Behaviour(Libp2pBehaviourEvent::Control(
                         ControlEvent::CloseConnection { peer_id })
                     ) => {
-                        if let Err(e) =  self.swarm.disconnect_peer_id(peer_id) {
-                            log::error!("Failed to disconnect peer {peer_id}: {e:?}");
-                        }
+                        let _ = self.swarm.disconnect_peer_id(peer_id)
+                            .tap_err(|e| log::error!("Failed to disconnect peer {peer_id}: {e:?}"));
                     }
                     _ => {
                         log::debug!("unhandled event {:?}", event);
