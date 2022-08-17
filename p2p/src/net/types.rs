@@ -123,15 +123,6 @@ pub enum ConnectivityEvent<T: NetworkingService> {
         peers: Vec<AddrInfo<T>>,
     },
 
-    /// Error occurred with peer
-    Error {
-        /// Unique ID of the peer
-        peer_id: T::PeerId,
-
-        /// Error that occurred
-        error: error::P2pError,
-    },
-
     /// Protocol violation
     Misbehaved {
         /// Unique ID of the peer
