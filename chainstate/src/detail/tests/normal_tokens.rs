@@ -154,7 +154,7 @@ fn token_issue_test() {
             ))
         ));
 
-        // Ticker contain not alpha-numeric byte
+        // Ticker contain non alpha-numeric byte
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: "💖".as_bytes().to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
