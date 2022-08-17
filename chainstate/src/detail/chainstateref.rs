@@ -482,20 +482,15 @@ impl<'a, S: BlockchainStorageRead, O: OrphanBlocks> ChainstateRef<'a, S, O> {
     }
 
     fn check_duplicate_txs(&self, block: &Block) -> Result<(), CheckBlockTransactionsError> {
-        // check duplicate transactions
         let mut txs_ids = BTreeSet::new();
         for tx in block.transactions() {
             let tx_id = tx.get_id();
-            let already_in_tx_id = txs_ids.get(&tx_id);
-            match already_in_tx_id {
-                Some(_) => {
-                    return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
-                        tx_id,
-                        block.get_id(),
-                    ))
-                }
-                None => txs_ids.insert(tx_id),
-            };
+            if !txs_ids.insert(tx_id) {
+                return Err(CheckBlockTransactionsError::DuplicatedTransactionInBlock(
+                    tx_id,
+                    block.get_id(),
+                ));
+            }
         }
         Ok(())
     }
