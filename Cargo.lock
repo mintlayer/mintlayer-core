@@ -2639,6 +2639,7 @@ dependencies = [
  "serialization",
  "sscanf",
  "subsystem",
+ "tap",
  "thiserror",
  "tokio",
  "tokio-util",
