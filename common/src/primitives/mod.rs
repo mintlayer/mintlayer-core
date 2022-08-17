@@ -22,6 +22,7 @@ pub mod height;
 pub mod id;
 pub mod merkle;
 pub mod semver;
+pub mod signed_amount;
 pub mod time;
 pub mod version_tag;
 
