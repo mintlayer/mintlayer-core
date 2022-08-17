@@ -33,4 +33,5 @@ mod error;
 mod gen_block_index;
 mod height_skip;
 mod locator;
+pub mod postconnect_data;
 mod preconnect_data;
