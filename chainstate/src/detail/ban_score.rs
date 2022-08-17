@@ -140,6 +140,7 @@ impl BanScore for TokensError {
             TokensError::TransferZeroTokens(_, _) => 100,
             TokensError::TokensNotRegistered(_) => 100,
             TokensError::TokenIdCantBeCalculated => 100,
+            TokensError::AttemptToTransferBurnedTokens => 100,
         }
     }
 }

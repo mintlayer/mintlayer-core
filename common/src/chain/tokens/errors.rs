@@ -54,4 +54,6 @@ pub enum TokensError {
     TokensNotRegistered(TokenId),
     #[error("Tokens ID can't be calculated")]
     TokenIdCantBeCalculated,
+    #[error("Burned tokens cannot be transferred")]
+    AttemptToTransferBurnedTokens,
 }

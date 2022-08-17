@@ -48,6 +48,28 @@ fn process_token(
     process_token_ex(test_framework, vec![], parent_block, values).map(|(_block_id, result)| result)
 }
 
+fn is_token_burned(output_value: &OutputValue) -> bool {
+    match output_value {
+        OutputValue::Coin(_) => false,
+        OutputValue::Token(token_data) => match token_data {
+            TokenData::TokenTransferV1 {
+                token_id: _,
+                amount: _,
+            } => false,
+            TokenData::TokenIssuanceV1 {
+                token_ticker: _,
+                amount_to_issue: _,
+                number_of_decimals: _,
+                metadata_uri: _,
+            } => false,
+            TokenData::TokenBurnV1 {
+                token_id: _,
+                amount_to_burn: _,
+            } => true,
+        },
+    }
+}
+
 fn process_token_ex(
     test_framework: &mut TestFramework,
     additional_inputs: Vec<TxInput>,
@@ -69,12 +91,13 @@ fn process_token_ex(
             outputs
                 .iter()
                 .enumerate()
-                .map(|(output_index, _output)| {
-                    TxInput::new(
+                .filter_map(|(output_index, output)| {
+                    // We mustn't add burned inputs
+                    (!is_token_burned(output.value())).then_some(TxInput::new(
                         outpoint_source_id.clone(),
                         output_index.try_into().unwrap(),
                         InputWitness::NoSignature(None),
-                    )
+                    ))
                 })
                 .collect::<Vec<TxInput>>()
         })
@@ -507,17 +530,19 @@ fn test_burn_tokens() {
             token_id,
             amount_to_burn: HALF_ISSUED_FUNDS,
         })];
-        let _ = process_token(&mut test_framework, ParentBlock::BestBlock, values)
+        let block_index = process_token(&mut test_framework, ParentBlock::BestBlock, values)
             .unwrap()
             .unwrap();
 
         // Try to transfer burned tokens
+        let outpoint_source_id = OutPointSourceId::from(*block_index.block_id());
+        let inputs = vec![TxInput::new(outpoint_source_id, 0, InputWitness::NoSignature(None))];
         let values = vec![OutputValue::Token(TokenData::TokenTransferV1 {
             token_id,
             amount: Amount::from_atoms(123456789),
         })];
         assert!(matches!(
-            process_token(&mut test_framework, ParentBlock::BestBlock, values),
+            process_token_ex(&mut test_framework, inputs, ParentBlock::BestBlock, values),
             Err(BlockError::StateUpdateFailed(
                 ConnectTransactionError::TokensError(TokensError::InsufficientTokensInInputs(_, _))
             ))

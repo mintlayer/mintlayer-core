@@ -138,10 +138,10 @@ pub fn check_tokens_data(
 pub fn filter_transferred_and_issued_amounts(
     prev_tx: &Transaction,
     output: &common::chain::TxOutput,
-) -> Option<(TokenId, Amount)> {
+) -> Result<Option<(TokenId, Amount)>, TokensError> {
     match output.value() {
-        OutputValue::Coin(_) => None,
-        OutputValue::Token(token) => Some(match token {
+        OutputValue::Coin(_) => Ok(None),
+        OutputValue::Token(token) => Ok(Some(match token {
             TokenData::TokenTransferV1 { token_id, amount } => (*token_id, *amount),
             TokenData::TokenIssuanceV1 {
                 token_ticker: _,
@@ -149,7 +149,7 @@ pub fn filter_transferred_and_issued_amounts(
                 number_of_decimals: _,
                 metadata_uri: _,
             } => {
-                let token_id = token_id(prev_tx)?;
+                let token_id = token_id(prev_tx).ok_or(TokensError::TokenIdCantBeCalculated)?;
                 (token_id, *amount_to_issue)
             }
             TokenData::TokenBurnV1 {
@@ -157,9 +157,9 @@ pub fn filter_transferred_and_issued_amounts(
                 amount_to_burn: _,
             } => {
                 /* Token have burned and can't be transferred */
-                return None;
+                return Err(TokensError::AttemptToTransferBurnedTokens);
             }
-        }),
+        })),
     }
 }
 

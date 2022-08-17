@@ -286,7 +286,7 @@ impl<'a, S: BlockchainStorageRead + 'a> TransactionVerifier<'a, S> {
                         },
                     )?;
 
-                    match filter_transferred_and_issued_amounts(&tx, output) {
+                    match filter_transferred_and_issued_amounts(&tx, output)? {
                         Some((ref input_token_id, amount)) => {
                             if token_id == input_token_id {
                                 total_tokens = (total_tokens + amount)
