@@ -138,7 +138,7 @@ fn token_issue_test() {
             ))
         ));
 
-        // Doesn't exist ticker
+        // Ticker doesn't exist
         let values = vec![OutputValue::Token(TokenData::TokenIssuanceV1 {
             token_ticker: b"".to_vec(),
             amount_to_issue: Amount::from_atoms(52292852472),
