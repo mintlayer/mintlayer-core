@@ -24,117 +24,85 @@ pub enum PoolOperation {
 }
 
 impl PoolOperation {
-    fn mark_pool_as_decommissioned(&mut self) {
-        let replacer_func = |self_| match self_ {
-            PoolOperation::AddStake(_amount) => PoolOperation::DecommissionPool,
-            PoolOperation::RemoveStake(_amount) => PoolOperation::DecommissionPool,
-            PoolOperation::DecommissionPool => unreachable!(),
-        };
-        replace_with::replace_with_or_abort(self, replacer_func);
-    }
-
-    fn decommission_pool(&mut self) -> Result<(), Error> {
+    fn decommission_pool(self) -> Result<Self, Error> {
         match self {
             PoolOperation::AddStake(_) | PoolOperation::RemoveStake(_) => {
-                self.mark_pool_as_decommissioned()
+                return Ok(Self::DecommissionPool)
             }
             PoolOperation::DecommissionPool => return Err(Error::PoolAlreadyDecommissioned),
         };
-        Ok(())
     }
 
-    fn flip_add_to_remove(&mut self, new_amount: Amount) -> Result<(), Error> {
-        let replacer_func = |self_| match self_ {
-            PoolOperation::AddStake(_amount) => PoolOperation::RemoveStake(new_amount),
-            PoolOperation::RemoveStake(_amount) => unreachable!(),
-            PoolOperation::DecommissionPool => unreachable!(),
-        };
-        replace_with::replace_with_or_abort(self, replacer_func);
-        Ok(())
-    }
-
-    fn flip_remove_to_add(&mut self, new_amount: Amount) -> Result<(), Error> {
-        let replacer_func = |self_| match self_ {
-            PoolOperation::AddStake(_amount) => unreachable!(),
-            PoolOperation::RemoveStake(_amount) => PoolOperation::AddStake(new_amount),
-            PoolOperation::DecommissionPool => unreachable!(),
-        };
-        replace_with::replace_with_or_abort(self, replacer_func);
-        Ok(())
-    }
-
-    fn add_stake(&mut self, amount_to_add: Amount) -> Result<(), Error> {
+    fn add_stake(self, amount_to_add: Amount) -> Result<Self, Error> {
         match self {
             PoolOperation::AddStake(current_amount) => {
-                let new_amount = (*current_amount + amount_to_add).ok_or(
-                    Error::PoolStakeAdditionArithmeticError(*current_amount, amount_to_add),
+                let new_amount = (current_amount + amount_to_add).ok_or(
+                    Error::PoolStakeAdditionArithmeticError(current_amount, amount_to_add),
                 )?;
-                *current_amount = new_amount;
+                return Ok(Self::AddStake(new_amount));
             }
             PoolOperation::RemoveStake(current_amount_to_remove) => {
-                if amount_to_add > *current_amount_to_remove {
-                    let new_amount = (amount_to_add - *current_amount_to_remove).ok_or(
+                if amount_to_add > current_amount_to_remove {
+                    let new_amount = (amount_to_add - current_amount_to_remove).ok_or(
                         Error::PoolStakeAdditionArithmeticError(
-                            *current_amount_to_remove,
+                            current_amount_to_remove,
                             amount_to_add,
                         ),
                     )?;
-                    self.flip_remove_to_add(new_amount)?;
+                    return Ok(Self::AddStake(new_amount));
                 } else {
-                    let new_amount = (*current_amount_to_remove - amount_to_add).ok_or(
+                    let new_amount = (current_amount_to_remove - amount_to_add).ok_or(
                         Error::PoolStakeAdditionArithmeticError(
                             amount_to_add,
-                            *current_amount_to_remove,
+                            current_amount_to_remove,
                         ),
                     )?;
-                    *current_amount_to_remove = new_amount;
+                    return Ok(Self::RemoveStake(new_amount));
                 }
             }
             PoolOperation::DecommissionPool => {
                 return Err(Error::AttemptedToAddBalanceToDecommissionedPool)
             }
         }
-        Ok(())
     }
 
-    fn remove_stake(&mut self, amount_to_remove: Amount) -> Result<(), Error> {
+    fn remove_stake(self, amount_to_remove: Amount) -> Result<Self, Error> {
         match self {
             PoolOperation::AddStake(current_amount_to_add) => {
-                if amount_to_remove > *current_amount_to_add {
-                    let new_amount = (amount_to_remove - *current_amount_to_add).ok_or(
+                if amount_to_remove > current_amount_to_add {
+                    let new_amount = (amount_to_remove - current_amount_to_add).ok_or(
                         Error::PoolStakeAdditionArithmeticError(
-                            *current_amount_to_add,
+                            current_amount_to_add,
                             amount_to_remove,
                         ),
                     )?;
-                    self.flip_add_to_remove(new_amount)?;
+                    return Ok(Self::RemoveStake(new_amount));
                 } else {
-                    let new_amount = (*current_amount_to_add - amount_to_remove).ok_or(
+                    let new_amount = (current_amount_to_add - amount_to_remove).ok_or(
                         Error::PoolStakeAdditionArithmeticError(
                             amount_to_remove,
-                            *current_amount_to_add,
+                            current_amount_to_add,
                         ),
                     )?;
-                    *current_amount_to_add = new_amount;
+                    return Ok(Self::AddStake(new_amount));
                 }
             }
             PoolOperation::RemoveStake(current_amount_to_remove) => {
-                let new_amount = (*current_amount_to_remove + amount_to_remove).ok_or(
+                let new_amount = (current_amount_to_remove + amount_to_remove).ok_or(
                     Error::PoolStakeNegativeAdditionArithmeticError(
-                        *current_amount_to_remove,
+                        current_amount_to_remove,
                         amount_to_remove,
                     ),
                 )?;
-                *current_amount_to_remove = new_amount;
+                return Ok(Self::RemoveStake(new_amount));
             }
             PoolOperation::DecommissionPool => {
                 return Err(Error::AttemptedToAddBalanceToDecommissionedPool)
             }
         }
-        Ok(())
     }
 
-    pub fn incorporate(&mut self, other: PoolOperation) -> Result<(), Error> {
+    pub fn incorporate(self, other: PoolOperation) -> Result<Self, Error> {
         match other {
             PoolOperation::AddStake(amount) => self.add_stake(amount),
             PoolOperation::RemoveStake(amount) => self.remove_stake(amount),

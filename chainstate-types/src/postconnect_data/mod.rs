@@ -38,14 +38,13 @@ impl BlockPostconnectDataDelta {
         staker_id: H256,
         pool_operation: PoolOperation,
     ) -> Result<(), error::Error> {
-        match self.ops.entry(staker_id) {
-            std::collections::btree_map::Entry::Vacant(op) => {
-                op.insert(pool_operation);
-            }
-            std::collections::btree_map::Entry::Occupied(op) => {
-                op.into_mut().incorporate(pool_operation)?;
-            }
+        let entry = self.ops.remove(&staker_id);
+        let new_entry = match entry {
+            Some(op) => op.incorporate(pool_operation)?,
+            None => pool_operation,
         };
+        self.ops.insert(staker_id, new_entry);
+
         Ok(())
     }
 }
