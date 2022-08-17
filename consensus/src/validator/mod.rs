@@ -25,7 +25,7 @@ mod transaction_index_handle;
 use chainstate_types::{pos_randomness::PoSRandomness, BlockIndex, ConsensusExtraData};
 use common::{
     chain::{
-        block::{BlockHeader, ConsensusData},
+        block::{consensus_data::PoSData, BlockHeader, ConsensusData},
         config::ChainConfig,
         PoWStatus, RequiredConsensus,
     },
@@ -68,6 +68,28 @@ pub fn validate_consensus<H: BlockIndexHandle, T: TransactionIndexHandle>(
     )
 }
 
+fn compute_current_randomness<H: BlockIndexHandle, T: TransactionIndexHandle>(
+    chain_config: &ChainConfig,
+    pos_data: &PoSData,
+    prev_block_index: &BlockIndex,
+    header: &BlockHeader,
+    block_index_handle: &H,
+    tx_index_retriever: &T,
+) -> Result<PoSRandomness, ExtraConsensusDataError> {
+    let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
+    let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
+        .map_err(|_| ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id()))?;
+    let current_randomness = PoSRandomness::from_new_block(
+        chain_config,
+        prev_randomness,
+        prev_block_index,
+        header,
+        &kernel_output,
+        pos_data,
+    )?;
+    Ok(current_randomness)
+}
+
 pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHandle>(
     chain_config: &ChainConfig,
     prev_block_index: &BlockIndex,
@@ -79,18 +101,13 @@ pub fn compute_extra_consensus_data<H: BlockIndexHandle, T: TransactionIndexHand
         ConsensusData::None => Ok(ConsensusExtraData::None),
         ConsensusData::PoW(_) => Ok(ConsensusExtraData::None),
         ConsensusData::PoS(pos_data) => {
-            let prev_randomness = prev_block_index.preconnect_data().pos_randomness();
-            let kernel_output = get_kernel_output(pos_data, block_index_handle, tx_index_retriever)
-                .map_err(|_| {
-                    ExtraConsensusDataError::PoSKernelOutputRetrievalFailed(header.get_id())
-                })?;
-            let current_randomness = PoSRandomness::from_new_block(
+            let current_randomness = compute_current_randomness(
                 chain_config,
-                prev_randomness,
+                pos_data,
                 prev_block_index,
                 header,
-                &kernel_output,
-                pos_data,
+                block_index_handle,
+                tx_index_retriever,
             )?;
             let data = ConsensusExtraData::PoS(current_randomness);
             Ok(data)
