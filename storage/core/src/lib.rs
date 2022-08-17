@@ -13,16 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Core backend-agnostic storage abstractions
+//! Definitions used to implement storage backends
 
+pub mod adaptor;
+pub mod backend;
 pub mod error;
-pub mod schema;
-pub mod traits;
-pub mod transaction;
+pub mod info;
 
-// Reexport items from the temporary basic implementation.
+// Re-export some commonly used items
+pub use backend::Backend;
 pub use error::Error;
-pub use transaction::{abort, commit};
+pub use info::{DbDesc, DbIndex};
 
 pub type Data = Vec<u8>;
 pub type Result<T> = std::result::Result<T, Error>;

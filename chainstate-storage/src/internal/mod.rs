@@ -25,10 +25,11 @@ use common::{
     primitives::{BlockHeight, Id, Idable},
 };
 use serialization::{Codec, Decode, DecodeAll, Encode};
-use storage::traits::{self, MapMut, MapRef, TransactionRo, TransactionRw};
 use utxo::{BlockUndo, Utxo, UtxosStorageRead, UtxosStorageWrite};
 
-use crate::{BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, Transactional};
+use crate::{
+    BlockchainStorage, BlockchainStorageRead, BlockchainStorageWrite, TransactionRw, Transactional,
+};
 
 mod well_known {
     use super::{Codec, GenBlock, Id};
@@ -58,7 +59,7 @@ mod well_known {
 
 storage::decl_schema! {
     // Database schema for blockchain storage
-    pub(crate) Schema {
+    Schema {
         // Storage for individual values.
         pub DBValue: Single,
         // Storage for blocks.
@@ -72,41 +73,52 @@ storage::decl_schema! {
         // Store for Utxo Entries
         pub DBUtxo: Single,
         // Store for BlockUndo
-        pub DBBlockUndo: Single
+        pub DBBlockUndo: Single,
     }
 }
-
-type RoTxImpl<'tx, B> = <B as traits::Transactional<'tx, Schema>>::TransactionRo;
-type RwTxImpl<'tx, B> = <B as traits::Transactional<'tx, Schema>>::TransactionRw;
 
 /// Store for blockchain data, parametrized over the backend B
-#[derive(Clone)]
-pub struct Store<B>(B);
+pub struct Store<B: storage::Backend>(storage::Storage<B, Schema>);
 
-/// Store for blockchain data
-impl<B: Default + for<'tx> traits::Transactional<'tx, Schema>> Store<B> {
-    /// New empty storage
-    pub fn new_empty() -> crate::Result<Self> {
-        let mut store = Self(B::default());
-        store.set_storage_version(1)?;
-        Ok(store)
+impl<B: storage::Backend> Store<B> {
+    /// Create a new chainstate storage
+    pub fn new(backend: B) -> crate::Result<Self> {
+        let mut storage = Self(storage::Storage::new(backend).map_err(crate::Error::from)?);
+        storage.set_storage_version(1)?;
+        Ok(storage)
     }
 }
 
-impl<'tx, B: traits::Transactional<'tx, Schema>> crate::Transactional<'tx> for Store<B> {
-    type TransactionRo = StoreTx<RoTxImpl<'tx, B>>;
-    type TransactionRw = StoreTx<RwTxImpl<'tx, B>>;
+impl<B: Default + storage::Backend> Store<B> {
+    /// Create a default storage (mostly for testing, may want to remove this later)
+    pub fn new_empty() -> crate::Result<Self> {
+        Self::new(B::default())
+    }
+}
+
+impl<B: storage::Backend> Clone for Store<B>
+where
+    B::Impl: Clone,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl<'tx, B: storage::Backend + 'tx> Transactional<'tx> for Store<B> {
+    type TransactionRo = StoreTxRo<'tx, B>;
+    type TransactionRw = StoreTxRw<'tx, B>;
 
     fn transaction_ro<'st: 'tx>(&'st self) -> Self::TransactionRo {
-        StoreTx(traits::Transactional::transaction_ro(&self.0))
+        StoreTxRo(self.0.transaction_ro())
     }
 
     fn transaction_rw<'st: 'tx>(&'st self) -> Self::TransactionRw {
-        StoreTx(traits::Transactional::transaction_rw(&self.0))
+        StoreTxRw(self.0.transaction_rw())
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema> + Send> BlockchainStorage for Store<B> {}
+impl<B: storage::Backend + 'static> BlockchainStorage for Store<B> {}
 
 macro_rules! delegate_to_transaction {
     ($(fn $f:ident $args:tt -> $ret:ty;)*) => {
@@ -119,7 +131,7 @@ macro_rules! delegate_to_transaction {
     };
     (@SELF $done:tt (&mut self $(, $($rest:tt)*)?)) => {
         delegate_to_transaction!(
-            @BODY transaction_rw (storage::commit) mut $done ($($($rest)*)?)
+            @BODY transaction_rw (StoreTxRw::commit) mut $done ($($($rest)*)?)
         );
     };
     (@BODY $txfunc:ident ($commit:path) $($mut:ident)?
@@ -127,13 +139,14 @@ macro_rules! delegate_to_transaction {
         ($($arg:ident: $aty:ty),* $(,)?)
     ) => {
         fn $f(&$($mut)? self $(, $arg: $aty)*) -> $ret {
-            #[allow(clippy::needless_question_mark)]
-            self.$txfunc().run(|tx| $commit(tx.$f($($arg),*)?))
+            let $($mut)? tx = self.$txfunc();
+            let val = tx.$f($($arg),*)?;
+            $commit(tx).map(|_| val)
         }
     };
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for Store<B> {
+impl<B: storage::Backend> BlockchainStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_storage_version(&self) -> crate::Result<u32>;
         fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -158,7 +171,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageRead for S
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageRead for Store<B> {
+impl<B: storage::Backend> UtxosStorageRead for Store<B> {
     delegate_to_transaction! {
         fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>>;
         fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>>;
@@ -166,7 +179,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageRead for Store<
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for Store<B> {
+impl<B: storage::Backend> BlockchainStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_storage_version(&mut self, version: u32) -> crate::Result<()>;
         fn set_best_block_id(&mut self, id: &Id<GenBlock>) -> crate::Result<()>;
@@ -193,7 +206,7 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> BlockchainStorageWrite for 
     }
 }
 
-impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageWrite for Store<B> {
+impl<B: storage::Backend> UtxosStorageWrite for Store<B> {
     delegate_to_transaction! {
         fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()>;
         fn del_utxo(&mut self, outpoint: &OutPoint) -> crate::Result<()>;
@@ -203,88 +216,125 @@ impl<B: for<'tx> traits::Transactional<'tx, Schema>> UtxosStorageWrite for Store
     }
 }
 
-/// A wrapper around a storage transaction type
-pub struct StoreTx<T>(T);
+/// Read-only chainstate storage transaction
+pub struct StoreTxRo<'st, B: storage::Backend>(storage::TransactionRo<'st, B, Schema>);
 
-/// Blockchain data storage transaction
-impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> BlockchainStorageRead for StoreTx<Tx> {
-    fn get_storage_version(&self) -> crate::Result<u32> {
-        self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
-    }
+/// Read-write chainstate storage transaction
+pub struct StoreTxRw<'st, B: storage::Backend>(storage::TransactionRw<'st, B, Schema>);
 
-    fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
-        self.read::<DBBlockIndex, _, _>(id.as_ref())
-    }
+macro_rules! impl_read_ops {
+    ($TxType:ident) => {
+        /// Blockchain data storage transaction
+        impl<'st, B: storage::Backend> BlockchainStorageRead for $TxType<'st, B> {
+            fn get_storage_version(&self) -> crate::Result<u32> {
+                self.read_value::<well_known::StoreVersion>().map(|v| v.unwrap_or_default())
+            }
 
-    /// Get the hash of the best block
-    fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
-        self.read_value::<well_known::BestBlockId>()
-    }
+            fn get_block_index(&self, id: &Id<Block>) -> crate::Result<Option<BlockIndex>> {
+                self.read::<DBBlockIndex, _, _>(id.as_ref())
+            }
 
-    fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
-        self.read::<DBBlock, _, _>(id.as_ref())
-    }
+            /// Get the hash of the best block
+            fn get_best_block_id(&self) -> crate::Result<Option<Id<GenBlock>>> {
+                self.read_value::<well_known::BestBlockId>()
+            }
 
-    fn get_block_reward(&self, block_index: &BlockIndex) -> crate::Result<Option<BlockReward>> {
-        match self.0.get::<DBBlock, _>().get(block_index.block_id().as_ref()) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let header_size = block_index.block_header().encoded_size();
-                let begin = header_size;
-                let encoded_block_reward_begin =
-                    block.get(begin..).expect("Block reward outside of block range");
-                let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
-                    .expect("Invalid block reward encoding in DB");
-                Ok(Some(block_reward))
+            fn get_block(&self, id: Id<Block>) -> crate::Result<Option<Block>> {
+                self.read::<DBBlock, _, _>(id.as_ref())
+            }
+
+            fn get_block_reward(
+                &self,
+                block_index: &BlockIndex,
+            ) -> crate::Result<Option<BlockReward>> {
+                match self.0.get::<DBBlock, _>().get(block_index.block_id().as_ref()) {
+                    Err(e) => Err(e.into()),
+                    Ok(None) => Ok(None),
+                    Ok(Some(block)) => {
+                        let header_size = block_index.block_header().encoded_size();
+                        let begin = header_size;
+                        let encoded_block_reward_begin =
+                            block.get(begin..).expect("Block reward outside of block range");
+                        let block_reward = BlockReward::decode(&mut &*encoded_block_reward_begin)
+                            .expect("Invalid block reward encoding in DB");
+                        Ok(Some(block_reward))
+                    }
+                }
+            }
+
+            fn get_mainchain_tx_index(
+                &self,
+                tx_id: &OutPointSourceId,
+            ) -> crate::Result<Option<TxMainChainIndex>> {
+                self.read::<DBTxIndex, _, _>(&tx_id.encode())
+            }
+
+            fn get_mainchain_tx_by_position(
+                &self,
+                tx_index: &TxMainChainPosition,
+            ) -> crate::Result<Option<Transaction>> {
+                let block_id = tx_index.block_id();
+                match self.0.get::<DBBlock, _>().get(block_id.as_ref()) {
+                    Err(e) => Err(e.into()),
+                    Ok(None) => Ok(None),
+                    Ok(Some(block)) => {
+                        let begin = tx_index.byte_offset_in_block() as usize;
+                        let encoded_tx =
+                            block.get(begin..).expect("Transaction outside of block range");
+                        let tx = Transaction::decode(&mut &*encoded_tx)
+                            .expect("Invalid tx encoding in DB");
+                        Ok(Some(tx))
+                    }
+                }
+            }
+
+            fn get_block_id_by_height(
+                &self,
+                height: &BlockHeight,
+            ) -> crate::Result<Option<Id<GenBlock>>> {
+                self.read::<DBBlockByHeight, _, _>(&height.encode())
             }
         }
-    }
 
-    fn get_mainchain_tx_index(
-        &self,
-        tx_id: &OutPointSourceId,
-    ) -> crate::Result<Option<TxMainChainIndex>> {
-        self.read::<DBTxIndex, _, _>(&tx_id.encode())
-    }
+        impl<'st, B: storage::Backend> UtxosStorageRead for $TxType<'st, B> {
+            fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
+                self.read::<DBUtxo, _, _>(&outpoint.encode())
+            }
 
-    fn get_mainchain_tx_by_position(
-        &self,
-        tx_index: &TxMainChainPosition,
-    ) -> crate::Result<Option<Transaction>> {
-        let block_id = tx_index.block_id();
-        match self.0.get::<DBBlock, _>().get(block_id.as_ref()) {
-            Err(e) => Err(e.into()),
-            Ok(None) => Ok(None),
-            Ok(Some(block)) => {
-                let begin = tx_index.byte_offset_in_block() as usize;
-                let encoded_tx = block.get(begin..).expect("Transaction outside of block range");
-                let tx = Transaction::decode(&mut &*encoded_tx).expect("Invalid tx encoding in DB");
-                Ok(Some(tx))
+            fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>> {
+                self.read_value::<well_known::UtxosBestBlockId>()
+            }
+
+            fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
+                self.read::<DBBlockUndo, _, _>(id.as_ref())
             }
         }
-    }
 
-    fn get_block_id_by_height(&self, height: &BlockHeight) -> crate::Result<Option<Id<GenBlock>>> {
-        self.read::<DBBlockByHeight, _, _>(&height.encode())
-    }
+        impl<'st, B: storage::Backend> $TxType<'st, B> {
+            // Read a value from the database and decode it
+            fn read<DBIdx, I, T>(&self, key: &[u8]) -> crate::Result<Option<T>>
+            where
+                DBIdx: storage::schema::DbMap<Kind = storage::schema::Single>,
+                Schema: storage::schema::HasDbMap<DBIdx, I>,
+                T: Decode,
+            {
+                let col = self.0.get::<DBIdx, I>();
+                let data = col.get(key).map_err(crate::Error::from)?;
+                Ok(data.map(|d| T::decode_all(&mut &*d).expect("Cannot decode a database value")))
+            }
+
+            // Read a value for a well-known entry
+            fn read_value<E: well_known::Entry>(&self) -> crate::Result<Option<E::Value>> {
+                self.read::<DBValue, _, _>(E::KEY)
+            }
+        }
+    };
 }
 
-impl<Tx: for<'a> traits::GetMapRef<'a, Schema>> UtxosStorageRead for StoreTx<Tx> {
-    fn get_utxo(&self, outpoint: &OutPoint) -> crate::Result<Option<Utxo>> {
-        self.read::<DBUtxo, _, _>(&outpoint.encode())
-    }
+impl_read_ops!(StoreTxRo);
+impl_read_ops!(StoreTxRw);
 
-    fn get_best_block_for_utxos(&self) -> crate::Result<Option<Id<GenBlock>>> {
-        self.read_value::<well_known::UtxosBestBlockId>()
-    }
-
-    fn get_undo_data(&self, id: Id<Block>) -> crate::Result<Option<BlockUndo>> {
-        self.read::<DBBlockUndo, _, _>(id.as_ref())
-    }
-}
-
-impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for StoreTx<Tx> {
+impl<'st, B: storage::Backend> BlockchainStorageWrite for StoreTxRw<'st, B> {
     fn set_storage_version(&mut self, version: u32) -> crate::Result<()> {
         self.write_value::<well_known::StoreVersion>(&version)
     }
@@ -330,7 +380,7 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> BlockchainStorageWrite for Store
     }
 }
 
-impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxosStorageWrite for StoreTx<Tx> {
+impl<'st, B: storage::Backend> UtxosStorageWrite for StoreTxRw<'st, B> {
     fn set_utxo(&mut self, outpoint: &OutPoint, entry: Utxo) -> crate::Result<()> {
         let key = outpoint.encode();
         self.write::<DBUtxo, _, _>(key, &entry)
@@ -354,59 +404,36 @@ impl<Tx: for<'a> traits::GetMapMut<'a, Schema>> UtxosStorageWrite for StoreTx<Tx
     }
 }
 
-impl<'a, Tx: traits::GetMapRef<'a, Schema>> StoreTx<Tx> {
-    // Read a value from the database and decode it
-    fn read<DBIdx, I, T>(&'a self, key: &[u8]) -> crate::Result<Option<T>>
-    where
-        DBIdx: storage::schema::DBIndex<Kind = storage::schema::Single>,
-        Schema: storage::schema::HasDBIndex<DBIdx, I>,
-        T: Decode,
-    {
-        let col = self.0.get::<DBIdx, I>();
-        let data = col.get(key).map_err(crate::Error::from)?;
-        Ok(data.map(|d| T::decode_all(&mut &*d).expect("Cannot decode a database value")))
-    }
-
-    // Read a value for a well-known entry
-    fn read_value<E: well_known::Entry>(&'a self) -> crate::Result<Option<E::Value>> {
-        self.read::<DBValue, _, _>(E::KEY)
-    }
-}
-
-impl<'a, Tx: traits::GetMapMut<'a, Schema>> StoreTx<Tx> {
+impl<'st, B: storage::Backend> StoreTxRw<'st, B> {
     // Encode a value and write it to the database
-    fn write<DBIdx, I, T>(&'a mut self, key: Vec<u8>, value: &T) -> crate::Result<()>
+    fn write<DbMap, I, T>(&mut self, key: Vec<u8>, value: &T) -> crate::Result<()>
     where
-        DBIdx: storage::schema::DBIndex<Kind = storage::schema::Single>,
-        Schema: storage::schema::HasDBIndex<DBIdx, I>,
+        DbMap: storage::schema::DbMap<Kind = storage::schema::Single>,
+        Schema: storage::schema::HasDbMap<DbMap, I>,
         T: Encode,
     {
-        self.0.get_mut::<DBIdx, I>().put(key, value.encode()).map_err(Into::into)
+        self.0.get_mut::<DbMap, I>().put(key, value.encode()).map_err(Into::into)
     }
 
     // Write a value for a well-known entry
-    fn write_value<E: well_known::Entry>(&'a mut self, val: &E::Value) -> crate::Result<()> {
+    fn write_value<E: well_known::Entry>(&mut self, val: &E::Value) -> crate::Result<()> {
         self.write::<DBValue, _, _>(E::KEY.to_vec(), val)
     }
 }
 
-impl<T: traits::TransactionRw<Error = storage::Error>> traits::TransactionRw for StoreTx<T> {
-    type Error = crate::Error;
+impl<'st, B: storage::Backend> crate::TransactionRo for StoreTxRo<'st, B> {
+    fn close(self) {
+        self.0.close()
+    }
+}
 
+impl<'st, B: storage::Backend> crate::TransactionRw for StoreTxRw<'st, B> {
     fn commit(self) -> crate::Result<()> {
         self.0.commit().map_err(Into::into)
     }
 
-    fn abort(self) -> crate::Result<()> {
-        self.0.abort().map_err(Into::into)
-    }
-}
-
-impl<T: traits::TransactionRo<Error = storage::Error>> traits::TransactionRo for StoreTx<T> {
-    type Error = crate::Error;
-
-    fn finalize(self) -> crate::Result<()> {
-        self.0.finalize().map_err(Into::into)
+    fn abort(self) {
+        self.0.abort()
     }
 }
 
