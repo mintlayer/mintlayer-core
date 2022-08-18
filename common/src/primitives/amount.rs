@@ -35,14 +35,14 @@ use std::iter::Sum;
 
 // use only unsigned types
 // if you need a signed amount, we should create a separate type for it and implement proper conversion
-pub type IntType = u128;
+pub type UnsignedIntType = u128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Encode, Decode)]
 pub struct Amount {
     #[codec(compact)]
-    val: IntType,
+    val: UnsignedIntType,
 }
 
 fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
@@ -56,13 +56,13 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 }
 
 impl Amount {
-    pub const MAX: Self = Self::from_atoms(IntType::MAX);
+    pub const MAX: Self = Self::from_atoms(UnsignedIntType::MAX);
 
-    pub const fn from_atoms(v: IntType) -> Self {
+    pub const fn from_atoms(v: UnsignedIntType) -> Self {
         Amount { val: v }
     }
 
-    pub fn into_atoms(&self) -> IntType {
+    pub fn into_atoms(&self) -> UnsignedIntType {
         self.val
     }
 
@@ -75,7 +75,7 @@ impl Amount {
 
             remove_right_most_zeros_and_decimal_point(result)
         } else {
-            let ten: IntType = 10;
+            let ten: UnsignedIntType = 10;
             let unit = ten.pow(decimals as u32);
             let whole = self.val / unit;
             let fraction = self.val % unit;
@@ -111,7 +111,7 @@ impl Amount {
             let zeros = "0".repeat(decimals);
             let amount_str = amount_str + &zeros;
 
-            amount_str.parse::<IntType>().ok().map(|v| Amount { val: v })
+            amount_str.parse::<UnsignedIntType>().ok().map(|v| Amount { val: v })
         } else {
             // if there's 1 decimal point, split, join the numbers, then add zeros to the right
             let amount_split = amount_str.split('.').collect::<Vec<&str>>();
@@ -124,7 +124,7 @@ impl Amount {
             let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
             let atoms_str = atoms_str.trim_start_matches('0');
 
-            atoms_str.parse::<IntType>().ok().map(|v| Amount { val: v })
+            atoms_str.parse::<UnsignedIntType>().ok().map(|v| Amount { val: v })
         }
     }
 }
@@ -145,26 +145,26 @@ impl std::ops::Sub for Amount {
     }
 }
 
-impl std::ops::Mul<IntType> for Amount {
+impl std::ops::Mul<UnsignedIntType> for Amount {
     type Output = Option<Self>;
 
-    fn mul(self, other: IntType) -> Option<Self> {
+    fn mul(self, other: UnsignedIntType) -> Option<Self> {
         self.val.checked_mul(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Div<IntType> for Amount {
+impl std::ops::Div<UnsignedIntType> for Amount {
     type Output = Option<Amount>;
 
-    fn div(self, other: IntType) -> Option<Amount> {
+    fn div(self, other: UnsignedIntType) -> Option<Amount> {
         self.val.checked_div(other).map(|n| Amount { val: n })
     }
 }
 
-impl std::ops::Rem<IntType> for Amount {
+impl std::ops::Rem<UnsignedIntType> for Amount {
     type Output = Option<Self>;
 
-    fn rem(self, other: IntType) -> Option<Self> {
+    fn rem(self, other: UnsignedIntType) -> Option<Self> {
         self.val.checked_rem(other).map(|n| Amount { val: n })
     }
 }
@@ -312,7 +312,12 @@ mod tests {
 
     #[test]
     fn add_overflow() {
-        assert_eq!(Amount { val: IntType::MAX } + Amount { val: 1 }, None);
+        assert_eq!(
+            Amount {
+                val: UnsignedIntType::MAX
+            } + Amount { val: 1 },
+            None
+        );
     }
 
     #[test]
@@ -330,7 +335,7 @@ mod tests {
             Amount { val: 1 },
             Amount { val: 2 },
             Amount {
-                val: IntType::MAX - 2,
+                val: UnsignedIntType::MAX - 2,
             },
         ];
         assert_eq!(amounts.into_iter().sum::<Option<Amount>>(), None);
@@ -346,14 +351,19 @@ mod tests {
 
     #[test]
     fn sub_underflow() {
-        assert_eq!(Amount { val: IntType::MIN } - Amount { val: 1 }, None);
+        assert_eq!(
+            Amount {
+                val: UnsignedIntType::MIN
+            } - Amount { val: 1 },
+            None
+        );
     }
 
     #[test]
     fn mul_overflow() {
         assert_eq!(
             Amount {
-                val: IntType::MAX / 2 + 1
+                val: UnsignedIntType::MAX / 2 + 1
             } * 2,
             None
         );
@@ -375,11 +385,11 @@ mod tests {
         let x = Amount { val: 5 };
         let y = Amount { val: 1 };
         let z = Amount { val: 2 };
-        let zero: IntType = 0;
+        let zero: UnsignedIntType = 0;
         assert_eq!(x | y, Amount { val: 5 });
         assert_eq!(x & z, Amount { val: 0 });
         assert_eq!(x ^ y, Amount { val: 4 });
-        assert!(!zero == IntType::MAX);
+        assert!(!zero == UnsignedIntType::MAX);
     }
 
     #[test]
@@ -438,18 +448,24 @@ mod tests {
         );
 
         assert_eq!(
-            amount_sum!(Amount::from_atoms(IntType::MAX), Amount::from_atoms(0)),
-            Some(Amount::from_atoms(IntType::MAX))
+            amount_sum!(
+                Amount::from_atoms(UnsignedIntType::MAX),
+                Amount::from_atoms(0)
+            ),
+            Some(Amount::from_atoms(UnsignedIntType::MAX))
         );
 
         assert_eq!(
-            amount_sum!(Amount::from_atoms(IntType::MAX), Amount::from_atoms(1)),
+            amount_sum!(
+                Amount::from_atoms(UnsignedIntType::MAX),
+                Amount::from_atoms(1)
+            ),
             None
         );
 
         assert_eq!(
             amount_sum!(
-                Amount::from_atoms(IntType::MAX - 1),
+                Amount::from_atoms(UnsignedIntType::MAX - 1),
                 Amount::from_atoms(1),
                 Amount::from_atoms(1)
             ),

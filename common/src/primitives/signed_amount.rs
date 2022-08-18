@@ -17,15 +17,17 @@
 
 use std::iter::Sum;
 
+use super::Amount;
+
 // use only unsigned types
 // if you need a signed amount, we should create a separate type for it and implement proper conversion
-pub type IntType = i128;
+pub type SignedIntType = i128;
 
 /// An unsigned fixed-point type for amounts
 /// The smallest unit of count is called an atom
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SignedAmount {
-    val: IntType,
+    val: SignedIntType,
 }
 
 fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
@@ -39,14 +41,26 @@ fn remove_right_most_zeros_and_decimal_point(s: String) -> String {
 }
 
 impl SignedAmount {
-    pub const MAX: Self = Self::from_atoms(IntType::MAX);
+    pub const MAX: Self = Self::from_atoms(SignedIntType::MAX);
 
-    pub const fn from_atoms(v: IntType) -> Self {
+    pub const fn from_atoms(v: SignedIntType) -> Self {
         SignedAmount { val: v }
     }
 
-    pub fn into_atoms(&self) -> IntType {
+    pub fn into_atoms(&self) -> SignedIntType {
         self.val
+    }
+
+    pub fn from_unsigned(amount: Amount) -> Option<Self> {
+        let unsigned_atoms = amount.into_atoms();
+        let atoms: SignedIntType = unsigned_atoms.try_into().ok()?;
+        Some(Self::from_atoms(atoms))
+    }
+
+    pub fn into_unsigned(self) -> Option<Amount> {
+        let atoms = self.val;
+        let unsigned_atoms: super::amount::UnsignedIntType = atoms.try_into().ok()?;
+        Some(Amount::from_atoms(unsigned_atoms))
     }
 
     pub fn into_fixedpoint_str(self, decimals: u8) -> String {
@@ -59,7 +73,7 @@ impl SignedAmount {
 
             remove_right_most_zeros_and_decimal_point(result)
         } else {
-            let ten: IntType = 10;
+            let ten: SignedIntType = 10;
             let unit = ten.pow(decimals as u32);
             let whole = self.val / unit;
             let fraction = self.val % unit;
@@ -100,7 +114,7 @@ impl SignedAmount {
             let zeros = "0".repeat(decimals);
             let amount_str = amount_str + &zeros;
 
-            amount_str.parse::<IntType>().ok().map(|v| SignedAmount { val: v })
+            amount_str.parse::<SignedIntType>().ok().map(|v| SignedAmount { val: v })
         } else {
             // if there's 1 decimal point, split, join the numbers, then add zeros to the right
             let amount_split = amount_str.split('.').collect::<Vec<&str>>();
@@ -113,7 +127,7 @@ impl SignedAmount {
             let atoms_str = amount_split[0].to_owned() + amount_split[1] + &zeros;
             let atoms_str = atoms_str.trim_start_matches('0');
 
-            atoms_str.parse::<IntType>().ok().map(|v| SignedAmount { val: v })
+            atoms_str.parse::<SignedIntType>().ok().map(|v| SignedAmount { val: v })
         }
     }
 }
@@ -134,26 +148,26 @@ impl std::ops::Sub for SignedAmount {
     }
 }
 
-impl std::ops::Mul<IntType> for SignedAmount {
+impl std::ops::Mul<SignedIntType> for SignedAmount {
     type Output = Option<Self>;
 
-    fn mul(self, other: IntType) -> Option<Self> {
+    fn mul(self, other: SignedIntType) -> Option<Self> {
         self.val.checked_mul(other).map(|n| SignedAmount { val: n })
     }
 }
 
-impl std::ops::Div<IntType> for SignedAmount {
+impl std::ops::Div<SignedIntType> for SignedAmount {
     type Output = Option<SignedAmount>;
 
-    fn div(self, other: IntType) -> Option<SignedAmount> {
+    fn div(self, other: SignedIntType) -> Option<SignedAmount> {
         self.val.checked_div(other).map(|n| SignedAmount { val: n })
     }
 }
 
-impl std::ops::Rem<IntType> for SignedAmount {
+impl std::ops::Rem<SignedIntType> for SignedAmount {
     type Output = Option<Self>;
 
-    fn rem(self, other: IntType) -> Option<Self> {
+    fn rem(self, other: SignedIntType) -> Option<Self> {
         self.val.checked_rem(other).map(|n| SignedAmount { val: n })
     }
 }
