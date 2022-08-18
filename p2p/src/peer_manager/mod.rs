@@ -35,14 +35,18 @@ use futures::FutureExt;
 use tokio::sync::{mpsc, oneshot};
 
 use chainstate::ban_score::BanScore;
-use common::{chain::ChainConfig, primitives::semver};
+use common::{chain::ChainConfig, primitives::semver::SemVer};
 use logging::log;
 use utils::ensure;
 
 use crate::{
     error::{P2pError, PeerError, ProtocolError},
     event,
-    net::{self, types::Protocol, ConnectivityService, NetworkingService},
+    net::{
+        self,
+        types::{Protocol, ProtocolType},
+        ConnectivityService, NetworkingService,
+    },
     P2pConfig,
 };
 
@@ -145,31 +149,20 @@ where
     /// peer and that is totally fine. As long as the aforementioned protocols with
     /// matching versions are found, the protocol set has been validated successfully.
     fn validate_supported_protocols(&self, protocols: &HashSet<Protocol>) -> bool {
-        todo!();
-        todo!();
-
-        const REQUIRED: &[&str] = &[
-            "/meshsub/1.1.0",
-            "/meshsub/1.0.0",
-            "/ipfs/ping/1.0.0",
-            "/ipfs/id/1.0.0",
-            "/ipfs/id/push/1.0.0",
-            "/mintlayer/sync/0.1.0",
+        const REQUIRED: &[Protocol] = &[
+            Protocol::new(ProtocolType::Pubsub, SemVer::new(1, 1, 0)),
+            Protocol::new(ProtocolType::Ping, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Handshake, SemVer::new(1, 0, 0)),
+            Protocol::new(ProtocolType::Sync, SemVer::new(0, 1, 0)),
         ];
 
-        for required_proto in REQUIRED {
-            if !protocols.iter().any(|proto| &proto.to_string().as_str() == required_proto) {
-                return false;
-            }
-        }
-
-        true
+        REQUIRED.iter().all(|p| protocols.contains(p))
     }
 
     /// Verify software version compatibility
     ///
     /// Make sure that local and remote peer have the same software version
-    fn validate_version(&self, version: &semver::SemVer) -> bool {
+    fn validate_version(&self, version: &SemVer) -> bool {
         // TODO: handle upgrades of versions
         version == self.chain_config.version()
     }

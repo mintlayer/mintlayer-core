@@ -49,7 +49,7 @@ pub enum ProtocolType {
 */
 
 impl Protocol {
-    pub fn new(protocol: ProtocolType, version: SemVer) -> Self {
+    pub const fn new(protocol: ProtocolType, version: SemVer) -> Self {
         Self { protocol, version }
     }
 
